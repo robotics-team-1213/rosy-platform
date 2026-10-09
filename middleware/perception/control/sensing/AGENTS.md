@@ -3,6 +3,9 @@
 
 # sensing/ (raw data → robot-frame geometry)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera and lane evidence is `perception/`, not this package root. This package does not import `perception` and does not publish `cmd_vel`.
 

@@ -229,7 +229,7 @@ python test/known_failures.py ../run.txt
 
 ### 3.4 ADR 쓰기
 
-1. 번호는 파일을 만들기 **직전에** 고른다. `docs/adr/`, [ADR Log](ROSY%20ADR%20Log.md)의 `| D-nnn |` 행, `tools/harness/harness.yaml`의 `adr_gaps`를 보고 가장 큰 번호의 다음.
+1. 번호는 파일을 만들기 **직전에** `python tools/harness/adr_reserve.py next "<주제>"`로 선점하고 찍힌 번호를 쓴다(D-510). 선점 ref는 로컬에만 있다. ADR이 브랜치와 같이 착지하지 않거나 버린 번호는 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄로 넣는다.
 2. `docs/adr/D-<번호>-<slug>.md`와 ADR Log 행을 **한 커밋**에.
 3. `python tools/harness/rosy_harness.py lint`
 

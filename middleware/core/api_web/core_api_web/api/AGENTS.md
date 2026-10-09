@@ -3,6 +3,9 @@
 
 # api
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 FastAPI surface for ROSY-API-REF-001. Factory builds the app, serves `/dashboard`, and mounts v1 routers plus WebSocket.

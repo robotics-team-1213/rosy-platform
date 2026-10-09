@@ -1,0 +1,140 @@
+{
+ "results": [
+  {
+   "case": "NE",
+   "index": 0,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 9,
+    "state": "armed"
+   },
+   "result": "stopped",
+   "final_state": "HOLD",
+   "final_reason": "lane_arc_edge",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 9,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 5,
+    "from_place_id": "NE",
+    "end_place_id": "NW",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3722,
+    "travelled_m": 0.3726,
+    "state": "stopped",
+    "reason": "lane_arc_edge",
+    "ir_correction": {
+     "side": "right",
+     "phase": "level",
+     "away_m": 0.1219,
+     "level_m": 0.0394,
+     "used": true
+    }
+   },
+   "start_dr": -0.0085347588239571,
+   "end_dr": 0.054329951143532285,
+   "max_abs_dr": 0.06268002435810444,
+   "flow": 0.06286470996748939,
+   "n": 133,
+   "elapsed": 21.177
+  },
+  {
+   "case": "NE",
+   "index": 1,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 11,
+    "state": "armed"
+   },
+   "result": "ended",
+   "final_state": "TRACKING",
+   "final_reason": "tracking",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 11,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 6,
+    "from_place_id": "NE",
+    "end_place_id": "NW",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3722,
+    "travelled_m": 0.3738,
+    "state": "ended",
+    "reason": "lane_arc_end_unarmed",
+    "ir_correction": {
+     "side": "right",
+     "phase": "done",
+     "away_m": 0.1207,
+     "level_m": 0.068,
+     "used": true
+    }
+   },
+   "start_dr": -0.010100852777817138,
+   "end_dr": 0.06956882728774627,
+   "max_abs_dr": 0.06956882728774627,
+   "flow": 0.07966968006556341,
+   "n": 121,
+   "elapsed": 19.242000000000004
+  },
+  {
+   "case": "NE",
+   "index": 2,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 13,
+    "state": "armed"
+   },
+   "result": "no_arc",
+   "final_state": "HOLD",
+   "final_reason": "junction_aborted",
+   "junction": {
+    "pending_action": "right",
+    "place_id": "NE",
+    "state": "aborted",
+    "seq": 13,
+    "turn_deg": -102.8,
+    "reason": "turn_basis_lost",
+    "pivot_basis": "map"
+   },
+   "arc": {
+    "arc_seq": 6,
+    "from_place_id": "NE",
+    "end_place_id": "NW",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3722,
+    "travelled_m": 0.3738,
+    "state": "ended",
+    "reason": "lane_arc_end_unarmed",
+    "ir_correction": {
+     "side": "right",
+     "phase": "done",
+     "away_m": 0.1207,
+     "level_m": 0.068,
+     "used": true
+    }
+   },
+   "start_dr": 0.2676591412383334,
+   "end_dr": -0.084359559122297,
+   "max_abs_dr": 0.2676591412383334,
+   "flow": -0.35201870036063043,
+   "n": 282,
+   "elapsed": 44.968
+  }
+ ],
+ "capability_at_end": false
+}

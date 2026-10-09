@@ -331,7 +331,8 @@ def test_node_gates_reuse_on_turn_rate_and_resets_the_worker():
     assert "declare_parameter('learned_paint_reuse_max_wz', 0.15)" in src
     assert "abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value)" in src
     assert src.count("self._paint_worker.reset()") >= 4
-    assert "self._odom_wz = float(msg.twist.twist.angular.z)" in src
+    assert "self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))" in src
+    assert "pose_if_fresh(self._odom_twist and self._odom_twist[1], self._odom_stamp, stamp)" in src
 
 
 def test_ort_session_options_with_a_fake_onnxruntime(monkeypatch):

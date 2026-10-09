@@ -151,6 +151,18 @@ def test_peer_approval_reader_is_strict(tmp_path):
         assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
 
+def test_peer_approval_reader_passes_only_a_well_formed_ca_digest(tmp_path):
+    # The LCD draws the CA digest a first-contact requester compares; anything else is dropped.
+    path = tmp_path / "approval.json"
+    for ca, kept in (("ab" * 32, True), ("AB" * 32, False), ("ab" * 31, False), (7, False)):
+        path.write_text(json.dumps({"requests": [_row()], "tls_ca_sha256": ca}), encoding="utf-8")
+        expected = dict(PEER, tls_ca_sha256=ca) if kept else PEER
+        assert fs.read_peer_approval(str(path), NOW) == expected, ca
+    # A digest alone shows no card.
+    path.write_text(json.dumps({"requests": [], "tls_ca_sha256": "ab" * 32}), encoding="utf-8")
+    assert fs.read_peer_approval(str(path), NOW) is None
+
+
 def test_burned_login_goes_to_the_face():
     assert fs.screen_for(**READY, core=core(), login="burned")["kind"] == fs.FACE
 
@@ -434,3 +446,29 @@ def test_module_is_standard_library_only():
                  if isinstance(node, ast.ImportFrom) and node.module}
 
     assert imported <= {"__future__", "datetime", "json", "math", "os", "re", "stat", "typing", "core_common"}
+
+
+# --- D-546: lane recovery ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("phase,text", [("retrace", "Recovering: reversing"),
+                                        ("return", "Recovering: returning to lane")])
+def test_a_moving_recovery_names_its_phase_and_beats_other_strips(phase, text):
+    answer = fs.screen_for(**READY, core=core(recovery=phase, caution=["line_follow_hold"]), test="lamp")
+
+    assert (answer["strip"], answer["strip_tone"]) == (text, "caution") and text.isascii()
+
+
+def test_the_bridge_has_no_lcd_line_and_an_estop_still_stops_the_screen():
+    assert fs.screen_for(**READY, core=core(recovery="bridge"))["strip"] == "Waiting"
+    assert fs.screen_for(**READY, core=core(recovery="retrace", estop=True))["kind"] == fs.STOPPED
+
+
+@pytest.mark.parametrize("value,expected", [("retrace", "retrace"), ("bridge", "bridge"), ("spin", None),
+                                            (3, None), (None, None)])
+def test_recovery_is_a_known_phase_or_nothing(value, expected):
+    assert fs.validate_face_inputs(handover(recovery=value), NOW)["recovery"] == expected
+
+
+def test_an_old_hand_over_without_recovery_reads_as_none():
+    assert fs.validate_face_inputs(handover(), NOW)["recovery"] is None

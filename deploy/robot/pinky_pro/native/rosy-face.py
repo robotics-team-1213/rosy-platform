@@ -6,9 +6,10 @@ the lamp from power-on to shutdown (formerly rosy-boot-display, which drew only
 the boot card). What the LCD draws comes from one rule table,
 ``core_common.face_screen.screen_for``: status cards (failure, update, e-stop,
 AP, booting, CORE not responding, unused login code) hide the face; otherwise
-the emotion GIF CORE chose plays, with the D-394 drive card, the PWR-003 wake
-card or a strip (caution, test, calibration, charging) over it. CORE hands its
-part over in /run/rosy/face-inputs.json (rosy-core's runtime directory, 0644,
+the emotion GIF CORE chose plays under a status bar (text, level colour, battery), or
+the D-394 drive / PWR-003 wake card takes its place. The lamp, the bar, the expression and
+the sound all come from one core_common.presentation record (D-552).
+CORE hands its part over in /run/rosy/face-inputs.json (rosy-core's runtime directory, 0644,
 rewritten every second); older than three seconds is no hand-over, so a dead
 CORE sends the screen back to the status card. GIF frames are converted to the
 panel's bytes once, lazily, and replayed (D-185 budget). The buzzer and lamp
@@ -86,6 +87,7 @@ import sys
 import time
 import stat
 import subprocess
+import types
 from typing import Callable
 
 sys.dont_write_bytecode = True
@@ -101,8 +103,14 @@ try:  # D-433: the screen's situation table and CORE's hand-over reader
     from core_common import face_screen
 except ImportError:
     face_screen = None
+try:  # the lamp, bar, expression and sound from one record (D-433 amendment 2026-10-09)
+    from core_common import presentation
+except ImportError:
+    presentation = None
 
 STATUS_DIR = "run/rosy-boot"
+#: D-548: root's marker that this robot accepts the shared rosy-dev-* API tokens.
+DEV_MODE_FILE = "etc/rosy/dev-mode"
 LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
 LOGIN_ROLES = frozenset({"viewer", "operator", "administrator"})
 POLL_S = 0.5  # D-433: the files and the situation table; face frames tick faster
@@ -146,16 +154,26 @@ BUZZER_OFF_S = 0.12
 #: A fleet identify is not a health sound (D-472). Two middle beeps, once, and it
 #: does not replace the health sound the robot is already in.
 BUZZER_CALL_HZ = 1400
+#: D-546: the reversing alarm — one 80 ms 1 kHz beep every BUZZER_REVERSE_S while CORE
+#: names the lane-recovery phase ``retrace``. Not a state sound: it repeats while it lasts.
+BUZZER_REVERSE_HZ = 1000
+BUZZER_REVERSE_S = 1.0
+#: D-546: the recovering lamp and LCD line outlast the last RECOVERING tick by this long, so
+#: they do not flicker between phases. The beep and an e-stop do not wait for it.
+RECOVERY_HOLD_S = 1.5
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
                    "caution": (2, BUZZER_LOW_HZ), "emergency": (4, 2500),
-                   "call": (2, BUZZER_CALL_HZ)}
+                   "call": (2, BUZZER_CALL_HZ), "reverse": (1, BUZZER_REVERSE_HZ)}
 #: Caution again inside this window stays silent (a battery near the threshold). Ready and
 #: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
 REPEAT_LIMITED = frozenset({"caution"})
+#: A caution (health or a CORE code) must hold this long before it sounds: a flapping one stays silent.
+CAUTION_DEBOUNCE_S = 2.0
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 #: robot state -> sound; booting is silent.
+#: Only for a release without core_common.presentation (tests pin it equal to presentation.SOUNDS).
 SOUNDS = {"ready": "ready", "ready_held": "ready", "failed": "failed", "caution": "caution"}
 #: robot state -> lamp_pattern argument (D-260 3). Fallback for a release without the
 #: rule table; with it, the table also folds CORE's mode in (D-380, robot_state.lamp_pattern).
@@ -174,6 +192,14 @@ TEST_REQUEST = "run/rosy-boot/display-test.request"
 TEST_RESULT = "run/rosy-display/display-test.json"
 TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
 TEST_REQUEST_MAX_AGE_S = 30.0
+#: D-472 4: Fleet's identity window is <= 6 s from its request. rosy-hw-test passes an identify
+#: on within 1.5 s, this program must take the hand-over within IDENTIFY_REQUEST_MAX_AGE_S
+#: (two polls) and ends the 3 s blink by IDENTIFY_MAX_S whatever the helper does.
+IDENTIFY_REQUEST_MAX_AGE_S = 1.0
+IDENTIFY_MAX_S = 3.5
+#: D-472 addendum 5: a blink may stand in for these normal patterns, moving or not. Booting,
+#: failed, emergency, caution and blocked (D-381) always win: refused, or cut short.
+IDENTIFY_OVER = frozenset({"ready", "manual", "navigating", "docking", "illumination"})
 MAX_TEST_REQUEST_BYTES = 512
 TEST_REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
 
@@ -230,6 +256,10 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
     if view["stage"] == "CORE_READY":
         view.update(_login_view(root))
     view.update(_state_view(view, status))
+    if (root / DEV_MODE_FILE).is_file():
+        view["dev_mode"] = True
+        if view.get("state_line"):
+            view["state_line"] = "DEV " + view["state_line"]
     return view
 
 
@@ -327,8 +357,10 @@ class Buzzer:
             self._frequency = frequency
         for index in range(count):
             self._pwm.start(BUZZER_DUTY)
-            self._sleep(on_s)
-            self._pwm.stop()
+            try:
+                self._sleep(on_s)
+            finally:
+                self._pwm.stop()  # a failed sleep must not leave the piezo on
             if index + 1 < count:
                 self._sleep(off_s)
         return count
@@ -369,8 +401,8 @@ class Lamp:
         self._process = None
         self.pattern: str | None = None
 
-    def available(self) -> bool:
-        if not self.enabled:
+    def available(self, *, for_identify: bool = False) -> bool:
+        if not self.enabled and not for_identify:
             return False
         if not (self._root / LAMP_NODE).exists():
             self._log.once("lamp-node", "no /dev/ws281x_pwm (rp1_ws281x_pwm); lamp left out")
@@ -448,28 +480,26 @@ class Lamp:
 
     def identify(self, color: str, unsafe: Callable[[], bool]) -> tuple[str, str]:
         """Temporary blue/amber pulse, then restore the state pattern."""
-        resume, self.pattern = self.pattern, None
+        resume, self.pattern = self.pattern if self.enabled else None, None
         self.stop()
-        if not self.available():
+        if not self.available(for_identify=True):
             self.show(resume)
             return "unavailable", "램프를 사용할 수 없음"
         process = None
         try:
             process = self._spawn([str(self._root / LAMP_HELPER), f"identify_{color}"])
-            deadline = time.monotonic() + LAMP_TEST_S
+            deadline = time.monotonic() + IDENTIFY_MAX_S
             while process.poll() is None:
                 if unsafe():
                     process.terminate()
                     try:
                         process.wait(timeout=LAMP_STOP_S)
                     except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=LAMP_STOP_S)
+                        self._reap_killed(process)
                     self.show(None)
                     return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
                 if time.monotonic() >= deadline:
-                    process.kill()
-                    process.wait(timeout=LAMP_STOP_S)
+                    self._reap_killed(process)
                     self.show(None)
                     return "failed", "식별 점멸 시간 초과"
                 time.sleep(0.05)
@@ -481,6 +511,17 @@ class Lamp:
             return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
         self.show(resume)
         return ("done", f"{color} 식별 점멸 완료") if code == 0 else ("failed", f"식별 점멸 종료 {code}")
+
+    def _reap_killed(self, process) -> None:
+        """SIGKILL; a helper that still does not exit is logged and left, never raised (review 2026-10-08).
+
+        The caller goes on to show(None) and the next step() shows the state pattern."""
+        process.kill()
+        try:
+            process.wait(timeout=LAMP_STOP_S)
+        except subprocess.TimeoutExpired:
+            self._log.once("lamp-identify-kill", "lamp_pattern identify did not exit after SIGKILL; "
+                                                 "going on to the state pattern")
 
 
 def _spawn_helper(command: list[str]):
@@ -517,7 +558,8 @@ def read_test_request(path: Path, now: float) -> dict | None:
     requested = data["requested_at"]
     if isinstance(requested, bool) or not isinstance(requested, (int, float)):
         return None
-    if not -5.0 <= now - float(requested) <= TEST_REQUEST_MAX_AGE_S:
+    limit = IDENTIFY_REQUEST_MAX_AGE_S if data["action"].startswith("identify_") else TEST_REQUEST_MAX_AGE_S
+    if not -5.0 <= now - float(requested) <= limit:
         return None
     return data
 
@@ -653,6 +695,9 @@ class FaceDisplay:
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
+        self._reversed_at: float | None = None
+        self._caution_since: float | None = None
+        self._held: tuple[str, float] | None = None
         self._tested: str | None = None
         self._faces = faces
         self._strip = strip
@@ -683,28 +728,49 @@ class FaceDisplay:
         return {"CORE_READY": "ready", "FAILED": "failed"}.get(kind, "booting")
 
     @staticmethod
-    def lamp_pattern_for(view: dict, state: str) -> str | None:
-        """D-380/D-381: the table's pattern for the state, CORE's mode and its
-        navigation; the stage-only mapping only on a release too old to carry
-        core_common.robot_state."""
-        if robot_state is None:
-            return LAMP_PATTERNS.get(state)
-        return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"))
+    def _present(view: dict, state: str, core: dict | None, screen: dict | None):
+        """The one record for lamp, bar, expression and sound (core_common.presentation). A release
+        with the rule table but not the record gets the same fields from the old rules."""
+        if robot_state is not None and presentation is not None:
+            return presentation.present(state=state, robot_mode=view.get("robot_mode"),
+                                        nav_state=view.get("nav_state"), core=core, screen=screen,
+                                        battery_percent=view.get("battery_percent"))
+        lamp = LAMP_PATTERNS.get(state)
+        if robot_state is not None:
+            args = (state, (core or {}).get("robot_mode") or view.get("robot_mode"),
+                    (core or {}).get("nav_state") or view.get("nav_state"))
+            try:
+                lamp = robot_state.lamp_pattern(*args, (core or {}).get("recovery"))
+            except TypeError:  # a core_common from before D-546 takes three arguments
+                lamp = robot_state.lamp_pattern(*args)
+        bar = None if not screen or screen["kind"] != "face" else (
+            screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok", None, None)
+        return types.SimpleNamespace(
+            state=state, lamp=lamp, bar=bar, sound="emergency" if lamp == "emergency" else SOUNDS.get(state),
+            reversing=bool(core) and core.get("estop") is False and lamp == "recovering"
+            and core.get("recovery") == "retrace")
 
-    def _announce(self, state: str, pattern: str | None, now: float) -> None:
-        sound = SOUNDS.get(state)
-        # D-381: while the emergency pattern holds, the sound is the e-stop alarm —
-        # entry is a real transition (the previous sound differs) so it sounds once,
-        # staying is silent (same sound), and leaving is the ready chirp again.
-        # Not repeat-limited: an e-stop is rare, and it is news a person waits for.
-        if pattern == "emergency":
-            sound = "emergency"
-        # Ready and held ready are one sound: moving between them is not a new sound.
+    @staticmethod
+    def lamp_pattern_for(view: dict, state: str, core: dict | None = None) -> str | None:
+        return FaceDisplay._present(view, state, core, None).lamp
+
+    def _announce(self, sound: str | None, now: float) -> None:
+        """Sound ``pres.sound`` on a change (D-381: the e-stop alarm replaces the health sound; ready and
+        held ready are one sound). A caution must hold CAUTION_DEBOUNCE_S first; caution, and the ready that
+        follows it, repeat at most every BUZZER_REPEAT_S. The e-stop, failed and the ready after them always sound."""
+        if sound == "caution":
+            self._caution_since = now if self._caution_since is None else self._caution_since
+            if now - self._caution_since < CAUTION_DEBOUNCE_S:
+                return  # not yet a caution: self._sound keeps the sound it had
+        else:
+            self._caution_since = None
         previous, self._sound = self._sound, sound
         if sound is None or sound == previous:
             return
         last = self._sounded.get(sound)
-        if sound in REPEAT_LIMITED and last is not None and now - last < BUZZER_REPEAT_S:
+        # ready is limited only when it follows a caution (the flapping case); after an e-stop or a failure it is news.
+        if ((sound in REPEAT_LIMITED or (sound == "ready" and previous == "caution"))
+                and last is not None and now - last < BUZZER_REPEAT_S):
             return
         self._sounded[sound] = now
         self._buzzer.announce(sound)
@@ -715,13 +781,25 @@ class FaceDisplay:
         if request is None or request["request_id"] == self._tested:
             return None
         def unsafe_identity() -> bool:
+            # D-472 5: e-stop, fault, caution or no CORE hand-over: the safety display wins.
+            # The pattern is recomputed from the files (the lamp's own is None mid-blink).
             core = self._core()
-            return (core is None or core.get("estop") is not False or core.get("robot_mode") != "IDLE"
-                    or core.get("nav_state") != "IDLE" or bool(core.get("caution")))
-        if request["action"].startswith("identify_") and (
-                self._lamp is None or self._lamp.pattern != "ready" or unsafe_identity()):
-            return None
-        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
+            if core is None or core.get("estop") is not False or core.get("caution"):
+                return True
+            view = read_view(self.root, self._battery_value)
+            return self.lamp_pattern_for(view, self.robot_state_of(view), core) not in IDENTIFY_OVER
+        identifying = request["action"].startswith("identify_")
+        identify_ready = identifying and self._lamp is not None and self._lamp.available(for_identify=True)
+        if identifying and (not identify_ready or unsafe_identity()):
+            # Answered at once, so rosy-hw-test does not wait out its hand-over timeout.
+            self._tested = request["request_id"]
+            state = "failed" if identify_ready else "unavailable"
+            write_test_result(self.root / TEST_RESULT, json.dumps(
+                {"schema": 1, "request_id": request["request_id"], "action": request["action"],
+                 "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절"},
+                ensure_ascii=False, sort_keys=True) + "\n")
+            return state
+        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
             return None
         if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
                             or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
@@ -748,6 +826,25 @@ class FaceDisplay:
         return state
 
     def _core(self) -> dict | None:
+        """CORE's face hand-over with D-546's recovery hold: an e-stop clears ``recovery`` at
+        once; a phase that just ended is held 1.5 s as ``return`` (lamp and LCD, no beep)."""
+        core = self._read_core()
+        if core is None:
+            return None
+        now = self._clock()
+        phase = core.get("recovery")
+        if core.get("estop") is not False:
+            self._held = None
+            return {**core, "recovery": None} if phase else core
+        if phase:
+            self._held = (phase, now)
+        elif self._held and now - self._held[1] < RECOVERY_HOLD_S:
+            return {**core, "recovery": "return" if self._held[0] == "retrace" else self._held[0]}
+        else:
+            self._held = None
+        return core
+
+    def _read_core(self) -> dict | None:
         """CORE's face hand-over, strictly read; None when missing, stale or not CORE's."""
         if face_screen is None:
             return None
@@ -837,10 +934,10 @@ class FaceDisplay:
         state = self.robot_state_of(view)
         if state != self._state:
             self._state = state
-        pattern = self.lamp_pattern_for(view, state)
+        core = self._core()
         screen = self.screen = self.screen_of(view, now)
-        if screen and screen["kind"] == "light":
-            pattern = "illumination"
+        pres = self._present(view, state, core, screen)
+        pattern = pres.lamp
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
@@ -851,9 +948,12 @@ class FaceDisplay:
         self._power(screen)
         kind = screen["kind"] if screen else "status"
         redrawn = False
+        bar = pres.bar  # None without the presentation record (a mixed install)
+        if bar is not None and view.get("dev_mode"):  # D-548: DEV on every face frame and card bar
+            bar = (bar[0], f"DEV {bar[1]}" if bar[1] else "DEV MODE", *bar[2:])
         if kind == "face" and screen["overlay"] is None:
-            # The face plays from tick(); a strip rides every frame.
-            self.animating = (screen["face"], screen["strip"], screen["strip_tone"])
+            # The face plays from tick(); the status bar rides every frame.
+            self.animating = bar
             self._drawn = None
         else:
             self.animating = None
@@ -863,6 +963,8 @@ class FaceDisplay:
                 card = dict(view)
                 if screen is not None:
                     card["screen"] = screen
+                    if kind == "face":
+                        card["bar"] = bar[1:] if bar is not None else None
                     if screen.get("line"):
                         card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
                     if kind == "update":
@@ -873,15 +975,24 @@ class FaceDisplay:
                         self.lcd.img_show(self._render(card))
                     except Exception:
                         # A broken LCD must not swallow the entry alarm.
-                        self._announce(state, pattern, now)
+                        self._announce(pres.sound, now)
                         raise
                     self._drawn = key
                     self.draws += 1
                     redrawn = True
         # A synchronous buzzer pattern can last hundreds of milliseconds. Show
         # the lamp and any status card first, especially on emergency entry.
-        self._announce(state, pattern, now)
+        self._announce(pres.sound, now)
+        self._reverse_alarm(pres.reversing, now)
         return redrawn
+
+    def _reverse_alarm(self, reversing: bool, now: float) -> None:
+        """D-546: one reversing beep per BUZZER_REVERSE_S while ``Presentation.reversing``; silent otherwise."""
+        if not reversing:
+            self._reversed_at = None
+        elif self._reversed_at is None or now - self._reversed_at >= BUZZER_REVERSE_S:
+            self._reversed_at = now
+            self._buzzer.announce("reverse")
 
     def _draw_shutdown(self, now: float) -> bool:
         view = read_view(self.root, self._battery_value)
@@ -904,12 +1015,12 @@ class FaceDisplay:
         self._ticks += 1
         if self._backlight < 100 and self._ticks % 2:
             return False  # D-185: the dimmed (idle) face plays at half rate
-        face, strip, tone = self.animating
+        face, *bar = self.animating
         frame = self._faces.next(face)
         if frame is None:
             return False
-        if strip and self._strip is not None:
-            frame = self._strip(frame, strip, tone)
+        if self._strip is not None:
+            frame = self._strip(frame, *bar)
         self.lcd.show_panel(frame)
         self.frames += 1
         return True
@@ -1003,17 +1114,22 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         elif kind == "shutdown":
             image = info_screen.render_notice(str(card.get("shutdown_title") or "Shutting down"),
                                               [str(card.get("device_name") or "")])
-        elif kind == "face" and screen.get("overlay"):
-            image = info_screen.render_card(screen["overlay"]["payload"])
+        elif kind == "face" and screen.get("overlay"):  # a card takes the expression area, under the bar
+            image = info_screen.render_overlay(screen["overlay"]["payload"])
         elif screen.get("row") == "peer_request":
             # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
             # One "XXXX  CODE" line per live request, so each requester reads its own code.
-            rows = (screen.get("peer") or {}).get("requests") or []
-            image = info_screen.render_notice("Pair request", [f"{r['display_code']}  {r['approval_code']}" for r in rows])
+            peer = screen.get("peer") or {}
+            lines = [f"{r['display_code']}  {r['approval_code']}" for r in peer.get("requests") or []]
+            if peer.get("tls_ca_sha256"):
+                # What the tablet asks a first-contact requester to compare (its first 16 digits).
+                ca = peer["tls_ca_sha256"][:16]
+                lines.append("CA " + " ".join(ca[i:i + 4] for i in range(0, 16, 4)))
+            image = info_screen.render_notice("Pair request", lines)
         else:
             image = info_screen.render_boot(card, frame=frame)
-        if kind == "face" and screen.get("strip"):
-            band, mask = info_screen.render_strip(screen["strip"], screen.get("strip_tone") or "info")
+        if kind == "face" and card.get("bar"):
+            band, mask = info_screen.render_bar(*card["bar"][:4])
             image.paste(band, (0, 0), mask)
         return image
 
@@ -1026,24 +1142,25 @@ def face_converter(info_screen) -> Callable[[object], object]:
 
     def convert(frame):
         landscape = frame.convert("RGB").resize(FACE_SIZE, Image.LANCZOS, reducing_gap=3.0)
-        return info_screen.to_panel(landscape)
+        return info_screen.to_panel(info_screen.compose_face(landscape))
 
     return convert
 
 
-def strip_painter(info_screen) -> Callable[[object, str, str], object]:
-    """Lay the strip over a panel frame; the band and its mask are made once per text."""
+def bar_painter(info_screen) -> Callable[..., object]:
+    """Lay the status bar over a panel frame; the bar and its mask are made once per content."""
     from PIL import Image
 
-    cache: dict[tuple[str, str], tuple] = {}
+    cache: dict[tuple, tuple] = {}
 
-    def paint(frame, text: str, tone: str):
-        if (text, tone) not in cache:
-            band, mask = info_screen.render_strip(text, tone)
-            cache.clear()  # one strip at a time
-            cache[(text, tone)] = (info_screen.to_panel(band),
-                                   info_screen.to_panel(Image.merge("RGB", (mask, mask, mask)))[..., 0] != 0)
-        panel, where = cache[(text, tone)]
+    def paint(frame, text: str, level: str, percent=None, charging=None):
+        key = (text, level, percent, charging)
+        if key not in cache:
+            band, mask = info_screen.render_bar(text, level, percent, charging)
+            cache.clear()  # one bar at a time
+            cache[key] = (info_screen.to_panel(band),
+                          info_screen.to_panel(Image.merge("RGB", (mask, mask, mask)))[..., 0] != 0)
+        panel, where = cache[key]
         out = frame.copy()
         out[where] = panel[where]
         return out
@@ -1115,7 +1232,7 @@ def main(argv: list[str] | None = None) -> int:
     faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen), log=log)
     display = FaceDisplay(args.root, lcd=lcd, render=card_renderer(info_screen), battery=battery,
                           buzzer=buzzer, clock=time.monotonic, lamp=lamp, faces=faces,
-                          strip=strip_painter(info_screen), core_owner=core_owner(log),
+                          strip=bar_painter(info_screen), core_owner=core_owner(log),
                           low_light_assist=rosy_display_env.flag(dict(os.environ), rosy_display_env.LOW_LIGHT_KEY)[0])
     polls_per_step = max(1, round(POLL_S / TICK_S))
     tick = 0

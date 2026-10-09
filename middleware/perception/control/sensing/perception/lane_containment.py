@@ -6,7 +6,8 @@ centre moved half the paint width (PAINT_HALF_WIDTH_M) toward the lane.
 uncertainty_m bounds the lateral error of a selected boundary over every x the receiver
 uses it at. It comes only from stated error bounds: a camera_profile record's score bands
 (D-47), or for the URDF nominal profile the conservative bounds camera_nominal.yaml
-carries (D-397). Without one it stays None and the D-468 receiver refuses.
+carries (D-397). Without one it stays None and the D-468 receiver refuses. The keeper
+fit's own slope error is added on top (G-16, SLOPE_SIGMAS).
 
 The ground model this producer runs on is never promoted: the line observer labels it
 from camera_ground_source, so a record-backed ground is still sent as NOMINAL and the
@@ -20,18 +21,13 @@ import math
 import numpy as np
 
 from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
+from .lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 -- one value with the keeper
 
-#: Half the painted line width. The keeper fits the paint centre; the payload sends the
-#: paint's inner (drivable) edge, so each boundary moves this far toward the lane. 260919
-#: STL straights: tape 25.0 mm, centres 185 mm apart (lane_half_width_m 0.0925), the map
-#: bundle's own lane_graph.py clearance basis. STL nominal, unmeasured: a tape measurement
-#: of the physical mat replaces it. Tested against the STL; node parameter lane_paint_half_width_m.
-PAINT_HALF_WIDTH_M = 0.0125
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.
 GAZEBO_DETECTOR_LATERAL_PX = 2.0
 #: The receiver extrapolates a boundary this far past its observed support
-#: (core_features.line_follow.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
+#: (core_features.line_follow.recovery.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
 RECEIVER_EXTRAPOLATION_M = 0.3
 #: Roll levels sampled across +-its bound (odd, so 0 is one). The re-review's 41-201 level
 #: scan found the worst roll interior, at most 0.3 % above the corners-and-centre value.
@@ -39,6 +35,16 @@ ROLL_LEVELS = 7
 #: Raise on the sampled worst for roll between levels: the 0.3 % gap above with 3 levels,
 #: times about seven for safety. Checked by the 21-level test truths.
 SAMPLING_MARGIN = 0.02
+#: G-16: the fit's own error, added to the projection error: SLOPE_SIGMAS times (the keeper's
+#: slope_sd, standard error of dy/dx from lane_keep_lines._paint_fit, times the lever from the
+#: fit centroid (inside the support) to the farthest x the receiver uses, bounded by the
+#: support length + RECEIVER_EXTRAPOLATION_M; plus its offset_sd, the line's standard error
+#: at the centroid). 2 sigma, times sqrt(2): the fit
+#: rows are 5 mm apart and far out one image row spans up to 1 cm (lane_bev BEV_MAX_RANGE_M),
+#: so up to two rows read one pixel row and the standard error counts them as independent.
+#: A selected boundary without both (only truncated paint, or a keeper that does not state
+#: them) leaves uncertainty_m None.
+SLOPE_SIGMAS = 2.0*math.sqrt(2.0)
 
 
 def _real(value):
@@ -159,13 +165,6 @@ def projection_uncertainty_m(ground, error, segments):
     return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
-def paint_half_width(value):
-    """``value`` as a float; a negative (edges moved outward, past the paint) or non-finite one is refused."""
-    if not (_real(value) and value >= 0):
-        raise ValueError("lane_paint_half_width_m must be a finite number >= 0")
-    return float(value)
-
-
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
                         paint_half_width_m=PAINT_HALF_WIDTH_M):
     paint_half_width_m = paint_half_width(paint_half_width_m)
@@ -175,7 +174,7 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
                 ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m,
                 paint_half_width_m]
     identity = hashlib.sha256(json.dumps(geometry, allow_nan=False).encode()).hexdigest()
-    boundaries = []
+    boundaries, slope_error = [], 0.
     for edge in keeper.get("boundaries", []):
         if edge.get("selected") is not True:
             continue
@@ -190,15 +189,19 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         boundaries.append(dict(side=edge["side"], slope=slope, intercept_m=intercept,
             observed_x_min_m=min(float(first[0]), float(last[0])),
             observed_x_max_m=max(float(first[0]), float(last[0]))))
+        sds = (edge.get("slope_sd"), edge.get("offset_sd"))
+        lever = abs(dx)+RECEIVER_EXTRAPOLATION_M
+        slope_error = (max(slope_error, SLOPE_SIGMAS*(float(sds[0])*lever+float(sds[1])))
+                       if slope_error is not None and all(_real(v) and v >= 0 for v in sds) else None)
     # GAZEBO (allow_simulation_ground only): exact sim geometry, only the detector's pixels.
     # NOMINAL/CALIBRATED without a stated geometry error stay None: the receiver must not
     # replace that null with a safe tolerance. Segments are taken from the lens (x - camera_x).
     error = (0., 0., 0., GAZEBO_DETECTOR_LATERAL_PX) if source == "GAZEBO" else geometry_bounds
     uncertainty = None
-    if error is not None:
+    if error is not None and slope_error is not None:
         segments = [tuple((x-camera_x, b["slope"]*x+b["intercept_m"])
                           for x in (b["observed_x_min_m"], b["observed_x_max_m"])) for b in boundaries]
-        uncertainty = projection_uncertainty_m(ground, error, segments)
+        uncertainty = min(projection_uncertainty_m(ground, error, segments)+slope_error, 1.0)
     # The imaged paint segments above set the uncertainty; the corridor edge is the paint's
     # inner side: half the paint width inward, perpendicular to the line.
     for b in boundaries:

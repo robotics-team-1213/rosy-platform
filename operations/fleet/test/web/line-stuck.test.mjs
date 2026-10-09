@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+// The button helpers live in queues.js (D-540 (d)), which imports the browser's "/common/..." modules.
+const { register } = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
+register("./resolve-console-assets.mjs", import.meta.url);
+const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, confirmText, decisionButtons, needsConfirm, outcomeText,
   pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-} from "../../fleet/server/web/line-stuck.js";
+} = await import("../../fleet/server/web/line-stuck.js");
 
 const STUCK = {
   stuck_id: "stuck-abc", cause: "obstacle_ahead", phase: "ASKING", held_s: 12.4,
@@ -131,4 +135,14 @@ test("resolverText says what the Fleet resolver did, or why a human is needed", 
   assert.equal(resolverText({ tier: "human", escalated: "core:ROBOT_UNREACHABLE" }),
     "자동 판단 불가 — 사람 확인 필요 (CORE 응답 ROBOT_UNREACHABLE)");
   assert.equal(resolverText({ tier: "human", escalated: "human_claimed" }), "운영자가 맡음");
+});
+
+test("D-540 9: an unnamed operator may WAIT or ABORT but not answer with motion", () => {
+  const named = "이름 있는 운영자 로그인이 필요합니다";
+  const buttons = byDecision(decisionButtons(STUCK, { operator: true, namedReason: named }));
+  assert.equal(buttons.WAIT.reason, "");
+  assert.equal(buttons.ABORT.reason, "");
+  for (const decision of ["RESUME", "BACK_AND_RETRY", "MANUAL"]) assert.equal(buttons[decision].reason, named);
+  assert.match(refusalText("rosy_01", "RESUME", { status: 403, code: "OPERATOR_IDENTITY_REQUIRED", message: "" }),
+    /이름 있는 운영자 로그인이 필요합니다/);
 });

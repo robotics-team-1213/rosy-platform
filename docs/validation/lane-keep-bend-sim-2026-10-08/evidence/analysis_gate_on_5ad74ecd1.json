@@ -1,0 +1,270 @@
+{
+ "g_1": {
+  "approach_frames": 34,
+  "approach_median_m": 0.0178,
+  "approach_max_abs_m": 0.018,
+  "bend_counts": {
+   "no_boundary": 34
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.943,
+    -0.493,
+    -0.05
+   ]
+  ],
+  "probe": {
+   "result": "LOST_between_junctions",
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 38.02,
+    "sim_t": 86.838,
+    "gt": [
+     -0.9380677118919092,
+     -0.49321924940714207,
+     -0.04455740551298343
+    ],
+    "odom": [
+     -0.9380677118919092,
+     -0.49321924940714207,
+     -0.04455740551298343,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "g_2": {
+  "approach_frames": 35,
+  "approach_median_m": 0.0171,
+  "approach_max_abs_m": 0.0172,
+  "bend_counts": {
+   "no_boundary": 35
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.945,
+    -0.494,
+    -0.051
+   ]
+  ],
+  "probe": {
+   "result": "LOST_between_junctions",
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 37.274,
+    "sim_t": 127.288,
+    "gt": [
+     -0.9422287788959175,
+     -0.49389645995713727,
+     -0.04710371951687531
+    ],
+    "odom": [
+     -0.9422287788959175,
+     -0.49389645995713727,
+     -0.04710371951687531,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "g_3": {
+  "approach_frames": 50,
+  "approach_median_m": 0.0153,
+  "approach_max_abs_m": 0.0185,
+  "bend_counts": {
+   "no_boundary": 38
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.945,
+    -0.492,
+    -0.058
+   ]
+  ],
+  "probe": {
+   "result": "LOST_between_junctions",
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 39.309,
+    "sim_t": 169.698,
+    "gt": [
+     -0.9000451079470884,
+     -0.49571501600475154,
+     -0.07753075110060322
+    ],
+    "odom": [
+     -0.9000451079470884,
+     -0.49571501600475154,
+     -0.07753075110060322,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "g_4": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {
+   "junction_transverse": 1,
+   "no_boundary": 13
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.954,
+    -0.492,
+    -0.062
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.953,
+    -0.492,
+    -0.061
+   ],
+   "final": {
+    "t": 36.344,
+    "sim_t": 209.279,
+    "gt": [
+     -0.9503157113857991,
+     -0.4918631307036168,
+     -0.058180056976025546
+    ],
+    "odom": [
+     -0.9503157113857991,
+     -0.4918631307036168,
+     -0.058180056976025546,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "g_5": {
+  "approach_frames": 11,
+  "approach_median_m": 0.0181,
+  "approach_max_abs_m": 0.0181,
+  "bend_counts": {
+   "junction_transverse": 1,
+   "no_boundary": 11
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.952,
+    -0.493,
+    -0.058
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.95,
+    -0.493,
+    -0.055
+   ],
+   "final": {
+    "t": 35.561,
+    "sim_t": 248.14,
+    "gt": [
+     -0.9496855451126275,
+     -0.4929201889488159,
+     -0.055332725759029304
+    ],
+    "odom": [
+     -0.9496855451126275,
+     -0.4929201889488159,
+     -0.055332725759029304,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": "no_boundary",
+    "body_gap_m": 0.0068,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "g_6": {
+  "approach_frames": 34,
+  "approach_median_m": 0.0178,
+  "approach_max_abs_m": 0.0179,
+  "bend_counts": {
+   "no_boundary": 34
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.945,
+    -0.493,
+    -0.053
+   ]
+  ],
+  "probe": {
+   "result": "LOST_between_junctions",
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 36.649,
+    "sim_t": 287.841,
+    "gt": [
+     -0.9422733801506774,
+     -0.49322390212751605,
+     -0.05170470174084867
+    ],
+    "odom": [
+     -0.9422733801506774,
+     -0.49322390212751605,
+     -0.05170470174084867,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ }
+}

@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import os
 import json
-import socket
 import sys
 import threading
 import time
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled, safe_listener
 
 playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
 import uvicorn  # noqa: E402
@@ -26,7 +26,7 @@ import dev_server  # noqa: E402
 TABLET_VIEWPORTS = [(2000, 1200), (1200, 2000)]
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(tablet_page):
     base_url, page, errors = tablet_page
     state = {"quality": {"valid": False, "reason": "low_light"}, "available": True}
@@ -55,7 +55,7 @@ def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(table
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_device_recording_option_uses_capability_and_actual_readback(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -93,7 +93,7 @@ def test_device_recording_option_uses_capability_and_actual_readback(tablet_page
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_pilot_browser_confirmation_records_and_saves_paired_variants(tablet_page):
     base_url, page, errors = tablet_page
     downloads = []
@@ -122,7 +122,7 @@ def test_pilot_browser_confirmation_records_and_saves_paired_variants(tablet_pag
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_lane_perception_failed_apply_idle_guard_and_readback(tablet_page):
     """Configuration never actuates; pending/failure/readback remain distinct."""
     base_url, page, errors = tablet_page
@@ -195,7 +195,7 @@ def test_lane_perception_failed_apply_idle_guard_and_readback(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -254,7 +254,7 @@ def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_omx_hidden_tab_releases_a_seat_acquired_after_visibility_changed(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -284,7 +284,7 @@ def test_omx_hidden_tab_releases_a_seat_acquired_after_visibility_changed(tablet
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_input_preview_stays_live_after_settings_change_and_escape_closes(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -306,7 +306,7 @@ def test_input_preview_stays_live_after_settings_change_and_escape_closes(tablet
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_shared_action_icon_preserves_reason_and_button_behavior(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -330,24 +330,18 @@ def test_shared_action_icon_preserves_reason_and_button_behavior(tablet_page):
     assert errors == [], errors
 
 
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 @pytest.fixture(scope="module")
 def base_url():
-    config = uvicorn.Config(dev_server.app, host="127.0.0.1",
-                            port=_free_port(), log_level="warning")
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
+    listener = safe_listener()
+    server = uvicorn.Server(uvicorn.Config(dev_server.app, log_level="warning"))
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     thread.start()
     while not server.started:
         thread.join(0.05)
-    yield f"http://127.0.0.1:{config.port}"
+    yield f"http://127.0.0.1:{listener.getsockname()[1]}"
     server.should_exit = True
     thread.join(timeout=5)
+    listener.close()
 
 
 def _click_tool(page, selector):
@@ -361,7 +355,7 @@ def _gate_value(page) -> str:
     return readout.get_attribute("data-gate-state") or readout.locator("dd").first.inner_text()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page, width, height):
     base_url, page, errors = tablet_page
@@ -426,7 +420,7 @@ def _default_controls():
     dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_gate_panel_at_tablet_viewports(base_url):
     """게이트가 모든 태블릿 뷰포트에서 올바른 조립을 갖는다."""
@@ -458,7 +452,7 @@ def test_gate_panel_at_tablet_viewports(base_url):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_bad_token_is_refused_with_guidance(tablet_page):
     base_url, page, errors = tablet_page
@@ -472,7 +466,7 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_viewer_gate_denial_uses_operator_words_at_declared_widths(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
@@ -504,7 +498,7 @@ def test_viewer_gate_denial_uses_operator_words_at_declared_widths(base_url, wid
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_drive_withheld_gate_names_the_no_motion_reason(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
@@ -535,7 +529,7 @@ def test_drive_withheld_gate_names_the_no_motion_reason(base_url, width, height)
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
     """이웃 방 목록(D-343 2.2-3): 이 기기가 대신 찾은 방들이 보이고, 각 버튼이 그 origin URL 을 가진다."""
@@ -554,7 +548,7 @@ def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
     """A failed scan is distinguishable from an empty LAN; login remains usable."""
@@ -569,7 +563,7 @@ def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
@@ -611,7 +605,7 @@ def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
     base_url, page, errors = tablet_page
     calls = []
@@ -635,7 +629,76 @@ def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_connection_offer_names_this_robot_before_the_neighbour(tablet_page):
+    """The page you opened is this robot. The other robot stays a secondary choice."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": "rosy_26", "transport": "https"}))
+    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": [
+        {"hostname": "rosy-pinky-8kcn.local", "address": "10.0.0.8", "port": 8080, "kind": "robot",
+         "url": "https://rosy-pinky-8kcn.local:8080/pilot/#join"}]}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    page.locator("[data-lobby-room='rosy-pinky-8kcn.local']").wait_for(state="visible")
+    offer = page.locator("[data-connection-offer]")
+    assert offer.get_attribute("data-connection-mode") == "paired"
+    assert offer.get_attribute("data-robot-id") == "rosy_26"
+    assert page.locator("[data-connection-title]").inner_text() == "rosy_26"
+    assert "로봇 화면에 뜬 로그인 코드" in offer.inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    text = page.locator("[data-screen=connect]").inner_text()
+    assert text.index("rosy_26") < text.index("rosy-pinky-8kcn.local")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_development_connection_enters_without_a_screen_code(tablet_page):
+    """development mode offers a one-hour operator session. paired mode does not."""
+    base_url, page, errors = tablet_page
+    calls = []
+
+    def connection(route):
+        route.fulfill(json={"mode": "development", "robot_id": "rosy_60", "transport": "https"})
+
+    def session(route):
+        calls.append(route.request.post_data)
+        route.fulfill(status=201, json={
+            "id": "dev-session", "token": "devtoken", "role": "operator",
+            "label": "Pilot development session", "source": "pair-development", "expires_at": None,
+        })
+
+    page.route("**/api/v1/auth/connection", connection)
+    page.route("**/api/v1/auth/development-session", session)
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-dev-connect]").wait_for(state="visible")
+    assert "코드 없이" in page.locator("[data-connection-copy]").inner_text()
+    assert page.locator("form[data-pilot-token-form]").is_visible()
+    page.locator("[data-dev-connect]").click()
+    page.wait_for_selector("[data-drive-enter]")
+    assert calls == ["{}"]
+    assert "rosy_60" in page.locator("[data-screen=connect]").inner_text()
+    recent = page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
+    assert "devtoken" not in recent
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_development_connection_refusal_keeps_the_code_form(tablet_page):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "development", "robot_id": "rosy_60", "transport": "https"}))
+    page.route("**/api/v1/auth/development-session", lambda route: route.fulfill(
+        status=403, json={"error": {"code": "FORBIDDEN", "message": "this robot requires pairing"}}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-dev-connect]").click()
+    page.get_by_text("이 로봇은 개발 연결 모드가 아닙니다.", exact=False).wait_for()
+    assert page.locator("[data-dev-connect]").is_enabled()
+    assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     from urllib.parse import urlsplit
     base_url, page, errors = tablet_page
@@ -655,10 +718,128 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
-def _enter_drive(page, base_url):
+def _refuse_second_session(page):
+    calls = []
+
+    def refuse(route):
+        calls.append(route.request.url)
+        route.fulfill(status=500, body="second session")
+
+    page.route("**/api/v1/auth/development-session", refuse)
+    page.route("**/api/v1/auth/pair", refuse)
+    return calls
+
+
+def _open_in_pilot_app(page, base_url, token):
+    """Same handoff as PilotProxy: a classic script at the start of <head>, before the modules."""
+
+    def inject(route):
+        response = route.fetch()
+        store = (
+            f"sessionStorage.setItem('rosy.pilot.token',{json.dumps(token)});"
+            if token else "")
+        script = (
+            "<script>document.documentElement.dataset.pilotShell='android';"
+            f"{store}</script>")
+        headers = {
+            key: value for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "content-encoding"}}
+        route.fulfill(
+            status=response.status, headers=headers,
+            body=response.text().replace("<head>", "<head>" + script, 1))
+
+    page.route("**/pilot", inject)
+    page.goto(f"{base_url}/pilot")
+
+
+def _assert_visible(page, selector, errors):
+    try:
+        page.locator(selector).wait_for()
+    except Exception:
+        shell = page.evaluate("document.documentElement.dataset.pilotShell")
+        token = page.evaluate("sessionStorage.getItem('rosy.pilot.token')")
+        text = page.locator("body").inner_text()
+        raise AssertionError(
+            f"missing {selector}; shell={shell!r} token={token!r} text={text!r} errors={errors!r}") from None
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_uses_the_app_session(tablet_page):
+    """The Pilot app already connected. The page uses that token and does not open another session."""
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert calls == []
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-enroll-section]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    assert page.evaluate("navigator.serviceWorker.getRegistrations().then((list) => list.length)") == 0
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+    assert page.locator("[data-drive-goal]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    page.locator("ui-topbar [data-goto]").evaluate("node => node.click()")
+    page.wait_for_timeout(200)
+    assert "/console" not in page.url
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("token_value", ["", "not-a-session"])
+def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_value):
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, token_value)
+    _assert_visible(page, "[data-app-session]", errors)
+    assert "Rosy Pilot 앱이 엽니다" in page.locator("[data-app-session]").inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert calls == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
+    """D-460 결정 2: 자기 방 운전 상태 라벨(MANUAL+움직임 → '운전 중', 아니면 '대기')."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "MANUAL",
+                   "velocity": {"linear": 0.08, "angular": 0.0}}))
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "운전 중"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "대기"
+    assert errors == [], errors
+
+
+def _enter_drive(page, base_url, access_token=None):
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", access_token or dev_server.DEV_TOKEN)
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
@@ -666,7 +847,136 @@ def _enter_drive(page, base_url):
     page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-map-handoff-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            button = page.locator("ui-topbar [data-goto]")
+            assert button.get_attribute("data-goto") == "/console"
+            assert button.inner_text() == "운용 지도"
+            assert page.locator('[aria-label="운전 모드"] [data-drive-goal]').count() == 0
+            page.evaluate("sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token')")
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            arrived = []
+
+            def console(route):
+                arrived.append({"modes": dev_server.MODE_LOG[modes_before:],
+                                "teleop": dev_server.TELEOP_LOG[teleop_before:]})
+                route.fulfill(status=200, content_type="text/html", body="<h1>운용 지도</h1>")
+
+            page.route("**/console", console)
+            button.click()
+            page.wait_for_url("**/console")
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == dev_server.DEV_TOKEN
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert dev_server.DEV_TOKEN not in page.url
+            assert arrived and "IDLE" in arrived[0]["modes"]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in arrived[0]["teleop"])
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tmp_path, monkeypatch):
+    """Pilot's live tab reaches the real CORE Console assets with its own token."""
+    root = HERE.parents[3]
+    for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+                    "middleware/core/services", "contracts/foundation"):
+        monkeypatch.syspath_prepend(str(root / package))
+    from fastapi.testclient import TestClient
+    from core_api_web.api.app import create_app
+    from core_common.profile import RobotProfile, robot_config_dir
+    from core.services import CoreServices
+    import yaml
+    from urllib.parse import urlsplit
+
+    config_dir = root / "contracts/foundation/config"
+    config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config["auth"] = {**config["auth"], **yaml.safe_load(
+        (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
+    operator = next(item for item in config["auth"]["tokens"] if item["role"] == "operator")
+    monkeypatch.setattr(dev_server, "DEV_TOKEN", operator["token"])
+    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+    capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    core = TestClient(create_app(config, CoreServices.build(config, profile, capabilities, tmp_path / "docks.json")))
+    phase = {"console": False}
+    requests = []
+
+    def serve(route):
+        target = urlsplit(route.request.url)
+        path = target.path
+        if path == "/console":
+            phase["console"] = True
+        if not phase["console"]:
+            route.continue_()
+            return
+        requests.append((route.request.method, path, route.request.headers.get("authorization")))
+        if route.request.method != "GET":
+            route.fulfill(status=501, json={"detail": "fixture blocks writes"})
+            return
+        response = core.get(path + (f"?{target.query}" if target.query else ""),
+                            headers={"Authorization": route.request.headers.get("authorization", "")})
+        route.fulfill(status=response.status_code, headers={
+            "content-type": response.headers.get("content-type", "application/octet-stream"),
+            "cache-control": "no-store",
+        }, body=response.content)
+
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", serve)
+            _enter_drive(page, base_url, operator["token"])
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-before-console-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            page.locator("ui-topbar [data-goto='/console']").click()
+            page.wait_for_url("**/console")
+            page.locator('[data-panel="console.map"] .surface-map-frame').wait_for(state="visible")
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+            assert "지도 데이터가 아직 없습니다" in page.locator('.surface-map-overlay').inner_text()
+            assert "지도가 들어오면 읽기 전용으로" in page.locator('#map-action-reason').inner_text()
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == operator["token"]
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert ("GET", "/api/v1/ui/surfaces/console", f"Bearer {operator['token']}") in requests
+            assert "IDLE" in dev_server.MODE_LOG[modes_before:]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in dev_server.TELEOP_LOG[teleop_before:])
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert page.locator("#shell-estop").is_visible()
+            spacing = page.evaluate("""() => {
+              const layers = document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect();
+              const setup = document.querySelector('.surface-link[href="/setup"]').getBoundingClientRect();
+              const status = document.querySelector('#map-status').getBoundingClientRect();
+              return {layersBottom: layers.bottom, setupTop: setup.top,
+                      setupBottom: setup.bottom, statusTop: status.top};
+            }""")
+            assert spacing["layersBottom"] <= spacing["setupTop"] <= spacing["setupBottom"] <= spacing["statusTop"], spacing
+            assert errors == [], errors
+            if output:
+                page.screenshot(path=str(shots / f"console-after-pilot-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
     with playwright_sync.sync_playwright() as playwright:
@@ -690,7 +1000,7 @@ def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -707,7 +1017,7 @@ def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("failure", ["status", "hang"])
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(base_url, failure, viewport):
@@ -749,7 +1059,7 @@ def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(b
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("state", ["fresh", "delayed", "disconnected", "unavailable"])
 def test_drive_telemetry_evidence_at_declared_widths(base_url, state):
     stamp = "2026-10-07T06:00:03Z"
@@ -800,7 +1110,7 @@ def test_drive_telemetry_evidence_at_declared_widths(base_url, state):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_drive_reconnect_warning_stays_visible_at_each_width(base_url, viewport):
     with playwright_sync.sync_playwright() as playwright:
@@ -834,7 +1144,7 @@ def test_drive_reconnect_warning_stays_visible_at_each_width(base_url, viewport)
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_drive_screen_fullscreen_with_camera_and_controls(tablet_page):
     """주행 화면이 풀스크린 카메라 + 2 축 스틱 + 페달 + 제자리 회전 + 프리셋을 갖는다."""
@@ -859,7 +1169,7 @@ def test_drive_screen_fullscreen_with_camera_and_controls(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_stick_right_turns_clockwise_pivot_holds_position_and_release_zeroes(tablet_page):
     """가제보 실측 규약(REP-103)을 브라우저 종단으로 고정: 오른쪽 = angular 음수."""
@@ -902,7 +1212,7 @@ def test_stick_right_turns_clockwise_pivot_holds_position_and_release_zeroes(tab
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_speed_preset_and_fine_change_the_cap(tablet_page):
     base_url, page, errors = tablet_page
@@ -916,7 +1226,7 @@ def test_speed_preset_and_fine_change_the_cap(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     """W 를 누른 채 입력 조정 슬라이더를 누르고 W 를 떼도 키가 눌린 채 남지 않는다(리뷰 지적)."""
@@ -936,7 +1246,7 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_login_code_pairs_and_recent_list_keeps_no_token(tablet_page):
     """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-343)."""
@@ -976,7 +1286,7 @@ MEASURE_VIDEO = """(() => {
 })()"""
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844), (320, 568)])
 def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
@@ -1036,18 +1346,21 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
     if viewport[0] < 480:
         buttons = action_boxes["buttons"]
-        assert len(buttons) == (2 if viewport[0] == 320 else 4), action_boxes
+        assert len(buttons) == 2, action_boxes
         assert max(button["width"] for button in buttons) - min(button["width"] for button in buttons) <= 1, action_boxes
         assert all(button["height"] >= 44 for button in buttons), action_boxes
         assert abs(buttons[0]["left"] - action_boxes["track"]["left"]) <= 1, action_boxes
         assert abs(buttons[-1]["right"] - action_boxes["track"]["right"]) <= 1, action_boxes
         assert abs(buttons[0]["top"] - buttons[1]["top"]) <= 1, action_boxes
-        if len(buttons) == 4:
-            assert abs(buttons[2]["top"] - buttons[3]["top"]) <= 1, action_boxes
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
-        assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
-        assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
+        if viewport[0] == 390:
+            assert cue is None
+            assert all(box["bottom"] <= controls["viewport"] + 1 for box in controls["boxes"]), controls
+            assert scrolled["page"] == 0, scrolled
+        else:
+            assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
+            assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
     else:
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]), controls
 
@@ -1060,7 +1373,7 @@ CONTROL_BOXES = """(() => {
 })()"""
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000)])
 def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport):
     with playwright_sync.sync_playwright() as playwright:
@@ -1092,7 +1405,7 @@ def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000)])
 def test_zoom_cycles_and_always_reports_crop(base_url, viewport):
@@ -1135,7 +1448,7 @@ def test_zoom_cycles_and_always_reports_crop(base_url, viewport):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     """D-364 §6: 진행을 누르는 동안 영상 아래에 겨누는 점과 CORE 의 실제 조향 방향."""
@@ -1207,7 +1520,7 @@ def _wait_for_modes(page, *expected):
 GO_ACTIVE = "document.querySelector('[data-drive-go]').classList.contains('active')"
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_go_releases_on_cancel_and_leave(tablet_page):
     """D-344: 진행은 누르는 동안만 — 손가락이 버튼을 벗어나거나 시스템이 터치를 취소하면 CORE 에 OFF."""
@@ -1238,7 +1551,7 @@ def test_go_releases_on_cancel_and_leave(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_stick_takes_over_auto(tablet_page):
     """자동 진행 중 스틱을 잡으면 자동이 즉시 풀린다(CORE 에 PUT mode OFF) — 손이 우선이다."""
@@ -1256,14 +1569,14 @@ def test_stick_takes_over_auto(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     base_url, page, errors = tablet_page
     page.set_viewport_size({"width": width, "height": height})
     _arm_auto(page, base_url)
-    robot = page.locator('ui-topbar [data-goto="/dashboard"]').bounding_box()
+    robot = page.locator('ui-topbar [data-goto="/console"]').bounding_box()
     stop = page.locator('ui-topbar [data-estop]').bounding_box()
     assert robot and stop and robot["x"] + robot["width"] <= stop["x"]
     if page.locator("ui-topbar ui-brand").is_visible():
@@ -1280,7 +1593,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-auto-{width}x{height}.png"))
     page.click("[data-drive-manual]")
     page.wait_for_selector("[data-drive-pivots]", state="visible")
-    assert page.locator("[data-drive-scroll-cue]").is_visible()
+    assert page.locator("[data-drive-scroll-cue]").is_visible() == (width == 320)
     if output:
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-manual-{width}x{height}.png"))
     page.locator('[data-drive-pivot="left"]').scroll_into_view_if_needed()
@@ -1300,7 +1613,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     base_url, page, errors = tablet_page
@@ -1323,6 +1636,21 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     panel.locator("details.pilot-models summary").first.click()
     assert panel.locator("details.pilot-models").first.get_attribute("open") is not None
     page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
+    assert panel.is_visible()
+    assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "true"
+    assert page.locator("[data-drive-tools-panel] [data-drive-fit]").count() == 1
+    assert page.locator("[data-drive-tools-panel] [data-drive-fill]").count() == 1
+    assert page.locator("[data-drive-tools-panel] details.pilot-models[open]").count() == 1
+    bounds = panel.bounding_box()
+    assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 844
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-390x844.png"))
+    scroll = panel.evaluate("node => { node.scrollTop = node.scrollHeight; return {top: node.scrollTop, height: node.scrollHeight, visible: node.clientHeight}; }")
+    assert scroll["height"] > scroll["visible"] and scroll["top"] > 0, scroll
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-scroll-390x844.png"))
+    page.set_viewport_size({"width": 500, "height": 844})
     page.wait_for_function("document.querySelectorAll('[data-drive-hud] details.pilot-models').length === 2")
     assert panel.is_hidden()
     assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "false"
@@ -1338,7 +1666,7 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_reenter_resets_auto_mode(tablet_page):
     """주행 화면은 같은 section 에 다시 마운트된다 — 나갔다 들어오면 수동(페달)으로 시작한다."""
@@ -1365,7 +1693,7 @@ def _calibrating(owner_id: str) -> dict:
             "started_at": "2026-10-01T09:00:00+00:00", "remaining_s": 27.0}
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_page):
     """D-321 부록: 보정 중이면 띠가 뜨고, 남의 보정이면 주행 조작이 사유와 함께 잠긴다."""
@@ -1416,7 +1744,7 @@ def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_leaving_while_locked_never_posts_idle_over_the_owner(tablet_page):
     """D-321 부록: 남의 보정으로 잠긴 화면이 나가도 /mode IDLE 로 주인의 주행을 끊지 않는다."""
@@ -1434,7 +1762,7 @@ def test_leaving_while_locked_never_posts_idle_over_the_owner(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_owner_leaving_still_returns_the_mode_to_idle(tablet_page):
     base_url, page, errors = tablet_page
@@ -1452,7 +1780,7 @@ def test_owner_leaving_still_returns_the_mode_to_idle(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_owner_sees_checking_while_whoami_retries_then_gets_control(tablet_page):
     """whoami 가 실패하는 동안 '보정 확인 중'으로 잠그고, 재시도가 성공하면 주인에게 조작을 돌려준다."""
@@ -1477,7 +1805,7 @@ def test_owner_sees_checking_while_whoami_retries_then_gets_control(tablet_page)
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
     """modeHeld 고정: MANUAL 을 잡지 못한 화면은 나가면서 IDLE 을 보내지 않는다(잠금이 없어도)."""
@@ -1547,7 +1875,34 @@ def _enter_recording_drive(page, base_url, **scenario):
     page.wait_for_function("!document.querySelector('[data-robot-record]').disabled")
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_narrow_recordings_sheet_scrolls_many_rows_and_keeps_actions_visible(base_url):
+    """22rem 미만: 녹화본이 많으면 목록만 스크롤하고 하단 행동은 스크롤 없이 보인다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 320, "height": 568})
+        page.set_default_timeout(10_000)
+        try:
+            _enter_recording_drive(page, base_url, many=True)
+            _open_sheet(page)
+            rows = page.locator("[data-recordings-sheet] [data-recording-id]")
+            assert rows.count() == 12
+            assert page.evaluate("""(() => { const l = document.querySelector('[data-recordings-list]');
+              return l.scrollHeight > l.clientHeight; })()"""), "많은 녹화본은 목록이 스크롤한다"
+            for selector in ("[data-recordings-close]", "[data-recordings-refresh]"):
+                box = page.locator(selector).bounding_box()
+                assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568, selector
+            last = rows.last
+            last.scroll_into_view_if_needed()
+            assert last.evaluate("""row => { const b = row.getBoundingClientRect();
+              return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-recording-id]') === row; }""")
+        finally:
+            _recordings(page, base_url, reset=True)
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_robot_recording_toggle_and_sheet(base_url, viewport):
@@ -1626,7 +1981,7 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     """'녹화 중'은 로봇이 실제로 기록할 때부터다. 준비 중에는 타이머 없이 멈출 수만 있다."""
@@ -1665,7 +2020,7 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
     base_url, page, errors = tablet_page
@@ -1677,7 +2032,7 @@ def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_robot_recording_continues_past_the_ten_minute_cap_until_stopped(tablet_page):
     """한 파일은 10분 상한을 지키고, 끄지 않은 녹화는 다음 구간으로 잇는다. 끈 뒤에는 잇지 않는다."""
@@ -1700,7 +2055,7 @@ def test_robot_recording_continues_past_the_ten_minute_cap_until_stopped(tablet_
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_page):
     base_url, page, errors = tablet_page
@@ -1715,7 +2070,7 @@ def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_a_viewer_is_told_it_needs_an_operator(tablet_page):
     base_url, page, errors = tablet_page
@@ -1729,7 +2084,7 @@ def test_a_viewer_is_told_it_needs_an_operator(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("mode, text", [("short", "끊겼습니다"), ("conflict", "멈춘 뒤에")])
 def test_a_cut_or_refused_download_saves_nothing(tablet_page, mode, text):
@@ -1744,7 +2099,7 @@ def test_a_cut_or_refused_download_saves_nothing(tablet_page, mode, text):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("how", ["cancel", "exit"])
 def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how):
@@ -1767,7 +2122,7 @@ def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how)
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_a_large_recording_points_to_the_pc_tool(tablet_page):
     base_url, page, errors = tablet_page
@@ -1779,7 +2134,7 @@ def test_a_large_recording_points_to_the_pc_tool(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+@pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
     """3 s 새로 읽기가 같은 목록을 가져오면 행을 다시 만들지 않는다 — 초점·live region 그대로."""
@@ -1797,7 +2152,7 @@ def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
 
 # --- D-411 B: rosy.controls/1 — 기기가 알리는 조작부로 화면을 조립한다 ---------------------------
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_unknown_control_kind_is_shown_not_fatal(tablet_page):
     base_url, page, errors = tablet_page
     page.request.post(f"{base_url}/__test__/controls", data={"extra": {"id": "laser", "kind": "laser", "label": "레이저"}})
@@ -1807,7 +2162,7 @@ def test_unknown_control_kind_is_shown_not_fatal(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_old_core_without_controls_falls_back_to_the_pinky_profile(tablet_page):
     base_url, page, errors = tablet_page
     page.request.post(f"{base_url}/__test__/controls", data={"omit": True})
@@ -1818,7 +2173,7 @@ def test_old_core_without_controls_falls_back_to_the_pinky_profile(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_announced_autonomy_decides_the_line_toggle(tablet_page):
     base_url, page, errors = tablet_page
     page.request.post(f"{base_url}/__test__/controls",
@@ -1828,7 +2183,7 @@ def test_announced_autonomy_decides_the_line_toggle(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_empty_controls_are_not_an_old_server(tablet_page):
     base_url, page, errors = tablet_page
     page.request.post(f"{base_url}/__test__/controls", data={"items": []})
@@ -1928,7 +2283,7 @@ def _mount_arm(page, base_url, **opts):
     page.wait_for_function("document.querySelector('[data-sim-status]').textContent === '조작 가능'")
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_joystick_sends_bounded_goals_one_at_a_time(tablet_page):
     base_url, page, errors = tablet_page
     _mount_arm(page, base_url)
@@ -1955,7 +2310,7 @@ def test_arm_joystick_sends_bounded_goals_one_at_a_time(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_axes_are_remappable_and_buttons_wait_for_the_goal(tablet_page):
     base_url, page, errors = tablet_page
     _mount_arm(page, base_url, extra=[{"id": "beam", "kind": "beam", "label": "빔"}])
@@ -1979,7 +2334,7 @@ def test_arm_axes_are_remappable_and_buttons_wait_for_the_goal(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_arm_screen_fits_phone_width(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
@@ -2011,7 +2366,7 @@ _HOLD_PAD = """async (ms) => {
 }"""
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_stick_held_keeps_going_across_goals_while_the_owner_is_active(tablet_page):
     """Review C1: the real owner says ready:false/"active" while a goal runs — that is busy, not blocked."""
     base_url, page, errors = tablet_page
@@ -2026,7 +2381,7 @@ def test_arm_stick_held_keeps_going_across_goals_while_the_owner_is_active(table
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_sequence_mismatch_is_retried_once_not_a_release(tablet_page):
     """Gazebo run: a new /joint_states between GET /state and POST → 409 joint_state_sequence_mismatch."""
     base_url, page, errors = tablet_page
@@ -2037,7 +2392,7 @@ def test_arm_sequence_mismatch_is_retried_once_not_a_release(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_stick_stops_at_the_joint_limit_without_a_refused_goal(tablet_page):
     base_url, page, errors = tablet_page
     _mount_arm(page, base_url, settleMs=150)
@@ -2050,7 +2405,7 @@ def test_arm_stick_stops_at_the_joint_limit_without_a_refused_goal(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_seat_loss_drops_the_goal_and_offers_pairing(tablet_page):
     base_url, page, errors = tablet_page
     _mount_arm(page, base_url)
@@ -2064,7 +2419,7 @@ def test_arm_seat_loss_drops_the_goal_and_offers_pairing(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_goal_unknown_to_the_server_is_settled(tablet_page):
     base_url, page, errors = tablet_page
     _mount_arm(page, base_url)
@@ -2076,7 +2431,7 @@ def test_arm_goal_unknown_to_the_server_is_settled(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_arm_gripper_presets_slider_and_badge(tablet_page):
     """D-411 C: one absolute goal per preset or slider release; the badge reads the grasp state."""
     base_url, page, errors = tablet_page
@@ -2107,7 +2462,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
     shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
@@ -2140,7 +2495,7 @@ def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
             browser.close()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_a_widget_that_throws_is_shown_not_fatal(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
@@ -2164,7 +2519,7 @@ def _enter_drive_with(page, base_url, items):
     page.wait_for_selector("[data-drive-stick]")
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_zero_announced_limits_show_standstill(tablet_page):
     base_url, page, errors = tablet_page
     _enter_drive_with(page, base_url, [{**dev_server._BASE_CONTROL, "max_linear": 0, "max_angular": 0}])
@@ -2172,7 +2527,7 @@ def test_zero_announced_limits_show_standstill(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_a_base_without_pivot_or_fine_draws_neither_and_ignores_q_e(tablet_page):
     base_url, page, errors = tablet_page
     _enter_drive_with(page, base_url, [{**dev_server._BASE_CONTROL, "pivot": False, "fine": False}])
@@ -2225,7 +2580,7 @@ def _zone_point(page):
     }""")
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
 def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_url, viewport):
     """Tablet field report 2026-10-02: the ring is too small. An invisible zone around it grabs the
@@ -2300,7 +2655,7 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
         finally:
             browser.close()
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
     """Re-review I-A: /state fails once right after SUCCEEDED — the stick must not wait forever."""
     base_url, page, errors = tablet_page
@@ -2322,7 +2677,7 @@ def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
     page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 2, bubbles: true}))")
     assert page.evaluate("window.rejections") == []
     assert errors == [], errors
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, width, height):
     from playwright.sync_api import expect
@@ -2392,7 +2747,7 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, widt
     assert errors == []
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_show_code_visible_for_operator_with_upgrade_path_and_working_for_admin(tablet_page):
     """양방향 연동(D-193 §5): 운영자에게도 항목이 보이고 전환 길을 제공, 관리자는 발급·표시."""
     base_url, page, errors = tablet_page

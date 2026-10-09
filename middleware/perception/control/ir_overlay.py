@@ -82,7 +82,8 @@ OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
                    "camera_height_m_override": (0.02, 0.2)}
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
-                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads")
+                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
+                           "learned_paint_motion_compensation")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -99,7 +100,7 @@ def operator_overlay_problem(data) -> Optional[str]:
     if ("camera_ground_source" in params
             and params["camera_ground_source"] not in OPERATOR_GROUND_SOURCES):
         return f"camera_ground_source must be one of {list(OPERATOR_GROUND_SOURCES)}"
-    for key in ("allow_nominal_ground", "debug_overlay"):
+    for key in ("allow_nominal_ground", "debug_overlay", "learned_paint_motion_compensation"):
         if key in params and type(params[key]) is not bool:
             return f"{key} must be true or false"
     if "nominal_camera_profile_path" in params:
@@ -129,11 +130,12 @@ def operator_overlay_problem(data) -> Optional[str]:
             return "learned_lane_pointer must be an absolute path"
     if params.get("paint_source") == "learned" and not params.get("learned_lane_pointer"):
         return "learned paint needs learned_lane_pointer in the same file"
-    # D-408 measured cadence is at most two frames; a Pi has four cores and
-    # CORE/IO must retain capacity. Do not expose unbounded thread counts here.
-    for key in ("learned_paint_every_n", "learned_paint_threads"):
-        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= 2):
-            return f"{key} must be an integer in [1, 2]"
+    # every_n up to 4: measured Pi 5 lane-seg inference is ~240-300 ms, about
+    # 2.4 frames at 8 Hz, so every_n 2 never serves a mask (0/84 live, 9dfk).
+    # Threads stay at 2: a Pi has four cores and CORE/IO must retain capacity.
+    for key, high in (("learned_paint_every_n", 4), ("learned_paint_threads", 2)):
+        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= high):
+            return f"{key} must be an integer in [1, {high}]"
     return None
 
 

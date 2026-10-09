@@ -11,8 +11,9 @@ from typing import Any, Optional
 
 from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
+from core.trip_lease import TripLeaseManager, build_trip_lease  # D-541
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
-from core_features.command.manager import CommandManager
+from core_features.command.manager import CommandManager, Twist
 from core.teleop_config import teleop_timeout_ms
 from core.fleet_loss_wiring import build_fleet_loss
 from core.line_follow_wiring import (  # noqa: F401 (tests import the parser here)
@@ -38,6 +39,7 @@ from core_features.maps import MapSnapshotStore
 from core_features.navigation.manager import NavigationManager
 from core_features.navigation.readiness import NavigationReadinessGate
 from core_features.line_follow import LineFollowManager
+from core_common.protocol.line_advice import AdviceStore
 from core_features.traffic_policy import (
     SignalObserverMonitor,
     SignalObserverPoller,
@@ -259,6 +261,7 @@ class CoreServices:
     audit: FileAuditLog
     # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
     calibration: CalibrationSessionManager
+    trip_lease: TripLeaseManager  # D-541: fences non-owner motion; ends with the trip's driving
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
     pilot_recording: PilotRecordingGuard = field(default_factory=PilotRecordingGuard)  # D-411 A
     vision_stream: DriverStreamGate = field(default_factory=DriverStreamGate)  # D-368
@@ -271,6 +274,8 @@ class CoreServices:
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
+    # D-525 signal advice, display only: kept off LineFollowManager so no decision can read it.
+    line_advice: AdviceStore = field(default_factory=AdviceStore)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -486,6 +491,9 @@ class CoreServices:
             # 쥔 채 묻는다.
             docking_active_provider=lambda: docking.active,
             map_id_provider=lambda: state.map_id,
+            # D-559 trail: own pose, the NAVIGATION slot and the D-422 judge of line follow.
+            pose_provider=state.pose_sample, obstacle_gap=line_follow.obstacle_gap,
+            twist_sink=lambda t: command.set_nav_twist(None if t is None else Twist(*t)),
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
         nav.docking_active_provider = lambda: (
@@ -542,6 +550,7 @@ class CoreServices:
             status = traffic_policy.reset("estop")
             state.set_traffic_policy(status)
         safety.estop_listeners.append(reset_traffic_policy)
+        trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav)
         runtime_probe = HostRuntimeProbe(
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
@@ -568,7 +577,7 @@ class CoreServices:
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
-                   audit=audit, calibration=calibration,
+                   audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, localization=localization, loc_mission=loc_mission,
                    fleet_loss=fleet_loss)

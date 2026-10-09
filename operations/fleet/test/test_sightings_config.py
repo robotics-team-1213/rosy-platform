@@ -63,3 +63,17 @@ def test_credential_kind_rules_refuse_start(tmp_path, row, message):
     config = _write(tmp_path / "sightings.yaml", [row])
     with pytest.raises(ValueError, match=message):
         load_sighting_sources(config, environ=ENV)
+
+
+@pytest.mark.parametrize("bad, message", [
+    ([34, 34], "distinct"), ([50], "0-49"), (["34"], "0-49"), ([True], "0-49"),
+    ([30], "corner_marker_ids"), ([7], "robot_markers"),
+])
+def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, bad, message):
+    """D-564: place_markers is a validated id list; absent means none."""
+    config = _write(tmp_path / "s.yaml", [_row(place_markers=[34, 35, 36, 37, 38])])
+    assert load_sighting_sources(config, environ=ENV)[0].place_markers == (34, 35, 36, 37, 38)
+    assert load_sighting_sources(_write(tmp_path / "s.yaml", [_row()]), environ=ENV)[0].place_markers == ()
+    config = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 7}, place_markers=bad)])
+    with pytest.raises(ValueError, match=message):
+        load_sighting_sources(config, environ=ENV)

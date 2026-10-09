@@ -74,6 +74,9 @@ class StateManager:
         self._mode: RobotMode = RobotMode.IDLE
         self._navigation: NavigationState = NavigationState.IDLE
         self._pose = Pose()
+        #: D-559: "odom" while the bridge's map TF is stale and odom writes the pose; None before
+        #: any pose arrived (the zero pose is no place).
+        self._pose_frame: Optional[str] = None
         self._odom_pose: Optional[OdomPose] = None
         self._odom_rejected_logged = False
         self._velocity = Velocity()
@@ -95,11 +98,17 @@ class StateManager:
         self._safety_policy_provider: Optional[Callable[[], Optional[dict]]] = None
         self._safety_policy_error: Optional[str] = None  # last logged error type
         self._localization_provider: Optional[Callable[[], object]] = None
+        self._trip_lease_provider: Optional[Callable[[], tuple]] = None
 
     def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
         """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
         with self._lock:
             self._localization_provider = provider
+
+    def set_trip_lease_provider(self, provider: Optional[Callable[[], tuple]]) -> None:
+        """D-541: ``() -> (lease or None, ended or None)``, read live so ``expires_in_s`` ticks."""
+        with self._lock:
+            self._trip_lease_provider = provider
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -132,10 +141,18 @@ class StateManager:
             self._navigation = state
             self._mark("navigation")
 
-    def set_pose(self, x: float, y: float, yaw: float) -> None:
+    def set_pose(self, x: float, y: float, yaw: float, frame: str = "map") -> None:
         with self._lock:
             self._pose = Pose(x=x, y=y, yaw=yaw)
+            self._pose_frame = frame
             self._mark("pose")
+
+    def pose_sample(self) -> tuple[float, float, float, Optional[str], float]:
+        """(x, y, yaw, frame, age_s) without building a snapshot (D-559 trail tick, 20 Hz)."""
+        with self._lock:
+            at = self._received_mono.get("pose")
+            age = float("inf") if at is None else self._monotonic() - at
+            return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame, age
 
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
@@ -265,6 +282,9 @@ class StateManager:
                     log.warning("safety_policy block unavailable: %s: %s", type(exc).__name__, exc)
         localization_provider = self._localization_provider
         localization = localization_provider() if localization_provider is not None else None
+        trip_lease_provider = self._trip_lease_provider
+        trip_lease, trip_lease_ended = (trip_lease_provider() if trip_lease_provider is not None
+                                        else (None, None))
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -304,4 +324,6 @@ class StateManager:
                 safety_policy=safety_policy,
                 localization=localization,
                 odom_pose=self._odom_pose,
+                trip_lease=trip_lease,
+                trip_lease_ended=trip_lease_ended,
             )

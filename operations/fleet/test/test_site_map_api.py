@@ -301,7 +301,7 @@ def test_field_view_review_fixes_are_served():
     page = client.get("/console").text
     field_view = client.get("/console/assets/field-view.js").text
     vision_view = client.get("/console/assets/vision-view.js").text
-    styles = client.get("/console/assets/styles.css").text
+    styles = client.get("/console/assets/styles.css").text + client.get("/console/assets/fleet-header.css").text
 
     # Re-warp only when the frame, corners or size change; a hidden layer returns before warp.
     assert "if (warped?.key !== key)" in field_view
@@ -345,6 +345,8 @@ def test_console_web_node_unit_tests_pass():
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
     specs = sorted((Path(__file__).resolve().parent / "web").glob("*.test.mjs"))
     assert specs, "no .test.mjs specs found under test/web"
-    result = subprocess.run([node, "--test", *map(str, specs)], capture_output=True, text=True,
+    hook = Path(__file__).resolve().parent / "web" / "register-console-assets.mjs"
+    result = subprocess.run([node, "--import", hook.as_uri(), "--test", *map(str, specs)],
+                            capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

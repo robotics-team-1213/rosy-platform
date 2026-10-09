@@ -170,7 +170,7 @@ def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
     shell = client.get("/console/assets/console.js").text
 
     assert pure.status_code == 200 and "normalizeMapProposal" in pure.text
-    assert 'from "./map-fit.js"' in fit_view and '"/api/fleet/site-lanes"' in fit_view
+    assert 'from "/console/assets/map-fit.js"' in fit_view and '"/api/fleet/site-lanes"' in fit_view
     # The warp is field-view's, not a copy.
     assert 'import { warpImage } from "./field-view.js"' in fit_view
     # Vision serves the proposal on the same lease; Fleet never relays it.

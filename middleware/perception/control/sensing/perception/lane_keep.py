@@ -66,7 +66,7 @@ import numpy as np
 
 from .lane import LaneObservation
 from .crosswalk_stripes import crosswalk_extent
-from .lane_bev import BirdsEye
+from .lane_bev import BEV_CELL_M, BirdsEye
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
     FLANK_INNER_M,
@@ -94,7 +94,7 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     _validate_positive,
     clean_learned_mask,
     denoise_white_mask,
-    extract_lines,
+    extract_lines, fit_cells, PAINT_HALF_WIDTH_M, paint_half_width,
     floor_white_mask,
 )
 from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on lane_keep_pairs
@@ -104,6 +104,7 @@ from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on
     PAIR_MAX_FRACTION,
     PAIR_MIN_FRACTION,
     _lateral_at,
+    _pursuit_point,
     is_pair,
     pair_conflicts,
 )
@@ -113,8 +114,11 @@ from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants
     FORK_MIN_LENGTH_M,
     JUNCTION_AHEAD_M,
     _across_path,
+    _continues,
     _junction,
 )
+from .lane_keep_bend import as_transverse, bend_side, bend_target, nearest_first, parallel_spans, runs_past, stop_short
+from .lane_keep_paint import extract_paint_points
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -190,6 +194,8 @@ CORNER_LATCH_FRAMES = 12
 #: pursues the new centre line at no less than its distance + CORNER_REACH_M.
 CORNER_SQUARE_RAD = math.radians(10.0)
 CORNER_REACH_M = 0.04
+#: Bends (lane_keep_bend, D-507 B9): steeper than STEEP_MIN_ANGLE_RAD, not square (an L-corner's line).
+BEND_MAX_ANGLE_RAD = math.pi / 2 - CORNER_SQUARE_RAD
 #: While a corner is latched, a line this steep to the heading is still the
 #: corner line (the next lane's outer boundary seen mid-turn).
 CORNER_MIN_HEADING_RAD = math.radians(35.0)
@@ -204,7 +210,7 @@ class LaneKeeper:
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
                  smoothing: float = 0.5, seed: int = 0,
-                 corner_turning: bool = False) -> None:
+                 corner_turning: bool = False, paint_half_width_m: float = PAINT_HALF_WIDTH_M) -> None:
         if (isinstance(camera_x_offset_m, bool)
                 or not isinstance(camera_x_offset_m, (int, float))
                 or not math.isfinite(camera_x_offset_m)):
@@ -218,6 +224,7 @@ class LaneKeeper:
         self._smoothing = float(smoothing)
         self._seed = int(seed)
         self._corner_turning = bool(corner_turning)
+        self._fit_half = paint_half_width(paint_half_width_m) + FIT_STRIDE * BEV_CELL_M  # G-16 fit band
         self._view = None
         self._view_key = None
         self._previous_target = None
@@ -267,16 +274,19 @@ class LaneKeeper:
         return (round(column, 1), round(row, 1))
 
     def update(self, bgr: np.ndarray, ground, *, lane_half_width_m: float = 0.0925,
-               paint_mask: np.ndarray | None = None, **_ignored) -> LaneObservation | None:
+               paint_mask: np.ndarray | None = None, bend_expected: bool = False, **_ignored) -> LaneObservation | None:
         """paint_mask (D-408): an HxW 0/1 paint mask from another source (learned model,
         OpenCV glare filter) used in place of floor_white_mask; rows above the horizon
-        margin are dropped from it."""
+        margin are dropped from it. bend_expected (D-507 B9, default off: the pre-B9 keeper): the route
+        expects a bend here (Fleet expect window, place kind 'bend', via CORE); with corner turning only."""
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
+        prior_boundaries = self.last.get("boundaries", [])
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
-                     "lane_width_m": 2.0 * lane_half_width_m}
+                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1,
+                     "paint_points_v": 1, "paint_points_m": []}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
@@ -299,25 +309,31 @@ class LaneKeeper:
             self._forget()
             return None
         self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
-        coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
-        cells = np.flatnonzero(coarse.ravel())
-        points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],
-                           view.y[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells]], axis=1)
+        points, self.last["paint_points_m"] = extract_paint_points(view, grid, FIT_STRIDE)
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]
-        lines, blobs = extract_lines(points, rng) if len(points) else ([], [])
+        lines, blobs = extract_lines(points, rng, usable=fit_cells(view.seen, self.last["crosswalk"]),  # G-16
+                                     paint_half_m=self._fit_half) if len(points) else ([], [])
         self.last["blobs"] = len(blobs)
         previous = self._previous_target
-        left, right, transverse = [], [], []
-        for line in lines:
+        left, right, transverse, bends = [], [], [], []
+        bend_expected, parallel = bool(bend_expected) and self._corner_turning, parallel_spans(lines, SIDE_X_M, STEEP_MIN_ANGLE_RAD)
+        for line in nearest_first(lines) if bend_expected else lines:  # a piece continuing another is sided after it
             centre, direction = line["centre"], line["direction"]
             heading = math.atan2(direction[1], direction[0])
             ends = [centre + direction * line["along"][0], centre + direction * line["along"][1]]
-            record = {"heading_deg": round(math.degrees(heading), 1),
+            record = {"slope_sd": line.get("slope_sd"), "offset_sd": line.get("offset_sd"), "heading_deg": round(math.degrees(heading), 1),
                       "length_m": round(line["along"][1] - line["along"][0], 3),
                       "ends_m": [[round(float(p[0]), 3), round(float(p[1]), 3)] for p in ends],
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}
+            bend = bend_expected and self._corner_side is None and bend_side(ends, heading, half, parallel, (
+                STEEP_MIN_ANGLE_RAD, BEND_MAX_ANGLE_RAD, CORNER_OPEN_M, AMBIGUOUS_LATERAL_M, ONE_MAX_DISTANCE_FRACTION, CORNER_PAST_MARGIN_M))
+            if bend:  # the closed side's boundary turning; kept out of pairing and containment
+                self.last["candidates"].append(dict(record, side="right" if bend == "left" else "left", rejected=False, reason="bend",
+                                                    y_at_side_x_m=round(_lateral_at(centre, direction, SIDE_X_M), 3), selected=False))
+                bends.append(dict(self.last["candidates"][-1], open=bend, centre=centre, direction=direction))
+                continue
             if abs(heading) > TRANSVERSE_MIN_ANGLE_RAD:
                 self.last["transverse"].append(record)
                 self.last["candidates"].append(dict(record, rejected=True, reason="transverse"))
@@ -349,10 +365,12 @@ class LaneKeeper:
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
                 continue
+            near_y = float(min(ends, key=lambda p: p[0])[1])  # D-507 B9: a steep line is sided by its seen paint
+            at = near_y if bend_expected and abs(heading) > STEEP_MIN_ANGLE_RAD and abs(near_y) >= half / 2.0 else lateral
             reference = 0.0
-            if abs(lateral) < AMBIGUOUS_LATERAL_M and previous is not None:
+            if abs(at) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
-            side = "left" if lateral > reference else "right"
+            side = "left" if at > reference else "right"
             # The same boundary as last frame keeps its side while it stays
             # near the robot: a line drifting across under the camera is still
             # the boundary it was, not the next lane's. Kept only while the
@@ -362,7 +380,10 @@ class LaneKeeper:
             # lane (20261005T134540Z, frames 329-367).
             tracked = self._track(lateral, heading)
             wrong_side = 0
-            if tracked is not None:
+            parent = next((p for p in left + right + bends if _continues(p, record)), None) if bend_expected else None
+            if parent is not None:  # one painted line is one boundary (D-507 B9)
+                side, tracked = parent["side"], None
+            elif tracked is not None:
                 tracked_side, carried = tracked
                 beyond = ((lateral > AMBIGUOUS_LATERAL_M and tracked_side == "right")
                           or (lateral < -AMBIGUOUS_LATERAL_M and tracked_side == "left"))
@@ -392,27 +413,29 @@ class LaneKeeper:
                 dict({k: v for k, v in record.items()
                       if k not in ("centre", "direction", "_wrong_side")},
                      rejected=True, reason="pair_conflict"))
-        target, strategy = self._choose(left, right, half)
+        target, strategy = self._choose(left, right, half, bend_expected and bool(bends))
         # A lane seen on both sides is followed; a corner is only looked for
         # when it is not (a line across between two lane lines is a stop
         # line, a crosswalk or a junction mouth, not an L-corner).
         corner = None
         if self._corner_turning and strategy != "both":
-            corner = self._corner(transverse, half, left + right + conflicts)
+            corner = self._corner(transverse, half, left + right + conflicts, left + right + prior_boundaries)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
-        junction = (None if corner is not None
-                    else _junction(strategy, transverse, seen_left, seen_right, half,
-                                   self._corner_turning,
-                                   ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
+        junction, ahead = ((None, None) if corner is not None
+                           else _junction(strategy, transverse + as_transverse(bends, TRANSVERSE_MIN_ANGLE_RAD), seen_left,
+                                          seen_right, half, self._corner_turning, ONE_MAX_DISTANCE_FRACTION * 2.0 * half,
+                                          continuity=bend_expected))
+        target, strategy, room = (bend_target(bends, half, CORNER_LOOKAHEAD_M, target, strategy)  # junctions first
+                                  if corner is None and junction is None and strategy != "both" and bends else (target, strategy, math.inf))
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],
                           r.get("_wrong_side", 0))
                          for r in left + right + conflicts]
         for record in left + right:
-            if target is None or strategy.startswith('corner'):
+            if target is None or strategy.startswith(('corner', 'bend')):
                 record['selected'] = False
             record.pop("direction")
             record.pop("centre")
@@ -420,7 +443,7 @@ class LaneKeeper:
             self.last["boundaries"].append(record)
             self.last["candidates"].append(dict(record, rejected=False, reason=None))
         if target is None:
-            self.last["reason"] = junction or "no_boundary"
+            self.last.update(reason=junction or "no_boundary", **({"junction_ahead_m": round(float(ahead), 3)} if junction else {}))
             # Nothing is pursued: the next frame sides its lines afresh (a
             # held robot sees the same frame again, and a side inherited
             # into a hold would otherwise hold it forever).
@@ -430,13 +453,13 @@ class LaneKeeper:
             return None
         if previous is not None and self._smoothing > 0.0 and not strategy.startswith("corner"):
             target = self._smoothing * np.asarray(previous) + (1.0 - self._smoothing) * target
-        tx, ty = float(target[0]), float(target[1])
+        tx, ty = (float(v) for v in stop_short(target, room))
         self._previous_target = (tx, ty)
         confidence = BOTH_CONFIDENCE if strategy == "both" else ONE_CONFIDENCE
         if strategy == "both":
             self._corner_side, self._corner_frames, self._corner_engaged = None, 0, False
         error = max(-1.0, min(1.0, -ty / half))
-        if strategy.startswith("corner_") and strategy != "corner_ahead":
+        if strategy.startswith(("corner_", "bend_")) and not strategy.endswith("_ahead"):
             # CORE saturates at |error| ~ 0.9 (0.7 rad/s): a full-scale corner
             # command spins the robot on the inner corner. Capped, it arcs.
             error = max(-CORNER_MAX_ERROR, min(CORNER_MAX_ERROR, error))
@@ -465,9 +488,8 @@ class LaneKeeper:
                          error=round(error, 3), confidence=confidence)
         return LaneObservation(error=error, confidence=confidence)
 
-    def _corner(self, transverse, half, boundaries=()):
-        """(target, strategy) from the nearest L-corner line ahead, or None.
-        Updates the latched corner side."""
+    def _corner(self, transverse, half, boundaries=(), seed_boundaries=()):
+        """(target, strategy) from the nearest L-corner ahead; latch its side."""
         best = None
         for centre, direction, ends, steep in transverse:
             ys = sorted(float(p[1]) for p in ends)
@@ -491,7 +513,7 @@ class LaneKeeper:
         # mimic the opposite corner.
         if (self._corner_side is None and not steep
                 and max(left_reach, right_reach) > half + CORNER_OPEN_M
-                and not _runs_past(boundaries, left_reach > right_reach, ahead)):
+                and not runs_past(boundaries, left_reach > right_reach, ahead, CORNER_PAST_MARGIN_M)):
             # The closed end is where the corner line meets the outer lane line.
             if (left_reach - right_reach > CORNER_ASYMMETRY_M
                     and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
@@ -499,6 +521,7 @@ class LaneKeeper:
             elif (right_reach - left_reach > CORNER_ASYMMETRY_M
                     and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
                 side = "right"
+        if side and not any(r["side"] != side and r["length_m"] >= half for r in seed_boundaries): side = None
         if side is not None:
             self._corner_side = side
         if self._corner_side is not None:
@@ -546,7 +569,7 @@ class LaneKeeper:
                 best = (gap, side, wrong_side)
         return None if best is None else best[1:]
 
-    def _choose(self, left, right, half):
+    def _choose(self, left, right, half, bend_expected=False):
         """Target (x, y) and strategy from the side-classified boundaries."""
         for record in left + right:
             record['selected'] = False
@@ -566,8 +589,8 @@ class LaneKeeper:
             heading = l["direction"] + r["direction"]
             point, _ = _pursuit_point(middle, heading / np.linalg.norm(heading), self._lookahead)
             return point, "both"
-        candidates = [r for r in left + right
-                      if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane]
+        candidates = [r for r in left + right if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane
+                      and (bend_expected or r["tracked"] or r["length_m"] >= half)]
         if not candidates:
             return None, "none"
         # The boundary continuous with last frame's first, then the nearest.
@@ -575,24 +598,3 @@ class LaneKeeper:
                                                 -r["length_m"]))
         record['selected'] = True
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
-
-
-def _runs_past(boundaries, open_left, ahead):
-    """True when a boundary on the open side runs on past the corner line."""
-    for record in boundaries:
-        if (record["side"] == "left") != open_left:
-            continue
-        far = max(float(p[0]) for p in record["ends_m"])
-        if far >= ahead - CORNER_PAST_MARGIN_M:
-            return True
-    return False
-
-
-def _pursuit_point(origin, direction, radius):
-    """Point of the line origin + t*direction at `radius` from base_link, ahead
-    (the larger root); the closest point when the line passes further away.
-    Returns (point, t)."""
-    b = float(np.dot(origin, direction))
-    disc = b * b - float(np.dot(origin, origin)) + radius * radius
-    t = -b + math.sqrt(disc) if disc > 0.0 else -b
-    return origin + direction * t, t

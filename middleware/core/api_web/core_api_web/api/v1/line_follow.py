@@ -20,12 +20,15 @@ from core_api_web.api.v1.common import (
     require_calibration_owner,
     require_manual_released,
     localized_start,
+    stop_ends_trip_lease,
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.line_advice import LineAdviceRequest
+from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import JunctionRefused, LineFollowMode, LineStuckRefused
+from core_api_web.api.deps import AuthorityRefused, JunctionRefused, LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -102,7 +105,15 @@ class LineStuckDecisionRequest(BaseModel):
 
 
 def _status(svc: CoreServicesLike) -> dict:
-    return svc.line_follow.status().model_dump()
+    data = svc.line_follow.status().model_dump()
+    authority = getattr(svc.line_follow, "authority_status", lambda: None)()
+    if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
+        data["authority"] = authority
+    store = getattr(svc, "line_advice", None)
+    advice = None if store is None else store.current(time.monotonic())
+    if advice is not None:  # D-525: only while an unexpired advice carries a signal
+        data["advice"] = advice
+    return data
 
 
 @line_follow_router.get("")
@@ -130,6 +141,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
             if not ok:
                 raise ApiError("MODE_CONFLICT", 409, reason)
             svc.state.set_mode(RobotMode.IDLE)
+        stop_ends_trip_lease(svc, auth)
         return _status(svc)
 
     # Turning line-follow OFF above only stops motion, so it stays open to all.
@@ -190,16 +202,49 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     return _status(svc)
 
 
+class LineExitSegment(BaseModel):
+    """D-520 1: the lane the robot enters after this place's turn is one circular arc to the next
+    place. Fleet sends it only to a robot announcing lane_arc, always with the instruction's map_id."""
+
+    curvature_1pm: float = Field(ge=-5.0, le=5.0)  # signed, left (CCW) +, 0.5 <= |k| <= 5
+    length_m: float = Field(gt=0, le=1.0)
+    outer_line_offset_m: float = Field(ge=0.05, le=0.20)
+    end_place_id: str = Field(min_length=1, max_length=128)
+
+
 class LineJunctionRequest(BaseModel):
     """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
 
-    action: str = Field(pattern="^(straight|left|right|stop)$")
+    action: str = Field(pattern="^(straight|left|right|stop|bend)$")
     place_id: str = Field(min_length=1, max_length=128)
     stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
     expires_s: float = Field(gt=0, le=30)
     # D-495: bounded turn for left (+) / right (-); without it left/right stay unresolved.
     turn_deg: Optional[float] = Field(default=None, ge=-150, le=150)
     advance_m: Optional[float] = Field(default=None, ge=0, le=0.30)
+    # D-507 2: the map's expectation, sent only to a robot announcing junction_pivot.
+    map_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    expect_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
+    expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
+    # signed (2026-10-08): negative when the measured cross line is past the place point.
+    pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
+    # D-520 1: the arc after this place, sent only to a robot announcing lane_arc.
+    exit_segment: Optional[LineExitSegment] = None
+    # lap SIM 2 (2026-10-08): a straight's lane heading change to the place (deg, left +).
+    lane_turn_deg: Optional[float] = Field(default=None, ge=-360, le=360, allow_inf_nan=False)
+    # D-507 addendum (2026-10-08): a site-map bend, sent only to a robot announcing lane_bend.
+    bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
+    bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
+    bend_radius_m: Optional[float] = Field(default=None, gt=0, le=0.5)
+
+
+def _expect(body: LineJunctionRequest):
+    """D-507 2: the optional fields as one dict, or None for an old client (behaviour unchanged)."""
+    fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
+                  pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
+                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m,
+                  lane_turn_deg=body.lane_turn_deg)
+    return fields if any(v is not None for v in fields.values()) else None
 
 
 @line_follow_router.post("/junction")
@@ -210,20 +255,70 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     calibration lease, as the other motion endpoints. CAMERA_LINE only (IR has no junctions)."""
     if body.stop_after_m is not None and body.action != "stop":
         raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
-    if body.turn_deg is not None and (body.action not in ("left", "right") or body.turn_deg == 0
-                                      or (body.turn_deg > 0) != (body.action == "left")):
+    if body.turn_deg is not None and body.action != "bend" and (
+            body.action not in ("left", "right") or body.turn_deg == 0
+            or (body.turn_deg > 0) != (body.action == "left")):
         raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
+    bend = (body.bend_in_m, body.bend_tol_m, body.bend_radius_m)
+    if body.action == "bend" and (
+            None in bend or body.map_id is None or body.turn_deg is None or body.turn_deg == 0
+            or abs(body.turn_deg) > 90 or body.expect_in_m is not None or body.expect_tol_m is not None
+            or body.pivot_past_line_m is not None or body.advance_m is not None):
+        raise ApiError("VALIDATION_ERROR", 400, "bend needs turn_deg (0 < |turn_deg| <= 90), map_id, "
+                       "bend_in_m, bend_tol_m and bend_radius_m, and no window, pivot or advance")
+    if body.action != "bend" and any(v is not None for v in bend):
+        raise ApiError("VALIDATION_ERROR", 400, "bend_in_m, bend_tol_m and bend_radius_m belong to bend")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
+    if (body.expect_in_m is None) != (body.expect_tol_m is None):
+        raise ApiError("VALIDATION_ERROR", 400, "expect_in_m and expect_tol_m come together")
+    if body.pivot_past_line_m is not None and (body.action == "stop" or (
+            body.action != "straight" and body.turn_deg is None)):
+        raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
+    if body.lane_turn_deg is not None and (body.action != "straight" or body.expect_in_m is None):
+        raise ApiError("VALIDATION_ERROR", 400, "lane_turn_deg belongs to straight with a window")
+    if body.exit_segment is not None and (
+            body.map_id is None or abs(body.exit_segment.curvature_1pm) < 0.5
+            or not (body.action == "straight" or body.turn_deg is not None)):
+        raise ApiError("VALIDATION_ERROR", 400, "exit_segment needs map_id, 0.5 <= |curvature_1pm| <= 5 "
+                       "and straight or a turn with turn_deg")
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
     try:
         result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
-                                              body.stop_after_m, body.turn_deg, body.advance_m)
+                                              body.stop_after_m, body.turn_deg, body.advance_m,
+                                              expect=_expect(body),
+                                              exit_segment=(None if body.exit_segment is None
+                                                            else body.exit_segment.model_dump()))
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
+
+
+@line_follow_router.post("/authority")
+def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(operator),
+                       svc: CoreServicesLike = Depends(get_services)):
+    """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
+    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg).
+    A 409 refusal also drops the held authority, so the robot stands."""
+    require_manual_released(svc)
+    require_calibration_owner(svc, auth, "line-follow authority")
+    try:
+        result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
+                                               body.until_m, body.ttl_s)
+    except AuthorityRefused as exc:
+        raise ApiError(exc.code, 409, exc.args[1]) from exc
+    return result
+
+
+@line_follow_router.post("/advice")
+def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """D-525: Fleet's signal advice for the trip leg, display only. The /authority seat
+    (operator) without the manual-release or calibration-lease checks: it moves nothing."""
+    accepted, reason = svc.line_advice.accept(body, time.monotonic())
+    return {"accepted": accepted, "reason": reason}
 
 
 @line_follow_router.post("/stuck/decision")

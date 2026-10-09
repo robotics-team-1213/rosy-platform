@@ -17,8 +17,11 @@ import httpx
 from fastapi import Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from core_common.protocol.power_health import PowerHealthResponse
 from fleet.hub.hub import HubError
+from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
+from fleet.server.identity import IdentityError, IdentityService
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
@@ -54,7 +57,7 @@ class LineStuckClaimRequest(BaseModel):
 
 class IdentifyLampRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    color: Literal["blue", "amber"]
+    color: Optional[Literal["blue", "amber"]] = None  # None: the robot's configured colour
 
 
 def transport_failure(exc: BaseException) -> tuple[str, str]:
@@ -82,13 +85,22 @@ class SharedGather:
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
 
+    def _observed_at(self, robots) -> dict:
+        """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
+        console_clock = getattr(self._console, "_clock", time.monotonic)
+        mono_now, track_now = console_clock(), self._tracking.now()
+        return {row["robot_id"]: track_now - max(0.0, mono_now - row["_state_mono"])
+                for row in robots
+                if isinstance(row, dict) and isinstance(row.get("_state_mono"), (int, float))}
+
     async def __call__(self) -> dict:
         async with self._lock:
             if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
                 gathered_at = self._tracking.now() if self._tracking is not None else None
                 snapshot = await self._console.snapshot()
                 if self._tracking is not None:
-                    self._tracking.observe_states(snapshot["robots"], now=gathered_at)
+                    self._tracking.observe_states(snapshot["robots"], now=gathered_at,
+                                                  observed=self._observed_at(snapshot["robots"]))
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
@@ -97,8 +109,9 @@ class SharedGather:
 
 
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard, require_operator,
-                           site_lanes=None, answer_log_path=None, tracking=None) -> None:
+                           read_guard, operator_guard, require_operator, require_named_operator,
+                           site_lanes=None, answer_log_path=None, tracking=None,
+                           identity=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
@@ -107,6 +120,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    power_display = app.state.power_health_display = CapabilityDisplay(
+        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse)
+    lane = getattr(app.state, "lane_compliance", None)
 
     async def gathered() -> dict:
         snapshot = await gather()
@@ -116,9 +132,18 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         rows = []
         for row in snapshot["robots"]:
             row = {**row, "line_stuck": board.view(row["robot_id"])}
+            if lane is not None:   # D-511 M0: the monitor's latest result, read only
+                row["lane_compliance"] = lane.view(row["robot_id"])
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
+        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.2)
+                                       for row in rows if row["online"]))
+        power_values = iter(power)
+        for row in rows:
+            row["power_health"] = next(power_values) if row["online"] else None
+            row["power_health_age_s"] = (power_display.age(row["robot_id"])
+                                         if row["power_health"] is not None else None)
         return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
@@ -163,30 +188,23 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no robot served a map"})
         return grid
 
-    # D-472: one robot at a time; CORE and rosy-face retain the final safety decision.
-    identify_lock = asyncio.Lock()
-    identify_until = 0.0
+    # D-472: one robot at a time (IdentityService); CORE and rosy-face keep the final safety decision.
+    if identity is None:
+        identity = IdentityService(console.clients, tracking=tracking)
+    app.state.identity = identity
 
-    @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=operator_guard, tags=["fleet"])
-    async def identify_robot(robot_id: str, body: IdentifyLampRequest) -> dict:
-        nonlocal identify_until
-        client = console.clients().get(robot_id)
-        if client is None:
-            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
-        async with identify_lock:
-            if time.monotonic() < identify_until:
-                raise HTTPException(status_code=409, detail={"code": "IDENTIFY_BUSY",
-                                                             "message": "다른 로봇의 LED 확인이 끝날 때까지 기다리세요"})
-            try:
-                result = await client.identify_lamp(body.color)
-            except (RobotApiError, OSError, httpx.HTTPError) as exc:
-                raise http_error(exc) from exc
-            if result.get("accepted") is not True:
-                raise HTTPException(status_code=502, detail={"code": "IDENTIFY_NOT_ACCEPTED",
-                                                             "message": "로봇이 램프 시험을 수락하지 않았습니다"})
-            identify_until = time.monotonic() + 6.0
-            return {"robot_id": robot_id, "request_id": result.get("request_id"),
-                    "state": "pending_visual_confirmation"}
+    # D-540 9: moving routes need a named operator; stops (WAIT/ABORT, formation stop) stay open.
+    named_guard = [Depends(require_named_operator)]
+
+    @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=named_guard, tags=["fleet"])
+    async def identify_robot(robot_id: str, body: Optional[IdentifyLampRequest] = None) -> dict:
+        try:
+            return await identity.request(robot_id, None if body is None else body.color)
+        except IdentityError as exc:
+            raise HTTPException(status_code=exc.status_code,
+                                detail={"code": exc.code, "message": str(exc)}) from exc
+        except (RobotApiError, OSError, httpx.HTTPError) as exc:
+            raise http_error(exc) from exc
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:
@@ -205,6 +223,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
               tags=["line-stuck"])
     async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest, request: Request,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
+        if body.decision not in ("WAIT", "ABORT"):
+            require_named_operator(principal)
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
@@ -248,6 +268,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"robot_id": robot_id, "actor_id": principal.principal_id,
                 "answer": answer, "result": result}
 
+    # D-540 9: claim stays open; the console claims before an ABORT confirm.
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
               tags=["line-stuck"])
     async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
@@ -265,7 +286,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def formation_state() -> dict:
         return console.formation_status()
 
-    @app.post("/api/fleet/formation/start", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/start", dependencies=named_guard, tags=["formation"])
     async def formation_start(body: FormationRequest) -> dict:
         try:
             return await console.formation_start(body.leader, body.formation,
@@ -274,14 +295,14 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
 
-    @app.post("/api/fleet/formation/reform", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/reform", dependencies=named_guard, tags=["formation"])
     async def formation_reform(body: ReformRequest) -> dict:
         try:
             return await console.formation_reform(body.formation, body.spacing, body.max_speed)
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
 
-    @app.post("/api/fleet/formation/resume", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/resume", dependencies=named_guard, tags=["formation"])
     async def formation_resume() -> dict:
         try:
             return await console.formation_resume()

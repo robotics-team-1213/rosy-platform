@@ -3,6 +3,9 @@
 
 # shell
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Shell of the role surfaces (D-204). It fetches the panel manifest, assembles panels into slots, and owns only what the three surfaces share: the surface switcher, role indicator, and the single e-stop.

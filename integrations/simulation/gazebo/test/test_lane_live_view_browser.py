@@ -1,15 +1,15 @@
 """Opt-in browser contract for the read-only Gazebo viewer tabs (D-306)."""
 
-import os
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 for the Chromium accessibility check",
 )
 

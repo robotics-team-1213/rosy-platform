@@ -3,6 +3,9 @@
 
 # launch
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Upload URDF to robot_state_publisher and optional RViz view.

@@ -12,6 +12,7 @@ import hashlib
 import ipaddress
 import json
 import mimetypes
+import re
 import secrets
 import sqlite3
 import threading
@@ -21,16 +22,34 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-import class_sets
-import review_return
+import cv2
+import numpy as np
+
+import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence
-import review_ingest
-import review_masks
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
 SHARED_ASSETS = json.loads((COMMON / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']
+
+
+def detail_preview(store, index):
+    frame = store.get(index)
+    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or photo.shape[:2] != (frame['source']['height'], frame['source']['width']):
+        raise ValueError('source image dimensions differ')
+    light, a, b = cv2.split(cv2.cvtColor(photo, cv2.COLOR_BGR2LAB))
+    # Preserve flat areas: local sharpening must not invent texture in clipped regions.
+    blurred = cv2.GaussianBlur(light, (0, 0), 3)
+    light = cv2.addWeighted(light, 1.6, blurred, -0.6, 0)
+    curve = np.rint(255 * (np.arange(256) / 255) ** 1.5).astype(np.uint8)
+    light = cv2.LUT(light, curve)
+    enhanced = cv2.cvtColor(cv2.merge((light, a, b)), cv2.COLOR_LAB2BGR)
+    ok, data = cv2.imencode('.png', enhanced)
+    if not ok:
+        raise ValueError('preview encoding failed')
+    return data.tobytes()
 
 
 class Conflict(ValueError):
@@ -39,7 +58,7 @@ class Conflict(ValueError):
 
 class ReviewStore:
     def __init__(self, state, source=None, human=None, images=None, object_classes=None, *,
-                 empty_eval=False):
+                 empty_eval=False, empty_training=False):
         self.state = Path(state).resolve()
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -55,7 +74,7 @@ class ReviewStore:
                 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);''')
             initialized = db.execute("SELECT value FROM metadata WHERE key='initialized'").fetchone()
             if initialized:
-                if empty_eval:
+                if empty_eval or empty_training:
                     raise ValueError('existing workspace: reopen with --state only')
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
@@ -71,6 +90,16 @@ class ReviewStore:
                     class_sets.bind_object_set(self, object_classes, db)
                 db.execute("INSERT INTO metadata VALUES ('initialized','true')")
                 db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
+                db.commit()
+                review_masks.configure(self)
+                review_evidence.configure(self)
+                return
+            if empty_training:
+                if any(x is not None for x in (source, human, images)):
+                    raise ValueError('empty training workspace has no initial inputs')
+                class_sets.bind_object_set(self, object_classes or class_sets.legacy_object_set(), db)
+                db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+                db.execute("INSERT INTO metadata VALUES ('workspace_kind','training')")
                 db.commit()
                 review_masks.configure(self)
                 review_evidence.configure(self)
@@ -148,9 +177,29 @@ class ReviewStore:
             raise KeyError(index)
         return self.decoded(row)
 
+    def object_drafts(self, index):
+        self.get(index)
+        with self.connect() as db:
+            return [dict(row, boxes=json.loads(row['boxes'])) for row in db.execute(
+                'SELECT sha256,boxes,origin,catalog_sha256 FROM object_drafts '
+                'WHERE frame=? ORDER BY rowid DESC', (index,))]
+
     def list_frames(self):
         with self.connect() as db:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
+
+    def history(self, index):
+        frame = self.get(index)
+        with self.connect() as db:
+            events = {}
+            for lane, table in (('object', 'events'), ('pixel', 'pixel_events')):
+                events[lane] = [dict(row) for row in db.execute(
+                    f'SELECT ts,action,version FROM {table} WHERE frame=? ORDER BY id DESC LIMIT 20',
+                    (index,))]
+        return {'source': frame['source'].get('annotation_source'),
+                'object_status': frame['status'],
+                'pixel_status': review_masks.get(self, index)['status'],
+                'events': events}
 
     def image(self, index):
         row = self.get(index)['source']
@@ -195,6 +244,23 @@ class ReviewStore:
                 self.validate_boxes(frame['source'], boxes, classes=classes)
                 review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
                               review_origin='pinky_web_candidate_import')
+                review.pop('disposition', None)
+                status = 'pending'
+            elif action == 'apply_object_draft':
+                if status == 'excluded':
+                    raise ValueError('제외 사진은 재검수로 돌린 후 초안을 가져오세요.')
+                digest = body.get('draft_sha256')
+                if not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest):
+                    raise ValueError('object draft SHA required')
+                candidate = db.execute('SELECT boxes,origin,catalog_sha256 FROM object_drafts '
+                                       'WHERE frame=? AND sha256=?', (index, digest)).fetchone()
+                if candidate is None:
+                    raise ValueError('selected object draft is unavailable')
+                boxes = json.loads(candidate['boxes'])
+                self.validate_boxes(frame['source'], boxes, classes=classes)
+                review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
+                              review_origin='model_draft_pending_human', draft_origin=candidate['origin'],
+                              draft_sha256=digest, draft_catalog_sha256=candidate['catalog_sha256'])
                 review.pop('disposition', None)
                 status = 'pending'
             elif action in ('exclude', 'reopen'):
@@ -307,6 +373,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     object_set = class_sets.object_set(store)
                     return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
+                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
                                       'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})
@@ -316,6 +383,10 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == tag:
                         return self.send(b'', 304, etag=tag)
                     return self.send(value, etag=tag)
+                if path.startswith('/api/history/'):
+                    return self.send(store.history(int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/vlm-feedback/'):
+                    return self.send(vlm_mask_feedback.read_current_feedback(store.state, int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
@@ -330,12 +401,68 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == etag:
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(pixels, mime='image/png', etag=etag, cache='no-cache')
+                if path.startswith('/api/draft-images/'):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    return self.send(review_masks.draft_image(store, int(frame_id), digest),
+                                     mime='image/png', cache='no-cache')
+                if path.startswith(('/api/draft-preview/', '/api/draft-merge-preview/')):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    merged = path.startswith('/api/draft-merge-preview/')
+                    return self.send(review_masks.draft_preview(store, int(frame_id), digest, merge=merged),
+                                     mime='image/png', cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/object-drafts/'):
+                    return self.send({'drafts': store.object_drafts(int(path.rsplit('/', 1)[1]))})
                 if path == '/api/learning':
+                    frames = store.list_frames()
+                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames
+                                     if f['status'] != 'excluded']
+                    pixel_statuses = [row['status'] for row in pixel_reviews]
+                    with store.connect() as db:
+                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
+                    object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
+                                            and (f['index'] in queued_objects or f['source'].get('objects')
+                                                 or f['source'].get('boxes'))]
+                    pixel_draft_indices = [row['frame'] for row in pixel_reviews
+                                           if row['status'] == 'pending' and
+                                           bool((review_masks.pixels(store, row) != 255).any())]
+                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
+                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
+                    latest = next(iter(store.exports()), None)
+                    preparation = None
+                    if latest:
+                        current = review_evidence.decisions(store)
+                        authority = latest.get('authority', {})
+                        preparation = {'object_frames': latest['exported_frames'],
+                                       'pixel_frames': latest.get('pixel_approved_frames', 0),
+                                       'current_decisions_match':
+                                       authority.get('workspace_id') == current['workspace_id'] and
+                                       authority.get('generation') == current['generation'] and
+                                       authority.get('decision_sha256') == current['decision_sha256']}
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
-                                      'counts': {state: sum(f['status'] == state for f in store.list_frames())
-                                                 for state in ('approved', 'pending', 'excluded')}})
+                                      'preparation': preparation,
+                                      'counts': {state: sum(f['status'] == state for f in frames)
+                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'object_drafts': len(object_draft_indices),
+                                      'source_video_unverified': sum(
+                                          f['status'] != 'excluded'
+                                          and bool(f['source'].get('source_video_sha256'))
+                                          and f['source'].get('original_video_verified') is not True
+                                          for f in frames),
+                                      'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
+                                      'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
+                                      'pixel_counts': {state: pixel_statuses.count(state)
+                                                       for state in ('approved', 'pending', 'excluded')}
+                                                      | {'drafted': len(pixel_draft_indices),
+                                                         'candidates': len(pixel_candidate_indices),
+                                                         'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
+                if path.startswith('/api/learning/images/'):
+                    prefix, identifier, name = path.rsplit('/', 2)
+                    if prefix != '/api/learning/images':
+                        raise ValueError('invalid JPG evidence path')
+                    raw, digest = learning.image(identifier, name)
+                    return self.send(raw, mime='image/jpeg', etag='"' + digest + '"', cache='no-cache')
                 if path.startswith('/api/images/'):
                     index = int(path.rsplit('/', 1)[1])
                     image = store.image(index)
@@ -344,7 +471,10 @@ def make_server(store, port=8767, host='127.0.0.1'):
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0],
                                      etag=etag, cache='no-cache')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
+                if path.startswith('/api/view-images/'):
+                    return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
+                                     mime='image/png')
+                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}
@@ -433,6 +563,8 @@ def main():
     parser.add_argument('--images', type=Path)
     parser.add_argument('--empty-eval', action='store_true',
                         help='initialize a separate empty evaluation workspace once')
+    parser.add_argument('--empty-training', action='store_true',
+                        help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
@@ -440,6 +572,8 @@ def main():
                         help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
+    if args.empty_eval and args.empty_training:
+        parser.error('choose one empty workspace kind')
     object_classes = None
     if args.object_classes:
         try:
@@ -447,7 +581,7 @@ def main():
         except (OSError, ValueError) as exc:
             parser.error(f'--object-classes: {exc}')
     store = ReviewStore(args.state, args.source, args.human, args.images, object_classes,
-                        empty_eval=args.empty_eval)
+                        empty_eval=args.empty_eval, empty_training=args.empty_training)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:

@@ -103,6 +103,10 @@ def test_mask_requires_full_background_review_and_never_restores_object_approval
     with pytest.raises(ValueError, match='미검수'):
         review_masks.update(store, 0, {'version':0, 'action':'approve',
                                       'complete_frame_review':True, 'background_reviewed':True}, Conflict)
+    with pytest.raises(ValueError, match='미검수'):
+        review_masks.update(store, 0, {'version':0, 'action':'approve',
+                                      'complete_frame_review':True, 'background_reviewed':True,
+                                      'unknown_pixels_reviewed':True}, Conflict)
     painted = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':0}, Conflict)
     with pytest.raises(ValueError, match='각각'):
         review_masks.update(store, 0, {'version':painted['version'], 'action':'approve',
@@ -120,6 +124,48 @@ def test_mask_requires_full_background_review_and_never_restores_object_approval
         review_masks.update(store, 0, {'version':changed['version'], 'action':'fill', 'label':0}, Conflict)
     with pytest.raises(ValueError, match='제외'):
         review_masks.update(store, 1, {'version':0, 'action':'fill', 'label':0}, Conflict)
+
+
+def test_fill_unknown_preserves_known_labels_and_stays_pending(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    marked = review_masks.update(store, 0, {'version':0, 'action':'paint',
+                                           'label':1, 'radius':2, 'points':[[8,9]]}, Conflict)
+    before = review_masks.pixels(store, marked).copy()
+    filled = review_masks.update(store, 0, {'version':marked['version'], 'action':'fill_unknown'}, Conflict)
+    after = review_masks.pixels(store, filled)
+    assert filled['status'] == 'pending' and filled['approval'] is None
+    assert np.array_equal(after[before != 255], before[before != 255])
+    assert np.all(after[before == 255] == 0)
+    with pytest.raises(ValueError, match='각각'):
+        review_masks.update(store, 0, {'version':filled['version'], 'action':'approve'}, Conflict)
+    restored = review_masks.update(store, 0, {'version':filled['version'], 'action':'undo'}, Conflict)
+    assert np.array_equal(review_masks.pixels(store, restored), before)
+
+
+def test_polygon_paints_only_selected_pixels_and_undoes(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    body = {'version': 0, 'action': 'polygon', 'label': 2,
+            'points': [[4, 4], [12, 4], [12, 12], [4, 12]]}
+    with pytest.raises(ValueError, match='polygon point'):
+        review_masks.update(store, 0, {**body, 'points': [[4, 4], [12, 4], [32, 12]]}, Conflict)
+    assert review_masks.get(store, 0)['version'] == 0
+    marked = review_masks.update(store, 0, body, Conflict)
+    pixels = review_masks.pixels(store, marked)
+    assert marked['status'] == 'pending' and marked['approval'] is None
+    assert pixels[8, 8] == 2 and pixels[1, 1] == 255
+    restored = review_masks.update(store, 0, {'version': marked['version'], 'action': 'undo'}, Conflict)
+    assert np.all(review_masks.pixels(store, restored) == 255)
+
+
+def test_zero_radius_brush_edits_one_pixel(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    marked = review_masks.update(store, 0, {'version': 0, 'action': 'paint',
+                                           'label': 1, 'radius': 0, 'points': [[8, 9]]}, Conflict)
+    pixels = review_masks.pixels(store, marked)
+    assert np.count_nonzero(pixels != 255) == 1 and pixels[9, 8] == 1
 
 
 def test_old_complete_export_cannot_resurrect_excluded_or_changed_frame(tmp_path):

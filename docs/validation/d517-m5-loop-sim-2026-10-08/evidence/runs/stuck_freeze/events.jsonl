@@ -1,0 +1,2 @@
+{"t": 40.5, "kind": "end", "robot": "a", "state": "stopped", "reason": "stall"}
+{"t": 71.0, "kind": "resolver", "robot_id": "a", "trigger": "unknown", "decision": "human", "since": 1040.4999999999632}

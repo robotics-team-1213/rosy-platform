@@ -1,6 +1,8 @@
 """Persistent links to local learning reports; no job execution or qualification."""
 import hashlib
 import json
+import math
+import re
 import sqlite3
 import uuid
 from pathlib import Path
@@ -33,6 +35,22 @@ WORKFLOWS = [
 KINDS = {row['id']: row for row in WORKFLOWS if 'files' in row}
 
 
+def report_image(root, item):
+    name, expected = item.get('name'), item.get('sha256')
+    if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*\.jpe?g', name, re.I)
+            or not isinstance(expected, str) or not re.fullmatch(r'[0-9a-f]{64}', expected)):
+        raise ValueError('invalid JPG evidence reference')
+    file = root / name
+    if file.is_symlink() or file.resolve().parent != root or not file.is_file():
+        raise ValueError('JPG evidence must be a regular file in the result directory')
+    if file.stat().st_size > 10 * 1024 * 1024:
+        raise ValueError('JPG evidence exceeds 10 MiB')
+    raw = file.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != expected or not raw.startswith(b'\xff\xd8'):
+        raise ValueError('JPG evidence hash or format differs')
+    return raw
+
+
 def read_report(root, name, baseline=None):
     file = root / name
     result = {'name': name, 'status': 'missing'}
@@ -57,6 +75,23 @@ def read_report(root, name, baseline=None):
         result['steps'] = [{'name': str(key)[:100], 'status': str(value.get('status', 'unknown'))[:100],
                             'error': str(value.get('error', ''))[:500]}
                            for key, value in list(doc.get('steps', {}).items())[:40] if isinstance(value, dict)] if isinstance(doc.get('steps'), dict) else []
+        metrics = doc.get('metrics', [])
+        if isinstance(metrics, list):
+            result['metrics'] = [{'label': row['label'][:60], 'value': row['value'],
+                                  'unit': row.get('unit', '')[:12]}
+                                 for row in metrics[:6] if isinstance(row, dict)
+                                 and isinstance(row.get('label'), str)
+                                 and type(row.get('value')) in (int, float) and math.isfinite(row['value'])
+                                 and isinstance(row.get('unit', ''), str)]
+        images = doc.get('images', [])
+        if not isinstance(images, list) or len(images) > 12:
+            raise ValueError('at most 12 JPG evidence files allowed')
+        result['images'] = []
+        for item in images:
+            if not isinstance(item, dict):
+                raise ValueError('invalid JPG evidence reference')
+            report_image(root, item)
+            result['images'].append({'name': item['name'], 'sha256': item['sha256']})
     except (ValueError, OSError, UnicodeError, RecursionError) as exc:
         result.update(status='invalid', error=str(exc)[:500])
     return result
@@ -81,6 +116,18 @@ class Workspace:
         with sqlite3.connect(self.db) as conn:
             rows = conn.execute('SELECT * FROM learning_links ORDER BY rowid DESC').fetchall()
         return [self.inspect(row) for row in rows]
+
+    def image(self, identifier, name):
+        with sqlite3.connect(self.db) as conn:
+            row = conn.execute('SELECT * FROM learning_links WHERE id=?', (identifier,)).fetchone()
+        if row is None:
+            raise ValueError('unknown learning result')
+        root = Path(row[3])
+        for report in KINDS[row[1]]['files']:
+            for item in read_report(root, report).get('images', []):
+                if item['name'] == name:
+                    return report_image(root, item), item['sha256']
+        raise ValueError('JPG evidence is not declared by this result')
 
     def register(self, body):
         kind, name, path = body.get('kind'), body.get('name'), body.get('path')

@@ -85,6 +85,9 @@ MAX_BY = 128
 REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
 #: A request older than this (a path unit started late, a leftover file) starts nothing.
 REQUEST_MAX_AGE_S = 60.0
+#: D-472 4: an identity blink must end within 6 s of the Fleet request. CORE's request may be
+#: this old here; rosy-face takes the hand-over within 1 s and stops the blink after 3.5 s.
+IDENTIFY_MAX_AGE_S = 1.5
 #: rosy-boot-display.py BUZZER_LINES / BUZZER_DEFAULT_LINE (board.yaml boot_display.buzzer).
 BUZZER_LINES = frozenset({4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26})
 BUZZER_DEFAULT_LINE = 4
@@ -136,7 +139,8 @@ def read_request(path: Path, now: Optional[float] = None) -> Optional[dict]:
     if requested.tzinfo is None:
         return None
     age = (now if now is not None else time.time()) - requested.timestamp()
-    if not -5.0 <= age <= REQUEST_MAX_AGE_S:
+    limit = IDENTIFY_MAX_AGE_S if data["action"].startswith("identify_") else REQUEST_MAX_AGE_S
+    if not -5.0 <= age <= limit:
         return None
     return data
 
@@ -338,7 +342,7 @@ def run_lamp(system: System, request_id: str) -> tuple[str, str]:
 
 def run_identify(system: System, request_id: str, action: str) -> tuple[str, str]:
     """Identity light is never driven behind rosy-face's safety/state owner."""
-    if not lamp_owned(_read_text(system.path(DISPLAY_ENV))) or not _display_takes_it(system):
+    if system.unit_state("rosy-face.service") != "active" or not _display_takes_it(system):
         return UNAVAILABLE, "rosy-face가 램프를 소유하지 않음 — 식별 점멸 거절"
     return system.handoff(action, request_id)
 

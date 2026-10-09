@@ -3,6 +3,9 @@
 
 # map
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Packaged occupancy maps used only when the host has no site map at

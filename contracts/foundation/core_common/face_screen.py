@@ -59,6 +59,11 @@ CAUTION_TEXT = {
     "dock_failed": "Docking failed: check the dock",
 }
 
+#: D-546: the moving lane-recovery phases CORE names in ``recovery``; the LCD says the
+#: first two (ASCII), ``bridge`` (D-476) is lamp only.
+RECOVERY_PHASES = frozenset({"retrace", "return", "bridge"})
+RECOVERY_TEXT = {"retrace": "Recovering: reversing", "return": "Recovering: returning to lane"}
+
 # --- the drive card cadence (D-394) ----------------------------------------------
 
 DRIVE_EVERY_S = 20.0
@@ -189,6 +194,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "line_follow_mode": _name(data.get("line_follow_mode")),
         "line_follow_state": _name(data.get("line_follow_state")),
         "caution": sorted(set(codes)),
+        "recovery": _name(data.get("recovery"), RECOVERY_PHASES),
         "drive": _card(data.get("drive")),
         "wake": wake,
     }
@@ -222,7 +228,7 @@ def _code(value: Any, length: int) -> Optional[str]:
 
 
 def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
-    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    """``{"requests": [{"display_code", "approval_code"}, ...], "tls_ca_sha256"?}`` of the live pending requests
     (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
 
     Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
@@ -243,7 +249,14 @@ def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None
             continue
         if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
             shown.append({"display_code": display, "approval_code": approval})
-    return {"requests": shown} if shown else None
+    if not shown:
+        return None
+    answer = {"requests": shown}
+    # The CA digest the requester compares on first contact; the LCD draws its first 16 digits.
+    ca = data.get("tls_ca_sha256")
+    if isinstance(ca, str) and re.fullmatch(r"[0-9a-f]{64}", ca):
+        answer["tls_ca_sha256"] = ca
+    return answer
 
 
 def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:
@@ -365,7 +378,10 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
     # to the D-8 catalogue guard (test_event_catalogue.py).
     strip = tone = None
-    if state == robot_state.CAUTION or caution:
+    if core.get("recovery") in RECOVERY_TEXT:  # D-546: a moving recovery outranks every other strip
+        strip = RECOVERY_TEXT[core["recovery"]]
+        tone = "caution"
+    elif state == robot_state.CAUTION or caution:
         strip = todo or (caution[0] if caution else "Caution")
         tone = "caution"
     elif test in ("buzzer", "lamp"):

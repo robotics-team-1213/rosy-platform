@@ -25,6 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 
@@ -32,12 +33,16 @@ Warn = Callable[[str], None]
 
 
 def line_observation(services, raw: str, *, source_now: float,
-                     received_at: float) -> None:
+                     received_at: float, expected_context_seq: int | None = None) -> None:
     """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
     source = None
     try:
         data = json.loads(raw)
         source = LineFollowMode(data["source"])
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            raise ValueError("route context sequence mismatch")
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
@@ -90,21 +95,34 @@ def line_observation(services, raw: str, *, source_now: float,
         })
 
 
-def keep_junction(services, raw: str, *, source_now: float, received_at: float) -> None:
+def keep_junction(services, raw: str, *, source_now: float, received_at: float,
+                  expected_context_seq: int | None = None) -> None:
     """D-494 decision 4 / D-495: the keeper's junction HOLD reason and corner_turning flag.
 
     A sighting HOLDs line-follow and also starts an armed D-495 bounded turn, so it gates
     motion, not only stops: the frame must reach CORE within stale_after_s (0.3 s) of its camera
-    stamp or it is dropped here. corner_turning feeds supports_junction_turn."""
+    stamp or it is dropped here. corner_turning feeds supports_junction_turn. D-507 5: the
+    optional junction_ahead_m (base_footprint x, m) places the sighting's cross line; the marker
+    junction_ahead_v (on every frame) gates the junction_pivot capability. The keeper's strategy
+    names its corner turn (lap SIM A: CORE holds it near an expected junction)."""
     try:
         data = json.loads(raw)
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            return
         reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
+        ahead, ahead_v = data.get("junction_ahead_m"), data.get("junction_ahead_v")
+        strategy = data.get("strategy")
     except (AttributeError, TypeError, ValueError):
         return
     if (type(stamp) in (int, float) and math.isfinite(stamp)
             and 0.0 <= source_now - stamp <= services.line_follow.config.stale_after_s):
         services.line_follow.observe_junction(reason, received_at - (source_now - stamp),
-                                              corner_turning=corner is True)
+                                              corner_turning=corner is True,
+                                              ahead_m=ahead if type(ahead) in (int, float) else None,
+                                              ahead_v=ahead_v if type(ahead_v) is int else None,
+                                              strategy=strategy if type(strategy) is str else None)
 
 
 def road_observation(services, raw: str, *, source_now: float,
@@ -224,13 +242,13 @@ def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: 
         )
         source_age = None if source_now is None else source_now - stamp
         fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
-                        and stamp >= 0 and 0 <= source_age <= 2.)
+                        and stamp >= 0 and -SOURCE_FUTURE_TOLERANCE_S <= source_age <= 2.)
         if not fresh_source:
             metadata.pop('quality', None)
             if raw:
                 raise ValueError('raw preview source image is stale or clock is unavailable')
         else:
-            metadata['source_age_s'] = source_age
+            metadata['source_age_s'] = max(0.0, source_age)  # D-507 8: skew counts as now
         store_frame = services.vision.publish_raw if raw else services.vision.publish
         store_frame(
             bytes(msg.data),
@@ -275,7 +293,9 @@ def nav_twist(services, linear: float, angular: float) -> None:
 def nav_path(services, msg, *, warn: Warn) -> None:
     """MAP-003 plan snapshot; a malformed path is ignored, not fatal."""
     try:
-        services.maps.set_path(translate.path_points(msg))
+        services.maps.set_path(translate.path_points(msg),
+                               map_id=getattr(services.state, "map_id", None),
+                               frame_id=getattr(getattr(msg, "header", None), "frame_id", None))
     except ValueError as exc:
         warn(f"ignored nav path: {exc}")
 

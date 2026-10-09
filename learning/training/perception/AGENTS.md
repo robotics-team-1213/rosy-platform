@@ -1,7 +1,10 @@
-<!-- Parent: ../../../AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-30 | Updated: 2026-09-30 -->
 
 # perception
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

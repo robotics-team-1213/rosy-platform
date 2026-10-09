@@ -3,6 +3,9 @@
 
 # docs
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Governance documents (D-17): requirements, shared API/protocol contract, ADRs, implementation plan, dated design/execute plans, Pi deployment runbooks, and a Phase 1 test report. Requirement IDs are the cross-document keys, not section numbers.

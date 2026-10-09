@@ -53,6 +53,7 @@ HW_TEST_REQUEST_FILE = "/run/rosy/hw-test.request"
 HW_TEST_RESULT_FILE = "/run/rosy-boot/hw-test.json"
 HW_CONFIRM_NAME = "hw-confirmations.json"
 HW_TEST_DEVICES = ("buzzer", "lamp")
+HW_TEST_ACTIONS = (*HW_TEST_DEVICES, "identify_blue", "identify_amber")
 HW_TEST_STATES = ("done", "busy", "unavailable", "failed")
 #: One test at a time: a second press inside this window starts nothing.
 HW_TEST_COOLDOWN_S = 10.0
@@ -124,7 +125,7 @@ def read_test_result(path: str) -> Optional[dict[str, Any]]:
     row = {key: data.get(key) for key in ("request_id", "action", "state", "detail")}
     if not all(isinstance(value, str) and len(value) <= MAX_TEXT for value in row.values()):
         return None
-    if row["action"] not in HW_TEST_DEVICES or row["state"] not in HW_TEST_STATES:
+    if row["action"] not in HW_TEST_ACTIONS or row["state"] not in HW_TEST_STATES:
         return None
     finished = _aware_time(data.get("finished_at"))
     if finished is None:
@@ -374,10 +375,14 @@ def host_lamp_identify(
 ):
     """Ask the sole face owner for a short visual challenge; no motion or identity claim."""
     request_path, _result, _confirm = _test_paths(svc)
+    color = body.color or _identify_color(svc)
+    if color is None:
+        raise ApiError("IDENTIFY_COLOR_UNSET", 409, "이 로봇의 식별 색이 설정되지 않았습니다")
     request_id = secrets.token_hex(8)
-    payload = json.dumps({"action": f"identify_{body.color}", "request_id": request_id,
+    # Milliseconds: rosy-hw-test refuses an identify older than 1.5 s (D-472 4, total <= 6 s).
+    payload = json.dumps({"action": f"identify_{color}", "request_id": request_id,
                           "by": auth.token_id,
-                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")},
                          sort_keys=True) + "\n"
     with _test_lock:
         now = time.monotonic()
@@ -389,8 +394,24 @@ def host_lamp_identify(
         except OSError as exc:
             raise ApiError("HW_TEST_UNAVAILABLE", 503, "램프 식별 요청을 전달하지 못했습니다") from exc
         _last_test[request_path] = now
-    return {"accepted": True, "request_id": request_id, "color": body.color,
+    return {"accepted": True, "request_id": request_id, "color": color,
             "state": "pending_visual_confirmation"}
+
+
+#: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).
+LAMP_IDENTIFY_COLORS = ("blue", "amber")
+#: D-472 4 default per robot (config, not wire schema); CORE config ``lamp_identify.color`` overrides it.
+#: D-562 renumbers 9dfk rosy_26 -> rosy_41 and 8kcn rosy_60 -> rosy_40; the old ids stay until both are renumbered.
+LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_41": "blue", "rosy_40": "amber", "rosy_26": "blue", "rosy_60": "amber"}
+
+
+def _identify_color(svc: CoreServicesLike):
+    """CORE config ``lamp_identify.color``, else the D-472 4 default for this robot id; None when neither."""
+    configured = ((getattr(svc, "config", None) or {}).get("lamp_identify") or {}).get("color")
+    if configured is not None:
+        return configured if configured in LAMP_IDENTIFY_COLORS else None
+    identity = getattr(svc, "identity", None)
+    return LAMP_IDENTIFY_DEFAULT_COLORS.get(getattr(identity, "robot_id", None))
 
 
 class HardwareConfirmRequest(BaseModel):

@@ -102,6 +102,8 @@ class FakeRobot:
         #: 설정돼 있으면 state()/swarm_state() 가 이것을 raise 한다. 실제
         #: `HttpRobotClient` 는 날것의 httpx 예외를 올린다 — 세션이 그것을 감싸는지 본다.
         self.state_error: Optional[BaseException] = None
+        self.power_health_value: Optional[dict] = None
+        self.power_health_error: Optional[BaseException] = None
         self.swarm_state_error: Optional[BaseException] = None
         self.pose_frames: asyncio.Queue = asyncio.Queue()
         self.event_frames: asyncio.Queue = asyncio.Queue()
@@ -120,6 +122,8 @@ class FakeRobot:
         self.sink_error_sticky = False
         #: D-395: what `localization_candidates` returns (None = not in CANDIDATES).
         self.candidates = None
+        #: D-546 5: what `localization_request` returns (None = no open request).
+        self.pose_request = None
         self.decisions: list = []
         self.suspects: list[str] = []
         #: Raised by `localization_decision` (e.g. RobotApiError 409 STALE_REQUEST).
@@ -146,6 +150,12 @@ class FakeRobot:
             raise self.state_error
         return dict(self._state)
 
+    async def power_health(self) -> dict:
+        self._record("power_health")
+        if self.power_health_error is not None:
+            raise self.power_health_error
+        return dict(self.power_health_value or {})
+
     async def map(self) -> dict:
         self._record("map")
         if self.map_error is not None:
@@ -170,7 +180,9 @@ class FakeRobot:
             await self.follow_gate.wait()
         if self.follow_error is not None:
             raise self.follow_error
-        return {"role": "follower", "active": True}
+        if params.mode == "trail" and getattr(self, "offset_only", False):
+            return {"role": "follower", "active": True}  # a CORE from before D-559
+        return {"role": "follower", "active": True, "mode": params.mode}
 
     async def swarm_cancel(self) -> dict:
         self._record("swarm_cancel")
@@ -208,13 +220,17 @@ class FakeRobot:
         self._record("estop")
         return {"estop": True}
 
-    async def identify_lamp(self, color: str) -> dict:
+    async def identify_lamp(self, color=None) -> dict:
         self._record("identify_lamp", color)
-        return {"accepted": True, "request_id": "fake-led-test"}
+        return {"accepted": True, "request_id": "fake-led-test", "color": color or "blue"}
 
     async def localization_candidates(self):
         self._record("localization_candidates")
         return self.candidates
+
+    async def localization_request(self):
+        self._record("localization_request")
+        return self.pose_request
 
     async def localization_decision(self, decision) -> dict:
         self._record("localization_decision", decision.request_id)

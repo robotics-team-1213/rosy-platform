@@ -15,6 +15,11 @@ from types import SimpleNamespace
 
 import pytest
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: fchown of the hand-over file to its group needs root")
+
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
@@ -545,6 +550,7 @@ def test_group_and_mode_are_set_before_any_byte_is_written(tmp_path, monkeypatch
     assert all(position == 0 and size == 0 for _name, position, size in seen)
 
 
+@REQUIRES_ROOT
 def test_closing_or_failing_the_ap_removes_the_handoff(tmp_path, monkeypatch):
     network = _network()
     monkeypatch.setattr(network, "_display_gid", lambda: 0)
@@ -1050,6 +1056,9 @@ def test_caution_is_two_low_tones_and_held_ready_one(tmp_path):
             devices=[{"id": "camera", "state": "no_response", "product": True}])
     clock.now += 1
     display.step()
+    assert len(_starts(gpio)) == 1  # a caution must hold before it sounds
+    clock.now += module.CAUTION_DEBOUNCE_S
+    display.step()
     assert len(_starts(gpio)) == 3
     assert ("change", module.BUZZER_LOW_HZ) in gpio.events
 
@@ -1067,10 +1076,12 @@ def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_s
         _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
         clock.now += 20
         display.step()
+        clock.now += module.CAUTION_DEBOUNCE_S
+        display.step()
         _status(tmp_path, "CORE_READY", runtime_mode="hardware")
         clock.now += 20
         display.step()
-    assert len(_starts(gpio)) == 1 + 2 + 3  # caution once (two tones), ready on each return
+    assert len(_starts(gpio)) == 1 + 2  # caution -> ready -> caution -> ready flap: one chirp, caution once
 
     for _ in range(2):
         _status(tmp_path, "FAILED:rosy-core")
@@ -1079,12 +1090,14 @@ def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_s
         _status(tmp_path, "CORE_READY", runtime_mode="hardware")
         clock.now += 1
         display.step()
-    assert len(_starts(gpio)) == 6 + 2 * (3 + 1)  # failed and ready both sound every time
+    assert len(_starts(gpio)) == 3 + 2 * (3 + 1)  # failed and the ready after it sound every time
 
     clock.now += module.BUZZER_REPEAT_S
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
     display.step()
-    assert len(_starts(gpio)) == 16
+    clock.now += module.CAUTION_DEBOUNCE_S
+    display.step()
+    assert len(_starts(gpio)) == 3 + 2 * (3 + 1) + 2
 
 
 def test_ready_and_held_ready_share_one_sound(tmp_path):
@@ -1484,7 +1497,7 @@ def test_a_handed_over_lamp_test_pauses_the_state_pattern_and_resumes_it(tmp_pat
     assert _answer(tmp_path)["detail"].endswith("(부팅 표시가 켬)")
 
 
-def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
+def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_state(tmp_path):
     module = _display()
     _lamp_tree(tmp_path)
     _status(tmp_path, "CORE_READY")
@@ -1499,8 +1512,102 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
     assert lamp.pattern == "ready"
     _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
     safe["estop"] = True
-    assert display.handle_test() is None
+    assert display.handle_test() == "failed"
+    assert "거절" in _answer(tmp_path)["detail"]
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
+
+
+def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    lamp.enabled = False
+    display.step()
+    assert spawn.patterns == []
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.enabled is False
+    display.step()
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.pattern == "ready"
+
+
+def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tmp_path):
+    # D-472 addendum 5: Fleet asks moving robots; the blink stands in for the drive pattern.
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", robot_mode="NAVIGATION", nav_state="ACTIVE")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    assert lamp.pattern == "navigating"
+    display._core = lambda: {"estop": False, "robot_mode": "NAVIGATION", "nav_state": "ACTIVE", "caution": []}
+    _hand_over(tmp_path, "identify_amber")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["navigating", "identify_amber", "navigating"]
+
+
+@pytest.mark.parametrize("status, core", [
+    ({"robot_mode": "EMERGENCY"}, {"estop": False, "robot_mode": "EMERGENCY", "caution": []}),
+    ({"robot_mode": "IDLE"}, {"estop": False, "robot_mode": "IDLE", "caution": ["battery_low"]}),
+    ({"robot_mode": "NAVIGATION", "nav_state": "BLOCKED"},
+     {"estop": False, "robot_mode": "NAVIGATION", "caution": []}),
+    ({"robot_mode": "IDLE"}, None),  # no fresh CORE hand-over
+])
+def test_identity_pulse_is_refused_while_a_safety_display_holds(tmp_path, status, core):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", **status)
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    display._core = lambda: core
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "failed"
+    assert "identify_blue" not in spawn.patterns
+
+
+def test_identity_pulse_is_cut_short_when_caution_starts_mid_blink(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn()  # the helper keeps running until stopped
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    reads = []
+
+    def core():
+        reads.append(1)
+        return {"estop": False, "robot_mode": "IDLE", "caution": [] if len(reads) < 3 else ["battery_low"]}
+    display._core = core
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "failed"
+    assert spawn.processes[1].terminated == 1
+    assert lamp.pattern is None  # the next step() shows the caution pattern, not the old ready
+
+
+def test_identity_pulse_has_a_hard_deadline_and_a_short_request_age(tmp_path, monkeypatch):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn()  # a helper that never ends on its own
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "caution": []}
+    assert module.IDENTIFY_MAX_S <= 4.0 and module.IDENTIFY_REQUEST_MAX_AGE_S <= 1.0
+    _hand_over(tmp_path, "identify_blue", at=1_000_000.0 - 1.5)  # older than the identify age
+    assert display.handle_test() is None
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None
+    _hand_over(tmp_path, "lamp", at=1_000_000.0 - 1.5)  # a bench test keeps its 30 s age
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is not None
+    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    state, detail = lamp.identify("blue", lambda: False)
+    assert state == "failed" and "시간 초과" in detail
 
 
 def test_an_accepted_fleet_call_chirps_once_and_a_refused_call_stays_quiet(tmp_path):
@@ -1532,16 +1639,14 @@ def test_an_accepted_fleet_call_chirps_once_and_a_refused_call_stays_quiet(tmp_p
 
     _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
     safe["estop"] = True
-    assert display.handle_test() is None
+    assert display.handle_test() == "failed"  # refused at once: no chirp, no blink
+    assert _answer(tmp_path)["state"] == "failed"
     safe["estop"] = False
-    safe["robot_mode"] = "MANUAL"
-    lamp.pattern = "manual"
-    assert display.handle_test() is None
-    safe["robot_mode"] = "IDLE"
-    lamp.pattern = "ready"
     display.screen = {"kind": "stopped", "row": "stopped", "strip_tone": None}
+    _hand_over(tmp_path, "identify_amber", request_id="2233445566778899")
     assert display.handle_test() is None
     assert len(_starts(gpio)) == 3
+    assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
 def test_identity_pulse_stops_without_restoring_old_pattern_when_safety_changes(tmp_path):
@@ -1676,7 +1781,7 @@ def _face_loop(module, root, *, gifs=None, logs=None):
     display = module.FaceDisplay(root, lcd=lcd, render=render, battery=battery,
                                  buzzer=module.Buzzer(None, 4, False, lambda _s: None), clock=clock,
                                  wall=lambda: WALL, faces=faces,
-                                 strip=lambda frame, text, tone: (frame, text, tone))
+                                 strip=lambda frame, *bar: (frame, *bar))
     return display, lcd, clock, rendered, opened, lines
 
 
@@ -1726,7 +1831,7 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     display, lcd, _clock, rendered, opened, _lines = _face_loop(module, tmp_path)
 
     assert display.step() is False and rendered == []
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
     for _ in range(5):
         assert display.tick() is True
     # The panel-sized loop keeps every authored frame, then replays.
@@ -1734,6 +1839,19 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     assert [panel[0][1] for panel in lcd.panels] == [0, 1, 2, 0, 1]
     assert {panel[1] for panel in lcd.panels} == {"Waiting"}
     assert opened == ["basic"]
+
+
+def test_a_dev_mode_robot_says_dev_on_the_face_and_the_card(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, face="basic")
+    (tmp_path / "etc/rosy").mkdir(parents=True)
+    (tmp_path / "etc/rosy/dev-mode").write_text("", encoding="ascii")
+    display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert display.animating[:2] == ("basic", "DEV Waiting")
+    assert module.read_view(tmp_path, None)["state_line"].startswith("DEV ")
 
 
 def test_a_stale_handover_brings_back_the_status_card(tmp_path):
@@ -1806,7 +1924,7 @@ def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
     clock.now += 1
     _face_inputs(tmp_path)
     display.step()
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
@@ -1859,7 +1977,7 @@ def test_an_expired_or_malformed_peer_approval_is_ignored(tmp_path, change):
 
     display.step()
 
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def test_an_oversized_peer_approval_is_ignored(tmp_path):
@@ -1871,7 +1989,7 @@ def test_an_oversized_peer_approval_is_ignored(tmp_path):
 
     display.step()
 
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def test_the_ap_card_stays_after_core_ready(tmp_path):
@@ -1948,7 +2066,7 @@ def test_the_drive_card_passes_over_the_face_on_the_cadence(tmp_path):
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
     display.step()
-    assert display.animating == ("happy", "Going", "info")
+    assert display.animating == ("happy", "Going", "ok", 80.0, False)
     clock.now += 15  # 21 s after the mode began
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
@@ -1966,8 +2084,8 @@ def test_caution_is_a_strip_on_every_face_frame(tmp_path):
     display.step()
     display.tick()
 
-    assert display.animating == ("basic", "Check the camera cable", "caution")
-    assert lcd.panels[-1][1:] == ("Check the camera cable", "caution")
+    assert display.animating[:3] == ("basic", "Check the camera cable", "caution")
+    assert lcd.panels[-1][1:3] == ("Check the camera cable", "caution")
 
 
 def test_a_handed_over_test_shows_its_strip(tmp_path):
@@ -1979,7 +2097,7 @@ def test_a_handed_over_test_shows_its_strip(tmp_path):
 
     display.step()
 
-    assert display.animating == ("basic", "Testing lamp", "info")
+    assert display.animating[:3] == ("basic", "Testing lamp", "ok")
 
 
 def test_a_missing_gif_is_logged_once_and_never_drawn(tmp_path):
@@ -2063,20 +2181,37 @@ def test_every_card_renders_on_the_panel_size(screen):
     assert image.size == (320, 240)
 
 
-def test_the_strip_paints_only_its_band():
+def test_the_peer_request_card_draws_the_ca_digest_the_tablet_asks_for(monkeypatch):
+    # First contact asks the requester to compare the CA digest; the LCD shows its first 16 digits.
+    module = _display()
+    info_screen = _info_screen()
+    drawn = []
+    real = info_screen.render_notice
+    monkeypatch.setattr(info_screen, "render_notice", lambda title, lines, **kw: drawn.append(list(lines)) or real(title, lines, **kw))
+    render = module.card_renderer(info_screen)
+    peer = {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
+
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request",
+                                              "peer": dict(peer, tls_ca_sha256="0123456789abcdef" + "f" * 48)}})
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request", "peer": peer}})
+
+    assert drawn == [["K7QM  ABC234", "CA 0123 4567 89ab cdef"], ["K7QM  ABC234"]]
+
+
+def test_the_status_bar_paints_only_its_band():
     import numpy as np
 
     module = _display()
     info_screen = _info_screen()
-    paint = module.strip_painter(info_screen)
+    paint = module.bar_painter(info_screen)
     frame = np.zeros((320, 240, 2), dtype=np.uint8)
 
-    painted = paint(frame, "Charge the battery", "caution")
+    painted = paint(frame, "Charge the battery", "caution", 64.0, True)
 
     changed = np.argwhere((painted != frame).any(axis=2))
     assert changed.size and frame.sum() == 0  # the cached frame is never written
-    band = info_screen.STRIP_HEIGHT
-    # Landscape bottom band -> after the panel's flip and rotation, a band of panel columns.
+    band = info_screen.BAR_HEIGHT
+    # Landscape top band -> after the panel's flip and rotation, a band of panel columns.
     assert changed[:, 1].max() - changed[:, 1].min() < band
 
 
@@ -2089,3 +2224,228 @@ def test_face_frames_reduce_gif_frames_to_panel_bytes():
     panel = convert(Image.new("P", (1000, 750)))
 
     assert panel.shape == (320, 240, 2) and panel.nbytes == 320 * 240 * 2
+
+
+def test_an_identity_helper_that_survives_sigkill_is_logged_and_the_state_pattern_comes_back(tmp_path, monkeypatch):
+    # Review 2026-10-08: wait() after the hard kill may time out; never raise out of the face loop.
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+
+    class Stuck(FakeProcess):
+        def wait(self, timeout=None):
+            raise module.subprocess.TimeoutExpired("lamp_pattern", timeout)
+
+        def kill(self):
+            self.killed = True
+
+    class StuckSpawn(FakeSpawn):
+        def __call__(self, command):
+            if not command[-1].startswith("identify_"):
+                return super().__call__(command)
+            self.processes.append(Stuck(command))
+            return self.processes[-1]
+
+    spawn = StuckSpawn()
+    lines = []
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, logs=lines)
+    display.step()
+    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    state, detail = lamp.identify("blue", lambda: False)
+    assert state == "failed" and "시간 초과" in detail
+    assert spawn.processes[-1].killed and lamp.pattern is None
+    assert any("SIGKILL" in line for line in lines)
+    assert lamp.show("ready") and spawn.patterns[-1] == "ready"  # next step() shows the state pattern
+
+
+# --- D-546: the lane-recovery signals ---------------------------------------------------
+
+
+def _recovering(tmp_path, **inputs):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn()
+    display, lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn,
+                                                          wall=lambda: WALL)
+    _face_inputs(tmp_path, **inputs)
+    return module, display, lamp, clock, gpio, spawn
+
+
+def test_reversing_beeps_once_a_second_only_while_the_phase_is_retrace(tmp_path):
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    ready = len(_starts(gpio))  # the ready chirp
+    assert lamp.pattern == "recovering" and ("pwm", 22, module.BUZZER_FREQUENCY_HZ) in gpio.events
+    assert ("change", module.BUZZER_REVERSE_HZ) in gpio.events and ready == 2
+    clock.now += 0.5
+    display.step()
+    assert len(_starts(gpio)) == ready  # still inside the 1 s period
+    clock.now += 0.5
+    display.step()
+    assert len(_starts(gpio)) == ready + 1
+
+    _face_inputs(tmp_path, recovery="return")  # aligning: lamp and LCD, no reversing alarm
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 1 and lamp.pattern == "recovering"
+
+    _face_inputs(tmp_path, recovery="retrace")
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 2  # a new retrace beeps at once
+    _face_inputs(tmp_path, recovery=None)
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 2 and lamp.pattern == "ready"
+
+
+def test_the_bridge_is_a_soft_lamp_only_and_estop_beats_recovering(tmp_path):
+    _module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="bridge")
+    display.step()
+    assert lamp.pattern == "bridging" and len(_starts(gpio)) == 1  # the ready chirp only
+    assert "Recovering" not in str(display.screen["strip"])  # no LCD line for the bridge
+
+    _face_inputs(tmp_path, recovery="retrace", robot_mode="EMERGENCY", estop=True)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    before = len(_starts(gpio))
+    clock.now += 1
+    display.step()
+    assert lamp.pattern == "emergency" and display.screen["kind"] == "stopped"
+    assert len(_starts(gpio)) == before + 4  # the e-stop alarm, no reversing beep
+
+
+def test_recovering_names_the_phase_on_the_lcd_and_refuses_an_identify_blink(tmp_path):
+    module, display, lamp, clock, _gpio, spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    assert display.screen["strip"] == "Recovering: reversing" and display.screen["strip_tone"] == "caution"
+    _hand_over(tmp_path, "identify_blue", at=WALL)
+    assert display.handle_test() == "failed"
+    assert _answer(tmp_path)["state"] == "failed" and "identify_blue" not in spawn.patterns
+    assert lamp.pattern == "recovering"
+
+
+def test_an_old_hand_over_without_recovery_and_an_unknown_value_signal_nothing(tmp_path):
+    module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path)  # no recovery key at all
+    display.step()
+    assert lamp.pattern == "ready" and "Recovering" not in str(display.screen["strip"]) and len(_starts(gpio)) == 1
+    _face_inputs(tmp_path, recovery="teleporting")
+    assert display._core()["recovery"] is None
+
+
+def test_the_recovering_lamp_and_lcd_are_held_1_5_s_but_the_beep_stops_at_once(tmp_path):
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    beeps = len(_starts(gpio))
+    _face_inputs(tmp_path, recovery=None)
+    clock.now += 1.0
+    display.step()
+    assert lamp.pattern == "recovering" and display.screen["strip"] == "Recovering: returning to lane"
+    assert len(_starts(gpio)) == beeps  # the reversing beep did not wait for the hold
+    clock.now += 0.4
+    display.step()
+    assert lamp.pattern == "recovering"
+    clock.now += 0.2  # 1.6 s after the last RECOVERING tick
+    display.step()
+    assert lamp.pattern == "ready" and "Recovering" not in str(display.screen["strip"])
+    assert module.RECOVERY_HOLD_S == 1.5
+
+
+def test_an_estop_in_the_handover_stops_every_recovery_signal_even_with_a_stale_mode(tmp_path):
+    # status-inputs still says the robot navigates (it is up to 10 s old); face-inputs has the e-stop.
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    beeps = len(_starts(gpio))
+    _face_inputs(tmp_path, recovery="retrace", estop=True, robot_mode="NAVIGATION")
+    clock.now += 1
+    display.step()
+    beeps += 4  # the e-stop alarm, once: the latch alone is the emergency pattern now, with no reversing beep
+    assert len(_starts(gpio)) == beeps and display._reversed_at is None
+    assert lamp.pattern != "recovering" and display.screen["kind"] == "stopped"
+    _face_inputs(tmp_path, recovery=None, estop=True, robot_mode="EMERGENCY")  # and no hold afterwards
+    clock.now += 0.2
+    display.step()
+    assert lamp.pattern != "recovering"
+    stopped = display._present({"robot_mode": "NAVIGATION"}, "ready", {"estop": True, "recovery": "retrace"}, None)
+    display._reverse_alarm(stopped.reversing, clock.now + 5)  # the record never asks for the beep under an e-stop
+    assert len(_starts(gpio)) == beeps
+
+
+def test_an_old_lamp_helper_leaves_the_lamp_out_but_the_beep_and_lcd_still_work(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    display, lamp, _clock, _rendered, lines = _state_loop(module, tmp_path, gpio=gpio, spawn=FakeSpawn(code=64),
+                                                          wall=lambda: WALL)
+    _face_inputs(tmp_path, recovery="retrace")
+    display.step()
+    display.step()
+    assert display.screen["strip"] == "Recovering: reversing"
+    assert ("change", module.BUZZER_REVERSE_HZ) in gpio.events
+    assert any("lamp_pattern recovering ended with 64" in line for line in lines)
+
+
+def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
+    _module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display._buzzer.enabled = False  # ROSY_BUZZER_ENABLED=false
+    display.step()
+    assert _starts(gpio) == [] and lamp.pattern == "recovering"
+
+
+def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_faces(tmp_path, monkeypatch):
+    module = _display()
+    monkeypatch.setattr(module, "presentation", None)
+    view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "recovering"
+    assert module.FaceDisplay.lamp_pattern_for({"robot_mode": "IDLE"}, "ready", {"robot_mode": "EMERGENCY"}) == "emergency"
+    assert module.FaceDisplay.lamp_pattern_for(view, "caution") == "caution"
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True)
+    display, *_ = _face_loop(module, tmp_path)
+    display.step()
+    assert display.screen["kind"] == "stopped"  # the table still draws the STOPPED card
+    old = module.robot_state.lamp_pattern
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", lambda state, mode=None, nav=None: "ready")  # pre-D-546
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", old)
+
+
+def test_the_fallback_sound_table_matches_the_record(monkeypatch):
+    module = _display()
+    assert module.SOUNDS == module.presentation.SOUNDS
+    assert module.REPEAT_LIMITED == {"caution"}
+
+
+def test_a_flapping_caution_never_sounds_but_a_held_one_sounds_once(tmp_path):
+    module, display, _lamp, clock, gpio, _spawn = _recovering(tmp_path)
+    display.step()
+    base = len(_starts(gpio))  # the ready chirp
+    for index in range(6):  # caution for 1 s, gone for 1 s: never reaches the 2 s hold
+        _face_inputs(tmp_path, caution=["line_follow_hold"] if index % 2 == 0 else [])
+        clock.now += 1.0
+        display.step()
+        display.step()
+    assert len(_starts(gpio)) == base
+    _face_inputs(tmp_path, caution=["line_follow_hold"])
+    for _ in range(6):
+        clock.now += 0.5
+        display.step()
+    assert len(_starts(gpio)) == base + 2  # two low tones, once
+
+
+def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():
+    module = _display()
+    gpio = FakeGPIO()
+
+    def broken(_seconds):
+        raise RuntimeError("sleep failed")
+    with pytest.raises(RuntimeError):
+        module.Buzzer(gpio, 22, True, broken).announce("reverse")
+    assert gpio.events[-2:] == [("start", module.BUZZER_DUTY), ("stop",)]
+

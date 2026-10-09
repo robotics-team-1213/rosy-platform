@@ -437,3 +437,48 @@ def test_turn_actions_on_map_v2_fleet_follow_the_drawn_geometry():
     assert set(seen.values()) == {"right"} and len(seen) == 8
     plan = plan_trip(graph, PlanRequest(1, graph.arcs["ring_s:fwd"].point_at(0.1), "NW"), CFG)
     assert [a[1] for a in plan.actions] == ["straight", "straight", "stop"]
+
+
+# ---- D-517 2: start places part-way along a lane ------------------------------------------
+
+START_PLACES = [{"id": "start_n", "name": "start_n", "x": 0.83, "y": -0.50, "yaw": 0.0, "kind": "start"},
+                {"id": "start_s", "name": "start_s", "x": -1.30, "y": 0.53, "yaw": -math.pi / 2, "kind": "start"}]
+
+
+def demo_site(extra_places=()) -> SiteMap:
+    """The 2026-10-08 demo map: map_v2_fleet with east/west one way and the two D-513 start places."""
+    from test_blocks import _demo_map
+
+    body = _demo_map().body()
+    body["places"] += [*START_PLACES, *extra_places]
+    return SiteMap.model_validate(body)
+
+
+def test_start_places_part_way_along_a_lane_are_goals_and_vias():
+    """D-517 2: start_n -> start_s -> start_n by place id (TRIP_NO_ROUTE before)."""
+    graph = build_graph(demo_site(), version=1)
+    start = (0.83, -0.50, 0.0)
+    plan = plan_trip(graph, PlanRequest(1, start, "start_n", via=("start_s",)), CFG)
+    assert [e for e, *_ in plan.segments] == ["east", "ring_n", "west", "ring_s", "east"]
+    assert plan.segments[0][2] > 0 and plan.segments[-1][3] < graph.arcs["east:fwd"].length_m  # part-way ends
+    end = graph.arcs["east:fwd"].point_at(plan.segments[-1][3])
+    assert math.dist(end[:2], (0.83, -0.50)) < 2 * graph.arcs["east:fwd"].width_m
+    assert plan.actions[-1] == (None, "stop", 0.0)
+    one = plan_trip(graph, PlanRequest(1, start, "start_s"), CFG)
+    assert [e for e, *_ in one.segments] == ["east", "ring_n", "west"]
+    far = {"id": "far", "name": "far", "x": 5.0, "y": 5.0, "yaw": 0.0, "kind": "start"}
+    with pytest.raises(PlanError) as err:  # nothing within twice the lane width
+        plan_trip(build_graph(demo_site([far]), version=1), PlanRequest(1, start, "far"), CFG)
+    assert err.value.code == "TRIP_OFF_MAP"
+
+
+def test_a_part_way_place_whose_yaw_cannot_be_reached_says_so():
+    """Review LOW 10: reachable facing the other way -> TRIP_ARRIVE_YAW_UNREACHABLE, not TRIP_NO_ROUTE."""
+    body = _map({"A": (0, 0), "B": (1, 0)}, [("ab", "A", "B", True)]).body()
+    body["places"].append({"id": "P", "name": "P", "x": 0.6, "y": 0.0, "yaw": math.pi, "kind": "start"})
+    site = SiteMap.model_validate(body)
+    with pytest.raises(PlanError) as err:  # facing west needs a U-turn at the junction B
+        _plan(site, (0.2, 0, 0), "P")
+    assert err.value.code == "TRIP_ARRIVE_YAW_UNREACHABLE"
+    body["places"][-1]["yaw"] = 0.0
+    assert _edges(_plan(SiteMap.model_validate(body), (0.2, 0, 0), "P")) == ["ab"]

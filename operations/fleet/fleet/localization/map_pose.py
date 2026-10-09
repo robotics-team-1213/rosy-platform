@@ -144,6 +144,8 @@ class MapPose:
     odom_refused_reason: Optional[str] = None
     #: Sightings ignored because their map_id is not the active site map frame.
     sightings_filtered_map_id: int = 0
+    #: D-517 4: CORE's stamp of the newest odom sample in this pose (the authority's ``pose_stamp``).
+    odom_stamp: Optional[float] = None
 
 
 def _wrap(angle: float) -> float:
@@ -234,8 +236,23 @@ class MapPoseTracker:
         self._refused_reason: Optional[str] = None
 
     @property
+    def sourced(self) -> bool:
+        """A sighting for this robot was ever accepted or filtered (D-577 1: a lost pose, not none)."""
+        return self._newest_sighting is not None or self._filtered_map_id > 0
+
+    @property
     def latest_odom_stamp(self) -> Optional[float]:
         return self._odom[-1].stamp if self._odom else None
+
+    def moved_since(self, since: float, min_m: float, min_rad: float) -> bool:
+        """D-511 2: an odom sample after `since` is more than `min_m` / `min_rad` (a jitter
+        deadband) from the last one before it (an odom reset starts over)."""
+        if not self._odom or self._odom[-1].stamp < since:
+            return False
+        base = next((o for o in reversed(self._odom) if o.stamp < since), self._odom[0])
+        return any(math.dist(o.pose[:2], base.pose[:2]) > min_m
+                   or abs(_wrap(o.pose[2] - base.pose[2])) > min_rad
+                   for o in self._odom if o.stamp >= since)
 
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
@@ -311,7 +328,7 @@ class MapPoseTracker:
                     or (active_map_id is not None and anchor.map_id != active_map_id)
                     or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
-                       anchor_age, anchor.map_id, **diag)
+                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, **diag)
 
     def _reset(self, since: float) -> None:
         self._odom.clear()

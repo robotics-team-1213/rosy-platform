@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from playwright.sync_api import sync_playwright
+from browser_harness import browser_tests_enabled
 
 ROOT = Path(__file__).resolve().parents[4]
 COMMON = ROOT / 'shared/web'
@@ -27,8 +27,11 @@ await window.panel.refresh(); window.ready=true;
 </script></body></html>'''
 
 
+@unittest.skipUnless(browser_tests_enabled(), "set ROSY_RUN_BROWSER_TESTS=1 for the Chromium check")
 class ReceiverBrowser(unittest.TestCase):
     def setUp(self):
+        from playwright.sync_api import sync_playwright
+
         evidence=tempfile.TemporaryDirectory()
         self.addCleanup(evidence.cleanup)
         self.evidence=Path(evidence.name)

@@ -1,0 +1,675 @@
+[
+ {
+  "run": "south_centre_1",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.961,
+   -0.509,
+   0.014
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.006,
+   -2.6
+  ],
+  "min_to_sw_node_m": 0.097,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.631,
+   -0.397,
+   1.065
+  ]
+ },
+ {
+  "run": "south_centre_2",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": [
+   -0.954,
+   -0.509,
+   0.015
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.006,
+   -4.3
+  ],
+  "min_to_sw_node_m": 0.244,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -0.627,
+   -0.388,
+   1.303
+  ]
+ },
+ {
+  "run": "south_centre_3",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.952,
+   -0.509,
+   0.001
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.008,
+   -2.7
+  ],
+  "min_to_sw_node_m": 0.097,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.629,
+   -0.399,
+   1.062
+  ]
+ },
+ {
+  "run": "south_left_01",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.951,
+   -0.5,
+   -0.024
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.009,
+   -6.2
+  ],
+  "min_to_sw_node_m": 0.099,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.624,
+   -0.391,
+   1.337
+  ]
+ },
+ {
+  "run": "south_left_02",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.949,
+   -0.5,
+   -0.023
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.011,
+   -4.5
+  ],
+  "min_to_sw_node_m": 0.095,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.626,
+   -0.399,
+   1.032
+  ]
+ },
+ {
+  "run": "south_left_03",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.95,
+   -0.5,
+   -0.024
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.01,
+   -5.9
+  ],
+  "min_to_sw_node_m": 0.096,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.628,
+   -0.402,
+   1.006
+  ]
+ },
+ {
+  "run": "south_left_04",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.946,
+   -0.501,
+   -0.013
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.009,
+   -4.9
+  ],
+  "min_to_sw_node_m": 0.147,
+  "first_sighting_after_bend": 0.147,
+  "last_state": [
+   "waiting",
+   null,
+   "HOLD",
+   "junction_waiting"
+  ],
+  "last_gt": [
+   -0.541,
+   -0.314,
+   0.912
+  ]
+ },
+ {
+  "run": "south_left_05",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.948,
+   -0.501,
+   -0.018
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.011,
+   -5.4
+  ],
+  "min_to_sw_node_m": 0.098,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.627,
+   -0.401,
+   1.016
+  ]
+ },
+ {
+  "run": "south_left_06",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.948,
+   -0.501,
+   -0.02
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.009,
+   -5.7
+  ],
+  "min_to_sw_node_m": 0.096,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.629,
+   -0.401,
+   1.01
+  ]
+ },
+ {
+  "run": "south_left_07",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.949,
+   -0.5,
+   -0.023
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.009,
+   -6.6
+  ],
+  "min_to_sw_node_m": 0.098,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.631,
+   -0.406,
+   0.994
+  ]
+ },
+ {
+  "run": "south_left_08",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.948,
+   -0.501,
+   -0.023
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.011,
+   -5.4
+  ],
+  "min_to_sw_node_m": 0.096,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.627,
+   -0.401,
+   1.015
+  ]
+ },
+ {
+  "run": "south_left_09",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.948,
+   -0.5,
+   -0.026
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.011,
+   -4.4
+  ],
+  "min_to_sw_node_m": 0.096,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.626,
+   -0.399,
+   1.034
+  ]
+ },
+ {
+  "run": "south_left_10",
+  "result": "reached_roundabout",
+  "armed": true,
+  "took_over_gt": [
+   -0.951,
+   -0.5,
+   -0.024
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": [
+   -0.011,
+   -4.1
+  ],
+  "min_to_sw_node_m": 0.097,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "TRACKING",
+   "tracking"
+  ],
+  "last_gt": [
+   -0.625,
+   -0.399,
+   1.039
+  ]
+ },
+ {
+  "run": "west_01",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.268,
+   -0.406,
+   -1.129
+  ]
+ },
+ {
+  "run": "west_02",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.269,
+   -0.404,
+   -1.188
+  ]
+ },
+ {
+  "run": "west_03",
+  "result": "aborted",
+  "armed": true,
+  "took_over_gt": [
+   -0.961,
+   -0.49,
+   -0.083
+  ],
+  "took_over_on": [
+   "TRACKING",
+   "tracking"
+  ],
+  "ended": [
+   "aborted",
+   "bend_basis_lost"
+  ],
+  "ended_gt": [
+   -0.624,
+   -0.48,
+   0.589
+  ],
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "aborted",
+   "bend_basis_lost",
+   "HOLD",
+   "junction_aborted"
+  ],
+  "last_gt": [
+   -0.624,
+   -0.48,
+   0.589
+  ]
+ },
+ {
+  "run": "west_04",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.389,
+   -1.51
+  ]
+ },
+ {
+  "run": "west_05",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.392,
+   -1.485
+  ]
+ },
+ {
+  "run": "west_06",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.269,
+   -0.401,
+   -1.235
+  ]
+ },
+ {
+  "run": "west_07",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.27,
+   -0.398,
+   -1.295
+  ]
+ },
+ {
+  "run": "west_08",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.392,
+   -1.46
+  ]
+ },
+ {
+  "run": "west_09",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.393,
+   -1.438
+  ]
+ },
+ {
+  "run": "west_10",
+  "result": "LOST",
+  "armed": true,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "armed",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.395,
+   -1.359
+  ]
+ }
+]

@@ -3,6 +3,9 @@
 
 # system
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Host and ROS-graph observability plus the unprivileged Host Agent client. Never invent telemetry when the agent or `/proc` is missing.

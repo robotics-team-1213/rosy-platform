@@ -1,26 +1,31 @@
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
-// and preview a D-490 trip plan. Only the D-494 운행 buttons start or cancel a trip.
+// and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
+import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
-  planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
-  tripStatusText, rectangularView,
+  planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
+  planTrip, tripRefusalText, planSummaryText, planeView,
 } from '/console/assets/site-map-model.js';
+import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
-import {warpImage} from '/console/assets/field-view.js';
+import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
-import {parseLensHeader} from '/console/assets/vision-view.js';
+import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
 const W = 800, H = 480;
 
-$('credential').value = sessionStorage.getItem('rosy-console-token') || '';
-const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null};
-const TRIP_POLL_MS = 1000;
+// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const stored = sessionStorage.getItem('rosy-console-token') || '';
+$('console-token').value = stored;
+const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, open: [], guide: null};
+const ROBOT_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
@@ -63,7 +68,8 @@ function render() {
   if (!hasMap) return;
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
-  const view = background?.view || fitView(map, W, H);
+  $('map-view-turn').value = String(viewTurnOf(map));
+  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map), robotDiscs(map));
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -77,7 +83,7 @@ function render() {
     for (const mark of arrowMarks(edge)) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
-        transform: `translate(${px} ${py}) rotate(${-mark.angle * 180 / Math.PI})`}, svg);
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);
     }
   }
   if ($('map-source').value === 'active' && planIsCurrent(state.plan, state.active)) {
@@ -89,6 +95,10 @@ function render() {
     const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
       class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
+    if (place.kind === 'start') {
+      el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
+    }
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
   }
   if (state.point && $('map-source').value === 'active') {
@@ -99,6 +109,55 @@ function render() {
     const [px, py] = view.toPx(background.point.x, background.point.y);
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
   }
+  drawRobots(false);
+}
+
+// D-540 4: robot rings stay on the map — the fit includes them.
+const LABEL_PAD = 24;  // the same margin as before; a label with no room above its ring goes below it
+function robotDiscs(map) {
+  if (map.map_id !== state.active?.map.map_id) return [];
+  return (state.guide?.robots || []).filter(row => row.pose).map(row => ({x: row.pose.x, y: row.pose.y, r: row.body_radius_m + row.pose.u_m}));
+}
+
+// D-540 4: the 관제 map's /guide marks (body, heading, uncertainty ring) and each open trip's line and
+// next place, in this map's frame and view turn. Read-only; redrawn alone so a poll never eats a click.
+function drawRobots(refit = true) {
+  const svg = $('site-map-svg'), map = shown();
+  svg.querySelector('#robot-layer')?.remove();
+  if (!map || !state.view || map.map_id !== state.active?.map.map_id) return;
+  const layer = el('g', {id: 'robot-layer'}, svg);
+  const order = (state.guide?.robots || []).map(row => row.robot_id);
+  const tint = id => `c${Math.max(0, order.indexOf(id)) % 3 + 1}`;
+  const line = points => points.map(([x, y]) => state.view.toPx(x, y).join(',')).join(' ');
+  for (const trip of state.open.filter(item => item.map_version === state.active.version && item.plan)) {
+    for (const points of planPolylines(map, trip.plan))
+      el('polyline', {class: `trip-line ${tint(trip.robot_id)}`, 'data-trip-robot': trip.robot_id, points: line(points)}, layer);
+    const next = map.places.find(place => place.id === trip.next_place);
+    if (next) {
+      const [px, py] = state.view.toPx(next.x, next.y);
+      el('circle', {class: `next-place ${tint(trip.robot_id)}`, cx: px, cy: py, r: 14}, layer);
+    }
+  }
+  const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
+  let off = false;
+  for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
+    const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
+      'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);
+    el('circle', {class: 'robot-ring', cx: p.x, cy: p.y, r: ring}, g);
+    el('circle', {class: 'robot-body', cx: p.x, cy: p.y, r}, g);
+    if (tip) {
+      el('line', {class: 'robot-heading', x1: p.x, y1: p.y, x2: tip.x, y2: tip.y}, g);
+      const deg = Math.atan2(tip.y - p.y, tip.x - p.x) * 180 / Math.PI;
+      el('polygon', {class: 'robot-tip', points: '2,0 -7,-5 -7,5', transform: `translate(${tip.x} ${tip.y}) rotate(${deg})`}, g);
+    }
+    const label = el('text', {class: 'robot-label', x: p.x, y: p.y - ring - 6}, g);
+    label.textContent = poseLabel(row);
+    const half = label.getComputedTextLength() / 2 + 4;  // keep the whole label on the map
+    label.setAttribute('x', Math.min(Math.max(p.x, half), W - half));
+    if (p.y - ring - 6 < 16) label.setAttribute('y', p.y + ring + 16);
+    off ||= p.x - ring < 0 || p.x + ring > W || p.y - ring < 0 || p.y + ring > H;
+  }
+  if (off && refit && !plane) render();  // a ring left the fitted view: fit again (a poll, not a click, redraws)
 }
 
 function select(selection) {
@@ -131,6 +190,7 @@ function syncButtons() {
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
   gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
+  gate('map-view-turn', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
@@ -151,29 +211,25 @@ function syncButtons() {
   const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
   gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
-  gate('estop', reason);
-  gate('trip-start', inspecting || tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
-  gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
-  $('trip-confirm').hidden = !state.running?.hold;
-  gate('trip-confirm', inspecting || reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
   teach.sync();
 }
 
-async function pollTrips() {
+// D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
+async function pollRobots() {
   if (state.loadState === 'ready') {
     try {
-      const {running, trips} = await request('/api/fleet/trips');
-      state.running = running;
-      const shown = running || trips[0] || null;
-      status('trip-run', tripStatusText(shown, state.active?.map), running ? 'pending' : shown?.state === 'arrived' ? 'ready' : shown ? 'error' : 'empty');
+      state.open = (await request('/api/fleet/trips')).open || [];
+      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
+        : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
     } catch (error) {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
     }
-    syncButtons();
+    try { state.guide = await request('/api/fleet/guide'); } catch { state.guide = null; }  // an older Fleet has no /guide
+    drawRobots();
   }
-  setTimeout(pollTrips, TRIP_POLL_MS);
+  setTimeout(pollRobots, ROBOT_POLL_MS);
 }
-pollTrips();
+pollRobots();
 
 async function load() {
   state.planEpoch += 1;
@@ -220,20 +276,20 @@ async function guarded(work) {
   syncButtons();
 }
 
-$('connect').addEventListener('click', async () => {
+$('token-save').addEventListener('click', async () => {
   planeEpoch += 1; plane = null; calibrations = [];
   $('plane-pick').checked = false;
   $('plane-source').replaceChildren();
-  gate('connect', '접속 중');
+  gate('token-save', '접속 중');
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;
-  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.running = null;
+  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.guide = null;
+  state.open = [];
   state.dirty = false;
-  $('session').textContent = '접속 전';
   $('trip-place').replaceChildren();
   $('trip-robot').replaceChildren();
   $('trip-actions').replaceChildren();
@@ -243,9 +299,10 @@ $('connect').addEventListener('click', async () => {
   notice('접속 중 · 0초 경과');
   try {
     const session = await request('/api/fleet/session');
-    sessionStorage.setItem('rosy-console-token', $('credential').value);
+    sessionStorage.setItem('rosy-console-token', $('console-token').value);
     state.role = session.role;
-    $('session').textContent = `${session.principal_id} · ${session.role}`;
+    showSession(session);
+    loginForm.refresh(false);
     syncButtons();
     await load();
     notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
@@ -255,19 +312,21 @@ $('connect').addEventListener('click', async () => {
     state.loadState = error.status === 401 ? 'idle' : 'error';
     if (error.status === 401 || error.status === 403) {
       state.role = null;
-      $('session').textContent = '접속 전';
+      showSignedOut();
     }
+    if (error.status === 401) loginForm.refresh(true);
     render();
     syncButtons();
     notice(siteMapErrorText(error));
   } finally {
     clearInterval(ticker);
-    gate('connect', '');
+    gate('token-save', '');
   }
 });
 
 function clearPlane() {
   planeEpoch += 1;
+  if (plane?.url.startsWith('blob:')) URL.revokeObjectURL(plane.url);
   plane = null;
   $('plane-pick').checked = false;
   $('plane-point').textContent = '확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.';
@@ -296,7 +355,31 @@ $('plane-load').addEventListener('click', async () => {
   gate('plane-load', '불러오는 중');
   let url;
   try {
-    const {view, field} = rectangularView(record, shown()?.map_id, W, H);
+    const turn = viewTurnOf(shown());
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H, turn);
+    // D-560: Vision's map plane first; the browser warp below only when Vision cannot make one.
+    const got = await fetchMapPlane(request, record.source_id, null, AbortSignal.timeout(10000));
+    if (got.state === 'error') throw new Error(`Vision 응답 ${got.status}`);
+    if (got.state === 'live') {
+      // The plane's coordinates are only as good as the calibration this page picked them against.
+      if (!got.calibrationRevision || got.calibrationRevision !== record.calibration_revision)
+        throw new Error('보정 revision이 다릅니다 — 다시 불러오세요.');
+      if (!(got.ageMs >= 0 && got.ageMs <= 3000)) throw new Error('신선한 평면 영상을 확인할 수 없습니다.');
+      if (got.blob.size > 8 * 1024 * 1024) throw new Error('영상 크기가 너무 큽니다.');
+      url = URL.createObjectURL(got.blob);
+      const image = new Image(); image.src = url; await image.decode();
+      if (epoch !== planeEpoch) return;
+      if (planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
+        // Header rectangle = picture, so the view's toMap is x = min_x + u/ppm, y = max_y - v/ppm (D-560 4).
+        plane = {mapId: record.map_id, ...planeView(got.plane, W, H, turn), bounds: got.plane, url};
+        url = null;  // the plane owns it until clearPlane
+        $('plane-status').textContent = `불러온 평면 영상 · Rosy Cam 평면 영상 · ${record.source_id} · ${got.calibrationRevision} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+        render();
+        return;
+      }
+      URL.revokeObjectURL(url);  // a picture that is not its rectangle is no plane: use the browser warp
+      url = null;
+    }
     const lease = await request('/api/fleet/vision/lease', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
     const path = new URL(lease.frame_path, location.origin);
@@ -322,7 +405,7 @@ $('plane-load').addEventListener('click', async () => {
     warpImage(canvas.getContext('2d'), image, h, canvas.width, canvas.height, document.createElement('canvas'));
     if (epoch !== planeEpoch) return;
     plane = {mapId: record.map_id, view, field, bounds: record.track_bounds_m, url: canvas.toDataURL('image/png')};
-    $('plane-status').textContent = `불러온 평면 영상 · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+    $('plane-status').textContent = `불러온 평면 영상 · 브라우저 보정(대체) · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
     render();
   } catch (error) {
     if (epoch === planeEpoch) $('plane-status').textContent = `평면 영상 확인 실패 · ${siteMapErrorText(error)}`;
@@ -398,6 +481,16 @@ $('import-camera-map').addEventListener('click', () => guarded(async () => {
   notice('카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
 }));
 
+// D-513 7: one orientation for every Fleet map and camera view; saved and activated like any edit.
+$('map-view-turn').addEventListener('change', () => guarded(async () => {
+  state.working = editViewTurn(state.working, $('map-view-turn').value);
+  state.dirty = true;
+  $('map-source').value = 'draft';
+  clearPlane();
+  render(); syncButtons();
+  notice('화면 방향을 초안에 반영했습니다. 저장하고 활성화하면 관제 화면 전체가 이 방향을 씁니다.');
+}));
+
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
   state.working = sel?.place
@@ -436,13 +529,12 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;
   try {
-    const plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({to})});
+    const plan = await planTrip(request, $('trip-robot').value, {to});
     if (epoch !== state.planEpoch) return;
     state.plan = plan;
   } catch (error) {
     if (epoch !== state.planEpoch) return;
-    status('trip-summary', error.code ? tripErrorText(error.code, error.detail) : error.message, 'error');
+    status('trip-summary', tripRefusalText(error), 'error');
     $('trip-actions').replaceChildren();
     render();
     return;
@@ -454,8 +546,7 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
     status('trip-summary', `지도가 v${plan.map_version}로 바뀌었습니다 · 다시 계산하세요`, 'error');
     return;
   }
-  status('trip-summary', `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`
-    + ` · 지도 v${plan.map_version} · 실행하지 않음 · 운행 시작으로 출발`, 'ready');
+  status('trip-summary', `${planSummaryText(plan)} · 실행하지 않음`, 'ready');
   $('trip-actions').replaceChildren(...actionRows(plan, state.active.map).map(text => {
     const row = document.createElement('li');
     row.textContent = text;
@@ -465,48 +556,22 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   render();
 }));
 
-async function tripAction(path, done) {
-  try {
-    const trip = await request(path, {method: 'POST'});
-    state.running = ['started', 'running'].includes(trip.state) ? trip : null;
-    status('trip-run', tripStatusText(trip, state.active?.map), state.running ? 'pending' : 'ready');
-    notice(done);
-  } catch (error) {  // the poll rewrites #trip-run each second; the refusal stays in the notice
-    notice(`운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
-  }
-  syncButtons();
-}
+bindEstop(request);
+bindTopbarToggle();
+tickClock();
+setInterval(tickClock, 1000);
+watchFleet(request);
+$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 
-$('trip-start').addEventListener('click', () => {
-  const plan = state.plan;
-  if (plan) tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, '운행을 시작했습니다.');
-});
-$('trip-confirm').addEventListener('click', () => {
-  if (state.running) tripAction(`/api/fleet/trips/${encodeURIComponent(state.running.trip_id)}/confirm-replan`, '바뀐 경로로 계속합니다.');
-});
-$('trip-cancel').addEventListener('click', async () => {
-  const trip = state.running;
-  if (!trip) return;
-  const allowed = await confirmIrreversible({
-    message: '운행을 취소할까요? 로봇은 바로 멈춥니다. 차선 주행이면 차선 주행을 끄고(OFF), 좌표 주행이면 목표를 취소합니다.',
-    action: '운행 취소', opener: $('trip-cancel'),
+developmentToken($('console-token').value).then(token => {
+  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
+  else loginForm.refresh(true).then(cookie => {
+    if (cookie || stored) $('token-save').click();
+    else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
   });
-  if (allowed) tripAction(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel`, '운행을 취소했습니다.');
-});
-
-$('estop').addEventListener('click', async () => {
-  const feedback = $('estop-feedback');
-  feedback.hidden = false;
-  try {
-    const result = await request('/api/fleet/estop', {method: 'POST'});
-    feedback.textContent = `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`;
-    feedback.setAttribute('state', 'warning');
-  } catch (error) {
-    feedback.textContent = `비상 정지 결과 확인 불가 — ${error.message}`;
-    feedback.setAttribute('state', 'error');
-  }
-});
-
-developmentToken($('credential').value).then(token => {
-  if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
 }).catch(() => {});
+// D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
+const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
+  $('console-token').value = ''; $('token-save').click();
+}});

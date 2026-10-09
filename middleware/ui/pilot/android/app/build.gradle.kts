@@ -1,4 +1,6 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+val pageProbe = (findProperty("rosy.pilot.page.probe") as? String) ?: "0"
+val pageDir = (findProperty("rosy.pilot.page.dir") as? String) ?: ""
 val nativePalette = tasks.register("generateNativePalette") {
     val canonical = file("../../../../../shared/web/tokens.css")
     val generated = layout.buildDirectory.dir("generated/pilot-palette")
@@ -65,6 +67,10 @@ android {
             it.inputs.dir(layout.buildDirectory.dir("generated/pilot-assets"))
             it.systemProperty("rosy.discovery.vectors", rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath)
             it.systemProperty("rosy.pilot.assets", layout.buildDirectory.dir("generated/pilot-assets").get().asFile.absolutePath)
+            it.systemProperty("rosy.pilot.page.probe", pageProbe)
+            it.systemProperty("rosy.pilot.page.dir", pageDir)
+            // The probe stays up until the browser finishes, so a green result is not reusable.
+            if (pageProbe == "1") it.outputs.upToDateWhen { false }
             it.systemProperty(
                 "rosy.icons.dir",
                 rootProject.file("../../../../shared/web/icons").absolutePath,

@@ -117,3 +117,36 @@ Status 는 Proposed 그대로다. 기본 꺼짐(`line_follow.bridge_enabled: fal
    4. **값은 그럴듯함 관문이다.** `bridge_arm_confidence` 0.5, `bridge_arm_frames` 3, `bridge_arm_max_error` 0.1, `bridge_arm_max_angular` 0.08은 결정 7 단계 1(실주행 재생)로 정당화하기 전에는 장치 단계로 가지 않는다. 장치 증거가 아니다.
    5. **안전 태그.** `lane_bridge.py`는 전진 명령을 만들므로 D-430 `safety_modules` 태그를 권한다. 안전 목록(`tools/harness/platform_parts.yaml`)은 이 변경에서 고치지 않았고, 태그 여부는 소유자가 정한다.
    6. **시험 추가.** 바닥 끝 수용·enforce 관문, 곡선·보정 중 무장 안 됨, 이어지는 손실, bridge 중 stuck 열림·모드 변경·스캔 stale·자세 frame/epoch 변경, 제출 때 스캔 stale, 그리고 `recovery_local_enabled`·`bridge_enabled`가 모두 false일 때 main(`7c0879274`)에서 기록한 결정 순서와 틱마다 같음(`test_lane_bridge_off_golden.json`).
+
+## 개정 2 (2026-10-07, 선택지 c): 곡률이 꾸준한 호에서도 무장, bridge는 그 호를 따른다
+
+프로젝트 소유자 결정(2026-10-07)이다. 개정 1의 8.2(곧은 추종에서만 무장)는 곧은 경로로 그대로 두고, 그 밖에서 곡률이 꾸준한 호 경로를 더한다. Status는 Proposed 그대로이고 기본은 꺼짐이다. 호스트 단위 시험까지만 했다. 재생·시뮬·장치 단계(결정 7)는 하지 않았다.
+
+**왜.** 260919 트랙의 회전교차로와 곡선 차로에서 추종은 계속 조향한다(Gazebo 개정 1 B 실행: cruise 0.08, error −0.184, angular +0.147). 개정 1은 이런 틱에서 무장하지 않아, 곡선에서 차선을 잃으면 bridge가 한 번도 돌지 않는다. 곡선에서 직선 연장은 좁은 차로를 벗어나므로(아래 경계), 몸이 차로와 나란히 도는 호를 그대로 잇는다.
+
+1. **관문.**
+   - **곧은 경로(개정 1 그대로).** 무장 연속 구간의 마지막 `bridge_arm_frames`개 틱이 모두 `|angular| ≤ bridge_arm_max_angular`이고 `|error| ≤ bridge_arm_max_error`면 직선 bridge(κ = 0)다. 기존 직선 시험과 OFF 비트 동일 시험(`test_lane_bridge_off_golden.json`)은 바뀌지 않았다.
+   - **호 경로(선택지 c).** 그 밖이면 `|error|` 크기 상한은 없다. 대신 같은 틱들에서 (a) error의 퍼짐(최대 − 최소) ≤ `bridge_arm_error_spread`, (b) 명령 곡률 κ = angular/linear의 퍼짐 ≤ `bridge_arm_curvature_tolerance`, (c) `|κ 평균| ≤ bridge_arm_max_curvature`, (d) 같은 틱들의 odom 회전 ÷ odom 이동(Δyaw/Δs)이 κ 평균과 `bridge_arm_curvature_tolerance` 안에서 같아야 무장하고, 닻에 κ 평균을 함께 둔다. 그 틱들은 서로 다른 카메라 프레임 `bridge_arm_frames`개 이상과 odom 이동 `bridge_arm_min_travel_m` 이상을 덮는 가장 짧은 최근 창이다(같은 epoch·frame. 바뀌면 창을 비운다). error와 κ가 함께 꾸준하면 몸은 차로와 나란히 돌고, 그 방향이 차로의 접선이다. 보정(크거나 변하는 error, 예: Gazebo 개정 1 Cb 실행의 모서리 진입 −0.64 → −0.89)은 (a)나 (c)에 걸려 무장하지 않는다. linear가 0인 틱의 κ는 무한대로 보아 무장하지 않는다.
+   - 연속 구간이 끊기면(`_confident_frames`가 1로 다시 시작) 호 창도 비운다(`lane_return_wiring.py` 한 곳).
+2. **호 모형.** 차로 중심원은 닻에서 corridor 중심만큼 옮긴 점을 지나고, 방향은 닻 yaw + corridor 방향이다. 몸의 원과 같은 중심을 가지므로 중심원의 곡률은 κ_c = κ / (1 − κ·center)다. 목표는 지금 자세를 그 원에 투영한 점에서 원을 따라 `bridge_lookahead_m` 앞이고, 지금처럼 pure pursuit로 좇는다(`bridge_target(..., kappa)`). 원 위에서 pure pursuit는 그 원의 곡률을 명령하므로 bridge의 angular/linear ≈ κ_c다. 이 명령이 `_intended`가 되어 D-422 `body_path_gap` 몸 쓸기는 직선이 아니라 그 호를 쓴다.
+3. **교차로.** 호 bridge는 교차로 지시가 있고 그 action이 `straight`가 아니거나, `stale_after_s` 안에 교차로를 본 적이 있으면 들어가지 않는다. 경로 힌트 `left`/`right` 거절은 그대로다. 직선 bridge의 교차로 조건은 개정 1 그대로다. D-494·D-495 코드는 바꾸지 않았다.
+4. **허용값과 근거.**
+   - `bridge_arm_max_curvature` 4.0 1/m: `map_v2_fleet/lane_graph.yaml` 회전교차로 반지름 0.2514 m(1/0.2514 ≈ 3.98), 지도에서 가장 좁은 차로 호다. 이보다 좁게 도는 추종은 차로를 따르는 것이 아니라 보정이다.
+   - `bridge_arm_curvature_tolerance` 0.5 1/m: 가장 긴 bridge 도달 거리 L = 0.25 / 1.08 ≈ 0.2315 m(거리 사다리 상한 ÷ 실측 배율)에서 곡률 오차 δκ가 만드는 옆 오차는 δκ·L²/2다. 0.5 × 0.2315² / 2 ≈ 13.4 mm로 한쪽 유격 23.5 mm(STL 공칭)의 약 절반이다.
+   - `bridge_arm_error_spread`(설정 아님, 유도값) = tolerance × `cruise_speed` / `steering_gain` = 0.5 × 0.08 / 0.8 = 0.05. 추종기의 angular = `steering_gain` × error이고 linear ≤ cruise이므로, cruise에서 κ를 꼭 tolerance만큼 바꾸는 error 변화다. linear가 error와 함께 바뀌어(곡선 감속, 신뢰도 배율) κ만 꾸준해 보이는 경우를 error 쪽에서 막는다. 새 숫자는 없다.
+5. **경계.**
+   - 허용 안의 곡률 오차: 위 13.4 mm < 23.5 mm. 닫힌 루프 시험이 bridge가 자기 호에서 2 mm 안으로 달리고, 참 곡률이 κ ± tolerance일 때 그 원에서 13.4 mm(+2 mm 이산화 여유) 안임을 확인한다.
+   - 최악 회전교차로 → 직선 출구: 호를 이은 뒤 차로가 직선으로 바뀌면 옆 오차는 κ_max·L²/2 = 4.0 × 0.2315² / 2 ≈ 107 mm로 유격을 넘는다. 이것은 거리 상한(0.10 / 0.25 m 사다리, 실측 odom × 1.08)과 IR 가드(경계선이 측면 IR 밑에 오면 bridge 끝, 개정 1 8.1)가 묶는다. 측면 IR은 몸 아래(±0.020 m)라 늦은 울타리임은 개정 1 4번 그대로다.
+6. **남는 위험(정직하게).**
+   - 닻 방향은 마지막 확신 틱의 odom yaw다. 꾸준한 error라도 카메라 투영 편향(26–134 mm)이 있으면 몸은 차로와 나란히 돌되 중심에서 벗어나 있을 수 있다. 호는 그 오프셋을 그대로 잇는다. 유격이 묶는 것은 개정 1과 같다.
+   - κ는 명령값(angular/linear)이지 측정값이 아니다. 바퀴 미끄러짐이나 모터 지연으로 실제 곡률이 다르면 위 경계는 그 차이만큼 넓어진다. 결정 7 단계 1(실주행 재생)로 확인하기 전에는 장치 단계로 가지 않는다.
+   - 3프레임(약 0.3 s) 창은 짧다. 곡선 진입·이탈 중 우연히 꾸준한 세 틱은 무장할 수 있다. 가장 나쁜 경우가 위 107 mm 경우다.
+   - 4.0, 0.5는 개정 1 8.4와 같은 그럴듯함 관문이다. 장치 증거가 아니다.
+7. **외부에 보이는 것.** 새 상태·필드·사유는 없다. 새 설정은 `line_follow.bridge_arm_max_curvature`(4.0), `line_follow.bridge_arm_curvature_tolerance`(0.5)이고 `0 < tolerance ≤ max ≤ 10`을 검증한다.
+8. **시험.** `middleware/core/services/test/test_lane_bridge.py`: 꾸준한 호에서 무장하고 호를 따라 bridge(angular/linear ≈ κ, `_intended` 일치), κ가 변하거나 error가 흔들리거나 `|κ| > max`거나 Gazebo 모서리 진입·꾸준한 큰 보정이면 무장하지 않음, error 퍼짐 허용값이 추종 이득에서 유도됨, 호 위의 점은 막고 직선 연장 위·호 밖의 점은 막지 않음, 닫힌 루프 13.4 mm 경계, 대기 중인 교차로는 호 bridge만 거절, 설정 검증. 곡선·보정 무장 거부 시험은 개정 1의 error 0.15(이 시험대 cruise 0.04에서 κ ≈ 3.9로 꾸준하므로 이제 호로 무장)를 0.3으로 바꿨다.
+9. **독립 리뷰 반영 (2026-10-07, APPROVE-WITH-FIXES).**
+   1. **특이점.** κ_c = κ / (1 − κ·center)는 κ·center = 1에서 0으로 나누고(잠긴 틱 안의 예외), 1을 넘으면 부호가 뒤집힌다. 호 bridge는 `1 − κ·center ≥ ARC_MIN_RADIUS_RATIO`(0.5), 곧 `|κ_c| ≤ 2|κ|`일 때만 든다. 근거: 좁은 차로에서 |center|는 한쪽 유격(23.5 mm)이 묶으므로 따라온 차로라면 κ·center ≤ 4.0 × 0.0235 ≈ 0.09다. corridor 중심이 몸의 회전 반지름 절반보다 안쪽이면 몸이 나란히 달린 차로가 아니다.
+   2. **낮은 속도의 약한 증거.** (a) 최소 odom 이동 `bridge_arm_min_travel_m`(설정 아님, 유도값) = `bridge_arm_error_spread` / `bridge_arm_curvature_tolerance` = `cruise_speed` / `steering_gain` = 0.08 / 0.8 = 0.1 m. 추종기의 error 한 단위는 곡률 `steering_gain`/`cruise_speed`를 명령하므로 길이로 본 error 척도가 cruise/gain이고, 이 이동에서 허용 곡률 오차는 몸을 `bridge_arm_error_spread`(0.05) rad 돌린다. 관문이 가려내는 error 한 걸음이다. 이보다 짧은 창(기어가는 속도, 몇 프레임)은 호와 보정을 가르지 못하고 odom 회전으로 곡률을 검사하지도 못한다. 장치(약 10 Hz, 0.06 m/s)에서 약 1.7 s, 회전교차로(반지름 0.25 m)에서 약 23°의 꾸준한 호다. (b) odom 곡률 교차 검사(위 1 (d)): 바퀴가 명령을 그대로 달리지 않았으면(미끄러짐, 한도 자름) 무장하지 않는다. 속도를 바꿔 κ만 꾸준해 보이는 경우(error 변화 < 0.05)도 odom이 맞을 때만 무장한다.
+   3. **서로 다른 프레임.** 창은 틱 수가 아니라 서로 다른 카메라 프레임 수로 `bridge_arm_frames`를 센다.
+   4. **개정 1의 "기운 보정"(cruise 0.04, error 0.15, κ ≈ 3.9).** 짧은 창이나 odom 불일치면 무장하지 않는다. 0.05 m(0.04/0.8)를 도는 동안 error가 꾸준하고 odom이 맞으면 호로 무장한다. 곧은 차로의 실제 보정이라면 몸이 돌면서 error가 바뀌어 퍼짐 검사에 걸린다. 이 판단은 시험 이름에 적었다.
+   5. **시험 추가.** 특이점(예외 없음, bridge 없음), 보정된 속도는 odom이 맞을 때만 무장, 최소 이동 미만 무장 안 됨, 개정 1 기운 보정 판정, 서로 다른 프레임 수, `stale_after_s` 안의 교차로 목격은 호 bridge 거절.

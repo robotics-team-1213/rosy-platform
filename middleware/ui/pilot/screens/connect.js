@@ -26,7 +26,7 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, api, authHeaders} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
 import {createVisionPreview} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
@@ -93,9 +93,16 @@ async function refreshLobby(host) {
       go.addEventListener("click", () => location.assign(target.href));
       list.append(go);
     }
-    host.replaceChildren(el("ui-text", seen.size ? "같은 LAN의 로봇 · 선택 후 연결 확인"
+    host.replaceChildren(el("ui-text", seen.size ? "다른 로봇 · 선택하면 그 로봇의 접속 화면으로 이동합니다"
       : "같은 LAN에서 발견한 다른 로봇이 없습니다", {scale: "label"}));
     if (seen.size) host.append(list, el("p", "발견 목록입니다. 선택한 로봇에서 승인·로그인을 확인합니다."));
+    // D-460 결정 2: 자기 방 운전 상태 표시 — rooms 라우터는 CoreServices에 접근하지
+    // 않으므로 여기(같은 origin)에서 mode·velocity 증거를 읽어 라벨만 단다.
+    const self = await api("/api/v1/robot/state").catch(() => null);
+    const driving = self?.ok && self.body?.mode === "MANUAL"
+      && Math.abs(self.body?.velocity?.linear ?? 0) > 0.002;
+    const tag = el("ui-tag", driving ? "운전 중" : "대기", {"data-lobby-self": ""});
+    host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
   } finally {
@@ -139,7 +146,61 @@ function renderRecentList(root, onConnect) {
   return section;
 }
 
-// --- 새 연결 폼 (접기 가능) ---
+// 이 화면이 붙어 있는 로봇. 옆 로봇 목록보다 먼저 보여 준다.
+function rememberRobot(root, offer) {
+  if (offer?.robotId) root.__pilotRobotId = offer.robotId;
+}
+
+async function showConnection(host, root, onConnect) {
+  const generation = (host.__generation ?? 0) + 1;
+  host.__generation = generation;
+  host.replaceChildren(el("ui-text", "이 로봇 연결을 확인하는 중…", {scale: "label"}));
+  const offer = await connectionOffer();
+  if (host.__generation !== generation) return;
+  rememberRobot(root, offer);
+  if (!offer) {
+    host.replaceChildren(
+      el("ui-text", "이 주소의 연결 방식을 확인하지 못했습니다.", {scale: "label"}),
+      el("p", "로그인 코드로 이 주소의 로봇에 계속할 수 있습니다.", {"data-connection-copy": ""}),
+    );
+    return;
+  }
+  host.dataset.connectionMode = offer.mode;
+  host.dataset.robotId = offer.robotId;
+  const copy = offer.mode === "development"
+    ? "코드 없이 이 브라우저 전용 1시간 운전자 세션으로 계속할 수 있습니다. 로봇 화면 코드로도 연결할 수 있습니다."
+    : "이 화면은 이 로봇에 붙어 있습니다. 로봇 화면에 뜬 로그인 코드를 아래에 입력하세요.";
+  // 로봇 이름은 label 이 아니다. label 은 대문자로 바꿔 rosy_26 을 ROSY_26 으로 보여 준다.
+  const name = el("ui-text", offer.robotId, {scale: "value", "data-connection-title": ""});
+  host.replaceChildren(el("ui-text", "이 로봇", {scale: "label"}), name);
+  if (offer.mode === "development") host.append(el("ui-text", "개발 연결", {scale: "label"}));
+  host.append(el("p", copy, {"data-connection-copy": ""}));
+  if (offer.mode !== "development") return;
+  const button = el("ui-button", "개발 연결로 계속", {type: "button", "data-dev-connect": ""});
+  button.setAttribute("kind", "primary");
+  const status = el("ui-status", "", {role: "status", "data-dev-status": ""});
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "개발 연결 확인 중…";
+    let result = null;
+    try { result = await developmentSession(); } catch { result = null; }
+    if (host.__generation !== generation) return;
+    if (!result || result.status !== 201) {
+      button.disabled = false;
+      status.textContent = result?.status === 403
+        ? "이 로봇은 개발 연결 모드가 아닙니다. 로봇 화면 코드로 연결하세요."
+        : result?.status === 429
+          ? "시도가 너무 많습니다. 잠시 뒤 다시 하세요."
+          : "개발 연결을 받지 못했습니다. 로그인 코드로 계속하세요.";
+      return;
+    }
+    addRecentEntry({host: location.host, label: offer.robotId});
+    onConnect();
+  });
+  host.append(button, status);
+}
+
+// --- 이 로봇의 로그인 코드 ---
 function tokenForm() {
   const form = el("form", null, {"data-pilot-token-form": ""});
   const field = el("ui-field", null, {
@@ -157,6 +218,11 @@ function tokenForm() {
 }
 
 function renderTokenForm(root, onConnect, message) {
+  // 앱이 연 화면은 코드·개발 연결·다른 로봇으로 다시 나가지 않는다.
+  if (inPilotApp()) {
+    renderAppSession(root);
+    return;
+  }
   const head = el("ui-head", "접속", {id: "pilot-gate-heading"});
   root.replaceChildren(head);
 
@@ -164,13 +230,12 @@ function renderTokenForm(root, onConnect, message) {
   const recent = renderRecentList(root, onConnect);
   if (recent) root.append(recent);
 
-  // 이웃 방 (D-343 2.2 — 이 기기가 대신 찾아 준 이웃. 주소는 현재 origin 으로만 연다)
-  const lobby = el("div", null, {"data-lobby-list": ""});
-  root.append(lobby);
-  refreshLobby(lobby);
+  // 이 화면의 로봇이 먼저다. 옆 로봇 목록은 코드 입력 아래에 둔다.
+  const offer = el("div", null, {"data-connection-offer": ""});
+  root.append(offer);
+  showConnection(offer, root, onConnect);
 
-  // 새 연결
-  const divider = el("ui-text", "새 연결", {scale: "label"});
+  const divider = el("ui-text", "로그인 코드", {scale: "label"});
   const {form, field, submit} = tokenForm();
   const connect = async () => {
     const value = field.value.trim();
@@ -202,6 +267,9 @@ function renderTokenForm(root, onConnect, message) {
 
   root.append(divider, form);
   if (message) root.append(el("ui-status", message, {role: "status"}));
+  const lobby = el("div", null, {"data-lobby-list": ""});
+  root.append(lobby);
+  refreshLobby(lobby);
 }
 
 // --- 연동 코드 보여주기 (D-193 §5 등록 코드) ---
@@ -268,6 +336,16 @@ function mountShowCode(root, onSwitchCredential) {
   root.__enrollDispose = stopTick;
 }
 
+function renderAppSession(root) {
+  setTag("앱");
+  notice("");
+  root.replaceChildren(
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    el("ui-status", "이 화면의 연결은 Rosy Pilot 앱이 엽니다. 위쪽 로봇 목록에서 로봇을 다시 선택하세요.",
+      {role: "status", "data-app-session": ""}),
+  );
+}
+
 function renderOffline(root, onConnect) {
   setTag("오프라인");
   notice("CORE 에 연결할 수 없습니다");
@@ -293,9 +371,17 @@ async function check(root, onReady, onEnter) {
   );
 
   let me;
-  try { me = await whoami(); } catch { return renderOffline(root, () => check(root, onReady, onEnter)); }
+  let offer = null;
+  try {
+    [me, offer] = await Promise.all([whoami(), connectionOffer()]);
+  } catch { return renderOffline(root, () => check(root, onReady, onEnter)); }
+  rememberRobot(root, offer);
   if (me.status === 401) {
     clearToken();
+    if (inPilotApp()) {
+      renderAppSession(root);
+      return;
+    }
     setTag("차단");
     notice("토큰이 유효하지 않습니다");
     renderTokenForm(root, () => check(root, onReady, onEnter), "토큰이 유효하지 않습니다. 다시 입력해 주세요.");
@@ -307,19 +393,26 @@ async function check(root, onReady, onEnter) {
   if (!verdict.allowed) {
     setTag("차단");
     notice("진입이 차단되었습니다");
-    const pairs = [["조종", "차단됨"], ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"]];
+    const pairs = [
+      ["조종", "차단됨"],
+      ...(root.__pilotRobotId ? [["로봇", root.__pilotRobotId]] : []),
+      ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"],
+    ];
     const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "status"}));
     const actions = el("ui-actions");
     const retry = el("ui-button", "다시 시도", {type: "button"});
     retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
-    const reset = el("ui-button", "토큰 초기화", {type: "button"});
-    reset.setAttribute("kind", "segment");
-    reset.addEventListener("click", () => {
-      clearToken();
-      renderTokenForm(root, () => check(root, onReady, onEnter));
-    });
-    actions.append(retry, reset);
+    actions.append(retry);
+    if (!inPilotApp()) {
+      const reset = el("ui-button", "토큰 초기화", {type: "button"});
+      reset.setAttribute("kind", "segment");
+      reset.addEventListener("click", () => {
+        clearToken();
+        renderTokenForm(root, () => check(root, onReady, onEnter));
+      });
+      actions.append(reset);
+    }
     root.replaceChildren(
       el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
@@ -327,6 +420,7 @@ async function check(root, onReady, onEnter) {
     return;
   }
 
+  const robotId = root.__pilotRobotId || "";
   setTag("준비");
   notice("조종 준비 완료");
   const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
@@ -337,14 +431,19 @@ async function check(root, onReady, onEnter) {
   if (emergency) {
     enter.disabled = true;
     enter.reason = "비상 정지 중에는 주행을 시작할 수 없습니다";
-    setTag("비상 정지 중"); notice("로봇에 연결됐습니다 · 비상 정지 중");
+    setTag("비상 정지 중");
+    notice("로봇에 연결됐습니다 · 비상 정지 중");
   }
   const camera = el("ui-button", "카메라 보기", {type: "button", kind: "primary", "data-camera-preview": ""});
   camera.setAttribute("kind", "primary");
   actionIcon(camera, "fit");
   camera.addEventListener("click", () => showCamera(root, () => check(root, onReady, onEnter)));
   const actions = el("ui-actions"); actions.append(camera, enter);
-  const summary = readoutPair([["로봇 연결", "확인됨"], ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"]]);
+  const summary = readoutPair([
+    ["로봇 연결", "확인됨"],
+    ...(robotId ? [["로봇", robotId]] : []),
+    ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"],
+  ]);
   summary.dataset.gateState = emergency ? "BLOCK" : "READY";
   root.replaceChildren(
     el("ui-head", "로봇에 연결됐습니다", {id: "pilot-gate-heading"}),
@@ -353,12 +452,14 @@ async function check(root, onReady, onEnter) {
       : "먼저 카메라를 확인하세요. 주행을 시작하면 누르는 동안만 로봇을 조종합니다.", {"data-ready-guidance": ""}),
     actions,
   );
-  // 연동 코드 보여주기: 운영자에게도 항목을 보여 준다(발급은 관리자 — 거절 시 전환 길 제공).
-  mountShowCode(root, () => {
-    clearToken();
-    renderTokenForm(root, () => check(root, onReady, onEnter),
-      "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
-  });
+  // 연동 코드는 브라우저 접속의 두 번째 연결이다. 앱은 자기 세션만 쓴다.
+  if (!inPilotApp()) {
+    mountShowCode(root, () => {
+      clearToken();
+      renderTokenForm(root, () => check(root, onReady, onEnter),
+        "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
+    });
+  }
   onReady?.({role: me.body?.role});
 }
 
@@ -422,7 +523,15 @@ export function mountConnect(root, {onReady, onEnter} = {}) {
   root.__enrollDispose?.();
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
-  root.__pilotForm = () => renderTokenForm(root, run);
+  root.__pilotForm = () => (inPilotApp() ? renderAppSession(root) : renderTokenForm(root, run));
+  if (inPilotApp()) {
+    if (!token()) {
+      renderAppSession(root);
+      return;
+    }
+    run();
+    return;
+  }
   if (!token()) {
     renderTokenForm(root, run);
     return;

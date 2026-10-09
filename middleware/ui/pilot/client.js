@@ -8,12 +8,23 @@ export function token() {
   return sessionStorage.getItem(KEY) ?? "";
 }
 
+// Rosy Pilot 앱이 이 화면을 연 경우. 로봇 선택과 세션은 앱이 소유한다.
+// 번들 화면은 그 세션만 쓰고, 개발 연결·코드·다른 표면으로 다시 나가지 않는다.
+export function inPilotApp() {
+  return document.documentElement.dataset.pilotShell === "android";
+}
+
 export function setToken(value) {
   sessionStorage.setItem(KEY, String(value ?? "").trim());
 }
 
 export function clearToken() {
   sessionStorage.removeItem(KEY);
+}
+
+export function prepareConsoleSession() {
+  const current = token();
+  if (current) sessionStorage.setItem("rosy.dashboard.token", current);
 }
 
 export function authHeaders() {
@@ -94,6 +105,29 @@ export async function pairWithCode(code, label = "Rosy Pilot") {
   const body = await response.json().catch(() => ({}));
   if (response.status === 201 && body.token) setToken(body.token);
   return {status: response.status, body};
+}
+
+// D-432 연결 방식. 인증 없음. 이 화면이 붙어 있는 로봇과 paired/development 만 돌려준다.
+// 실패·다른 모양은 null — 코드 입력은 그대로 둔다.
+const ROBOT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+export async function connectionOffer() {
+  try {
+    const result = await api("/api/v1/auth/connection");
+    const body = result.body ?? {};
+    if (!result.ok || (body.mode !== "paired" && body.mode !== "development")) return null;
+    if (typeof body.robot_id !== "string" || !ROBOT_ID.test(body.robot_id)) return null;
+    return {mode: body.mode, robotId: body.robot_id};
+  } catch {
+    return null;
+  }
+}
+
+// D-432 개발 연결. 로봇이 development 일 때만 CORE 가 201 로 1시간 운전자 세션을 준다.
+export async function developmentSession() {
+  const result = await postJson("/api/v1/auth/development-session", {});
+  if (result.status === 201 && typeof result.body?.token === "string") setToken(result.body.token);
+  return result;
 }
 
 // 등록 코드 발급(D-193 §5, 관리자만). 화면이 없는 상대 기기와 연동할 때

@@ -15,6 +15,20 @@ const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
 const safetyStatus = document.getElementById("safety-mode-status");
 const store = createStore(api, { session });
+if (surface === "console") {
+  const compact = window.matchMedia("(width < 64rem)");
+  const main = document.getElementById("surface-main");
+  function syncSlotOrder() {
+    const order = compact.matches ? ["observe", "act", "sense"] : ["sense", "observe", "act"];
+    const slots = [...main.querySelectorAll(":scope > .surface-slot:not([data-slot='banner'])")];
+    if (slots.every((slot, index) => slot.dataset.slot === order[index])) return;
+    const focused = main.contains(document.activeElement) ? document.activeElement : null;
+    for (const name of order) main.append(slots.find((slot) => slot.dataset.slot === name));
+    focused?.focus({preventScroll: true});
+  }
+  compact.addEventListener("change", syncSlotOrder);
+  syncSlotOrder();
+}
 let mounted = null;
 let revision = null;
 let inflight = null;

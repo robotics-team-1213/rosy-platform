@@ -5,9 +5,10 @@
             short MANUAL teleop (|lin| <= 0.08 m/s, |ang| <= 0.6 rad/s, <= 4 s), then IDLE
             and save the front frame (OUT.jpg) and the raw driver frame (OUT_raw.jpg);
             SECS 0 only saves the frames
-      drive [--max-s 45]
+      drive [--max-s 45] [--rearm 3]
             start a recording, CAMERA_LINE under a 1 s hold deadman until a stop reason,
-            3 s without motion or --max-s, then line-follow OFF and stop the recording
+            3 s without motion or --max-s, then line-follow OFF and stop the recording;
+            a deadman release (link stall) re-arms up to --rearm times in the same recording
       rec start|stop
       cam-watch SECONDS EVERY OUT_DIR
             raw driver frame every EVERY s with road-band clipping in OUT_DIR/exposure.jsonl
@@ -31,8 +32,10 @@ import http.client
 import json
 import math
 import os
+import socket
 import ssl
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -50,22 +53,35 @@ SOI, EOI = b"\xff\xd8", b"\xff\xd9"
 
 class Core:
     """One kept-alive HTTPS connection (a loaded Pi times out repeated TLS handshakes);
-    reconnect once on a broken one. A network failure is (0, None), never an exception."""
+    reconnect once on a broken one (attempts=1: no retry, for a time-boxed loop). A network failure is (0, None), never an exception."""
 
-    def __init__(self, host, token, port, context):
+    def __init__(self, host, token, port, context, tls_host=None):
+        """tls_host: the certificate name to check when `host` is an address (Windows does not
+        resolve the robot's .local name); the TLS check is unchanged, only the name it is made against."""
         self.host, self.token, self.port, self.context = host, token, port, context
+        self.tls_host = tls_host
         self.conn = None
+
+    def _connection(self, timeout):
+        conn = http.client.HTTPSConnection(self.host, self.port, timeout=timeout, context=self.context)
+        if self.tls_host:
+            name, ctx = self.tls_host, self.context
+
+            def connect():
+                sock = socket.create_connection((self.host, self.port), timeout)
+                conn.sock = ctx.wrap_socket(sock, server_hostname=name)
+            conn.connect = connect
+        return conn
 
     def _headers(self):
         return {"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}
 
-    def call(self, method, path, body=None, raw=False, timeout=3.0):
+    def call(self, method, path, body=None, raw=False, timeout=3.0, attempts=2):
         data = None if body is None else json.dumps(body).encode()
-        for _ in range(2):
+        for _ in range(attempts):
             try:
                 if self.conn is None:
-                    self.conn = http.client.HTTPSConnection(self.host, self.port, timeout=timeout,
-                                                            context=self.context)
+                    self.conn = self._connection(timeout)
                 self.conn.timeout = timeout
                 if self.conn.sock:
                     self.conn.sock.settimeout(timeout)
@@ -83,6 +99,10 @@ class Core:
                     self.conn.close()
                 self.conn = None
         return 0, None
+
+    def clone(self):
+        """A second client on its own connection (one HTTPSConnection is not thread-safe)."""
+        return Core(self.host, self.token, self.port, self.context)
 
     def raw_frame(self, timeout=5.0):
         """First JPEG of the driver MJPEG stream (no overlay); None when not available."""
@@ -145,6 +165,18 @@ def advisory(view, lin, secs, body=PINKY_PRO):
         f"in-place turn not clear: {why}" if kind else None)
 
 
+def front_frame(core):
+    """The current overlaid front JPEG (GET /vision/front/frame), None when not available."""
+    _, st = core.call("GET", "/vision/front/status")
+    seq = st.get("sequence") if isinstance(st, dict) else None
+    for _ in range(6):  # the frame advances every ~0.1 s; a 409 names the current sequence
+        s, img = core.call("GET", f"/vision/front/frame?sequence={seq}", raw=True)
+        if s != 409:
+            return img if s == 200 else None
+        seq = img.decode(errors="ignore").split("sequence ")[-1].split('"')[0]
+    return None
+
+
 # --- commands ------------------------------------------------------------------------------
 
 def cmd_nudge(core, args):
@@ -187,16 +219,9 @@ def cmd_nudge(core, args):
                 time.sleep(0.5)
             print("mode IDLE", code)
     time.sleep(0.8)
-    _, st = core.call("GET", "/vision/front/status")
-    seq = st.get("sequence") if isinstance(st, dict) else None
-    s, img = 0, None
-    for _ in range(6):  # the frame advances every ~0.1 s; a 409 names the current sequence
-        s, img = core.call("GET", f"/vision/front/frame?sequence={seq}", raw=True)
-        if s != 409:
-            break
-        seq = img.decode(errors="ignore").split("sequence ")[-1].split('"')[0]
+    img = front_frame(core)
     out = Path(args.out)
-    if s == 200:
+    if img:
         out.write_bytes(img)
     raw = core.raw_frame(timeout=3.0)   # needs this token to be the driver (last accepted teleop)
     if raw:
@@ -205,7 +230,7 @@ def cmd_nudge(core, args):
     else:
         print("raw frame unavailable")
     _, state = core.call("GET", "/robot/state")
-    print("moved", moved, "frame", s, "pose", state.get("pose") if isinstance(state, dict) else None)
+    print("moved", moved, "frame", bool(img), "pose", state.get("pose") if isinstance(state, dict) else None)
 
 
 def _recording_state(core):
@@ -243,25 +268,73 @@ def cmd_rec(core, args):
     rec_start(core) if args.action == "start" else rec_stop(core)
 
 
+class HoldLoop(threading.Thread):
+    """Line-follow hold every PERIOD s on its own connection, so a slow status read on a
+    loaded Pi never stretches the gap past CORE's 1 s deadman. A daemon: if the tool dies,
+    the holds stop and CORE releases line-follow by itself."""
+
+    PERIOD = 0.3
+
+    def __init__(self, core):
+        super().__init__(daemon=True)
+        self.core, self.status, self.done = core, 200, threading.Event()
+
+    def run(self):
+        while not self.done.is_set():
+            self.status, _ = self.core.call("POST", "/line-follow/hold", timeout=0.8)
+            if self.status != 200:
+                return
+            self.done.wait(self.PERIOD)
+
+
+def _arm(core):
+    """CAMERA_LINE under a fresh 1 s deadman, holds from their own thread; None if refused."""
+    s, b = core.call("PUT", "/line-follow/mode", {"mode": "CAMERA_LINE", "hold_s": 1.0})
+    log("line-follow mode", s, {k: b.get(k) for k in ("mode", "state", "reason")} if s == 200 else b)
+    if s != 200:
+        return None
+    holds = HoldLoop(core.clone())
+    holds.start()
+    return holds
+
+
+def _disarm(holds):
+    if holds is not None:
+        holds.done.set()
+        holds.join(timeout=2.0)
+
+
 def cmd_drive(core, args):
-    started = False
+    """A link stall longer than the 1 s deadman releases line-follow (driver_released); that
+    stop stands, and the drive re-arms at most --rearm times inside the same recording."""
+    started, holds, rearms = False, None, 0
     try:
         rec_start(core)
-        s, b = core.call("PUT", "/line-follow/mode", {"mode": "CAMERA_LINE", "hold_s": 1.0})
-        log("line-follow mode", s, {k: b.get(k) for k in ("mode", "state", "reason")} if s == 200 else b)
-        if s != 200:
+        holds = _arm(core)
+        if holds is None:
             raise SystemExit("line-follow refused")
         started = True
         t0, still_since = time.time(), None
         while time.time() - t0 < args.max_s:
-            hs, _ = core.call("POST", "/line-follow/hold", timeout=0.8)
             _, lf = core.call("GET", "/line-follow", timeout=0.8)
+            hs = holds.status
             lf = lf if isinstance(lf, dict) else {}
             lin, ang = lf.get("linear") or 0.0, lf.get("angular") or 0.0
             reason = str(lf.get("reason"))
             log(f"t={time.time() - t0:4.1f} hold={hs} state={lf.get('state')} reason={reason} v={lin:.3f} "
                 f"w={ang:.3f} conf={lf.get('confidence') or 0:.2f} gap={lf.get('body_gap_m')} stuck={bool(lf.get('stuck'))}")
-            if hs != 200:
+            released = hs != 200 or "driver_released" in reason
+            if released and rearms < getattr(args, "rearm", 0):
+                rearms += 1
+                _disarm(holds)
+                log(f"deadman released (link stall) -> re-arm {rearms}/{args.rearm}")
+                holds = _arm(core)
+                if holds is None:
+                    log("re-arm refused -> stop")
+                    break
+                still_since = None
+                continue
+            if released:
                 log("hold refused -> stop")
                 break
             if lf.get("stuck") or any(k in reason for k in STOP_REASONS):
@@ -276,6 +349,7 @@ def cmd_drive(core, args):
                 still_since = None
             time.sleep(0.3)
     finally:
+        _disarm(holds)
         if started:
             log("line-follow OFF", core.call("PUT", "/line-follow/mode", {"mode": "OFF"})[0])
         rec_stop(core)
@@ -335,6 +409,8 @@ def main(argv=None):
     p.set_defaults(fn=cmd_nudge)
     p = sub.add_parser("drive")
     p.add_argument("--max-s", type=float, default=45.0)
+    p.add_argument("--rearm", type=int, default=3,
+                   help="re-arm CAMERA_LINE this many times after a deadman release (link stall)")
     p.set_defaults(fn=cmd_drive)
     p = sub.add_parser("rec")
     p.add_argument("action", choices=("start", "stop"))

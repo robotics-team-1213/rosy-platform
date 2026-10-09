@@ -64,8 +64,11 @@ def stop_gap_m(speed: float, *, margin_m: float = MARGIN_M, latency_s: float = L
 
 
 def inside_body(x: float, y: float, front_x: float, rear_x: float, half_width: float,
-                radius: float) -> bool:
-    """D-422 body outline: the URDF rectangle cut by the rotation circle (rounded corners)."""
+                radius: float, *, strict: bool = False) -> bool:
+    """D-422 body outline: the URDF rectangle cut by the rotation circle (rounded corners).
+    strict: the open set, so a point on the outline is outside (D-507 10 memory entry)."""
+    if strict:
+        return rear_x < x < front_x and abs(y) < half_width and x * x + y * y < radius * radius
     return rear_x <= x <= front_x and abs(y) <= half_width and x * x + y * y <= radius * radius
 
 
@@ -395,3 +398,5 @@ def resolve_body(geometry: Optional[Mapping[str, Any]] = None, *, source: str = 
 
 
 PINKY_PRO = from_geometry(PINKY_PRO_GEOMETRY)
+#: D-424 URDF nominal body for a caller that names no robot kind (one kind drives today).
+NOMINAL_BODY = PINKY_PRO

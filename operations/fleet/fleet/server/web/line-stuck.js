@@ -4,6 +4,8 @@
 // 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
 
+import { primaryButton, quietButton, setReason } from "./queues.js";
+
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
 export const DECISION_LABEL = Object.freeze({
@@ -49,6 +51,16 @@ const ESCALATION_REASON = Object.freeze({
   estop: "비상정지",
   calibration: "보정 중",
   no_resolver_token: "자동 판단 토큰 없음",
+  // D-577 1: R5 held the robot (WAIT) instead of backing off after a lost lane.
+  "lane_lost_hold:peer_behind": "차선 잃음 — 뒤에 다른 로봇",
+  "lane_lost_hold:attempts": "차선 잃음 — 후진 시도 소진",
+  "lane_lost_hold:local_disabled": "차선 잃음 — 로컬 복구 꺼짐",
+  "lane_lost_hold:crosswalk": "차선 잃음 — 횡단보도 안",
+  "lane_lost_hold:crosswalk_unknown": "차선 잃음 — 횡단보도 여부 모름",
+  "lane_lost_hold:peer_unknown": "차선 잃음 — 주변 로봇 위치 모름",
+  "lane_lost_hold:pose": "차선 잃음 — Fleet 위치 오래됨",
+  "lane_lost_hold:refused": "차선 잃음 — 후진 거절됨",
+  "lane_lost_hold:rule_budget": "차선 잃음 — 자동 판단 횟수 소진",
 });
 
 /** One line about what the Fleet resolver did for this stuck. */
@@ -58,6 +70,7 @@ export function resolverText(note) {
     if (note.escalated === "human_claimed") return "운영자가 맡음";
     const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
     const why = code ? `CORE 응답 ${code}` : ESCALATION_REASON[note.escalated] || note.escalated;
+    if (note.decision) return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision} — 사람 확인 필요 (${why})`;
     return `자동 판단 불가 — 사람 확인 필요 (${why})`;
   }
   return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision}`;
@@ -114,10 +127,12 @@ export function stuckFacts(stuck) {
 }
 
 /** One button per CORE decision, disabled with the first reason that applies. */
-export function decisionButtons(stuck, { operator, busy = false }) {
+export function decisionButtons(stuck, { operator, namedReason = "", busy = false }) {
   return DECISIONS.map((decision) => {
     let reason = "";
     if (!operator) reason = "운영자 권한이 필요합니다";
+    // D-540 9: 대기·중단은 멈춤이라 열려 있고, 움직이는 답만 이름 있는 운영자다.
+    else if (namedReason && decision !== "WAIT" && decision !== "ABORT") reason = namedReason;
     else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
     else if (busy) reason = "답을 보내는 중";
     else if (decision === "BACK_AND_RETRY" && !stuck.local_enabled) {
@@ -156,6 +171,7 @@ export function refusalText(robotId, decision, err) {
     why = REFUSAL_REASON[reason] || "CORE가 거부했습니다";
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
+  else if (code === "OPERATOR_IDENTITY_REQUIRED") why = "이름 있는 운영자 로그인이 필요합니다";
   else if (err && err.status === 403) why = "운영자 권한이 필요합니다";
   else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
   else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") {
@@ -167,31 +183,7 @@ export function refusalText(robotId, decision, err) {
   return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
 }
 
-// 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
-// 못 본다. 종류별 헬퍼가 리터럴을 담는다.
-function quietButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "quiet");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-function primaryButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "primary");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-function setReason(node, reason) {
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  else node.removeAttribute("reason");
-}
-
-export function createLineStuckPanel({ scope, el, view, call, log, isOperator }) {
+export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const results = new Map();
@@ -252,17 +244,15 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
   }
 
   function item(robotId, stuck) {
-    const li = document.createElement("li");
+    const li = document.createElement("div");
     li.className = "stuck-item";
     li.dataset.robotId = robotId;
     li.dataset.stuckId = stuck.stuck_id;
     if (stuck.robot_online === false) li.classList.add("offline");
 
+    // D-540 3: the queue row above already names the robot.
     const head = document.createElement("div");
     head.className = "stuck-head";
-    const name = document.createElement("b");
-    name.textContent = robotId;
-    name.id = `stuck-name-${robotId}`;
     const cause = document.createElement("ui-tag");
     cause.setAttribute("status", "crit");
     cause.textContent = CAUSE_LABEL[stuck.cause] || stuck.cause || "원인 미상";
@@ -271,7 +261,7 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
     phase.setAttribute("status", stuck.phase === "BACKING" || stuck.phase === "SETTLING" ? "warn" : "neutral");
     phase.textContent = PHASE_LABEL[stuck.phase] || stuck.phase || "—";
     phase.title = stuck.phase || "";
-    head.append(name, cause, phase);
+    head.append(cause, phase);
     if (stuck.robot_online === false) {
       const offline = document.createElement("ui-tag");
       offline.setAttribute("status", "warn");
@@ -295,11 +285,11 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
 
     // render() already dropped a confirm step whose stuck id is no longer the live one.
     const pending = confirming.get(robotId);
-    const specs = decisionButtons(stuck, { operator: isOperator(), busy: busy.has(robotId) });
+    const specs = decisionButtons(stuck, { operator: isOperator(), namedReason: namedReason(), busy: busy.has(robotId) });
     const actions = document.createElement("div");
     actions.className = "stuck-actions";
     actions.setAttribute("role", "group");
-    actions.setAttribute("aria-labelledby", name.id);
+    actions.setAttribute("aria-label", `${robotId} 판단`);
     for (const spec of specs) {
       const node = quietButton(spec.confirm ? `${spec.label}…` : spec.label);
       node.dataset.decision = spec.decision;
@@ -363,10 +353,8 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
     return li;
   }
 
+  // D-540 3: each answer lives in its queue row's slot (roster.fillQueues makes the slot).
   function render(focusKey = null, focusRobot = null) {
-    const panel = el("stuck-panel");
-    const list = el("stuck-list");
-    if (!panel || !list) return;
     const stucks = view.stateUnavailable ? [] : pendingStucks(view.robots);
     const live = new Map(stucks.map((robot) => [robot.robot_id, robot.line_stuck.stuck_id]));
     // A confirm step belongs to one stuck id: a closed or replaced stuck drops it.
@@ -381,34 +369,27 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
       ? { robot: focusRobot, key: focusKey }
       : activeItem ? { robot: activeItem.dataset.robotId, key: active.dataset?.focusKey } : null;
 
-    const existing = new Map([...list.children].map((node) => [node.dataset.robotId, node]));
-    const ordered = [];
     for (const robot of stucks) {
+      const slot = document.querySelector(`[data-decision-slot="${CSS.escape(`${robot.robot_id}|stuck`)}"]`);
+      if (!slot) continue;
       const stuck = robot.line_stuck;
       // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
       const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
       const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
-        results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator()]);
-      let node = existing.get(robot.robot_id);
+        results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
+      const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
-        node = item(robot.robot_id, stuck);
+        slot.replaceChildren(item(robot.robot_id, stuck));
         signatures.set(robot.robot_id, signature);
       } else {
         // 멈춘 시간만 바뀌었다 — 항목을 다시 만들지 않는다(포커스·확인 단계 유지).
         const held = node.querySelector('[data-fact="held"] dd');
         if (held) held.textContent = stuckFacts(stuck).find(([key]) => key === "held")[2];
       }
-      ordered.push(node);
     }
-    const same = ordered.length === list.children.length
-      && ordered.every((node, index) => list.children[index] === node);
-    if (!same) list.replaceChildren(...ordered);
-    panel.hidden = ordered.length === 0;
-    const count = el("stuck-count");
-    if (count) count.textContent = ordered.length ? `${ordered.length}건` : "";
 
     if (keepFocus?.robot && keepFocus.key) {
-      const owner = [...list.children].find((node) => node.dataset.robotId === keepFocus.robot);
+      const owner = document.querySelector(`.stuck-item[data-robot-id="${CSS.escape(keepFocus.robot)}"]`);
       // The focused control may be gone (confirm step dropped): land on the item's first answer.
       const target = owner?.querySelector(`[data-focus-key="${keepFocus.key}"]`)
         || owner?.querySelector("ui-button[data-decision]");

@@ -32,8 +32,17 @@ def _whole(raw: dict, key: str, default: int) -> int:
     return value
 
 
+#: D-507 9: replaced by line_follow.site_floor_map_id. No alias: a layer that still sets one
+#: refuses CORE start, so a site overlay is migrated on purpose, never read silently.
+_REMOVED_SITE_KEYS = ("bridge_site_no_dropoffs", "junction_turn_site_accepted")
+
+
 def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
     """Parse the operator-tunable D-143 policy with validation in one place."""
+    removed = [key for key in _REMOVED_SITE_KEYS if key in raw]
+    if removed:
+        raise ValueError(f"line_follow.{', line_follow.'.join(removed)} was removed (D-507 9); "
+                         "declare the walked site floor as line_follow.site_floor_map_id: <map_id>")
     defaults = LineFollowConfig()
     return LineFollowConfig(
         cruise_speed=float(raw.get("cruise_speed", defaults.cruise_speed)),
@@ -119,14 +128,17 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         bridge_arm_max_error=float(raw.get("bridge_arm_max_error", defaults.bridge_arm_max_error)),
         bridge_arm_max_angular=float(raw.get(
             "bridge_arm_max_angular", defaults.bridge_arm_max_angular)),
-        bridge_site_no_dropoffs=_flag(raw, "bridge_site_no_dropoffs", defaults.bridge_site_no_dropoffs),
         junction_reacquire_frames=_whole(raw, "junction_reacquire_frames",
                                          defaults.junction_reacquire_frames),
         junction_turn_lead_s=float(raw.get("junction_turn_lead_s", defaults.junction_turn_lead_s)),
         junction_still_linear=float(raw.get("junction_still_linear", defaults.junction_still_linear)),
         junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
-        junction_turn_site_accepted=_flag(raw, "junction_turn_site_accepted",
-                                          defaults.junction_turn_site_accepted),
+        site_floor_map_id=raw.get("site_floor_map_id", defaults.site_floor_map_id),
+        arc_enabled=_flag(raw, "arc_enabled", defaults.arc_enabled),
+        route_context_enabled=_flag(raw, "route_context_enabled", defaults.route_context_enabled),
+        arc_curvature_gain=float(raw.get("arc_curvature_gain", defaults.arc_curvature_gain)),
+        arc_blind_max_m=float(raw.get("arc_blind_max_m", defaults.arc_blind_max_m)),
+        authority_required=_flag(raw, "authority_required", defaults.authority_required),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
@@ -163,10 +175,10 @@ def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision
 
 def check_bridge_floor_basis(config: LineFollowConfig, sensor_mode: str) -> None:
     """D-476 rev 1, at CORE start: an enabled bridge needs the live floor proof (effective
-    control.sensor_adapter mode enforce) or the site acceptance bridge_site_no_dropoffs."""
-    if config.bridge_enabled and not config.bridge_site_no_dropoffs and sensor_mode != "enforce":
+    control.sensor_adapter mode enforce) or the site floor declaration site_floor_map_id (D-507 9)."""
+    if config.bridge_enabled and config.site_floor_map_id is None and sensor_mode != "enforce":
         raise ValueError("line_follow.bridge_enabled needs control.sensor_adapter mode enforce "
-                         "or line_follow.bridge_site_no_dropoffs: true (site acceptance, D-476)")
+                         "or line_follow.site_floor_map_id: <map_id> (site floor declaration, D-507)")
 
 
 def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> None:

@@ -5,18 +5,21 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createLineStuckPanel } from "./line-stuck.js";
+import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
-import { createStartPointView } from "./start-point-view.js";
-import { createVisionView } from "./vision-view.js";
-import { applyRoleToControls } from "./authorization.js";
+import { createVisionView } from "/console/assets/vision-view.js";
+import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
-import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
-import { createPollGate } from "./poll-gate.js";
+import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
+import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { bindEstop, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -48,6 +51,9 @@ pageScope.onResume(layoutConsole);
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
+// D-457 6: a tracking position shows for at most 1 s minus its age and the request time, so
+// polling at 1 s always left a gap and the markers blinked; poll well inside the lifetime.
+const TRACKING_MS = 400;
 const MAP_MS = 5000;
 const LOG_MAX = 120;
 
@@ -65,12 +71,6 @@ const auth = {
   locked: false,
 };
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
-function stopNotice(message = "", state = "warning") {
-  const notice = el("estop-feedback");
-  notice.textContent = message;
-  notice.hidden = !message;
-  notice.setAttribute("state", state);
-}
 function cancelAllNotice(message = "", details = false) {
   const result = el("cancel-all-result"), link = el("cancel-all-details");
   result.textContent = message;
@@ -94,8 +94,7 @@ function markLocked(reason = "auth") {
   auth.locked = true;
   connectionView.open();
   auth.role = null;
-  el("user-role").textContent = "인증 필요";
-  el("user-role").setAttribute("status", "crit");
+  showSignedOut({fold: false, refused: reason === "auth"});
   applyRoleToControls(null, operatorControls());
   const pill = el("online-pill");
   pill.textContent = "접속 전";
@@ -110,12 +109,15 @@ function markLocked(reason = "auth") {
   connectionView.show(reason, auth.token);
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
-      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {}});
-    visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
+      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
+      traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
+    visionView.reset(); visionView.refreshSources(); trackingView.reset();
   }
   render();
   // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
   if (firstLock && reason === "auth") renewDevelopmentSession();
+  // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
+  if (firstLock && reason === "auth") loginForm.refresh(true);
 }
 
 function markUnlocked() {
@@ -126,9 +128,9 @@ function markUnlocked() {
 
 function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
-  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
+  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -137,7 +139,9 @@ const view = {
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
-  showAllRobots: false,
+  robotNames: {}, // enrolled robot_id -> verified discovery hostname; presentation only
+  cardChoice: {},  // D-540 3: robot_id -> the operator's fold {open, attention}
+  queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
   cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
@@ -209,8 +213,10 @@ async function refreshDispatchControl(life = pageScope.capture()) {
       detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
     }
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
-    rearm.disabled = auth.locked || !state.rearm_available;
-    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : "재허가 조건 미충족");
+    // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
+    const rearmNamed = namedOperatorReason(auth.role, auth.principal);
+    rearm.disabled = auth.locked || !state.rearm_available || Boolean(rearmNamed);
+    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : rearmNamed || "재허가 조건 미충족");
     else rearm.removeAttribute("reason");
     return state;
   } catch (err) {
@@ -260,23 +266,13 @@ function render() {
   const focusedCard = focused?.closest?.("#roster article");
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
-    ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
-  const attention = view.robots.filter((robot) => roster.needsAttention(robot));
-  const normalCount = view.robots.length - attention.length;
-  const toggle = el("roster-toggle");
-  toggle.hidden = normalCount === 0;
-  toggle.setAttribute("aria-expanded", String(view.showAllRobots));
-  toggle.textContent = view.showAllRobots ? "개입 대상만 보기" : `전체 로봇 보기 · 정상 ${normalCount}대`;
-  const shown = view.showAllRobots ? view.robots : view.robots.filter((robot) =>
-    roster.needsAttention(robot) || robot.robot_id === view.selected);
-  if (shown.length) {
-    rosterBox.replaceChildren(...shown.map((robot) => roster.card(robot, view.robots.indexOf(robot))));
-  } else if (view.robots.length) {
-    const empty = document.createElement("p");
-    empty.className = "hint";
-    empty.setAttribute("role", "status");
-    empty.textContent = `개입할 로봇 없음 · 정상 ${normalCount}대`;
-    rosterBox.replaceChildren(empty);
+    ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
+  // D-540 3 — every robot has a card; a nominal one is one line (roster.card decides). Exceptions first
+  // (D-201); the colour index stays the robot's own.
+  if (view.robots.length) {
+    const order = [...view.robots.keys()].sort((a, b) =>
+      roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
+    roster.place(rosterBox, order.map((index) => roster.card(view.robots[index], index)));
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -292,21 +288,22 @@ function render() {
       rosterBox.replaceChildren(empty);
     }
   }
-  if (focusedId) {
+  if (focusedId && document.activeElement !== focused) {  // a kept card (roster.place) still has it
     const nextCard = [...rosterBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
-      ? nextCard?.querySelectorAll("ui-button")[focusedButton] : nextCard;
+      ? nextCard?.querySelectorAll("ui-button, button")[focusedButton] : nextCard;
     nextFocused?.focus({preventScroll: true});
   }
   signals.render();
   roster.fillQueues();
+  roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
+  tripReplan.render();
 
   formation.fillLeaders();
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
-  startPointView.updateAuthorization();
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -321,7 +318,43 @@ function render() {
   refreshDiagnostics();
 }
 
+let pathSample = { proxy: null, fleet: null, vision: null };
 let statePollInFlight = false;
+
+function paintSitePath() {
+  const list = el("site-path-list");
+  const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
+  const summary = sitePathSummary(rows);
+  const summaryNode = el("site-path-summary");
+  if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
+  summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
+    || rows.find((row) => row.kind === "warn")?.kind || "good";
+  list.replaceChildren(...rows.map((row) => {
+    const item = document.createElement("li");
+    const name = document.createElement("b");
+    name.textContent = row.name;
+    const word = document.createElement("ui-tag");
+    // ui-tag's nominal status is active. kind "good" is that word; "good" itself has no rule.
+    word.setAttribute("status", row.kind === "good" ? "active" : row.kind);
+    word.textContent = row.word;
+    item.append(name, word);
+    return item;
+  }));
+}
+
+async function refreshHealthz() {
+  const life = pageScope.capture();
+  try {
+    const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
+    const body = await response.json();
+    if (!life.current()) return;
+    pathSample.proxy = { finished: true, status: response.status, body };
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    pathSample.proxy = { finished: false };
+  }
+  paintSitePath();
+}
 pageScope.onDispose(() => {
   statePollInFlight = false;
   view.selected = null;
@@ -333,12 +366,16 @@ async function refreshState() {
   life.check();
   if (auth.locked || statePollInFlight) return;
   statePollInFlight = true;
+  let fleetAnswered = false;
   try {
     const snapshot = await call("/api/fleet/state");
     life.check();
+    pathSample.fleet = { finished: true, status: 200 };
+    fleetAnswered = true;
+    paintSitePath();
     view.robots = snapshot.robots;
     view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
-    if (requestedRobotFocus && view.robots.some(robot => robot.robot_id === requestedRobotFocus)) view.showAllRobots = true;
+    if (requestedRobotFocus) roster.openCard(requestedRobotFocus);
     view.stateUnavailable = false;
     view.stateLoaded = true;
     if (view.selected) {
@@ -348,11 +385,7 @@ async function refreshState() {
       }
     }
     view.signals = snapshot.signals || {};
-    el("fleet-name").textContent = snapshot.fleet.name || "사이트";
-    const pill = el("online-pill");
-    delete pill.dataset.locked;
-    pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
-    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
+    showFleet(snapshot.fleet, snapshot.robots);
     render();
     if (requestedRobotFocus) {
       const card = [...el("roster").querySelectorAll("article")]
@@ -362,6 +395,12 @@ async function refreshState() {
     }
   } catch (err) {
     if (err.name === "AbortError") return;
+    if (!fleetAnswered) {
+      pathSample.fleet = typeof err.status === "number"
+        ? { finished: true, status: err.status }
+        : { finished: false };
+      paintSitePath();
+    }
     // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
     if (auth.locked) return;
     view.stateUnavailable = true;
@@ -397,6 +436,30 @@ async function refreshDiscovery() {
     const snapshot = await call("/api/fleet/discovery");
     life.check();
     discoveryGate.ok();
+    let names = { ...view.robotNames };
+    try {
+      const listing = await call("/api/fleet/enrollment/robots");
+      life.check();
+      names = Object.fromEntries((listing.robots || [])
+        .filter((row) => row.robot_id && row.hostname)
+        .map((row) => [row.robot_id, row.hostname]));
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+    for (const device of snapshot.devices || []) {
+      if (device.status === "enrolled" && device.robot_id && device.name) names[device.robot_id] = device.name;
+    }
+    if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
+      view.robotNames = names;
+      render();
+    }
+    const pending = snapshot.scanner_online
+      ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
+    const pendingNote = el("discovery-pending");
+    const summary = pending.length
+      ? `발견됐지만 미등록 ${pending.length}대: ${pending.map((device) => device.name).join(", ")}` : "";
+    if (pendingNote.firstElementChild.textContent !== summary) pendingNote.firstElementChild.textContent = summary;
+    pendingNote.hidden = !summary;
     await refreshAddresses();
     life.check();
     // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.
@@ -472,12 +535,7 @@ async function refreshAuthorization() {
     if (auth.role !== identity.role) confirmedAction.cancel();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    const roleName = identity.role === "operator" ? "운영자" :
-      identity.role === "viewer" ? "조회 전용" :
-        identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
-    el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
-    el("user-role").title = el("user-role").textContent; // 넓은 머리에서 12rem으로 잘릴 때의 전문
-    el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+    showSession(identity);
     // The session already proves the token: unlock now. The state gather can take seconds
     // when a robot times out, and must not hold the operator's controls locked behind it.
     const pill = el("online-pill");
@@ -487,6 +545,7 @@ async function refreshAuthorization() {
       pill.setAttribute("status", "neutral");
     }
     applyRoleToControls(auth.role, operatorControls());
+    loginForm.refresh(false);
     render();
     // Independent panels refresh side by side; one slow source does not delay the rest.
     await Promise.allSettled([
@@ -539,7 +598,7 @@ async function commitGoal(col, row) {
   life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" ||
+  if (view.stateUnavailable || auth.role !== "operator" || namedReason() ||
       !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
     disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
     render();
@@ -655,30 +714,8 @@ pageScope.listen(el("map-canvas"), "keydown", async (event) => {
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
 // D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
-pageScope.listen(el("estop"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
-  stopNotice("비상 정지 요청 중…", "pending");
-  try {
-    const result = await call("/api/fleet/estop", { method: "POST" });
-    life.check();
-    const summary = result.total > 0
-      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
-      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
-    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
-    log(summary, "bad");
-    (result.robots || []).filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
-    await refreshDispatchControl();
-    life.check();
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    stopNotice(err.status >= 500 || !err.status
-      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
-      : `비상 정지 요청 거절 — ${err.message}`, "error");
-    log(`전체 정지 실패 — ${err.message}`, "bad");
-  }
-});
+bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture(), log,
+  after: () => refreshDispatchControl()});
 
 
 // D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
@@ -721,13 +758,16 @@ pageScope.listen(el("cancel-all"), "click", async () => {
 
 // D-262: 대형 패널은 formation.js 팩토리가 가진다. 셸은 지도 오버레이와
 // 명렬 렌더를 쥐고, 대형 상태는 view.formation 으로 공유한다.
-const formation = createFormation({ scope: pageScope, el, view, log, call, render });
+// D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
+const namedReason = () => namedOperatorReason(auth.role, auth.principal);
+const formation = createFormation({ scope: pageScope, el, view, log, call, render, namedReason });
 formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
 const mapView = createMapView({ scope: pageScope,
   el, view, auth, call,
   onMapChanged: render,
+  onTrafficChanged: render,
   onMapUnavailable: () => {
     const selected = view.selected;
     if (selected) disarmGoal("지도를 확인할 수 없어 목표 지정 취소");
@@ -739,15 +779,12 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", confirmedAction });
-// D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
-const lineStuck = createLineStuckPanel({ scope: pageScope, el, view, call, log,
-  isOperator: () => auth.role === "operator" });
-
-pageScope.listen(el("roster-toggle"), "click", () => {
-  view.showAllRobots = !view.showAllRobots;
-  render();
-});
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
+// D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
+const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
+  isOperator: () => auth.role === "operator", namedReason });
+const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
+  isOperator: () => auth.role === "operator", namedReason });
 
 // D-415 — 로그 지우기
 pageScope.listen(el("log-clear"), "click", () => {
@@ -777,19 +814,17 @@ function refreshDiagnostics() {
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
-  isOperator: () => auth.role === "operator" && !auth.locked });
+  isOperator: () => auth.role === "operator" && !auth.locked, namedReason });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
-const visionView = createVisionView({ scope: pageScope, el, call, rawOnly: true });
+const visionView = createVisionView({
+  scope: pageScope, el, call, rawOnly: true,
+  onSources: (sample) => { pathSample.vision = sample; paintSitePath(); },
+});
 mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
-const startPointView = createStartPointView({scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw()});
-
-function tickClock() {
-  el("clock").textContent = new Date().toTimeString().slice(0, 8);
-}
+const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
@@ -817,6 +852,11 @@ function useToken(token) {
   visionView.refreshSources();
 }
 pageScope.listen(el("token-save"), "click", saveToken);
+// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
+const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
+  el("console-token").value = "";
+  useToken("");
+}});
 pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
@@ -827,8 +867,7 @@ async function connectionMode() {
   try {
     const info = await fleetClient("/api/fleet/auth/connection");
     el("development-badge").hidden = info?.mode !== "development";
-    el("console-token").hidden = info?.mode === "development";
-    el("token-save").hidden = info?.mode === "development";
+    el("token-access").hidden = info?.mode === "development";
     return info?.mode === "development";
   } catch (_err) {
     return false;
@@ -860,19 +899,24 @@ tickClock();
 pageScope.interval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
+paintSitePath();
 connectionMode();
+refreshState();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
 trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
-pageScope.interval(() => trackingView.refresh(), STATE_MS);
+pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
+pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
+pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 
 pageScope.onResume(() => {

@@ -3,6 +3,9 @@
 
 # meshes
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Visual Collada and convex collision STL for Pinky Pro links (base, wheels, caster, cameras, lamp, RPLidar, screen).

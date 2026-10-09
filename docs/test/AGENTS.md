@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Phase 1 (P1) test report. Not the pytest tree — executable tests live in `middleware/core/gateway/test` and repo-root `test/`.

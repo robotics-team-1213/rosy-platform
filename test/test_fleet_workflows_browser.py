@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 from test_fleet_console_browser import API, _open_console as _open_base, console_url  # noqa: F401
 
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='optional Chromium regression')
 
 
@@ -62,7 +63,7 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         page.locator('#robot-enrollment').evaluate('node=>window.retainedEnrollment=node')
         api['/api/fleet/session'] = {'principal_id': 'reader', 'role': 'viewer'}
         page.locator('#token-save').click()
-        expect(page.locator('#user-role')).to_contain_text('조회 전용')
+        expect(page.locator('#user-role')).to_contain_text('보기 전용')  # D-540 2
         choose(page, '카메라 연결 승인')
         expect(page.locator('#camera-link')).to_be_visible()
         choose(page, '카메라 설치·보정')

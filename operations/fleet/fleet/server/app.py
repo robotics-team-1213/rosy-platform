@@ -52,8 +52,11 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
 from fleet.server.background_workers import goal_evidence_expiry_loop
+from fleet.server.background_workers import lane_compliance_loop
+from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
+from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
-from fleet.server.ingest_routes import install_discovery_routes, install_ingest_routes
+from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
 from fleet.server.intent_routes import install_intent_routes
 from fleet.server.mission_routes import install_mission_routes
 from fleet.server.site_auth import (
@@ -68,6 +71,7 @@ from fleet.server.site_auth import (
 )
 from fleet.server.static_routes import install_static_routes
 from fleet.server.development_session import install_development_routes
+from fleet.server.password_session import PasswordSessions, install_password_routes
 from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
@@ -110,6 +114,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
+               site_logins: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
@@ -136,7 +141,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None) -> FastAPI:
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
+               traffic_signal_advice=False, trip_lease=None,
+               identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -175,7 +182,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if cell_job_compiler is not None:
         from fleet.server.cell_goal_evidence import make_cell_job_resolver
         cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
-    if site_users is not None and task_service is None:
+    if (site_users is not None or site_logins) and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
         raise ValueError("discovery and its dedicated credential must be configured together")
@@ -305,6 +312,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.routing.cost import RoutingConfig
         site_maps = SiteMapStore(routing_config=routing_config or RoutingConfig())
 
+    # D-472: LED identity binding; observation only (never map pose, trips or commands).
+    from fleet.server.identity import IdentityConfig, IdentityService
+    identity = IdentityService(console.clients, tracking=tracking,
+                               config=identity_config or IdentityConfig())
+    if tracking is not None:
+        tracking.identity = identity
+
     @asynccontextmanager
     async def lifespan(app):
         dispatcher = None
@@ -328,6 +342,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if calibration_drift_watch is not None:
             calibration_drift_task = asyncio.create_task(calibration_drift_watch.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
+        lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
+                      if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
+        identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
+        lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
+            app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
+        tether_task = app.state.tether_watch.start()  # D-526
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -352,10 +372,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
+            power_display = getattr(app.state, "power_health_display", None)
+            if power_display is not None:
+                await power_display.aclose()
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, calibration_drift_task):
+                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
+                               lease_task, calibration_drift_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -412,7 +436,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if tracking is not None and (sightings is None
                                  or tuple(tracking.sources) != tuple(sightings.sources)):
         raise ValueError("overhead tracking must use the configured sighting sources")
-    principals = parse_site_principals(site_users, console)
+    # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
+    principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
+    password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
+    app.state.password_sessions = password_sessions
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
@@ -438,13 +465,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
-    authorize = build_authorize(console_token, principals, task_service, development=development_sessions)
+    authorize = build_authorize(console_token, principals, task_service, development=development_sessions,
+                                password_sessions=password_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
-        authorize, principals)
+        authorize, principals, named_logins=password_sessions is not None)
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
-                               trust_forwarded=lan_camera_proxy)
+                               trust_forwarded=lan_camera_proxy, account_login=password_sessions is not None)
+    install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
+                            trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
@@ -478,10 +508,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  principals=principals, require_viewer=require_viewer,
                                  read_guard=read_guard, catalogue=catalogue)
 
+        def _link_addresses():
+            reasons = address_reasons(console=console, hub=hub, discovery=discovery,
+                                     enrollment=enrollment)
+            return {entry["robot_id"]: entry["status"] for entry in reasons["robots"]}
+
+        console.set_link_address_status(_link_addresses)
+
     from fleet.server.central_registry_routes import install_registry_routes
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
                             sync_token=pairing_sync_token, require_viewer=require_viewer,
-                            require_operator=require_operator, named_identity=bool(principals))
+                            require_operator=require_operator,
+                            named_identity=bool(principals) or password_sessions is not None)
     from fleet.server.camera_peer_adapter import install_camera_peer
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
@@ -511,19 +549,29 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    if localization_service is not None:
+        localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
                           read_guard=read_guard, map_pose=map_pose)
     install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
+    # D-511 M0: lane compliance from the same map pose; observe and notify only.
+    from fleet.localization.lane_compliance import LaneComplianceConfig
+    from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
+    app.state.lane_compliance = LaneComplianceMonitor(
+        lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
+        config=lane_compliance_config or LaneComplianceConfig(), identity=identity)
+    install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
+                           require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
-                           tracking=tracking)
+                           tracking=tracking, identity=identity)
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
@@ -532,9 +580,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
                                                               calibrations=tracking.calibrations),
-                                   read_guard=read_guard, require_operator=require_operator)
+                                   read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator, auth_configured=bool(principals or console_token))
+                          require_operator=require_operator, require_named_operator=require_named_operator,
+                          # D-519: login accounts are configured named operators too.
+                          auth_configured=bool(principals or console_token) or password_sessions is not None)
 
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),
@@ -543,6 +593,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
             clients=lambda: stuck_resolver_clients)
+        app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(
@@ -565,13 +616,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
-                              site_maps=site_maps, require_operator=require_operator,
-                              operator_guard=operator_guard)
+                              site_maps=site_maps, require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
         """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
         return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
 
+    if (trip_lease or {}).get("required") and console_token and console.uses_rest_token(console_token):
+        # D-541 1: the lease owner is the robot REST token; browsers hold the console token
+        raise ValueError("D-541: a robot REST token must be Fleet's own, not the console token")
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
@@ -579,21 +632,44 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
-                             roster=lambda: console.robot_ids)
+                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
+                             traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
+                             lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
+                             renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
+        console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
+
+    @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
+    def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-550 10: a named operator's console is open; operator goals are renewed while it keeps coming."""
+        console.goal_leases.operator_present()
+        return {"present": True}
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
-    if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
+    marker_sources = sightings is not None and any(s.place_markers for s in sightings.sources)  # D-564
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
-                                                   roster=lambda: console.robot_ids),
+                                                   roster=lambda: console.robot_ids,
+                                                   place_markers=sightings.fresh_place_marker
+                                                   if marker_sources else None),
                          read_guard=read_guard, require_named_operator=require_named_operator)
+    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
+    install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
+                          require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
+                        require_operator=require_operator,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
+    from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
+    app.state.guide = GuideService(gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
+                                   tracking=tracking if tracking is not None and tracking.enabled else None,
+                                   zones=trip_runner.traffic.zone_edges)
+    install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
@@ -618,6 +694,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,
+                          require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport),
@@ -643,6 +720,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return {"source_id": body.source_id, "lease": token,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
+
+    from fleet.host_control import UnavailableHostHelper, helper_from_config
+    from fleet.server.host_control_routes import install_host_control_routes
+    # D-524: without site-users or logins every caller is `site-console`, so no host control.
+    install_host_control_routes(
+        app, require_operator=require_operator, require_named_operator=require_named_operator,
+        helper=(helper_from_config() if principals or password_sessions is not None
+                else UnavailableHostHelper()))
 
     install_static_routes(app)
 

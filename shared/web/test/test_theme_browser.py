@@ -7,15 +7,15 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 import token_themes
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 

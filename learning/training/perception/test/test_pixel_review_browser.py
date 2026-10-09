@@ -1,14 +1,17 @@
 """Real browser pixel editing and approval guards on isolated synthetic originals."""
 import os
+from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 import numpy as np
 
-from test_review_flow_browser import browser_workspace
+from test_review_flow_browser import browser_workspace, serve
+from test_review_app import bright_store, open_store
 from test_review_cycle import CLASSES
 import review_masks
 
-pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
@@ -19,6 +22,86 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
+    store = open_store(tmp_path)
+    with serve(store) as (page, _, expect):
+        open_pixels(page, store, expect)
+        expect(page.locator('#pixel-workspace-mode')).to_contain_text('학습 후보')
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 후보')
+        page.locator('#pixel-next').click()
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 후보')
+    with store.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata (key,value) VALUES ('workspace_kind','evaluation')")
+    with serve(store) as (page, _, expect):
+        open_pixels(page, store, expect)
+        expect(page.locator('#pixel-workspace-mode')).to_contain_text('고정 평가')
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 제외')
+        expect(page.locator('#pixel-preparation')).to_be_hidden()
+
+
+def test_short_desktop_view_keeps_entire_photo_in_view(browser_workspace):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': 1262, 'height': 632})
+    open_pixels(page, store, expect)
+    canvas = page.locator('#pixel-canvas').bounding_box()
+    assert canvas and canvas['y'] + canvas['height'] <= 632
+
+
+def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
+    with serve(bright_store(tmp_path)) as (page, store, expect):
+        open_pixels(page, store, expect)
+        before = store.image(0).read_bytes()
+        mask = review_masks.get(store, 0)
+        page.locator('#pixel-mask-visible').uncheck()
+        pixel = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
+            .getContext('2d').getImageData(16, 12, 1, 1).data)""")
+        original = pixel()
+        page.locator('#pixel-view-detail').click()
+        expect(page.locator('#pixel-view-status')).to_contain_text('명암 보정 보기')
+        assert pixel() != original
+        page.keyboard.press('v')
+        expect(page.locator('#pixel-view-original')).to_have_attribute('aria-pressed', 'true')
+        assert pixel() == original
+        page.locator('#pixel-mask-visible').check()
+        assert pixel() != original
+        assert store.image(0).read_bytes() == before
+        assert review_masks.get(store, 0)['version'] == mask['version']
+        page.goto(page.url.split('/pixels')[0] + '/?frame=0', wait_until='networkidle')
+        page.locator('#view-detail').click()
+        expect(page.locator('#view-status')).to_contain_text('명암 보정 보기')
+        assert store.get(0)['version'] == 1
+
+
+def test_unknown_highlight_is_visual_only(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    y, x = np.argwhere(review_masks.pixels(store, review_masks.get(store, 0)) == 255)[0]
+    pixel = lambda: page.evaluate("""([x, y]) => Array.from(document.querySelector('#pixel-canvas')
+        .getContext('2d').getImageData(x, y, 1, 1).data)""", [int(x), int(y)])
+    highlight = page.locator('#pixel-show-unknown')
+    expect(highlight).to_be_checked()
+    marked = pixel()
+    highlight.uncheck()
+    assert pixel() != marked
+    assert review_masks.get(store, 0)['version'] == 0
+
+
+def test_sparse_unknown_pixels_are_visible_and_never_shown_as_zero_percent(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    filled = review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, ValueError)
+    review_masks.update(store, 0, {'version': filled['version'], 'action': 'paint',
+                                   'label': 255, 'radius': 0, 'points': [[10, 10]]}, ValueError)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-coverage')).to_contain_text('(<1%)')
+    sample = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
+        .getContext('2d').getImageData(10, 10, 1, 1).data)""")
+    highlighted = sample()
+    page.locator('#pixel-show-unknown').uncheck()
+    assert sample() != highlighted
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+
+
 def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
@@ -26,10 +109,12 @@ def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     path, digest = review_masks.freeze(store, review_masks.encode(
         np.full((source['height'], source['width']), 1, np.uint8)))
     with store.connect() as db:
-        db.execute('INSERT INTO pixel_drafts VALUES (?,?,?,?)', (0, digest, path, 'c' * 64))
+        db.execute('INSERT INTO pixel_drafts (frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?)',
+                   (0, digest, path, 'c' * 64, 'sam3_obstacle_unknown_v12_base'))
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     button = page.locator('#pixel-apply-candidate')
     expect(button).to_be_visible()
+    expect(page.locator('#pixel-candidates')).to_contain_text('SAM3 장애물 보류 · 사람 확인 필요')
     expect(button).to_be_enabled()
     page.once('dialog', lambda dialog: dialog.accept())
     button.click()
@@ -87,8 +172,8 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     page.locator('#pixel-complete').check()
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
     page.locator('#pixel-background').check()
-    page.locator('#pixel-approve').click()
-    expect(page.locator('#pixel-error')).to_contain_text('미검수')
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['version'] == 0
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
@@ -107,19 +192,20 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
+    assert page.locator('#pixel-approve').bounding_box()['y'] < page.locator('#pixel-class-help').bounding_box()['y']
     if width <= 390:
         field_widths = page.evaluate("""() => ({
-          available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
-          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label')]
+          available: document.querySelector('.pixel-editor-column > section').getBoundingClientRect().width,
+          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label, .pixel-quick-tools > label')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
-          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field')]
+          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field, .pixel-quick-tools > label .ui-field')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
         })""")
-        assert len(field_widths['labels']) >= 5 and len(field_widths['fields']) >= 5
-        assert all(abs(value - field_widths['available']) <= 1
-                   for value in field_widths['labels'] + field_widths['fields']), field_widths
+        assert len(field_widths['labels']) >= 3 and len(field_widths['fields']) >= 3
+        assert all(value <= field_widths['available'] for value in field_widths['labels']), field_widths
+        assert all(abs(label-field) <= 1 for label, field in zip(field_widths['labels'], field_widths['fields'])), field_widths
     if width == 320:
         navigation = page.evaluate("""() => ['#pixel-prev', '#pixel-next']
           .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
@@ -148,6 +234,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     shot('approved')
     page.locator('#pixel-export').click()
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
+    expect(page.locator('#pixel-class-help')).to_contain_text('255는 클래스가 아닙니다')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     shot('decision-result')
 
@@ -176,11 +263,19 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
+def test_pending_filter_omits_object_excluded_frame(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-filter').select_option('pending')
+    expect(page.locator('#pixel-frame option')).to_have_count(1)
+    expect(page.locator('#pixel-frame')).to_have_value('0')
+
+
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.locator('#pixel-class').select_option('4')
-    page.locator('#pixel-flood').click()
+    page.locator('#pixel-brush-tool').click()
     page.locator('#pixel-radius').fill('2')
     canvas = page.locator('#pixel-canvas')
     canvas.scroll_into_view_if_needed()
@@ -197,7 +292,7 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     expect(page.locator('#pixel-draft')).to_contain_text('2획')
     expect(page.locator('#pixel-next')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0)['version'] == 0
-    page.locator('#pixel-undo').click()
+    canvas.focus(); page.keyboard.press('Control+z')
     expect(page.locator('#pixel-draft')).to_contain_text('1획')
     page.locator('#pixel-save').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
@@ -208,6 +303,52 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
+
+
+def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspace):
+    page, store, expect = browser_workspace
+    object_tools = page.locator('.review-editor-tools').bounding_box()
+    object_canvas = page.locator('#canvas').bounding_box()
+    object_decision = page.locator('.label-inspector').bounding_box()
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('')
+    expect(page.locator('#pixel-tool-hint')).to_contain_text('픽셀 클래스를 선택')
+    expect(page.locator('#pixel-brush-tool')).to_be_disabled()
+    pixel_tools = page.locator('.pixel-quick-tools').bounding_box()
+    pixel_canvas = page.locator('#pixel-canvas').bounding_box()
+    pixel_decision = page.locator('.pixel-review-column').bounding_box()
+    assert object_tools['x'] < object_canvas['x'] < object_decision['x']
+    assert pixel_tools['x'] < pixel_canvas['x'] < pixel_decision['x']
+    assert abs(object_tools['x']-pixel_tools['x']) <= 1
+    page.locator('#pixel-class').select_option('4')
+    expect(page.locator('#pixel-tool-hint')).to_be_hidden()
+    page.locator('#pixel-brush-tool').click()
+    stage = page.locator('.pixel-stage')
+    canvas = page.locator('#pixel-canvas')
+    original_width = canvas.bounding_box()['width']
+    page.locator('.review-viewport-controls [aria-label^="확대"]').click()
+    expect(page.locator('.review-zoom-level')).to_have_text('150%')
+    assert canvas.bounding_box()['width'] > original_width
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    box = stage.bounding_box()
+    start = (box['x'] + box['width']/2, box['y'] + box['height']/2)
+    page.mouse.move(*start)
+    page.mouse.down()
+    page.mouse.move(start[0] - 100, start[1] - 40, steps=4)
+    page.mouse.up()
+    assert stage.evaluate('(node) => node.scrollLeft') > 0
+    assert review_masks.get(store, 0)['version'] == 0
+    expect(page.locator('#pixel-draft')).to_have_text('')
+    expect(page.locator('.pixel-save-panel')).to_be_hidden()
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    image = canvas.bounding_box()
+    canvas.click(position={'x': image['width']/2, 'y': image['height']/2})
+    expect(page.locator('.pixel-save-panel')).to_be_visible()
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    expect(page.locator('.pixel-save-panel')).to_be_hidden()
+    changed = np.argwhere(review_masks.pixels(store, review_masks.get(store, 0)) == 4)
+    assert any(abs(y-12) <= 1 and abs(x-16) <= 1 for y, x in changed), changed.tolist()
 
 
 @pytest.mark.parametrize('width', [1440, 800, 390])
@@ -244,8 +385,26 @@ def test_pixel_screen_shows_classes_yaml_display_names(browser_workspace):
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
     expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')
-    expect(page.locator('#pixel-class option').nth(1)).to_have_text('왼쪽 차선')
-    expect(page.locator('#pixel-class option').first).to_have_text('배경')
+    expect(page.locator('#pixel-class option[value="1"]')).to_have_text('왼쪽 차선')
+    expect(page.locator('#pixel-class option[value="0"]')).to_have_text('배경')
+
+
+def test_drivable_class_can_be_selected_painted_and_saved(browser_workspace):
+    page, store, expect = browser_workspace
+    raw = (Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr6_drivable.yaml').read_bytes()
+    review_masks.bind_classes(store, raw)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-status')).to_contain_text('v0')
+    chip = page.locator('#pixel-quick-classes button').nth(5)
+    expect(chip).to_contain_text('주행 가능 영역')
+    chip.click()
+    expect(page.locator('#pixel-class')).to_have_value('5')
+    expect(page.locator('#pixel-tool-hint')).to_contain_text('경계선 안쪽')
+    page.locator('#pixel-brush-tool').click()
+    page.locator('#pixel-canvas').click(position={'x': 16, 'y': 12})
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 5)
 
 
 
@@ -263,12 +422,121 @@ def test_pixel_number_keys_pick_class_and_x_excludes(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
+def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_workspace):
+    page, store, expect = browser_workspace
+    row = store.get(1)
+    store.update(1, {'version': row['version'], 'action': 'reopen'})
+    open_pixels(page, store, expect)
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('c')
+    page.keyboard.press('b')
+    expect(page.locator('#pixel-complete')).to_be_checked()
+    expect(page.locator('#pixel-background')).to_be_checked()
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('a')
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('n')
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+
+
+def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.set_viewport_size({'width': 1280, 'height': 800})
+    canvas = page.locator('#pixel-canvas').bounding_box()
+    tools = page.locator('.pixel-quick-tools').bounding_box()
+    assert tools['x'] < canvas['x'] and tools['y'] < canvas['y']
+    assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
+    assert page.locator('#pixel-undo').bounding_box()['y'] < canvas['y']
+    page.locator('#pixel-frame').select_option('1')
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    expect(page.locator('#pixel-canvas')).to_be_focused()
+    page.keyboard.press('ArrowLeft')
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    page.locator('#pixel-quick-classes button').nth(1).click()
+    expect(page.locator('#pixel-class')).to_have_value('1')
+    expect(page.locator('#pixel-canvas')).to_be_focused()
+    page.keyboard.press('t')
+    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'false')
+    page.keyboard.press('t')
+    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'true')
+    page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+    expect(page.locator('#pixel-sample-apply')).to_be_enabled()
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.set_viewport_size({'width': 390, 'height': 800})
+    assert page.locator('.pixel-quick-tools').bounding_box()['y'] > page.locator('#pixel-canvas').bounding_box()['y']
+    assert review_masks.get(store, 0)['version'] == 1
+
+
+def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    thumbs = page.locator('#pixel-frames .pixel-frame-item')
+    expect(thumbs).to_have_count(2)
+    expect(thumbs.nth(0).locator('img')).to_have_attribute('loading', 'lazy')
+    thumbs.nth(1).click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    thumbs.nth(0).click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill-unknown').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    assert not np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+
+
+def test_polygon_tool_previews_saves_and_undoes(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('4')
+    canvas = page.locator('#pixel-canvas')
+    canvas.focus()
+    page.keyboard.press('p')
+    expect(page.locator('#pixel-polygon-tool')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-polygon-tool .ui-icon')).to_have_count(1)
+    box = canvas.bounding_box()
+    for x, y in [(5, 5), (20, 5), (20, 18), (5, 18)]:
+        canvas.click(position={'x': x * box['width'] / 32,
+                               'y': y * box['height'] / 24})
+    expect(page.locator('#pixel-draft')).to_contain_text('4개')
+    assert review_masks.get(store, 0)['version'] == 0
+    expect(page.locator('#pixel-next')).to_be_disabled()
+    canvas.focus(); page.keyboard.press('Backspace')
+    expect(page.locator('#pixel-draft')).to_contain_text('3개')
+    canvas.focus(); page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    mask = review_masks.pixels(store, review_masks.get(store, 0))
+    assert mask[8, 15] == 4 and mask[1, 1] == 255
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    page.locator('#pixel-undo').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    assert review_masks.pixels(store, review_masks.get(store, 0))[8, 15] == 255
+    page.locator('#pixel-brush-tool').click()
+    page.locator('#pixel-radius').fill('0')
+    canvas.focus(); page.keyboard.press(']')
+    expect(page.locator('#pixel-radius')).to_have_value('1')
+    page.keyboard.press('[')
+    expect(page.locator('#pixel-radius')).to_have_value('0')
+    box = canvas.bounding_box()
+    canvas.click(position={'x': 8 * box['width'] / 32,
+                           'y': 9 * box['height'] / 24})
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    assert np.count_nonzero(review_masks.pixels(store, review_masks.get(store, 0)) != 255) == 1
+
+
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     expect(page.locator('#pixel-legend')).to_contain_text('배경')
     expect(page.locator('#pixel-legend')).to_contain_text('차선')
-    expect(page.locator('#pixel-class option').first).to_have_text('배경')
+    expect(page.locator('#pixel-class option[value="0"]')).to_have_text('배경')
 
 
 def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_workspace):

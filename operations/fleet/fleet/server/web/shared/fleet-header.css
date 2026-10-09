@@ -1,0 +1,124 @@
+/* D-540 2 — Rosy Fleet 공통 머리. 관제·설치·보정·현장 지도·Cell 네 문서가 같은 마크업과 이 시트를 쓴다.
+   문서 시트(styles.css, site-map.css, cell.css)는 머리를 칠하지 않는다. CSP: 클래스와 id만. */
+
+/* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
+body { margin: 0; }
+
+/* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
+.token { width: 11rem; }
+#console-token[hidden], #token-save[hidden] { display: none; }
+/* 현장 지도·Cell 시트의 전역 `input { width: 100% }`가 머리의 "이 브라우저 기억" 칸을 늘이지 않게 한다. */
+ui-topbar input[type="checkbox"] { width: auto; }
+
+/* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
+   이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
+.theme-choice { display: flex; align-items: center; gap: var(--space-1); }
+/* D-457 — 아이콘 세그먼트는 정사각 누름 면(44px)을 지킨다. */
+.theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
+#theme-choice-label { white-space: nowrap; }
+
+/* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 상세 절차는 화면 낭독기에 남긴다. */
+.estop {
+  min-width: var(--target-irreversible);
+  min-height: var(--target-irreversible);
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.estop .ui-icon {
+  width: calc(var(--target-irreversible) * 0.55);
+  height: calc(var(--target-irreversible) * 0.55);
+  flex: none;
+}
+.estop span { white-space: nowrap; }
+.estop small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+#estop[disabled][reason] > small:not([data-reason]) { display: none; }
+
+/* D-359 §6.4 — 넓은 창(90rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에
+   선다. 줄이 모자라면 항목이 다음 줄로 내려가고 글자가 접히지 않는다. */
+#topbar-more { display: none; }
+.topbar-extra { display: contents; }
+@media (width >= 90rem) {
+  ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
+  /* 긴 주체 이름이 머리 줄을 넘치게 하지 않도록 역할 표지는 12rem에서 자른다(전문은 title). */
+  #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (width < 64rem) {
+  /* 접힌 머리가 좁아지면 부제와 정지의 래치 부제를 숨긴다. 보이는 동사 비상 정지는 남는다. */
+  ui-topbar ui-brand small { display: none; }
+  #estop small { display: none; }
+}
+
+/* D-466 — 바깥 자리는 brand | cluster | estop. cluster는 연결·시계·설정이다.
+   머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
+   90rem은 surfaces.yaml console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
+   자연 폭(약 1220–1300px, 주체 이름에 따라)이 1440px 미만 창에서 한 줄에 들지 않아,
+   비상 정지가 둘째 줄로 밀리거나 이름표가 두 줄로 접히지 않도록 접는다. */
+@media (width < 90rem) {
+  ui-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    /* D-501 — 다른 문서로 가는 길은 머리 아래 탭 줄(doc-tabs.css)이다. */
+    grid-template-areas: "brand pill clock more estop";
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
+  ui-topbar .spacer { display: none; }
+  /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
+  #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #clock { grid-area: clock; justify-self: end; }
+  #topbar-more { display: inline-flex; grid-area: more; }
+  #estop { grid-area: estop; }
+  .topbar-extra {
+    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--line-10);
+  }
+  .topbar-extra[data-open="true"] { display: flex; }
+  #console-token { flex: 1 1 10rem; width: auto; min-width: 0; }
+  .topbar-extra .theme-choice { flex-wrap: wrap; }
+}
+
+@media (width < 22rem) {
+  #topbar-more > span:not(.sr-only) { display: none; }
+}
+
+/* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다.
+   D-359 US-008: 320px에서 "ROSY FLEET"가 두 줄로 접혔다(이름 칸 83px, 글자 119px). 시계와
+   설정이 한 열을 나눠 쓰던 것을 풀어 이름이 시계 열 위까지 쓴다. 이름 칸을 크기
+   컨테이너로 두면 components.css의 워드마크가 칸에 맞게 줄어든다(title 크기가 상한). */
+@media (width < 30rem) {
+  ui-topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand more estop" "pill clock estop";
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+  ui-topbar ui-brand { container-type: inline-size; }
+  #clock { font-size: var(--text-micro); }
+  /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */
+  #estop { align-self: center; padding-inline: var(--space-2); gap: var(--space-1); }
+  #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
+  .topbar-extra { grid-row: 3; }
+}

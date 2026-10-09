@@ -1,0 +1,28 @@
+=== bend_1 02:37:04
+=== bend_2 02:37:55
+=== bend_3 02:38:46
+=== bend_4 02:39:39
+=== bend_5 02:40:31
+=== bend_6 02:41:21
+=== bend_7 02:41:38
+=== bend_8 02:42:30
+=== bend_9 02:43:22
+=== bend_10 02:44:18
+=== bend_11 02:45:08
+=== bend_12 02:45:58
+=== bend_13 02:46:50
+=== bend_14 02:47:41
+b4/b4_go.sh: line 8: 136358 Aborted                 (core dumped) python3 "$S" "$@" --base http://127.0.0.1:8100 --out "$O" > "$O/probe.out" 2>&1
+=== bend_15 02:48:32
+=== south_c1 02:49:27
+=== south_c2 02:49:48
+=== south_c3 02:50:11
+=== latch_b5 02:50:35
+=== latch_b3 02:51:23
+=== latch_b4 02:51:38
+=== latch_b6 02:51:54
+=== box_ahead_1 02:52:10
+=== box_ahead_2 02:53:04
+=== box_drop_1 02:53:58
+=== box_drop_2 02:54:45
+BATCH_DONE

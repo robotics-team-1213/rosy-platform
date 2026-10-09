@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "training"))
 from train_job import check_coverage, publish_ready  # noqa: E402
-from job_state import JobError, Rejected  # noqa: E402
+from job_state import Job, JobError, Rejected  # noqa: E402
 from export_cell import write_manifest  # noqa: E402
 
 
@@ -24,6 +24,19 @@ def model(folder):
               "files": [{"name": f["name"], "sha256": f["sha256"]} for f in doc["files"]]}
     (folder / "intake_report.json").write_text(json.dumps(report))
     return doc
+
+
+def test_candidate_job_outcome_is_distinct_from_ready(tmp_path):
+    with Job(tmp_path / 'candidate', {'dataset_sha': 'a' * 64}) as job:
+        job.finish('candidate')
+    state = json.loads((tmp_path / 'candidate' / 'state.json').read_text())
+    assert state['outcome'] == 'candidate'
+    assert not list(tmp_path.rglob('READY'))
+    with Job(tmp_path / 'candidate', {'dataset_sha': 'a' * 64}) as job:
+        assert job.state['outcome'] == 'candidate'
+    with pytest.raises(JobError, match='outcome'):
+        with Job(tmp_path / 'invalid', {'dataset_sha': 'b' * 64}) as job:
+            job.finish('untrusted')
 
 
 def test_coverage_rejects_validation_wall_without_training_wall():

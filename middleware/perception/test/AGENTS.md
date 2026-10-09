@@ -3,6 +3,9 @@
 
 # test/ (pure-logic suite)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 ROS-free unittest suite covering every pure-logic decision module. No ROS on the dev machine — numpy/opencv only.
 

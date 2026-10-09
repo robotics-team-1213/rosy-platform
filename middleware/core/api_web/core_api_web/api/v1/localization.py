@@ -41,12 +41,16 @@ def reporting_assist(svc: CoreServicesLike):
 
 
 def _lease(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:
-    """D-321 addendum, answered 423 on the D-395 routes (contract §2)."""
+    """D-321 addendum / D-541 3, answered 423 on the D-395 routes (contract §2)."""
     session = svc.calibration.blocking(auth.token_id)
     if session is not None:
         raise ApiError("CALIBRATION_ACTIVE", 423,
                        f"{action} refused: calibration '{session['label']}' is in progress",
                        detail={"session": session})
+    lease = svc.trip_lease.blocking(auth.token_id)
+    if lease is not None:  # D-541 3: same 423 convention on the D-395 routes
+        raise ApiError("TRIP_LEASED", 423,
+                       f"{action} refused: Fleet trip '{lease['trip_id']}' holds this robot", detail=lease)
 
 
 def send_decision(loc, decision: LocalizationDecision) -> None:
@@ -63,6 +67,16 @@ def candidates(_: AuthContext = Depends(assist), svc: CoreServicesLike = Depends
     if report is None:
         raise ApiError("NO_CANDIDATES", 404, "the robot is not in CANDIDATES")
     return report.model_dump(mode="json")
+
+
+@localization_router.get("/request")
+def pose_request(_: AuthContext = Depends(assist), svc: CoreServicesLike = Depends(get_services)):
+    """D-546 5: the open "where am I" request (lane_return cannot go on without a pose)."""
+    loc = getattr(svc, "localization", None)
+    request = loc.pose_requests.current() if loc is not None else None
+    if request is None:
+        raise ApiError("NO_REQUEST", 404, "the robot has no open pose request")
+    return request
 
 
 @localization_router.post("/decision", status_code=202)
@@ -110,6 +124,9 @@ def start_mission(body: MissionRequest, auth: AuthContext = Depends(assist),
     mission = _mission(svc)
     if svc.calibration.blocking(auth.token_id) is not None:
         raise ApiError("calibration_lease", 409, "a calibration lease is in progress")
+    lease = svc.trip_lease.blocking(auth.token_id)
+    if lease is not None:  # D-541 3: CORE drives the mission, so a non-owner may not start it
+        raise ApiError("TRIP_LEASED", 409, f"Fleet trip '{lease['trip_id']}' holds this robot", detail=lease)
     TaskKind.MOVE.require(svc.capability)
     try:
         svc.nav.require_ready()

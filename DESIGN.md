@@ -238,6 +238,10 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## Layout
 
+### 목적이 공간보다 먼저
+
+화면의 크기와 연결은 [D-543](docs/adr/D-543-task-purpose-navigation-and-layout-review.md)의 작업 카드로 설명한다. 사용자가 누구인지, 첫눈에 답할 질문, 다음 안전한 행동, 완료 근거와 복귀 경로를 정한 뒤 지도·영상·목록의 면적을 배분한다. 전역 탭은 위치를 알려 주고, 맥락 링크는 작업 인계를 알려 준다. Fleet 네 문서의 같은 탭 줄(D-501)은 유지하되, 관제와 Cell 사이에서는 실제 인계의 목적과 결과를 화면에서 설명해야 한다. `설정`도 접속·역할·화면 표시·장치 설정의 소유와 효과를 구분해 평가한다. [작업별 평가표와 반복 절차](docs/plans/2026-10-09-uiux-purpose-and-layout-pipeline.md)가 첫 적용 기준이다.
+
 - **간격 척도**: 4의 배수 여섯 단계 `--space-1..6`(4/8/12/16/24/32px). 임의 값을 쓰지 않는다.
 - **역할 간격**: 부품은 척도 대신 역할 이름을 읽는다 — `--inset-button`, `--inset-field`, `--inset-tag`, `--gap-actions`, `--gap-form`, `--gap-readout`, `--gap-topbar` 등([D-292](docs/adr/D-292-design-tokens-and-component-layout-contract.md)).
 - **세 단**: **compact** `width < 30rem`, **medium** `30rem ≤ width < 64rem`, **wide** `width ≥ 64rem`. 범위 문법(`@media (width < 30rem)`)을 쓰고 `.01` 보정을 쓰지 않는다. 값은 rem이다.
@@ -365,7 +369,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ### 비상 정지
 - `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`(팔각 아이콘과 보이는 동사 비상 정지. 넓은 머리의 래치 부제는 "래치 · 로봇별 관리자 해제". 명령은 [D-421](docs/adr/D-421-fleet-cancel-all-driving-separate-from-latched-estop.md)의 래치형 전체 비상 정지). 동사는 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
-- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `primary`로 선다(위험 채움은 비상 정지 하나).
+- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `quiet`로 선다(위험 채움은 비상 정지 하나). 로봇 카드 `운행 취소`와 큐 펼침 `중단`도 `quiet`이고, 멈추는 동작이라 확인 없이 바로 나간다([D-540](docs/adr/D-540-fleet-console-structure-v2.md) 6항).
 
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.

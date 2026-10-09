@@ -29,8 +29,10 @@ class StuckResolverLoop:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
-        #: D-494 5: a robot on a running trip gets no automatic answer (app.py sets it).
+        #: D-517 5 (M4): a robot on a running trip gets stopping answers only (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
+        #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
+        self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
         self.wake = asyncio.Event()
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
@@ -40,7 +42,7 @@ class StuckResolverLoop:
                                   escalated=previous.get("escalated") or "human_claimed")
 
     async def run_once(self) -> None:
-        robots = [row for row in (await self._snapshot())["robots"] if not self.trip_busy(row["robot_id"])]
+        robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         for action in self._resolver.step(now, robots):
@@ -48,6 +50,15 @@ class StuckResolverLoop:
                 self._escalated(action)
             else:
                 await self._answer(action, now)
+
+    def _row(self, row: dict) -> dict:
+        extra = {}
+        if self.trip_busy(row["robot_id"]):
+            extra["trip"] = True
+        pose = self.map_pose(row["robot_id"])
+        if pose is not None:
+            extra["map_pose"] = pose
+        return {**row, **extra} if extra else row
 
     async def run(self) -> None:
         last_error = None
@@ -69,11 +80,12 @@ class StuckResolverLoop:
                 pass
             self.wake.clear()
 
-    def _escalated(self, action: Escalate) -> None:
+    def _escalated(self, action: Escalate, *, rule: Optional[str] = None,
+                   decision: Optional[str] = None) -> None:
         log.warning("stuck %s on %s escalated to a human: %s",
                     action.stuck_id, action.robot_id, action.reason)
-        self._board.note_resolver(action.robot_id, action.stuck_id, tier="human", rule=None,
-                                  decision=None, escalated=action.reason)
+        self._board.note_resolver(action.robot_id, action.stuck_id, tier="human", rule=rule,
+                                  decision=decision, escalated=action.reason)
         self._board.record(robot_id=action.robot_id, stuck_id=action.stuck_id,
                            decision="ESCALATE", principal_id=PRINCIPAL_ID, accepted=None,
                            tier="human", escalated=action.reason)
@@ -120,4 +132,5 @@ class StuckResolverLoop:
                                   rule=answer.rule, decision=answer.decision, escalated=None)
         escalation = self._resolver.result(answer, code=code)
         if escalation is not None:
-            self._escalated(escalation)
+            self._escalated(escalation, rule=answer.rule if answer.escalate else None,
+                            decision=answer.decision if answer.escalate else None)

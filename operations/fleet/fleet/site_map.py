@@ -33,6 +33,15 @@ IMPORT_WIDTH_M = 0.185
 #: Import default only; the operator edits it per edge in the console.
 IMPORT_SPEED_CAP_MPS = 0.2
 
+#: ``start`` (D-513): a demo start slot. Its ``yaw`` is required and fixes the departure heading.
+#: ``bend`` (D-507 addendum): a lane bend CORE passes on odometry. ``(x, y)`` is the vertex of
+#: the two centre lines, ``yaw`` the entering heading as the edge is drawn, ``exit_yaw`` the
+#: leaving heading and ``radius_m`` the centre-line arc; driven the other way it is the same
+#: bend entered at ``exit_yaw + pi``. Bends do not split edges.
+PlaceKind = Literal["park", "charge", "stop", "junction", "turnaround", "start", "bend"]
+#: A bend turns at least this much (a smaller one is the expected window's, D-507 2) and at most 90.
+BEND_MIN_DEG, BEND_MAX_DEG = 15.0, 90.0
+
 Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
 
@@ -45,7 +54,24 @@ class SitePlace(BaseModel):
     x: float = Finite
     y: float = Finite
     yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
-    kind: Literal["park", "charge", "stop", "junction", "turnaround"] = "junction"
+    kind: PlaceKind = "junction"
+    exit_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
+    radius_m: Optional[float] = Field(default=None, gt=0.0, le=0.5, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _start_heading(self) -> "SitePlace":
+        if self.kind == "start" and self.yaw is None:
+            raise ValueError(f"start place {self.id} needs a yaw")
+        if self.kind != "bend":
+            if self.exit_yaw is not None or self.radius_m is not None:
+                raise ValueError(f"place {self.id}: exit_yaw and radius_m belong to a bend")
+            return self
+        if None in (self.yaw, self.exit_yaw, self.radius_m):
+            raise ValueError(f"bend place {self.id} needs yaw, exit_yaw and radius_m")
+        turn = abs(math.degrees(math.remainder(self.exit_yaw - self.yaw, math.tau)))
+        if not BEND_MIN_DEG <= turn <= BEND_MAX_DEG:
+            raise ValueError(f"bend place {self.id} turns {turn:.1f} deg, not {BEND_MIN_DEG}-{BEND_MAX_DEG}")
+        return self
 
 
 class SiteEdge(BaseModel):
@@ -89,6 +115,9 @@ class SiteMap(BaseModel):
     places: list[SitePlace] = Field(max_length=MAX_PLACES)
     edges: list[SiteEdge] = Field(max_length=MAX_EDGES)
     turn_bans: list[TurnBan] = Field(default_factory=list, max_length=MAX_EDGES)
+    #: D-513 7: clockwise screen turn of the plain (+y up) map view. Display only; the one
+    #: orientation every Fleet map and camera view follows.
+    view_turn_deg: Literal[0, 90, 180, 270] = 0
 
     @model_validator(mode="after")
     def _references(self) -> "SiteMap":
@@ -126,7 +155,14 @@ class SiteMap(BaseModel):
         return self
 
     def body(self) -> dict:
-        return self.model_dump(by_alias=True, mode="json")
+        body = self.model_dump(by_alias=True, mode="json")
+        for place in body["places"]:  # bend fields only on bends: other stored maps stay byte-equal
+            for key in ("exit_yaw", "radius_m"):
+                if place[key] is None:
+                    del place[key]
+        if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
+            del body["view_turn_deg"]
+        return body
 
 
 def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:

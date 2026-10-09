@@ -1,6 +1,7 @@
 """Independent, versioned pixel reviews. Never derive human truth from CAD/boxes."""
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import cv2
@@ -31,8 +32,13 @@ def configure(store):
             id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP,
             frame INTEGER, version INTEGER, action TEXT, review TEXT);
             CREATE TABLE IF NOT EXISTS pixel_drafts (
-            frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
-            catalog_sha256 TEXT NOT NULL, PRIMARY KEY(frame, sha256));''')
+                frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
+                catalog_sha256 TEXT NOT NULL, origin TEXT, withdrawn INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(frame, sha256));''')
+        if 'origin' not in {r['name'] for r in db.execute('PRAGMA table_info(pixel_drafts)')}:
+            db.execute('ALTER TABLE pixel_drafts ADD COLUMN origin TEXT')
+        if 'withdrawn' not in {r['name'] for r in db.execute('PRAGMA table_info(pixel_drafts)')}:
+            db.execute('ALTER TABLE pixel_drafts ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0')
         if 'approval' not in {r['name'] for r in db.execute('PRAGMA table_info(masks)')}:
             db.execute('ALTER TABLE masks ADD COLUMN approval TEXT')
 
@@ -104,7 +110,7 @@ def get(store, index):
     with store.connect() as db:
         row = db.execute('SELECT * FROM masks WHERE frame=?', (index,)).fetchone()
         drafts = [dict(value) for value in db.execute(
-            'SELECT sha256,catalog_sha256 FROM pixel_drafts WHERE frame=? ORDER BY rowid DESC', (index,))
+            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? AND withdrawn=0 ORDER BY rowid DESC', (index,))
                   if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}
@@ -127,6 +133,91 @@ def pixels(store, review):
     if image is None or image.shape != (review['height'], review['width']) or image.dtype != np.uint8:
         raise ValueError('mask shape or index format differs')
     return image
+
+
+def draft_image(store, index, digest):
+    """Return an available draft for read-only preview, without changing review state."""
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('draft SHA required')
+    review = get(store, index)
+    with store.connect() as db:
+        candidate = db.execute('SELECT path,sha256 FROM pixel_drafts '
+                               'WHERE frame=? AND sha256=? AND withdrawn=0',
+                               (index, digest)).fetchone()
+    if not candidate:
+        raise ValueError('selected draft is unavailable')
+    return encode(pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256'])))
+
+
+def merge_unknown(current, proposal, binding):
+    """Keep reviewed pixels; never add drivable beyond reviewed lane edges."""
+    selected = (current == 255) & (proposal != 255)
+    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    if {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        for y, row in enumerate(current):
+            left = np.flatnonzero(row == by_name['lane_left'])
+            right = np.flatnonzero(row == by_name['lane_right'])
+            human_road = np.flatnonzero(row == by_name['drivable'])
+            if human_road.size:
+                selected[y, human_road.min():] &= proposal[y, human_road.min():] != by_name['lane_left']
+                selected[y, :human_road.max() + 1] &= proposal[y, :human_road.max() + 1] != by_name['lane_right']
+            if left.size:
+                selected[y, :left.min()] &= proposal[y, :left.min()] != by_name['drivable']
+            if right.size:
+                selected[y, right.max() + 1:] &= proposal[y, right.max() + 1:] != by_name['drivable']
+    out = current.copy()
+    out[selected] = proposal[selected]
+    if {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        for y, row in enumerate(out):
+            fresh_road = (current[y] == 255) & (row == by_name['drivable'])
+            left = np.flatnonzero(row == by_name['lane_left'])
+            right = np.flatnonzero(row == by_name['lane_right'])
+            if left.size:
+                row[:left.min()][fresh_road[:left.min()]] = 255
+            if right.size:
+                row[right.max() + 1:][fresh_road[right.max() + 1:]] = 255
+    return out
+
+
+def draft_preview(store, index, digest, merge=False):
+    """Visual comparison only; the indexed draft and review remain unchanged."""
+    review = get(store, index)
+    mask = cv2.imdecode(np.frombuffer(draft_image(store, index, digest), np.uint8), cv2.IMREAD_UNCHANGED)
+    if merge:
+        current = pixels(store, review)
+        mask = merge_unknown(current, mask, review['classes'])
+    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or photo.shape[:2] != mask.shape:
+        raise ValueError('draft preview dimensions differ')
+    result = photo.copy()
+    for entry in review['classes']['classes']:
+        selected = mask == entry['index']
+        if np.any(selected):
+            color = np.asarray(entry['color'][::-1], dtype=np.uint8)
+            result[selected] = (photo[selected].astype(np.float32) * .45 + color * .55).astype(np.uint8)
+    return encode(result)
+
+
+def lane_boundary_violations(image, binding):
+    """Count drivable pixels beyond visible left/right lane edges per image row."""
+    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    if not {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        return {'left': 0, 'right': 0}
+    drivable = by_name['drivable']
+    counts = {'left': 0, 'right': 0}
+    for row in image:
+        left = np.flatnonzero(row == by_name['lane_left'])
+        right = np.flatnonzero(row == by_name['lane_right'])
+        if left.size:
+            counts['left'] += int(np.count_nonzero(row[:left.min()] == drivable))
+        if right.size:
+            counts['right'] += int(np.count_nonzero(row[right.max() + 1:] == drivable))
+    return counts
+
+
+def require_inside_lane_boundaries(image, binding):
+    if any(lane_boundary_violations(image, binding).values()):
+        raise ValueError('drivable outside visible lane boundary')
 
 
 def from_color(raw, width, height, labelmap_raw, binding):
@@ -257,7 +348,14 @@ def update(store, index, body, conflict):
         action = body.get('action')
         complete = background = 0
         status = 'pending'
-        if action in ('paint', 'fill', 'flood', 'sample'):
+        if action == 'fill_unknown':
+            backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
+            if len(backgrounds) != 1:
+                raise ValueError('exactly one background class required')
+            if not np.any(image == 255):
+                raise ValueError('no unknown pixels remain')
+            image[image == 255] = backgrounds[0]
+        elif action in ('paint', 'fill', 'flood', 'sample', 'polygon'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
                 raise ValueError('known mask index required')
@@ -277,9 +375,19 @@ def update(store, index, body, conflict):
                 if type(tolerance) is not int or not 0 <= tolerance <= 100:
                     raise ValueError('bounded flood tolerance required')
                 image[flood_region(store, index, review, seed, tolerance)] = value
+            elif action == 'polygon':
+                points = body.get('points')
+                if not isinstance(points, list) or not 3 <= len(points) <= 128:
+                    raise ValueError('3..128 polygon points required')
+                for point in points:
+                    if (not isinstance(point, list) or len(point) != 2 or
+                            any(type(v) is not int for v in point) or
+                            not 0 <= point[0] < review['width'] or not 0 <= point[1] < review['height']):
+                        raise ValueError('polygon point outside original image')
+                cv2.fillPoly(image, [np.asarray(points, dtype=np.int32)], value)
             else:
                 points, radius = body.get('points'), body.get('radius')
-                if type(radius) is not int or not 1 <= radius <= 128:
+                if type(radius) is not int or not 0 <= radius <= 128:
                     raise ValueError('bounded brush radius required')
                 if not isinstance(points, list) or not 1 <= len(points) <= 2048:
                     raise ValueError('bounded brush points required')
@@ -293,33 +401,53 @@ def update(store, index, body, conflict):
                 for point in checked:
                     cv2.circle(image, point, radius, value, -1)
                 for first, second in zip(checked, checked[1:]):
-                    cv2.line(image, first, second, value, radius * 2)
+                    cv2.line(image, first, second, value, max(1, radius * 2))
         elif action == 'undo':
             # Walk back one edit per undo: after an undo, the next target is the
             # edit that produced the version that undo restored.
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'flood', 'sample', 'apply_draft') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood','sample','apply_draft')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'polygon', 'apply_draft', 'merge_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','polygon','apply_draft','merge_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])
             image = pixels(store, dict(review, path=prior['path'], sha256=prior['sha256']))
-        elif action == 'apply_draft':
+        elif action in ('apply_draft', 'merge_draft'):
             digest = body.get('draft_sha256')
             if not isinstance(digest, str):
                 raise ValueError('draft SHA required')
-            candidate = db.execute('SELECT path,sha256 FROM pixel_drafts WHERE frame=? AND sha256=?',
+            candidate = db.execute('SELECT path,sha256 FROM pixel_drafts WHERE frame=? AND sha256=? AND withdrawn=0',
                                    (index, digest)).fetchone()
             if not candidate:
                 raise ValueError('selected draft is unavailable')
-            image = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
+            proposal = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
+            if action == 'merge_draft':
+                before = lane_boundary_violations(image, binding)
+                merged = merge_unknown(image, proposal, binding)
+                if np.array_equal(merged, image):
+                    raise ValueError('draft has no labels for remaining unknown pixels')
+                image = merged
+                after = lane_boundary_violations(image, binding)
+                if any(after[side] > before[side] for side in before):
+                    raise ValueError('drivable outside visible lane boundary')
+            else:
+                image = proposal
+                require_inside_lane_boundaries(image, binding)
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
-            if np.any(image == 255):
-                raise ValueError('미검수 픽셀이 남아 있습니다.')
+            require_inside_lane_boundaries(image, binding)
+            unknown_count = int(np.count_nonzero(image == 255))
+            if unknown_count:
+                kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+                if not kind or kind[0] != 'evaluation':
+                    raise ValueError('미검수 픽셀이 남아 있습니다.')
+                if (frame['source'].get('source_kind') != 'mcap'
+                        or body.get('unknown_pixels_reviewed') is not True
+                        or unknown_count == image.size):
+                    raise ValueError('가림 픽셀은 평가 작업공간에서 명시적으로 확인하세요.')
             if (frame['source'].get('fixed_eval_overlap') and
                     frame['source'].get('source_kind') != 'mcap'):
                 raise ValueError('고정 평가와 겹치는 자료는 학습 승인할 수 없습니다.')
@@ -340,6 +468,9 @@ def update(store, index, body, conflict):
                         'ignore_index': binding['ignore_index'], 'width': review['width'],
                         'height': review['height'], 'complete_frame_review': True,
                         'background_reviewed': True}
+            if unknown_count:
+                approval['unknown_pixels_reviewed'] = True
+                approval['reviewed_unknown_count'] = unknown_count
         db.execute('INSERT OR REPLACE INTO masks(frame,version,status,path,sha256,complete,background,approval) VALUES (?,?,?,?,?,?,?,?)',
                    (index, version, status, path, digest, complete, background,
                     json.dumps(approval) if approval else None))

@@ -3,6 +3,9 @@
 
 # cell
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Rosy Cell (D-377 id `cell`, package `rosy_cell`) is the D-399 Application for palletizing and easy cell setup. The canonical ROS-free Recipe/Cell/Job compiler lives in `operations/processes/palletizing`; `rosy_cell` re-exports its public types and functions for existing callers. `cell.yaml` remains schema `rosy_cell.cell/2` (required tool-down `home` pose and `kinematics_revision`; `/1` is rejected). Fleet calls `rosy_cell.compiler.carry_z(recipe, cell, *, tol_m)` and does not reimplement it. This package never sends Motion Intents, solves IK, or judges reachability; the device's local owner does (D-376, D-399).

@@ -10,7 +10,7 @@ import re
 from pathlib import Path, PurePosixPath
 
 
-def capture_eval_companions(eval_folders, companion_files, *, read_bytes):
+def _capture_video_companions(eval_folders, companion_files, *, read_bytes):
     """Capture sealed evaluation lineage; never grant pixel proof or admission.
 
     The internal bundle contains manifest.json, COMPLETE and every resource
@@ -148,4 +148,191 @@ def capture_eval_companions(eval_folders, companion_files, *, read_bytes):
     require(seen == set(expected), 'all active eval companions required')
     return dict(training_admission=False, training_dataset_qualified=False, frames=frames,
                 blockers=sorted(blockers), observed=observed, captured_files=captured)
+
+
+def _capture_mcap_companions(eval_folders, companion_files, *, read_bytes):
+    """Re-prove human evaluation pixels from the original pinned MCAP bytes."""
+    import os
+    import tempfile
+
+    import cv2
+    import numpy as np
+
+    from dataset.build import load_classes, read_eval_set
+    from dataset.mcap_proof import prove_frames
+    from dataset.review_evidence import encoded, identity, sha, validate_authority
+    from store import file_hashes
+
+    def require(ok, why):
+        if not ok:
+            raise ValueError('eval companion: ' + why)
+
+    def parse(raw):
+        def pairs(items):
+            out = {}
+            for key, value in items:
+                require(key not in out, 'duplicate JSON field')
+                out[key] = value
+            return out
+        return json.loads(raw, object_pairs_hook=pairs,
+                          parse_constant=lambda _: require(False, 'finite JSON required'))
+
+    expected = {}
+    for folder in eval_folders:
+        root = Path(folder).absolute()
+        ref, _, raw = read_eval_set(root, with_manifest=True)
+        require((ref['name'], ref['content_sha']) not in expected, 'duplicate evaluation ref')
+        expected[(ref['name'], ref['content_sha'])] = (root, raw)
+    require(bool(expected), 'MCAP evaluation inventory empty')
+    observed, captured, frames, source_hashes, seen = {}, {}, [], {}, set()
+    for folder in companion_files:
+        root = Path(folder).absolute()
+        require(not any(p.is_symlink() or (hasattr(p, 'is_junction') and p.is_junction())
+                        for p in (root, *root.parents, *root.rglob('*'))), 'bundle links refused')
+        raw, seal = read_bytes(root / 'manifest.json'), read_bytes(root / 'COMPLETE')
+        require(seal.decode('ascii').strip() == sha(raw), 'seal differs')
+        doc = parse(raw)
+        require(isinstance(doc, dict) and set(doc) == {'schema', 'eval_ref', 'eval_manifest_sha256', 'eval_files'}
+                and doc['schema'] == 'rosy.pinky-fixed-eval-mcap-companion/1', 'MCAP companion schema required')
+        ref = doc['eval_ref']
+        require(isinstance(ref, dict) and set(ref) == {'name', 'content_sha'}, 'exact eval ref required')
+        key = (ref['name'], ref['content_sha'])
+        require(key in expected and key not in seen, 'unknown or duplicate eval version')
+        seen.add(key)
+        eval_root, eval_raw = expected[key]
+        require(sha(eval_raw) == doc['eval_manifest_sha256'], 'eval manifest differs')
+        inventory = file_hashes(eval_root)
+        require(doc['eval_files'] == inventory and set(file_hashes(root)) == {'manifest.json', 'COMPLETE'},
+                'full eval or bundle inventory differs')
+        eval_files = {name: read_bytes(eval_root / name) for name in inventory}
+        require(all(sha(value) == inventory[name] for name, value in eval_files.items()),
+                'eval changed during capture')
+        eval_doc = parse(eval_raw)
+        require(eval_doc.get('builder') == 'review_eval_bootstrap.py --publish (D-475)'
+                and eval_doc.get('ignore_index') == 255 and eval_doc.get('trusted_sources') == ['human_reviewed_eval'],
+                'human MCAP evaluation contract required')
+        authority = parse(eval_files['authority.json'])
+        validate_authority(authority)
+        require(authority['decision_sha256'] == eval_doc.get('authority_sha256'), 'authority digest differs')
+        require(sha(eval_files['pixel-classes.yaml']) == eval_doc.get('classes_sha256')
+                == authority['pixel_classes_sha256'], 'class bytes differ')
+        normalized = load_classes(Path('classes.yaml'), source_bytes=eval_files['pixel-classes.yaml'])
+        require(normalized == eval_doc['classes']
+                and sha(json.dumps(normalized, sort_keys=True).encode()) == authority['classes_signature'],
+                'class identity differs')
+        classes = {c['index'] for c in eval_doc['classes']}
+        require(len(classes) == len(eval_doc['classes']) and 255 not in classes, 'class indices invalid')
+        rows = eval_doc.get('frames')
+        require(isinstance(rows, list) and rows and len(rows) == len(authority['frames']),
+                'full approved frame coverage required')
+        groups = {}
+        identities = set()
+        for row, approval in zip(rows, authority['frames']):
+            require(isinstance(row, dict) and row.get('source_kind') == 'mcap'
+                    and row.get('sources') == ['human_reviewed_eval']
+                    and row.get('split') == 'eval' and row.get('frame') == approval['frame']
+                    and row.get('identity') == approval['identity']
+                    and row.get('session') == approval['source_session']
+                    and row.get('capture_group') == approval['capture_group']
+                    and row.get('mask_sha256') == approval['mask_sha256']
+                    and row.get('image_sha256') == approval['image_sha256']
+                    and row.get('mask_version') == approval['mask_version']
+                    and approval['mask_decision'] == 'approved' and approval['object_decision'] != 'excluded'
+                    and row.get('approval_sha256') == sha(encoded(approval['pixel_approval'])),
+                    'frame approval differs')
+            require(row['identity'] not in identities, 'duplicate MCAP frame identity')
+            identities.add(row['identity'])
+            image_raw, mask_raw = eval_files[row['image']], eval_files[row['mask']]
+            require(sha(image_raw) == row['image_sha256'] and sha(mask_raw) == row['mask_sha256'],
+                    'approved image or mask bytes differ')
+            mask = cv2.imdecode(np.frombuffer(mask_raw, np.uint8), cv2.IMREAD_UNCHANGED)
+            unknown = row.get('reviewed_unknown_count')
+            require(mask is not None and mask.dtype == np.uint8
+                    and mask.shape == (approval['height'], approval['width'])
+                    and type(unknown) is int and 0 <= unknown < mask.size
+                    and int(np.count_nonzero(mask == 255)) == unknown
+                    and unknown == approval['pixel_approval'].get('reviewed_unknown_count', 0)
+                    and np.isin(mask, list(classes | {255})).all(), 'approved mask pixels differ')
+            mcap = row.get('mcap')
+            require(isinstance(mcap, dict) and isinstance(mcap.get('frame'), dict)
+                    and isinstance(mcap.get('session_dir'), str)
+                    and isinstance(mcap.get('bags'), list)
+                    and sum(b.get('name') == mcap['frame'].get('bag') for b in mcap['bags']
+                            if isinstance(b, dict)) == 1, 'MCAP source required')
+            require(row['identity'] == identity({'source_kind': 'mcap', 'mcap': mcap})
+                    and mcap['frame'].get('width') == approval['width']
+                    and mcap['frame'].get('height') == approval['height'],
+                    'MCAP frame identity or dimensions differ')
+            session = Path(mcap['session_dir'])
+            require(session.is_absolute() and session.name == row['session'], 'MCAP source session differs')
+            require(not any(p.is_symlink() or (hasattr(p, 'is_junction') and p.is_junction())
+                            for p in (session, *session.parents)), 'MCAP source links refused')
+            groups.setdefault(session, []).append((row, {'image': str(eval_root / row['image']), **mcap['frame']}))
+        scratch = Path('X:/DevTemp') if os.name == 'nt' else Path(tempfile.gettempdir())
+        for session, entries in groups.items():
+            first = entries[0][0]['mcap']
+            require(all(row['mcap']['metadata_sha256'] == first['metadata_sha256']
+                        and row['mcap']['bags'] == first['bags'] for row, _ in entries),
+                    'MCAP session inventory differs')
+            proof = prove_frames(session, [selector for _, selector in entries], scratch, expected=first)
+            require(proof['decoder'] == first['decoder'], 'MCAP decoder differs')
+            source_hashes[session / 'bag' / 'metadata.yaml'] = first['metadata_sha256']
+            for bag in first['bags']:
+                source_hashes[session / 'bag' / bag['name']] = bag['sha256']
+            for (row, _), proven in zip(entries, proof['frames']):
+                require(proven == row['mcap']['frame'], 'MCAP decoded frame differs')
+                frames.append({'session': row['session'], 'image': row['image'],
+                               'capture_group': row['capture_group'], 'source_kind': 'mcap',
+                               'decoded_mcap_pixels_verified': True, 'eval_ref': ref,
+                               'mcap': proven})
+        bindings = {root / 'manifest.json': raw, root / 'COMPLETE': seal,
+                    **{eval_root / name: data for name, data in eval_files.items()}}
+        require(all(read_bytes(path) == data for path, data in bindings.items())
+                and file_hashes(eval_root) == inventory, 'captured evaluation changed')
+        observed.update(bindings)
+        captured[sha(raw)] = {'manifest.json': raw, 'COMPLETE': seal}
+    require(seen == set(expected), 'all active eval companions required')
+    return {'training_admission': False, 'training_dataset_qualified': False,
+            'frames': frames, 'blockers': [], 'observed': observed,
+            'captured_files': captured, 'source_hashes': source_hashes}
+
+
+def capture_eval_companions(eval_folders, companion_files, *, read_bytes):
+    """Keep D-379 semantics; dispatch human MCAP evals to independent proof."""
+    from dataset.build import read_eval_set
+
+    human, video = [], []
+    for folder in eval_folders:
+        _, _, raw = read_eval_set(folder, with_manifest=True)
+        doc = json.loads(raw)
+        if not isinstance(doc, dict):
+            raise ValueError('eval companion: evaluation manifest object required')
+        (human if doc.get('builder') == 'review_eval_bootstrap.py --publish (D-475)'
+         else video).append(folder)
+    mcap_files, video_files = [], []
+    for folder in companion_files:
+        raw = read_bytes(Path(folder) / 'manifest.json')
+        doc = json.loads(raw)
+        if not isinstance(doc, dict):
+            raise ValueError('eval companion: companion manifest object required')
+        (mcap_files if doc.get('schema') == 'rosy.pinky-fixed-eval-mcap-companion/1'
+         else video_files).append(folder)
+    if not human:
+        return _capture_video_companions(eval_folders, companion_files, read_bytes=read_bytes)
+    parts = []
+    if video or video_files:
+        parts.append(_capture_video_companions(video, video_files, read_bytes=read_bytes))
+    parts.append(_capture_mcap_companions(human, mcap_files, read_bytes=read_bytes))
+    merged = {'training_admission': False, 'training_dataset_qualified': False,
+              'frames': [], 'blockers': [], 'observed': {}, 'captured_files': {}, 'source_hashes': {}}
+    for part in parts:
+        merged['frames'].extend(part['frames'])
+        merged['blockers'].extend(part['blockers'])
+        for field in ('observed', 'captured_files', 'source_hashes'):
+            for key, value in part.get(field, {}).items():
+                if key in merged[field]:
+                    raise ValueError('eval companion: duplicate captured artifact')
+                merged[field][key] = value
+    merged['blockers'] = sorted(set(merged['blockers']))
+    return merged
 

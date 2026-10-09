@@ -1,7 +1,10 @@
-<!-- Parent: ../../src/runtime/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-06 | Updated: 2026-09-14 -->
 
 # control (absorbed into Rosy OS)
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro desk-maze robot (~11 cm; RPi, RPLidar C1, US-016, 3× IR cliff, BNO055 IMU, OV5647). It provides reusable sensing, camera/OpenCV, calibration, planning, safety-policy, and navigation-session behavior. During absorption its legacy node entry points remain available for parity tests, but `core` owns the final external API and motor command path in the target runtime.
@@ -42,6 +45,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 - Docs/STEPS.txt are Korean; code comments and logs are English. Comments explain *why* against measured hardware limits (lidar 5 cm min, US 2 cm blind zone, IR 4095 = ADC saturation, never a cliff).
 - Learned loop (D-356): `learned_lane_node` is shadow-only and never publishes a command. Weights never live in `src/`; dataset, training and delivery tooling is in `learning/training/perception/`.
 - Commits: short imperative behavioral summaries.
+- `control/sensing/perception/` is a separate P1a architecture size unit; its import path and colcon package still belong to `control`.
 
 ### Testing Requirements
 - `python3 -m pytest test/ -q` from this package directory (`middleware/perception`); needs numpy/OpenCV. ROS graph tests require a separate isolated ROS Jazzy run.

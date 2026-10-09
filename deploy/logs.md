@@ -2604,3 +2604,50 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: provenance는 JSONL이 아니라 하나의 JSON 문서다 — 줄 단위 추가가 아니라 records 배열 안에 넣어야 하며, 무작정 append는 "Extra data"로 스캐너 자체를 죽인다. 하루에 같은 오탐 클래스가 세 번(log_repairs 미등록 포함) 나왔다 — 회차 문서·수선 표를 쓰는 세션은 착지 전 시크릿 시험 1회(`docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`)를 돌려야 한다
+
+## 2026-10-08 · uncommitted · feat(face): D-472 식별 점멸 — 움직이는 로봇, 안전 거절, 6 s 상한
+- 변경: `rosy-face`가 식별 점멸을 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다. E-Stop·EMERGENCY·고장·주의·booting·blocked·CORE 인계 없음이면 결과 파일에 `failed`를 바로 쓰고 거절하며, 점멸 중 그렇게 되면 끊는다. 인계 요청은 1 s, 점멸은 3.5 s에 끝낸다. `rosy-hw-test`는 1.5 s보다 오래된 식별 요청을 버린다. 요청부터 끝까지 6 s 이내
+- 증거: `test/test_rosy_face.py`·`test/test_hw_test.py` 호스트 시험(거절·중단·기한·요청 나이). 실제 LED·ARM64 배포 없음
+- gate 변화: 없음. DEVICE/FIELD 미확인, D-430 Safety-Review 미수령
+- 결정: D-472 addendum 5항
+
+## 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리
+- 변경: 식별 점멸 helper가 SIGKILL 뒤에도 끝나지 않으면 한 번 기록하고 상태 패턴 갱신으로 넘어간다(예외로 face 루프를 끊지 않음)
+- 증거: `test_rosy_face.py` 등 267 passed, known_failures 0 NEW. 새 시험은 수정 전 코드에서 실패
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE, DEVICE/FIELD 미확인
+
+## 2026-10-08 · uncommitted · AI PC 오프라인 Decision watchdog
+
+- 변경: `deploy/ai_pc/`에 systemd 사용자 GPU 점검 타이머와 수동 활성화 Laya loopback 서비스를 추가했다. AI PC에서 linger와 GPU 타이머를 켰고 Laya 자동 시작은 꺼 두었다.
+- 증거: 두 번의 GPU 점검이 드라이버 부재를 exit 9로 기록했다. Laya GPU 서비스는 preflight에서 거부됐고 포트 8000은 닫혔다. 별도 CPU 서버에서 합성 2건을 5회 재생해 호출 오류 0을 확인했다(`docs/validation/decision-ai-pc-watchdog-2026-10-08/`).
+- gate 변화: 없음. GPU 복구, 사람 라벨 L0, 고정 ModelProfile 및 현장 Fleet/CORE 수용은 미검증.
+
+## 2026-10-09 · uncommitted · docs(decision): split model test hosts
+
+- 변경: 모델 PC 독립 L0, AI PC 승인 버전 스모크, 개발 로컬 PC 계약 검사와 현장 수용을 ADR·계획·호스트 안내에 분리.
+- 증거: 문서 lint·관련 계약 시험은 착지 전 확인; 모델 PC 모델 평가와 AI PC GPU 스모크는 HOLD.
+- gate 변화: 없음.
+
+## 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
+
+- 변경: 세 PC의 새벽 재부팅 유닛(관제 06:08, 모델 06:03, AI 05:58)과 관제 PC Docker 갱신 유닛·스크립트를 실제 파일 그대로 `deploy/{site,model_pc,ai_pc}/host-state/`에 옮겼다. `deploy/hosts/common/rosy-host-state`(역할별 설치, `--dry-run` diff, 30분 드리프트 점검은 safe만 수정). `rosy-model-guard-check`를 `deploy/site/rosy-host-guard`로 일반화(모델 PC·AI PC·로봇, N → 유닛 재시작 → 2N → 재부팅, 새벽 창 제외, 실행은 D-524 도우미).
+- 증거: 모델 PC `test/test_host_state.py`·`test/test_host_guard.py` 25 passed. 모델 PC에서 읽기 전용 `install model --dry-run`: 새벽 재부팅 파일 일치, 워치독·panic 설정 없음을 보고.
+- gate 변화: 없음. 실제 PC 설치·활성화 없음(sudo·승인 필요). D-524 착지 뒤 도우미 줄이 채워진다.
+
+## 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
+
+- 변경: D-545에 따라 모델 PC 검수 앱에 불변 코드 릴리스, current 링크, DB 외부 경로, 서비스 재시작 후 HTTP 확인과 실패 복구 절차를 추가했다.
+- 증거: 모델 PC Linux 설치기 시험 2 passed; 실제 기존 코드에서 state/를 제외해 studio-d538-20261009 릴리스로 전환; rosy-review-v13.service active, ExecStart는 current 경유, /api/workspace와 /pixels 응답. 실제 브라우저에서 객체 43장 목록과 픽셀 검수·제외 상태를 읽었다. 사람 승인 동작은 실행하지 않았다.
+- gate 변화: 없음. 새 코드의 자동 전송과 검수 승인·학습 반영은 별도 검증이다.
+## 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
+- 변경: `rosy-face`가 `/etc/rosy/dev-mode`를 보면 얼굴 띠 앞에 `DEV `(띠가 없으면 `DEV MODE`), 상태 카드 줄 앞에 `DEV `.
+- 증거: test/test_rosy_face.py.
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · fix(site): 비밀을 설정 디렉터리 밖으로, Vision은 카메라 파일만 (D-524 보안 검토)
+- 변경: Vision이 `/etc/rosy/site` 전체 대신 `site-cameras.yaml`만 마운트. 기본 비밀 경로 `/etc/rosy/site-secrets`(.env.example, mdns-bridge·model-watch 유닛, preflight, functional setup, rosy_ml). `migrate-site-secrets.sh`. D-524 결정 11, README.
+- 증거: test_host_control.py::test_vision_cannot_reach_fleet_secrets (원격 pytest 결과는 커밋 메시지·보고).
+- gate 변화: SOURCE. 실제 사이트 PC는 건드리지 않았다. 현장 이전(스크립트 실행·재시작)은 열림.
+## 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
+- 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
+- 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
+- gate 변화: SOURCE.

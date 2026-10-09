@@ -54,7 +54,7 @@ def route_nav_cmd_vel(svc, twist) -> bool:
     robot. Line following owns the nav slot while it is active, and so does a
     D-395 P2-7 rotate/nudge mission.
     """
-    if svc.line_follow.active:
+    if svc.line_follow.active or svc.swarm.trail_active:  # D-559: trail owns the slot too
         return False
     mission = svc.loc_mission
     if mission is not None and mission.owns_wheels:

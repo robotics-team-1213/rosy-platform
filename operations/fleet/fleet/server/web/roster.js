@@ -1,14 +1,19 @@
-// 명렬 카드 + 큐 채우기 (Fleet 분해 3). 로봇 한 대의 상태·증거·조작과
-// 주의/개입 큐를 그린다. formation/signals 팩토리와 같은 모양이다.
+// 명렬 카드 (Fleet 분해 3). 로봇 한 대의 상태·증거·조작을 그린다. 주의/개입 큐는 queues.js가
+// 가지고, 이 팩토리가 그 규칙(attentionItems)을 카드 펼침에 같이 쓴다. formation/signals 팩토리와 같은 모양이다.
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
-import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { MODE_LABEL, NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL,
+  enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
-import { addressReason } from "./address-drift.js";
-import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
+import { addressReason } from "/console/assets/address-drift.js";
+import { linkTag } from "./link-tag.js";
+import { localizationTag, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
+import { powerHealthView } from "./power-health-view.js";
+import { createQueues, disclosure } from "./queues.js";
+import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -35,45 +40,34 @@ function tag(text, cls) {
   return node;
 }
 
+/** D-540 3: a card stays open whatever the operator chose while the robot is offline (no link or no
+ * state), its E-stop is latched, its safety state is not nominal, or a calibration lease holds it. */
+export function mustExpand(robot) {
+  const estop = robot.state?.safety?.estop;
+  return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
+}
+
+/** D-540 3: open on an exception or selection, one line when nominal; the operator's fold or unfold
+ * holds until the robot's exceptions change. `attention` is the exception key ("" when nominal). */
+export function cardExpanded({ must, selected, attention, choice }) {
+  if (must || selected) return true;
+  if (choice && choice.attention === attention) return choice.open;
+  return attention !== "";
+}
+
 function blockWith(button, reason) {
   button.disabled = Boolean(reason);
   if (reason) button.setAttribute("reason", reason);
   else button.removeAttribute("reason");
 }
 
-export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
+export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
-  // D-493 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
-  // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
-  function attentionItems(robot) {
-    const state = robot.state;
-    // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 큐는 비어 있었다. 가장 흔한 예외부터 말한다.
-    if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }];
-    if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
-    const items = [];
-    // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 큐 아래 판단 요청이다.
-    const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
-    const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
-    if (robot.line_stuck) items.push({ severity: "crit", text: `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}` });
-    if (localizationUrgent(robot.localization)) {
-      // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
-      items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
-    } else if (state.hitl_requested === true) {
-      // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는
-      // 조작을 모의 버튼으로 걸면 경보가 거짓말을 한다(D-218, F-20). 진짜 개입은 로봇 화면에서.
-      items.push({ severity: "crit", text: ": 개입 필요 — 로봇 화면에서 확인" });
-    } else if (state.capabilities_degraded?.length) {
-      items.push({ severity: "warn", text: `: 성능 저하 [${state.capabilities_degraded.join(", ")}]` });
-    }
-    const relay = streamEvidence(view.formation, robot.robot_id);
-    if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: ": 비상 정지 걸림 — 관리자가 해제해야 움직입니다" });
-    else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
-    if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
-    if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
-    if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
-    if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
-    return items;
+  const { attentionItems, attentionKey, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
+  const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
+  function openCard(robotId) {
+    const robot = view.robots.find((row) => row.robot_id === robotId);
+    if (robot) view.cardChoice = { ...view.cardChoice, [robotId]: { open: true, attention: attentionKey(robot) } };
   }
   function needsAttention(robot) {
     return view.stateUnavailable || attentionItems(robot).length > 0;
@@ -109,12 +103,15 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
   function card(robot, index) {
     const node = document.createElement("article");
+    const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
     // D-82 로봇 사다리 — 지도 삼각형과 같은 색 순서(view.robots 인덱스)로 카드의
     // 정체 띠가 돈다. CSS 의 .s0/.s1/.s2 가 --robot-1..3 을 붙인다. 표시 순서가
     // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
     node.className = `robot s${index % view.colors.length}`;
     node.dataset.robotId = robot.robot_id;
-    if (!view.stateUnavailable && !robot.online) node.classList.add("offline");
+    // A late answer (link "degraded", server grace) is not shown as offline; decisions still see online=false.
+    const lagging = !robot.online && robot.link === "degraded";
+    if (!view.stateUnavailable && !robot.online && !lagging) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
     // D-224 — ↑/↓ 순회의 착지점. tabindex -1 은 프로그램 포커스만 허용한다
     // (탭 순서를 더럽히지 않는다).
@@ -122,9 +119,34 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     const nav = navTag(state);
+    // D-540 3: one line when nominal; the four must-expand states keep the card open.
+    const attention = attentionKey(robot);
+    const must = view.stateUnavailable || mustExpand(robot);
+    const selected = view.selected === robot.robot_id;
+    const fold = (open) => scope.guard(() => {
+      view.cardChoice = { ...view.cardChoice, [robot.robot_id]: { open, attention } };
+      render();
+    });
+    const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
+    if (!cardExpanded({ must, selected, attention, choice: view.cardChoice?.[robot.robot_id] })) {
+      node.dataset.collapsed = "";
+      const line = disclosure("robot-line", false, fold(true));
+      line.title = "카드 펼치기";
+      const battery = nodeWithText("span", "robot-line-battery");
+      battery.dataset.fact = "battery";
+      battery.append(nodeWithText("span", "sr-only", "배터리 "),
+        nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
+      line.append(nodeWithText("b", "", displayName),
+        nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
+      if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
+      node.appendChild(line);
+      return node;
+    }
     const estop = state.safety?.estop;
-    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
+    const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
       : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
       ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
@@ -135,9 +157,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const head = nodeWithText("div", "robot-head");
     const robotName = document.createElement("b");
-    robotName.textContent = robot.robot_id;
+    robotName.textContent = displayName;
     const spacer = nodeWithText("span", "spacer");
-    head.append(robotName, spacer);
+    head.append(robotName);
+    if (displayName !== robot.robot_id) head.append(nodeWithText("small", "hint", `Fleet ID ${robot.robot_id}`));
+    head.append(spacer);
     // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
     const modeTag = tag(
       view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "오프라인",
@@ -145,6 +169,39 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
+    if (!view.stateUnavailable && robot.online) {
+      const powerMode = state.power?.mode;
+      if (powerMode) {
+        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode), "");
+        powerTag.title = String(powerMode);
+        powerTag.dataset.power = String(powerMode);
+        head.appendChild(powerTag);
+      }
+      const dock = state.docking?.state;
+      if (dock) {
+        const dockTag = tag(enumLabel(DOCK_STATE_LABEL, dock), dock === "DOCK_FAILED" ? "crit" : "");
+        dockTag.title = String(dock);
+        dockTag.dataset.dock = String(dock);
+        head.appendChild(dockTag);
+      }
+      const chargeTag = tag(power.charging, "");
+      chargeTag.dataset.charging = power.charging;
+      const chargeState = robot.power_health?.battery?.charging_state;
+      if (typeof chargeState === "string") chargeTag.title = chargeState;
+      head.appendChild(chargeTag);
+    }
+    const link = view.stateUnavailable ? null : linkTag(robot.link);
+    // D-535: the server's reason (code, message, action) for a failed robot read.
+    const reason = view.stateUnavailable ? null : robot.link_reason;
+    if (link || reason) {
+      const linkNode = tag(link ? link.word : reason.message, link ? link.kind : "warn");
+      if (link) linkNode.dataset.link = robot.link;
+      if (reason) {
+        linkNode.dataset.reason = reason.code;
+        linkNode.title = `${reason.message} ${reason.action}`;
+      }
+      head.appendChild(linkNode);
+    }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
     head.appendChild(tag(
@@ -165,11 +222,23 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       locTag.dataset.localization = "";
       head.appendChild(locTag);
     }
+    if (!must && !selected) {
+      const shut = disclosure("robot-fold", true, fold(false));
+      shut.textContent = "접기";
+      shut.setAttribute("aria-label", `${robot.robot_id} 카드 접기`);
+      head.appendChild(shut);
+    }
     node.appendChild(head);
+    // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
+    if (tripLine) {
+      const line = nodeWithText("p", "trip-line", tripLine);
+      line.dataset.fact = "trip";
+      node.appendChild(line);
+    }
 
     const facts = nodeWithText("div", "facts");
-    const battery = state.battery && typeof state.battery.percent === "number"
-      ? `${Math.round(state.battery.percent)}%` : "—";
+    const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
+      ? `${power.battery} · ${power.voltage.toFixed(2)} V` : power.battery;
     const rows = [
       ["pose", "위치", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
       ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
@@ -194,11 +263,22 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       } else {
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
+        if (key === "battery" && typeof power.observedAgeS === "number")
+          valueEl.title = `${power.observedAgeS}초 전`;
       }
       cellEl.append(labelEl, valueEl);
       facts.appendChild(cellEl);
     });
     node.appendChild(facts);
+
+    if (!view.stateUnavailable) {
+      if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
+      const diagnostics = Object.entries(stateStale ? {} : state.diagnostics_summary || {})
+        .filter(([, status]) => status === "WARNING" || status === "ERROR" || status === "UNKNOWN")
+        .map(([name, status]) => `${name}: ${status}`);
+      if (diagnostics.length) node.appendChild(nodeWithText("p", "hint",
+        `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`));
+    }
 
     if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.
@@ -216,9 +296,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
     // 버튼 사유는 "위 사유"로 이 줄을 가리킨다.
-    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error
+    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link
       ? `robot-why-${robot.robot_id}` : null;
-    if (!view.stateUnavailable && !robot.online && robot.error) {
+    if (!view.stateUnavailable && !robot.online && robot.error && !link) {
       const why = nodeWithText("p", "hint");
       why.textContent = robot.error.reachable
         ? `로봇이 거절: ${robot.error.code}`
@@ -236,6 +316,21 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
       why.textContent = address.text;
       node.appendChild(why);
+    }
+
+    if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
+    if (link?.next) {
+      if (link.focus === "console-token") {
+        const next = document.createElement("button");
+        next.type = "button";
+        next.textContent = link.next;
+        next.addEventListener("click", scope.guard(() => {
+          document.getElementById("console-token")?.focus();
+        }));
+        node.appendChild(next);
+      } else {
+        node.appendChild(nodeWithText("p", "hint", link.next));
+      }
     }
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
@@ -266,13 +361,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
-    blockWith(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : capabilityReason(robot.capabilities, "navigation.goal_navigation")
           || (!view.map ? "지도 없음"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
-              : lineFollowActive ? "라인 추종 중" : ""));
+              : lineFollowActive ? "라인 추종 중" : "")));
     if (offlineWhyId) aim.setAttribute("aria-describedby", offlineWhyId);
     aim.addEventListener("click", scope.guard(() => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
@@ -289,17 +384,39 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       else [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     }));
+    // D-540 1/3: 이 로봇 정지 = 운행 취소 한 자리. 열린 trip이면 trip을, 없으면 목표(와 켜진 차선 주행)를
+    // 멈춘다. 멈춤이라 quiet·확인 없음이고 이름 없는 운영자에게도 열려 있다(D-540 9). Fleet의 trip은
+    // 로봇이 오프라인이어도 취소할 수 있다.
+    const shown = cancelScope(openTrip(view, robot.robot_id), state.line_follow?.mode);
     const cancel = document.createElement("ui-button");
     cancel.setAttribute("kind", "quiet");
     cancel.type = "button";
-    cancel.textContent = "취소";
+    cancel.textContent = "운행 취소";
+    cancel.title = shown.text;
+    cancel.dataset.cancelScope = shown.trip ? "trip" : shown.lane ? "goal-lane" : "goal";
     blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
-      : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
+      : !robot.online && !shown.trip ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
     cancel.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       life.check();
+      // Decide at click time: a card kept across polls (roster.place) may predate the trip.
+      const now = view.robots.find((row) => row.robot_id === robot.robot_id) || robot;
+      const stop = cancelScope(openTrip(view, robot.robot_id), now.state?.line_follow?.mode);
       try {
+        if (stop.trip) {
+          try {
+            await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+            life.check();
+            view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+            render();
+            log(`${robot.robot_id} 운행 취소`, "good");
+            return;
+          } catch (err) {  // the trip may have just ended: the goal cancel below still stops the robot
+            if (err.name === "AbortError") return;
+            log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
+          }
+        }
         const pending = view.pendingTasks[robot.robot_id];
         if (pending) {
           const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
@@ -316,7 +433,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         }
         await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
         life.check();
-        log(`${robot.robot_id} 항법 취소`, "good");
+        if (stop.lane) {
+          await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "OFF" }) });
+          life.check();
+        }
+        log(`${robot.robot_id} ${stop.lane ? "목표·차선 주행 취소" : "항법 취소"}`, "good");
       } catch (err) {
         if (err.name === "AbortError") return;
         log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
@@ -333,7 +455,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운영자 권한이 필요합니다" : "");
+          : !isOperator() ? "운영자 권한이 필요합니다"
+            // D-540 9: IR 추적 선택은 움직임, 중지(OFF)는 멈춤이다.
+            : lineFollow.mode !== "IR_LINE" ? namedReason() : "");
       fallback.addEventListener("click", scope.guard(async () => {
         const life = scope.capture();
         life.check();
@@ -365,6 +489,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     identify.type = "button";
     identify.textContent = "LED로 찾기";
     blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
+      : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
     identify.addEventListener("click", scope.guard(async () => {
@@ -380,7 +505,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         log(`${robot.robot_id} 호출 · ${color === "blue" ? "파랑" : "주황"} LED · 얼굴에 이름 표시`, "info");
       } catch (error) { log(`${robot.robot_id} LED 시험 거부 · ${error.message}`, "bad"); }
     }));
-    actions.append(aim, cancel, identify);
+    actions.append(aim, trip.toggle(robot), cancel, identify);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");
@@ -393,6 +518,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       actions.append(move);
     }
     node.appendChild(actions);
+    const tripForm = view.stateUnavailable ? null : trip.section(robot);
+    if (tripForm) node.appendChild(tripForm);
     if (goalSafetyReason) {
       const why = nodeWithText("p", "hint", goalSafetyReason);
       node.appendChild(why);
@@ -404,54 +531,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     return node;
   }
 
-  // D-252: 큐 머리는 ui-triage. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로 둔다.
-  function setTriageHead(id, label, list) {
-    const head = el(id);
-    if (!head) return;
-    const names = [...new Set([...list.querySelectorAll("li b")].map((b) => b.textContent))];
-    head.querySelector("b").textContent = `${label} ${names.length}`;
-    head.querySelector("small").textContent = names.join(" · ");
+  // D-540 (d): a card whose picker has focus stays where it is — a rebuilt <select> closes its list mid-pick.
+  function place(box, cards) {
+    const keep = document.activeElement?.tagName === "SELECT" ? document.activeElement.closest("#roster article") : null;
+    const nodes = cards.map((node) => (keep && node.dataset.robotId === keep.dataset.robotId ? keep : node));
+    if (!nodes.includes(keep)) { box.replaceChildren(...nodes); return; }
+    for (const node of [...box.children]) if (node !== keep) node.remove();
+    nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
   }
 
-  function fillQueues() {
-    // ADR-1000: Populate Queues
-    const warnList = el("warning-list");
-    const critList = el("critical-list");
-    warnList.innerHTML = "";
-    critList.innerHTML = "";
-
-    let warningCount = 0;
-    let criticalCount = 0;
-
-    const queueItem = (robotId, text) => {
-      const li = document.createElement("li");
-      const name = document.createElement("b");
-      name.textContent = robotId;
-      li.append(name, document.createTextNode(text));
-      return li;
-    };
-
-    for (const r of view.stateUnavailable ? [] : view.robots) {
-      for (const item of attentionItems(r)) {
-        if (item.severity === "crit") {
-          critList.appendChild(queueItem(r.robot_id, item.text));
-          criticalCount++;
-        } else {
-          warnList.appendChild(queueItem(r.robot_id, item.text));
-          warningCount++;
-        }
-      }
-    }
-    setTriageHead("warning-head", "주의 요망", warnList);
-    setTriageHead("critical-head", "최우선 개입 요망", critList);
-
-    // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
-    // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
-    // (D-201 회차 계측에서 style.display 토글이 실서버에서는 무시됨을 확인).
-    warnList.parentElement.hidden = warningCount === 0;
-    critList.parentElement.hidden = criticalCount === 0;
-    document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
-  }
-
-  return { card, fillQueues, queuedReason, needsAttention, attentionItems };
+  return { card, place, trip, fillQueues, queuedReason, needsAttention, attentionItems, openCard };
 }

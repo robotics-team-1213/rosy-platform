@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 
 
 CAPTURE_JS = Path(__file__).resolve().parents[1] / "middleware/ui/robot/camera-capture.js"
 # D-359 §4: 캔버스 색·글꼴은 ui.js(window.RosyPalette)가 푼다 — 실제 화면처럼 먼저 싣는다.
 UI_JS = Path(__file__).resolve().parents[1] / "shared/web/ui.js"
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run Chromium capture",
 )
 

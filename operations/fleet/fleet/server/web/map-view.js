@@ -8,29 +8,18 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence,
+  streamEvidence, quarterTurn, siteViewTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
-import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
-import {drawStartPointMarks} from './start-point-layer.js';
-import { project as projectCamera } from "./map-fit.js";
+import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
+import { createCameraBackdrop } from "./camera-backdrop.js";
+import { drawTrails } from "./trail-view.js";
+import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
+import { drawGuide } from "/console/assets/guide-layer.js";
+import { trafficClock } from "/console/assets/site-map-model.js";
 
-export function cameraMapCalibration(frame, calibrations, siteMap) {
-  if (!frame || frame.state !== "live" || frame.rectified || !siteMap
-    || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) return null;
-  return (calibrations || []).find((row) => row.source_id === frame.source
-    && (siteMap.maps || []).some((map) => map.map_id === row.map_id)
-    && row.image?.width === frame.image?.naturalWidth
-    && row.image?.height === frame.image?.naturalHeight
-    && (!row.lens || (row.lens.kind === frame.lens?.kind
-      && row.lens.focal_mm === frame.lens?.focal_mm
-      && row.lens.hfov_deg === frame.lens?.hfov_deg))
-    && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
-}
-
-export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
-  let cameraFrame = null;
-  let calibrations = [];
+export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
+  const camera = createCameraBackdrop({ scope, el, view, draw });
   let calibrationsAt = 0;
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
@@ -307,8 +296,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    // 캔버스 y 가 아래로 자라므로 sin 은 뒤집는다.
-    ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
+    // 방향도 같은 toPoint 로 그린다 — 카메라 영상(호모그래피·D-513 7 회전)에서도 지도 방향이 맞다.
+    const ahead = toPoint(s.x + 0.1 * Math.cos(s.yaw), s.y + 0.1 * Math.sin(s.yaw));
+    const span = Math.hypot(ahead.x - cx, ahead.y - cy) || 1;
+    ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
     ctx.stroke();
     ctx.restore();
     drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
@@ -336,7 +327,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
       ctx.stroke();
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, offsetLabel(row), row.warn ? "warn" : undefined);
+      const markers = new Set((view.siteMap?.maps || []).flatMap((map) => map.sources || [])
+        .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
+      const label = row.measured && !row.pose && markers.size === 1
+        ? `ArUco ${[...markers][0]}` : offsetLabel(row);
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
     }
     ctx.fillStyle = css("--ink-quiet");
     for (const item of tracking.unknown) {
@@ -344,6 +339,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      if (item.markerId !== undefined) drawChip(ctx, null, p.x, p.y - size * 1.8, `ArUco ${item.markerId} · 미등록`);
     }
     ctx.restore();
   }
@@ -384,7 +380,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const bounds = siteBounds(view.siteMap);
     if (!bounds) return;
     const canvas = el("map-canvas");
-    const calibration = cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+    const calibration = camera.calibration();
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view) 또는 로봇
     // 관측 없이 서버 자동 검사(승인 교정 vs 새 맞춤 제안)가 낡음을 잡을 때. 낡은 교정으로
     // 실영상 위에 지도를 얹으면 잘려 돌아간 지도를 정확해 보이게 그린다 — 영상과 지도를 함께
@@ -395,21 +391,28 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    const width = cameraOn ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
-    const height = cameraOn ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
-    const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
+    // D-515: 실영상도 지도 미터 뷰(+y 위) 위에 위에서 본 직사각형으로 편다. 지도 방향이 화면
+    // 방향이라 따로 돌리지 않고(D-513 7의 mapUpTurn 불필요), 클릭도 미터 뷰를 그대로 거꾸로 푼다.
+    const width = rect.width > 0 ? rect.width : fallback.width;
+    const height = rect.height > 0 ? rect.height : fallback.height;
+    const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    const t = fitTransform(bounds, width, height, 32);
-    const toPx = cameraOn
-      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return { x: p?.[0] ?? NaN, y: p?.[1] ?? NaN }; }
-      : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    if (cameraOn) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
+    // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
+    // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
+    // 돌리므로 글자는 똑바로 선다.
+    const rot = view.siteViewTurn || 0;
+    const side = rot === 90 || rot === 270;
+    const fw = side ? height : width, fh = side ? width : height;
+    const t = fitTransform(bounds, fw, fh, 32);
+    const turn = quarterTurn(rot, fw, fh);
+    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    ctx.fillStyle = css("--ground-deep");
+    ctx.fillRect(0, 0, width, height);
+    if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
     else {
-      ctx.fillStyle = css("--ground-deep");
-      ctx.fillRect(0, 0, width, height);
       if (drift) {
         // 서버 판정(자동 검사)은 문구로 구분해 적는다 — 로봇 표본 판정과 근거가 다르다.
         const text = drift.origin === "server"
@@ -484,8 +487,16 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 축과 원점: 원점이 보이면 그 자리에, 아니면 범위 왼쪽 아래에 x/y 방향만 그린다.
     const originVisible = bounds.min_x <= 0 && bounds.max_x >= 0
       && bounds.min_y <= 0 && bounds.max_y >= 0;
-    const axisAt = originVisible ? toPx(0, 0) : toPx(bounds.min_x + 0.1, bounds.min_y + 0.1);
+    const axisOrigin = originVisible ? [0, 0] : [bounds.min_x + 0.1, bounds.min_y + 0.1];
+    const axisAt = toPx(...axisOrigin);
     const axisLen = Math.min(t.scale * 0.4, width / 8);
+    // 축은 지도 방향으로 그린다 — 실영상(호모그래피·회전)에서도 x/y 가 실제 지도 축을 가리킨다.
+    const axisTip = (dx, dy) => {
+      const p = toPx(axisOrigin[0] + dx, axisOrigin[1] + dy);
+      const span = Math.hypot(p.x - axisAt.x, p.y - axisAt.y) || 1;
+      return { x: axisAt.x + (p.x - axisAt.x) / span * axisLen, y: axisAt.y + (p.y - axisAt.y) / span * axisLen };
+    };
+    const xTip = axisTip(0.1, 0), yTip = axisTip(0, 0.1);
     ctx.save();
     ctx.lineWidth = 2;
     ctx.font = labelFont;
@@ -494,13 +505,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillStyle = css("--ink");
     ctx.beginPath();
     ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(axisAt.x + axisLen, axisAt.y);
+    ctx.lineTo(xTip.x, xTip.y);
     ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(axisAt.x, axisAt.y - axisLen);
+    ctx.lineTo(yTip.x, yTip.y);
     ctx.stroke();
-    ctx.fillText("x", axisAt.x + axisLen + 4, axisAt.y);
     ctx.textAlign = "center";
-    ctx.fillText("y", axisAt.x, axisAt.y - axisLen - 10);
+    ctx.fillText("x", xTip.x + (xTip.x - axisAt.x) / axisLen * 10, xTip.y + (xTip.y - axisAt.y) / axisLen * 10);
+    ctx.fillText("y", yTip.x + (yTip.x - axisAt.x) / axisLen * 10, yTip.y + (yTip.y - axisAt.y) / axisLen * 10);
     if (originVisible) {
       ctx.beginPath();
       ctx.arc(axisAt.x, axisAt.y, 4, 0, Math.PI * 2);
@@ -510,17 +521,28 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
-    drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
+    drawTrails(ctx, view, toPx, 1.5, call);
+    traffic(ctx, toPx, t.scale);
+    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
+    guide(ctx, toPx);
     if (layerOn("sightings")) {
-      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
     flushChips(ctx);
   }
 
+  const traffic = (ctx, toPoint, pxPerM) =>
+    drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
+  // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
+  const guide = (ctx, toPoint) => {
+    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip, on: layerOn("poses") });
+    drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
+  };
+
   function describeSightings() {
-    const fresh = view.sightings.filter((s) => s.state === "fresh").length;
-    return `카메라 관측 ${fresh}/${view.sightings.length}대`;
+    const observed = new Set(view.sightings.filter((s) => s.state === "fresh").map((s) => s.robot_id));
+    for (const row of view.cameraTracking?.robots || []) observed.add(row.robotId);
+    return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
   function activeCall(robotId) {
@@ -540,12 +562,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         const b = siteBounds(view.siteMap, 0);
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
-          + (cameraMapCalibration(cameraFrame, calibrations, view.siteMap)
+          + (camera.calibration()
             ? (view.trackingDrift
               ? (view.trackingDrift.origin === "server"
                   ? " · 카메라 교정 어긋남(자동 검사) — 맞춤 재수락 필요"
                   : " · 카메라 교정 어긋남 — 맞춤 재수락 필요")
-              : ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}`) : "")
+              : ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`) : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
           `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`
@@ -558,7 +580,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
-    drawStartPointMarks(ctx, (x,y)=>{const p=cellOf(grid,x,y);return {x:p.cx,y:p.cy};}, view.startPoints, [grid.map_id], css('--series-secondary'), .6);
     if (view.stateUnavailable) {
       el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
       canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
@@ -569,6 +590,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
+    drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
       const pose = robot.state && robot.state.pose;
@@ -577,7 +599,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const cell = worldToCell(grid, pose.x, pose.y);
       const cx = cell.col;
       const cy = grid.height - cell.row;
-      const size = Math.max(3, Math.min(grid.width, grid.height) * 0.045);
+      const pxPerCell = Math.max(canvas.clientWidth / grid.width, canvas.clientHeight / grid.height) || 1;
+      const size = Math.min(3, 18 / pxPerCell);
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-pose.yaw); // 캔버스 y 가 아래로 자라므로 회전도 뒤집는다
@@ -616,6 +639,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ctx.stroke();
       }
     });
+    traffic(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 1 / grid.resolution);
+    guide(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; });
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
@@ -640,6 +665,19 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
   }
 
+  function showSiteMap() {
+    const canvas = el("map-canvas");
+    canvas.removeAttribute("aria-hidden");
+    canvas.setAttribute("role", "img");
+    canvas.tabIndex = -1;
+    canvas.classList.add("idle");
+    el("map-stage").dataset.mapState = "site";
+    el("map-empty").hidden = true;
+    syncLegend("site");
+    draw();
+    onMapUnavailable();
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     life.check();
@@ -649,12 +687,26 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
       if (Date.now() - calibrationsAt > 30000) {
+        // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
+        try {
+          view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+          view.siteViewTurn = siteViewTurn(view.activeSiteMap);
+          life.check();
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
+        }
+        // The first site draw must use the active map turn; drawing at 0° then turning to 90°
+        // makes the whole map jump while the camera and robot map requests are still pending.
+        if (!view.map && !auth.locked) showSiteMap();
         try {
           const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
           life.check();
-          calibrations = result.calibrations || [];
+          camera.setCalibrations(result.calibrations || []);
           calibrationsAt = Date.now();
-        } catch (error) { if (error.name === "AbortError") return; calibrations = []; }
+        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
+      } else if (!view.map && !auth.locked) {
+        showSiteMap();
       }
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -671,7 +723,72 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // resetPolling()(로그인) 전까지 멈춘다. 일시 실패는 다음 5 s 주기에 다시 묻는다.
   const mapGate = createPollGate({ slowCodes: { NO_MAP: NO_MAP_RETRY_MS } });
 
+  // D-517 10: 교통 표(1 s). Fleet 이 그 라우트를 모르면(404) 다음 로그인까지 묻지 않는다.
+  // 진행 중 trip 이 있을 때만 /trips 로 계획을 읽는다 — 통행권 끝을 계획 위에 놓는다.
+  const trafficGate = createPollGate();
+  let trafficInFlight = false;
+  scope.onDispose(() => { trafficInFlight = false; });
+  // D-536: 로봇 상황(1 s, 교통 표와 같은 주기). 모르는 라우트(404)면 다음 로그인까지 묻지 않는다.
+  const guideGate = createPollGate();
+  let guideInFlight = false;
+  scope.onDispose(() => { guideInFlight = false; });
+  async function refreshGuide() {
+    const life = scope.capture();
+    life.check();
+    if (auth.locked || guideInFlight || !guideGate.due()) return;
+    guideInFlight = true;
+    try {
+      view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
+      life.check();
+      guideGate.ok();
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (guideGate.fail(err.status, err.code) === "absent") view.guide = null;
+    } finally {
+      if (life.current()) guideInFlight = false;
+    }
+    onTrafficChanged();  // the roster's exception queue reads view.guide too
+  }
+  async function refreshTraffic() {
+    const life = scope.capture();
+    life.check();
+    if (auth.locked || trafficInFlight || !trafficGate.due()) return;
+    trafficInFlight = true;
+    try {
+      const traffic = await call("/api/fleet/traffic", { signals: [life.signal] });
+      life.check();
+      trafficGate.ok();
+      // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
+      const trips = traffic.robots.length || view.trafficTrips?.length
+        ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      view.trafficTrips = trips.open || [];
+      view.endedTrips = trips.trips || [];
+      life.check();
+      if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
+        view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+        life.check();
+      }
+      view.traffic = traffic;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;
+    } finally {
+      if (life.current()) trafficInFlight = false;
+    }
+    view.trafficClock = trafficClock(view.trafficClock, view.traffic, Date.now());
+    el("traffic-toggle").hidden = !view.traffic?.units?.length;
+    onTrafficChanged();
+  }
+  scope.listen(el("traffic-toggle"), "click", () => {
+    const on = !layerOn("traffic");
+    view.layers = { ...view.layers, traffic: on };
+    el("traffic-toggle").setAttribute("aria-pressed", String(on));
+    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
+    draw();
+  });
+
   function resetPolling() {
+    trafficGate.reset();
     mapGate.reset();
     sightingsUnavailable = false;
   }
@@ -704,16 +821,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
-        const canvas = el("map-canvas");
-        canvas.removeAttribute("aria-hidden");
-        canvas.setAttribute("role", "img"); // 관측 전용 — 누를 수 있는 버튼이 아니다
-        canvas.tabIndex = -1;
-        canvas.classList.add("idle");
-        el("map-stage").dataset.mapState = "site";
-        el("map-empty").hidden = true;
-        syncLegend("site");
-        draw();
-        onMapUnavailable();
+        showSiteMap();
         return;
       }
       const canvas = el("map-canvas");
@@ -768,37 +876,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     draw();
   }
 
-  function setCameraFrame(frame) {
-    cameraFrame = frame?.state === "live" ? frame : null;
-    if (!view.map && view.siteMap) draw();
-  }
-  function bindCamera(visionView) {
-    // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
-    // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
-    // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
-    const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
-    const setLive = (url) => {
-      birdseye.hidden = !url;
-      if (url) birdseye.src = url;
-      toggle.disabled = !url;
-      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
-    };
-    setLive(null);
-    scope.listen(toggle, "click", () => {
-      const large = stage.dataset.view !== "camera";
-      stage.dataset.view = large ? "camera" : "map";
-      toggle.setAttribute("aria-pressed", String(large));
-    });
-    let cancelMapCameraExpiry = () => {};
-    scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
-      cancelMapCameraExpiry();
-      if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
-        setCameraFrame(null); setLive(null); return;
-      }
-      setCameraFrame(frame);
-      setLive(frame.url);
-      cancelMapCameraExpiry = scope.timeout(() => { setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
-    })));
-  }
-  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };
+  return { draw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
+    setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };
 }

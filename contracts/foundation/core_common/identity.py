@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import re
 import socket
+from pathlib import Path
 from typing import Any, Optional
 
 SOFTWARE_VERSION = "0.1.0"
+CPUINFO_PATH = Path("/proc/cpuinfo")
 ROBOT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
@@ -76,11 +78,19 @@ class RobotIdentity:
         number = robot.get("number")
         if number is not None:
             number = int(number)
+        serial = robot.get("serial")
+        if not serial and robot.get("device_uid"):
+            try:
+                serial = next((line.split(":", 1)[1].strip().lower()
+                               for line in CPUINFO_PATH.read_text(encoding="utf-8").splitlines()
+                               if line.partition(":")[0].strip() == "Serial"), None)
+            except OSError:
+                pass
         return cls(
             robot_id=robot.get("id") or "rosy_01",
             robot_name=robot.get("name") or "Rosy 01",
             profile_model=profile_model,
-            serial=robot.get("serial"),
+            serial=serial,
             hardware_version=robot.get("hardware_version"),
             runtime_mode=mode,
             robot_number=number,
@@ -109,6 +119,7 @@ class RobotIdentity:
             "hardware_model": self.profile_model,
             "hardware_version": self.hardware_version,
             "serial_number": self.serial,
+            "device_uid": self.device_uid or None,
             "software_version": SOFTWARE_VERSION,
             "ros_version": os.environ.get("ROS_DISTRO", "unknown"),
             "runtime_mode": self.runtime_mode,

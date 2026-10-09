@@ -3,6 +3,9 @@
 
 # image
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Build a signed Ubuntu Server 24.04 LTS arm64 ROSY OS release image with native ROS 2 Jazzy on **native aarch64**. The scripts refuse x86/QEMU release hosts. Inputs must be pinned in `inputs.lock.yaml`; producing a file is not enough — `verify-artifacts.sh` is the go/no-go.

@@ -3,6 +3,9 @@
 
 # map
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Gazebo world asset for the Pinky Pro desk maze used by Control sim rigs.

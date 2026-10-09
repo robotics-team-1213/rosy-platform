@@ -37,6 +37,25 @@
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
 .surface-map-frame canvas[data-goal-cursor] { cursor: crosshair; }
+.surface-map-stage {
+  position: absolute;
+  inset: var(--space-2) var(--space-2) auto;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  max-width: calc(100% - 2 * var(--space-2));
+  padding: var(--space-2) var(--space-3);
+  background: var(--scrim-solid);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  color: var(--ink);
+  font: var(--weight-emphasis) var(--text-label)/var(--leading-copy) var(--body);
+  pointer-events: none;
+}
+.surface-map-stage span { white-space: nowrap; }
+.surface-map-stage .surface-map-path-evidence { white-space: normal; min-width: 0; }
+.surface-map-frame:has(ui-empty:not([hidden])) .surface-map-stage { display: none; }
 .surface-map-readout { margin: 0; }
 .surface-map-frame:has(ui-empty:not([hidden])) canvas { height: 16rem; }
 /* D-359 US-009 — 빈 지도·읽기 실패 장(ui-empty + 다시 시도)은 무대 위에 얹는다. 누를 것이 있을 때만 누름을 받는다. */

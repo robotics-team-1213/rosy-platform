@@ -144,7 +144,7 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
     pages = {
         "operations/fleet/fleet/server/web/index.html": "console",
         "operations/fleet/fleet/server/web/install.html": "console",
-        "operations/fleet/fleet/server/web/cell.html": "console",
+        "operations/fleet/fleet/server/web/cell/cell.html": "console",
         "middleware/ui/robot/index.html": "robot",
         "middleware/ui/robot/surface.html": "robot",
         "middleware/ui/pilot/index.html": "pilot",

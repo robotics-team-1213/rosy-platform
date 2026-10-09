@@ -73,6 +73,10 @@ class _Client:
     async def fetch_config(self):
         return self.configs.pop(0)
 
+    async def publish_identity(self, body):
+        self.identity = getattr(self, "identity", []) + [body]
+        return {"accepted": True}
+
 
 class _Ingest:
     def __init__(self, lens=None, frame=None):
@@ -89,6 +93,9 @@ class _Ingest:
 
     def report_markers(self, source_id, corners_seen, robots_seen):
         self.reports.append((source_id, list(corners_seen), list(robots_seen)))
+
+    def report_calibration(self, source_id, record, map_id):
+        self.calibration = (source_id, record, map_id)
 
 
 def test_robot_marker_uses_approved_fit_when_corners_absent_even_during_blob_learning():
@@ -118,6 +125,19 @@ def test_marker_frame_retains_blobs_for_single_deduplication_in_fleet():
     assert len(result.detections) == 3
     assert [d.x for d in result.detections if d.marker_id is None] == [1, 1.22]
 
+
+
+def test_an_unassigned_robot_sticker_is_sent_and_other_ids_are_not():
+    # D-575: id 41 (D-562 robot range) has no robot in robot_markers yet; Fleet shows it
+    # as an unknown robot. A game marker (12) on the floor is not a robot.
+    worker = TrackWorker(camera=CAMERA, ingest=_Ingest(), client=_Client(),
+                         detector=_Detector(DetectorResult((), "OK")),
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8))
+    markers = {7: ((98, 48), (102, 48), (102, 52), (98, 52)),
+               41: ((198, 48), (202, 48), (202, 52), (198, 52)),
+               12: ((298, 48), (302, 48), (302, 52), (298, 52))}
+    _, result = worker._detect(JPEG, 99.75, markers, CONFIG["calibration"], None, None)
+    assert sorted(d.marker_id for d in result.detections) == [7, 41]
 
 def _frame(seq=1, captured_at=99.75, jpeg=JPEG):
     return SimpleNamespace(header=SimpleNamespace(seq=seq), jpeg=jpeg, captured_at=captured_at,
@@ -170,6 +190,20 @@ def test_the_approved_record_is_used_when_markers_are_missing(make_worker):
     assert detector.calls[0][0].captured_at == 99.75
 
 
+def test_the_read_record_is_handed_to_the_ingest_for_the_map_plane(make_worker):
+    """D-560: the ingest warps the map plane with the record tracking reads, no second client."""
+    worker, _ = make_worker(configs=[CONFIG])
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", CONFIG["calibration"], "map_v2_fleet")
+
+
+def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "calibration": None}])
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
+
+
 def test_corner_markers_win_over_the_record(make_worker):
     detector = _Detector()
     worker, _ = make_worker(configs=[CONFIG], detector=detector)
@@ -193,6 +227,22 @@ def test_relearn_counter_resets_the_detector_once_per_change(make_worker):
         asyncio.run(worker.refresh_config())
         asyncio.run(worker.process(_frame(seq=seq, captured_at=99.75 + seq), {}))
     assert detector.resets == 1
+
+
+def test_an_operator_relearn_calls_relearn_when_the_detector_keeps_backgrounds(make_worker):
+    """D-539: the operator relearn is the empty-track statement the detector may keep."""
+    class _Keeping(_Detector):
+        relearns = 0
+
+        def relearn(self):
+            self.relearns += 1
+
+    detector = _Keeping()
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "relearn_seq": 1}], detector=detector)
+    for seq in (1, 2):
+        asyncio.run(worker.refresh_config())
+        asyncio.run(worker.process(_frame(seq=seq, captured_at=99.75 + seq), {}))
+    assert (detector.relearns, detector.resets) == (1, 0)
 
 
 def test_a_lower_relearn_counter_is_a_new_baseline_not_a_relearn(make_worker):
@@ -415,3 +465,33 @@ def test_a_tracker_error_is_logged_and_does_not_mask_the_sighting_error(caplog):
         assert len(asyncio.run(vision(None).process_latest())) == 1
     assert caplog.text.count("error_type=ValueError") == 2
     assert "tracker broke" not in caplog.text
+
+
+def test_an_identity_challenge_is_answered_once_after_its_window_with_numbers_only(make_worker):
+    # D-472: grey frames, no blink -> ambiguous "none"; one verdict per request id, no image.
+    challenge = {"request_id": "req-1", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    worker, client = make_worker(configs=[{**CONFIG, "identity_challenge": challenge}])
+    asyncio.run(worker.refresh_config())
+    for i in range(16):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    (body,) = client.identity
+    assert (body["request_id"], body["state"], body["reason"]) == ("req-1", "ambiguous", "none")
+    assert body["evidence"]["frames"] == 14 and body["source_id"] == "ceiling_north"
+    assert not any(isinstance(v, (bytes, bytearray)) for v in body.values())
+    asyncio.run(worker.process(_frame(seq=17, captured_at=105.0), {}))
+    assert len(client.identity) == 1
+
+
+def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
+    # Site 2026-10-09: the challenge reaches vision on the 2 s config read, after its window opened.
+    # Sampling only from then left the head of the window empty -> every verdict frames_missing.
+    challenge = {"request_id": "req-2", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    worker, client = make_worker(configs=[CONFIG, {**CONFIG, "identity_challenge": challenge}])
+    asyncio.run(worker.refresh_config())                      # no challenge yet
+    for i in range(8):                                        # 100.0 .. 102.1 s, before vision knows
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    asyncio.run(worker.refresh_config())                      # the challenge arrives late
+    for i in range(8, 16):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    (body,) = client.identity
+    assert body["reason"] != "frames_missing" and body["evidence"]["frames"] == 14

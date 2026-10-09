@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
-- 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
-- 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
-- 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+- 2026-10-09 · uncommitted · fix(control): D-570 리뷰 반영 — 재사용 기록 명확화, 워커 시계 상한, idle 주기 제거
+- 2026-10-09 · uncommitted · feat(control): 학습 페인트 마스크 오돔 보정 재사용 (D-570)
+- 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
+- 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
+- 2026-10-09 · uncommitted · feat(control): CORE 경로 문맥을 keeper의 굽이 입력에 연결

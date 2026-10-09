@@ -1,6 +1,6 @@
 ## D-346 병행 세션 충돌은 커밋 시점 검사로 막는다 — ADR 번호는 행 추가 즉시 선점한다
 
-**Status:** Accepted (2026-09-29, 저장소 도구·작업 규칙만). 기존 ADR의 의미, 게이트 정의(ROS-SIM…FIELD), CI 구성을 바꾸지 않는다. 훅 설치는 클론별 옵트인이며 강제 이행 수단이 아니다.
+**Status:** Accepted (2026-09-29, 저장소 도구·작업 규칙만). 4항은 [D-510](D-510-union-merge-and-adr-number-reservation.md)이 개정(2026-10-07). 기존 ADR의 의미, 게이트 정의(ROS-SIM…FIELD), CI 구성을 바꾸지 않는다. 훅 설치는 클론별 옵트인이며 강제 이행 수단이 아니다.
 
 ### Context
 

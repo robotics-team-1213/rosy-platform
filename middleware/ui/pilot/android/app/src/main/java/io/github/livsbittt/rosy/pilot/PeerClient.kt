@@ -19,7 +19,10 @@ class PeerApprovalExpired : IOException("approval usage expired; local record re
 class PeerApprovalTimeout : IOException("receiver approval timed out")
 /** D-483: the robot-screen approval code did not match; [remaining] attempts are left (0 = rejected). */
 class PeerCodeWrong(val remaining: Int) : IOException("approval code did not match")
-data class PeerPending(val code: String, val receiverId: String, val expiresAt: Instant)
+/** The receiver ended the request without approving it: [state] is rejected, expired or cancelled. */
+class PeerEnded(val state: String) : IOException("receiver ended the request: $state")
+/** [caSha256]: the first-contact CA the tablet will pin (null when already trusted); compared while the LCD still shows it. */
+data class PeerPending(val code: String, val receiverId: String, val expiresAt: Instant, val caSha256: String? = null)
 
 /** One selected endpoint, one cancelable approval/renewal; never retries a positive session POST. */
 class PeerClient internal constructor(private val candidate: Candidate, private val store: CandidateStore,
@@ -110,10 +113,10 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
                         "approved" -> { approved = true; if (state.get("authorization_available") != true) throw PeerRefused(409); break }
                         "pending" -> {
                             val code = string(state, "display_code", 4); require(Regex("[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}").matches(code))
-                            onPending(PeerPending(code, receiverId, deadline)); require(now() < deadline)
+                            onPending(PeerPending(code, receiverId, deadline, bootstrap?.sha256)); require(now() < deadline)
                             waitPoll(); state = call("/requests/$requestId", "GET", secret = requestSecret)
                         }
-                        else -> throw IOException("receiver did not approve request")
+                        else -> throw PeerEnded(string(state, "state", 16))
                     }
                 }
                 require(identifier(state, "relationship_id") == requestId)

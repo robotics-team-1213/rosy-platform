@@ -1,24 +1,19 @@
 // Markerless start reference geometry. Never used for goals, identity or localization.
-import {siteBounds, fitTransform} from './site-layer.js';
 
-export function pointerPose(view, rect, canvas, clientX, clientY) {
-  if (!(rect.width > 0 && rect.height > 0 && canvas.width > 0 && canvas.height > 0)) return null;
-  const aspect = view.map || canvas;
-  const scale = Math.min(rect.width / aspect.width, rect.height / aspect.height);
-  const w = aspect.width * scale, h = aspect.height * scale;
-  const px = clientX - rect.left - (rect.width-w)/2;
-  const py = clientY - rect.top - (rect.height-h)/2;
-  if (px<0 || py<0 || px>=w || py>=h) return null;
-  if (view.map) {
-    const g=view.map;
-    return {x:g.origin.x+px/w*g.width*g.resolution, y:g.origin.y+(1-py/h)*g.height*g.resolution};
-  }
-  const b=siteBounds(view.siteMap);
-  if (!b) return null;
-  const t=fitTransform(b, rect.width, rect.height, 32);
-  const point={x:(clientX-rect.left-t.ox)/t.scale, y:(t.oy-clientY+rect.top)/t.scale};
-  const track=siteBounds(view.siteMap,0);
-  return point.x>=track.min_x && point.x<=track.max_x && point.y>=track.min_y && point.y<=track.max_y ? point : null;
+// D-540 5: a click on the install top-down picture (canvas, object-fit: contain) becomes a map
+// pose only inside the drawn picture and inside the track bounds; the letterbox, the layout's
+// margin and a degenerate transform give no pose.
+export function picturePose(rect, size, canvasToMap, bounds, clientX, clientY) {
+  if (!canvasToMap || !bounds || !(size.width > 0 && size.height > 0)) return null;
+  const scale = Math.min(rect.width / size.width, rect.height / size.height);
+  if (!(scale > 0)) return null;
+  const px = (clientX - rect.left - (rect.width - size.width * scale) / 2) / scale;
+  const py = (clientY - rect.top - (rect.height - size.height * scale) / 2) / scale;
+  if (!(px >= 0 && py >= 0 && px < size.width && py < size.height)) return null;
+  const h = canvasToMap, w = h[6] * px + h[7] * py + h[8];
+  const x = (h[0] * px + h[1] * py + h[2]) / w, y = (h[3] * px + h[4] * py + h[5]) / w;
+  if (!(w > 1e-9) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return x >= bounds.min_x && x <= bounds.max_x && y >= bounds.min_y && y <= bounds.max_y ? { x, y } : null;
 }
 
 export function drawStartPointMarks(ctx, toPx, rows, maps, color, lineWidth) {

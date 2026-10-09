@@ -45,6 +45,8 @@ surfaces:
       - {value: 24rem, reason: 390px 전화의 검수 칸은 358px라 공용 22rem 경계 밖이다. 검수 조작을 칸 너비로 읽고 누르게 한다.}
     breakpoints:
       - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
+      - {value: 23rem, reason: 368px 미만 전화에서 픽셀 편집 이동 버튼과 빠른 행동을 두 칸·한 칸으로 쌓아 누를 수 있게 한다.}
+      - {value: 700px, reason: 높이 700px 이하의 짧은 데스크톱 창에서 픽셀 검수 사진이 화면 안에 들어오게 한다. 40rem(640px) 프레임 높이보다 큰 1366×768 노트북 브라우저 창을 덮는다.}
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
@@ -63,6 +65,8 @@ surfaces:
     themes: [dark, light]
     surface: robot
     medium: web
+    breakpoints:
+      - {value: 23rem, reason: 320px 전화에서 운용 지도의 네 줄 상태 HUD가 로봇·경로를 가리므로 그 폭에서만 HUD를 캔버스 아래로 옮긴다. 390px는 지도 위 HUD를 유지한다.}
     ports:
       - {port: 8080, source: contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
@@ -76,6 +80,8 @@ surfaces:
       - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
     grammar: spatial
     contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - {value: 23rem, reason: 320px 화면에서 지도 조작이 지도 위에 겹치지 않도록 조작 영역을 아래로 배치한다.}
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
 
   - id: console
@@ -96,6 +102,8 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
+      - value: 22rem
+        reason: 320px에서 접속 글자만 접어 비상 정지 누름 면적과 머리 폭을 지킨다. 390px에서는 접속 글자를 보여 준다.
       - value: 90rem
         reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
       - value: 110rem

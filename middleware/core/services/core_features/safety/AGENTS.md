@@ -3,6 +3,9 @@
 
 # safety
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 SAF-001–005: e-stop, teleop timeout, speed limits, battery policy hooks. ROS-free. Does not command motors or halt the OS.

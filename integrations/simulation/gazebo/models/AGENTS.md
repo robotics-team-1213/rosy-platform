@@ -3,6 +3,9 @@
 
 # models
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Gazebo model assets (robot mesh, shelf SDF, images). Binary/mesh children have no AGENTS.md.

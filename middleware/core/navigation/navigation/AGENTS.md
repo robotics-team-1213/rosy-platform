@@ -3,6 +3,9 @@
 
 # navigation (Python)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Nav2 policy used by launch files: D-4 frame prefixing, temp params rewrite, and

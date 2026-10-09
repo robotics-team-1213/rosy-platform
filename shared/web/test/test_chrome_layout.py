@@ -6,7 +6,9 @@ ROOT = Path(__file__).resolve().parents[3]
 TOKENS = ROOT / "shared" / "web" / "tokens.css"
 CHOOSER = ROOT / "shared" / "web" / "task-chooser.js"
 SHELL = ROOT / "middleware" / "ui" / "robot" / "shell" / "shell.css"
-FLEET = ROOT / "operations" / "fleet" / "fleet" / "server" / "web" / "styles.css"
+FLEET = ROOT / "operations" / "fleet" / "fleet" / "server" / "web" / "shared" / "styles.css"
+# D-540 2: the four Fleet documents share one header sheet.
+FLEET_HEADER = FLEET.with_name("fleet-header.css")
 
 
 def test_sidebar_track_is_the_procedure_column():
@@ -23,7 +25,7 @@ def test_sidebar_track_is_the_procedure_column():
 
 def test_header_keeps_one_recipe_of_named_areas():
     shell = SHELL.read_text(encoding="utf-8")
-    fleet = FLEET.read_text(encoding="utf-8")
+    fleet = FLEET_HEADER.read_text(encoding="utf-8")
     assert '"brand role estop" "nav nav estop"' in shell
     # D-493: the document links (설치·보정, 현장 지도, Cell) fold behind settings; no cell area.
     assert '"brand pill clock more estop"' in fleet

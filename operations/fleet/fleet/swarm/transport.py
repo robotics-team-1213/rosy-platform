@@ -33,12 +33,13 @@ _missing_invalid_status_logged = False
 class RobotApiError(Exception):
     """로봇이 4xx/5xx 를 돌려줬다. `code` 는 ERR-101 본문의 것, 없으면 `HTTP_<status>`."""
 
-    def __init__(self, robot_id: str, status: int, code: str, message: str) -> None:
+    def __init__(self, robot_id: str, status: int, code: str, message: str, detail: Optional[dict] = None) -> None:
         super().__init__(f"{robot_id}: {code} ({status}) {message}")
         self.robot_id = robot_id
         self.status = status
         self.code = code
         self.message = message
+        self.detail = detail  # ERR-101 ``detail`` when it is an object (D-541: why a trip lease ended)
 
 
 def _invalid_status_class():
@@ -112,6 +113,7 @@ class RobotClient(Protocol):
     robot_id: str
 
     async def state(self) -> dict: ...
+    async def power_health(self) -> dict: ...
     async def capabilities(self) -> dict: ...
     async def map(self) -> dict: ...
     async def swarm_state(self) -> dict: ...
@@ -122,22 +124,26 @@ class RobotClient(Protocol):
 
     async def navigation_goal(
         self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
+        lease_ttl_s: float | None = None,
     ) -> dict: ...
+
+    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
     async def line_follow(self) -> dict: ...
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict: ...
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: str) -> dict: ...
+    async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
+    async def localization_request(self) -> Optional[dict]: ...
     async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
     async def localization_suspect(self, reason: str) -> dict: ...
 
@@ -153,13 +159,15 @@ class RobotClient(Protocol):
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
 
 
-async def require_capability(client: RobotClient, feature: str) -> None:
-    """Fresh CAP-001 preflight; cached presentation never authorizes a command."""
-    value = await client.capabilities()
+async def require_capability(client: RobotClient, feature: str) -> dict:
+    """Fresh CAP-001 preflight; cached presentation never authorizes a command.
+    Returns the capabilities it read."""
+    caps = value = await client.capabilities()
     for part in feature.split("."):
         value = value.get(part) if isinstance(value, dict) else None
     if value is not True:
         raise RobotApiError(client.robot_id, 501, "NOT_SUPPORTED", f"{feature} is not advertised")
+    return caps
 
 
 class _WebsocketSink:
@@ -226,14 +234,15 @@ class HttpRobotClient:
                 raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
                                     f"expected a JSON object, got {type(data).__name__}")
             return data
-        code, message = f"HTTP_{resp.status_code}", resp.text
+        code, message, detail = f"HTTP_{resp.status_code}", resp.text, None
         try:
             err = resp.json().get("error") or {}
             code = str(err.get("code") or code)
             message = str(err.get("message") or message)
+            detail = err.get("detail") if isinstance(err.get("detail"), dict) else None
         except (ValueError, AttributeError):
             pass
-        raise RobotApiError(self.robot_id, resp.status_code, code, message)
+        raise RobotApiError(self.robot_id, resp.status_code, code, message, detail)
 
     async def _get(self, path: str) -> dict:
         return self._check(await self._http.get(path, headers=self._headers()))
@@ -243,6 +252,9 @@ class HttpRobotClient:
 
     async def state(self) -> dict:
         return await self._get("/api/v1/robot/state")
+
+    async def power_health(self) -> dict:
+        return await self._get("/api/v1/power/health")
 
     async def capabilities(self) -> dict:
         return await self._get("/api/v1/system/capabilities")
@@ -268,11 +280,19 @@ class HttpRobotClient:
         return await self._get("/api/v1/navigation/path")
 
     async def navigation_goal(self, x: float, y: float, yaw: float, *,
-                              correlation_id: str | None = None) -> dict:
+                              correlation_id: str | None = None,
+                              lease_ttl_s: float | None = None) -> dict:
         body = {"x": x, "y": y, "yaw": yaw}
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
+        if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
+            body["lease_ttl_s"] = lease_ttl_s
         return await self._post("/api/v1/navigation/goal", body)
+
+    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
+        """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not active."""
+        return await self._post("/api/v1/navigation/goal/lease",
+                                {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
     async def line_follow_mode(self, mode: str) -> dict:
         if mode not in {"IR_LINE", "OFF"}:
@@ -287,13 +307,32 @@ class HttpRobotClient:
 
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict:
-        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404."""
-        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict:
+        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404.
+
+        ``expect`` holds the D-507 2 fields (map_id, expect_in_m, ...) for a ``junction_pivot`` CORE.
+        """
+        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s, **(expect or {})}
         for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
             if value is not None:
                 body[key] = value
         return await self._post("/api/v1/line-follow/junction", body)
+
+    async def line_follow_authority(self, body: dict) -> dict:
+        """D-517 4: one movement authority ``{authority_id, leg_id, pose_stamp, until_m, ttl_s}``."""
+        return await self._post("/api/v1/line-follow/authority", body)
+
+    async def trip_lease(self, body: dict) -> dict:
+        """D-541 1: open or renew the trip lease ``{lease_id, trip_id, holder, operator_name, ttl_s}``."""
+        return self._check(await self._http.put("/api/v1/trip-lease", json=body, headers=self._headers()))
+
+    async def trip_lease_release(self, lease_id: str) -> dict:
+        """D-541 1: the owner's normal end of its trip lease."""
+        return self._check(await self._http.delete(f"/api/v1/trip-lease/{lease_id}", headers=self._headers()))
+
+    async def line_follow_advice(self, body: dict) -> dict:
+        """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
+        return await self._post("/api/v1/line-follow/advice", body)
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
@@ -306,13 +345,24 @@ class HttpRobotClient:
             body["yield_turn_rad"] = yield_turn_rad
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
+    async def fleet_link_put(self, body: dict) -> dict:
+        """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
+        return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
+
+    async def fleet_link_get(self) -> dict:
+        return await self._get("/api/v1/fleet/link")
+
+    async def fleet_link_delete(self) -> dict:
+        return self._check(await self._http.delete("/api/v1/fleet/link", headers=self._headers()))
+
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
-    async def identify_lamp(self, color: str) -> dict:
-        if color not in {"blue", "amber"}:
+    async def identify_lamp(self, color: Optional[str] = None) -> dict:
+        """D-472: None asks for the robot's configured colour; the answer names the one used."""
+        if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        return await self._post("/api/v1/host/lamp/identify", {"color": color})
+        return await self._post("/api/v1/host/lamp/identify", {} if color is None else {"color": color})
 
     # --- D-395 localization (contract §2) -------------------------------------------
 
@@ -330,6 +380,14 @@ class HttpRobotClient:
         except ValidationError as exc:
             raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
                                 f"not a candidate report: {exc.error_count()} errors") from exc
+
+    async def localization_request(self) -> Optional[dict]:
+        """D-546 5: the robot's open "where am I" request, or None (404 `NO_REQUEST`, or a CORE
+        without the route)."""
+        resp = await self._http.get("/api/v1/localization/request", headers=self._headers())
+        if resp.status_code == 404:
+            return None
+        return self._check(resp)
 
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))

@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
+from core_common.protocol.route_context import RouteContext
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
@@ -33,6 +34,8 @@ from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
+from core_common.protocol.line_arc import LineArcIrCorrection, LineArcStatus  # noqa: F401
+from core_common.protocol.trip_lease import TripLeaseFields  # D-541 1: trip_lease, trip_lease_ended
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
@@ -991,6 +994,8 @@ class SwarmFollowParams(BaseModel):
     source: SwarmReferenceSource = SwarmReferenceSource.FLEET  # v1.2 additive
     #: v1 additive. 대형 멤버를 robots.yaml 순서로. 비어 있으면 승계를 하지 않는다.
     members: list[str] = Field(default_factory=list)
+    #: D-559 additive. trail = replay the leader's driven path `distance` behind (lateral 0).
+    mode: Literal["offset", "trail"] = "offset"
 
 
 class PoseSample(BaseModel):
@@ -1001,6 +1006,7 @@ class PoseSample(BaseModel):
     seq: int
     #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
     map_id: Optional[str] = None
+    frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
 
 
 class LineStuckStatus(BaseModel):
@@ -1023,11 +1029,11 @@ class LineJunctionStatus(BaseModel):
 
     pending_action: Optional[str] = None  # straight | left | right | stop
     place_id: Optional[str] = None
-    # idle | armed | executing | waiting | unresolved | turning | advancing | reacquiring | aborted
-    state: str = "idle"
+    state: str = "idle"  # API ref line_follow.junction.state list (D-507: approaching, unexpected)
     seq: int = 0
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
+    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
 
 
 class LineFollowStatus(BaseModel):
@@ -1049,7 +1055,13 @@ class LineFollowStatus(BaseModel):
     stop_gap_m: Optional[float] = None
     clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
+    # D-507 7: D-468 while following -- "contained" (proven) | "unknown" (D-468 idle,
+    # following as recovery off). None when D-468 is not tracking or not configured.
+    lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
+    arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
+    route_context: Optional[RouteContext] = None
+    route_context_published_at_s: Optional[float] = None
 
 
 class TrafficPolicyStatus(BaseModel):
@@ -1160,7 +1172,7 @@ class SafetyPolicyStatus(BaseModel):
     shadow: Optional[SafetyShadowStatus] = None
 
 
-class StateSnapshot(BaseModel):
+class StateSnapshot(TripLeaseFields):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
     robot_id: str
@@ -1309,9 +1321,9 @@ class SshHostKeys(BaseModel):
 
 
 class LampIdentifyRequest(BaseModel):
-    """A short, display-only LED challenge; the face owner may refuse it."""
+    """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
     model_config = ConfigDict(extra="forbid")
-    color: Literal["blue", "amber"]
+    color: Optional[Literal["blue", "amber"]] = None
 
 
 class SshPasswordRequest(BaseModel):

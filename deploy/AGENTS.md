@@ -3,6 +3,9 @@
 
 # deploy
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Deployment and provisioning surfaces for ROSY device and site hosts. Pinky's
@@ -34,6 +37,8 @@ unit. At this level only the harness records.
 | `robot/pinky_pro/` | Pinky Pro product deployment: native runtime, image, release, SD media, and development compatibility files |
 | `robot/omx/` | OMX workstation development and simulation preparation; not an accepted field runtime (see `robot/omx/AGENTS.md`) |
 | `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image (see `site/AGENTS.md`) |
+| `model_pc/` | Decision 독립 L0 평가·승격 증거의 실행 안내 (see `model_pc/AGENTS.md`) |
+| `ai_pc/` | 승인 고정 버전의 추론·배포 스모크 유닛; GPU timer와 disabled loopback Laya service (see `ai_pc/AGENTS.md`) |
 
 `robot/` groups deployment inputs by robot product. Shared ROS packages remain
 under `src/`; this folder is not a shared device-control library.

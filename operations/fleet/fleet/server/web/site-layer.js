@@ -1,4 +1,6 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
+import { invert3, project as projectHomography } from "/console/assets/map-fit.js";
+
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
 
@@ -104,4 +106,52 @@ export function streamEvidence(formation, robotId) {
     return { text: `릴레이 지연${age}${reason}`, cls: "warn", evidence: "delayed" };
   }
   return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
+}
+
+// w×h 원본을 시계 방향 rot 만큼 돌린 화면: 크기, 점 변환, ctx.transform 행렬 [a, b, c, d, e, f].
+export function quarterTurn(rot, w, h) {
+  const m = rot === 90 ? [0, 1, -1, 0, h, 0] : rot === 180 ? [-1, 0, 0, -1, w, h]
+    : rot === 270 ? [0, -1, 1, 0, 0, w] : [1, 0, 0, 1, 0, 0];
+  const side = rot === 90 || rot === 270;
+  return {
+    width: side ? h : w, height: side ? w : h, matrix: m,
+    point: (x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }),
+    // 돌린 화면 점 → 원본 영상 점 (quarter turn 이라 det 은 ±1).
+    unpoint: (x, y) => {
+      const det = m[0] * m[3] - m[1] * m[2], dx = x - m[4], dy = y - m[5];
+      return { x: (m[3] * dx - m[2] * dy) / det, y: (-m[1] * dx + m[0] * dy) / det };
+    },
+  };
+}
+
+// 돌린 카메라 화면의 점 → 지도 m. map_to_image 를 뒤집어 쓴다. 지평선 뒤면 null.
+// 역행렬의 부호는 지도 위 기준점 ``ref``(트랙 중심)가 앞쪽(w > 0)이 되게 한 번 맞춘다 —
+// 부호를 점마다 바꾸면 지평선 뒤 픽셀이 거울 위치의 바닥 점으로 돌아온다.
+export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
+  let inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
+  const seen = inverse && ref ? projectHomography(mapToImage, ref.x, ref.y) : null;
+  if (!seen) return null;
+  if (inverse[6] * seen[0] + inverse[7] * seen[1] + inverse[8] < 0) inverse = inverse.map((v) => -v);
+  const raw = turn.unpoint(x, y);
+  const p = projectHomography(inverse, raw.x, raw.y);
+  return p ? { x: p[0], y: p[1] } : null;
+}
+
+// D-513 7: 현장 지도(D-488 활성 지도)의 화면 방향 — 기본(+y 위) 화면을 시계 방향으로 돌릴 각.
+// 모든 지도·카메라 화면이 이 값 하나를 따른다. 응답이 없거나 값이 이상하면 0.
+export function siteViewTurn(activeView) {
+  const turn = activeView?.map?.view_turn_deg;
+  return [90, 180, 270].includes(turn) ? turn : 0;
+}
+
+// D-513 7: 실영상은 지도 방향으로 보인다 — 지도 +y 가 화면 위로 오는 가장 가까운 quarter turn(시계 방향 도).
+// 방향의 근거는 지도 좌표계와 보정 하나뿐이다. 설치 키를 따로 두지 않는다. 보정이 없으면 0(원본 그대로).
+export function mapUpTurn(record) {
+  const h = record?.map_to_image, b = record?.track_bounds_m;
+  if (!Array.isArray(h) || h.length !== 9 || !b) return 0;
+  const cx = (b.min_x + b.max_x) / 2, cy = (b.min_y + b.max_y) / 2;
+  const a = projectHomography(h, cx, cy), c = projectHomography(h, cx, cy + 0.1);
+  if (!a || !c) return 0;
+  const up = Math.atan2(c[1] - a[1], c[0] - a[0]) * 180 / Math.PI; // map +y on the raw picture, clockwise
+  return ((Math.round((-90 - up) / 90) * 90) % 360 + 360) % 360;
 }

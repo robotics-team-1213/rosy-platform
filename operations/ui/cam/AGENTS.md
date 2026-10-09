@@ -1,4 +1,9 @@
+<!-- Parent: ../AGENTS.md -->
+
 # cam
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 Rosy Cam (D-377 id `cam`; 천장 카메라 앱): the Android phone app that streams ceiling-camera JPEG frames to Rosy Vision over `rosy-overhead/1`. Kotlin + CameraX + OkHttp. Not a ROS package (`COLCON_IGNORE`); Gradle only.
 

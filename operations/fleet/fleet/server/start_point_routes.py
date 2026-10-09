@@ -18,7 +18,7 @@ class StartPointRequest(BaseModel):
     yaw: float = Field(ge=-math.pi, le=math.pi, allow_inf_nan=False)
 
 
-def install_start_point_routes(app, *, service, read_guard, require_operator):
+def install_start_point_routes(app, *, service, read_guard, require_named_operator):
     app.state.start_points = service
     def fail(exc):
         return HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)})
@@ -28,7 +28,8 @@ def install_start_point_routes(app, *, service, read_guard, require_operator):
         return service.listing()
 
     @app.put("/api/fleet/start-points/{source_id}", tags=["start-points"])
-    async def save(source_id: str, body: StartPointRequest, principal: SitePrincipal = Depends(require_operator)):
+    async def save(source_id: str, body: StartPointRequest,
+                   principal: SitePrincipal = Depends(require_named_operator)):  # D-540 9
         try:
             return service.save(source_id, body.model_dump(), principal_id=principal.principal_id)
         except StartPointError as exc:
@@ -36,7 +37,7 @@ def install_start_point_routes(app, *, service, read_guard, require_operator):
 
     @app.delete("/api/fleet/start-points/{source_id}", tags=["start-points"])
     async def delete(source_id: str, expected_revision: str = Query(min_length=1, max_length=64),
-                     principal: SitePrincipal = Depends(require_operator)):
+                     principal: SitePrincipal = Depends(require_named_operator)):
         try:
             return service.delete(source_id, expected_revision=expected_revision, principal_id=principal.principal_id)
         except StartPointError as exc:

@@ -1,0 +1,410 @@
+{
+ "lap_01": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0031,
+    "start_dyaw_deg": -4.4,
+    "max_abs_dr": 0.0372,
+    "end_dr": 0.0372,
+    "correcting": false,
+    "ticks": 39
+   },
+   "ring_e": {
+    "start_dr": 0.0378,
+    "start_dyaw_deg": -3.1,
+    "max_abs_dr": 0.0431,
+    "end_dr": 0.0135,
+    "correcting": false,
+    "ticks": 56
+   },
+   "ring_n": {
+    "start_dr": 0.0124,
+    "start_dyaw_deg": 7.5,
+    "max_abs_dr": 0.0235,
+    "end_dr": -0.0235,
+    "correcting": false,
+    "ticks": 34
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_02": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0061,
+    "start_dyaw_deg": -0.8,
+    "max_abs_dr": 0.0232,
+    "end_dr": 0.0232,
+    "correcting": false,
+    "ticks": 39
+   },
+   "ring_e": {
+    "start_dr": 0.0238,
+    "start_dyaw_deg": -3.3,
+    "max_abs_dr": 0.0333,
+    "end_dr": 0.0196,
+    "correcting": false,
+    "ticks": 54
+   },
+   "ring_n": {
+    "start_dr": 0.0188,
+    "start_dyaw_deg": 4.7,
+    "max_abs_dr": 0.0188,
+    "end_dr": -0.0096,
+    "correcting": false,
+    "ticks": 36
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_03": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0022,
+    "start_dyaw_deg": -1.4,
+    "max_abs_dr": 0.0238,
+    "end_dr": 0.0238,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0242,
+    "start_dyaw_deg": -2.4,
+    "max_abs_dr": 0.0303,
+    "end_dr": 0.0153,
+    "correcting": false,
+    "ticks": 54
+   },
+   "ring_n": {
+    "start_dr": 0.0145,
+    "start_dyaw_deg": 4.6,
+    "max_abs_dr": 0.0145,
+    "end_dr": -0.0102,
+    "correcting": false,
+    "ticks": 36
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_04": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0037,
+    "start_dyaw_deg": -3.4,
+    "max_abs_dr": 0.0313,
+    "end_dr": 0.0313,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0319,
+    "start_dyaw_deg": -3.0,
+    "max_abs_dr": 0.0381,
+    "end_dr": 0.0152,
+    "correcting": false,
+    "ticks": 55
+   },
+   "ring_n": {
+    "start_dr": 0.0142,
+    "start_dyaw_deg": 6.3,
+    "max_abs_dr": 0.0178,
+    "end_dr": -0.0178,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_05": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0058,
+    "start_dyaw_deg": -4.6,
+    "max_abs_dr": 0.0375,
+    "end_dr": 0.0375,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0382,
+    "start_dyaw_deg": -3.7,
+    "max_abs_dr": 0.0454,
+    "end_dr": 0.0162,
+    "correcting": false,
+    "ticks": 56
+   },
+   "ring_n": {
+    "start_dr": 0.0149,
+    "start_dyaw_deg": 7.7,
+    "max_abs_dr": 0.0235,
+    "end_dr": -0.0235,
+    "correcting": false,
+    "ticks": 33
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_06": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0067,
+    "start_dyaw_deg": -0.9,
+    "max_abs_dr": 0.0234,
+    "end_dr": 0.0234,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.024,
+    "start_dyaw_deg": -3.5,
+    "max_abs_dr": 0.0339,
+    "end_dr": 0.0199,
+    "correcting": false,
+    "ticks": 54
+   },
+   "ring_n": {
+    "start_dr": 0.0191,
+    "start_dyaw_deg": 4.8,
+    "max_abs_dr": 0.0191,
+    "end_dr": -0.0096,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_07": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0035,
+    "start_dyaw_deg": -2.5,
+    "max_abs_dr": 0.0289,
+    "end_dr": 0.0289,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0294,
+    "start_dyaw_deg": -3.1,
+    "max_abs_dr": 0.0365,
+    "end_dr": 0.0167,
+    "correcting": false,
+    "ticks": 55
+   },
+   "ring_n": {
+    "start_dr": 0.0157,
+    "start_dyaw_deg": 5.9,
+    "max_abs_dr": 0.0157,
+    "end_dr": -0.0152,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_08": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0031,
+    "start_dyaw_deg": -2.3,
+    "max_abs_dr": 0.0297,
+    "end_dr": 0.0297,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0302,
+    "start_dyaw_deg": -3.1,
+    "max_abs_dr": 0.0368,
+    "end_dr": 0.0162,
+    "correcting": false,
+    "ticks": 55
+   },
+   "ring_n": {
+    "start_dr": 0.0152,
+    "start_dyaw_deg": 6.0,
+    "max_abs_dr": 0.0161,
+    "end_dr": -0.0161,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_09": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0059,
+    "start_dyaw_deg": -0.6,
+    "max_abs_dr": 0.0221,
+    "end_dr": 0.0221,
+    "correcting": false,
+    "ticks": 38
+   },
+   "ring_e": {
+    "start_dr": 0.0226,
+    "start_dyaw_deg": -3.3,
+    "max_abs_dr": 0.0323,
+    "end_dr": 0.0196,
+    "correcting": false,
+    "ticks": 54
+   },
+   "ring_n": {
+    "start_dr": 0.019,
+    "start_dyaw_deg": 4.5,
+    "max_abs_dr": 0.019,
+    "end_dr": -0.0085,
+    "correcting": false,
+    "ticks": 36
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_10": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0025,
+    "start_dyaw_deg": -4.8,
+    "max_abs_dr": 0.0415,
+    "end_dr": 0.0415,
+    "correcting": false,
+    "ticks": 39
+   },
+   "ring_e": {
+    "start_dr": 0.0421,
+    "start_dyaw_deg": -3.2,
+    "max_abs_dr": 0.0472,
+    "end_dr": 0.0125,
+    "correcting": false,
+    "ticks": 56
+   },
+   "ring_n": {
+    "start_dr": 0.0111,
+    "start_dyaw_deg": 8.4,
+    "max_abs_dr": 0.0277,
+    "end_dr": -0.0277,
+    "correcting": false,
+    "ticks": 33
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_11": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.0112,
+    "start_dyaw_deg": -6.9,
+    "max_abs_dr": 0.0449,
+    "end_dr": 0.0449,
+    "correcting": false,
+    "ticks": 39
+   },
+   "ring_e": {
+    "start_dr": 0.0458,
+    "start_dyaw_deg": -5.2,
+    "max_abs_dr": 0.056,
+    "end_dr": 0.0202,
+    "correcting": false,
+    "ticks": 57
+   },
+   "ring_n": {
+    "start_dr": 0.0185,
+    "start_dyaw_deg": 9.7,
+    "max_abs_dr": 0.0304,
+    "end_dr": -0.0304,
+    "correcting": false,
+    "ticks": 32
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "lap_12": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_s": {
+    "start_dr": -0.008,
+    "start_dyaw_deg": -0.7,
+    "max_abs_dr": 0.0222,
+    "end_dr": 0.0222,
+    "correcting": false,
+    "ticks": 39
+   },
+   "ring_e": {
+    "start_dr": 0.0229,
+    "start_dyaw_deg": -3.7,
+    "max_abs_dr": 0.0341,
+    "end_dr": 0.022,
+    "correcting": false,
+    "ticks": 53
+   },
+   "ring_n": {
+    "start_dr": 0.0212,
+    "start_dyaw_deg": 4.7,
+    "max_abs_dr": 0.0212,
+    "end_dr": -0.0083,
+    "correcting": false,
+    "ticks": 36
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ }
+}

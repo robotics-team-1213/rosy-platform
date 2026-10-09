@@ -77,6 +77,12 @@ def get_session(_: AuthContext = Depends(viewer),
 def start_session(body: SessionRequest, auth: AuthContext = Depends(operator),
                   svc: CoreServicesLike = Depends(get_services)):
     with svc.modes.idle_admission:
+        lease = svc.trip_lease.current()
+        if lease is not None:
+            # D-541 8: the two leases exclude each other; calibration takes the trip over first.
+            raise ApiError("TRIP_LEASED", 409,
+                           f"calibration refused: Fleet trip '{lease['trip_id']}' holds this robot",
+                           detail=lease)
         busy = _busy_reason(svc)
         if busy is not None:
             raise ApiError("MODE_CONFLICT", 409, f"calibration refused: {busy}")

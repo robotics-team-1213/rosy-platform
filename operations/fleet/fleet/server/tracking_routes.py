@@ -9,13 +9,14 @@ contains "vision" (test_app_roles): Fleet never relays frames (D-318).
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.identity import IdentityError
 from fleet.server.tracking import TrackingError
 
 _LOG = logging.getLogger(__name__)
@@ -66,7 +67,25 @@ class RelearnRequest(BaseModel):
     source_id: str = Field(min_length=1, max_length=64)
 
 
-def _http(exc: TrackingError) -> HTTPException:
+class IdentityVerdict(BaseModel):
+    """D-472: Vision's answer to one identity challenge. Numbers only, never an image."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(min_length=1, max_length=64)
+    map_id: str = Field(min_length=1, max_length=160)
+    request_id: str = Field(min_length=1, max_length=64)
+    processor_revision: str = Field(min_length=1, max_length=64)
+    state: Literal["matched", "ambiguous"]
+    reason: Optional[Literal["none", "multiple", "frames_missing", "stale", "calibration_changed"]] = None
+    x: Optional[float] = Field(default=None, allow_inf_nan=False)
+    y: Optional[float] = Field(default=None, allow_inf_nan=False)
+    captured_at: Optional[float] = Field(default=None, allow_inf_nan=False)
+    calibration_revision: Optional[str] = Field(default=None, max_length=160)
+    evidence: dict = Field(default_factory=dict)
+
+
+def _http(exc: TrackingError | IdentityError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)})
 
 
@@ -85,6 +104,25 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
             return tracking.config_for(authorization)
         except TrackingError as exc:
             raise _http(exc) from exc
+
+    @app.post("/api/fleet/detections/identity", tags=["tracking"])
+    async def submit_identity_verdict(body: IdentityVerdict,
+                                      authorization: Optional[str] = Header(default=None)) -> dict:
+        try:
+            source = tracking.authenticate(authorization)
+            if body.source_id != source.source_id:
+                raise TrackingError(403, "SOURCE_MISMATCH", "verdict source does not match the token")
+            if tracking.identity is None:
+                raise TrackingError(409, "IDENTIFY_NOT_PENDING", "no identity service")
+            return tracking.identity.accept_verdict(source, body.model_dump())
+        except (TrackingError, IdentityError) as exc:
+            raise _http(exc) from exc
+
+    @app.get("/api/fleet/tracking/identity", dependencies=read_guard, tags=["tracking"])
+    async def identity_readback() -> dict:
+        if tracking.identity is None:
+            return {"use": "observation-only", "pending": None, "robots": []}
+        return tracking.identity.snapshot()
 
     @app.get("/api/fleet/tracking", dependencies=read_guard, tags=["tracking"])
     async def tracking_readback() -> dict:

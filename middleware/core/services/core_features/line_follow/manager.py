@@ -9,11 +9,14 @@ import time
 from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineFollowStatus
+from core_features.line_follow.authority import AuthorityMixin
+from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
-from core_features.line_follow.recovery.junction import JunctionMixin
+from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.recovery.lane_return_wiring import LaneReturnMixin
+from core_features.line_follow.route_context import route_context as build_route_context
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
@@ -26,7 +29,8 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, JunctionMixin):
+class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
+                        ArcMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -48,6 +52,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
         self._lost_latched = False
         self._invalid_observation = False
         self._status = LineFollowStatus()
+        self._route_context_current = None
+        self._route_context_published_at_s = None
         # D-344 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
         self._hold_s: Optional[float] = None
         self._hold_until: Optional[float] = None
@@ -66,6 +72,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
         self._init_recovery()  # D-407 (stuck_wiring.py)
         self._init_lane_return()  # D-468 source-time odometry and corridor evidence.
         self._init_junction()  # D-494 decision 4 (junction.py)
+        self._init_arc()  # D-520 (arc/lane_arc.py)
+        self._init_authority()  # D-517 4 (authority.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -115,6 +123,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._recovery_reset(reason or default, self._clock())
             self._reset_lane_return()
             self._reset_junction()
+            self._reset_arc(reason or default)
+            self._init_authority()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -243,7 +253,30 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
 
     def status(self) -> LineFollowStatus:
         with self._lock:
-            return self._status.model_copy(update={'junction': self._junction_status()})
+            return self._status.model_copy(update={'junction': self._junction_status(),
+                                                   'arc': self._arc_status(),
+                                                   'route_context': self._route_context_current,
+                                                   'route_context_published_at_s':
+                                                   self._route_context_published_at_s})
+
+    def set_route_context_publication(self, context, stamp_s: float) -> None:
+        with self._lock:
+            self._route_context_current = context
+            self._route_context_published_at_s = stamp_s if context is not None else None
+
+    def route_context(self, *, ros_now: float, now: Optional[float] = None):
+        """The active instruction in image clock coordinates, or no usable context."""
+        if not self._config.route_context_enabled:
+            return None
+        now = self._clock() if now is None else now
+        with self._lock:
+            pose = self._fresh_pose(now)
+            if pose is None:
+                return None
+            return build_route_context(
+                self._junction, self._arc, mono_now=now, ros_now=ros_now,
+                odom_key=(self._return_evidence.epoch, pose.frame),
+                odometer=self._return_evidence.trail.odometer, mode=self._mode.value)
 
     def observe_clearance(self, distance: Optional[float],
                           received_at: Optional[float] = None) -> None:
@@ -261,6 +294,30 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._scan_points = tuple((float(x), float(y)) for x, y in points)
             self._clearance_at = float(now)
             self._remember_near(float(now))  # D-422: returns that slip under range_min
+
+    def obstacle_gap(self, linear: float, angular: float, now: Optional[float] = None):
+        """D-559: this obstacle judgement for another CORE mode's twist (swarm trail follow).
+
+        (gap, stop, resume), gap None = nothing in the way; None = no fresh obstacle sensor.
+        Path mode with the URDF body is the D-422 sweep; sector mode is the front distance.
+        Line-follow's own intent and gap status are left as they were.
+        """
+        c = self._config
+        current = self._clock() if now is None else now
+        with self._lock:
+            if self._clearance_at is None or current - self._clearance_at > c.clearance_stale_s:
+                return None
+            if self._scan_points is None:
+                return self._clearance, c.sector_stop_m, c.sector_resume_m
+            saved = self._intended, self._gap_status, self._gap_resume
+            self._intended = (float(linear), float(angular))
+            try:
+                if c.body_stop_known:
+                    gap, _, stop, resume = self._body_clearance(current)
+                    return gap, stop, resume
+                return self._path_clearance(), c.sector_stop_m, c.sector_resume_m
+            finally:
+                self._intended, self._gap_status, self._gap_resume = saved
 
     def _set_clearance(self, distance: Optional[float], now: Optional[float] = None,
                        stop: Optional[float] = None, resume: Optional[float] = None) -> None:
@@ -393,14 +450,19 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._path_evaluated = False
             try:
                 decision = self._tick_locked(current)
+                # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
+                self._feed_return_trail(current)
+                if decision is self._arc_out:  # D-520: the arc owns this tick (no D-468/D-476/D-407,
+                    return self._authority_gate(current, decision)  # no junction gate); D-517 4 stops it
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
-                    return self._junction_gate(current, decision)  # LOST also bypasses back-off.
+                    # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
+                    return self._authority_gate(current, self._junction_gate(current, decision))
                 local = self._apply_lane_return(current, decision)
-                return self._junction_gate(current, local if local is not None
-                                           else self._apply_recovery(current, decision))
+                return self._authority_gate(current, self._junction_gate(current, local if local is not None
+                                            else self._apply_recovery(current, decision)))
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.
@@ -418,11 +480,15 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._hold_until = None
             self._loss_started_at = None
             self._recovery_reset("driver_released", current)
+            self._reset_arc("driver_released")
             self._events.publish(
                 "nav.line_driver_released", source="line_follow_manager",
                 data={"mode": previous.value},
             )
             return self._stop_decision("OFF", "driver_released")
+        arc = self._arc_tick(current)  # D-520: a live arc ignores the keeper and its loss clock
+        if arc is not None:
+            return arc
         cap = self._angular_cap()
         if cap <= 0.0:
             # 조향할 수 없는데 선속도만 내면 차선을 벗어난다(D-344 §13).
@@ -442,6 +508,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             guard = self._ir_guard(current)
             if self._crosswalk_rest(current, guard):
                 guard = "crosswalk"  # D-491: known crosswalk under the IR row
+            elif guard == "centre" and self._centre_on_cross_line(current):
+                guard = "cross_line"  # D-507 6: a straight crossing's measured cross line
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:

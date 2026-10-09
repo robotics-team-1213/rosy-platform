@@ -208,6 +208,7 @@
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 | D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
+| D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
 
 ## 계획·결과 문서
 
@@ -300,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
-- 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
-- 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
-- 2026-10-07 · uncommitted · docs(api): 추적 교정 낡음 자동 검사 v1.120
+- 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
+- 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
+- 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
+- 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
+- 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프

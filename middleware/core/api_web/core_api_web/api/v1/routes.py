@@ -13,6 +13,7 @@ from core_api_web.api.v1.calibration import calibration_router
 from core_api_web.api.v1.common import admin, enter_navigation_mode, operator, viewer
 from core_api_web.api.v1.control import control_router
 from core_api_web.api.v1.docking import docking_router
+from core_api_web.api.v1.fleet_link import fleet_link_router
 from core_api_web.api.v1.host import host_router
 from core_api_web.api.v1.intent import intent_router
 from core_api_web.api.v1.map import map_router
@@ -32,6 +33,7 @@ from core_api_web.api.v1.safety import safety_router
 from core_api_web.api.v1.swarm import swarm_router
 from core_api_web.api.v1.system import system_router
 from core_api_web.api.v1.traffic import traffic_router
+from core_api_web.api.v1.trip_lease import trip_lease_router
 from core_api_web.api.v1.vision import vision_router
 from core_api_web.api.v1.ui import ui_router
 from core_api_web.api.v1.waypoints import waypoints_router
@@ -45,6 +47,7 @@ __all__ = [
     "docking_router",
     "enter_navigation_mode",
     "events_router",
+    "fleet_link_router",
     "host_router",
     "intent_router",
     "logs_router",
@@ -64,6 +67,7 @@ __all__ = [
     "swarm_router",
     "system_router",
     "traffic_router",
+    "trip_lease_router",
     "ui_router",
     "vision_router",
     "viewer",

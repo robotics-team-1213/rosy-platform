@@ -1,15 +1,14 @@
 """D-457: camera map coordinates and source transitions in the actual console DOM."""
 
-import os
 from urllib.parse import urlparse
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 from test_fleet_console_browser import console_url  # noqa: F401
 from test_console_lifetime_browser import _serve_api
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium acceptance")
 
 
@@ -78,6 +77,7 @@ def test_position_expires_even_when_the_next_poll_never_returns(console_url):  #
 
 
 def test_background_relearn_requires_the_owned_confirmation(console_url):  # noqa: F811
+    """D-540 5: 배경 다시 학습은 설치·보정 `카메라 설치·보정`에만 있고 확인 뒤에 보낸다."""
     from playwright.sync_api import sync_playwright
 
     posts = []
@@ -99,6 +99,10 @@ def test_background_relearn_requires_the_owned_confirmation(console_url):  # noq
         page.add_init_script("sessionStorage.setItem('rosy-console-token', 'tracking-browser')")
         page.route("**/api/**", serve)
         page.goto(console_url, wait_until="domcontentloaded")
+        page.wait_for_function("!document.querySelector('#tracking-state').hidden")
+        assert page.locator("#tracking-relearn").count() == 0  # 관제는 운용만 한다
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="domcontentloaded")
+        page.get_by_role("tab", name="카메라 설치·보정").click()
         button = page.locator("#tracking-relearn")
         button.wait_for(state="visible")
         button.click()
@@ -111,7 +115,7 @@ def test_background_relearn_requires_the_owned_confirmation(console_url):  # noq
         button.click()
         dialog.wait_for()
         dialog.locator('ui-button[kind=irreversible]').click()
-        page.wait_for_function("document.querySelector('#tracking-state').dataset.state === 'warn'")
+        page.wait_for_function("document.querySelector('#tracking-relearn-state').dataset.state === 'warn'")
         assert posts == [{"source_id": "north"}]
         assert not errors
         browser.close()

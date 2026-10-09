@@ -1,0 +1,12 @@
+# D-530 AI PC desired state (role: ai). Format: deploy/hosts/common/host-state/manifest.
+# Nightly reboot was copied byte for byte from the AI PC on 2026-10-09. The AI PC is shared:
+# install only after its owner agrees (D-530 5).
+safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
+safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
+safe enabled rosy-nightly-reboot.timer
+report wifi-allow
+# Hardware watchdog and panic: approved 2026-10-09 (D-530 2). Ubuntu blacklists iTCO_wdt, so a oneshot unit modprobes it (modules-load.d cannot).
+approval file /etc/systemd/system/rosy-watchdog-load.service common/rosy-watchdog-load.service
+approval enabled rosy-watchdog-load.service
+approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
+approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf

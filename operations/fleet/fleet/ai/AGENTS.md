@@ -3,6 +3,9 @@
 
 # ai
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Proposal-only embodied-model adapters used by Fleet services. A model may propose pick/place candidates and request allowlisted, non-executable feedback tools; nothing here moves a robot or calls CORE. Pixel-level identity evidence only: no 3D pose, grasp or physical completion is inferred.
@@ -18,6 +21,7 @@ Proposal-only embodied-model adapters used by Fleet services. A model may propos
 | `tool_dispatch.py` | Fleet-owned allowlist dispatch for non-executable feedback tools |
 | `selector_bridge.py` | Resolves ER 2 image selectors against candidates from the same camera frame |
 | `vision_observation_source.py` | Trusted, bounded reads of the source-scoped Vision preview API |
+| `decision_pipeline.py` | D-523 parsers: identity fact or allowlisted choice. No stuck answer and no network |
 
 ## For AI Agents
 
@@ -26,12 +30,13 @@ Proposal-only embodied-model adapters used by Fleet services. A model may propos
 - Keep the catalog closed: a new tool needs a catalog entry, an effect class and a dispatch allowlist decision together.
 - Model output is untrusted. Selectors must resolve against the candidates of the same frame; reject mismatches rather than guessing.
 - Do not add a robot command path here. Execution belongs to Fleet missions and CORE, the robot's only external API.
+- `decision_pipeline.py` parses two AI PC replies and stops there (D-523). An identity fact is `wall`/`object`/`robot`/`person`/`unknown`. A choice is one Fleet allowlist entry or abstention. This module does not choose `WAIT`, `YIELD`, `RESUME`, `ABORT`, or `MANUAL`, and it does not call the network.
 - Import wire schemas from `core_common.protocol.schemas`; do not import `rclpy` or `core`.
 
 ### Testing Requirements
 
 ```bash
-python -m pytest operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py -q
+python -m pytest operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
 ```
 
 Related: `test_model_tool_call_journal.py`, `test_mission_ai_proposal.py`, `test_mission_model_turn_store.py`.

@@ -1,16 +1,19 @@
 main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
-.site-access { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4) 0; max-width: 90rem; margin: 0 auto; }
-.site-access[hidden] { display: none; }
-#credential { flex: 1; min-width: 0; }
 ui-section { display: grid; gap: var(--space-3); }
-.columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
+.map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
+.map-workflow > [aria-labelledby="run-heading"] { grid-area: run; }
+.map-workflow > [aria-labelledby="edit-heading"] { grid-area: edit; }
+.plane-tools { min-width: 0; }
+.plane-tools summary { box-sizing: border-box; cursor: pointer; min-height: var(--target-secondary); padding-block: var(--space-2); }
+.plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .form[hidden] { display: none; }
 label { display: grid; gap: var(--space-2); }
 label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
-input, select { box-sizing: border-box; width: 100%; background: var(--field-bg); color: var(--ink); border: 1px solid var(--field-line); border-radius: var(--radius-control); padding: var(--space-2); font: inherit; }
-input[type="checkbox"] { width: auto; }
-input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.ui-field:not([type="checkbox"]) { width: 100%; }  /* components.css caps fields at 100% but leaves width to the page */
+a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 a { color: var(--ink); }
@@ -27,19 +30,31 @@ a { color: var(--ink); }
 #site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
 #site-map-svg .arrow { fill: var(--ink-quiet); pointer-events: none; }
 #site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
+#site-map-svg .place.start { fill: var(--series-secondary); }
+#site-map-svg .start-heading { fill: var(--series-secondary); stroke: var(--ink); stroke-width: 1px; pointer-events: none; }
 #site-map-svg .place.selected { stroke: var(--series-primary); stroke-width: 4px; }
 #site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
 #site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
 #site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
+#robot-layer { pointer-events: none; }
+#robot-layer .c1 { color: var(--robot-1); } #robot-layer .c2 { color: var(--robot-2); } #robot-layer .c3 { color: var(--robot-3); }
+#robot-layer .trip-line { fill: none; stroke: currentColor; stroke-width: 4px; stroke-opacity: .7; stroke-linecap: round; }
+#robot-layer .next-place { fill: none; stroke: currentColor; stroke-width: 3px; stroke-dasharray: 4 3; }
+#robot-layer .robot-ring { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-dasharray: 3 4; }
+#robot-layer .robot-body { fill: currentColor; fill-opacity: .35; stroke: currentColor; stroke-width: 2px; }
+#robot-layer .degraded .robot-body { fill-opacity: .18; stroke-dasharray: 4 3; }
+#robot-layer [data-alert="warn"] .robot-body { stroke: var(--status-warn); stroke-width: 3px; }
+#robot-layer [data-alert="crit"] .robot-body { stroke: var(--status-crit); stroke-width: 3px; }
+#robot-layer .offline { opacity: var(--disabled-opacity); }
+#robot-layer .robot-heading { stroke: currentColor; stroke-width: 3px; stroke-linecap: round; }
+#robot-layer .robot-tip { fill: currentColor; }
+#robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
-.estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
-.estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
-.estop span { white-space: nowrap; }
-.estop small { flex-basis: 100%; text-align: center; }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 64rem) {
-  .columns, .form { grid-template-columns: 1fr; }
+  .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
+  .form { grid-template-columns: 1fr; }
   .map-viewport { overflow-x: auto; }
   .map-scroll-hint { display: block; }
   #site-map-svg { width: 50rem; height: 30rem; }
@@ -47,11 +62,6 @@ a { color: var(--ink); }
 @media (width < 30rem) {
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .draft-actions { grid-template-columns: minmax(0, 1fr); }
-  ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
-  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
-  ui-topbar ui-brand small, ui-topbar [data-spacer], #estop small { display: none; }
-  #session { grid-area: session; min-width: 0; overflow-wrap: anywhere; }
-  #estop { grid-area: estop; }
 }
 /* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
 .doc-tabs { max-width: 90rem; margin-inline: auto; padding-inline: var(--space-4); }

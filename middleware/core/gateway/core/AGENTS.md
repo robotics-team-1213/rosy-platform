@@ -3,6 +3,9 @@
 
 # core (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the process and starts the API thread; `services.py` builds `CoreServices` by assembling managers from `core_features`, schemas/profile/identity/capability from `core_common`, and the event bus / audit log from `core_events`. All ROS I/O is confined to `bridge/ros_bridge`.
@@ -14,6 +17,7 @@ Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the proces
 | `__init__.py` | Package marker |
 | `main.py` | Entry (`core=core.main:main`): applies Cyclone RMW via `core_common.rmw`, then `rclpy.init` → `RosyCoreNode.run` → shutdown |
 | `node.py` | Assembles profile/capabilities/services (`SOFTWARE_VERSION` from `core_common.identity`), starts uvicorn thread |
+| `trip_lease.py` | D-541 `TripLeaseManager` (one lease, TTL on the monotonic clock, policy only) and `build_trip_lease` (ends it on leaving NAVIGATION / e-stop, `halt` to IDLE on expiry, takeover, non-owner stop) |
 | `services.py` | `CoreServices` DI: ModeMachine/CommandManager, Docking*, Navigation*, Swarm, Power*, SafetyManager, StateManager (`core_features`), EventBus/FileAuditLog (`core_events`), inventory/protocol/evidence (`core_common`); `SHUTDOWN_SENTINEL_NAME` |
 
 ## Subdirectories

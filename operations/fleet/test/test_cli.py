@@ -116,6 +116,18 @@ def test_console_mission_api_requires_shared_database_and_named_users(tmp_path):
         cli.run_console(no_named_users)
 
 
+def test_console_mission_api_runs_on_development_sessions_without_site_users(tmp_path, monkeypatch):
+    # D-548: a development session is the named operator, so no site-users.yaml is needed.
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "development")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    cli.run_console(cli.parse_args([
+        "console", "--robots", str(_write(tmp_path)), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+        "--mission-api", "--connection-mode", "development",
+    ]))
+    assert captured["app"].state.mission_service is not None
+
+
 def test_console_mission_api_persists_candidates_without_enabling_dispatch(
         tmp_path, monkeypatch):
     robots = _write(tmp_path)
@@ -174,6 +186,7 @@ def test_console_mission_api_persists_candidates_without_enabling_dispatch(
 
 def test_cell_job_stack_tolerance_injects_the_palletizing_compiler(tmp_path, monkeypatch):
     """C4b G5: the Fleet composition root injects the production CellJobCompiler."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "operations/execution/src"))
     robots = _write(tmp_path)
     users = tmp_path / "site-users.yaml"
     users.write_text(yaml.safe_dump({"users": [{
@@ -596,15 +609,17 @@ def test_console_refuses_incomplete_d341_pairing(tmp_path, monkeypatch, extra, m
         cli.run_console(cli.parse_args(base + extra))
 
 
-def test_console_starts_the_localization_service_by_default_with_the_overhead_cue_off(
+def test_console_starts_the_localization_service_by_default_with_the_overhead_cue_off_and_pose_request_overhead_on(
         tmp_path, monkeypatch):
-    """D-395 P2-6: the service is on unless switched off; the D-257 sighting cue is off."""
+    """D-395 P2-6: the service is on unless switched off; the D-257 sighting cue stays off;
+    D-546: the pose-request handler may answer from the overhead pose."""
     captured = {}
     monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
     cli.run_console(cli.parse_args(["console", "--robots", str(_write(tmp_path))]))
 
     service = captured["app"].state.localization_service
     assert service is not None and service.overhead_cue is False
+    assert service.pose_request_overhead is True
     assert len(service._squares) == 2          # the repo's map_v2_fleet lane_rules.yaml
 
 
@@ -644,7 +659,7 @@ def test_console_development_mode_needs_both_the_flag_and_the_deployment(
 
     client = TestClient(captured["app"], client=("192.168.1.50", 50000),
                         base_url="http://192.168.1.10:8090")
-    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected}
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected, "password_login": False}
     issued = client.post("/api/fleet/auth/development-session")
     assert issued.status_code == (201 if expected == "development" else 403)
 
@@ -667,3 +682,83 @@ def test_console_development_mode_requires_the_task_database(tmp_path, monkeypat
 
     with pytest.raises(SystemExit, match="--tasks-db is required with --connection-mode development"):
         cli.run_console(args)
+
+
+def test_site_config_optional_present_absent_and_both(tmp_path, capsys):
+    base = ["console", "--robots", str(_write(tmp_path))]
+    site = tmp_path / "fleet-site.yaml"
+    site.write_text("fleet: {}\n", encoding="utf-8")
+    args = cli.parse_args(base + ["--site-config-optional", str(site)])
+    cli._resolve_optional_site_config(args)
+    assert args.site_config == site
+
+    args = cli.parse_args(base + ["--site-config-optional", str(tmp_path / "none.yaml")])
+    cli._resolve_optional_site_config(args)
+    assert args.site_config is None
+    assert "using defaults" in capsys.readouterr().err
+
+    args = cli.parse_args(base + ["--site-config", str(site), "--site-config-optional", str(site)])
+    with pytest.raises(SystemExit, match="cannot be combined"):
+        cli._resolve_optional_site_config(args)
+
+
+def test_site_config_example_is_a_valid_roundabout_signal():
+    from types import SimpleNamespace
+
+    from fleet.routing.graph import build_graph
+    from fleet.traffic import signal_phase
+    from fleet.traffic.blocks import build_layout
+    from test_blocks import DEMO, _demo_map
+
+    example = Path(__file__).resolve().parents[3] / "deploy" / "site" / "fleet-site.yaml.example"
+    args = SimpleNamespace(site_config=example)
+    zones, plans = cli._traffic_zones(args), cli._traffic_signals(args)
+    assert list(zones) == ["roundabout"] and len(plans) == 1
+    graph = build_graph(_demo_map())
+    layout = build_layout(graph, DEMO, zones)
+    assert signal_phase.check(plans[0], graph, layout) == []
+
+
+def test_site_compose_reads_the_optional_fleet_site_config():
+    compose = (Path(__file__).resolve().parents[3] / "deploy" / "site" / "compose.yaml").read_text(encoding="utf-8")
+    assert "--site-config-optional\n      - /run/rosy-config/fleet-site.yaml" in compose
+
+
+# ---- D-577 2: the stuck resolver runs by default; robots without a resolver credential are untouched ----
+
+def _console_app(tmp_path, monkeypatch, *extra):
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    cli.run_console(cli.parse_args(["console", "--robots", str(_write(tmp_path)), *extra]))
+    return captured["app"]
+
+
+def test_d577_console_runs_the_stuck_resolver_by_default(tmp_path, monkeypatch):
+    loop = _console_app(tmp_path, monkeypatch).state.stuck_resolver
+    assert loop is not None
+    assert dict(loop._clients()) == {}          # no resolver_token in robots.yaml: every stuck goes to a human
+
+
+def test_d577_old_flag_is_accepted_and_no_flag_turns_it_off(tmp_path, monkeypatch):
+    assert _console_app(tmp_path, monkeypatch, "--stuck-resolver").state.stuck_resolver is not None
+    off = _console_app(tmp_path, monkeypatch, "--no-stuck-resolver")
+    assert getattr(off.state, "stuck_resolver", None) is None
+
+
+def test_d577_only_robots_with_a_resolver_token_get_a_client(tmp_path, monkeypatch):
+    p = tmp_path / "robots.yaml"
+    write_robots(p, [RobotEndpoint("rosy_01", "http://a:8080", "t1", resolver_token="r1"),
+                     RobotEndpoint("rosy_02", "http://b:8080", "t2")])
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    cli.run_console(cli.parse_args(["console", "--robots", str(p)]))
+    assert set(captured["app"].state.stuck_resolver._clients()) == {"rosy_01"}
+
+
+def test_d577_startup_names_the_robots_the_resolver_answers(tmp_path, monkeypatch, capsys):
+    p = tmp_path / "robots.yaml"
+    write_robots(p, [RobotEndpoint("rosy_01", "http://a:8080", "t1", resolver_token="r1"),
+                     RobotEndpoint("rosy_02", "http://b:8080", "t2")])
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
+    cli.run_console(cli.parse_args(["console", "--robots", str(p)]))
+    assert "stuck resolver answers: rosy_01" in capsys.readouterr().err

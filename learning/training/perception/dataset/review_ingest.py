@@ -114,6 +114,12 @@ def import_frames(store, body):
             raise ValueError('integer image dimensions required')
         data = bounded(row['image'])
         image(data, row['image_sha256'], width, height)
+        objects = row.get('objects', [])
+        if not isinstance(objects, list) or len(objects) > 100:
+            raise ValueError('at most 100 object draft boxes required')
+        for box in objects:
+            store.validate_boxes({'width': width, 'height': height}, [box],
+                                 classes=store.object_classes())
         mask, labelmap_sha = None, None
         if row.get('mask'):
             ref = row['mask']
@@ -139,9 +145,16 @@ def import_frames(store, body):
                     mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
             else:
                 raise ValueError('draft mask reference must be indexed PNG or color ZIP')
+            indexed = cv2.imdecode(np.frombuffer(mask, np.uint8), cv2.IMREAD_UNCHANGED)
+            review_masks.require_inside_lane_boundaries(indexed, binding)
         normalized = {key: row.get(key) for key in
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}
+        for key in ('annotation_source', 'annotation_note'):
+            if row.get(key):
+                if not isinstance(row[key], str) or len(row[key]) > 100:
+                    raise ValueError(f'bounded {key} required')
+                normalized[key] = row[key]
         normalized['source_session_declared'] = row['source_session']
         if row.get('source_kind') == 'mcap':
             normalized.update(source_kind='mcap', mcap=mcap)
@@ -151,7 +164,7 @@ def import_frames(store, body):
             except ValueError:
                 pass  # Preserve historical identities; never invent authenticated capture stamps.
         normalized.update(video=row.get('source_video'), width=width, height=height,
-                          image_sha256=row['image_sha256'], boxes=[],
+                          image_sha256=row['image_sha256'], objects=objects,
                           original_video_verified=False, map_revision=None, map_pose=None,
                           fixed_eval_overlap=row.get('fixed_eval_overlap') is True,
                           review_status='pending_human', complete_frame_review=False,
@@ -167,7 +180,7 @@ def import_frames(store, body):
         for source, data, suffix, mask in checked:
             source['image'] = freeze_image(store, data, suffix)
             frozen.append((source, review_masks.freeze(store, mask) if mask else None))
-        added, duplicates, aliases, draft_added, legacy_linked, queued = [], 0, 0, 0, 0, 0
+        added, duplicates, aliases, draft_added, legacy_linked, queued, object_queued = [], 0, 0, 0, 0, 0, 0
         with store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             next_id = db.execute('SELECT COALESCE(MAX(id),-1)+1 FROM frames').fetchone()[0]
@@ -207,11 +220,22 @@ def import_frames(store, body):
                         raise ValueError('same source frame has conflicting dimensions')
                     if (existing.get('capture_group'), existing.get('source_session')) != (source['capture_group'], source['source_session']):
                         raise ValueError('same source frame has conflicting session identity')
+                    if source['objects'] and existing['image_sha256'] != source['image_sha256']:
+                        raise ValueError('object draft requires the exact reviewed image')
                     if mask is not None:
                         current = db.execute('SELECT sha256 FROM masks WHERE frame=?', (index,)).fetchone()
                         if not current or current['sha256'] != mask[1]:
-                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts VALUES (?,?,?,?)',
-                                                 (index, mask[1], mask[0], source['import_catalog_sha256'])).rowcount
+                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts '
+                                                 '(frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?)',
+                                                 (index, mask[1], mask[0], source['import_catalog_sha256'],
+                                                  source.get('annotation_source'))).rowcount
+                    if source['objects']:
+                        boxes = json.dumps(source['objects'], sort_keys=True)
+                        digest = review_masks.sha(boxes.encode())
+                        object_queued += db.execute('INSERT OR IGNORE INTO object_drafts '
+                                                    '(frame,sha256,boxes,origin,catalog_sha256) VALUES (?,?,?,?,?)',
+                                                    (index, digest, boxes, source.get('annotation_source'),
+                                                     source['import_catalog_sha256'])).rowcount
                     duplicates += 1
                 else:
                     index = next_id
@@ -238,10 +262,11 @@ def import_frames(store, body):
                     db.execute('INSERT INTO masks(frame,version,status,path,sha256) VALUES (?,1,?,?,?)',
                                (index, 'pending', *mask))
                     draft_added += 1
-            if added or aliases or legacy_linked or queued:
+            if added or aliases or legacy_linked or queued or object_queued:
                 db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
     return {'added': len(added), 'indices': added, 'duplicate_representations': duplicates,
             'new_representations': aliases, 'pixel_reviews_pending': draft_added,
             'draft_candidates_queued': queued,
+            'object_draft_candidates_queued': object_queued,
             'legacy_primary_bindings': legacy_linked,
             'catalog_sha256': review_masks.sha(raw), 'original_video_verified': False}

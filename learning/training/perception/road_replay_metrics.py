@@ -127,3 +127,32 @@ def _unassociated(rows):
 def _unassociated_summary(ys):
     pct = [round(float(v), 4) for v in np.percentile(ys, [10, 50, 90])] if ys else [None] * 3
     return {"count": len(ys), "abs_y_m": dict(zip(("p10", "median", "p90"), pct))}
+
+
+def boundary_candidate(observation, tier: str, confirmed_pair: bool):
+    """Offline hypothesis: ONE/MEMORY need an earlier detector-paired BOTH."""
+    if tier in ("ONE", "MEMORY") and not confirmed_pair:
+        return None
+    return observation
+
+
+def pair_seen_after(was_seen: bool, tier: str) -> bool:
+    return tier == "BOTH" or (was_seen and tier != "STOP")
+
+
+def _boundary_comparison(rows, fresh_odom_frames, memory_before_both):
+    candidates = [r["boundary_candidate"] for r in rows if r["boundary_candidate"] is not None]
+    return {
+        "frames": len(rows),
+        "fresh_odom_frames": fresh_odom_frames,
+        "tiers": {tier: sum(r["boundary_tier"] == tier for r in rows)
+                  for tier in ("BOTH", "ONE", "MEMORY", "STOP")},
+        "keep_none_boundary_output": sum(r["keep"] is None and r["boundary"] is not None
+                                         for r in rows),
+        "memory_before_both": memory_before_both,
+        "candidate_suppressed": sum(r["boundary"] is not None and
+                                    r["boundary_candidate"] is None for r in rows),
+        "candidate_on_paint_rate": (round(sum(c["on_paint"] for c in candidates) /
+                                          len(candidates), 3) if candidates else None),
+        "scope": "same threshold image and odometry, offline only; no learned paint or lane GT",
+    }

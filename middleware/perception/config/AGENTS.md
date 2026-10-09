@@ -3,6 +3,9 @@
 
 # config/ (ROS parameters)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 All ROS parameters. `robot.yaml` is the **single shared source** loaded first by every launch with the `/**` wildcard so all nodes get the same numbers; per-node yamls load after and override.
 

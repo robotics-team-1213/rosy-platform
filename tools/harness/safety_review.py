@@ -41,6 +41,37 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "f14e20e2fc52ff0fb9e8d7267dbeb0f7e6596d70":  # git commit revision
+        "Independently reviewed on 2026-10-09: D-526 follow-up moves the TRUSTED map-pose check verbatim "
+        "into tether_routes so the safety-tagged tether_watch imports no decision module; still fail-closed "
+        "(19 tether tests). Part of the D-526 landing the user approved on 2026-10-09. See docs/validation/"
+        "d526-tether-watch-safety-review-2026-10-09/result.md.",
+    "66f0e629d4aad3533ad2c8ff07b7f95a9e817a14":  # git commit revision
+        "Independently reviewed on 2026-10-09 (three rounds, final APPROVE): D-526 Fleet tether watch "
+        "stops a tethered robot through the existing CORE E-Stop client on radius, turn or a stale "
+        "trusted map pose (fail-closed). Exempted with user approval 2026-10-09. See docs/validation/"
+        "d526-tether-watch-safety-review-2026-10-09/result.md; host tests only, no device acceptance.",
+    "2c1c2310e42bcc54092935cb8ca86378422c9ed1":  # git commit revision
+        "Independently reviewed on 2026-10-09: D-526 review fixes (trusted map pose only, per-stop "
+        "timeout, watch liveness, TETHER_STOP_FAILED alarm via console alarm sources). Exempted with "
+        "user approval 2026-10-09. See docs/validation/d526-tether-watch-safety-review-2026-10-09/result.md.",
+    "a402c42935e27170be57e5240b807be6f88d38fc":  # git commit revision
+        "Independent code-reviewer agent (read-only), 2026-10-09: APPROVE WITH NOTES. console.py adds "
+        "LINK_DEGRADED_S (10 s) and a console-clock (time.monotonic) _last_ok; a failed state read within "
+        "the grace gets link 'degraded' plus link_degraded_s, display only. The row keeps online=False, so "
+        "traffic, dead-leader hand-off, swarm speed, capabilities, tracking and line-stuck readers are "
+        "unchanged; only link 'unreachable' is rewritten (moved, tls-refused, protocol are not). A degraded "
+        "robot still disarms the selected goal (review MEDIUM applied in the follow-up commit) and the "
+        "server goal path is untouched. test_link_on_snapshot.py passes; no device acceptance.",
+    "cd7464f3241145b28c1d2fa21aa734e7ccb6940f":  # git commit revision
+        "Independent Codex review, 2026-10-09: D-535 adds a read-only link_reason field "
+        "to failed Fleet robot rows and renders it in the roster. The field has no "
+        "command, stop, admission or authority reader; D-499 link classification remains. "
+        "Model-PC link-reason, dispatch-stop-latch and cancel-all tests passed 48/48. "
+        "See docs/validation/d535-link-reason-safety-review-2026-10-09/result.md; "
+        "a second independent review fixed missing SSL verify_code handling and passed 60 focused tests "
+        "(docs/validation/d535-link-reason-review-2026-10-09/result.md); "
+        "no device or motion acceptance.",
     "f8165b2a44d01ff628d5bd75ec923953bd09d000":  # git commit revision
         "Independently reviewed by Codex /root on 2026-10-05: D-463 retains existing "
         "operator policy/idempotency and goal authority, including legacy compatibility; fresh LOCALIZED finite map "
@@ -161,6 +192,73 @@ EXEMPT: dict[str, str] = {
         'method, and the dispatch loop still skips trip robots. No stop, E-stop, admission, '
         'traffic, auth or trust path changed; Fleet 2446 host tests pass, 0 new; no device '
         'acceptance.',
+    "20d423a1a604197291eb83422a0683cac153de89":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: D-499 only adds a display '
+        'link word to snapshot rows from the existing gather exception and cached address '
+        'status. The provider is called once and its failure falls back to an empty map; '
+        'no extra robot request, goal, stop, admission, or motion path was changed. '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "71e68b8c9f3b68337d2e6634475151eb6b01d37c":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: D-493 stores a monotonic '
+        'observation time beside the gathered state, then copies the response row to '
+        'display state_age_s and gathered_at. The internal stamp is removed before the '
+        'response; no goal, stop, admission, or motion path was changed. '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "153daa0e9537cafe2b6ba031bb422d6fccf2b7fd":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: the console.py conflict '
+        'resolution combines D-493 observation age with D-499 read-only link class in '
+        'the same gathered row. The --cc diff adds neither a goal nor a stop path; '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "756634d24d97582720802dfde7fd7c39d63543b3":  # git commit revision
+        "Independently reviewed (security-reviewer, read-only) on 2026-10-08: on the five "
+        "safety-tagged paths (core_features/safety, dock/firmware, dock/firmware/rosy_dock, "
+        "signal/firmware, signal/firmware/rosy_signal AGENTS.md) the commit only adds 'Parent "
+        "context'/'Updated' header lines and corrects the rosy_signal parent comment from "
+        "../../AGENTS.md to ../AGENTS.md; all parent targets exist on main. Markdown only; no "
+        "code, config, firmware or build/flash change; no safety rule, fail-safe, interlock or "
+        "auth text altered or made optional. Exemption approved by livsbittt.",
+    "35945410f33f55daac79ac68aea73ab72e953b69":  # git commit revision
+        "Independent safety review (oh-my-claudecode code-reviewer, opus, read-only) on "
+        "2026-10-08, APPROVE WITH NOTES, no HIGH/CRITICAL, together with its follow-up "
+        "32f98d98b: D-507 10 drops a D-422 memory point only when it is strictly inside the "
+        "URDF outline on entry; the C1 blind disc (range_min 0.05 around LiDAR x -0.017) lies "
+        "strictly inside the Pinky body (>= 6.5 mm margin), so no obstacle outside the body is "
+        "hidden; a range_min reaching past the body still remembers outside points; all memory "
+        "readers (tick, junction, lane_bridge, motion_admit forward/reverse) use the one "
+        "filtered store. 77 tests passed. Its two MEDIUM notes became tests on "
+        "fix/d422-memory-outside-body (C1 disc inside the body guard, contact on entry). "
+        "Trailer missing because the commits landed before the review; SIM on model PC.",
+    "32f98d98bd9aab0a1ef7242ad7080b502ff75d9b":  # git commit revision
+        "Same independent safety review as 35945410f (2026-10-08, APPROVE WITH NOTES): the "
+        "outline check runs once, on entry, so a remembered point that odometry later puts "
+        "inside the body (creep into contact, in-place turn) keeps holding; inside_body(strict=) "
+        "in core_common.robot_body keeps a point exactly on the outline (conservative). Creep "
+        "and turn hold tests pass.",
+    "b4f96a974df15956b41086587c5003bb0bdc9794":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: import-only; console.py takes the pure "
+        "D-499 classify_link (link word for status rows, not on the estop_all path) from the frozen "
+        "console_view edge, where the function is now defined (link_class.py removed). No new "
+        "safety->decision module; estop_all and dispatch unchanged. Exemption approved by livsbittt.",
+    "d69299d04b9b47fc6c2390963d32ab3f50b48e68":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: adds NOMINAL_BODY = PINKY_PRO alias and its "
+        "public safety anchor; second name for an already public object, no new capability; "
+        "robot_body.py stays in the literal backlog. Exemption approved by livsbittt.",
+    "a7fab3bf383e27e992f92f1165d30d9bf67b85e9":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: clearance.return_scan_view: future-stamped "
+        "scans within SOURCE_FUTURE_TOLERANCE_S (0.1 s) count as age 0, beyond it dropped; 0.25 s "
+        "staleness bound unchanged; only feeds D-468 return evidence, not the D-422 body stop; scan "
+        "sequence high-water kept. Exemption approved by livsbittt.",
+    "c2fe98e028597c73084a882f680e9722e653bf6a":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: body_stop.py docstring wording only (Pinky C1 "
+        "-> the C1 LiDAR); no executable change. Exemption approved by livsbittt.",
+    "0f1e07f7effdc983fa2110dc21ba7b97fc9f40d2":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: console.py added read-only CORE power_health "
+        "projection; superseded by 6d2ad7327 which moved it out of the console state; no command, gate "
+        "or stop path reads it. Exemption approved by livsbittt.",
+    "6d2ad7327628942f2a27d847ce852bbd6e4635c0":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
+        "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
+        "display-only. Exemption approved by livsbittt.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

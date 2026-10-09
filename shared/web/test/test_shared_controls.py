@@ -608,7 +608,6 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
     ("middleware/ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
     ("middleware/ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("middleware/ui/robot/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
     ("middleware/ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
@@ -631,9 +630,9 @@ DISABLED_WITHOUT_REASON = {
     ("operations/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
     ("operations/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.
@@ -709,7 +708,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
     fleet = ROOT / "operations" / "fleet" / "fleet" / "server" / "web"
-    lock = (fleet / "authorization.js").read_text(encoding="utf-8")
+    lock = (fleet / "shared" / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
     # D-410 — 운용 문서(대형 잠금)와 설치 문서(카메라·보정 잠금)가 각각 자기 잠금 안내를 둔다.

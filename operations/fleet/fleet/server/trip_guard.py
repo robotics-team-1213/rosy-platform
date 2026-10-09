@@ -8,7 +8,8 @@ motion and stop methods are replaced on the console instance (``console_view.Tri
   other than ``OFF``.
 - Stops are never refused and always run first; afterwards the trip ends ``canceled``:
   ``cancel`` (per robot, cancel-all, intent cancel) -> ``operator_cancel``, ``estop_all`` ->
-  ``operator_estop``, ``line_follow_mode(OFF)`` -> ``operator_line_follow_off``.
+  ``operator_estop``, ``line_follow_mode(OFF)`` -> ``operator_line_follow_off``. The E-stop
+  closes every trip before it goes out (no trip step sends after it), then halts them all at once.
 - ``trip_busy`` makes ``_make_room`` find no bay for a trip robot and keeps it out of the
   degraded-capability reassignment. The trip loop's own halt keeps the methods bound before
   this wrapping (no recursion).
@@ -59,6 +60,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
     async def guarded_goal(robot_id, *args, trip: bool = False, **kwargs):
         if not trip:
             refuse([robot_id])
+        else:  # D-550 10: the trip loop, not the console loop, renews a trip goal's lease
+            kwargs["lease_source"] = "trip"
         result = await goal(robot_id, *args, **kwargs)
         console.trip_goal_sent_at[robot_id] = clock()
         return result
@@ -92,12 +95,15 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
             await end_trip(robot_id, "operator_cancel")
 
     async def guarded_estop_all(*args, **kwargs):
-        running = runner.running()
+        closed = runner.close_all("operator_estop")  # D-517 1: no trip step sends after this line
+        runner.traffic.signals_all_red()  # D-525 4: virtual signals go all red with the E-stop
         try:
             return await estop_all(*args, **kwargs)
         finally:
-            if running is not None:
-                await end_trip(running["robot_id"], "operator_estop")
+            try:
+                await runner.halt_closed(closed)  # every robot at once
+            except Exception:
+                _LOG.exception("could not end the trips after the E-stop")
 
     console.goal, console.cancel, console.estop_all = guarded_goal, guarded_cancel, guarded_estop_all
     console.formation_start, console.line_follow_mode = guarded_formation_start, guarded_line_follow_mode

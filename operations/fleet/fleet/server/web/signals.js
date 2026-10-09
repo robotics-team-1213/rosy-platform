@@ -20,12 +20,23 @@ export async function sendSignalPresence({ operator, visible, configured, call }
   }
 }
 
-export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false }) {
+export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false,
+  namedReason = () => "" }) {
   let presenceInFlight = false;
   async function presence() {
     if (presenceInFlight) return;
     presenceInFlight = true;
     try {
+      // D-550 10: operator goals' leases are renewed only while a visible operator console says so.
+      // Only while some robot holds a leased goal: with leases off (the default) nothing new is sent.
+      const leased = (view.robots || []).some((r) => r?.goal?.goal_lease === "leased");
+      if (isOperator() && !document.hidden && leased) {
+        await call("/api/fleet/goal-lease/presence", { method: "POST" }).catch(() => {});
+      }
+      // D-525 4: a virtual manual green lasts while this console is open and visible.
+      if (isOperator() && !document.hidden && (view.traffic?.signals || []).length) {
+        await call("/api/fleet/traffic/signals/presence", { method: "POST" }).catch(() => {});
+      }
       await sendSignalPresence({ operator: isOperator(), visible: !document.hidden,
         configured: Object.keys(view.signals || {}).length > 0, call });
     } catch (_) {
@@ -124,8 +135,11 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       button.setAttribute("kind", "quiet");
       button.type = "button";
       button.textContent = label;
-      button.disabled = !row.online;
-      if (!row.online) button.setAttribute("reason", "오프라인");
+      // D-540 9: 점멸·전체정지는 멈춤이라 열려 있다. 나머지 명령은 이름 있는 운영자만.
+      const why = !row.online ? "오프라인"
+        : body_.mode === "flash_red" || body_.mode === "all_red" ? "" : namedReason();
+      button.disabled = Boolean(why);
+      if (why) button.setAttribute("reason", why);
       if (kind) button.classList.add(kind);
       button.addEventListener("click", scope.guard(() => command(row.signal_id, body_, label)));
       return button;
@@ -141,19 +155,96 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     return node;
   }
 
+  // D-525 가상 신호 — 장치가 아니라 Fleet 교통 규칙이다. 구동값·연결·관측 대신 단계와 남은 시간만 있다.
+  // 버튼은 자동·유지·전체 적색과 입구마다 수동 녹색이다. 수동 녹색은 이 화면이 열려 있는 동안만 유지되고
+  // (presence), 닫히면 전체 적색이 된다(D-525 4).
+  const VIRTUAL_ASPECT = { green: "녹", yellow: "황", all_red: "전체 적색" };
+  function virtualCommand(signalId, verb, label, approach) {
+    const life = scope.capture();
+    life.check();
+    return call(`/api/fleet/traffic/signals/${encodeURIComponent(signalId)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(approach ? { verb, approach } : { verb }),
+    }).then(() => { life.check(); log(`${signalId} ${label}`, "good"); refreshState(); })
+      .catch((err) => {
+        if (!life.current() || err.name === "AbortError") return;
+        log(`${signalId} 명령 거절 — ${err.message}`, "bad");
+      });
+  }
+
+  function virtualCard(row) {
+    const node = document.createElement("article");
+    node.className = "signal";
+    if (row.errors?.length) node.classList.add("broken");
+    const head = document.createElement("div");
+    head.className = "robot-head";
+    const name = document.createElement("b");
+    name.textContent = row.signal_id;
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    const kind = document.createElement("ui-tag");
+    kind.setAttribute("status", "neutral");
+    kind.textContent = "가상";
+    const tag = document.createElement("ui-tag");
+    tag.setAttribute("status", row.errors?.length ? "crit" : ["cycle", "demand"].includes(row.mode) ? "active" : "warn");
+    // D-525 rev 4: 요청 모드는 AI PC 제어기가 요청만 하고 Fleet이 단계를 정한다.
+    tag.textContent = row.errors?.length ? "설정 오류"
+      : row.mode === "manual" ? `수동 · ${row.manual} 녹`
+      : row.mode === "demand" ? `요청(AI)${row.demands?.length ? ` · ${row.demands[0].approach} 대기` : ""}`
+      : signalIntentLabel(row.mode);
+    head.append(name, spacer, kind, tag);
+    node.appendChild(head);
+    const body = document.createElement("div");
+    body.className = "signal-body";
+    const lamps = document.createElement("div");
+    lamps.className = "lamps";
+    for (const approach of row.approaches || []) {
+      const dot = document.createElement("i");
+      dot.className = `lamp ${approach.lamp} on`;
+      dot.title = `${approach.approach} · ${({ green: "녹", yellow: "황", red: "적" })[approach.lamp]}`;
+      lamps.appendChild(dot);
+    }
+    body.appendChild(lamps);
+    const meta = document.createElement("span");
+    meta.className = "signal-meta";
+    const left = typeof row.left_s === "number" ? ` ${Math.ceil(row.left_s)} s` : "";
+    meta.textContent = row.errors?.length ? row.errors[0]
+      : `${VIRTUAL_ASPECT[row.aspect] || row.aspect}${left} · 구역 ${row.zone}${row.aspect === "all_red" && row.zone_busy && row.mode !== "all_red" ? " · 비기를 기다림" : ""}${row.alert === "controller_lost" ? " · AI 제어기 끊김, 자동 순환" : ""}`;
+    body.appendChild(meta);
+    node.appendChild(body);
+    const actions = document.createElement("div");
+    actions.className = "robot-actions";
+    const verbs = [["자동", "cycle"], ["AI 요청", "demand"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
+      ...(row.approaches || []).map((a) => [`녹 · ${a.approach}`, "set_aspect", "", a.approach])];
+    for (const [label, verb, cls, approach] of verbs) {
+      const button = document.createElement("ui-button");
+      button.setAttribute("kind", "quiet");
+      button.type = "button";
+      button.textContent = label;
+      button.disabled = !isOperator();
+      if (!isOperator()) button.setAttribute("reason", "운영자만");
+      if (cls) button.classList.add(cls);
+      button.addEventListener("click", scope.guard(() => virtualCommand(row.signal_id, verb, label, approach)));
+      actions.appendChild(button);
+    }
+    node.appendChild(actions);
+    return node;
+  }
+
   function render() {
     const box = el("signal-cards");
     if (!box) return;
     const rows = Object.values(view.signals || {});
-    box.replaceChildren(...rows.map(card));
+    const virtual = view.traffic?.signals || [];
+    box.replaceChildren(...rows.map(card), ...virtual.map(virtualCard));
     el("signals-state").textContent = rows.length
-      ? `${rows.filter((r) => r.online).length}/${rows.length} 연결`
-      : "—";
+      ? `${rows.filter((r) => r.online).length}/${rows.length} 연결${virtual.length ? ` · 가상 ${virtual.length}` : ""}`
+      : virtual.length ? `가상 ${virtual.length}` : "—";
     // D-415 — 빈 상태는 ui-empty 규칙으로 말한다.
     const empty = el("signals-hint");
     if (empty) {
-      empty.hidden = rows.length > 0;
-      if (!rows.length) empty.textContent = "설정된 신호등이 없습니다. 장치 연결과 현장 설치 상태를 확인하세요.";
+      empty.hidden = rows.length + virtual.length > 0;
+      if (!rows.length && !virtual.length) empty.textContent = "설정된 신호등이 없습니다. 장치 연결과 현장 설치 상태를 확인하세요.";
     }
   }
 

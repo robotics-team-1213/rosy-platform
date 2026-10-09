@@ -70,6 +70,9 @@ The installed bootstrap also supports the previous signed release layout for rol
 ## 카메라 지도 생성 작업 (D-497)
 
 `exec camera_lane_map.py`는 같은 작업 잠금·서명 source·환경 지문을 사용해 지도 초안을 만든다.
+이 이름만 `JOB_ENTRY_POINTS`가 서명 source의 `operations/vision/rosy_vision/lane_map.py` 한 파일로 바꾼다.
+다른 이름은 `learning/training/perception/` 밑에서만 찾고, `../`·절대 경로·다른 source 경로는 거절한다.
+영수증의 `script`는 `camera_lane_map.py`, `entry`는 그 Vision 경로다(2026-10-08, D-427 §2 learning→operations 금지).
 추가 payload는 `operations/vision/rosy_vision/__init__.py`, `lane_map.py`, `map_register.py` 세 파일뿐이다.
 다른 Vision 서비스 파일은 여전히 거절한다. 작업 진입점이 있는 새 후보는 이 세 의존성이 모두
 필요하며 활성화 전에 `--help` import를 검사한다. 기존 후보의 복귀에는 새 진입점을 요구하지 않는다.

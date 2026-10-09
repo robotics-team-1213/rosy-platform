@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(line_follow): odom 원천 시각이 CORE 시계보다 조금 앞서도 자세 기록을 지우지 않는다
-- 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
-- 2026-10-07 · uncommitted · fix(line_follow): 모드 선택 직후 교차로 회전은 첫 odom을 기다린다
-- 2026-10-07 · uncommitted · test(line_follow): D-495/D-498 교차로 회전 SIM 결과 기록
-- 2026-10-07 · uncommitted · feat(line_follow): NOMINAL 지면 횡단보도 구간과 앞뒤 거리 여유 (D-491 개정)
+- 2026-10-09 · uncommitted · fix(core): D-531 굽이 단계 문맥 발행
+- 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
+- 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
+- 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
+- 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산

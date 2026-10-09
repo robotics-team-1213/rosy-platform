@@ -1,0 +1,21 @@
+{"t": 53697.840333468, "kind": "wait", "value": "ConnectError('All connection attempts failed')"}
+{"t": 53759.569947042, "kind": "localization", "value": [null, null]}
+{"t": 53759.769959057, "kind": "frames", "value": ["map", "map"]}
+{"t": 53769.820071455, "kind": "truth", "value": "ready", "latest": {"rosy_01": [-1.8000000000000094, -2.2, 2.9458581394535258e-18], "rosy_02": [-2.3999999972237323, -2.2, 3.1411080351500775e-19]}}
+{"t": 53769.833424637, "kind": "state", "value": "rosy_01", "pose": {"x": -1.806553912853129, "y": -2.177422195970105, "yaw": -0.00282279318000225}, "mode": "IDLE", "localization": null}
+{"t": 53769.844728617, "kind": "state", "value": "rosy_02", "pose": {"x": -2.377893999648596, "y": -2.178415460504418, "yaw": -0.0009802829698295687}, "mode": "IDLE", "localization": null}
+{"t": 53769.95225777, "kind": "armed", "value": {"rosy_02": {"distance": 0.6, "lateral": 0.0}}}
+{"t": 53769.970292113, "kind": "phase", "value": "straight_e"}
+{"t": 53786.737593612, "kind": "phase", "value": "arc_left_r0.4"}
+{"t": 53791.984838643, "kind": "phase", "value": "straight_n"}
+{"t": 53798.679410227, "kind": "phase", "value": "s_left_r0.5"}
+{"t": 53805.23321499, "kind": "phase", "value": "s_right_r0.5"}
+{"t": 53811.785874634, "kind": "phase", "value": "straight_n2"}
+{"t": 53816.884016917, "kind": "phase", "value": "stop_10s"}
+{"t": 53826.953060491, "kind": "phase", "value": "pivot_right"}
+{"t": 53830.177924153, "kind": "phase", "value": "straight_e2"}
+{"t": 53834.277435728, "kind": "cut", "value": "pause"}
+{"t": 53839.278393673, "kind": "cut", "value": "session_resume"}
+{"t": 53846.898916832, "kind": "phase", "value": "stop_end"}
+{"t": 53858.971334422, "kind": "phase", "value": "done"}
+{"t": 53859.102645474, "kind": "final_swarm", "value": {"role": "none", "formation": null, "active": false, "holding": false, "target_robot_id": null, "source": null, "max_speed": null, "map_mismatch": null, "mode": null, "trail": null, "stream_age_s": null}}

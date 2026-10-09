@@ -122,6 +122,23 @@ def test_camera_quality_and_raw_pair_require_fresh_ros_capture_clock():
     assert svc.vision.status(now=frame.received_at+1.9)['quality'] is None
 
 
+def test_camera_capture_stamp_ahead_of_core_clock_counts_as_now_within_the_tolerance():
+    # D-507 8: one SOURCE_FUTURE_TOLERANCE_S (0.1 s) for image source times too.
+    from core_features.vision import VisionFrameStore
+    svc = SimpleNamespace(vision=VisionFrameStore())
+    msg = SimpleNamespace(header=SimpleNamespace(frame_id='front', stamp=SimpleNamespace(sec=10,nanosec=1_000_000)),
+        format='jpeg;width=8;height=8;quality_valid=false;quality_reason=low_light',
+        data=b'\xff\xd8frame\xff\xd9')
+    warnings = []
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=10.)
+    assert svc.vision.frame().quality == dict(valid=False, reason='low_light')
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=10.)
+    assert not warnings
+    msg.header.stamp.nanosec = 200_000_000
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=10.)
+    assert warnings  # 0.2 s ahead: the raw sample is refused
+
+
 def test_a_well_formed_observation_reaches_the_manager_with_both_clocks():
     """The ROS clock and the receipt clock are different questions."""
     svc, calls = _services()
@@ -167,6 +184,26 @@ def test_camera_low_light_marker_reaches_stop_evidence_and_rejects_visible_claim
                          source_now=12.5, received_at=50.)
     assert not _calls(calls, 'line_follow.observe')
     assert _calls(calls, 'line_follow.invalidate')
+
+
+def test_camera_observation_with_foreign_route_sequence_is_rejected():
+    svc, calls = _services()
+    obs.line_observation(
+        svc, _line_payload(source='CAMERA_LINE', route_context_seq=8),
+        source_now=12.5, received_at=50., expected_context_seq=7)
+    assert not _calls(calls, 'line_follow.observe')
+    assert _calls(calls, 'line_follow.invalidate')
+
+
+def test_keeper_junction_with_foreign_route_sequence_does_not_start_turn():
+    svc, calls = _services()
+    svc.line_follow.config = SimpleNamespace(stale_after_s=.3)
+    svc.line_follow.observe_junction = _sink(calls, "line_follow.observe_junction")
+    raw = json.dumps(dict(reason="junction_fork", stamp=12.5,
+                          corner_turning=False, route_context_seq=8))
+    obs.keep_junction(svc, raw, source_now=12.5, received_at=50.,
+                      expected_context_seq=7)
+    assert not _calls(calls, "line_follow.observe_junction")
 
 
 def test_a_rejection_that_is_already_handled_does_not_clear_again():
@@ -371,6 +408,17 @@ def test_a_plan_becomes_a_point_list():
 
     assert _calls(calls, "maps.set_path")[0][1] == (
         [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}],)
+
+
+def test_plan_keeps_map_and_frame_from_receive_time():
+    svc, calls = _services()
+    svc.state.map_id = "lab-map"
+    msg = _path([(1.0, 2.0)])
+    msg.header = SimpleNamespace(frame_id="odom")
+
+    obs.nav_path(svc, msg, warn=_warn(calls))
+
+    assert _calls(calls, "maps.set_path")[0][2] == {"map_id": "lab-map", "frame_id": "odom"}
 
 
 def test_an_unreadable_plan_is_ignored_not_fatal():

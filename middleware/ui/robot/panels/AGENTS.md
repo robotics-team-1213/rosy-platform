@@ -3,6 +3,9 @@
 
 # panels
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Panel modules for the role surfaces (D-204): `console` (operate), `setup` (prepare work), `device` (install/service). Each panel does one job and is declared in `../panels.yaml` (id, surface, slot, order, module, css, role). The shell in `../shell/` mounts them; panels never mount themselves.

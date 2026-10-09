@@ -54,6 +54,10 @@ class LaneUNet(nn.Module):
         self.head = nn.Conv2d(c[0], n_classes, 1)
 
     def forward(self, x):
+        return self.head(self.features(x))
+
+    def features(self, x):
+        """Last decoder features (N x base x H x W), the input of head."""
         e1 = self.enc1(x)
         e2 = self.enc2(self.pool(e1))
         e3 = self.enc3(self.pool(e2))
@@ -62,8 +66,7 @@ class LaneUNet(nn.Module):
         d4 = self.dec4(torch.cat([self.up4(b), e4], 1))
         d3 = self.dec3(torch.cat([self.up3(d4), e3], 1))
         d2 = self.dec2(torch.cat([self.up2(d3), e2], 1))
-        d1 = self.dec1(torch.cat([self.up1(d2), e1], 1))
-        return self.head(d1)
+        return self.dec1(torch.cat([self.up1(d2), e1], 1))
 
 
 @dataclass(frozen=True)

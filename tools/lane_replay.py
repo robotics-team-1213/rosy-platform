@@ -15,10 +15,13 @@
                 열의 하단 띠 가운데 행. 목표가 화면 밖이면 칠 위가 아니다.
   jump_rate     이웃 프레임 사이 목표가 화면 폭의 30% 넘게 튄 비율.
   none_rate     비가시(HOLD) 비율.
+  none_run_count / max_consecutive_none  연속 HOLD 구간 수 / 최장 프레임 수. 사람 정답에
+                매칭하지 않은 검출기 출력 지속성 진단이며 논문 R_F/R_M이 아니다.
 """
 from __future__ import annotations
 
 import argparse
+from itertools import groupby
 import json
 import subprocess
 import sys
@@ -113,6 +116,11 @@ def _centre_detector():
     return detect
 
 
+def none_runs(rows, name):
+    return [sum(1 for _ in group) for missing, group in groupby(row[name] is None for row in rows)
+            if missing]
+
+
 def make_detectors(names):
     detectors = {}
     for name in names:
@@ -191,12 +199,15 @@ def run(frames: list[Path], names: list[str], out: Path, skip_blank: bool = True
     metrics = {}
     for name in detectors:
         seen = [r[name] for r in rows if r[name] is not None]
+        missing = none_runs(rows, name)
         jumps = sum(1 for a, b in zip(rows, rows[1:])
                     if a[name] is not None and b[name] is not None
                     and abs(a[name]["error"] - b[name]["error"]) > 2 * JUMP_FRACTION)
         metrics[name] = {
             "frames": len(rows),
             "none_rate": round(1 - len(seen) / max(1, len(rows)), 3),
+            "none_run_count": len(missing),
+            "max_consecutive_none": max(missing, default=0),
             "on_line_rate": round(sum(s["on_line"] for s in seen) / max(1, len(seen)), 3),
             "on_paint_rate": round(sum(s["on_paint"] for s in seen) / max(1, len(seen)), 3),
             "jump_rate": round(jumps / max(1, len(rows) - 1), 3),

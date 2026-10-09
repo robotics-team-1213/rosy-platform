@@ -10,16 +10,42 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/site-map.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/fleet-header.css">
+  <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/site-map.js"></script>
 </head>
 <body>
 <ui-shell grammar="procedure">
+  <a class="skip-link" href="#site-map-main">본문으로 건너뛰기</a>
+  <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
-    <ui-brand href="/console" aria-label="Rosy Fleet 홈"><b>Rosy Fleet</b><small>현장 지도 · 주소와 길</small></ui-brand>
-    <span data-spacer></span>
-    <ui-tag id="session">접속 전</ui-tag>
-    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop" disabled reason="관제 접속이 필요합니다"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
+    <div class="spacer"></div>
+    <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="접속과 화면 표시" title="접속과 화면 표시" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
+    <div id="topbar-extra" class="topbar-extra" data-open="false">
+      <!-- D-519 — paired 화면은 아이디·비밀번호로 로그인한다. 토큰은 접힘 안에 남는다. -->
+      <div id="password-login" class="password-login" hidden></div>
+      <details id="token-access" class="token-access" open>
+        <summary>토큰으로 접속</summary>
+        <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+               autocomplete="off" aria-label="관제 토큰">
+        <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
+      </details>
+      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
+      <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
+        <ui-text id="theme-choice-label" scale="label">화면 표시</ui-text>
+        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게" data-action-icon="theme-dark"><span class="sr-only">어둡게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
+      </div>
+    </div>
+    <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
+    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
+    <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+    <ui-text id="clock" scale="value">--:--:--</ui-text>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
   <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
@@ -28,12 +54,15 @@
     <a href="/console/site-map" aria-current="page">현장 지도</a>
     <a href="/console/cell">Cell</a>
   </nav>
-  <div class="site-access">
-    <ui-field id="credential" type="password" placeholder="관제 토큰" aria-label="관제 토큰"></ui-field>
-    <ui-button id="connect" kind="primary">접속</ui-button>
-  </div>
   <ui-status id="estop-feedback" hidden></ui-status>
-  <main>
+  <main id="site-map-main" tabindex="-1">
+    <nav class="task-nav" aria-label="현장 지도 작업">
+      <a href="#map-heading">지도 보기</a>
+      <a href="#trip-heading">경로 미리보기</a>
+      <a href="#run-heading">운행 확인</a>
+      <a href="#edit-heading">지도 편집</a>
+      <a href="#teach-heading">가르치기</a>
+    </nav>
     <ui-text id="notice" role="status" aria-live="polite">접속하면 활성 지도와 초안을 읽습니다. 경로 미리보기는 로봇을 움직이지 않습니다.</ui-text>
     <ui-section aria-labelledby="map-heading">
       <ui-head>
@@ -41,23 +70,47 @@
         <label class="inline">보기 <select class="ui-field" id="map-source" aria-label="보는 지도">
           <option value="active">활성 지도</option><option value="draft">초안</option>
         </select></label>
+        <label class="inline">화면 방향 <select class="ui-field" id="map-view-turn" aria-label="지도 화면 방향, 기본 화면에서 시계 방향 회전">
+          <option value="0">기본 (+y 위)</option><option value="90">90° 돌림</option>
+          <option value="180">180° 돌림</option><option value="270">270° 돌림</option>
+        </select></label>
       </ui-head>
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
-      <div class="actions">
-        <label>평면 영상 카메라<select class="ui-field" id="plane-source" aria-label="평면 영상 카메라"></select></label>
-        <ui-button id="plane-load" kind="quiet" disabled>직사각형 평면 영상 불러오기</ui-button>
-        <ui-button id="plane-clear" kind="quiet" disabled>영상 숨기기</ui-button>
-        <label class="ui-check"><input class="ui-field" id="plane-pick" type="checkbox" disabled> 평면 지도 좌표 확인</label>
-      </div>
-      <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
-      <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
       <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
       </div>
-      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <details class="plane-tools">
+        <summary>평면 영상 도구 · 표시 전용</summary>
+        <div class="plane-tools-body">
+          <div class="actions">
+            <label>평면 영상 카메라<select class="ui-field" id="plane-source" aria-label="평면 영상 카메라"></select></label>
+            <ui-button id="plane-load" kind="quiet" disabled>직사각형 평면 영상 불러오기</ui-button>
+            <ui-button id="plane-clear" kind="quiet" disabled>영상 숨기기</ui-button>
+            <label class="ui-check"><input class="ui-field" id="plane-pick" type="checkbox" disabled> 평면 지도 좌표 확인</label>
+          </div>
+          <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
+          <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
+        </div>
+      </details>
     </ui-section>
-    <div class="columns">
+    <div class="map-workflow">
+      <ui-section aria-labelledby="trip-heading">
+        <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>
+        <label>로봇<select class="ui-field" id="trip-robot"></select></label>
+        <label>목적지 주소<select class="ui-field" id="trip-place"></select></label>
+        <label class="ui-check"><input class="ui-field" type="checkbox" id="trip-pick"> 지도에서 좌표 찍기</label>
+        <ui-text id="trip-point">찍은 좌표 없음</ui-text>
+        <div class="actions"><ui-button id="trip-plan" kind="primary" disabled>경로 계산</ui-button></div>
+        <ui-status id="trip-summary" state="empty">계산 전 · 실행은 하지 않습니다</ui-status>
+        <ol id="trip-actions" aria-label="교차로 동작"></ol>
+      </ui-section>
+      <ui-section aria-labelledby="run-heading">
+        <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
+        <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
+        <a id="trip-console-link" href="/console">운행은 관제의 로봇 카드에서</a>
+      </ui-section>
       <ui-section aria-labelledby="edit-heading">
         <ui-head><ui-text id="edit-heading" scale="label">초안 편집</ui-text></ui-head>
         <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
@@ -82,27 +135,7 @@
         </div>
         <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
       </ui-section>
-      <ui-section aria-labelledby="trip-heading">
-        <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>
-        <label>로봇<select class="ui-field" id="trip-robot"></select></label>
-        <label>목적지 주소<select class="ui-field" id="trip-place"></select></label>
-        <label class="ui-check"><input class="ui-field" type="checkbox" id="trip-pick"> 지도에서 좌표 찍기</label>
-        <ui-text id="trip-point">찍은 좌표 없음</ui-text>
-        <div class="actions"><ui-button id="trip-plan" kind="primary" disabled>경로 계산</ui-button></div>
-        <ui-status id="trip-summary" state="empty">계산 전 · 실행은 하지 않습니다</ui-status>
-        <ol id="trip-actions" aria-label="교차로 동작"></ol>
-      </ui-section>
     </div>
-    <ui-section aria-labelledby="run-heading">
-      <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
-      <ui-text>계산한 경로를 30초 안에 출발시킵니다. 현장에서 한 번에 한 대만 운행합니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
-      <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
-      <div class="actions">
-        <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>
-        <ui-button id="trip-confirm" kind="quiet" hidden>바뀐 경로로 계속</ui-button>
-        <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
-      </div>
-    </ui-section>
     <ui-section aria-labelledby="teach-heading">
       <ui-head><ui-text id="teach-heading" scale="label">지도 가르치기</ui-text></ui-head>
       <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>
@@ -128,6 +161,8 @@
         <label>새 주소 이름<input class="ui-field" id="teach-place-name" maxlength="64"></label>
         <label>장소 종류<select class="ui-field" id="teach-place-kind"></select></label>
         <div class="actions"><ui-button id="teach-place" kind="quiet" disabled reason="관제 접속이 필요합니다">여기에 주소 만들기</ui-button></div>
+        <label>바닥 장소 마커<select class="ui-field" id="teach-marker"></select></label>
+        <div class="actions"><ui-button id="teach-marker-place" kind="quiet" disabled reason="관제 접속이 필요합니다">마커로 등록</ui-button></div>
       </div>
     </ui-section>
   </main>

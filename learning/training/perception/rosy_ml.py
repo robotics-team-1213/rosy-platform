@@ -58,7 +58,7 @@ import operator_ssh  # noqa: E402
 import slot_cli  # noqa: E402
 import store  # noqa: E402
 
-SITE_TOKEN_FILE = "/etc/rosy/site/secrets/hf_token"
+SITE_TOKEN_FILE = "/etc/rosy/site-secrets/hf_token"
 STALE_HOLD_H = 24
 
 

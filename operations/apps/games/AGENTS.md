@@ -1,4 +1,9 @@
+<!-- Parent: ../AGENTS.md -->
+
 # games
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stays in CORE.
 

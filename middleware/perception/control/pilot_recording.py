@@ -30,12 +30,17 @@ from core_common.protocol.recording import (
     FETCHED_NAME, MANIFEST_NAME, MANIFEST_SCHEMA, MAX_DURATION_S, SESSION_NAME, STATUS_SCHEMA,
     TELEOP_INTENT_TOPIC, recording_id_ok)
 from control.recording import (
-    COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics,
-    _read_meta, _sessions, _total_bytes, _write_meta, new_session)
+    CAMERA_GROUND_STATUS_TOPIC, CAMERA_TELEMETRY_TOPIC, COMPRESSED_CAMERA_TOPIC,
+    IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC,
+    ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics, _read_meta, _sessions, _total_bytes,
+    _write_meta, new_session)
 
 # ir_sensor/range rides with the other evidence. us_sensor/range (ultrasonic) does not.
 PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",
-                TELEOP_INTENT_TOPIC, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC)
+                TELEOP_INTENT_TOPIC, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC, CAMERA_TELEMETRY_TOPIC,
+                CAMERA_GROUND_STATUS_TOPIC, "tf", "tf_static")
+# ROS TF may be published globally or remapped into the robot namespace.
+GLOBAL_TOPICS = ("/tf", "/tf_static")
 # Targets and selected boundaries are needed even when no annotated preview is requested.
 ANNOTATED_TOPICS = ('camera/preview/compressed', 'camera/observation',
                     'perception/learned/shadow', 'perception/learned/status')
@@ -63,7 +68,8 @@ def pilot_bag_command(folder, namespace: str = "", *, preview_mode: str = 'raw')
             "ros2", "bag", "record", "--storage", "mcap",
             "--storage-preset-profile", "zstd_fast", "--max-bag-duration", "30",
             "-o", str(Path(folder) / "bag"), "--topics",
-            *_ns_topics(PILOT_TOPICS + (ANNOTATED_TOPICS if preview_mode == 'annotated' else ()), namespace)]
+            *_ns_topics(PILOT_TOPICS + (ANNOTATED_TOPICS if preview_mode == 'annotated' else ()), namespace),
+            *(GLOBAL_TOPICS if namespace.strip("/") else ())]
 
 
 def _sha256(path: Path) -> str:
@@ -223,7 +229,8 @@ class PilotRecorder:
             folder = new_session(self._root, device=self._device, camera_profile_revision="",
                                  model_revision="", task_id=None, reason="pilot",
                                  now=self._now(), topics=PILOT_TOPICS + (
-                                     ANNOTATED_TOPICS if preview_mode == 'annotated' else ()),
+                                     ANNOTATED_TOPICS if preview_mode == 'annotated' else ()) + (
+                                     GLOBAL_TOPICS if self._namespace.strip("/") else ()),
                                  extra={"mode": "pilot", "writer_ready": False,
                                         'preview_mode': preview_mode,
                                         'annotation_origin': 'model_unreviewed' if preview_mode == 'annotated' else 'none'})

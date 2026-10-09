@@ -3,6 +3,9 @@
 
 # wander/ (the autonomy FSM)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 The wander autonomy: a 20 ms FSM (`wait forward pause look calc recon wall backup turn escape stop`) over subject mixins. Publishes semantic velocity (positive x = nose-forward) to `/cmd_vel_raw`, never `/cmd_vel`.
 

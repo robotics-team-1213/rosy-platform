@@ -23,6 +23,8 @@ class ReferencePose:
     seq: int = 0
     #: 이 좌표가 어느 맵의 것인지. `None` 이면 확인할 수 없다.
     map_id: Optional[str] = None
+    #: D-559: "map" | "odom" | None (an older leader that does not say).
+    frame: Optional[str] = None
 
 
 def follow_goal(reference: ReferencePose, distance: float, lateral: float) -> NavGoalSpec:

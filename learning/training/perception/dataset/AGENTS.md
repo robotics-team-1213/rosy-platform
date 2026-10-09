@@ -3,6 +3,9 @@
 
 # dataset
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot, cut frames, label them (by hand through CVAT or automatically from LiDAR geometry), build a session-split dataset and publish it into the store for the trainer. Developer-side only; outputs live in `data/perception/` (gitignored) and `data/teleop/learning/`.

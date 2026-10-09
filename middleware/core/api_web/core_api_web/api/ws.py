@@ -91,7 +91,9 @@ async def ws_state(websocket: WebSocket):
     rate = float(svc.config.get("state", {}).get("rate_hz", 10.0))
     try:
         svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
+        origin = websocket.client.host if websocket.client else ""
         while True:
+            svc.trip_lease.note_use(token_id, origin, "ws_state")   # D-541 1: shared owner token
             await websocket.send_json(svc.state.snapshot().model_dump())
             await asyncio.sleep(1.0 / rate)
     except WebSocketDisconnect:
@@ -191,9 +193,9 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
     return svc
 
 
-def _pose_envelope(robot_id: str, pose, seq: int, map_id=None) -> dict:
+def _pose_envelope(robot_id: str, pose, seq: int, map_id=None, frame=None) -> dict:
     """API Ref §7.8 그대로. 리더와 팔로워가 같은 모양을 쓴다."""
-    sample = PoseSample(robot_id=robot_id, map_id=map_id,
+    sample = PoseSample(robot_id=robot_id, map_id=map_id, frame=frame,
                         pose=Pose(x=pose.x, y=pose.y, yaw=pose.yaw), seq=seq)
     return Envelope(type=EnvelopeType.POSE, payload=sample.model_dump()).model_dump()
 
@@ -216,10 +218,12 @@ async def ws_swarm_pose(websocket: WebSocket):
     try:
         while True:
             snapshot = svc.state.snapshot()
+            # D-559: pose and its frame in one read; an odom fallback must not pass as map.
+            x, y, yaw, frame, _age = svc.state.pose_sample()
             seq += 1
             await websocket.send_json(
-                _pose_envelope(svc.identity.robot_id, snapshot.pose, seq,
-                               map_id=snapshot.map_id))
+                _pose_envelope(svc.identity.robot_id, Pose(x=x, y=y, yaw=yaw), seq,
+                               map_id=snapshot.map_id, frame=frame))
             next_at += period
             delay = next_at - loop.time()
             if delay <= 0:
@@ -244,6 +248,7 @@ def _reference_from(frame: dict):
     pose = payload.get("pose")
     robot_id = payload.get("robot_id")
     map_id = payload.get("map_id")
+    frame = payload.get("frame")
     if not isinstance(pose, dict) or not isinstance(robot_id, str) or not robot_id:
         return None
     try:
@@ -254,6 +259,7 @@ def _reference_from(frame: dict):
             # robot_id 옆에 있는 검사와 같은 것. 숫자 map_id 하나면 비교가
             # 영원히 참이 되어, 스트림이 멀쩡한 대형이 영구 HOLD 에 앉는다.
             map_id=map_id if isinstance(map_id, str) and map_id else None,
+            frame=frame if isinstance(frame, str) and frame else None,
         )
     except (KeyError, TypeError, ValueError):
         return None
@@ -282,9 +288,10 @@ async def ws_swarm_reference(websocket: WebSocket):
             if reference is None:
                 continue
             if (getattr(svc.modes, "motion_reserved", False)
-                    or svc.calibration.blocking(token_id) is not None):
-                # D-321 addendum: a leader pose from anyone but the calibration
-                # owner must not steer a follower during the lease. Drop the
+                    or svc.calibration.blocking(token_id) is not None
+                    or svc.trip_lease.blocking(token_id) is not None):
+                # D-321 addendum / D-541 3: a leader pose from anyone but the calibration
+                # or trip lease owner must not steer a follower during the lease. Drop the
                 # frame (like a malformed one); SWM-004 holds on silence.
                 continue
             try:

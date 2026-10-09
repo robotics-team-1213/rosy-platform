@@ -3,6 +3,9 @@
 
 # v1
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 REST routers under `/api/v1/*` (API Ref §5). One module per domain; `routes.py` only collects them.
@@ -25,6 +28,7 @@ REST routers under `/api/v1/*` (API Ref §5). One module per domain; `routes.py`
 | `swarm.py` | SWM-002 follow/cancel/state. 501 when the capability does not declare `swarm.follow` |
 | `observability.py` | EVT-003 events, LOG-001 audit, DIAG-001 diagnostics, OBS-101 `/metrics` |
 | `host.py` | Host Agent relay: network, release, commissioning |
+| `trip_lease.py` | D-541 Fleet trip lease open/renew, release, takeover (fence lives in `common.require_calibration_owner`) |
 
 ## Subdirectories
 

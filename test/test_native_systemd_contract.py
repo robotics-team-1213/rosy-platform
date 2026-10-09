@@ -472,6 +472,8 @@ DECLARED_READS = {
         "/etc/ssh",
         # D-411: lists and streams Pilot recordings; ReadOnlyPaths. CORE never writes there.
         "/var/lib/rosy/pilot-recordings",
+        # D-548: root's bench marker, only stat()ed; CORE never writes /etc/rosy.
+        "/etc/rosy/dev-mode",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -819,6 +821,13 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     # D-483: the approval-code hand-over; only CORE writes, only rosy-display's group reads.
     assert "d /run/rosy-peer-display 2750 rosy-core rosy-display -" in rules
     assert "-/run/rosy-peer-display" in _words(_directives("rosy-core.service"), "ReadWritePaths")
+    # A payload release never refreshes /etc/tmpfiles.d; the unit (which the image-layer sync
+    # does carry) must create the directory itself or old cards show no code (2026-10-09).
+    # Same mode/owner/group as the tmpfiles rule, read from it so the two cannot drift.
+    _d, path, mode, owner, group, _age = next(
+        line.split() for line in rules.splitlines() if line.startswith("d /run/rosy-peer-display "))
+    assert _directives("rosy-core.service")["ExecStartPre"] == [
+        f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}"]
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():

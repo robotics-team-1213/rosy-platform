@@ -1,0 +1,123 @@
+{
+  "status": "candidate_only_not_human_truth",
+  "model_revision": "lane-seg-20261007-b389d6a0",
+  "model_sha256": "b389d6a0690fec9bfa5f5a2db1f0ada56eb68ea58b0e747ff9afa3a028a6b145",
+  "dataset": {
+    "repo": "sam3-road-091340Z-smoke",
+    "revision": "38cc567d11baea4e62b94c1547fe0217a8cbc4fcc44ef6f66e68d43c08d55718"
+  },
+  "frames": [
+    {
+      "frame": "20261007T143038Z_000.png",
+      "source_sha256": "401941ec7d3d76055c900daaecbbd83e86407cc10ac475e88668438b2686c3f8",
+      "class_fraction": {
+        "background": 0.4713671875,
+        "lane_left": 0.0160546875,
+        "lane_right": 0.031901041666666664,
+        "crosswalk": 0.00018229166666666667,
+        "speed_bump": 0.0,
+        "drivable": 0.48049479166666664
+      },
+      "near_drivable_fraction": 0.9383463541666667,
+      "near_drivable_center_x": 154.0226878512454
+    },
+    {
+      "frame": "20261007T143038Z_020.png",
+      "source_sha256": "7a767c99d86f9bea2d2b49e19a71224b708f1e5fa979fd80745197980650fb44",
+      "class_fraction": {
+        "background": 0.46703125,
+        "lane_left": 0.0,
+        "lane_right": 0.07239583333333334,
+        "crosswalk": 0.014361979166666667,
+        "speed_bump": 2.604166666666667e-05,
+        "drivable": 0.4461848958333333
+      },
+      "near_drivable_fraction": 0.8386393229166667,
+      "near_drivable_center_x": 139.95497418778868
+    },
+    {
+      "frame": "20261007T143038Z_035.png",
+      "source_sha256": "b5b87abc7bc86eaf48de439d5a96e8d6584ebca1fc7365689864fbe5a68be29e",
+      "class_fraction": {
+        "background": 0.46751302083333335,
+        "lane_left": 0.0,
+        "lane_right": 0.09006510416666667,
+        "crosswalk": 0.010924479166666667,
+        "speed_bump": 0.0,
+        "drivable": 0.43149739583333335
+      },
+      "near_drivable_fraction": 0.7924153645833333,
+      "near_drivable_center_x": 159.49476235468103
+    },
+    {
+      "frame": "20261007T143038Z_080.png",
+      "source_sha256": "6ef35527509fda892e546e9a0b577def9004e204249a50ae73f6a2f4c228f9a8",
+      "class_fraction": {
+        "background": 0.47765625,
+        "lane_left": 0.03700520833333333,
+        "lane_right": 0.046171875,
+        "crosswalk": 0.10515625,
+        "speed_bump": 0.00037760416666666666,
+        "drivable": 0.3336328125
+      },
+      "near_drivable_fraction": 0.5278645833333333,
+      "near_drivable_center_x": 182.89411692155895
+    },
+    {
+      "frame": "20261007T143038Z_123.png",
+      "source_sha256": "b7f4792c6685cc2e48c1a389ad144802562695f2460bd77c64c49b8287f18c00",
+      "class_fraction": {
+        "background": 0.5034505208333333,
+        "lane_left": 0.039010416666666665,
+        "lane_right": 0.00328125,
+        "crosswalk": 0.0,
+        "speed_bump": 0.0018880208333333333,
+        "drivable": 0.4523697916666667
+      },
+      "near_drivable_fraction": 0.8326822916666666,
+      "near_drivable_center_x": 159.1931196247068
+    },
+    {
+      "frame": "20261007T143211Z_055.png",
+      "source_sha256": "97a921ae9f5227c9b53f002087e6d70118125339747721740a84a7b8c611b2a7",
+      "class_fraction": {
+        "background": 0.48244791666666664,
+        "lane_left": 0.105,
+        "lane_right": 0.0,
+        "crosswalk": 0.0,
+        "speed_bump": 0.026744791666666667,
+        "drivable": 0.38580729166666666
+      },
+      "near_drivable_fraction": 0.7388346354166667,
+      "near_drivable_center_x": 131.8513459928625
+    },
+    {
+      "frame": "20261006T091340Z_190.png",
+      "source_sha256": "27b1a2f83cb823e99c0eccd73345fd63794560827b1ebeef7e099ba10c3314bd",
+      "class_fraction": {
+        "background": 0.47765625,
+        "lane_left": 0.10350260416666666,
+        "lane_right": 0.0,
+        "crosswalk": 0.0,
+        "speed_bump": 0.026276041666666666,
+        "drivable": 0.3925651041666667
+      },
+      "near_drivable_fraction": 0.7056640625,
+      "near_drivable_center_x": 148.86050373650707
+    },
+    {
+      "frame": "20261006T091340Z_448.png",
+      "source_sha256": "eded74589922b7e49b677cfe294bd694d56a5c2261dde39cf376ec5e9b591d3c",
+      "class_fraction": {
+        "background": 0.4796223958333333,
+        "lane_left": 0.09010416666666667,
+        "lane_right": 1.3020833333333334e-05,
+        "crosswalk": 0.0,
+        "speed_bump": 0.0,
+        "drivable": 0.43026041666666665
+      },
+      "near_drivable_fraction": 0.7306640625,
+      "near_drivable_center_x": 159.8605096676468
+    }
+  ]
+}

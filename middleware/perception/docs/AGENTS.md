@@ -3,6 +3,9 @@
 
 # docs
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Operator-facing notes for camera ground calibration, localization, and narrow-passage navigation. Korean prose. These are package notes, not the repo governance docs in `Rosy OS/docs/`.

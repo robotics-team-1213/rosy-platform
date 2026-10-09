@@ -19,6 +19,8 @@ services:
       - console
       - --robots
       - /run/rosy-config/robots.yaml
+      - --site-config-optional
+      - /run/rosy-config/fleet-site.yaml
       - --host
       - 0.0.0.0
       - --port
@@ -70,6 +72,9 @@ services:
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy
+      # D-524 Service Control key, targets, known_hosts: Fleet only, outside the config dir
+      # that Vision also mounts. Docker creates it empty when absent; Fleet then answers 503.
+      - /etc/rosy/fleet-host-control:/run/rosy-fleet-host-control:ro
       # NSS queries host Avahi; directory bind follows socket replacement after daemon restart.
       - type: bind
         source: /run/avahi-daemon
@@ -117,6 +122,9 @@ services:
       - vision
       # D-457 marker priority and anonymous fallback, display-only.
       - --track
+      # D-539: the operator-relearned empty-track background survives restarts.
+      - --track-state
+      - /var/lib/rosy-vision/track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host
@@ -134,7 +142,15 @@ services:
       ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
-      - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
+      # Vision reads only its camera file. Never the whole config dir: Fleet roster, users and
+      # CORE credentials live there (D-524 security review). Secrets sit outside it too.
+      - type: bind
+        source: "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}/site-cameras.yaml"
+        target: /run/rosy-config/site-cameras.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - vision_state:/var/lib/rosy-vision
     secrets:
       - phone_ingress_token
       - fleet_sighting_token
@@ -209,6 +225,7 @@ services:
 
 volumes:
   sighting_data:
+  vision_state:
 
 networks:
   site_backend:

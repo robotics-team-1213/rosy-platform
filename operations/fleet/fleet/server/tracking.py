@@ -79,6 +79,8 @@ class TrackingService:
         self._drift_provider = drift_provider
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
+        #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
+        self.identity = None
 
     @property
     def enabled(self) -> bool:
@@ -98,9 +100,12 @@ class TrackingService:
         source = self.authenticate(authorization)
         record = self.calibrations.get(source.source_id)
         usable = record is not None and record.map_id == source.map_id
-        return {"source_id": source.source_id, "map_id": source.map_id,
-                "calibration": record.to_dict() if usable else None,
-                "relearn_seq": self._sources[source.source_id].relearn_seq}
+        config = {"source_id": source.source_id, "map_id": source.map_id,
+                  "calibration": record.to_dict() if usable else None,
+                  "relearn_seq": self._sources[source.source_id].relearn_seq}
+        if self.identity is not None:
+            config["identity_challenge"] = self.identity.challenge_for(source.source_id)
+        return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:
         source = self.authenticate(authorization)
@@ -130,6 +135,8 @@ class TrackingService:
         state.last_error = None
         state.arrivals.append(now)
         self._trim(state, now)
+        if self.identity is not None:
+            self.identity.on_detections(source.source_id, payload)
         return {"accepted": True, "source_id": source.source_id, "seq": payload.seq,
                 "status": payload.status}
 
@@ -174,16 +181,21 @@ class TrackingService:
     def now(self) -> float:
         return self._clock()
 
-    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None) -> None:
+    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None,
+                       observed: Optional[Mapping[str, float]] = None) -> None:
         """Remember the robot states the console state route just gathered.
 
         ``now`` is when the gather started (default: the clock now), so a slow robot read
-        never makes its state look fresher than it is. An online row with a state replaces
-        the robot's entry; any other row for that robot (offline, or no state) drops it, so
-        a robot that went away keeps no stale pose.
+        never makes its state look fresher than it is. ``observed`` (robot_id -> this clock)
+        is when each robot's own state was read; it wins over ``now``. Without it a whole
+        gather slower than ``state_fresh_s`` left every state stale on arrival, so LED
+        identify always answered IDENTIFY_NOT_MOVING (site, 2026-10-09: 3.4 s gathers).
+        An online row with a state replaces the robot's entry; any other row for that robot
+        (offline, or no state) drops it, so a robot that went away keeps no stale pose.
         """
         if now is None:
             now = self._clock()
+        observed = observed or {}
         for row in robots:
             if not isinstance(row, Mapping):
                 continue
@@ -192,7 +204,7 @@ class TrackingService:
                 continue
             state = row.get("state")
             if row.get("online") and isinstance(state, Mapping):
-                self._states[robot_id] = (dict(state), now)
+                self._states[robot_id] = (dict(state), observed.get(robot_id, now))
             else:
                 self._states.pop(robot_id, None)
 
@@ -230,14 +242,23 @@ class TrackingService:
             poses = {rid: self._pose(rid, source.map_id, now) for rid in source.robot_ids}
             assignments = {marker: rid for rid, marker in source.robot_markers}
             measured = {}
+            # D-575: a marker no robot is assigned to is still a robot on the floor: unknown, with its id.
+            unassigned: dict[int, Seen] = {}
             if fresh and status == "OK":
                 for detection in payload.detections:
+                    if detection.marker_id is None:
+                        continue
                     rid = assignments.get(detection.marker_id)
+                    item = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
                     if rid is not None and rid in source.robot_ids:
-                        measured[rid] = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
-            if measured and seen is not None:
-                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), rid, index)
-                               for rid, m in measured.items() for index, d in enumerate(seen)
+                        measured[rid] = item
+                    else:
+                        unassigned[detection.marker_id] = item
+            marked = {**measured, **unassigned}
+            if marked and seen is not None:
+                # One anonymous blob per marker is that marker's robot, not another one.
+                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), str(rid), index)
+                               for rid, m in marked.items() for index, d in enumerate(seen)
                                if math.hypot(d.x - m.x, d.y - m.y) <= max(d.footprint_m, m.footprint_m))
                 used_markers, duplicates = set(), set()
                 for _, rid, index in pairs:
@@ -257,10 +278,32 @@ class TrackingService:
                     track_source[row.robot_id] = source.source_id
                 tracks[row.robot_id] = chosen
             unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
-                            "footprint_m": item.footprint_m, "score": item.score} for item in extra)
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": None}
+                           for item in extra)
+            unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": marker_id}
+                           for marker_id, item in sorted(unassigned.items()))
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
                 "sources": sources_out, "robots": robots, "unknown": unknown}
+
+    def latest(self, source_id: str) -> Optional[OverheadDetectionsPayload]:
+        """The source's last accepted payload while inside the lease, else None."""
+        state = self._sources.get(source_id)
+        payload = None if state is None else state.payload
+        if payload is None or self._clock() - payload.captured_at > self.lease_s:
+            return None
+        return payload
+
+    def robot_state(self, robot_id: str) -> Optional[dict]:
+        """The robot's state from the last console gather while fresh, else None."""
+        entry = self._states.get(robot_id)
+        if entry is None or not 0.0 <= self._clock() - entry[1] <= self.state_fresh_s:
+            return None
+        return entry[0]
+
+    def revisions(self, source: SightingSource) -> set[str]:
+        return self._revisions(source)
 
     def _revisions(self, source: SightingSource) -> set[str]:
         allowed = {source.calibration_revision}  # corner-marker path (CameraMap), D-457 2

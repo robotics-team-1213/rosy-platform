@@ -3,6 +3,9 @@
 
 # map_260905_update_v2
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Versioned MAP 260905 bundle (v2): Gazebo world, static occupancy map, human

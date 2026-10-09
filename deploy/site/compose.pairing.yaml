@@ -15,6 +15,8 @@ services:
       - console
       - --robots
       - /run/rosy-config/robots.yaml
+      - --site-config-optional
+      - /run/rosy-config/fleet-site.yaml
       - --host
       - 0.0.0.0
       - --port
@@ -79,6 +81,8 @@ services:
       - rosy_vision.cli
       - vision
       - --track
+      - --track-state
+      - /var/lib/rosy-vision/track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host

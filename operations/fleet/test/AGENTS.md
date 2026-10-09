@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 pytest for fleet geometry, assignment, robots, transport, relay, arming,

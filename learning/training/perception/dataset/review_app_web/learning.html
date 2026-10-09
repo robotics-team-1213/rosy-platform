@@ -5,26 +5,32 @@
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
-<ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>학습 작업</h1>
-<nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning" aria-current="page">작업 목록</a><a href="/">객체 검수</a><a href="/pixels">픽셀 검수</a><a href="/catalog">자료 등록</a></nav><span data-spacer></span>
+<ui-shell grammar="procedure"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning 작업 목록"><b>ROSY</b></ui-brand><h1>학습 작업</h1>
+<nav class="workspace-tabs" aria-label="학습 화면"><a data-action-icon="list" href="/learning" aria-current="page">작업 목록</a><a data-action-icon="box" href="/">객체 검수</a><a data-action-icon="pixels" href="/pixels">픽셀 검수</a><a data-action-icon="folder" href="/catalog">자료 등록</a></nav><span data-spacer></span>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
 <main id="learning-main" class="learning-main" tabindex="-1">
-<div class="workspace-heading"><div><h2>오늘 확인할 학습 결과</h2><p>검수 상태와 학습 결과를 확인하고 다음 작업으로 이어가세요.</p></div><ui-button id="new-task" kind="primary" disabled>작업 결과 연결</ui-button></div>
+<div class="workspace-heading"><div><h2>학습·검수 작업대</h2><p>현재 검수할 자료와 기존 학습 결과를 각각 확인하세요.</p></div></div>
+<ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
+<section class="learning-section" aria-labelledby="next-review-title"><h2 id="next-review-title">현재 검수 작업</h2>
+<p id="review-stage-summary" class="quiet" role="status">등록·승인 상태를 확인하는 중입니다.</p>
+<p class="quiet">사진을 열어 원본과 초안을 확인한 뒤 각 검수 화면에서 승인하세요. 객체 승인과 픽셀 승인은 별도로 기록됩니다.</p>
+<div class="review-summary" aria-labelledby="review-summary-title"><div><h3 id="review-summary-title">1 · 객체 박스 확인</h3><p id="review-counts">불러오는 중</p></div><a id="object-review-link" class="workspace-link" data-action-icon="next" href="/?filter=pending">검수 대기 사진 열기</a></div>
+<div class="review-summary" aria-labelledby="pixel-summary-title"><div><h3 id="pixel-summary-title">2 · 픽셀 마스크 확인</h3><p id="pixel-counts">불러오는 중</p></div><a id="pixel-review-link" class="workspace-link" data-action-icon="next" href="/pixels?filter=pending">검수 대기 마스크 열기</a></div>
+<div class="review-summary" aria-labelledby="data-summary-title"><div><h3 id="data-summary-title">3 · 학습 데이터 수용</h3><p id="training-data-state">현재 검수분의 데이터셋 수용 여부는 이 화면에서 확인할 수 없습니다.</p><p id="preparation-status" class="quiet" role="status">준비 상태를 확인하는 중입니다.</p></div><a href="/pixels#pixel-preparation" class="workspace-link">승인 자료 준비로 이동</a></div></section>
+<section class="learning-section" aria-labelledby="job-heading"><div class="ui-workspace-bar"><h2 id="job-heading">실행·평가 결과</h2><span data-spacer></span><ui-button id="new-task" data-action-icon="plus" kind="quiet" disabled>작업 결과 연결</ui-button><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
 <ui-status id="learning-status" state="pending">작업을 불러오는 중입니다.</ui-status>
-<section class="review-summary" aria-labelledby="review-summary-title"><div><h3 id="review-summary-title">Pinky 객체 검수</h3><p id="review-counts">불러오는 중</p></div><a class="workspace-link" href="/?filter=pending">검수 대기 사진 열기</a></section>
+<p class="quiet">아래는 연결된 기존 작업 결과입니다. 현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.</p>
+<div id="work-filters" class="ui-workspace-bar work-filters"><label class="ui-field-label search-field">작업 검색 <input id="search" class="ui-field" type="search" placeholder="작업 이름·종류로 검색"></label>
+<label class="ui-field-label">종류 <select id="kind-filter" class="ui-field"><option value="all">전체 종류</option></select></label>
+<label class="ui-field-label">상태 <select id="state-filter" class="ui-field"><option value="all">전체 상태</option><option value="attention">확인 필요</option></select></label></div>
+<p id="updated" class="quiet" role="status"></p><div id="jobs" aria-live="polite"></div>
+<ui-empty id="empty-jobs" hidden><h3 id="empty-title">연결한 작업이 없습니다</h3><p id="empty-description">작업 결과 연결에서 기존 결과 폴더를 연결하세요.</p><ui-button id="reset-filters" data-action-icon="refresh" kind="quiet" hidden>검색·필터 초기화</ui-button></ui-empty></section>
 <details id="connection-panel" class="learning-section"><summary>기존 결과 폴더 연결</summary>
 <p class="quiet">이미 실행한 작업의 결과를 연결합니다. 목록은 자동 저장되며 원본 파일을 수정하지 않습니다.</p>
 <form id="register" class="ui-form learning-form"><label class="ui-field-label">작업 종류 <select id="kind" class="ui-field" required></select></label>
 <label class="ui-field-label">작업 이름 <input id="name" class="ui-field" maxlength="100" required placeholder="예: 독립 세션 평가"></label>
 <label class="ui-field-label">결과 폴더 <input id="path" class="ui-field" required placeholder="이 PC의 결과 폴더 전체 경로"></label>
-<p id="expected-files" class="quiet"></p><ui-button id="connect" kind="primary" disabled>연결 저장</ui-button></form></details>
-<ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
-<section class="learning-section" aria-labelledby="job-heading"><div class="ui-workspace-bar"><h2 id="job-heading">연결한 작업</h2><span data-spacer></span><ui-button id="refresh" kind="quiet">최신 결과 확인</ui-button></div>
-<div class="ui-workspace-bar work-filters"><label class="ui-field-label search-field">작업 검색 <input id="search" class="ui-field" type="search" placeholder="작업 이름·종류로 검색"></label>
-<label class="ui-field-label">종류 <select id="kind-filter" class="ui-field"><option value="all">전체 종류</option></select></label>
-<label class="ui-field-label">상태 <select id="state-filter" class="ui-field"><option value="all">전체 상태</option><option value="attention">확인 필요</option></select></label></div>
-<p id="updated" class="quiet"></p><div id="jobs" aria-live="polite"></div>
-<ui-empty id="empty-jobs" hidden><h3 id="empty-title">연결한 작업이 없습니다</h3><p id="empty-description">위의 작업 결과 연결에서 기존 결과 폴더를 연결하세요.</p><ui-button id="reset-filters" kind="quiet" hidden>검색·필터 초기화</ui-button></ui-empty></section>
+<p id="expected-files" class="quiet"></p><ui-button id="connect" data-action-icon="check" kind="primary" disabled>연결 저장</ui-button></form></details>
 <details class="learning-section"><summary>지원 기능과 다음 작업</summary><div id="capabilities"></div>
 <p class="quiet">자료 등록과 픽셀 검수는 이 앱에서 이어갑니다. 새 자동 추론·웹 학습 실행·CVAT 서버 연결·정책 승격 화면은 아직 지원하지 않습니다. 기존 CLI 작업 결과를 이 화면에서 확인할 수 있습니다.</p></details>
 </main></ui-shell></body></html>

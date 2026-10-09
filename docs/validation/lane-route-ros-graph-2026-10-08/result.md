@@ -1,0 +1,9 @@
+# 녹화 굽이의 지도 경계 기억: 격리 ROS 노드 재생
+
+2026-10-08 모델 PC `~/rosy_lfstop_ws`에서 `line_observer_node`만 ROS domain 97로 실행했다. 실행 전·종료 후 그 도메인의 노드 목록은 비어 있었다. 원본 Gazebo 녹화 frame 76~200의 `camera/front`, `odom`, `/clock`를 원래 stamp로 재발행했고, `camera_lane_mode=route_a`, 경로 `west:r → ring_s:f`, Gazebo 지면 기하를 [파라미터](evidence/route_graph_params.yaml)에 지정했다. [실행 스크립트](evidence/run_route_graph.sh)와 [재발행기](evidence/route_graph_replay.py)는 이 입력을 재현한다.
+
+송신 125프레임에 대응하는 `CAMERA_LINE` 관측을 **125/125** 수신했고 누락 stamp는 없었다. 일반 `edge_left` ROS SIM이 정지한 첫 공백 frame 192(`stamp=65.625`)에서 `route_a`의 wire 관측은 `visible=true`, `confidence=0.6`, `error=-0.0984813`이었다([출력](evidence/result.json), SHA-256 `2f57b32990643da84c652eade5e6ecf46439b16dbeccefcf60e9a29e7cf3618d`). 같은 소스를 직접 호출한 [오프라인 재생](../lane-route-gap-replay-2026-10-08/result.md)은 그 프레임을 `MEMORY`로 판독했다. wire에는 내부 tier가 없으므로 ROS 출력만으로 `MEMORY`를 확인했다고 주장하지 않는다.
+
+원본 `frames.npz`는 모델 PC `~/rosy_lfstop_ws/guard1/rec/`와 로컬 `X:/DevTemp/lane-blind-ros-sim/`에 있으며 SHA-256은 `08e8598bd0aa9736b8ba90ba8a7ec3bc8a77c44a00025f4f546bd3e73f1bfd63`이다. 작업공간은 기본 소스 `65b15b9bb`에 로컬의 차선 추종 세 파일만 덮은 이미지이며 현재 main 전체 빌드가 아니다. 실행 모듈 SHA-256: `lane_bev.py` `f3de37fd32056e78dbff1d796613c681cca040436d16c38c001c1191d18284e1`, `lane_boundaries.py` `fa394d7cbf6006001ee34da63b74c2846d454b0525e1275e3fa6df1be3df484c`, `route_camera.py` `6dcb60d5ad661ce0280008c9109f2a235cfbca0af0014fd1ec54ab22056c1df9`(브랜치 수정 `26c2aa8f8` 포함). 노드 종료 시 rclpy가 `ExternalShutdownException`을 로그에 남겼으나 이후 전용 프로세스와 domain 97 노드는 남지 않았다.
+
+처음 시도한 domain 83은 다른 세션이 사용 중임을 뒤늦게 확인했으므로 그 출력은 **증거에서 제외**했다. 이 유효한 재생에는 CORE와 Gazebo 폐루프가 없고 녹화 자세는 frame 192 뒤 정지해 있다. 따라서 ROS 노드의 관측 배선과 stamp 처리만 검증했다. Fleet 활성 경로·지도 버전 권한, CORE 명령 수용, 전진 중 경계 재획득, 벽/분기 음성 사례, 사람 승인 영상 정답과 실물 수용은 여전히 미검증이다. 현재 운영 `edge_left`의 완전 미관측 STOP은 유지한다.

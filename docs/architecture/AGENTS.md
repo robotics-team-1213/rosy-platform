@@ -3,6 +3,9 @@
 
 # architecture
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Numbered target-OS architecture documents (v0.1) for ROSY Platform: a distributed robotics and physical-AI platform on Ubuntu 24.04 and ROS 2 Jazzy. They describe the target shape and migration path, not the current implementation state. `ROSY OS` stays the repository and historical artifact name (D-290).

@@ -3,6 +3,9 @@
 
 # launch
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Gazebo multi-robot and single-sim launches.

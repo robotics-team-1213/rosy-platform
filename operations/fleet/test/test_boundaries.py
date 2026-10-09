@@ -99,22 +99,28 @@ TRACKING_IMPORTERS = {"server/app.py", "server/console_routes.py", "server/track
                       "server/tracking_routes.py", "server/tracking_drift.py", "cli.py"}
 
 
-def _tracking_imports(source: str) -> list[str]:
-    """Every import in ``source`` that names a fleet.server tracking module, in any spelling."""
+def _server_imports(source: str, stem: str) -> list[str]:
+    """Every import in ``source`` that names a fleet.server module starting with ``stem``, in any spelling."""
     found = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             found += [alias.name for alias in node.names
                       if alias.name.startswith("fleet.server.")
-                      and alias.name.rsplit(".", 1)[-1].startswith("tracking")]
+                      and alias.name.rsplit(".", 1)[-1].startswith(stem)]
         elif isinstance(node, ast.ImportFrom):
             module = node.module
-            if module is not None and module.rsplit(".", 1)[-1].startswith("tracking"):
+            # An absolute module outside fleet (core_common.identity) is another package.
+            if (module is not None and module.rsplit(".", 1)[-1].startswith(stem)
+                    and (node.level > 0 or module.startswith(("fleet.", "server.")))):
                 found.append(module)
             elif module in (None, "fleet.server", "server"):
                 found += [f"{module or '.'}:{alias.name}" for alias in node.names
-                          if alias.name.startswith("tracking")]
+                          if alias.name.startswith(stem)]
     return found
+
+
+def _tracking_imports(source: str) -> list[str]:
+    return _server_imports(source, "tracking")
 
 
 @pytest.mark.parametrize("snippet", [
@@ -140,4 +146,74 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
             continue
         offenders += [f"{rel} imports {name}"
                       for name in _tracking_imports(path.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+#: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only.
+#: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it,
+#: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
+IDENTITY_READERS = {"server/app.py", "server/console_routes.py", "server/identity.py",
+                    "server/tracking.py", "server/tracking_routes.py", "server/sightings_config.py",
+                    "server/lane_compliance_service.py"}
+#: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
+IDENTITY_NEVER = ("server/map_pose_service.py", "localization/map_pose.py", "server/trip_*.py",
+                  "routing/execute.py")
+
+
+def _identity_reads(source: str) -> list[str]:
+    found = _server_imports(source, "identity")
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute) and node.attr == "identity":
+            owner = node.value
+            name = owner.attr if isinstance(owner, ast.Attribute) else getattr(owner, "id", None)
+            if isinstance(name, str) and name.lstrip("_") in ("tracking", "state"):
+                found.append(f"{name}.identity")
+        elif (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "getattr"
+              and len(node.args) >= 2 and getattr(node.args[1], "value", None) == "identity"):
+            found.append("getattr(..., 'identity')")
+    return found
+
+
+@pytest.mark.parametrize("snippet", [
+    "from fleet.server.identity import IdentityService",
+    "from .identity import IdentityService",
+    "from . import identity",
+    "from fleet.server import identity",
+    "import fleet.server.identity",
+    "pose = tracking.identity.confirmed_track_pose('rosy_26')",
+    "pose = self._tracking.identity",
+    "service = app.state.identity",
+    "service = getattr(app.state, 'identity', None)",
+])
+def test_identity_guard_sees_relative_imports_and_attribute_reads(snippet):
+    assert _identity_reads(snippet) != []
+
+
+def test_identity_guard_ignores_unrelated_identities():
+    assert _identity_reads("from core_common.identity import ROBOT_ID_PATTERN\n"
+                           "key = self.identity.fingerprint\nrid = svc.identity_id") == []
+
+
+def test_only_the_wiring_and_lane_compliance_read_the_led_identity_binding():
+    offenders = []
+    for path in _py_files(FLEET_PKG):
+        rel = path.relative_to(FLEET_PKG).as_posix()
+        if rel in IDENTITY_READERS:
+            continue
+        offenders += [f"{rel} reads {name}" for name in _identity_reads(path.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+def test_map_pose_and_trip_modules_never_read_the_led_identity_binding():
+    """D-511 lane compliance may judge a LED-confirmed track; MapPoseService and trips may not."""
+    paths = sorted({p for pattern in IDENTITY_NEVER for p in FLEET_PKG.glob(pattern)})
+    assert len(paths) >= 5                                   # the globs still find the modules
+    offenders = []
+    for path in paths:
+        rel = path.relative_to(FLEET_PKG).as_posix()
+        assert rel not in IDENTITY_READERS, rel
+        text = path.read_text(encoding="utf-8")
+        offenders += [f"{rel} reads {name}" for name in _identity_reads(text)]
+        if "confirmed_track_pose" in text:
+            offenders.append(f"{rel} reads confirmed_track_pose")
     assert offenders == []

@@ -136,6 +136,12 @@ def focal_from_hfov(width_px, hfov_rad):
     return (width_px / 2.0) / math.tan(hfov_rad / 2.0)
 
 
+def simulation_ground_allowed(*, source, simulation_enabled, use_sim_time):
+    """Gazebo geometry is an experiment input, never a physical-camera fallback."""
+    return (str(source).strip().upper() == 'GAZEBO'
+            and bool(simulation_enabled) and bool(use_sim_time))
+
+
 def simulation_ground_plane(*, source, simulation_enabled, use_sim_time,
                             width_px, height_px, height_m, pitch_rad,
                             hfov_rad, max_range_m):
@@ -146,9 +152,8 @@ def simulation_ground_plane(*, source, simulation_enabled, use_sim_time,
     source guard prevents this shortcut from becoming an accidental fallback
     for a Pinky camera that still requires an independently validated profile.
     """
-    if (str(source).strip().upper() != 'GAZEBO'
-            or not simulation_enabled
-            or not use_sim_time):
+    if not simulation_ground_allowed(source=source, simulation_enabled=simulation_enabled,
+                                     use_sim_time=use_sim_time):
         return None
     try:
         width = float(width_px)

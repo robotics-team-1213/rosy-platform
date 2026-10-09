@@ -3,6 +3,9 @@
 
 # dev
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Bench-only tools, never the product install:

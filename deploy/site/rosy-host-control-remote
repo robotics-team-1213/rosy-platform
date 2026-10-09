@@ -1,0 +1,15 @@
+#!/bin/sh
+# Forced command for the site Fleet's Service Control key (authorized_keys `command=`, D-524).
+# Passes one or two plain words to the root helper as an argument list; the helper decides.
+# Installed by install-host-control.sh as /usr/local/sbin/rosy-host-control-remote.
+set -eu
+set -f
+# shellcheck disable=SC2086  # split on purpose; globbing is off
+set -- ${SSH_ORIGINAL_COMMAND:-}
+[ $# -ge 1 ] && [ $# -le 2 ] || { echo "refused" >&2; exit 2; }
+for word in "$@"; do
+  case "$word" in
+    *[!a-z0-9.@-]*|-*) echo "refused" >&2; exit 2 ;;
+  esac
+done
+exec sudo -n /usr/local/sbin/rosy-host-control "$@"

@@ -3,6 +3,9 @@
 
 # workflow-issues
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Compound lessons about verification process: a gate that cannot actually check is not a pass. Apply when adding tests, deploy guards, or documented human procedures.

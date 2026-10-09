@@ -72,6 +72,7 @@ import delivery_journal  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
+from intake_eval_gate import v13_lineage_error  # noqa: E402
 from control.sensing.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)
 
@@ -346,10 +347,15 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"{s}cat {hold} 2>/dev/null || true",
         ])
     if action == "status":
+        def versioned(label: str, pointer: str) -> list[str]:  # D-558: model_version beside the revision
+            sed = r"""sed -n 's/.*"model_version": *"\(v[0-9][0-9.]*\)".*/\1/p'"""
+            return [f"cur=$({s}cat {pointer} 2>/dev/null)",
+                    f"ver=$({s}{sed} \"$cur/{MANIFEST_NAME}\" 2>/dev/null)",
+                    f'echo "{label}: $cur${{ver:+ ($ver)}}"']
         return "\n".join([
-            f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
+            *versioned("shadow", ptr),
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
-            f"echo \"active: $({s}cat {act} 2>/dev/null)\"",
+            *versioned("active", act),
             f"echo \"active previous: $({s}cat {act_prev} 2>/dev/null)\"",
             f"echo \"hold: $({s}cat {hold} 2>/dev/null || echo none)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
@@ -404,6 +410,9 @@ def _push(args, ssh, scp, runner) -> int:
     except ManifestError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
+    if rev.startswith("v13-drivable-") and args.task != "lane_seg":
+        print("refused: v13-drivable goes only to the lane_seg shadow slot (D-554)", file=sys.stderr)
+        return 2
     folder = Path(args.models) / rev
     try:
         report = json.loads((folder / REPORT_NAME).read_text(encoding="utf-8"))
@@ -421,6 +430,9 @@ def _push(args, ssh, scp, runner) -> int:
         return 2
     if manifest.model_revision != rev:
         print(f"refused: manifest revision {manifest.model_revision} != {rev}", file=sys.stderr)
+        return 2
+    if rev.startswith("v13-drivable-") and v13_lineage_error(manifest.raw):
+        print(f"refused: {v13_lineage_error(manifest.raw)}", file=sys.stderr)
         return 2
     if manifest.task != args.task:
         print(f"refused: {rev} is a {manifest.task} model, not {args.task}", file=sys.stderr)

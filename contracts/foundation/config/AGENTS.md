@@ -3,6 +3,9 @@
 
 # config
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Default robot config. Installed to `share/core_common/config`. Local override is `~/.rosy/rosy.yaml` (not in this folder). The robot profile and capabilities now live in `src/products/<model>/config/` (D-196); `robot.model` (default `pinky_pro`, env `ROSY_ROBOT`) picks the package.

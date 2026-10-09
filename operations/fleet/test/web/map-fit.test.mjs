@@ -6,7 +6,7 @@ import {
   normalizeMapProposal, reasonText, cutGuidance, fitSummary, pickLanes, topDownLayout,
   parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable,
   orientHomography, calibrationRequest, lensesMatch, fitFromCalibration,
-} from "../../fleet/server/web/map-fit.js";
+} from "../../fleet/server/web/shared/map-fit.js";
 
 test("the field fallback maps the field rectangle onto the map rectangle, y up", () => {
   const bounds = { min_x: -1.405, max_x: 1.405, min_y: -0.63, max_y: 0.63 };

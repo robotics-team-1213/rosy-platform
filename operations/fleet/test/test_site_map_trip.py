@@ -289,6 +289,31 @@ def test_activation_refuses_a_map_the_planner_cannot_use(tmp_path, monkeypatch):
     assert store.active()[0] == 1
 
 
+def test_a_start_place_must_face_along_its_lane(tmp_path):
+    """D-513: a start place carries the departure heading and must be a pose a trip can start from."""
+    client, _tasks, _store, _robot = _app(tmp_path)
+
+    def activate(yaw):
+        body = _line()
+        body["places"].append({"id": "S1", "name": "출발-1", "x": 1.0, "y": 0.02, "yaw": yaw, "kind": "start"})
+        revision = client.get("/api/fleet/site-map/draft", headers=OPERATOR).json()["revision"]
+        saved = client.put("/api/fleet/site-map/draft", json={"map": body, "expected_revision": revision},
+                           headers=OPERATOR).json()
+        return client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
+                           headers=OPERATOR)
+
+    refused = activate(3.0)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "SITE_MAP_START_INVALID"
+    assert "TRIP_HEADING_CONFLICT" in str(refused.json()["detail"])
+    assert activate(0.1).status_code == 200
+
+    headless = _line()
+    headless["places"].append({"id": "S1", "name": "출발-1", "x": 1.0, "y": 0.0, "kind": "start"})
+    with pytest.raises(ValueError, match="needs a yaw"):
+        SiteMap.model_validate(headless)
+
+
 def test_an_unexpected_planner_failure_is_a_coded_500_logged_once(tmp_path, monkeypatch, caplog):
     import fleet.server.trip_routes as trip_module
 
@@ -344,3 +369,13 @@ def test_the_store_warms_the_planner_with_the_site_routing_config():
     store = SiteMapStore(routing_config=config)
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
     assert list(store.active()[2]._successors) == [config]
+
+
+def test_site_map_view_turn_is_a_quarter_turn_defaulting_to_zero():
+    """D-513 7: one screen orientation per map, display only."""
+    assert SiteMap.model_validate(_line()).view_turn_deg == 0
+    assert "view_turn_deg" not in SiteMap.model_validate(_line()).body()  # older Fleet can still read it
+    assert SiteMap.model_validate({**_line(), "view_turn_deg": 90}).body()["view_turn_deg"] == 90
+    for bad in (45, -90, "90"):
+        with pytest.raises(ValueError):
+            SiteMap.model_validate({**_line(), "view_turn_deg": bad})

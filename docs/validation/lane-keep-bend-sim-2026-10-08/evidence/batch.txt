@@ -1,0 +1,8 @@
+g_1 trip --plan left:60 --duration 90 --tag B9G1_
+g_2 trip --plan left:60 --duration 90 --tag B9G2_
+g_3 trip --plan left:60 --duration 90 --tag B9G3_
+g_4 trip --plan left:60 --duration 90 --tag B9G4_
+g_5 trip --plan left:60 --duration 90 --tag B9G5_
+g_6 trip --plan left:60 --duration 90 --tag B9G6_
+g_7 trip --plan left:60 --duration 90 --tag B9G7_
+g_8 trip --plan left:60 --duration 90 --tag B9G8_

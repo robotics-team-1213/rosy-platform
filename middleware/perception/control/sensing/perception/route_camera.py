@@ -21,7 +21,8 @@ three bounded things only:
             within REACQUIRE_HEADING_RAD of the route; past
             MANOEUVRE_MAX_TRAVEL_M, MANOEUVRE_TIMEOUT_S or
             MANOEUVRE_MAX_HEADING_RAD it aborts and stays stopped
-            (MANOEUVRE_ABORT, fail-closed)
+            (MANOEUVRE_ABORT, fail-closed). A pose outside the route also
+            stops this follower until a new route instance is constructed.
 
   relock    with `map_frame` (route_hybrid: the pose is paint-localised,
             not dead-reckoned), after a lock, away from a node, whenever
@@ -41,7 +42,7 @@ three bounded things only:
 
 "Near a node" is within JUNCTION_ARM_M of either end of the current route
 segment. Outside that, after the first lock, the tracker runs unmodified
-but for the relock.
+but for the relock and the active-route gate on fully unseen memory.
 Direction on the ring comes from the route: LaneRoute refuses a one-way
 segment walked backwards, so a clockwise ring route cannot be built.
 
@@ -115,6 +116,11 @@ SEED_MIN_FRACTION = 0.5
 #: centre band / iso-line quantisation; a quarter of the 185 mm lane, so
 #: the other branch's lane centre fails it once the two have diverged.
 AGREE_MAX_LATERAL_M = 0.045
+# The route polyline can read 46.6 mm off in a passing junction replay.
+# A camera candidate past 60 mm cannot preserve that route's lane identity.
+CAMERA_ROUTE_MAX_LATERAL_M = 0.06
+# Stop before the last route point; continuing requires a new route segment.
+TERMINAL_STOP_M = 0.02
 #: Manoeuvre hands back to the camera when the heading is within this of
 #: the route: a pursuit target inside the lane (|lateral| <= half-width) at
 #: LOOKAHEAD_M bears at most atan(0.0925 / 0.15) = 31.7 deg.
@@ -162,6 +168,17 @@ class _RouteGatedTracker(LaneBoundaryTracker):
     def __init__(self, *, camera_x_offset_m: float = 0.0) -> None:
         super().__init__(camera_x_offset_m=camera_x_offset_m)
         self.gate = None
+        self.route_owner = None
+
+    def _allow_unseen_memory(self) -> bool:
+        owner = self.route_owner
+        fix = None if owner is None else owner._fix
+        if (owner is None or not owner.locked or fix is None
+                or abs(fix.lateral_m) > AGREE_MAX_LATERAL_M
+                or abs(_wrap(owner._pose[2] - fix.heading)) > REACQUIRE_HEADING_RAD):
+            return False
+        self.gate = owner  # all remembered targets must still agree with the active route
+        return True
 
     def _seed(self, view, labels, stats, count, half):
         left, right = super()._seed(view, labels, stats, count, half)
@@ -228,6 +245,7 @@ class RouteCameraFollower:
         # its far end.
         self.route.locate(start_pose[:2])
         self._tracker = _RouteGatedTracker(camera_x_offset_m=camera_x_offset_m)
+        self._tracker.route_owner = self
         self.state = "STOP"
         self.locked = False
         self._start_pose = start_pose
@@ -235,7 +253,9 @@ class RouteCameraFollower:
         self._map_from_odom = None      # (tx, ty, dyaw), set on the first odometry
         self._pose = start_pose
         self._s = 0.0
+        self._fix = None
         self._manoeuvre = None
+        self._route_invalidated = False
         self.relock = False
         self.last = {}
 
@@ -319,9 +339,12 @@ class RouteCameraFollower:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
                 pose = None
-        if pose is None or self._manoeuvre == "ABORTED":
+        self.last = {}
+        if pose is None or self._manoeuvre == "ABORTED" or self._route_invalidated:
             self._tracker.gate = None
             self._tracker.update(now_s, None, bgr, ground, **kwargs)
+            if self._tracker.last.get("reason") == "washed":
+                self.last["reason"] = "washed"
             if self._manoeuvre is not None:
                 # Latched, or a manoeuvre that lost odometry cannot be measured.
                 self._abort()
@@ -331,8 +354,24 @@ class RouteCameraFollower:
         pose = self._to_map(pose)
         self._pose = pose
         fix = self.route.locate(pose[:2])
+        self._fix = fix
         self._s = float(self._seg_start[fix.segment_index] + fix.s_m)
         near_node = min(fix.distance_to_node_m, fix.s_m) <= JUNCTION_ARM_M
+        if abs(fix.lateral_m) > CAMERA_ROUTE_MAX_LATERAL_M:
+            # Camera paint cannot preserve a lock after metric route disagreement.
+            self._tracker.gate = None
+            self._tracker.update(now_s, None, bgr, ground, **kwargs)
+            self.locked = False
+            self.relock = False
+            self._route_invalidated = True
+            if self._manoeuvre is not None:
+                self._abort()
+            else:
+                self.state = "STOP"
+            self.last = {"fix": fix, "camera_tier": "STOP", "near_node": near_node,
+                         "gated": False, "tracker": self._tracker.last,
+                         "reason": "route_disagreement"}
+            return None
         self.relock = (self._map_frame and self.locked and not near_node
                        and self._tracker.tier not in _LOCK_TIERS)
         self._tracker.gate = self if (near_node or not self.locked or self.relock) else None
@@ -340,11 +379,30 @@ class RouteCameraFollower:
             now_s, pose if odom_pose is None else tuple(float(v) for v in odom_pose),
             bgr, ground, **kwargs)
         tier = self._tracker.tier
+        if self._tracker.last.get("reason") == "odom_discontinuity":
+            self._route_invalidated = True
+            self.locked = False
+            self.relock = False
+            self.state = "STOP"
+            self.last = {"fix": fix, "camera_tier": tier, "near_node": near_node,
+                         "gated": False, "tracker": self._tracker.last,
+                         "reason": "odom_discontinuity"}
+            return None
         if tier in _LOCK_TIERS:
             self.locked = True
         heading_error = abs(_wrap(pose[2] - fix.heading))
         self.last = {"fix": fix, "camera_tier": tier, "near_node": near_node,
                      "gated": self._tracker.gate is not None, "tracker": self._tracker.last}
+
+        if self._tracker.last.get("reason") == "washed":
+            self.state = "STOP"
+            self.last["reason"] = "washed"
+            return None
+
+        if self.route.length_m - self._s <= TERMINAL_STOP_M:
+            self._manoeuvre = None
+            self.state = "STOP"
+            return None
 
         if self._manoeuvre is not None:
             m = self._manoeuvre
@@ -355,6 +413,7 @@ class RouteCameraFollower:
                 self._manoeuvre = None
             elif (m["travel"] > MANOEUVRE_MAX_TRAVEL_M
                   or not 0.0 <= now_s - m["t0"] <= MANOEUVRE_TIMEOUT_S
+                  or abs(fix.lateral_m) > AGREE_MAX_LATERAL_M
                   or heading_error > MANOEUVRE_MAX_HEADING_RAD):
                 self._abort()
                 return None
@@ -364,7 +423,9 @@ class RouteCameraFollower:
         if observation is not None:
             self.state = tier
             return observation
-        if near_node and self.locked and heading_error <= MANOEUVRE_MAX_HEADING_RAD:
+        if (near_node and self.locked
+                and abs(fix.lateral_m) <= AGREE_MAX_LATERAL_M
+                and heading_error <= MANOEUVRE_MAX_HEADING_RAD):
             self._manoeuvre = {"travel": 0.0, "xy": pose[:2], "t0": float(now_s)}
             self.state = "MANOEUVRE"
             return self._route_observation()

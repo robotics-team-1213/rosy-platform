@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from browser_harness import browser_tests_enabled
 import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -21,7 +22,7 @@ for package in ("runtime/api_web", "runtime/gateway", "runtime/events", "runtime
     sys.path.insert(0, str(SRC / package))
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 for LOCAL Chromium capture",
 )
 

@@ -1,0 +1,83 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "left:60"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "left:60",
+   "result": "aborted",
+   "sight_gt": [
+    -0.957,
+    -0.492,
+    -0.054
+   ],
+   "keep_at_sight": "junction_transverse",
+   "at_done": {
+    "gt": [
+     -0.959,
+     -0.492,
+     -0.054
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "lane_lost_before_junction",
+    "lane_offset_m": 0.018,
+    "heading_vs_lane_deg": -3.1
+   },
+   "seq": [
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "stuck_back_off",
+     "sim_t": 145.909
+    },
+    {
+     "j": "aborted",
+     "jr": "lane_lost_before_junction",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 146.024
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "left:60",
+     "code": 200,
+     "resp": null,
+     "refresh": 3
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 1.0122,
+ "final": {
+  "t": 37.827,
+  "sim_t": 146.024,
+  "gt": [
+   -0.958913616288608,
+   -0.492052141744756,
+   -0.05371997888572341
+  ],
+  "odom": [
+   -0.958913616288608,
+   -0.492052141744756,
+   -0.05371997888572341,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_aborted",
+  "keep": "junction_transverse",
+  "body_gap_m": null,
+  "j": "aborted",
+  "jr": "lane_lost_before_junction"
+ },
+ "capability_at_end": true
+}

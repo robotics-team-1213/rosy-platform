@@ -29,6 +29,7 @@ COLORS = ("rgb", "bgr")
 PRECISIONS = ("fp32", "int8")
 MANIFEST_NAME = "model_manifest.json"
 REVISION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+VERSION_PATTERN = re.compile(r"v\d+\.\d+\.\d{2}")  # D-558 model_version, optional (legacy has none)
 
 
 class ManifestError(ValueError):
@@ -80,6 +81,7 @@ class ModelManifest:
     raw: dict
     output_layout: str = "nchw_logits"
     backend: str = "onnx"
+    model_version: str | None = None
 
     def ncnn_files(self) -> tuple[Path, Path]:
         if self.backend != "ncnn":
@@ -248,6 +250,30 @@ def load_manifest(path: str | Path) -> ModelManifest:
     if not isinstance(doc, dict) or doc.get("schema") not in (SCHEMA, NCNN_SCHEMA):
         raise ManifestError(f"schema: expected {SCHEMA} or {NCNN_SCHEMA}")
     revision = check_revision(doc.get("model_revision"))
+    if revision.startswith("v13-drivable-"):
+        parent = doc.get("parent_lane_model")
+        if (not isinstance(parent, dict) or set(parent) != {
+                "model_revision", "onnx_sha256", "torchscript_sha256"}
+                or not isinstance(parent["model_revision"], str)
+                or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", parent["model_revision"])
+                or not isinstance(parent["onnx_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent["onnx_sha256"])
+                or not isinstance(parent["torchscript_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent["torchscript_sha256"])):
+            raise ManifestError("parent_lane_model: v13-drivable needs lane-seg revision, ONNX and TorchScript sha256")
+        dataset_doc = doc.get("dataset")
+        dataset_revision = dataset_doc.get("revision") if isinstance(dataset_doc, dict) else None
+        if not isinstance(dataset_revision, str) or not re.fullmatch(r"[0-9a-f]{64}", dataset_revision):
+            raise ManifestError("dataset.revision: v13-drivable needs 64 lowercase hex chars")
+        output_doc = doc.get("output")
+        classes = output_doc.get("classes") if isinstance(output_doc, dict) else None
+        if (not isinstance(classes, list) or not classes or not isinstance(classes[-1], dict)
+                or classes[-1].get("role") != "drivable"
+                or sum(c.get("role") == "drivable" for c in classes if isinstance(c, dict)) != 1):
+            raise ManifestError("output.classes: v13-drivable needs one final drivable channel")
+    version = doc.get("model_version")
+    if version is not None and (not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version)):
+        raise ManifestError("model_version: expected v<major>.<minor>.<two-digit patch> (D-558)")
     task = doc.get("task")
     if task not in TASKS:
         raise ManifestError(f"task: one of {TASKS}")
@@ -270,6 +296,7 @@ def load_manifest(path: str | Path) -> ModelManifest:
         raw=doc,
         output_layout=LAYOUTS[task],
         backend=backend,
+        model_version=version,
     )
 
 

@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(bridge): ControlSensorAdapter.return_proof_configured
-- 2026-10-07 · uncommitted · fix(bridge): D-495 검토 L3 keep_debug 문서
-- 2026-10-07 · uncommitted · feat(line_follow): D-495 recovery_local_enabled 기본 켜짐과 keep 증거
-- 2026-10-07 · uncommitted · test(line_follow): D-495 bridge 로봇 기본값 켜짐 고정
-- 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
+- 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
+- 2026-10-09 · uncommitted · feat(core): D-531 경로 문맥 발행
+- 2026-10-09 · uncommitted · feat(core): D-541 trip lease 배선
+- 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
+- 2026-10-08 · uncommitted · fix(bridge): 경로 frame과 지도 ID 수신 근거 보존

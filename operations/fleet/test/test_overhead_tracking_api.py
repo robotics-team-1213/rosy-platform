@@ -93,7 +93,8 @@ def test_vision_writes_detections_and_reads_only_its_own_config(tmp_path):
         assert accepted.json() == {"accepted": True, "source_id": "ceiling_north", "seq": 41, "status": "OK"}
         config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN))
         assert config.json() == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                 "calibration": None, "relearn_seq": 0}
+                                 "calibration": None, "relearn_seq": 0,
+                                 "identity_challenge": None}  # D-472: no open LED request
         assert client.get("/api/fleet/detections/config").status_code == 401
         assert client.get("/api/fleet/tracking", headers=_auth(SOURCE_TOKEN)).status_code == 401
         assert client.post("/api/fleet/calibrations", json=APPROVAL,
@@ -182,14 +183,14 @@ def test_tracking_pairs_the_console_state_with_detections(tmp_path):
     assert [(row["x"], row["y"]) for row in snap["unknown"]] == [(2.5, 1.0)]
 
 
-def test_state_is_aged_from_before_the_robot_reads(tmp_path):
+def test_state_uses_its_own_read_time_after_a_slow_gather(tmp_path):
     clock = _Clock()
     with _client(tmp_path, clock=clock, delay_s=2.5) as client:
         assert client.get("/api/fleet/state", headers=_auth(VIEWER_TOKEN)).status_code == 200
         client.post("/api/fleet/detections", json=_detections(captured_at=clock.now - 0.1),
                     headers=_auth(SOURCE_TOKEN))
         snap = client.get("/api/fleet/tracking", headers=_auth(VIEWER_TOKEN)).json()
-    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "NO_POSE")]
+    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "MATCHED")]
 
 
 def test_relearn_is_an_operator_action(tmp_path, caplog):
@@ -219,7 +220,8 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
             if any(word in path for word in ("detections", "tracking", "calibrations"))}
     assert ours == {"/api/fleet/detections", "/api/fleet/detections/config", "/api/fleet/tracking",
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
-                    "/api/fleet/calibrations/{source_id}"}
+                    "/api/fleet/calibrations/{source_id}",
+                    "/api/fleet/detections/identity", "/api/fleet/tracking/identity"}  # D-472
 
 
 def test_tracking_needs_the_sighting_sources():

@@ -3,6 +3,9 @@
 
 # deployment
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Operator runbooks for Raspberry Pi 5: first Wi-Fi image, runtime services, power-bench, acceptance, and release key/retention.

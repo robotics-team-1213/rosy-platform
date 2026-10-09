@@ -87,9 +87,28 @@ def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_pa
 
 def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
     m = module()
-    folder = candidate(m, tmp_path, keys, extra_files={m.PREFIX + "camera_lane_map.py": b"pass\n"})
+    folder = candidate(m, tmp_path, keys, extra_files={m.CAMERA_MAP_ENTRY: b"pass\n"})
     with pytest.raises(ValueError, match="missing camera-map dependency"):
         m.unpack(folder / "code.tar", tmp_path / "release")
+
+
+def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
+    m = module()
+    source = tmp_path / "release"
+    for name in (m.CAMERA_MAP_ENTRY, m.PREFIX + "rosy_ml.py", "outside.py"):
+        (source / name).parent.mkdir(parents=True, exist_ok=True)
+        (source / name).write_text("pass\n")
+    file, base, name, mapped = m.job_entry(source, "camera_lane_map.py")
+    assert file == (source / m.CAMERA_MAP_ENTRY).resolve() and mapped == m.CAMERA_MAP_ENTRY
+    assert (base, name) == (source.resolve(), m.CAMERA_MAP_ENTRY)
+    file, base, name, mapped = m.job_entry(source, "rosy_ml.py")
+    assert file == (source / m.PREFIX / "rosy_ml.py").resolve() and mapped is None
+    assert m.JOB_ENTRY_POINTS == {"camera_lane_map.py": m.CAMERA_MAP_ENTRY}
+    # Other names resolve only under PREFIX: no other source path, no escape.
+    for bad in ("../../../outside.py", str((source / "outside.py").resolve()), m.CAMERA_MAP_ENTRY,
+                "./camera_lane_map.py", "lane_map.py"):
+        with pytest.raises((ValueError, OSError)):
+            m.job_entry(source, bad)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux symlink/flock updater")
@@ -256,7 +275,7 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     dependencies = ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
                     "shared/web/shared-assets.json", profile]
     if camera_map:
-        dependencies += [*m.CAMERA_MAP_FILES, m.PREFIX + "camera_lane_map.py"]
+        dependencies += [*m.CAMERA_MAP_FILES]
     for name in dependencies:
         dep = repo / name
         dep.parent.mkdir(parents=True, exist_ok=True)

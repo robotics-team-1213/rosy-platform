@@ -3,6 +3,9 @@
 
 # reference
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent unix-socket API. Changing these without code (or vice versa) is a defect.

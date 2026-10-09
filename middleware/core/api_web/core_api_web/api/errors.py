@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from core_common.capability import CapabilityError
+from core_common.protocol.connect_reason import body as reason_body
 from core_features.navigation.manager import NavigationError
 from core_features.waypoints.manager import WaypointError
 
@@ -23,6 +24,17 @@ class ApiError(Exception):
         self.detail = detail
 
 
+class ReasonError(HTTPException):
+    """D-535: a connection or pairing refusal. The body keeps the route's older ``detail``
+    beside the ERR-101 ``error`` whose code, message and action come from connect_reason.
+    An app without the handler below still answers the older ``{"detail": ...}``."""
+
+    def __init__(self, http_status: int, code: str, legacy: Any, detail: Optional[dict] = None,
+                 headers: Optional[dict] = None) -> None:
+        super().__init__(http_status, legacy, headers)
+        self.http_status, self.code, self.legacy, self.reason_detail = http_status, code, legacy, detail
+
+
 def error_body(code: str, message: str, detail: Any = None) -> dict:
     return {"error": {"code": code, "message": message, "detail": detail}}
 
@@ -35,6 +47,8 @@ _HTTP_BY_CODE = {
     "MODE_CONFLICT": 409,
     "EMERGENCY_ACTIVE": 409,
     "NAVIGATION_ACTIVE": 409,
+    # D-550 10: a lease renewal for a goal that is no longer the active leased goal.
+    "GOAL_LEASE_NOT_ACTIVE": 409,
     "WAYPOINT_EXISTS": 409,
     "MAP_MISMATCH": 409,
     "MAPPING_ACTIVE": 409,
@@ -44,6 +58,9 @@ _HTTP_BY_CODE = {
     "CAPABILITY_WITHHELD": 409,
     # D-321 addendum: another token holds the calibration session lease.
     "CALIBRATION_ACTIVE": 409,
+    # D-541: a Fleet trip lease holds the robot; opening a trip lease on a MANUAL robot.
+    "TRIP_LEASED": 409,
+    "MANUAL_MODE": 409,
     # D-407: a stuck answer for another (or no) stuck, or one the robot refuses now.
     "STUCK_ID_MISMATCH": 409,
     "STUCK_DECISION_REFUSED": 409,
@@ -86,6 +103,12 @@ def register_exception_handlers(app) -> None:
     async def _api_error(_: Request, exc: ApiError):
         return JSONResponse(status_code=exc.http_status,
                             content=error_body(exc.code, exc.message, exc.detail))
+
+    @app.exception_handler(ReasonError)
+    async def _reason_error(_: Request, exc: ReasonError):
+        return JSONResponse(status_code=exc.http_status,
+                            content={"detail": exc.legacy, **reason_body(exc.code, exc.reason_detail)},
+                            headers={"Cache-Control": "no-store", **(exc.headers or {})})
 
     @app.exception_handler(NavigationError)
     async def _nav_error(_: Request, exc: NavigationError):

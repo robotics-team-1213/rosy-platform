@@ -3,6 +3,9 @@
 
 # navigation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 NAV-001–004/006 facade. ROS-free. Nav2 action client lives behind `NavExecutor` (implemented by `RosBridge`). Follow lives in `core.swarm` (D-60).

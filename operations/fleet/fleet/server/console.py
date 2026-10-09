@@ -26,15 +26,18 @@ import logging
 import math
 import time
 from typing import Any, Callable, Optional, Sequence
+from urllib.parse import urlsplit
 
 from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
-from fleet.server import bays, traffic
+from fleet.server import bays, goal_lease, traffic
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
+    classify_link,
+    link_reason,
 )
 from fleet.swarm.session import (
     FormationSession,
@@ -45,6 +48,9 @@ from fleet.swarm.session import (
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
 
+#: A robot whose read fails within this many seconds of its last answer is shown as
+#: `degraded` (responding late), not `unreachable`; decisions still see online=False.
+LINK_DEGRADED_S = 10.0
 logger = logging.getLogger("fleet.console")
 
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
@@ -68,7 +74,7 @@ class FleetConsole(TripAware):
         relay_factory=None,
         signal_console=None,
         event_store=None,
-        hub_state_max_age_s: float = 3.0,
+        hub_state_max_age_s: float = 3.0, goal_lease_ttl_s: float = 0.0,
     ) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
@@ -87,10 +93,13 @@ class FleetConsole(TripAware):
         self._capability_display = CapabilityDisplay(self._clients, self._clock)
         self._capability_cache = self._capability_display.cache
         self._hub_state_max_age_s = hub_state_max_age_s
+        #: Extra alarm rows from other watchers (D-526 tether watch): callables returning alarm dicts.
+        self.alarm_sources: list = []
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
         self._goals: dict[str, dict] = {}
+        self.goal_leases = goal_lease.GoalLeases(goal_lease_ttl_s, self._clients, clock, lambda r: r in self._yielding)
         #: 달리는 로봇이 점유한 경로. 교행 판정의 재료이자, 왜 기다리는지의 근거다.
         self._claims: dict[str, list] = {}
         #: 남의 경로와 부딪혀 아직 못 내려간 미션. 앞이 비면 그대로 다시 내려간다.
@@ -111,6 +120,8 @@ class FleetConsole(TripAware):
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
+        # Console clock time of each robot's last answered state read (link grace below).
+        self._last_ok: dict[str, float] = {}
         #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`): only
         #: from a LOCALIZED map snapshot, never from a legacy-null one (S2 Finding 1).
         self._trusted: dict[str, tuple] = {}
@@ -122,6 +133,7 @@ class FleetConsole(TripAware):
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
+        self._link_address_status = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -199,7 +211,7 @@ class FleetConsole(TripAware):
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
         for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
-                      self._held, self._trusted, self._loc_null_since):
+                      self._held, self._trusted, self._loc_null_since, self.goal_leases):
             table.pop(robot_id, None)
         return client
 
@@ -223,6 +235,13 @@ class FleetConsole(TripAware):
 
     def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
         self._state_sink = sink
+
+    def set_link_address_status(self, provider) -> None:
+        """robot_id -> address status from the latest scan. None skips the lookup.
+
+        The provider must not contact a robot. snapshot calls it once.
+        """
+        self._link_address_status = provider
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -254,6 +273,13 @@ class FleetConsole(TripAware):
             *(self._gather_state(rid) for rid in order),
             return_exceptions=True,
         )
+        statuses = {}
+        provider = self._link_address_status
+        if provider is not None:
+            try:
+                statuses = provider() or {}
+            except Exception:
+                statuses = {}
         robots = []
         for robot_id, result in zip(order, results):
             goal = self._goals.get(robot_id)
@@ -262,6 +288,12 @@ class FleetConsole(TripAware):
                 robots.append({"robot_id": robot_id, "online": False, "goal": goal,
                                "queued": _shown(queued), "error": _error_of(result),
                                "state": None, "gather_source": None})
+                last_ok = self._last_ok.get(robot_id)
+                if last_ok is not None and 0.0 <= self._clock() - last_ok <= LINK_DEGRADED_S:
+                    # One missed read is not a lost robot: the console showed every slow answer
+                    # (site 2026-10-09, 3-5 s gathers on loaded robots) as offline and back.
+                    # `online` stays False for every decision; only the link word changes.
+                    robots[-1]["link_degraded_s"] = round(self._clock() - last_ok, 1)
             else:
                 state, source = result
                 hub_row = self._hub.registry.find(robot_id) if source == "hub" else None
@@ -269,10 +301,22 @@ class FleetConsole(TripAware):
                 observed = (hub_row.last_heartbeat_monotonic if hub_row is not None else None)
                 if observed is None:
                     observed = self._clock()
+                self._last_ok[robot_id] = self._clock()
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None,
                                "state": state, "gather_source": source,
                                "_state_mono": observed})
+            row = robots[-1]
+            scheme = urlsplit(self._registered_endpoints.get(robot_id, "")).scheme
+            exc = result if isinstance(result, BaseException) else None
+            link = classify_link(exc, scheme=scheme, address_status=statuses.get(robot_id))
+            if link == "unreachable" and "link_degraded_s" in row:
+                link = "degraded"
+            if link is not None:
+                row["link"] = link
+            reason = link_reason(exc, scheme=scheme)
+            if reason is not None:
+                row["link_reason"] = reason
         self._remember(robots)
         shown = await asyncio.gather(*(self._shown_capabilities(r["robot_id"])
                                        for r in robots if r["online"]))
@@ -286,7 +330,7 @@ class FleetConsole(TripAware):
         # 않으면 화면은 방금 출발한 미션을 한 주기 동안 계속 "대기 중"으로 보여 준다.
         for row in robots:
             row["queued"] = _shown(self._queued.get(row["robot_id"]))
-            row["goal"] = self._goals.get(row["robot_id"])
+            row["goal"] = self.goal_leases.view(row["robot_id"], self._goals.get(row["robot_id"]))
             row["yielding"] = self._yielding.get(row["robot_id"])
             hold = self._held.get(row["robot_id"])
             row["held"] = hold["reason"] if hold is not None else None
@@ -355,7 +399,7 @@ class FleetConsole(TripAware):
 
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
-                   attempt_seq: int | None = None) -> dict:
+                   attempt_seq: int | None = None, lease_source: str | None = None) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -369,7 +413,7 @@ class FleetConsole(TripAware):
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
         client = self._client(robot_id)
-        await require_capability(client, "navigation.goal_navigation")
+        caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
@@ -399,10 +443,7 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
                     "reason": "LOCALIZATION_UNTRUSTED"}
-        if attempt_id is None:
-            result = await client.navigation_goal(x, y, yaw)
-        else:
-            result = await client.navigation_goal(x, y, yaw, correlation_id=attempt_id)
+        result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
         # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
         # 않을 곳으로 로봇이 간다고 읽는다.
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
@@ -411,7 +452,7 @@ class FleetConsole(TripAware):
         route = await self._route_of(robot_id)
         blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
         if blocker is not None:
-            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -435,7 +476,7 @@ class FleetConsole(TripAware):
                           if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
         if untrusted is not None:
             # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
-            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -569,7 +610,7 @@ class FleetConsole(TripAware):
             await self._send_to_bay(robot_id, bay, mover)
             yielded.append(robot_id)
 
-        cancel_receipt = await self._client(mover).navigation_cancel()
+        cancel_receipt = await self.goal_leases.cancel(mover, self._client(mover))
         if not self._cancel_confirmed(cancel_receipt):
             raise RuntimeError("navigation goal cancellation was not confirmed")
         self._goals.pop(mover, None)
@@ -588,7 +629,7 @@ class FleetConsole(TripAware):
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
         client = self._client(robot_id)
-        await require_capability(client, "navigation.goal_navigation")
+        caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
@@ -600,7 +641,7 @@ class FleetConsole(TripAware):
             self._queued[robot_id] = {**own, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "YIELDED"}
         self._claims.pop(robot_id, None)
-        await client.navigation_goal(bay[0], bay[1], 0.0)
+        await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:
@@ -878,7 +919,7 @@ class FleetConsole(TripAware):
         return False
 
     async def cancel(self, robot_id: str) -> dict:
-        result = await self._client(robot_id).navigation_cancel()
+        result = await self.goal_leases.cancel(robot_id, self._client(robot_id))
         self._goals.pop(robot_id, None)
         self._held.get(robot_id) or self._claims.pop(robot_id, None)  # D-361: held keeps its claim
         self._queued.pop(robot_id, None)
@@ -898,7 +939,7 @@ class FleetConsole(TripAware):
             route = ([here] if here is not None else []) + list(self._claims.get(robot_id) or [])
             if robot_id == mover or goal is None or not trust.blocks(route, last):
                 continue
-            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+            if not self._cancel_confirmed(await self.goal_leases.cancel(robot_id, self._client(robot_id))):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
             self._claims.pop(robot_id, None)
@@ -909,7 +950,7 @@ class FleetConsole(TripAware):
             here, bay = self._pose_of(robot_id), (yielding["bay"]["x"], yielding["bay"]["y"])
             if robot_id == mover or not trust.blocks(([here] if here else []) + [bay], last):
                 continue
-            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+            if not self._cancel_confirmed(await self.goal_leases.cancel(robot_id, self._client(robot_id))):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._yielding.pop(robot_id, None)
             held.append(robot_id)
@@ -969,8 +1010,11 @@ class FleetConsole(TripAware):
         await self.formation_stop()
 
     def alarms(self) -> list[dict]:
-        return [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
+        rows = [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
                 for rid, hold in sorted(self._held.items()) if hold.get("alarm")]
+        for source in self.alarm_sources:
+            rows.extend(source())
+        return rows
 
     async def estop_all(self) -> dict:
         """전 대상 정지 요청. 한 대가 거절해도 나머지에 계속 내린다.
@@ -979,6 +1023,7 @@ class FleetConsole(TripAware):
         움직이는 것이 이 버튼에서 가장 나쁜 결과다. 로봇 쪽 e-stop 과 deadman 은 관제와
         무관하게 살아 있다(설계 §3).
         """
+        self.goal_leases.clear()  # D-550 10: a leased goal is never renewed past an E-stop
         # 대형이 살아 있으면 먼저 푼다. 릴레이가 참조를 계속 밀어 넣는 채로 로봇만 세우면,
         # e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해 달려나간다.
         if self._formation is not None and self._formation_members():

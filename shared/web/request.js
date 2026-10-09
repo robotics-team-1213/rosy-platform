@@ -34,7 +34,7 @@ export function createRequest({origin = globalThis.location?.origin, credential 
       controller.signal.throwIfAborted();
       const response = await send(target.href, {
         cache: 'no-store', ...init, headers, signal: controller.signal,
-        credentials: 'omit', redirect: 'error',
+        credentials: 'same-origin', redirect: 'error',
       });
       controller.signal.throwIfAborted();
       const body = response.status === 204 ? null : await response.json().catch(() => null);

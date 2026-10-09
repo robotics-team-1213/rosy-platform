@@ -2,7 +2,7 @@
 // 콘솔은 6자리 코드를 모른다 — 운영자가 폰 화면의 코드를 입력해 Fleet으로만 보낸다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
 
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { canManage } from "./enrollment.js";
 
 const BASE = "/api/fleet/pairing/v1";

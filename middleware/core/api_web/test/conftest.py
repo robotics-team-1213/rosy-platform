@@ -9,3 +9,8 @@ for path in (SRC.parent / "middleware" / "core" / "api_web", SRC.parent / "middl
              SRC.parent / "middleware" / "core" / "services", SRC.parent / "middleware" / "perception"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
+
+# Browser tests here import test/browser_harness.py (opt-in flag, Chromium-safe ports).
+_HARNESS = str(Path(__file__).resolve().parents[4] / "test")
+if _HARNESS not in sys.path:
+    sys.path.append(_HARNESS)

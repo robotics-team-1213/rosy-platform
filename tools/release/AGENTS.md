@@ -3,6 +3,9 @@
 
 # release
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Developer-side steps between "the GitHub runner built a payload" and "push a signed release to a robot". These run on the release operator's PC. Robot-side install, signing code and the push script live in `deploy/robot/pinky_pro/` (`release/`, `rosy-release-push.ps1`), not here.

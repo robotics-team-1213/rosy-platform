@@ -8,6 +8,14 @@ class ConnectionInfo(BaseModel):
     mode: Literal['paired', 'development']
     robot_id: str
     transport: Literal['http', 'https']
+    # D-535 reachability (optional: robots before it answer the three fields above only).
+    connect_contract: int | None = None
+    api: str | None = None
+    core_ready: bool | None = None
+    stage: str | None = Field(default=None, max_length=128)
+    release: str | None = Field(default=None, max_length=64)
+    tls_hostname: str | None = Field(default=None, max_length=253)
+    pairing: Literal['open', 'console_only', 'full', 'unavailable'] | None = None
 
 
 class RoomDiscoveryHint(BaseModel):

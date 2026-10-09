@@ -3,6 +3,9 @@
 
 # config
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Device manifest for the OMX adapter. The disabled arm profile lives in `middleware/apps/device/omx/profile`.

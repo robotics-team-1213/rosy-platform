@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · feat(config): D-498 junction_turn_site_accepted
-- 2026-10-07 · uncommitted · docs(protocol): LaneContainmentEvidence 경계 = 칠 안쪽 가장자리
-- 2026-10-07 · uncommitted · fix(config): D-495 검토 설정과 주석
-- 2026-10-07 · uncommitted · feat(config): D-495 recovery_local_enabled 로봇 기본값 켜짐
-- 2026-10-07 · uncommitted · feat(config): D-495 bridge 기본값과 LineJunctionStatus 확장
+- 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
+- 2026-10-09 · uncommitted · fix: route context 시험 파일명 중복 해소
+- 2026-10-09 · uncommitted · fix(core_common): D-531 굽이 단계 문맥
+- 2026-10-09 · uncommitted · feat(core_common): D-531 문맥 스키마
+- 2026-10-09 · uncommitted · feat(core_common): 장치 개발 모드 표식 (D-548)

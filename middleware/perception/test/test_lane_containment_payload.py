@@ -42,10 +42,10 @@ def test_boundaries_are_the_paint_inner_edge_moved_inward_by_half_the_paint():
 
 
 def test_paint_shift_does_not_change_the_projection_uncertainty():
-    keeper = {"boundaries": [dict(selected=True, side="left", ends_m=[[.1, .0925], [.3, .0925]])]}
+    keeper = {"boundaries": [dict(selected=True, side="left", slope_sd=0., offset_sd=0., ends_m=[[.1, .0925], [.3, .0925]])]}
     u = [containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033,
                              paint_half_width_m=p)["uncertainty_m"] for p in (0., PAINT_HALF_WIDTH_M)]
-    assert u[0] == u[1]
+    assert u[0] == u[1] is not None
 
 
 def test_paint_edges_that_cross_send_no_corridor():
@@ -131,7 +131,7 @@ INTERVALS = {"uncertainty": BANDS}
 
 def keeper(far):
     # A fixed 0.1 m support moved out: a longer support would shorten the extrapolation lever.
-    return {"boundaries": [dict(selected=True, side="left", ends_m=[[far-.1, .0925], [far, .0925]])]}
+    return {"boundaries": [dict(selected=True, side="left", slope_sd=0., offset_sd=0., ends_m=[[far-.1, .0925], [far, .0925]])]}
 
 
 def plane(profile):
@@ -220,9 +220,8 @@ def test_a_stated_systematic_is_added_to_a_grid_fit_too():
 
 def test_receiver_extrapolation_is_mirrored():
     text = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
-            "lane_return_evidence.py").read_text(encoding="utf-8")
-    assert re.search(r"MAX_EXTRAPOLATION_M = ([0-9.]+)", text).group(1) in (".3", "0.3")
-    assert RECEIVER_EXTRAPOLATION_M == .3
+            "recovery" / "lane_return_evidence.py").read_text(encoding="utf-8")
+    assert float(re.search(r"^\s+MAX_EXTRAPOLATION_M = ([0-9.]+)", text, re.M).group(1)) == RECEIVER_EXTRAPOLATION_M
 
 
 def _truth(h, pitch, roll, a, b):

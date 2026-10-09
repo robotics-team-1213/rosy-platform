@@ -179,7 +179,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
   # D-476 expected-road bridge. D-495 decision 2 wants it on by robot default, but D-476 rev 1
   # (main 2026-10-07) makes an enabled bridge need ir_guard_enabled (off above until IR
-  # calibration) and control.sensor_adapter enforce or bridge_site_no_dropoffs; CORE refuses
+  # calibration) and control.sensor_adapter enforce or site_floor_map_id (D-507 9); CORE refuses
   # to start otherwise. So the robot default stays off until those are decided per site
   # (D-495 implementation note, merge 2026-10-07).
   # A short camera lane loss right after confident following (rev 2026-10-07: no D-468
@@ -196,10 +196,13 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_arm_max_error: 0.1        # ... and straight: |error| (follower slows < 7 % there)
   bridge_arm_max_angular: 0.08     # ... and |angular| (steering_gain x max_error); all four are
                                    # plausibility gates until D-476 replay justifies them
-  # Site acceptance (D-476 rev 1): nothing in CORE sees a drop-off ahead. bridge_enabled also
-  # needs ir_guard_enabled, and either control.sensor_adapter enforce (live floor proof) or this
-  # true for a site with no drop-off or hole within bridge reach. CORE refuses to start otherwise.
-  bridge_site_no_dropoffs: false
+  # D-476 rev 2: outside that straight band, arm on a steady arc instead: over the last
+  # bridge_arm_frames the curvature (angular/linear) spreads <= the tolerance (13.4 mm worst
+  # lateral over the 0.23 m reach), the error spreads <= tolerance x cruise_speed / steering_gain,
+  # and |mean| <= the max (lane_graph roundabout radius 0.2514 m), over >= cruise_speed /
+  # steering_gain odom travel whose odom turn agrees. Bridges then follow that arc.
+  bridge_arm_max_curvature: 4.0      # 1/m
+  bridge_arm_curvature_tolerance: 0.5  # 1/m
   bridge_lookahead_m: 0.10         # pure-pursuit point ahead on the extended centre line
   bridge_coast_m: 0.10             # D-384 COAST
   bridge_slow_m: 0.25              # D-384 SLOW
@@ -213,12 +216,32 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   junction_turn_lead_s: 0.15
   junction_still_linear: 0.01      # m/s; odom below this (and the angular one) for 0.2 s = standing still
   junction_still_angular: 0.05     # rad/s; checked before the turn and before it counts as settled
-  # D-498 site basis for the junction turn without D-400 enforce: the site lead declares no
-  # drop-off within turn reach (in-place turn + up to 0.30 m off the lane edge). It also needs
-  # ir_guard_enabled (CORE refuses to start otherwise) with a fresh guard verdict and the D-422
-  # body stop on a fresh scan. Enable order: IR calibration -> site overlay (~/.rosy/rosy.yaml)
-  # with ir_guard_enabled and this true -> model-PC SIM S1-S6 -> 9dfk keep-mode DEVICE D1-D6.
-  junction_turn_site_accepted: false
+  # D-507 9 site floor declaration (replaces D-476 bridge_site_no_dropoffs and D-498
+  # junction_turn_site_accepted; CORE refuses to start while a layer still sets either).
+  # null = none. A SiteMap map_id ([A-Za-z0-9_.-]{1,64}, not the default 'site') declares that
+  # the site lead walked every lane and junction of that map, both ways, plus 0.30 m outside
+  # (turn circle, advance, approach, bridge, D-468 return and the retrace's rear path) and
+  # found no drop-off, hole or step, and recorded map id, walker and date (D-498 D8). The IR
+  # guard sees no floor edge and nothing behind the robot, so floor risk rests on this alone.
+  # Needs ir_guard_enabled, obstacle_mode path and the URDF body (CORE refuses otherwise). With
+  # it, motion_admitted's site basis admits the D-476 bridge, the D-468 return and retrace and
+  # the D-495 junction motions without D-400 enforce; capability site_floor_map_id shows it, and
+  # Fleet opens lane trips only on the active map with that id. Clear it when the robot leaves.
+  site_floor_map_id: null
+  # D-520 map-guided arc: omega = arc_curvature_gain x v x kappa + a bounded radial correction
+  # toward the map circle in odom (2026-10-09 addendum). A junction instruction's exit_segment
+  # (Fleet sends it only with capability lane_arc) makes CORE drive the map arc to the next place
+  # after the turn, on odom path length; the IR guard gets one correction per arc, D-422 sweeps
+  # the arc twist. On by default (user 2026-10-09), but capability lane_arc needs
+  # site_floor_map_id too: without the declaration nothing changes. A device declaring the site
+  # floor sets arc_enabled: false until the D-520 DEVICE checklist passes (addendum 2026-10-09).
+  arc_enabled: true
+  route_context_enabled: false      # D-531: CORE route evidence to perception; off until replay/SIM/device review
+  arc_curvature_gain: 1.0          # [0.8, 1.25]; per robot from the D-500 measured motion response
+  arc_blind_max_m: 1.0             # step 1 SIM: the whole segment (<= 1.0 m) without a camera fit
+  # D-517 4 (M2): true = no line-follow motion without a live Fleet movement authority. False:
+  # enforced only once Fleet sent one in this line-follow session (a trip on an authority site).
+  authority_required: false
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
   # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
   # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and

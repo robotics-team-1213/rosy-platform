@@ -69,6 +69,19 @@ def test_simulation_plane_is_explicitly_gazebo_only():
     assert 0.0 < model.distance(300, 320) <= 0.6
 
 
+@pytest.mark.parametrize('source,enabled,sim_time,expected', [
+    ('GAZEBO', True, True, True),
+    ('PINKY', True, True, False),
+    ('NOMINAL', True, True, False),
+    ('GAZEBO', False, True, False),
+    ('GAZEBO', True, False, False),
+])
+def test_route_prototype_uses_only_simulation_ground_context(source, enabled, sim_time, expected):
+    admitted = getattr(camera_ground, 'simulation_ground_allowed', None)
+    assert callable(admitted)
+    assert admitted(source=source, simulation_enabled=enabled, use_sim_time=sim_time) is expected
+
+
 @pytest.mark.parametrize("simulation_enabled,use_sim_time", [
     (False, True),
     (True, False),

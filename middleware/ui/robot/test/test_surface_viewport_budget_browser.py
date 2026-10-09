@@ -15,12 +15,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import sync_playwright
 
 from test_role_g2_browser import TOKENS, _core_client, _response
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 for the LOCAL Chromium viewport budget",
 )
 
@@ -38,8 +39,9 @@ MEASURE = """() => {
     topbar: box('ui-topbar'),
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
-    slots: ['act', 'sense', 'observe'].map(name => document.querySelector(`[data-slot="${name}"]`))
+    slots: ['observe', 'act', 'sense'].map(name => document.querySelector(`[data-slot="${name}"]`))
       .filter(Boolean).map(node => node.getBoundingClientRect().toJSON()),
+    slotOrder: [...document.querySelectorAll('#surface-main > .surface-slot')].map(node => node.dataset.slot),
     cameraActions: [...document.querySelectorAll('#vision-expand, #vision-record-stop')]
       .map(node => node.getBoundingClientRect().toJSON()),
   };
@@ -105,6 +107,7 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
         assert _inside(first["estop"], width, height), (surface, first["estop"])
         assert first["sticky"] == "sticky", (surface, first["sticky"])
         if surface == "console":
+            assert first["slotOrder"] == ["banner", "observe", "act", "sense"], (width, first)
             slots = first["slots"]
             assert slots[0]["top"] < slots[1]["top"] < slots[2]["top"], (width, slots)
             assert max(slot["x"] for slot in slots) - min(slot["x"] for slot in slots) <= 1, (width, slots)

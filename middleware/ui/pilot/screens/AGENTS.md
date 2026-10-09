@@ -3,6 +3,9 @@
 
 # screens
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Pilot screens (D-323): connect, drive, input settings, and the OMX sim arm practice. `../app.js` mounts one at a time into its root.

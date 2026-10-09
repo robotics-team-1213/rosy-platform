@@ -1,4 +1,8 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.123."""
+<<<<<<< HEAD
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.174."""
+=======
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.173."""
+>>>>>>> main
 
 from __future__ import annotations
 
@@ -15,7 +19,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.responses import HTMLResponse
 from core_api_web.api.ui_registry import load_registry
 
-from core_api_web.api.deps import CoreServicesLike, refused_token_count
+from core_api_web.api.deps import CoreServicesLike, device_mode, refused_token_count
+from core_common.config import DEV_MODE_MARKER, dev_auth_enabled
 from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.connection import connection_router
@@ -42,6 +47,8 @@ from core_api_web.api.v1.routes import (
     swarm_router,
     system_router,
     traffic_router,
+    trip_lease_router,
+    fleet_link_router,
     vision_router,
     waypoints_router,
     diagnostics_router,
@@ -112,7 +119,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.120)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.173)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -136,6 +143,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         logging.warning("device mode refused %d development or plaintext API token(s)", refused)
         services.events.publish("auth.credentials_refused", severity="warning", source="api",
                                 data={"count": refused})
+    if device_mode() and dev_auth_enabled():
+        # D-548: /etc/rosy/dev-mode opened the shared rosy-dev-* tokens on this device.
+        logging.warning("device dev mode: shared rosy-dev-* API tokens are accepted (%s)", DEV_MODE_MARKER)
+        services.events.publish("auth.development_mode", severity="warning", source="api",
+                                data={"marker": str(DEV_MODE_MARKER)})
     # 현장 화면은 로봇 AP 위에서 뜬다. 대시보드 자산은 압축 없이 122 KB이고
     # gzip 뒤에는 29 KB다 — 첫 로드에서 93 KB가 줄어든다. 별도 런타임도,
     # 빌드 산출물도 늘리지 않으므로 D-23의 최소 표면 원칙을 지킨다.
@@ -186,6 +198,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(robot_router)
     app.include_router(control_router)
     app.include_router(calibration_router)
+    app.include_router(trip_lease_router)
+    app.include_router(fleet_link_router)
     app.include_router(line_follow_router)
     app.include_router(traffic_router)
     app.include_router(vision_router)

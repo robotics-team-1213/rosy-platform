@@ -3,6 +3,9 @@
 
 # waypoints
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 WPT-001–005 local JSON store (D-9). CRUD, unique names, reserved `__home__`.

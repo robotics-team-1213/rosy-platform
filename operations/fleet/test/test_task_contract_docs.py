@@ -24,9 +24,13 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
 <<<<<<< HEAD
-    assert "**Version:** v1.123" in reference
+<<<<<<< HEAD
+    assert "**Version:** v1.174" in reference
 =======
     assert "**Version:** v1.122" in reference
+>>>>>>> main
+=======
+    assert "**Version:** v1.173" in reference
 >>>>>>> main
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
@@ -94,9 +98,13 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
         encoding="utf-8")
 
 <<<<<<< HEAD
-    assert "**Version:** v1.123" in reference
+<<<<<<< HEAD
+    assert "**Version:** v1.174" in reference
 =======
     assert "**Version:** v1.122" in reference
+>>>>>>> main
+=======
+    assert "**Version:** v1.173" in reference
 >>>>>>> main
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference

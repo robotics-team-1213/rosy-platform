@@ -163,6 +163,30 @@ def test_selection_table(sample, case, changed, mode, extra):
         assert all(sel.reasons[p] for p in sel.reasons), "every suite carries a reason"
 
 
+def test_full_local_uses_deploy_functional_tests_and_leaves_root_suite_to_ci(sample):
+    sel = _select(sample, "deploy/robot/run.sh", ".github/workflows/ci.yml")
+    local = {path for invocation in sel.local_invocations for path in invocation}
+    full = {path for invocation in sel.invocations for path in invocation}
+    assert sel.mode == "full"
+    assert "test" not in local
+    assert "test/test_robot_runtime.py" in local
+    assert "test" in full
+
+
+def test_pack_bounds_remote_command_length_without_dropping_tests():
+    class FakeRepo:
+        @staticmethod
+        def test_files_under(path):
+            return [path]
+
+    paths = [f"test/test_case_{i:04d}_{'x' * 24}.py" for i in range(200)]
+    groups = affected.pack(FakeRepo(), paths)
+    assert len(groups) > 1
+    assert sorted(path for group in groups for path in group) == paths
+    assert all(sum(len(path) + 1 for path in group) <= affected.MAX_INVOCATION_CHARS
+               for group in groups)
+
+
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
@@ -229,6 +253,20 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
     root_tests = sorted(t for t in repo.test_files if t.startswith("test/"))
     assert sorted(shard_files) == root_tests, "each root test file in exactly one shard"
     assert [e["name"] for e in matrix].count("build-smoke") == 1
+
+
+def test_ci_full_matrix_shards_slow_suites_by_file(sample):
+    repo = affected.Repo.load(sample)
+    matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
+    for name, n in affected.SUITE_SHARDS.items():
+        suite = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)["invocations"][0][0]
+        files = sorted(t for t in repo.test_files if t.startswith(suite + "/"))
+        shards = [e for e in matrix if e["name"] == name or e["name"].startswith(name + "-")]
+        if len(files) < n:
+            assert [e["invocations"] for e in shards] == [[[suite]]]
+            continue
+        assert len(shards) == n
+        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == files
 
 
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():

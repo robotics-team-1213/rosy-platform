@@ -510,9 +510,13 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
     )
 
 <<<<<<< HEAD
-    assert "**Version:** v1.123" in reference
+<<<<<<< HEAD
+    assert "**Version:** v1.174" in reference
 =======
     assert "**Version:** v1.122" in reference
+>>>>>>> main
+=======
+    assert "**Version:** v1.173" in reference
 >>>>>>> main
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference

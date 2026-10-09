@@ -1,7 +1,10 @@
-<!-- Parent: ../../../src/drivers/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
 
 # imu_bno055
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

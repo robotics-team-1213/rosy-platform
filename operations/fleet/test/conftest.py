@@ -14,7 +14,8 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 
 # Each entry is the *outer* ROS-package dir, so the inner Python package
 # (which owns __init__.py) resolves: fleet, core_common (prod, D-126 S3),
-# core_features (test_geometry.py follow_goal cross-check only, D-60).
+# core_features (cross-checks only: test_geometry.py follow_goal, D-60; test_trip_runner.py CORE's
+# junction manoeuvre states).
 for path in (
     SRC.parent / "operations" / "fleet",
     SRC.parent / "contracts" / "foundation",
@@ -26,3 +27,7 @@ for path in (
     if entry not in sys.path:
         sys.path.insert(0, entry)
 
+# Browser tests here import test/browser_harness.py (opt-in flag, Chromium-safe ports).
+_HARNESS = str(Path(__file__).resolve().parents[3] / "test")
+if _HARNESS not in sys.path:
+    sys.path.append(_HARNESS)

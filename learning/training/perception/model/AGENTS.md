@@ -3,6 +3,9 @@
 
 # model
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The model half of the D-356 learned-perception loop: export a trained model to ONNX, verify a returned model against the intake gate, and deliver it to a robot's shadow slot (with rollback). The delivered model runs shadow-only; activating it for driving is a separate decision.
@@ -13,6 +16,7 @@ The model half of the D-356 learned-perception loop: export a trained model to O
 |------|-------------|
 | `export_onnx.py` | TorchScript to ONNX (opset 17, 1x3x240x320) with a fixed-seed parity check; writes the model folder and manifest |
 | `intake.py` | Shadow-deployment eligibility report for a model folder, `store-inbox:<folder>` (taken only when its READY marker matches its content) or `hf:org/repo@<40-hex sha>`; thresholds come from `intake_gate.yaml` |
+| `drivable_versions.py` / `drivable_versions.yaml` | D-558 ledger of `v13-drivable` model versions (`v<major>.<minor>.<NN>`, one revision each, status candidate/shadow/rejected/retired); intake refuses a missing, malformed, off-lineage or taken version; CLI `show`/`add`/`set-status` |
 | `intake_gate.yaml` | Gate values: p50 host latency, NaN frames, minimum visible-lane fraction, replay sources and frame cap; D-379 eval set keys (`eval_set`, `eval_max_frames`, `min_eval_miou`, `max_eval_miou_drop`, `min_lane_marking_iou`; `eval_set: null` = no eval; gated mIoU leaves out background). Eligibility only, not the D-205 selection gate |
 | `deliver.py` | `push`, `rollback`, `release-hold`, `status` against a robot over ssh (default root `/var/lib/rosy/models`); refuses a model whose intake failed |
 | `watch.py` | Site-host watcher (D-373): intake plus shadow push for each READY inbox folder (or each new HF commit with `backend: hf`); reads `/etc/rosy/model-watch.yaml` |
@@ -23,6 +27,7 @@ The model half of the D-356 learned-perception loop: export a trained model to O
 ### Working In This Directory
 
 - Delivery refuses a model whose intake failed; never add a force path around it.
+- `v13-drivable` intake and push are refused (final fail, not a retriable HOLD) unless the manifest carries D-554 lineage: `parent_lane_model` (lane-seg revision, ONNX sha256), a 64-hex dataset revision and `dataset.annotation_origin: derived_from_reviewed_lanes` with `dataset.adr: D-554`, plus a `camera_provenance` mark (accepted or provisional, D-554 item 7) (`intake_eval_gate.v13_lineage_error`). Push goes only to the lane_seg shadow slot; lane_seg has no promote.
 - HF revisions must be 40-hex commit hashes, not tags. The store folder is the source of truth.
 - Robot writes use the operator SSH options in `../operator_ssh.py` (user `rosy`, key plus pinned known_hosts, BatchMode, `sudo -n`).
 - Model weights never go in `src/` or git.

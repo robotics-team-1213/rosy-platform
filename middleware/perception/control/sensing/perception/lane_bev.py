@@ -22,13 +22,12 @@ the floor instead:
 Frame: base_link, x ahead, y LEFT positive (REP 103). Output keeps the lane
 contract: error > 0 means steer right. No ground plane or no odometry means
 no output: the boundary memory cannot be carried without odometry. Odometry
-older than ODOM_MAX_SKEW_S against the image counts as none, and memory not
-refreshed by fresh paint for MEMORY_MAX_AGE_S is forgotten, so frozen
-odometry cannot drive on remembered paint for ever.
+older than ODOM_MAX_SKEW_S against the image counts as none. In the base
+follower, when both boundaries disappear, memory is retained for reacquisition
+but emits no drive candidate; it is forgotten after MEMORY_MAX_AGE_S.
 
 On the 260919 lap the inner block's outline is one closed line on the
-robot's left, so holding it at a half-width drives the whole lap with no
-junction decision (the roundabout is taken on its outer arc).
+robot's left. A fully unseen bend now stops until route evidence is available.
 """
 
 from __future__ import annotations
@@ -73,6 +72,8 @@ LOOKAHEAD_MAX_M = 0.25
 LOOKAHEAD_STEP_M = 0.01
 #: A path point further off the heading than this is behind, not ahead.
 LOOKAHEAD_MAX_BEARING_RAD = math.radians(100.0)
+# ponytail: Host 65-deg gap calibration; tune from reviewed camera frames before activation.
+RIGHT_MATE_MAX_LATERAL_FRACTION = 0.65
 #: The robot must be within this of the path it pursues.
 PATH_MAX_OFFSET_M = 0.14
 #: Half-thickness of the iso-line band, so it stays 8-connected.
@@ -118,6 +119,8 @@ MEMORY_CONFIDENCE = 0.6
 #: Equal to CORE line_follow stale_after_s: evidence older than that already
 #: stops CORE, and a pose that old cannot place the paint in the image.
 ODOM_MAX_SKEW_S = 0.30
+# ponytail: Conservative 0.5 s camera gap at 0.08 m/s plus margin; calibrate on robot odom.
+ODOM_MAX_STEP_M = 0.06
 
 # CORE line_follow law (core_features/line_follow/manager.py, tick()),
 # mirrored so a curvature can be expressed as the error CORE turns into it;
@@ -208,6 +211,13 @@ class BirdsEye:
 
     def sample(self, bright: np.ndarray) -> np.ndarray:
         return (bright[self._pixel_row, self._pixel_col] & self.observable).astype(np.uint8)
+
+    def seen(self, xy: np.ndarray) -> np.ndarray:
+        """bool per floor point (N x 2, base_link): on an observable cell of this grid."""
+        i = np.floor((xy[:, 0] - BEV_X_MIN_M) / BEV_CELL_M).astype(np.intp)
+        j = np.floor((BEV_Y_HALF_M - xy[:, 1]) / BEV_CELL_M).astype(np.intp)
+        inside = (i >= 0) & (i < self.rows) & (j >= 0) & (j < self.cols)
+        return inside & self.observable[np.where(inside, i, 0), np.where(inside, j, 0)]
 
     def cell(self, x: float, y: float) -> tuple[int, int]:
         return (int(math.floor((x - BEV_X_MIN_M) / BEV_CELL_M)),
@@ -338,6 +348,7 @@ class LaneEdgeFollower:
         self._right = _LineMemory()
         self._odometer = 0.0
         self._last_pose = None
+        self._pose_fault = False
         self._fresh_at = None
         self.last = {}
 
@@ -361,6 +372,10 @@ class LaneEdgeFollower:
             self._view_key = key
         return self._view
 
+    def _allow_unseen_memory(self) -> bool:
+        # Route followers may override only with an active, aligned map gate.
+        return False
+
     def update(self, now_s: float, pose, bgr: np.ndarray, ground, *,
                lane_half_width_m: float,
                roi_top_fraction: float = 0.25,
@@ -380,8 +395,23 @@ class LaneEdgeFollower:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
                 pose = None
+        if self._pose_fault:
+            self.last = {"reason": "odom_discontinuity"}
+            return None
+        if pose is not None and self._last_pose is not None:
+            dx, dy = pose[0] - self._last_pose[0], pose[1] - self._last_pose[1]
+            dyaw = math.remainder(pose[2] - self._last_pose[2], 2.0 * math.pi)
+            if max(math.hypot(dx, dy), float(lane_half_width_m) * abs(dyaw)) > ODOM_MAX_STEP_M:
+                self._forget()
+                self._pose_fault = True
+                self.last = {"reason": "odom_discontinuity"}
+                return None
         if ground is None or pose is None:
             self._forget()
+            self.last = {}
+            if ground is not None:
+                self._follow(float(now_s), None, bgr, ground, float(lane_half_width_m),
+                             bright_threshold, float(washed_fraction))
             if self._corner is not None:
                 self._corner.update(now_s, None, bgr, ground,
                                     lane_half_width_m=lane_half_width_m,
@@ -413,7 +443,13 @@ class LaneEdgeFollower:
         paint = view.sample(gray > bright_threshold)
         self.last = {"paint": paint}
         observable = int(view.observable.sum())
-        if observable == 0 or paint.sum() > washed_fraction * observable:
+        if observable == 0:
+            return None
+        if paint.sum() > washed_fraction * observable:
+            self.last["reason"] = "washed"
+            return None
+        if pose is None:
+            self.last = {}
             return None
 
         if self._last_pose is not None:
@@ -456,6 +492,8 @@ class LaneEdgeFollower:
               or now_s - self._fresh_at > MEMORY_MAX_AGE_S):
             self._forget()
             return None
+        elif not self._allow_unseen_memory():
+            return None  # neither lane boundary is observed: no drive evidence
         left_grid = self._one_line(self._left.grid(view, pose),
                                    None if left is None else labels == left)
         right_grid = self._one_line(self._right.grid(view, pose),
@@ -472,9 +510,26 @@ class LaneEdgeFollower:
         of the same lane stands in where the left has left the field of view
         (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
+        candidates = (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"]))
+        if (found.get("left") is None and found.get("right") is not None
+                and found["left_grid"].any() and found["right_grid"].any()):
+            left_target, left_supported = self._lookahead(view, found["left_grid"], half)
+            right_target, right_supported = self._lookahead(view, found["right_grid"], half)
+            if (left_supported and right_supported
+                    and abs(right_target[1]) <= half * RIGHT_MATE_MAX_LATERAL_FRACTION
+                    and abs(left_target[1] - right_target[1]) > LANE_LINE_WIDTH_M):
+                # A forward observed mate beats the old line's turning end cap.
+                candidates = candidates[1:]
+        for name, grid in candidates:
             if not grid.any():
                 continue
+            if name == "RIGHT":
+                near = (view.x >= BEV_MIN_RANGE_M) & (view.x <= LOOKAHEAD_MAX_M)
+                left_y = view.y[(found["left_grid"] > 0) & near]
+                right_y = view.y[(grid > 0) & near]
+                if len(left_y) and len(right_y) and not (
+                        1.2 * half <= np.median(left_y) - np.median(right_y) <= 2.8 * half):
+                    continue  # a branch or wall line is not this lane's missing boundary
             target, supported = self._lookahead(view, grid, half)
             if supported:
                 source = name

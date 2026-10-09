@@ -3,6 +3,9 @@
 
 # drivers
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Device-kind drivers for Pilot (D-323 T5, D-296). A driver owns the endpoints and gate decision for one kind of device; screens ask the registry for it and never hardcode paths.

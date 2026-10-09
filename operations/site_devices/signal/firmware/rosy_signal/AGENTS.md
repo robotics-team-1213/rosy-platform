@@ -1,7 +1,10 @@
-<!-- Parent: ../../AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-21 | Updated: 2026-09-21 -->
 
 # rosy_signal
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

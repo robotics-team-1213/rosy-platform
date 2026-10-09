@@ -3,6 +3,9 @@
 
 # Robot product deployments
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Group deployment inputs by robot product. This directory does not own shared

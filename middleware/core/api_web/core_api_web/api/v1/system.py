@@ -219,6 +219,16 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # planning. `free` follows the live goal_navigation flag after withholding above.
     # `junction_turn` (D-495): the line-follow manager declares `supports_junction_turn`;
     # a manager without that hook cannot do the bounded junction turn.
+    # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
+    # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
+    # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
+    # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
+    # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
+    # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
+    # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
+    # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
+    # `trip_lease` (D-541 1): CORE holds the Fleet trip lease and fences non-owner motion.
+    # `goal_lease` (D-550 10): navigation/goal takes lease_ttl_s; announced with goal navigation.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -234,7 +244,27 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       drive_modes=drive_modes,
                                       trip_max_linear=max(0.0, trip_max_linear),
                                       junction_turn=getattr(svc.line_follow, "supports_junction_turn",
-                                                            False) is True)
+                                                            False) is True,
+                                      junction_pivot=getattr(svc.line_follow, "supports_junction_pivot",
+                                                             False) is True,
+                                      lane_arc=getattr(svc.line_follow, "supports_lane_arc",
+                                                       False) is True,
+                                      lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
+                                      route_context=(True if svc.line_follow is not None and
+                                                     svc.line_follow.config.route_context_enabled else None),
+                                      site_floor_map_id=(None if svc.line_follow is None else getattr(
+                                          svc.line_follow.config, "site_floor_map_id", None)),
+                                      line_follow_authority=callable(getattr(svc.line_follow,
+                                                                             "set_authority", None)),
+                                      line_follow_authority_required=svc.line_follow is not None and getattr(
+                                          svc.line_follow.config, "authority_required", False) is True,
+                                      line_follow_advice=svc.line_follow is not None and getattr(
+                                          svc, "line_advice", None) is not None,
+                                      trip_lease=getattr(svc, "trip_lease", None) is not None,
+                                      goal_lease=True if "free" in drive_modes else None)
+    # `fleet_link_provisioning` (D-555 3, v1.161 additive): PUT/DELETE /fleet/link exists (TLS
+    # listener only). Top level, not in `controls`: a robot without a drive pairs too.
+    data["fleet_link_provisioning"] = getattr(svc, "fleet_agent", None) is not None
     return data
 
 

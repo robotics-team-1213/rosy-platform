@@ -2,21 +2,25 @@
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
-import { applyRoleToControls } from "./authorization.js";
-import { developmentToken } from "./development-auth.js";
+import { applyRoleToControls } from "/console/assets/authorization.js";
+import { developmentToken } from "/console/assets/development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createCameraPeerPanel } from "./camera-peer.js";
-import { createVisionView } from "./vision-view.js";
+import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
-import { createPollGate } from "./poll-gate.js";
+import { createStartPointView } from "./start-point-view.js";
+import { createTrackingRelearn } from "./tracking-relearn.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
-import { addressMap, movableRobots } from "./address-drift.js";
+import { addressMap, movableRobots } from "/console/assets/address-drift.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
+import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
 
 const pageScope = createPageScope();
 
@@ -32,6 +36,7 @@ const LOG_MAX = 40;
 // 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다.
 const discoveryGate = createPollGate();
 let peerPicker = null;
+let startPoints = null; // D-540 5 시작점 — 자기 잠금 사유(이름 있는 운영자)를 역할 적용 뒤에 다시 건다
 
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
@@ -40,21 +45,14 @@ const auth = {
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
   locked: false,
 };
-function stopNotice(message = "", state = "warning") {
-  const notice = el("estop-feedback");
-  notice.textContent = message;
-  notice.hidden = !message;
-  notice.setAttribute("state", state);
-}
-
 function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
 }
 
 function operatorControls() {
-  // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4).
+  // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return [...document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
@@ -62,21 +60,17 @@ function operatorControls() {
 
 function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
+  startPoints?.updateAuthorization();
 }
 
-function setTopbarOpen(open) {
-  el("topbar-more").setAttribute("aria-expanded", String(open));
-  el("topbar-extra").dataset.open = String(open);
-}
-
-function markLocked() {
+function markLocked(reason = "auth") {
   stopNotice();
+  // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
+  if (!auth.locked) loginForm.refresh(true);
   auth.locked = true;
-  setTopbarOpen(true);
   auth.role = null;
   peerPicker?.reset();
-  el("user-role").textContent = "인증 필요";
-  el("user-role").setAttribute("status", "crit");
+  showSignedOut({refused: reason === "auth"});
   const pill = el("online-pill");
   pill.textContent = "접속 전";
   pill.setAttribute("status", "neutral");
@@ -173,6 +167,9 @@ let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
+// D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
+startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
+const relearn = createTrackingRelearn({ scope: pageScope, el, call, auth, confirm: confirmIrreversible });
 peerPicker = createPeerPicker({scope: pageScope, el, call,
   isLocked: () => auth.locked || !auth.role,
   isActive: () => taskChooser.selectedId === "peers",
@@ -186,13 +183,7 @@ peerPicker = createPeerPicker({scope: pageScope, el, call,
     select.value = source; select.dispatchEvent(new Event("change")); select.focus();
   }});
 
-pageScope.listen(el("topbar-more"), "click", () => {
-  setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
-});
-
-function tickClock() {
-  el("clock").textContent = new Date().toTimeString().slice(0, 8);
-}
+bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 
 el("console-token").value = auth.token;
 function saveToken() {
@@ -209,38 +200,24 @@ function saveToken() {
   }
   visionView.reset();
   mapFit.reset();
+  startPoints.reset();
+  relearn.reset();
   refreshAuthorization();
   visionView.refreshSources();
 }
 pageScope.listen(el("token-save"), "click", saveToken);
+// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
+const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
+  el("console-token").value = "";
+  saveToken();
+}});
 pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
-pageScope.listen(el("estop"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
-  stopNotice("비상 정지 요청 중…", "pending");
-  try {
-    const result = await call("/api/fleet/estop", { method: "POST" });
-    life.check();
-    const summary = result.total > 0
-      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
-      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
-    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
-    log(summary, "bad");
-    (result.robots || []).filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    stopNotice(err.status >= 500 || !err.status
-      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
-      : `비상 정지 요청 거절 — ${err.message}`, "error");
-    log(`전체 정지 실패 — ${err.message}`, "bad");
-  }
-});
+bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture(), log});
 
 let discoveryPending = false;
 let scannerLost = false;
@@ -313,16 +290,9 @@ async function refreshAuthorization(renewed = false) {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    if (identity.principal_id.startsWith("development-")) {
-      el("console-token").hidden = true;
-      el("token-save").hidden = true;
-    }
-    const roleName = identity.role === "operator" ? "운영자" :
-      identity.role === "viewer" ? "조회 전용" :
-        identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
-    el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
-    el("user-role").title = el("user-role").textContent;
-    el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+    if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
+    loginForm.refresh(false);
+    showSession(identity);
     const pill = el("online-pill");
     if (pill.dataset.locked === "true") {
       delete pill.dataset.locked;
@@ -335,6 +305,8 @@ async function refreshAuthorization(renewed = false) {
       cameraPeer.refresh(),
       refreshDiscovery(),
       peerPicker.refresh(),
+      startPoints.refresh(),
+      relearn.refresh(),
     ]);
     life.check();
   } catch (_err) {
@@ -345,19 +317,19 @@ async function refreshAuthorization(renewed = false) {
         if (token && token !== auth.token) {
           auth.token = token;
           el("console-token").value = token;
-          el("console-token").hidden = true;
-          el("token-save").hidden = true;
+          el("token-access").hidden = true;
           await refreshAuthorization(true);
           return;
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
     }
-    if (!auth.locked) markLocked();
+    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
   }
 }
 
 tickClock();
 pageScope.interval(tickClock, 1000);
+watchFleet(fleetClient, {interval: (fn, ms) => pageScope.interval(fn, ms)});
 applyRole();
 refreshAuthorization();
 visionView.refreshSources();
@@ -368,6 +340,8 @@ pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
 pageScope.onResume(() => {
   visionView.reset();
   mapFit.reset();
+  startPoints.reset();
+  relearn.reset();
   refreshAuthorization();
   visionView.refreshSources();
 });

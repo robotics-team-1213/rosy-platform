@@ -3,6 +3,9 @@
 
 # config
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Explicit opt-in YAML for the optional BNO055 node. The default Rosy OS compose path does not load this file.

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
-- 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
-- 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
-- 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
-- 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+- 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
+- 2026-10-09 · uncommitted · uiux(pilot): 브랜드에서 안전하게 접속 홈으로 복귀
+- 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
+- 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
+- 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리

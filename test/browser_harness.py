@@ -9,7 +9,73 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import socket
+from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit
+
+# Chromium net/base/port_util.cc kRestrictedPorts: page loads to these fail with
+# net::ERR_UNSAFE_PORT. Windows hosts whose dynamic port range starts at 1024
+# (`netsh int ipv4 show dynamicport tcp`) hand them out for port 0 (2049 seen 2026-10-07).
+CHROMIUM_RESTRICTED_PORTS = frozenset({
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95,
+    101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161,
+    179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563,
+    587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060,
+    5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080,
+})
+
+
+def browser_tests_enabled() -> bool:
+    """Opt-in for real-Chromium tests. `ROSY_RUN_BROWSER_TESTS=1` is canonical;
+    `ROSY_BROWSER_TESTS=1` (the older Fleet name) is accepted too."""
+    return "1" in (os.environ.get("ROSY_RUN_BROWSER_TESTS"), os.environ.get("ROSY_BROWSER_TESTS"))
+
+
+def open_token_access(page) -> None:
+    """Open the paired console's token fallback before using its controls."""
+    try:  # a polling console may never go idle; the wait only covers the auth refresh
+        page.wait_for_load_state("networkidle", timeout=5000)
+    except Exception as error:  # playwright TimeoutError, imported lazily like the rest of the harness
+        if type(error).__name__ != "TimeoutError":
+            raise
+    # D-540 2: below 90rem the token sits in the header fold behind 설정.
+    toggle = page.locator("#topbar-more")
+    if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
+        toggle.click()
+    details = page.locator("#token-access")
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+
+
+def safe_listener(host: str = "127.0.0.1") -> socket.socket:
+    """A socket bound to a free port Chromium will load (never a restricted one)."""
+    for _ in range(64):
+        listener = socket.socket()
+        listener.bind((host, 0))
+        if listener.getsockname()[1] not in CHROMIUM_RESTRICTED_PORTS:
+            return listener
+        listener.close()
+    raise RuntimeError("could not allocate a browser-safe local port")
+
+
+def safe_http_server(handler_cls, *, server_cls=ThreadingHTTPServer, host: str = "127.0.0.1"):
+    """`server_cls` serving on an already-bound `safe_listener()` socket (no bind race)."""
+    listener = safe_listener(host)
+    server = server_cls(listener.getsockname(), handler_cls, bind_and_activate=False)
+    server.socket.close()
+    server.socket = listener
+    # What HTTPServer.server_bind() would have set (handlers read server_port).
+    server.server_address = listener.getsockname()
+    server.server_name, server.server_port = host, server.server_address[1]
+    server.server_activate()
+    return server
+
+
+def free_port(host: str = "127.0.0.1") -> int:
+    """A browser-safe free port, closed before return, so another bind can take it first.
+    Use only for a server API that accepts nothing but a port number."""
+    with safe_listener(host) as listener:
+        return listener.getsockname()[1]
 
 
 def launch_options() -> dict:
