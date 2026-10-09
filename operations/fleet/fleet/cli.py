@@ -588,7 +588,7 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
-    stuck_resolver_enrolled, stuck_resolver_ai = _stuck_resolver_site(args)
+    stuck_resolver_enrolled = _stuck_resolver_enrolled(args)
     if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
@@ -629,7 +629,6 @@ def run_console(args: argparse.Namespace) -> None:
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
-                     stuck_resolver_ai=stuck_resolver_ai,
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -670,30 +669,22 @@ def _goal_lease_ttl_s(args) -> float:
     return float(value)
 
 
-def _stuck_resolver_site(args):
-    """``fleet.stuck_resolver`` of ``--site-config``. ``enrolled_robots``: enrolled robot ids (D-361)
-    the resolver answers with Fleet's enrolled CORE credential (default none, as before).
-    ``ai_url``: the AI PC situation service asked once per open stuck, facts shown only (D-577
-    shadow); bearer from ``$ROSY_AI_SITUATION_TOKEN`` when set. Returns (ids, ask or None)."""
+def _stuck_resolver_enrolled(args) -> frozenset:
+    """``fleet.stuck_resolver.enrolled_robots`` of ``--site-config``: enrolled robot ids (D-361) the
+    resolver answers with Fleet's enrolled CORE credential. Empty (default) = none, as before."""
     import yaml
-
-    from fleet.server.stuck_ai import HttpSituationAsk
 
     try:
         site_config = {}
         if getattr(args, "site_config", None) is not None:
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
         section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
-        ids, ai_url = section.get("enrolled_robots") or [], section.get("ai_url")
+        ids = section.get("enrolled_robots") or []
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"stuck resolver config: {exc}")
     if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
         sys.exit("stuck resolver config: fleet.stuck_resolver.enrolled_robots must be a list of robot ids")
-    if ai_url is not None and not (isinstance(ai_url, str) and ai_url.startswith(("http://", "https://"))):
-        sys.exit("stuck resolver config: fleet.stuck_resolver.ai_url must be an http(s) URL")
-    ask = None if ai_url is None else HttpSituationAsk(
-        ai_url, token=os.environ.get("ROSY_AI_SITUATION_TOKEN") or None)
-    return frozenset(ids), ask
+    return frozenset(ids)
 
 
 def _trip_config(args):

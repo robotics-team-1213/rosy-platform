@@ -33,10 +33,6 @@ class StuckResolverLoop:
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
-        #: D-577 shadow: `stuck_ai.HttpSituationAsk` when the site config names an AI PC (app.py).
-        self.ai_ask: Optional[Callable[[dict], Awaitable[list]]] = None
-        self._ai_asked: set[tuple[str, str]] = set()
-        self._ai_tasks: set[asyncio.Task] = set()
         self.wake = asyncio.Event()
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
@@ -48,44 +44,12 @@ class StuckResolverLoop:
     async def run_once(self) -> None:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
-        if self.ai_ask is not None:
-            self._ask_ai(robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         for action in self._resolver.step(now, robots):
             if isinstance(action, Escalate):
                 self._escalated(action)
             else:
                 await self._answer(action, now)
-
-    def _ask_ai(self, robots: list) -> None:
-        """One background AI PC ask per open stuck. The rules never wait for it (D-577 5)."""
-        open_now = set()
-        for row in robots:
-            stuck = ((row.get("state") or {}).get("line_follow") or {}).get("stuck")
-            if not row.get("online", True) or not isinstance(stuck, dict) or not stuck.get("stuck_id"):
-                continue
-            key = (str(row["robot_id"]), str(stuck["stuck_id"]))
-            open_now.add(key)
-            if key not in self._ai_asked:
-                self._ai_asked.add(key)
-                task = asyncio.create_task(self._ai_one(key, row, stuck))
-                self._ai_tasks.add(task)
-                task.add_done_callback(self._ai_tasks.discard)
-        self._ai_asked &= open_now
-
-    async def _ai_one(self, key: tuple[str, str], row: dict, stuck: dict) -> None:
-        line = (row.get("state") or {}).get("line_follow") or {}
-        situation = {"robot_id": key[0], "stuck": stuck, "map_pose": row.get("map_pose"),
-                     "line_follow": {k: line.get(k) for k in ("mode", "state", "reason")}}
-        try:
-            facts = await asyncio.wait_for(self.ai_ask(situation),
-                                           getattr(self.ai_ask, "timeout_s", 3.0) + 0.5)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - an absent or wrong AI PC is "no facts", never a stop
-            log.info("AI PC situation ask for %s %s: %s", *key, exc)
-            facts = None
-        self._board.note_ai(*key, facts)
 
     def _row(self, row: dict) -> dict:
         extra = {}
