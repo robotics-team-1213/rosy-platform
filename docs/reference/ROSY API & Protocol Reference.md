@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.180
+**Version:** v1.181
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1038,7 +1038,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `nav.failed` | error | 로봇 | `{error_code, correlation_id}` — 동일 dispatch 시도 ID 또는 `null` |
 | `nav.canceled` | info | 로봇 | `{source, correlation_id}` — 로컬 취소 요청을 냈다는 뜻이며 액션 완료나 물리 정지를 증명하지 않는다 |
 | `nav.stuck` | error | 로봇 | `{timeout_s}` — NAV-006 무진척 판정 시간(초) |
-| `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음) |
+| `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음. CAMERA_LINE은 D-407 개정 2026-10-10에 따라 차선이 다시 보이면 같은 모드로 이어 감, `nav.lane_reacquired`) |
+| `nav.lane_reacquired` | info | 로봇 | `{mode, frames, since_s}` — D-407 개정 2026-10-10: CAMERA_LINE `LOST`(`camera_reselection_required`)가 `line_follow.lost_resume_frames`(3)개 연속 신선·확신 프레임이 `lost_resume_s`(1.0 s) 넘게 이어지고 앞 물체 정지가 없으며 IR 감시가 비어 있을 때 풀려 같은 모드로 이어 감(재선택 없음). `lost_auto_resume: false`면 옛 잠금 (v1.181) |
 | `nav.line_mode_changed` | info | 로봇 | `{from, to}` — D-143 line-follow 모드 선택 |
 | `nav.line_driver_released` | info | 로봇 | `{mode}` — D-344 §8 운전자 확인(`hold_s`)이 끊겨 CORE 가 line-follow 를 스스로 내림 (v1.63) |
 | `nav.line_obstacle_hold` | warning | 로봇 | `{mode, clearance_m, held_s}` — D-344 §11 앞 물체 정지(`obstacle_ahead`)가 `line_follow.obstacle_escalate_s` 넘게 이어짐, 정지 한 번에 한 번 (feat/device-prep, v1.64). 몸 기준 정지(D-422)면 `body_gap_m`·`stop_gap_m`·`clearance_source` 도 온다 (v1.84) |
@@ -2641,6 +2642,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.181 | 2026-10-10 | Behavioural + Additive (D-407 개정 2026-10-10, fix/keep-auto-resume): CORE CAMERA_LINE `LOST`는 차선이 다시 보이면 같은 모드로 자동으로 이어 간다. 설정 `line_follow.lost_auto_resume`(기본 true)·`lost_resume_frames`(3, = D-495 `junction_reacquire_frames`)·`lost_resume_s`(1.0, = D-407 `recovery_settle_s`); 조건은 연속 신선·확신 프레임, 앞 물체 정지 없음, IR 감시 비어 있음(또는 꺼짐). 사건 `nav.lane_reacquired` `{mode, frames, since_s}`. 상태·사유 문자열은 그대로이고 IR_LINE의 재선택 잠금도 그대로 |
 | v1.180 | 2026-10-10 | Additive (D-593, feat/operator-map-pin-anchor): Fleet `POST /api/fleet/robots/{robot_id}/map-pin` (named operator), map-pose `anchor_source` (`sighting` \| `operator_pin`), `bridge_turn_deg` and `source` value `operator_pin`; trip start accepts a still operator pin up to 10 s old (`fleet.trip.pin_start_still_m` 0.02, `pin_start_still_deg` 2). Robot API and envelope 1.0 unchanged |
 | v1.179 | 2026-10-10 | Additive (D-573 2·3·4·6, feat/crosswalk-core-gate, Safety-Review 대상, 기본 꺼짐): CORE line-follow 횡단보도 게이트. 설정 `line_follow.crosswalk_gate_enabled`(기본 false, URDF 몸 필요)·`crosswalk_look_s`(1.0)·`crosswalk_look_min_scans`(8)·`crosswalk_report_s`(10)·`crosswalk_cross_speed`(0.04)·`crosswalk_approach_default_m`(0, 보기 영역은 카메라가 본 차로 안쪽 경계 사이). 출처는 D-491 카메라 구역(Fleet 힌트는 나중). `GET /line-follow`·상태 `line_follow.crosswalk`(꺼짐이면 키 없음, 구역 밖 null), 막힘 원인 `crosswalk_blocked`와 `stuck.detail`, 그 원인의 움직이는 답 거부(`crosswalk_gate`). 꺼져 있으면 동작·응답 변경 없음. envelope 1.0 변경 없음 |
 | v1.178 | 2026-10-10 | 동작 변경 + Additive (D-525 rev 6, feat/signal-occupancy-default): 가상 신호의 새 기본 모드이자 Fleet 재시작 상태는 `occupancy`(점유 기반)다(이전 `all_red`). 이 모드에서 신호는 D-517 구역 허가에 단계 관문을 더하지 않고(모든 입구 허용, 수용 1이 한 대만 들임) 등은 살아 있는 구역 상태에서 나온다: 비어 있음 모두 `green`, 허가만 쥠 그 입구 `green`·나머지 `yellow`(화면 주황), 점유·모름 모두 `red`. `POST /api/fleet/traffic/signals/{id}` 동사 `occupancy` 추가. `GET /api/fleet/traffic` `signals[]` `occupancy {state free\|reserved\|occupied\|unknown, holder, approach}`, `mode: occupancy`이면 `aspect`는 요약이고 `left_s`·입구 `left_s` null, `green_in_s`는 초록 0 아니면 null. `signal_ahead`(로봇 행과 `GET /api/fleet/traffic/signals/ahead/{robot_id}`)에 `mode`·`occupancy`. 설정 오류 신호의 입구 `lamp`는 늘 `red`. 등은 표시·참고이고 허가는 D-517만 준다. Robot API, D-551 advice `lamp` 값(green/yellow/red), CORE 명령과 envelope 1.0 그대로 |
