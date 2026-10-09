@@ -463,7 +463,7 @@ def test_device_dev_mode_marker_opens_only_the_shared_dev_tokens(robot, monkeypa
     # D-548: no credential that outlives the marker, no new network, release or boot.
     for method, path in (("post", "/api/v1/system/tokens"), ("delete", "/api/v1/system/tokens/card01"),
                          ("post", "/api/v1/auth/enrollment-codes"), ("post", "/api/v1/host/reboot"),
-                         ("post", "/api/v1/host/network/connect")):
+                         ("post", "/api/v1/host/network/connect"), ("post", "/api/v1/system/dds/cyclone")):
         assert getattr(tc, method)(path, headers=DEV_ADMIN).status_code == 403, path
     assert tc.get("/api/v1/system/tokens", headers=DEV_ADMIN).status_code == 200
     assert tc.post("/api/v1/system/tokens", headers=CARD, json={"role": "viewer"}).status_code == 201

@@ -91,7 +91,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
   `expires_at`(없으면 만료 없음)이 있다. 만료된 토큰은 401 이고, 다음 저장 때 목록에서 지워진다(D-193).
 - 장치 기본값에는 토큰이 없다. 장치 모드(`ROSY_DEPLOYMENT=device`)의 CORE 는 평문 레거시 항목과 공용 개발 토큰
   `rosy-dev-*` 를 어디서 오든 거부하고 `auth.credentials_refused` 를 낸다. 토큰이 0 개여도 API 는 뜨고 모든 인증 요청은 401 이다.
-  예외(D-548): root 가 만든 `/etc/rosy/dev-mode` 가 있으면 그 로봇만 세 공용 개발 토큰을 받고 기동 때 `auth.development_mode` 를 낸다. 파일을 지우면 즉시 401 이다. 이때도 공용 개발 토큰은 `/api/v1/host/ssh*`·`/api/v1/auth/enrollment-codes` 전부와 `/api/v1/host/*`·`/api/v1/system/tokens*` 쓰기에 403 `FORBIDDEN` 이다.
+  예외(D-548): root 가 만든 `/etc/rosy/dev-mode` 가 있으면 그 로봇만 세 공용 개발 토큰을 받고 기동 때 `auth.development_mode` 를 낸다. 파일을 지우면 즉시 401 이다. 이때도 공용 개발 토큰은 `/api/v1/host/ssh*`·`/api/v1/auth/enrollment-codes` 전부와 `/api/v1/host/*`·`/api/v1/system/tokens*`·`/api/v1/system/dds*` 쓰기에 403 `FORBIDDEN` 이다.
 - 로그인 코드(D-193): 로봇 화면·콘솔의 8자 일회용 코드를 `POST /api/v1/auth/pair` 로 이 브라우저 전용 만료 토큰으로 바꾼다(§5.1).
 - Fleet 접속용 로봇 토큰은 사용자 토큰과 분리한다(페어링, §7).
 
@@ -2513,7 +2513,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.156 | 2026-10-09 | Additive + 동작 변경 (D-548, feat/device-dev-profile): 이벤트 `auth.development_mode` `{marker}`. 장치 모드 CORE 는 `/etc/rosy/dev-mode` 가 있을 때만 공용 개발 토큰 `rosy-dev-*` 를 받는다(없으면 D-193 7 그대로). 그 토큰은 장치에서 `/host/ssh*`·`/auth/enrollment-codes` 전부와 `/host/*`·`/system/tokens*` 쓰기에 403 `FORBIDDEN`. Fleet `--mission-api` 는 `--users-file` 대신 개발 연결 모드로도 시작. 스키마 변경 없음 — envelope 1.0 유지 |
+| v1.156 | 2026-10-09 | Additive + 동작 변경 (D-548, feat/device-dev-profile): 이벤트 `auth.development_mode` `{marker}`. 장치 모드 CORE 는 `/etc/rosy/dev-mode` 가 있을 때만 공용 개발 토큰 `rosy-dev-*` 를 받는다(없으면 D-193 7 그대로). 그 토큰은 장치에서 `/host/ssh*`·`/auth/enrollment-codes` 전부와 `/host/*`·`/system/tokens*`·`/system/dds*` 쓰기에 403 `FORBIDDEN`. Fleet `--mission-api` 는 `--users-file` 대신 개발 연결 모드로도 시작. 스키마 변경 없음 — envelope 1.0 유지 |
 | v1.155 | 2026-10-09 | Additive (D-535, feat/connect-failure-reasons): 연결 이유 코드 21개(ERR-102 행, 기계 원천 `connect-reasons.v1.json`). `/api/v1/auth/peer-pairing/*` 거절에 기존 상태·`detail`을 두고 `error {code, message, detail.action, detail.retry}`를 더함, 한도 거절에 `Retry-After`. `GET /api/v1/auth/connection`에 `connect_contract`·`api`·`core_ready`·`stage`·`release`·`tls_hostname`·`pairing`, 출발지별 30회/분 429, LAN 밖 403 코드 `LAN_REQUIRED`(이전 `FORBIDDEN`). Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link_reason {code, message, action, retry}`. envelope 1.0 변화 없음 |
 | v1.154 | 2026-10-09 | 동작 변경 (D-520 개정 2026-10-09, fix/d520-arc-entry-tangent·feat/d520-arc-radial-tracking·docs/d520-default-on-ring, Safety-Review 대상): `line_follow.arc_enabled` 기본 켬, 능력 `lane_arc` 는 그 설정·`site_floor_map_id` 선언·`ir_guard_speed_scale` > 0 이 함께 있을 때만 참(선언 없는 켬은 시작 거부가 아님); 409 `LANE_ARC_UNAVAILABLE` 은 그 능력이 거짓일 때; 호 명령에 odom 지도 원으로의 반지름·방향 보정(\|c\| ≤ 1.5 1/m), 원과 0.075 m 넘게 떨어지면 HOLD `lane_arc_edge`, 첫 IR 판정이 원을 옮김. 스키마 필드 변경 없음. Fleet 은 `exit_segment` 가 있는 회전에도 `turn_target` 회전각을 보낸다 |
 | v1.153 | 2026-10-09 | Additive (D-524 Proposed, feat/host-control, Safety-Review 대상): `GET /api/fleet/hosts`(운영자, 행에 `stoppable_units`)와 `POST /api/fleet/hosts/{host}/control`(이름 있는 운영자). 409 `REBOOT_ALREADY_SCHEDULED`·`NO_HOST_CONTROL_REBOOT`, 503 `HOST_HELPER_UNAVAILABLE`, 502 `HOST_HELPER_FAILED`. 사이트 유닛은 재시작만. envelope 1.0 변경 없음 |

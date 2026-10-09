@@ -419,7 +419,7 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
 #: D-548: on a device the shared dev tokens drive the robot but never hand out a shell, a
 #: credential that outlives the marker, or a new network, release or boot.
 SHARED_DEV_REFUSED_PREFIXES = ("/api/v1/host/ssh", "/api/v1/auth/enrollment-codes")
-SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens")
+SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens", "/api/v1/system/dds")
 
 
 def auth_dependency(request: Request,
