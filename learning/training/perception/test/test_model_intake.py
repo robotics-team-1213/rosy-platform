@@ -81,9 +81,46 @@ def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
         parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
                            "torchscript_sha256": "c" * 64},
         dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
-        camera_provenance="provisional")
+        camera_provenance="provisional", model_version="v13.1.00")
     rc, report = intake.run(str(derived), out=tmp_path / "accepted", root=tmp_path)
-    assert rc != 0 and "D-554" not in " ".join(report["reasons"])
+    assert rc != 0 and "D-55" not in " ".join(report["reasons"])
+    assert report["model_version"] == "v13.1.00"
+
+
+def test_v13_drivable_intake_checks_the_d558_version(tmp_path):
+    import drivable_versions
+    import export_cell
+
+    raw = tmp_path / "candidate.onnx"
+    raw.write_bytes(b"candidate")
+    kw = dict(onnx_path=raw, classes=[("background", "background"), ("lane_left", "lane_marking"),
+                                      ("drivable", "drivable")],
+              color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1],
+              dataset_repo="store:v13-lane-derived", dataset_revision="a" * 64,
+              camera_profile_revision="cam-1", trainer="t", date="20261010",
+              revision_prefix="v13-drivable",
+              parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
+                                 "torchscript_sha256": "c" * 64},
+              dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
+              camera_provenance="provisional")
+    ledger = tmp_path / "ledger.yaml"
+    drivable_versions.save([{"version": "v13.1.00", "revision": "v13-drivable-20261010-ffffffff",
+                             "onnx_sha256": "f" * 64, "dataset": "d", "rules": ["D-554 1-9"],
+                             "status": "candidate", "note": "taken"}], ledger)
+
+    def reasons(folder, version):
+        doc = export_cell.write_manifest(folder, **kw)
+        if version is not None:
+            doc["model_version"] = version
+        (folder / "model_manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+        rc, report = intake.run(str(folder), out=tmp_path / "accepted", root=tmp_path, ledger=ledger)
+        assert rc != 0
+        return " ".join(report["reasons"])
+
+    assert "needs model_version" in reasons(tmp_path / "none", None)
+    assert "major 12" in reasons(tmp_path / "major", "v12.1.00")
+    assert "one version, one revision" in reasons(tmp_path / "taken", "v13.1.00")
+    assert "D-558" not in reasons(tmp_path / "free", "v13.2.00")  # fails later on the fake ONNX
 
 
 @pytest.mark.parametrize("src", ["hf:org/repo@main", "hf:org/repo@v1.0", "hf:org/repo",

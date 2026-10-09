@@ -59,7 +59,10 @@ def _validate(doc) -> list[dict]:
 
 
 def load(path=LEDGER) -> list[dict]:
-    return _validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+    try:
+        return _validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"ledger {path}: {exc}") from exc
 
 
 def save(entries: list[dict], path=LEDGER) -> None:
@@ -121,7 +124,7 @@ def main(argv=None) -> int:
                 raise ValueError(f"no ledger entry {args.version}")
             match[0]["status"] = args.status
         save(entries, args.ledger)
-    except (OSError, ValueError, yaml.YAMLError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
     print(f"{args.action} {args.version} -> {args.ledger}")
