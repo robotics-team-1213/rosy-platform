@@ -289,6 +289,8 @@ def test_main_prints_push_commands_and_never_pushes(tmp_path, monkeypatch, capsy
         assert (f"deploy\\robot\\pinky_pro\\rosy-release-push.ps1 -Robot {ip} -Tarball {quoted} -PrintCommands"
                 in printed)
         assert f"deploy\\robot\\pinky_pro\\rosy-release-push.ps1 -Robot {ip} -Tarball {quoted}\n" in printed
+    assert (f"deploy\\robot\\pinky_pro\\rosy-release-push-many.ps1 -Robot 192.168.1.202,192.168.1.203 "
+            f"-Tarball {quoted}   # all at once") in printed
     assert all("rosy-release-push" not in " ".join(call) for call in tools.calls + ssh.calls)
 
 
@@ -355,6 +357,7 @@ def test_push_commands_escape_spaces_and_apostrophes():
     assert "''" in expected and " " in expected
     assert lines[1] == f"deploy\\robot\\pinky_pro\\rosy-release-push.ps1 -Robot 192.168.1.202 -Tarball {expected}"
     assert lines[0].startswith(lines[1] + " -PrintCommands")
+    assert len(lines) == 2  # one robot: no parallel line
 
 
 def test_main_reports_truncated_tarball_without_traceback(tmp_path, monkeypatch, capsys):

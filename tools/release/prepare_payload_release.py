@@ -51,6 +51,7 @@ HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.\-]*")
 # their old version, be dropped.
 DPKG_COMMAND = "dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\n' 'ros-jazzy-*'"
 PUSH_SCRIPT = r"deploy\robot\pinky_pro\rosy-release-push.ps1"
+PUSH_MANY_SCRIPT = r"deploy\robot\pinky_pro\rosy-release-push-many.ps1"
 
 SshRunner = Callable[[list[str]], tuple[int, str, str]]
 ToolRunner = Callable[[list[str]], int]
@@ -292,6 +293,9 @@ def push_commands(hosts: list[str], tarball: Path) -> list[str]:
     for host in hosts or ["<robot-ip>"]:
         base = f"{PUSH_SCRIPT} -Robot {host} -Tarball {_ps_path(tarball)}"
         lines += [f"{base} -PrintCommands   # dry run", base]
+    if len(hosts) > 1:
+        # D-553 addendum 2: the same pushes at the same time, one log per robot.
+        lines.append(f"{PUSH_MANY_SCRIPT} -Robot {','.join(hosts)} -Tarball {_ps_path(tarball)}   # all at once")
     return lines
 
 
