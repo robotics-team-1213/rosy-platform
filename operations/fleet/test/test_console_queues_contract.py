@@ -92,7 +92,7 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     index = INDEX.read_text(encoding="utf-8")
     roster = ROSTER.read_text(encoding="utf-8")
-    assert "#fleet-main > .console-secondary { min-height: 0; overflow-y: auto;" in styles
+    assert "#fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto;" in styles
     assert "ui-shell:has(> #fleet-main) { height: 100dvh; }" in styles
     assert "max-height: min(20dvh, 12rem)" not in styles
     assert "#roster { min-height: 0; max-height" not in styles
