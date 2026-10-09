@@ -124,7 +124,9 @@ class LearnedLaneNode(Node):
         if model.model_revision != self._logged_revision:
             self._logged_revision = model.model_revision
             self._visible = VisibleHysteresis()
-            self.get_logger().info(f'shadow model {model.model_revision}')
+            version = getattr(getattr(model, 'manifest', None), 'model_version', None)  # D-558
+            self.get_logger().info(f'shadow model {model.model_revision}'
+                                   + (f' ({version})' if version else ''))
             if self._signature.signed is False:
                 self.get_logger().warn(f'shadow model {model.model_revision} is not release-signed '
                                        f'({self._signature.reason}); warn-only for lane_seg (D-423)')

@@ -32,6 +32,18 @@ def test_clear_message_cannot_carry_a_stale_place():
                      stamp_s=10.0, valid_until_s=10.5, kind="ring", curvature_1pm=3.0)
 
 
+def test_bend_phase_is_bounded_to_an_active_bend():
+    fields = dict(v=1, seq=7, place_id="bend", map_id="track-v1",
+                  stamp_s=10.0, valid_until_s=10.5, kind="bend")
+    assert RouteContext(**fields, bend_phase="reacquiring").message()["bend_phase"] == "reacquiring"
+    for change in (dict(kind="junction", bend_phase="bending"),
+                   dict(bend_phase="armed")):
+        with pytest.raises(ValidationError):
+            RouteContext(**(fields | change))
+    with pytest.raises(ValidationError):
+        RouteContext(v=1, seq=None, bend_phase="reacquiring")
+
+
 def test_line_follow_status_reports_published_context():
     context = RouteContext(v=1, seq=7, place_id="ring_s", map_id="track-v1",
                            stamp_s=10.0, valid_until_s=10.5, kind="ring", curvature_1pm=3.0)

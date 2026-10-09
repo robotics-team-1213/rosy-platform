@@ -191,7 +191,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_118,
+        48_481,
+        "split: re-judged at 48481 on 2026-10-09 (independent re-judge, critic agent): D-540 (d) robot card trips: "
+        "web/card-trip.js 230 (card 운행 form, convoy block), shared/site-map-model.js +40 (one plan/start/cancel "
+        "path, site-map.js uses it, −4), queues.js split from roster.js done (roster.js −117). No new route or "
+        "package owner. site-map.js trip/repeat/convoy controls are removed in D-540 step (e), which must "
+        "net-shrink. +150 allowance unchanged, measured from 48481. Previously "
         "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
         " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
         "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "

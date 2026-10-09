@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix: route context 시험 파일명 중복 해소
+- 2026-10-09 · uncommitted · fix(core_common): D-531 굽이 단계 문맥
 - 2026-10-09 · uncommitted · feat(core_common): D-531 문맥 스키마
 - 2026-10-09 · uncommitted · feat(core_common): 장치 개발 모드 표식 (D-548)
 - 2026-10-08 · uncommitted · fix(device identity): 프로비저닝 UID와 Pi 시리얼을 CORE 신원으로 전달
-- 2026-10-08 · 887abb1a9 · feat(core_common): D-517 M2 controls 필드 line_follow_authority_required
-- 2026-10-08 · b570504a2 · core_common(protocol): line_authority (D-517 M2)

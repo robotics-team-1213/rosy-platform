@@ -945,7 +945,7 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         assert "목표 남음" in card.inner_text()
         assert "NAVIGATING" not in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
-        assert not card.locator("ui-button").nth(1).evaluate("node => node.disabled")
+        assert not card.locator("ui-button[data-cancel-scope]").evaluate("node => node.disabled")  # 운행 취소 (D-540 (d))
         assert not errors
         save_temp_screenshot(page, "fleet_safety_stopped.png" if safety else "fleet_safety_unknown.png")
         browser.close()
@@ -1586,7 +1586,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
-        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").nth(1).click()
+        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button[data-cancel-scope]").click()
         page.wait_for_timeout(200)
         assert not errors
         browser.close()
@@ -1786,7 +1786,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
         headings = [
-            "대형",
+            "대형·대열",  # D-540 3
             "신호등",
         ]
         for name in headings:
@@ -2162,11 +2162,9 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
-        assert len(action_widths) == 3 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
-        if width == 320:
-            assert abs(action_widths[2] - actions_width) <= 1, action_widths
-        else:
-            assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
+        # D-540 (d): 목표 지정 · 운행… · 운행 취소 · LED로 찾기 wrap whole, never wider than the row.
+        assert len(action_widths) == 4 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        assert all(w <= actions_width + 1 for w in action_widths), action_widths
         _open_cards(page)
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({

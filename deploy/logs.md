@@ -2641,3 +2641,7 @@
 - 변경: Vision이 `/etc/rosy/site` 전체 대신 `site-cameras.yaml`만 마운트. 기본 비밀 경로 `/etc/rosy/site-secrets`(.env.example, mdns-bridge·model-watch 유닛, preflight, functional setup, rosy_ml). `migrate-site-secrets.sh`. D-524 결정 11, README.
 - 증거: test_host_control.py::test_vision_cannot_reach_fleet_secrets (원격 pytest 결과는 커밋 메시지·보고).
 - gate 변화: SOURCE. 실제 사이트 PC는 건드리지 않았다. 현장 이전(스크립트 실행·재시작)은 열림.
+## 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
+- 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
+- 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
+- gate 변화: SOURCE.

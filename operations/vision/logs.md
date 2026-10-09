@@ -381,3 +381,8 @@
 - 원인: 독립 리뷰가 파란 사각형 위 회색 상자가 첫 프레임부터 숨고 치유되어 치운 뒤 유령이 남는 것(S1), 확정 전 숨김, blob 16개에서 30–47 ms를 찾음
 - 증거: 합성 시험(테이프 위 색 덱 로봇, 파란 사각형 위 상자, 확정 전 0.35 보고, 의자 부분)과 각 조건 변이 시 실패 확인. 실프레임 D4/D5: 0.35 보고 2프레임 뒤 유령 0, 8kcn 9/9. A·B·C 변화 없음. blob 16개 약 9 ms
 - gate 변화: 없음
+
+## 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
+- 변경: `detect.py`가 `_detector_parameters`가 돌려준 객체에 `minMarkerPerimeterRate = 0.015`를 둔다(4.6 segfault 회피로 새 객체를 만들지 않음). 로봇 윗면이 40 mm 스티커만 받기 때문이다.
+- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:/DevTemp/marker-id-plan/run-1.txt.
+- gate 변화: SOURCE. 현장 Vision 갱신 뒤 실제 스티커로 MARKER 확인은 열림.
