@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.158
+**Version:** v1.159
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -91,6 +91,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
   `expires_at`(없으면 만료 없음)이 있다. 만료된 토큰은 401 이고, 다음 저장 때 목록에서 지워진다(D-193).
 - 장치 기본값에는 토큰이 없다. 장치 모드(`ROSY_DEPLOYMENT=device`)의 CORE 는 평문 레거시 항목과 공용 개발 토큰
   `rosy-dev-*` 를 어디서 오든 거부하고 `auth.credentials_refused` 를 낸다. 토큰이 0 개여도 API 는 뜨고 모든 인증 요청은 401 이다.
+  예외(D-548): root 가 만든 `/etc/rosy/dev-mode` 가 있으면 그 로봇만 세 공용 개발 토큰을 받고 기동 때 `auth.development_mode` 를 낸다. 파일을 지우면 즉시 401 이다. 이때도 공용 개발 토큰은 `/api/v1/host/ssh*`·`/api/v1/auth/enrollment-codes` 전부와 `/api/v1/host/*`·`/api/v1/system/tokens*`·`/api/v1/system/dds*` 쓰기에 403 `FORBIDDEN` 이다.
 - 로그인 코드(D-193): 로봇 화면·콘솔의 8자 일회용 코드를 `POST /api/v1/auth/pair` 로 이 브라우저 전용 만료 토큰으로 바꾼다(§5.1).
 - Fleet 접속용 로봇 토큰은 사용자 토큰과 분리한다(페어링, §7).
 
@@ -964,6 +965,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `auth.code_burned` | warning | 로봇 | `{code_id, attempts}` — 틀린 시도가 쌓여 로그인 코드를 폐기했다 |
 | `auth.enrollment_code_issued` | warning | 로봇 | `{code_id, role, by}` — 관리자(`by` = 토큰 id)가 등록 코드를 받았다. 코드는 싣지 않는다 |
 | `auth.credentials_refused` | warning | 로봇 | `{count}` — 장치 모드가 기동 때 개발 토큰·평문 항목을 거부했다 |
+| `auth.development_mode` | warning | 로봇 | `{marker}` — 장치 모드인데 개발 모드 표식이 있어 공용 개발 토큰을 받는다(D-548) |
 | `mode.changed` | info | 로봇 | `{from, to, by}` |
 | `trip_lease.opened` | info | 로봇 | `{lease_id, trip_id, holder, operator_name, ttl_s}` — D-541 (v1.157) |
 | `trip_lease.renewed` | info | 로봇 | `{lease_id, trip_id, ttl_s}` — renew 는 0.5 s 마다 오므로 lease 하나에 30 s 에 한 번만 낸다 (v1.157) |
@@ -2533,6 +2535,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.159 | 2026-10-09 | Additive + 동작 변경 (D-548, feat/device-dev-profile): 이벤트 `auth.development_mode` `{marker}`. 장치 모드 CORE 는 `/etc/rosy/dev-mode` 가 있을 때만 공용 개발 토큰 `rosy-dev-*` 를 받는다(없으면 D-193 7 그대로). 그 토큰은 장치에서 `/host/ssh*`·`/auth/enrollment-codes` 전부와 `/host/*`·`/system/tokens*`·`/system/dds*` 쓰기에 403 `FORBIDDEN`. Fleet `--mission-api` 는 `--users-file` 대신 개발 연결 모드로도 시작. 스키마 변경 없음 — envelope 1.0 유지 |
 | v1.158 | 2026-10-09 | Additive (D-526 1단계, feat/fleet-tether-watch, Safety-Review 대상): Fleet tether 감시. `GET /api/fleet/tethers` 행에 `watch {state, trip, distance_m, turn_deg, pose_age_s, stop_sent, stop_error}`(첫 틱 전 null); 반경+0.15 m·누적 회전 405°·지도 자세 2 s 없음이면 기존 로봇 E-Stop을 보내고 그 로봇의 trip을 `tether_trip`으로 끝낸다. 테더 POST가 감시를 다시 시작한다. 신뢰하는 지도 자세(LOCALIZED·map)만 지도 자세이고 `localization`이 없으면 2 s 안에 정지한다. 목록에 `watch_age_s`, `watch`에 `stop_failures`·`tick_age_s`, E-Stop 10회 실패는 관제 `alarms`의 `TETHER_STOP_FAILED`. 로봇 API·envelope 1.0 변경 없음 |
 | v1.157 | 2026-10-09 | Additive + 동작 변경 (D-541 CORE 부분, feat/core-trip-lease, Safety-Review 대상): `PUT /api/v1/trip-lease`, `DELETE /api/v1/trip-lease/{lease_id}`, `POST /api/v1/trip-lease/takeover`; 상태 선택 필드 `trip_lease`·`trip_lease_ended`(없으면 키 없음); 능력 `base_velocity.trip_lease`; 오류 `TRIP_LEASED`·`MANUAL_MODE`; 이벤트 `trip_lease.opened|renewed|ended|shared_token`. 동작 변경은 lease 가 살아 있을 때만: 주인 아닌 `/mode`·`/teleop`·구동 쓰기 409 `TRIP_LEASED`, `POST /calibration/session` 409 `TRIP_LEASED`, `/ws/swarm/reference` 주인 아닌 프레임 버림, 주인 아닌 `navigation/cancel`·line-follow OFF 는 lease 를 끝내고 IDLE, 주인의 `navigation/goal` 은 line-follow 가 켜져 있어도 받음, 만료·넘겨받기는 IDLE, 끝난 `lease_id` 의 PUT 은 404(다시 열지 않음), `localization/mission` 409·`decision`·`suspect` 423 `TRIP_LEASED`, DOCKING 에서 열기 409 `MODE_CONFLICT`. lease 가 없으면 동작은 v1.156 과 같다. Fleet 쪽 코드(`TRIP_ROBOT_LEASED`·`TRIP_ROBOT_MANUAL`·`TRIP_LEASE_UNSUPPORTED`)는 Fleet 구현(D-541 7, feat/fleet-trip-lease-holder)과 함께 싣는다. envelope 1.0 변화 없음 |
 | v1.156 | 2026-10-09 | Additive (D-551, feat/core-line-advice): `POST /api/v1/line-follow/advice` 구현(표시만, 허가 아님), `GET /line-follow` 선택 키 `advice`, 능력 `controls` `line_follow_advice`. 공유 schema `core_common.protocol.line_advice` |
