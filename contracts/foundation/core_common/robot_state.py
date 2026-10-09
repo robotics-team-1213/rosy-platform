@@ -168,13 +168,16 @@ def mode_suffix(robot_mode: Any) -> str:
     return f" - {mode}" if mode in OPERATING_MODES else ""
 
 
-def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None) -> str:
+def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None, recovery: Any = None) -> str:
     """D-380/D-381: the one lamp pattern for a health state, CORE's mode and its navigation.
 
-    Priority: FAILED > EMERGENCY > CAUTION > BOOTING > DOCKING > BLOCKED >
+    Priority: FAILED > EMERGENCY > RECOVERING > CAUTION > BOOTING > DOCKING > BLOCKED >
     NAVIGATING > MANUAL > READY. A mode reaches the lamp only through CORE's 10 s
     hand-over (``status-inputs.json``), so a robot whose CORE is down never keeps
     showing a stale mode — the health patterns alone answer for it.
+
+    D-546: ``recovery`` (CORE's moving lane-recovery phase) shows amber ``recovering``
+    (``bridge``: the softer ``bridging``) over everything but FAILED and EMERGENCY.
 
     D-381: inside NAVIGATION, a goal that is BLOCKED or FAILED blinks the same
     cyan ("blocked") instead of breathing — the robot says "I am trying and
@@ -186,6 +189,10 @@ def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None) -> s
         return "failed"
     if mode == "EMERGENCY":
         return "emergency"
+    if recovery in ("retrace", "return"):
+        return "recovering"
+    if recovery == "bridge":
+        return "bridging"
     if state == CAUTION:
         return "caution"
     if state == BOOTING:
