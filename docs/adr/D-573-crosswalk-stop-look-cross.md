@@ -112,6 +112,7 @@
      - 알려진 한계: 가장자리 3σ 띠(약 1 cm) 안에서 빠르게 지나가는 물체는 2 스캔 늦게 잡힐 수 있다. 몸 정지(D-422)는 따로 앞선다.
      - **안전 검토 반영(2026-10-10).** 어느 빔도 지나지 않는 상자(빈 스캔, 시야 밖)는 UNKNOWN이다. 무장한 구역에서 몸이 그 차로 corridor 밖으로 나가거나 진행 방향이 D-491 `MAX_TURN_RAD`(0.3 rad)보다 틀어지면 무장을 푼다. 게이트는 `obstacle_mode: path`를 요구한다(range_min 안쪽 띠는 D-422 몸 정지가 맡는다). 차로 진행 방향에서 0.3 rad 넘게 틀어진 채 들어오는 로봇은 게이트에 걸리지 않는다(D-491 "다른 길" 규칙).
      - **켜기 조건(D-577 결합).** `crosswalk_gate_enabled`는 D-577 열린 항목 1(LEGACY 로봇 odom 자세가 Fleet 뒤 띠에 들어감, `stuck_resolver.py` `_map_pose`)이 닫힐 때까지 false로 둔다. 게이트가 켜지면 구역 밖에서 `line_follow.crosswalk: null`을 보내고, 그것이 해결기 R3 후진을 연다.
+       - **켜기 개정 (2026-10-10, 사용자 결정 "지금 켜기").** 사용자가 D-577 열린 항목 1이 닫히기 전에 켜기로 했다. Pinky Pro 로봇 패키지 설정(`middleware/apps/device/pinky/profile/config/core.yaml`)에서 `crosswalk_gate_enabled: true`(`obstacle_mode: path`는 이미 그 파일에 있다)이고 다음 릴리스로 두 로봇(9dfk, 8kcn)에 들어간다. 카메라 구역은 D-597 개정 1의 crosswalk 클래스에서 온다. 신호등 강제(`fleet.traffic.authority`)는 두 로봇 완주 뒤로 미루고 false로 둔다. 해결기 R3 확인은 다른 세션이 함께 한다.
 
 3. **센서가 없거나 낡거나 모르면 건너지 않는다.**
    1. 스캔이 늦거나 끊기면 UNKNOWN이다.

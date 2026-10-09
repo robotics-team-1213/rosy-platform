@@ -3009,12 +3009,12 @@
 
 ## 2026-10-10 · uncommitted · uiux(fleet): D-577 (b) 막힘 행의 근거 그림과 알림
 
-- Change: `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` (API v1.181) asks the robot for one front-camera frame (`front/status` then `front/frame?sequence=`) on the first read of an open stuck and `LineStuckBoard` keeps it in memory only until the stuck closes. The queue row shows it below the five answers with camera, frame and age (`evidenceCaption`), and `alertsDue` raises one tone and browser notice per new stuck row and one more at the 30 s deadline. Rosy Cam crop and AI facts on the row are not in this step (AI facts come with (c)).
+- Change: `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` (API v1.182) asks the robot for one front-camera frame (`front/status` then `front/frame?sequence=`) on the first read of an open stuck and `LineStuckBoard` keeps it in memory only until the stuck closes. The queue row shows it below the five answers with camera, frame and age (`evidenceCaption`), and `alertsDue` raises one tone and browser notice per new stuck row and one more at the 30 s deadline. Rosy Cam crop and AI facts on the row are not in this step (AI facts come with (c)).
 - Evidence: AI PC remote pytest (line-stuck evidence/API, transport, queues contract, node web units, server app, version pins, module structure) green except the fleet size verdict (50617 vs 50404+150), which waits for an independent re-judge; red run first (X:/DevTemp/uiux-d577-queue-evidence-notify/red.txt). The new real-Chromium test is opt-in and was not run (no browser on the test hosts).
 - Gate: SOURCE. Console only; no robot command path.
 
 ## 2026-10-10 · uncommitted · feat(situation): D-577 (c) rosy-situation 골격과 Fleet ai_observer 사실(shadow)
 
-- Change: Fleet role `ai_observer`, `POST /api/fleet/ai/facts`·`/heartbeat`, `GET /api/fleet/ai` (API v1.182; (b) holds v1.181), `fleet_ai_facts`; the stuck row carries the AI chip and live facts. `ai_observer` is refused on every other write route in `authorize`. New `operations/situation` (stdlib service, analyzers stubbed) and the `deploy/ai_pc/rosy-situation.service` template, not installed.
+- Change: Fleet role `ai_observer`, `POST /api/fleet/ai/facts`·`/heartbeat`, `GET /api/fleet/ai` (API v1.183; (b) holds v1.182), `fleet_ai_facts`; the stuck row carries the AI chip and live facts. `ai_observer` is refused on every other write route in `authorize`. New `operations/situation` (stdlib service, analyzers stubbed) and the `deploy/ai_pc/rosy-situation.service` template, not installed.
 - Evidence: AI PC remote pytest red first (X:/DevTemp/feat-d577-ai-pc-situation-skeleton/red.txt, collection errors), then test_ai_facts + situation tests + node web units 26 passed, including an in-process real Fleet over HTTP.
 - Gate: SOURCE. Shadow only. Installing on the AI PC waits for the owner's consent.
