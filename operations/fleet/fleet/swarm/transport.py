@@ -139,6 +139,7 @@ class RobotClient(Protocol):
     async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
+    async def localization_request(self) -> Optional[dict]: ...
     async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
     async def localization_suspect(self, reason: str) -> dict: ...
 
@@ -346,6 +347,14 @@ class HttpRobotClient:
         except ValidationError as exc:
             raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
                                 f"not a candidate report: {exc.error_count()} errors") from exc
+
+    async def localization_request(self) -> Optional[dict]:
+        """D-546 5: the robot's open "where am I" request, or None (404 `NO_REQUEST`, or a CORE
+        without the route)."""
+        resp = await self._http.get("/api/v1/localization/request", headers=self._headers())
+        if resp.status_code == 404:
+            return None
+        return self._check(resp)
 
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
