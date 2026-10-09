@@ -110,7 +110,7 @@ D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한�
 1. **새 원인 `no_motion`.** 활성 차선 모드에서 line-follow 결정(D-517 권한·D-573 횡단보도·D-494 교차로 게이트 앞의 값)이 `line_follow.stuck_report_s`(기본 5.0 s, 0 = 끔, 설정 검사 [0, 60]) 동안 0이고 기존 원인(`crosswalk_blocked`·`obstacle_ahead`·`lane_lost`)이 없으면 막힘 하나를 연다. `detail`은 그 HOLD/LOST 사유다(`lane_departure`, `angular_limit_zero`, `obstacle_sensor_stale`, `nominal_ground_requires_driver` 등). 기존 원인이 먼저다.
 2. **로컬 후진 대체가 없다.** 열리면 곧바로 `WAITING_CONSOLE`(`nav.line_stuck_asked` `reason: no_motion`)이다. 답은 Fleet 판단기 또는 사람이 낸다. 답은 §2의 다섯 답(+YIELD)과 같고 CORE가 §4대로 다시 검사한다. 수락된 `BACK_AND_RETRY`는 §3의 후진·정착·재판단과 같다.
 3. **닫힘.** 결정이 다시 0이 아니면 `cleared`로 닫힌다. OFF·E-stop·운전자 hold 만료는 지금처럼 닫는다. D-520 arc나 D-468 로컬 복귀가 틱을 가진 동안은 세지 않는다. 저조도·과노출 HOLD는 지금처럼 복구를 매 틱 초기화하므로 이 원인을 열지 않는다(후속).
-4. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 신호·권한 게이트, CORE 단일 `/cmd_vel`(D-2)은 그대로다. Fleet 쪽 규칙은 [D-577](D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md) 개정 2026-10-10이다. API Ref v1.186.
+4. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 신호·권한 게이트, CORE 단일 `/cmd_vel`(D-2)은 그대로다. Fleet 쪽 규칙은 [D-577](D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md) 개정 2026-10-10이다. API Ref v1.187.
 
 **왜.** 2026-10-10 현장 기록: 8kcn이 HOLD/LOST로 40 s 넘게 답 없이 서 있었고(`X:\DevTemp\drivable-keep-run\drive-8kcn-2.txt`), 9dfk는 `HOLD lane_departure`로 90 s 서 있었다(`drive-9dfk-2.txt`). `lane_departure`는 막힘 원인이 아니어서 Fleet에 아무것도 가지 않았다.
 

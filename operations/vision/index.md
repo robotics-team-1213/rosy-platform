@@ -38,6 +38,6 @@
 
 - 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
 - 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
+- 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
 - 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
 - 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
-- 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167

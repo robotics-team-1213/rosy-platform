@@ -28,6 +28,14 @@
       "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
       "detections": [{"x": 1.2345, "y": 0.4321, "footprint_m": 0.181, "score": 0.83},
                      {"x": 2.5, "y": 1.0, "footprint_m": 0.2, "score": 0.5}]}},
+    {"id": "ok_unknown_floor", "expect": {"valid": true}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 43, "status": "OK",
+      "detections": [], "unknown_floor": [{"x": 1.2, "y": 0.4, "radius_m": 0.12}]}},
+    {"id": "unknown_floor_only_when_ok", "expect": {"valid": false}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 1, "status": "LEARNING",
+      "detections": [], "unknown_floor": [{"x": 1.2, "y": 0.4, "radius_m": 0.12}]}},
     {"id": "ok_empty", "expect": {"valid": true}, "payload": {
       "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
       "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 42, "status": "OK",

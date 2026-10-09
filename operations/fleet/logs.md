@@ -3002,6 +3002,12 @@
 - Evidence: model PC pytest of sightings/tracking/map pose/site map/roster/version pins/ownership/module structure 426 passed, gateway site sightings + module criteria 16 passed, known_failures 0 new.
 - Gate: SOURCE. The live site needs a release and the config line before D-494 anchors from the ceiling camera.
 
+## 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background
+
+- Change: `detections/config` carries `occupied` (marker > D-494 map pose incl. operator pin > LOCALIZED own pose, plus unassigned markers and last OK blobs); relearn reply adds `occupied`/`unlocated`; tracking source rows carry `unknown_floor`, drawn as a hatch; relearn copy says robots stay. API v1.181.
+- Evidence: model PC pytest operations/fleet/test exit 0, known_failures 0 new; guards (module structure after re-judge, safety separation, robot literals, behavior test ownership, version pins, tracking browser) on the model PC.
+- Gate: SOURCE. Needs a site release; nudge (moving a robot off unknown floor) is a follow-up.
+
 ## 2026-10-10 · uncommitted · feat(fleet): D-596 LED 신원 확인 켜기
 
 - 변경: `server/identity.py` — 서 있는 로봇도 요청(`IDENTIFY_NOT_MOVING` 제거), source마다 색 하나씩 열린 요청(두 번째 로봇은 남은 색을 이름으로), detections config `identity_challenges`, 읽기 `pendings`·`trigger`. 새 순수 모듈 `server/identity_triggers.py`(marker_missing 3 s·0.5 m, split, odom_reset; 로봇마다 30 s, E-Stop 아님). `identity.auto_request` 기본 true. 콘솔 "LED로 찾기"는 색을 Fleet에 맡기고 창 뒤 결과를 기록줄에 보인다. 안내 `CAMERA_NOT_SEEING`은 익명 blob이 있으면 LED 확인, 없으면 배경 다시 학습. API Ref v1.181

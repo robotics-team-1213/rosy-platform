@@ -545,6 +545,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
+    if tracking is not None:
+        tracking.map_pose = map_pose.arbitrated_pose   # D-600: robot regions Vision must not learn
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
