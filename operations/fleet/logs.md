@@ -2778,8 +2778,18 @@
 - 증거: CI `37854678441`의 Fleet 브라우저 실패 19건을 모델 PC Chromium에서 다시 실행해 19 passed (46.09s). 비밀번호 로그인 브라우저 검사 1 passed, 변경 JavaScript 구문 검사 통과.
 - gate 변화: LOCAL/MODEL-PC 재현 검사 복구. 새 CI 전체 결과와 설치본·DEVICE/FIELD 수용은 별도 확인한다.
 
+## 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
+- 변경: `SharedGather`가 행마다 실제로 읽은 시각(D-493 `_state_mono`, 콘솔 단조 시계)을 추적 시계로 바꿔 `TrackingService.observe_states(observed=...)`에 넘긴다. 없으면 예전처럼 수집 시작 시각이다.
+- 증거: 현장 2026-10-09 `/api/fleet/state` 수집 3.34–3.49 s > `STATE_FRESH_S` 2.0 s. 9dfk가 −0.0275 m/s로 움직이는 동안 LED 확인이 계속 `IDENTIFY_NOT_MOVING`이었고 천장 카메라 추적은 `NO_POSE`였다. 새 시험 2개(수정 전 실패) 포함 63 passed.
+- gate 변화: SOURCE. 현장 Fleet 갱신 뒤 LED 확인·추적 연결 확인.
+
+## 2026-10-09 · uncommitted · fix(fleet): 늦은 응답 한 번에 로봇이 오프라인으로 바뀌었다가 돌아오던 깜빡임
+- 변경: 마지막 응답 뒤 `LINK_DEGRADED_S`(10 s) 안의 읽기 실패는 연결 단어 `degraded`(응답 지연, 주의)와 `link_degraded_s`로 보인다. `online`은 그대로 False라 교통·핸드오프·목표 판단은 바뀌지 않는다. 카드·예외 큐·연결 수 pill·목표 해제는 `degraded`를 오프라인으로 보지 않는다. 10 s를 넘으면 지금처럼 `unreachable`이다.
+- 증거: 현장 2026-10-09 두 로봇 모두 hub 없이 REST 수집(3.4–4.5 s, 로봇 부하 평균 13), 5 s 제한을 넘는 한 번의 읽기가 카드를 오프라인으로 바꿨다. test_link_on_snapshot 새 시험 2개 포함 14 passed, link-tag.test.mjs 2 passed. web 전체 node 실패 10개는 main과 같은 목록.
+- gate 변화: SOURCE/LOCAL. 현장 Fleet 갱신 뒤 관제 화면 확인.
+
 ## 2026-10-09 · uiux/fleet-shared-header · uiux(fleet): 네 문서 공통 머리와 비상 정지 규칙 하나 (D-540 2)
 - 변경: `web/shared/fleet-header.js`·`fleet-header.css` 신규. 관제·설치·보정·현장 지도·Cell이 같은 `<ui-topbar>`(글자 그대로, `test_fleet_header.py`)를 쓴다. 현장 지도·Cell의 `#session`·`#credential`·`#connect`를 없애고 `#console-token`·`#token-save`·`#user-role`로 통일, 역할은 "운영자"·"보기 전용"(principal·영어 역할은 `title`), 개발 배지·연결 수·시계·테마·설정 접힘을 네 문서에 둔다. 비상 정지 클릭·문구도 모듈 하나(`bindEstop`). 머리 CSS를 `styles.css`·`site-map.css`·`cell.css`에서 뺐다(styles.css 809→748줄, 판정 행 제거).
 - 비상 정지 규칙: 마크업은 언제나 눌림. 세션 거절(401)이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유로 잠근다. 모름(로딩·Fleet 끊김)은 눌린다. 관제·설치는 접속 전 잠김에서 모름=눌림으로, 현장 지도는 처음 잠김에서 같은 규칙으로, Cell은 401 뒤 잠김이 새로 생겼다(그 누름은 401로 거절됐던 것이다).
-- 증거: 모델 PC `operations/fleet/test/`+관제 브라우저 묶음 3268 passed / 14 failed — 13건은 main `59f8427c1` 계열에서도 같은 실패(main 스냅숏 재실행 14 failed), 1건(`test_module_structure` styles.css 판정 stale)은 이 브랜치에서 고침. 새 `test_fleet_header_browser.py`(네 문서 × 1920·1440·1024·390, `#estop` 크기·자리 같음, 머리 줄 수, 가로 넘침 0, 401 잠금·토큰 해제). 캡처 `X:\DevTempleet-header\{before,after}\`.
+- 증거: 모델 PC `operations/fleet/test/`+관제 브라우저 묶음 3268 passed / 14 failed — 13건은 main `59f8427c1` 계열에서도 같은 실패(main 스냅숏 재실행 14 failed), 1건(`test_module_structure` styles.css 판정 stale)은 이 브랜치에서 고침. 새 `test_fleet_header_browser.py`(네 문서 × 1920·1440·1024·390, `#estop` 크기·자리 같음, 머리 줄 수, 가로 넘침 0, 401 잠금·토큰 해제). 캡처 `X:\DevTemp\fleet-header\{before,after}\`.
 - gate 변화: 없음. LOCAL/MODEL-PC 브라우저. 세션 조회는 아직 `/api/fleet/session`(D-540 2의 `/auth/session` 하나로 합치기는 남음). 현장·G3는 HOLD.

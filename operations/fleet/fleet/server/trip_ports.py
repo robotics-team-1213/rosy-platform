@@ -94,6 +94,10 @@ class HttpLaneJunction:
         """D-517 4: ``POST /api/v1/line-follow/authority`` (``trip_authority``)."""
         return await self._client(robot_id).line_follow_authority(body)
 
+    async def send_advice(self, robot_id: str, body: dict) -> dict:
+        """D-551: ``POST /api/v1/line-follow/advice`` (``trip_advice``)."""
+        return await self._client(robot_id).line_follow_advice(body)
+
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None

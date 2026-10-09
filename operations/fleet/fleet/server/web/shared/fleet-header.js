@@ -64,12 +64,14 @@ export function showSignedOut({fold = true, refused = true} = {}) {
   }
 }
 
-export function showFleet(fleet) {
+export function showFleet(fleet, robots = null) {
   $("fleet-name").textContent = fleet.name || "사이트";
   const pill = $("online-pill");
   delete pill.dataset.locked;
-  pill.textContent = `${fleet.online}/${fleet.total} 연결`;
-  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : "crit");
+  // A robot answering late (link "degraded") still counts as connected on the pill.
+  const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
+  pill.textContent = `${linked}/${fleet.total} 연결`;
+  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
 }
 
 // Pages without their own state poll (설치·보정, 현장 지도, Cell) read the count every 5 s. A 401/403 leaves
@@ -77,7 +79,8 @@ export function showFleet(fleet) {
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   async function read() {
     try {
-      showFleet((await request("/api/fleet/state")).fleet);
+      const state = await request("/api/fleet/state");
+      showFleet(state.fleet, state.robots);
     } catch (error) {
       if (error.name === "AbortError" || error.status === 401 || error.status === 403) return;
       const pill = $("online-pill");

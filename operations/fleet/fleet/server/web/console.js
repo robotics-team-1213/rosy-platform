@@ -387,7 +387,7 @@ async function refreshState() {
       }
     }
     view.signals = snapshot.signals || {};
-    showFleet(snapshot.fleet);
+    showFleet(snapshot.fleet, snapshot.robots);
     render();
     if (requestedRobotFocus) {
       const card = [...el("roster").querySelectorAll("article")]

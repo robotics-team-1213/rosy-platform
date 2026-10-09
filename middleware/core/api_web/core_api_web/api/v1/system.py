@@ -226,6 +226,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
+    # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -252,7 +253,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       line_follow_authority=callable(getattr(svc.line_follow,
                                                                              "set_authority", None)),
                                       line_follow_authority_required=svc.line_follow is not None and getattr(
-                                          svc.line_follow.config, "authority_required", False) is True)
+                                          svc.line_follow.config, "authority_required", False) is True,
+                                      line_follow_advice=svc.line_follow is not None and getattr(
+                                          svc, "line_advice", None) is not None)
     return data
 
 

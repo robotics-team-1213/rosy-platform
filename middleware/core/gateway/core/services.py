@@ -38,6 +38,7 @@ from core_features.maps import MapSnapshotStore
 from core_features.navigation.manager import NavigationManager
 from core_features.navigation.readiness import NavigationReadinessGate
 from core_features.line_follow import LineFollowManager
+from core_common.protocol.line_advice import AdviceStore
 from core_features.traffic_policy import (
     SignalObserverMonitor,
     SignalObserverPoller,
@@ -271,6 +272,8 @@ class CoreServices:
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
+    # D-525 signal advice, display only: kept off LineFollowManager so no decision can read it.
+    line_advice: AdviceStore = field(default_factory=AdviceStore)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
