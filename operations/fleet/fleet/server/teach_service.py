@@ -14,6 +14,7 @@ import asyncio
 import inspect
 import json
 import logging
+import math
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -56,8 +57,11 @@ class Session:
 
 class TeachService:
     def __init__(self, *, poses, site_maps, roster: Callable[[], Iterable[str]],
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 place_markers: Optional[Callable[[int], Optional[dict]]] = None) -> None:
         self._poses, self._store, self._roster, self._clock = poses, site_maps, roster, clock
+        #: D-564: marker id -> the newest fresh place marker row (``SightingService.fresh_place_marker``).
+        self._place_markers = place_markers
         self._recording: Optional[Session] = None
         self._task: Optional[asyncio.Task] = None
         self._pending: dict[str, Session] = {}
@@ -207,6 +211,44 @@ class TeachService:
         draft = self._save(body, expected_revision, principal_id)
         self._store.record_event("teach_place", principal_id, {"robot_id": robot_id, "place_id": place_id,
                                                                "revision": draft["revision"]})
+        return {"place_id": place_id, "draft": draft}
+
+    def place_from_marker(self, marker_id: int, *, name: Optional[str], kind: Optional[str],
+                          place_id: Optional[str], expected_revision: Optional[str], principal_id: str) -> dict:
+        """D-564: add (or move, with ``place_id``) a draft place at a fresh floor place marker."""
+        if self._place_markers is None:
+            raise TeachError(503, "PLACE_MARKERS_DISABLED")
+        row = self._place_markers(marker_id)
+        if row is None:
+            raise TeachError(409, "PLACE_MARKER_STALE", {"marker_id": marker_id})
+        active = self._store.active()
+        if active is not None and active[1].map_id != row["map_id"]:
+            raise TeachError(409, "PLACE_MARKER_MAP_MISMATCH",
+                             {"marker_map_id": row["map_id"], "active_map_id": active[1].map_id})
+        body = self._base()
+        updated = place_id is not None
+        if not updated:
+            if not name:
+                raise TeachError(422, "PLACE_NAME_REQUIRED")
+            place_id = teach.add_place(body, name, kind or "junction", row["x"], row["y"], row["yaw"])
+        else:
+            body = {**body, "places": [dict(p) for p in body["places"]]}
+            place = next((p for p in body["places"] if p["id"] == place_id), None)
+            if place is None:
+                raise TeachError(404, "PLACE_UNKNOWN", {"place_id": place_id})
+            if place.get("kind") == "bend" or kind == "bend":
+                raise TeachError(422, "PLACE_MARKER_BEND", {"place_id": place_id})
+            place.update(x=round(row["x"], 4), y=round(row["y"], 4),
+                         yaw=math.atan2(math.sin(row["yaw"]), math.cos(row["yaw"])))
+            if name:
+                place["name"] = name
+            if kind:
+                place["kind"] = kind
+        draft = self._save(body, expected_revision, principal_id)
+        self._store.record_event("teach_place", principal_id, {
+            "marker_id": marker_id, "source_id": row["source_id"], "place_id": place_id,
+            "updated": updated,
+            "revision": draft["revision"]})
         return {"place_id": place_id, "draft": draft}
 
     def view(self) -> dict:

@@ -10,6 +10,7 @@ from typing import Mapping
 
 import yaml
 
+from core_common.protocol.place_markers import check_place_marker_ids
 from rosy_vision.project import CameraMap
 
 _REQUIRED = {
@@ -18,7 +19,8 @@ _REQUIRED = {
     "corner_world_m", "robot_markers",
 }
 _ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
-                        "corner_marker_ids", "calibration_source"}
+                        "corner_marker_ids", "calibration_source",
+                        "place_markers"}
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -109,6 +111,12 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
                     or any(type(marker_id) is not int or marker_id < 0 for marker_id in marker_ids)):
                 raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         heading_edge = tuple(row.get("heading_edge", (0, 1)))
+        try:  # D-564
+            place_markers = check_place_marker_ids(
+                row.get("place_markers", []), corner_ids=row.get("corner_marker_ids"),
+                robot_marker_ids=robot_markers.values())
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         camera = CameraMap(
             source_id=row["source_id"],
             map_id=row["map_id"],
@@ -119,6 +127,7 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             robot_markers=dict(robot_markers),
             heading_edge=heading_edge,
             calibration_source=calibration_source,
+            place_markers=place_markers,
         )
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
