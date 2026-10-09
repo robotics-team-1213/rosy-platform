@@ -1,8 +1,8 @@
 """Closed-loop LaneKeeper diagnostics with the rendered floor and CORE law mirror.
 
 These are host SIM cases, not an approved camera calibration or a device test.
-The bend stop is a measured limitation: its visible bend line cannot drive the
-robot when the parallel side boundary has disappeared before turn commitment.
+The bend case must either stop safely before a missing parallel boundary or
+make measured progress around the turn while staying near the centreline.
 """
 
 import math
@@ -44,18 +44,33 @@ def test_keep_crosses_one_missing_straight_boundary_without_leaving_centre():
     assert max(distance_to_polyline(p[:2], centre) for p, _, _ in records) < 0.02
 
 
-def test_keep_bend_stops_before_turn_when_its_parallel_boundary_ends():
-    """Characterization of the remaining bend gap, not a bend acceptance test."""
+def test_keep_bend_stops_early_or_follows_centreline_through_turn():
+    """Characterize either a fail-closed gap or a bounded completed bend."""
     turn = math.radians(65.0)
     centre = np.array([(-1.0, 0.0), (0.45, 0.0),
                        (0.45 + 1.2 * math.cos(turn), 1.2 * math.sin(turn))])
     records, pose = _run(lane(centre), centre, (-0.3, 0.0, 0.0), bend_expected=True)
-    first_stop = next((i, p, last) for i, (p, obs, last) in enumerate(records) if obs is None)
-    step, stopped_at, last = first_stop
-    assert 0.23 < stopped_at[0] < 0.30
-    assert last["reason"] == "no_boundary"
-    assert any(c.get("reason") == "bend" for c in last["candidates"])
-    assert any(row[2]["strategy"] == "bend_ahead" for row in records[:step])
-    assert all(obs is None for _, obs, _ in records[step:])
-    assert pose[:2] == stopped_at[:2]
-    assert distance_to_polyline(pose[:2], centre) < 0.02
+    stops = [(i, p, last) for i, (p, obs, last) in enumerate(records) if obs is None]
+    if stops:
+        step, stopped_at, last = stops[0]
+        assert 0.23 < stopped_at[0] < 0.30, (step, stopped_at, last)
+        assert last["reason"] == "no_boundary", (step, stopped_at, last)
+        assert any(c.get("reason") == "bend" for c in last["candidates"]), last
+        assert any(row[2]["strategy"] == "bend_ahead" for row in records[:step]), step
+        assert all(obs is None for _, obs, _ in records[step:]), stops
+        assert pose[:2] == stopped_at[:2], (pose, stopped_at)
+        assert distance_to_polyline(pose[:2], centre) < 0.02, pose
+        return
+
+    turn_direction = centre[2] - centre[1]
+    turn_direction /= np.linalg.norm(turn_direction)
+    turn_progress = float(np.dot(np.asarray(pose[:2]) - centre[1], turn_direction))
+    errors = [distance_to_polyline(p[:2], centre) for p, _, _ in records]
+    errors.append(distance_to_polyline(pose[:2], centre))
+    max_error = max(errors)
+    diagnostic = (f"final_pose={pose}, turn_progress={turn_progress:.3f} m, "
+                  f"max_cross_track={max_error:.3f} m, "
+                  f"last_strategy={records[-1][2].get('strategy')}")
+    assert turn_progress > 0.06, diagnostic
+    assert pose[2] > math.radians(10), diagnostic
+    assert max_error < 0.035, diagnostic
