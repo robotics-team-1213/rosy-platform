@@ -13,6 +13,8 @@ grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it cl
 D-525 (S1): virtual signals from site config ``fleet.traffic.signals`` run here each period; a
 signalled zone is granted only to its green approach (``blocks.step(green=...)``). A plan that fails
 ``signal_phase.check`` on the active map keeps its zone red. Robots get no colour, only D-517 authority.
+D-525 rev 6: a signal starts in ``occupancy`` mode: every approach may be granted (capacity 1 decides)
+and the lamps follow the zone's live table state (``signal_phase.zone_occupancy``).
 
 The single writer of lane-trip grants (D-517 3). ``traffic_reservations.py`` (D-426 segment
 states) writes no trip grant; it stays only as the Gazebo conformance harness's segment record."""
@@ -61,12 +63,14 @@ class TrafficService:
                  body=PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time,
                  signal_clock=time.monotonic) -> None:
         self._store, self._config, self._zones = store, config, dict(zones or {})
-        #: D-525: plan per signal id, its phase state (a restart starts all red), the active map's
-        #: check errors, and the last table's busy units (None: not known yet, so busy)
+        #: D-525: plan per signal id, its phase state (a restart starts in ``occupancy``, rev 6), the
+        #: active map's check errors, and the last table's busy units (None: not known yet, so busy)
         self._signals = {plan.id: plan for plan in signals}
         self._phase = {signal_id: signal_phase.SignalState() for signal_id in self._signals}
         self._signal_errors: dict[str, list[str]] = {}
         self._busy: Optional[frozenset] = None
+        #: rev 6: zone -> ``signal_phase.zone_occupancy`` of the last table (missing: unknown, red)
+        self._occupancy: dict[str, tuple] = {}
         self._signal_clock = signal_clock
         self._present_until = -math.inf  # D-525 4: a manual green needs an operator present
         self._ahead: dict[str, dict] = {}  # robot id -> its next signal (D-525 rev 3)
@@ -108,7 +112,7 @@ class TrafficService:
                     state.pinned[robot_id] = units
             self._layout, self._version, self._state, self._seen = layout, active[0], state, {}
             self._signal_errors = {i: signal_phase.check(plan, active[2], layout) for i, plan in self._signals.items()}
-            self._busy = None
+            self._busy, self._occupancy = None, {}
         return self._layout
 
     def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float]) -> dict[str, bool]:
@@ -241,6 +245,7 @@ class TrafficService:
                 live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": 0.0}
         if layout is None:
             self._view = _empty(None)
+            self._occupancy = {}
             self._view["signals"] = self._signal_view(None)
             self._unknown_since, self._tried, self._cycle = {}, {}, (frozenset(), 0)
             return
@@ -261,6 +266,8 @@ class TrafficService:
         now = self._clock()
         result = blocks.step(layout, robots, self._state, now, green=self._green())
         self._busy = result.busy
+        self._occupancy = {plan.zone: signal_phase.zone_occupancy(self._state, robots, plan.zone, result.unplaced)
+                           for plan in self._signals.values()}
         self._ahead = self._signals_ahead(robots)
         refused_unit: dict[str, str] = {}
         for robot in robots:
@@ -357,14 +364,16 @@ class TrafficService:
         if ahead is None:
             return None
         plan = self._signals[ahead["signal_id"]]
-        row = next((a for a in self._signal_row(plan, None)["approaches"] if a["approach"] == ahead["approach"]), {})
-        return {"robot_id": robot_id, **ahead, "virtual": True, "advisory": True,
-                **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
+        signal = self._signal_row(plan, None)
+        row = next((a for a in signal["approaches"] if a["approach"] == ahead["approach"]), {})
+        return {"robot_id": robot_id, **ahead, "virtual": True, "advisory": True, "mode": signal["mode"],
+                "occupancy": signal["occupancy"], **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
 
     def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
-        """Operator verb (D-525 4): ``cycle``, ``hold``, ``all_red``, ``demand`` (rev 4) or ``set_aspect``
-        (green for one approach while the operator is present). KeyError: unknown signal; ValueError: bad
-        verb or approach; PermissionError: a manual green without presence."""
+        """Operator verb (D-525 4): ``occupancy`` (rev 6, the default), ``cycle``, ``hold``, ``all_red``,
+        ``demand`` (rev 4) or ``set_aspect`` (green for one approach while the operator is present).
+        KeyError: unknown signal; ValueError: bad verb or approach; PermissionError: a manual green
+        without presence."""
         plan = self._signals[signal_id]
         now = self._signal_clock()
         if verb == "set_aspect":
@@ -372,7 +381,7 @@ class TrafficService:
                 raise ValueError(approach)
             if now >= self._present_until:
                 raise PermissionError("presence")
-        elif verb not in ("cycle", "hold", "all_red", "demand"):
+        elif verb not in signal_phase.VERBS:
             raise ValueError(verb)
         signal_phase.command(plan, self._phase[signal_id], verb, now, approach)
         return self._signal_row(plan, None)
@@ -413,17 +422,19 @@ class TrafficService:
 
     def _signal_row(self, plan, graph) -> dict:
         state, now = self._phase[plan.id], self._signal_clock()
-        lit = signal_phase.green(plan, state)
-        last = plan.phases[state.phase][0] if state.phase >= 0 else None
         held = now - state.since
         left = {"green": (plan.phases[state.phase][1] - held) if state.mode == "cycle" else None,
                 "yellow": plan.yellow_s - held, "all_red": plan.all_red_s - held}[state.aspect]
         approaches = []
         errors = self._signal_errors.get(plan.id) or []
         busy = self._busy is None or plan.zone in self._busy
-        ahead = signal_phase.forecast(plan, state, now, busy)
+        occupancy = self._occupancy.get(plan.zone, signal_phase.UNKNOWN)
+        ahead = signal_phase.forecast(plan, state, now, busy, occupancy)
+        aspect = state.aspect
+        if state.mode == "occupancy":  # rev 6: a summary of the derived lamps; no time is known
+            aspect, left = {"free": "green", "reserved": "yellow"}.get(occupancy[0], "all_red"), None
         for approach, green_s in plan.phases:
-            lamp = "green" if approach in lit else "yellow" if state.aspect == "yellow" and approach == last else "red"
+            lamp = "red" if errors else ahead[approach]["lamp"]  # a refused plan's zone is never granted
             row = {"approach": approach, "lamp": lamp, "green_s": green_s,
                    **({"left_s": None, "green_in_s": None, "exact": False} if errors else
                       {k: ahead[approach][k] for k in ("left_s", "green_in_s", "exact")})}
@@ -437,7 +448,8 @@ class TrafficService:
                 "demands": [{"approach": a, "age_s": round(now - state.demands[a][0], 1), "reason": state.demands[a][2]}
                             for a in signal_phase.queue(plan, state, now)] if state.mode == "demand" else [],
                 "controller_age_s": round(now - state.heard, 1) if state.mode == "demand" else None,
-                "aspect": "all_red" if errors else state.aspect,
+                "aspect": "all_red" if errors else aspect,
+                "occupancy": dict(zip(("state", "holder", "approach"), occupancy)),
                 "left_s": None if left is None or errors else round(max(0.0, left), 1),
                 "zone_busy": busy,
                 "approaches": approaches, "errors": errors, "alert": signal_phase.alert(plan, state, now)}

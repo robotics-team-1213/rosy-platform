@@ -61,8 +61,10 @@ def test_decide_is_fifo_by_first_seen_and_keeps_alive_when_nobody_waits():
 
 
 def test_signals_not_in_demand_mode_get_nothing():
-    sends, _memory = decide(_traffic(mode="cycle", robots=[_ahead("a", "east:fwd", 0.3)]), _guide(), {}, 0.0)
-    assert sends == []
+    for mode in ("cycle", "occupancy", "all_red", "hold", "manual"):   # D-525 rev 6: occupancy is the default
+        sends, _memory = decide(_traffic(mode=mode, robots=[_ahead("a", "east:fwd", 0.3)]),
+                                _guide(_rec("b", 1.0, arc="west:fwd")), {"xy": {"b": (1.0, 0.0)}}, 0.0)
+        assert sends == [], mode
 
 
 class FakeFleet:
@@ -89,3 +91,11 @@ def test_run_only_sends_demands_and_survives_fleet_errors():
     assert [s["approach"] for s in fleet.sent] == ["east:fwd", None]
     refused = FakeFleet([(_traffic(robots=[_ahead("a", "east:fwd", 0.3)]), _guide())], refuse=True)
     run(refused, clock=lambda: 0.0, sleep=lambda s: None, polls=1)        # logged, not raised
+
+
+def test_a_409_after_an_operator_leaves_demand_mode_is_dropped_quietly(caplog):
+    """The operator switched the signal back to occupancy between the read and the send: no warning."""
+    refused = FakeFleet([(_traffic(robots=[_ahead("a", "east:fwd", 0.3)]), _guide())], refuse=True)
+    with caplog.at_level("INFO", logger="fleet.signal_agent"):
+        run(refused, clock=lambda: 0.0, sleep=lambda s: None, polls=1)
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
