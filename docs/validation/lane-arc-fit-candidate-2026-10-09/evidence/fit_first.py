@@ -41,5 +41,6 @@ for argument in sys.argv[1:]:
         if fit is not None:
             print(json.dumps({"run": run.name, "stamp": stamp, "used": fit.used_points,
                               "span_deg": round(fit.span_deg, 1), "rms_mm": round(fit.radial_rms_m * 1000, 1),
+                              "line_rms_mm": round(fit.line_rms_m * 1000, 1),
                               "geometry_u95_deg": round(fit.heading_u95_deg, 1)}))
             break

@@ -7,6 +7,7 @@ from typing import NamedTuple
 class CircleCandidate(NamedTuple):
     centre_m: tuple[float, float]
     radial_rms_m: float
+    line_rms_m: float
     span_deg: float
     used_points: int
     weak_axis_1sigma_m: float
@@ -26,8 +27,8 @@ def fit_circle_candidate(points, expected_centre_m, radius_m, *, point_sigma_m, 
     if len(points) > 48 or any(len(p) != 2 or any(not math.isfinite(v) for v in p) for p in points):
         raise ValueError("at most 48 finite xy points required")
     cx, cy = (float(v) for v in expected_centre_m)
-    selected = [(float(x), float(y)) for x, y in points
-                if abs(math.hypot(x-cx, y-cy)-radius_m) <= radial_gate_m]
+    selected = list(dict.fromkeys((float(x), float(y)) for x, y in points
+                                  if abs(math.hypot(x-cx, y-cy)-radius_m) <= radial_gate_m))
     # A spoke enters the radial band at its crossing, but its local direction
     # differs from the expected circle tangent (D-520's 45 mm / 30 deg gate).
     tangent_points = []
@@ -77,9 +78,16 @@ def fit_circle_candidate(points, expected_centre_m, radius_m, *, point_sigma_m, 
     gaps.append(angles[0]+2*math.pi-angles[-1])
     span_deg = math.degrees(2*math.pi-max(gaps))
     rms = math.sqrt(sum((math.hypot(x-cx, y-cy)-radius_m)**2 for x, y in selected)/len(selected))
+    mx = sum(x for x, _ in selected)/len(selected)
+    my = sum(y for _, y in selected)/len(selected)
+    line_xx = sum((x-mx)**2 for x, _ in selected)
+    line_xy = sum((x-mx)*(y-my) for x, y in selected)
+    line_yy = sum((y-my)**2 for _, y in selected)
+    line_weak = (line_xx+line_yy-math.hypot(line_xx-line_yy, 2*line_xy))/2
+    line_rms = math.sqrt(max(0.0, line_weak)/len(selected))
     weak_eigenvalue = (xx+yy-math.sqrt(max(0.0, (xx-yy)**2+4*xy*xy)))/2
     if weak_eigenvalue <= 1e-10:
         return None
     weak_sigma = point_sigma_m/math.sqrt(weak_eigenvalue)
     heading_u95 = math.degrees(math.atan2(1.96*weak_sigma, math.hypot(cx, cy)))
-    return CircleCandidate((cx, cy), rms, span_deg, len(selected), weak_sigma, heading_u95)
+    return CircleCandidate((cx, cy), rms, line_rms, span_deg, len(selected), weak_sigma, heading_u95)

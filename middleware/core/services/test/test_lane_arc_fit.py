@@ -33,6 +33,27 @@ def test_short_tangent_chord_cannot_claim_a_five_degree_entry():
     assert fit.heading_u95_deg > 5
 
 
+def test_slanted_straight_chord_exposes_better_line_explanation():
+    points = [((i - 3.5) * 0.046 / 3.5, (i - 3.5) * 0.046 / 3.5 * 0.15)
+              for i in range(8)]
+    fit = fit_circle_candidate(points, (0.0, RADIUS), RADIUS, point_sigma_m=0.002,
+                               radial_gate_m=0.06)
+    assert fit is not None
+    assert fit.line_rms_m < fit.radial_rms_m
+
+
+def test_repeating_pixels_does_not_increase_independent_support():
+    points = [((i - 3.5) * 0.046 / 3.5, (i - 3.5) * 0.046 / 3.5 * 0.15)
+              for i in range(8)]
+    once = fit_circle_candidate(points, (0.0, RADIUS), RADIUS, point_sigma_m=0.005,
+                                radial_gate_m=0.06)
+    repeated = fit_circle_candidate(points * 4, (0.0, RADIUS), RADIUS,
+                                    point_sigma_m=0.005, radial_gate_m=0.06)
+    assert once is not None and repeated is not None
+    assert repeated.used_points == once.used_points
+    assert repeated.heading_u95_deg == pytest.approx(once.heading_u95_deg)
+
+
 def test_radial_spoke_is_not_used_to_move_the_outer_circle():
     arc = [(RADIUS * math.cos(math.radians(deg)),
             RADIUS + RADIUS * math.sin(math.radians(deg))) for deg in range(-110, -69, 2)]
