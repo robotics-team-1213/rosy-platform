@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(control): 학습 페인트 마스크 오돔 보정 재사용 (D-570)
 - 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
 - 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
 - 2026-10-09 · uncommitted · feat(control): CORE 경로 문맥을 keeper의 굽이 입력에 연결
 - 2026-10-09 · uncommitted · refactor(control): P1a perception 증거 크기 단위 분리
-- 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
