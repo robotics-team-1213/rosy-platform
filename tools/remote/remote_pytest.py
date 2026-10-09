@@ -11,8 +11,9 @@ under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
 (``.github/workflows/ci.yml``); different dependency versions can run together.
 Each pytest runs under a 6 GB memory cap.
 
-Hosts: ``ROSY_TEST_HOSTS`` (space separated, first reachable wins), default model PC
-then AI PC. A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
+Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC then AI PC. One
+invocation runs on the first reachable host; several are spread over every
+reachable host at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
 is for explicit diagnostics.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -153,6 +155,19 @@ def pick_host(hosts: list[str] | None = None, probe=None) -> str | None:
     return next((h for h in hosts if (probe or reachable)(h)), None)
 
 
+def reachable_hosts(hosts: list[str] | None = None, probe=None) -> list[str]:
+    """Every reachable host in listed order; empty when forced local."""
+    if os.environ.get("ROSY_TEST_LOCAL") == "1":
+        return []
+    if hosts is None:
+        hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
+    if not hosts:
+        return []
+    with ThreadPoolExecutor(len(hosts)) as pool:
+        up = list(pool.map(probe or reachable, hosts))
+    return [h for h, ok in zip(hosts, up) if ok]
+
+
 def bundle_base(repo: Path, sha: str) -> str | None:
     """The commit the remote is expected to have already: sha's merge base with origin/main."""
     result = subprocess.run(["git", "-C", str(repo), "merge-base", sha, "origin/main"],
@@ -219,8 +234,8 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
     if not invocations:
         return []
-    host = None if local else pick_host()
-    if host is None:
+    hosts = [] if local else (reachable_hosts() if len(invocations) > 1 else [h for h in [pick_host()] if h])
+    if not hosts:
         if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
                              " tree, not the commit. Use --local only for explicit diagnostics.")
@@ -229,6 +244,19 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                   " (working tree, not only the commit)", file=sys.stderr, flush=True)
         return [capture([sys.executable, "-m", "pytest", *inv, *PYTEST_TAIL], log, cwd=repo)
                 for inv, log in zip(invocations, logs)]
+    hosts = hosts[:len(invocations)]
+    if len(hosts) == 1:
+        return run_on(hosts[0], invocations, logs, sha, repo, label)
+    # D-553 4: invocation k runs on hosts[k % n]; each host ships and builds its venv once.
+    n = len(hosts)
+    with ThreadPoolExecutor(n) as pool:
+        parts = list(pool.map(lambda i: run_on(hosts[i], invocations[i::n], logs[i::n], sha, repo, label),
+                              range(n)))
+    return [parts[k % n][k // n] for k in range(len(invocations))]
+
+
+def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
+           label: str | None) -> list[int]:
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     try:
