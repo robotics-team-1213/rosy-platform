@@ -63,6 +63,21 @@ def test_south_west_bend_reacquires_on_the_route():
     assert result["max_centre_dev_m"] <= 0.040
 
 
+def test_camera_candidate_stops_when_pose_is_outside_the_active_route():
+    """A visible line cannot authorise a different lane after odom diverges."""
+    pose = (-1.15, -0.511, 0.0)
+    subject = RouteCameraFollower(GRAPH, ["west:r", "ring_s:f"],
+                                  start_pose=pose, camera_x_offset_m=CAM_X)
+    image = WORLD.render(pose)
+    assert subject.update(0.0, pose, image, lane_sim.GROUND, **lane_sim.KW) is not None
+    off_route = (pose[0], pose[1] + 0.08, pose[2])
+    assert subject.update(0.2, off_route, image, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+    assert not subject.locked
+    assert subject.update(0.4, pose, image, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+
+
 def test_south_west_bend_stops_before_a_long_paint_gap():
     scenario = dict(SCENARIOS[11], start=(-1.15, -0.511, 0.0))
     world = _blank_world()

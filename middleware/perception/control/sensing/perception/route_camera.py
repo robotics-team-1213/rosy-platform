@@ -21,7 +21,8 @@ three bounded things only:
             within REACQUIRE_HEADING_RAD of the route; past
             MANOEUVRE_MAX_TRAVEL_M, MANOEUVRE_TIMEOUT_S or
             MANOEUVRE_MAX_HEADING_RAD it aborts and stays stopped
-            (MANOEUVRE_ABORT, fail-closed)
+            (MANOEUVRE_ABORT, fail-closed). A pose outside the route also
+            stops this follower until a new route instance is constructed.
 
   relock    with `map_frame` (route_hybrid: the pose is paint-localised,
             not dead-reckoned), after a lock, away from a node, whenever
@@ -115,6 +116,9 @@ SEED_MIN_FRACTION = 0.5
 #: centre band / iso-line quantisation; a quarter of the 185 mm lane, so
 #: the other branch's lane centre fails it once the two have diverged.
 AGREE_MAX_LATERAL_M = 0.045
+# The route polyline can read 46.6 mm off in a passing junction replay.
+# A camera candidate past 60 mm cannot preserve that route's lane identity.
+CAMERA_ROUTE_MAX_LATERAL_M = 0.06
 # Stop before the last route point; continuing requires a new route segment.
 TERMINAL_STOP_M = 0.02
 #: Manoeuvre hands back to the camera when the heading is within this of
@@ -251,6 +255,7 @@ class RouteCameraFollower:
         self._s = 0.0
         self._fix = None
         self._manoeuvre = None
+        self._route_invalidated = False
         self.relock = False
         self.last = {}
 
@@ -334,7 +339,7 @@ class RouteCameraFollower:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
                 pose = None
-        if pose is None or self._manoeuvre == "ABORTED":
+        if pose is None or self._manoeuvre == "ABORTED" or self._route_invalidated:
             self._tracker.gate = None
             self._tracker.update(now_s, None, bgr, ground, **kwargs)
             if self._manoeuvre is not None:
@@ -349,6 +354,21 @@ class RouteCameraFollower:
         self._fix = fix
         self._s = float(self._seg_start[fix.segment_index] + fix.s_m)
         near_node = min(fix.distance_to_node_m, fix.s_m) <= JUNCTION_ARM_M
+        if abs(fix.lateral_m) > CAMERA_ROUTE_MAX_LATERAL_M:
+            # Camera paint cannot preserve a lock after metric route disagreement.
+            self._tracker.gate = None
+            self._tracker.update(now_s, None, bgr, ground, **kwargs)
+            self.locked = False
+            self.relock = False
+            self._route_invalidated = True
+            if self._manoeuvre is not None:
+                self._abort()
+            else:
+                self.state = "STOP"
+            self.last = {"fix": fix, "camera_tier": "STOP", "near_node": near_node,
+                         "gated": False, "tracker": self._tracker.last,
+                         "reason": "route_disagreement"}
+            return None
         self.relock = (self._map_frame and self.locked and not near_node
                        and self._tracker.tier not in _LOCK_TIERS)
         self._tracker.gate = self if (near_node or not self.locked or self.relock) else None
