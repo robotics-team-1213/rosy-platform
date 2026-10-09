@@ -7436,3 +7436,8 @@ osy-d395-s1d\`.
 - 변경: D-280 디자인 철학을 Fleet 네 작업의 목적·전환·설정 범위·레이아웃 심사 규칙으로 구체화하고, 평가표와 반복 검증 절차를 기록했다.
 - 증거: D-543, `docs/plans/2026-10-09-uiux-purpose-and-layout-pipeline.md`의 Fleet SOURCE 진단. 현행 D-493 지도 비율과 D-501 네 탭은 유지한다.
 - gate 변화: 없음. UI 코드 변경, G1/G2/G3 재평가, 사용자 작업 입회, DEVICE/FIELD 수용은 후속 단계다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
+- 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
+- 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
+- gate 변화: 없음(제안).
