@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = [("console", "/console"), ("install", "/console/install"),
         ("site-map", "/console/site-map"), ("cell", "/console/cell")]
-SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844)]
+SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844), (320, 700)]
 STUCK = {"stuck_id": "stuck-abc", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 41.0,
          "attempts": 1, "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 9.0,
          "last_answer": None, "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
@@ -50,6 +50,8 @@ PROBE = """() => {
   return {rows, header: document.querySelector('ui-topbar').getBoundingClientRect().height,
     stop: [Math.round(stop.x), Math.round(stop.y), Math.round(stop.width), Math.round(stop.height)],
     overflow: document.documentElement.scrollWidth - innerWidth,
+    overflowNodes: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
+      .slice(0, 8).map(node => [node.tagName, node.id, node.textContent.slice(0, 30), Math.round(node.getBoundingClientRect().right)]),
     ids: [...document.querySelectorAll('ui-topbar [id]')].map(node => node.id)};
 }"""
 
@@ -135,9 +137,18 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 fact = page.evaluate(PROBE)
                 measured[(name, width)] = fact
                 x, y, w, h = fact["stop"]
-                assert fact["overflow"] <= 0, (name, width, fact)
+                assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
+                if width <= 390:
+                    more = page.get_by_role("button", name="접속과 화면 표시")
+                    expect(more).to_be_visible()
+                    if width == 390:
+                        expect(more).to_contain_text("접속")
+                    more.click()
+                    expect(page.locator("#theme-choice-label")).to_be_visible()
+                    assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)
+                    more.click()
                 if width >= 1440:
                     assert fact["rows"] == 1, (name, width, fact)
                 elif width >= 1024:

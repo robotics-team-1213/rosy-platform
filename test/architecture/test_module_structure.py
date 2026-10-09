@@ -185,8 +185,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_953,
-        "split: re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
+        48_118,
+        "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
         " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
         "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "
         "hub/hub.py +25 (SHA-256 digest HELLO check beside the old token path), enrollment_routes.py +17, swarm/transpo"
@@ -844,8 +844,8 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
-        12_947,
-        "accept: independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        13_105,
+        "accept: re-judged at 13105 on 2026-10-09 for D-546 5: CORE raises and clears the pose request (localization/pose_request.py, lane_return_pose_request.py); no motion path, D-468 gates unchanged; +150 allowance unchanged. Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
         "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
         "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
         "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "
