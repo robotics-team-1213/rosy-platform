@@ -16,6 +16,7 @@ Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10
 |------|-------------|
 | `__init__.py` | Package marker |
 | `schemas.py` | Enums (`RobotMode`, `PowerMode`, `BatteryLevel`, …), `StateSnapshot`, envelope, events. D-400: `SafetyPolicyStatus` on `StateSnapshot.safety_policy` (v1.71; `mode`/verdict are lowercase plain strings, an exception to the enum rule) |
+| `trip_lease.py` | D-541 `TripLeaseStatus`, `TripLeaseEnded`, `TripLeaseFields` (base of `StateSnapshot`; the two keys are absent, not null, when unset) |
 | `localization.py` | D-395 wire models: `LocalizationStatus` (state + `map\|odom` frame flag, on `StateSnapshot.localization`), `CandidateReport`, `LocalizationDecision` (candidate index or direct pose, source, `cues`, `ttl_s` from receipt), D-494 `OdomPose` (on `StateSnapshot.odom_pose`, stamp = UTC epoch s) |
 
 ## Subdirectories
