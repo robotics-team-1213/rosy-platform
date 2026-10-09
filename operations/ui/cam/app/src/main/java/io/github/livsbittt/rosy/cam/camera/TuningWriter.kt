@@ -18,6 +18,8 @@ interface CameraPort {
  *   nor overwrite [confirmed]. It also clears the Camera2 interop options, which CameraX keeps per camera id across
  *   unbind and rebind, so the camera really matches the default [written].
  * - A control that failed is not called again until [clearFailures] or the next [bind].
+ * - `frames` is a count of capture results. A lock needs at least one capture after the last exposure change
+ *   ([drive] write, [touch] or [bind]); after a bind the settle clock starts at the first capture.
  */
 class TuningWriter(private val onSettled: () -> Unit = {}) {
     var written = CameraSettings()
@@ -34,12 +36,13 @@ class TuningWriter(private val onSettled: () -> Unit = {}) {
     private var port: CameraPort? = null
     private var epoch = 0
     private var changedAtMs: Long? = null
+    private var framesAtChange = 0L
     private var atGoal = true
 
     /** True when bound, nothing is in flight and the last [drive] reached its goal (no lock still settling). */
     val readyToReport: Boolean get() = port != null && inFlight == 0 && atGoal
 
-    fun bind(camera: CameraPort, nowMs: Long) {
+    fun bind(camera: CameraPort, frames: Long) {
         epoch++
         port = camera
         written = CameraSettings()
@@ -47,7 +50,8 @@ class TuningWriter(private val onSettled: () -> Unit = {}) {
         inFlight = 0
         evFailed = false
         optionsFailed = false
-        changedAtMs = nowMs
+        changedAtMs = null
+        framesAtChange = frames
         atGoal = true
         call({ camera.clearOptions(it) }, onOk = {}, onFail = { optionsFailed = true })
     }
@@ -58,20 +62,28 @@ class TuningWriter(private val onSettled: () -> Unit = {}) {
         inFlight = 0
     }
 
+    /** An exposure change the writer did not make (the torch went on or off): locks wait to settle again. */
+    fun touch(nowMs: Long, frames: Long) {
+        changedAtMs = nowMs
+        framesAtChange = frames
+    }
+
     fun clearFailures() {
         evFailed = false
         optionsFailed = false
     }
 
     /** Writes the next step toward [goal] (see [RecognitionTuning.step]). */
-    fun drive(goal: CameraSettings, nowMs: Long) {
+    fun drive(goal: CameraSettings, nowMs: Long, frames: Long) {
         val camera = port ?: return
-        val next = RecognitionTuning.step(written, confirmed, goal, changedAtMs, nowMs)
+        val framed = frames > framesAtChange
+        if (changedAtMs == null && framed) changedAtMs = nowMs // first capture after bind
+        val next = RecognitionTuning.step(written, confirmed, goal, changedAtMs, nowMs, framed)
         atGoal = next == goal
         if (next == written) return
         val prev = written
         written = next
-        if (next.ev != prev.ev || next.fpsRange != prev.fpsRange || next.antibanding != prev.antibanding) changedAtMs = nowMs
+        if (next.ev != prev.ev || next.fpsRange != prev.fpsRange || next.antibanding != prev.antibanding) touch(nowMs, frames)
         if (next.ev != prev.ev && !evFailed) {
             call({ camera.setEv(next.ev, it) }, onOk = { confirmed = confirmed.copy(ev = next.ev) }, onFail = { evFailed = true })
         }

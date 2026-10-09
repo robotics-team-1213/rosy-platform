@@ -92,25 +92,51 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
     private var request: ServerMessage.Camera? = null
     private var receivedAtMs = 0L
 
+    /** Newest request that came within [MIN_GAP_MS]; applied by [tick] when the gap ends. */
+    private var pending: ServerMessage.Camera? = null
+
     /** Turning the switch off forgets the request, so a stale one never applies when it is turned on again. */
     fun setEnabled(on: Boolean) {
         enabled = on
-        if (!on) request = null
+        if (!on) {
+            request = null
+            pending = null
+        }
     }
 
     enum class Receipt { APPLIED, IGNORED_SWITCH_OFF, TOO_SOON }
 
     /**
-     * Records [msg]; its seq is echoed whatever happens. A request closer than [MIN_GAP_MS] to the previously
-     * applied one is dropped, so a burst cannot make the camera hunt.
+     * Records [msg]. One closer than [MIN_GAP_MS] to the previously applied request waits as [pending] (the newest
+     * wins) and is applied by [tick], so a burst cannot make the camera hunt and the last word is never lost.
+     * [lastSeq] follows applied and switch-off-ignored messages, not waiting ones.
      */
     fun receive(msg: ServerMessage.Camera, nowMs: Long): Receipt {
+        if (!enabled) {
+            lastSeq = msg.seq
+            return Receipt.IGNORED_SWITCH_OFF
+        }
+        if (request != null && nowMs >= receivedAtMs && nowMs - receivedAtMs < MIN_GAP_MS) {
+            pending = msg
+            return Receipt.TOO_SOON
+        }
+        apply(msg, nowMs)
+        return Receipt.APPLIED
+    }
+
+    /** Applies a [pending] request once the gap has passed; true when it did. Call on every evaluation. */
+    fun tick(nowMs: Long): Boolean {
+        val next = pending ?: return false
+        if (nowMs >= receivedAtMs && nowMs - receivedAtMs < MIN_GAP_MS) return false
+        apply(next, nowMs)
+        return true
+    }
+
+    private fun apply(msg: ServerMessage.Camera, nowMs: Long) {
         lastSeq = msg.seq
-        if (!enabled) return Receipt.IGNORED_SWITCH_OFF
-        if (request != null && nowMs >= receivedAtMs && nowMs - receivedAtMs < MIN_GAP_MS) return Receipt.TOO_SOON
         request = msg
         receivedAtMs = nowMs
-        return Receipt.APPLIED
+        pending = null
     }
 
     fun mode(nowMs: Long): TuningMode = when {
@@ -202,8 +228,13 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
 
         /**
          * The step to write now toward [goal]. A change to EV, the exposure cap or anti-banding goes in with the
-         * locks off. The locks follow once [confirmed] shows that change and [SETTLE_MS] has passed since it was
-         * written ([changedAtMs], also set at bind), or after [SETTLE_TIMEOUT_MS] in any case.
+         * locks off. The locks follow once [confirmed] shows that change, at least one capture came after it
+         * ([framed]) and [SETTLE_MS] has passed since it ([changedAtMs]; null = not started yet, e.g. no capture since
+         * bind), or after [SETTLE_TIMEOUT_MS] with a capture in any case.
+         *
+         * "Confirmed" means the control call completed, i.e. the setting was applied to the repeating request. For
+         * EV that is CameraX's own completion; for the fps range and anti-banding it says nothing about AE having
+         * converged, which is what [SETTLE_MS] is for.
          */
         fun step(
             written: CameraSettings,
@@ -211,11 +242,14 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
             goal: CameraSettings,
             changedAtMs: Long?,
             nowMs: Long,
+            framed: Boolean = true,
         ): CameraSettings {
-            if (goal == written || !goal.locked) return goal
+            // No early return for goal == written: a change the writer did not make (the torch) must unlock too.
+            if (!goal.locked) return goal
             val unlocked = goal.copy(aeLock = false, awbLock = false)
             if (exposureKey(written) != exposureKey(goal)) return unlocked
-            val since = changedAtMs?.let { nowMs - it }?.takeIf { it >= 0 } ?: Long.MAX_VALUE
+            if (changedAtMs == null || !framed) return unlocked
+            val since = (nowMs - changedAtMs).takeIf { it >= 0 } ?: Long.MAX_VALUE
             val confirmedAll = exposureKey(confirmed) == exposureKey(goal)
             return if ((confirmedAll && since >= SETTLE_MS) || since >= SETTLE_TIMEOUT_MS) goal else unlocked
         }

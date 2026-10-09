@@ -114,14 +114,32 @@ class RecognitionTuningTest {
     }
 
     @Test
-    fun requestsCloserThan500MsAreDroppedButEchoed() {
+    fun requestsCloserThan500MsWaitAndTheNewestIsAppliedWhenTheGapEnds() {
         val t = RecognitionTuning()
         t.receive(req(seq = 1, ev = -1), 0)
-        assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 2, ev = 3), 499))
-        assertEquals(2L, t.lastSeq)
+        assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 2, ev = 3), 100))
+        assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 3, ev = 2), 400))
+        assertEquals("a waiting request is not echoed yet", 1L, t.lastSeq)
         assertEquals(-1, t.target(TuningMode.VISION, s21, CameraSettings(), 0).ev)
-        assertEquals(RecognitionTuning.Receipt.APPLIED, t.receive(req(seq = 3, ev = 3), 500))
-        assertEquals(3, t.target(TuningMode.VISION, s21, CameraSettings(), 0).ev)
+        assertFalse(t.tick(499))
+        assertTrue(t.tick(500))
+        assertEquals(3L, t.lastSeq)
+        assertEquals(2, t.target(TuningMode.VISION, s21, CameraSettings(), 0).ev)
+        assertFalse("nothing left waiting", t.tick(10_000))
+        // The applied pending request restarts the gap and the 60 s window.
+        assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 4), 900))
+        assertEquals(TuningMode.VISION, t.mode(60_500))
+    }
+
+    @Test
+    fun switchingOffDropsAWaitingRequest() {
+        val t = RecognitionTuning()
+        t.receive(req(seq = 1), 0)
+        t.receive(req(seq = 2), 100)
+        t.setEnabled(false)
+        t.setEnabled(true)
+        assertFalse(t.tick(1_000))
+        assertEquals(TuningMode.LOCAL, t.mode(1_000))
     }
 
     @Test
@@ -237,6 +255,9 @@ class RecognitionTuningTest {
         val goal = CameraSettings(aeLock = true)
         assertEquals(CameraSettings(), RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, 5_000, 5_500))
         assertEquals(goal, RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, 5_000, 6_000))
+        // No capture since the change (or since bind): never locked, not even at the timeout.
+        assertEquals(CameraSettings(), RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, null, 60_000))
+        assertEquals(CameraSettings(), RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, 0, 60_000, framed = false))
     }
 
     @Test
@@ -244,7 +265,9 @@ class RecognitionTuningTest {
         val unlocked = CameraSettings(ev = 2, antibanding = Antibanding.HZ60)
         assertEquals(unlocked, RecognitionTuning.step(CameraSettings(), CameraSettings(), unlocked, null, 0))
         val locked = CameraSettings(ev = -1, aeLock = true)
-        assertEquals(locked, RecognitionTuning.step(locked, locked, locked, 0, 1))
+        assertEquals(locked, RecognitionTuning.step(locked, locked, locked, 0, 600_000))
+        // Unchanged goal but a recent outside change (torch): unlocked until it settles.
+        assertEquals(CameraSettings(ev = -1), RecognitionTuning.step(locked, locked, locked, 600_000, 600_500))
     }
 
     @Test

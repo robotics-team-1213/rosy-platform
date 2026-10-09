@@ -108,10 +108,14 @@ class CameraController(
     private var reportPending = false
     @Volatile private var exposureNs = 0L
     @Volatile private var sensorIso = 0
+    /** Capture results seen; written only on the camera callback thread. */
+    @Volatile private var captures = 0L
+    private var torchSeen = false
     private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
             result.get(CaptureResult.SENSOR_EXPOSURE_TIME)?.let { exposureNs = it }
             result.get(CaptureResult.SENSOR_SENSITIVITY)?.let { sensorIso = it }
+            captures++
         }
     }
 
@@ -342,7 +346,8 @@ class CameraController(
             val caps = readCapabilities(camera)
             capabilities = caps
             // Also clears the Camera2 interop options CameraX kept for this camera id from an earlier bind.
-            writer.bind(CameraXPort(camera, caps), SystemClock.elapsedRealtime())
+            writer.bind(CameraXPort(camera, caps), captures)
+            torchSeen = false
             reportPending = true
             val observer = Observer<Int> { state ->
                 if (stopped || generation != epoch || this.camera !== camera) return@Observer
@@ -489,8 +494,17 @@ class CameraController(
             exposureEnabled && !writer.evFailed && mode != TuningMode.VISION,
             thermalBlocked || lighting.torchOn || mode == TuningMode.THERMAL_HOLD)
         val caps = capabilities
+        if (tuning.tick(now)) reportPending = true
         if (bound != null && caps != null) {
-            writer.drive(tuning.target(mode, caps, writer.written, target, torchOn = lighting.torchOn), now)
+            // A torch going on or off changes the exposure under any lock: settle again before locking.
+            if (lighting.torchOn != torchSeen) {
+                torchSeen = lighting.torchOn
+                writer.touch(now, captures)
+            }
+            // A hold changes nothing, not even a settle unlock after the torch (heat forces it off).
+            if (mode != TuningMode.THERMAL_HOLD) {
+                writer.drive(tuning.target(mode, caps, writer.written, target, torchOn = lighting.torchOn), now, captures)
+            }
             tuningMode = mode
             reportTuning()
         }
@@ -510,7 +524,7 @@ class CameraController(
             RecognitionTuning.Receipt.APPLIED -> Unit
             RecognitionTuning.Receipt.IGNORED_SWITCH_OFF ->
                 Log.i(TAG, "camera seq=${msg.seq} ignored: recognition exposure switch is off")
-            RecognitionTuning.Receipt.TOO_SOON -> Log.i(TAG, "camera seq=${msg.seq} dropped: too soon after the last one")
+            RecognitionTuning.Receipt.TOO_SOON -> Log.i(TAG, "camera seq=${msg.seq} waits: too soon after the last one")
         }
         reportPending = true
         evaluateExposure()
