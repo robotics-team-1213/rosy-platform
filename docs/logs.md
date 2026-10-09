@@ -7467,3 +7467,9 @@ osy-d395-s1d\`.
 - 변경: D-531에서 인식 seq를 마지막 발행값 대신 현재 지시/실행 중 호와 비교하도록 명확히 했다. 호가 시작되기 전 `exit_segment`는 `junction`이고, 다른 seq의 카메라 프레임은 `invalid_observation` HOLD다. API reference v1.163 설명·문서 버전 pin을 맞췄다.
 - 증거: 독립 안전 검토, 관련 services 6·gateway 46·문서/구조 36 passed. D-168 `schemas.py` 1344줄 재판정 수용.
 - gate 변화: P1 SOURCE 후보. ROS-SIM·DEVICE·FIELD 미확인.
+
+## 2026-10-09 · uncommitted · docs(merge): D-531 v1.164와 CORE 크기 판정
+
+- 변경: D-555가 먼저 쓴 API v1.163을 보존하고 D-531을 v1.164로 옮겼다. 기존 `core_features/localization/` 835줄을 독립 크기 단위로 등록해 이전 `core_features` 증가 전 분리 조건을 이행했다. 런타임 코드 이동은 없다.
+- 증거: 독립 안전 검토, 구조 시험 34 passed, API 149 passed/15 skipped, CORE 집중 52 passed. 원격 착지 시험의 첫 시도에서 발견한 버전 pin·크기 판정 실패를 수정했다.
+- gate 변화: SOURCE 구조 판정 통과. CI 전체·ROS-SIM·DEVICE·FIELD는 별도.

@@ -78,12 +78,14 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
-#: docs/plans/2026-10-08-line-follow-arc-subpackage.md
+#: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
+#: docs/plans/2026-10-09-core-localization-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
+              "core/services/core_features/localization",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -185,8 +187,18 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_636,
-        "split: re-judged at 47636 on 2026-10-09 (independent re-judge, critic agent): D-540 3 (+183 over "
+        47_953,
+        "split: re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
+        " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
+        "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "
+        "hub/hub.py +25 (SHA-256 digest HELLO check beside the old token path), enrollment_routes.py +17, swarm/transpo"
+        "rt.py +10, enrollment_store.py +9, console_builders.py +3. No new package owner and no duplication. The only n"
+        "ew robot call is the credential PUT/GET/DELETE /api/v1/fleet/link through the existing TLS-bound enrolled clie"
+        "nt, gated on the robot's fleet_link_provisioning capability; it adds no drive, goal or E-Stop path. Next growt"
+        "h: D-555 hub-link code leaves enrollment.py (956, hard tier 1000) for its own module, and the queues.js move n"
+        "amed below still precedes D-540 (d). The site-map web/server split in docs/plans/2026-10-07-fleet-site-map-web"
+        "-server-seam.md stays next; +150 allowance unchanged, measured from 47953. Previously "
+        "re-judged at 47636 on 2026-10-09 (independent re-judge, critic agent): D-540 3 (+183 over "
         "main 47453) puts stuck decisions and the replan confirm inline in the queue rows (roster.js +102, "
         "new web/trip-replan.js 92 calling the existing confirm-replan/cancel routes), one rail scroll and "
         "collapsed robot cards; the old #stuck-panel and roster-toggle are removed, not left beside. No new "
@@ -585,8 +597,11 @@ SIZE_VERDICTS = {
         "grows past 800",
     ),
     "fleet/fleet/server/enrollment.py": (
-        664,
-        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        956,
+        "accept: re-judged 2026-10-09 at 956 (independent re-judge, critic agent; was 932 author's record) when "
+        "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
+        "client, so it stays with that state machine. The next D-555 growth first moves the hub link "
+        "(link_hub, unlink_hub, _hub_*, _clear_robot_link) into its own module (e.g. enrollment_hub.py); past HARD_TIER (1000) it must. Before: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
@@ -834,9 +849,21 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
+    "core/services/core_features/localization": (
+        835,
+        "accept: independently re-judged at 835 on 2026-10-09 (read-only safety reviewer); "
+        "docs/plans/2026-10-09-core-localization-size-unit.md registers the existing assist, halt, "
+        "mission and package init as one localization domain. No runtime move, new owner, store, "
+        "publisher or command path. Re-judge after +150.",
+    ),
     "core_features": (
-        12_947,
-        "accept: independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        12_270,
+        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        "the existing 835-line localization package is now its own size unit under "
+        "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
+        "13105, above 12947+150; moving this coherent domain out fulfills the previous condition "
+        "without moving runtime code. Keep the +150 parent allowance and re-judge at the next growth. "
+        "Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
         "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
         "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
         "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "
