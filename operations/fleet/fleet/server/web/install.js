@@ -10,6 +10,8 @@ import { createCameraPeerPanel } from "./camera-peer.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
+import { createStartPointView } from "./start-point-view.js";
+import { createTrackingRelearn } from "./tracking-relearn.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
 import { addressMap, movableRobots } from "/console/assets/address-drift.js";
@@ -34,6 +36,7 @@ const LOG_MAX = 40;
 // 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다.
 const discoveryGate = createPollGate();
 let peerPicker = null;
+let startPoints = null; // D-540 5 시작점 — 자기 잠금 사유(이름 있는 운영자)를 역할 적용 뒤에 다시 건다
 
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
@@ -57,6 +60,7 @@ function operatorControls() {
 
 function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
+  startPoints?.updateAuthorization();
 }
 
 function markLocked(reason = "auth") {
@@ -163,6 +167,9 @@ let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
+// D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
+startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
+const relearn = createTrackingRelearn({ scope: pageScope, el, call, auth, confirm: confirmIrreversible });
 peerPicker = createPeerPicker({scope: pageScope, el, call,
   isLocked: () => auth.locked || !auth.role,
   isActive: () => taskChooser.selectedId === "peers",
@@ -193,6 +200,8 @@ function saveToken() {
   }
   visionView.reset();
   mapFit.reset();
+  startPoints.reset();
+  relearn.reset();
   refreshAuthorization();
   visionView.refreshSources();
 }
@@ -296,6 +305,8 @@ async function refreshAuthorization(renewed = false) {
       cameraPeer.refresh(),
       refreshDiscovery(),
       peerPicker.refresh(),
+      startPoints.refresh(),
+      relearn.refresh(),
     ]);
     life.check();
   } catch (_err) {
@@ -329,6 +340,8 @@ pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
 pageScope.onResume(() => {
   visionView.reset();
   mapFit.reset();
+  startPoints.reset();
+  relearn.reset();
   refreshAuthorization();
   visionView.refreshSources();
 });

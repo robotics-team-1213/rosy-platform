@@ -21,7 +21,7 @@
    - 기록이 없는 대기 binding(처음 들어오는 로봇, 이 변경 전에 해제된 로봇)은 지금처럼 `robot_id`가 같아야 한다(`409 tls_binding_mismatch`, 코드는 나가지 않는다). 잘못 적은 binding을 잡는 D-565의 일관성 검사를 남긴다.
 2. **binding의 우선순위.** binding 파일이 호스트 이름·포트·CA를 승인한다. Fleet이 배운 `robot_id`는 그 파일 행의 호스트 이름·CA 지문·`robot_id`가 기록 때와 같을 때만 그 행의 `robot_id`를 대신한다. 관리자가 파일 행의 CA나 `robot_id`를 바꾸면 파일이 이긴다(다시 승인한 것이다). 배운 ID가 파일의 다른 행 ID와 겹쳐도 파일이 이기고 Fleet은 뜬다. 번호를 바꾼 binding은 파일 행의 옛 ID도 계속 차지한다. 그 ID는 HTTP로 등록되지 않는다. 실행 중 파일이 바뀌면 거절하는 규칙은 그대로다.
 3. **카메라는 명단을 따를 수 있다.** `site-cameras.yaml`의 source에 `robot_ids: enrolled`를 쓰면 그 source의 대상은 Fleet의 살아 있는 명단(`robots.yaml` + 등록부)이다. 등록·해제 때 `SiteRoster.sync`가 sighting과 추적 source를 함께 바꾼다. 마커는 YAML `robot_markers`에 적은 로봇은 그 값, 아니면 `rosy_NN`의 NN(40–49, D-562)이다. 모서리·장소 마커·YAML 값과 겹치는 번호는 배정하지 않는다. 목록을 적은 source는 이전과 같다.
-4. **Vision은 Fleet이 준 마커를 쓴다.** Fleet은 기존 source 토큰 인증 `GET /api/fleet/detections/config`에 `robot_markers`를 더한다(API v1.173). Vision은 그 값으로 sighting과 설치 안내를 만들고, 읽지 못했거나 값이 틀리면(모서리와 겹침 등) YAML 값을 쓴다. `heading_edge`(스티커 위 = 로봇 앞)는 YAML 그대로다.
+4. **Vision은 Fleet이 준 마커를 쓴다.** Fleet은 기존 source 토큰 인증 `GET /api/fleet/detections/config`에 `robot_markers`를 더한다(API v1.174). Vision은 그 값으로 sighting과 설치 안내를 만들고, 읽지 못했거나 값이 틀리면(모서리와 겹침 등) YAML 값을 쓴다. `heading_edge`(스티커 위 = 로봇 앞)는 YAML 그대로다.
 5. **갱신 기능 검사는 명단을 따른다.** `autoupdate.conf`의 `/api/fleet/state` 검사에 `"required_ids": "enrolled"`를 쓸 수 있다. 고정 목록이 없으니 번호를 바꿔도 `inventory-drift`가 생기지 않고, D-569의 전환 전후 기준선 비교(잃은 로봇은 롤백)는 그대로다. 카메라 source 검사는 목록만 받는다. `site_functional_setup.py`는 로봇 검사를 `"enrolled"`로 쓴다.
 
 ### 보안
@@ -56,4 +56,4 @@
 - 사이트에서 한 번만 바꾼다: `site-cameras.yaml`의 `robot_ids`를 `enrolled`로(마커 예외만 `robot_markers`에), `autoupdate.conf`의 로봇 `required_ids`를 `"enrolled"`로. 그 뒤 번호 바꾸기는 콘솔 등록 해제 → 로봇 번호 변경 → 콘솔 화면 코드 등록이다.
 - 새 TLS 로봇(처음 보는 CA)은 여전히 관리자가 binding 파일에 행과 CA를 넣는다.
 - Vision 추적이 꺼진 source는 Fleet 설정을 읽지 않으므로 YAML 마커만 쓴다.
-- 새 감사 동작 `tls_renumber`, `detections/config`의 `robot_markers`(v1.173 additive), `autoupdate.conf` 값 `"enrolled"`.
+- 새 감사 동작 `tls_renumber`, `detections/config`의 `robot_markers`(v1.174 additive), `autoupdate.conf` 값 `"enrolled"`.
