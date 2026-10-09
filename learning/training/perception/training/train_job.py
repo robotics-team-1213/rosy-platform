@@ -506,6 +506,8 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          camera_profile_revision="training-provenance-" + sha(profile),
                          trainer="rosy-frozen-drivable-head", revision_prefix="v13-drivable",
                          parent_lane_model=parent["lineage"],
+                         dataset_annotation=(None if "lane_derived" not in inputs else
+                                             {k: inputs["lane_derived"][k] for k in ("annotation_origin", "adr")}),
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},
                          experiment={"tracker": "local", "run_id": out.name,
                                      "path": "jobs/" + out.name})

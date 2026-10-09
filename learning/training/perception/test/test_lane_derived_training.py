@@ -95,3 +95,25 @@ def test_derived_dataset_refuses_other_recipes_and_tampered_files(tmp_path):
     config["dataset"] = "lane-derived@" + renamed.name
     with pytest.raises(JobError, match="lane-derived admission denied"):
         train_job.run(config, tmp_path / "job")
+
+
+def test_robot_loader_reads_six_class_d554_shadow_output(tmp_path):
+    import numpy as np
+    from export_cell import write_manifest
+    from control.sensing.perception.learned.lane_mask import lane_evidence
+    from control.sensing.perception.learned.manifest import load_manifest
+    raw = tmp_path / "m.onnx"
+    raw.write_bytes(b"candidate")
+    write_manifest(tmp_path / "v13", onnx_path=raw, classes=[(c["name"], c["role"]) for c in ldd.CLASSES],
+                   color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1],
+                   dataset_repo="store:v13-lane-derived", dataset_revision="a" * 64,
+                   camera_profile_revision="cam", trainer="t", revision_prefix="v13-drivable",
+                   parent_lane_model={"model_revision": "lane-seg-20261006-5f5ddcd9",
+                                      "onnx_sha256": "b" * 64, "torchscript_sha256": "c" * 64},
+                   dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"})
+    manifest = load_manifest(tmp_path / "v13")
+    assert [c.role for c in manifest.classes][-1] == "drivable" and len(manifest.classes) == 6
+    logits = np.zeros((1, 6, 240, 320), np.float32)
+    logits[0, 5, 150:, 100:220] = 5.0
+    evidence = lane_evidence(logits, manifest.classes)
+    assert evidence.visible and abs(evidence.error) < 0.05

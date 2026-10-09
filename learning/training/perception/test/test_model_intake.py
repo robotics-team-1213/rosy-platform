@@ -65,8 +65,24 @@ def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
     )
     rc, report = intake.run(str(folder), out=tmp_path / "accepted", root=tmp_path)
     assert rc != 0 and report["verdict"] == "fail" and report["transient"] is False
-    assert "trusted owner" in " ".join(report["reasons"]).lower()
+    assert "D-554" in " ".join(report["reasons"])
     assert not (tmp_path / "accepted" / report["model_revision"]).exists()
+
+    # D-554 lineage passes the lineage step; the fake ONNX then fails on its own merits.
+    derived = tmp_path / "v13-derived"
+    export_cell.write_manifest(
+        derived, onnx_path=raw,
+        classes=[("background", "background"), ("lane_left", "lane_marking"),
+                 ("drivable", "drivable")],
+        color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1],
+        dataset_repo="store:v13-lane-derived", dataset_revision="a" * 64,
+        camera_profile_revision="cam-1", trainer="t", date="20261009",
+        revision_prefix="v13-drivable",
+        parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
+                           "torchscript_sha256": "c" * 64},
+        dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"})
+    rc, report = intake.run(str(derived), out=tmp_path / "accepted", root=tmp_path)
+    assert rc != 0 and "D-554" not in " ".join(report["reasons"])
 
 
 @pytest.mark.parametrize("src", ["hf:org/repo@main", "hf:org/repo@v1.0", "hf:org/repo",

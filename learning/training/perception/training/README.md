@@ -382,6 +382,10 @@ python dataset/publish.py ~/rosy-ml/data/v13-lane-derived/out --store <store> --
 python training/train_job.py config.json --out <store>/jobs/<new-job>
 ```
 
+export는 manifest `dataset`에 `annotation_origin`, `adr`를 같이 적는다. intake와 `deliver.py push`는
+이 D-554 계보(부모 lane-seg revision·ONNX sha256, 64자리 dataset revision, 파생 annotation)가 있는
+`v13-drivable`만 받아 lane_seg shadow 슬롯에 넣는다. 그 밖의 v13은 계속 거부하고 lane_seg에는 promote가 없다.
+
 `judge`는 조언용이다. `concern` 프레임만 `finalize`가 빼고 manifest의 `judge.dropped`에 남긴다.
 `config.json`은 위 `drivable_head` 형식 그대로이고 `dataset`에 publish가 찍은
 `v13-lane-derived@<content_sha>`를 넣는다. 벽 판정 값(`WALL`: 밝기 125, 7x7 표준편차 12, 면적 200)은

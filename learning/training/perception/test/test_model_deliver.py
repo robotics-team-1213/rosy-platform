@@ -48,7 +48,8 @@ class FakeRunner:
         return r
 
 
-def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg") -> str:
+def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg",
+           dataset_annotation=None) -> str:
     onnx = models.parent / "src.onnx"
     onnx.write_bytes(b"fake-onnx")
     tmp = models.parent / "tmp"
@@ -61,7 +62,8 @@ def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg"
         date="20260930", revision_prefix=revision_prefix,
         parent_lane_model=({"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
                             "torchscript_sha256": "c" * 64}
-                           if revision_prefix == "v13-drivable" else None))
+                           if revision_prefix == "v13-drivable" else None),
+        dataset_annotation=dataset_annotation)
     rev = doc["model_revision"]
     models.mkdir(parents=True, exist_ok=True)
     tmp.rename(models / rev)
@@ -250,6 +252,30 @@ def test_push_refuses_old_v13_pass_report_without_trusted_lineage(tmp_path):
     runner = FakeRunner()
     assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
                         runner=runner) == 2
+    assert runner.calls == []
+
+
+D554 = {"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"}
+
+
+def test_push_v13_with_d554_lineage_reaches_lane_shadow_only(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass", revision_prefix="v13-drivable", dataset_annotation=D554)
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), "--task", "object_det", *SSH],
+                        runner=runner) == 2
+    assert runner.calls == []
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner) == 0
+    assert [c[0] for c in runner.calls] == ["ssh", "scp", "ssh"]
+    assert f"{ROOT_M}/shadow" in runner.calls[2][-1]
+
+
+def test_push_refuses_v13_with_other_annotation(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass", revision_prefix="v13-drivable",
+                 dataset_annotation=dict(D554, adr="D-532"))
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner) == 2
     assert runner.calls == []
 
 

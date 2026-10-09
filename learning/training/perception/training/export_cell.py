@@ -75,7 +75,7 @@ def _experiment_doc(experiment: dict) -> dict:
 def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
                    val_iou=None, date=None, precision="fp32", experiment=None,
-                   revision_prefix="lane-seg", parent_lane_model=None) -> dict:
+                   revision_prefix="lane-seg", parent_lane_model=None, dataset_annotation=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
     {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"} (path relative, e.g. runs/<run_id>)
@@ -101,8 +101,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                 or not isinstance(parent_lane_model["torchscript_sha256"], str)
                 or not re.fullmatch(r"[0-9a-f]{64}", parent_lane_model["torchscript_sha256"])):
             raise ValueError("v13-drivable parent_lane_model needs lane-seg revision, ONNX and TorchScript sha256")
-    elif parent_lane_model is not None:
-        raise ValueError("parent_lane_model only applies to v13-drivable")
+    elif parent_lane_model is not None or dataset_annotation is not None:
+        raise ValueError("parent_lane_model and dataset_annotation only apply to v13-drivable")
     exp_doc = _experiment_doc(experiment) if experiment is not None else None
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}, not {precision!r}")
@@ -123,7 +123,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                   "scale": float(scale), "mean": [float(v) for v in mean],
                   "std": [float(v) for v in std]},
         "output": {"layout": "nchw_logits", "classes": entries},
-        "dataset": {"repo": dataset_repo, "revision": dataset_revision},
+        "dataset": {"repo": dataset_repo, "revision": dataset_revision, **(dataset_annotation or {})},
         "camera_profile_revision": camera_profile_revision,
         "metrics": {"val_iou": val_iou or {}},
         "trainer": trainer,
