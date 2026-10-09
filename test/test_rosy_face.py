@@ -1517,6 +1517,24 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_state(tmp_path)
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
+def test_a_quiet_identity_pulse_blinks_without_the_call_chirp(tmp_path):
+    """D-596: Fleet's automatic requests ask for identify_<colour>_quiet; same blink, no beep."""
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+    heard = []
+    display._buzzer.announce = heard.append
+    _hand_over(tmp_path, "identify_blue_quiet")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["ready", "identify_blue", "ready"] and heard == []
+    _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
+    assert display.handle_test() == "done" and heard == ["call"]
+
+
 def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
     module = _display()
     _lamp_tree(tmp_path)

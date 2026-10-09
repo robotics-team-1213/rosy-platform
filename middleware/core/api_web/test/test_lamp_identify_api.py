@@ -23,6 +23,20 @@ def test_lamp_identify_accepts_only_named_colors_and_writes_no_motion_command(mo
         host_hardware.host_lamp_identify(LampIdentifyRequest(color="amber"), auth, object())
     with pytest.raises(ValidationError):
         LampIdentifyRequest(color="red")
+    with pytest.raises(ValidationError):
+        LampIdentifyRequest(quiet="yes")
+
+
+def test_a_quiet_identify_asks_the_face_for_the_silent_blink(monkeypatch, tmp_path):
+    """D-596: Fleet's automatic requests carry quiet; the face blinks without the call chirp."""
+    writes = []
+    monkeypatch.setattr(host_hardware, "_test_paths", lambda _svc: (str(tmp_path / "q"), "r", "c"))
+    monkeypatch.setattr(host_hardware, "_write_private", lambda *args: writes.append(args))
+    result = host_hardware.host_lamp_identify(LampIdentifyRequest(color="blue", quiet=True),
+                                              SimpleNamespace(token_id="fleet"), object())
+    assert result["color"] == "blue"
+    assert json.loads(writes[0][1])["action"] == "identify_blue_quiet"
+    assert "identify_blue_quiet" in host_hardware.HW_TEST_ACTIONS
 
 
 def test_lamp_identify_without_a_color_uses_the_robot_s_configured_colour(monkeypatch, tmp_path):
