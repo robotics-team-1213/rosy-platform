@@ -575,7 +575,7 @@ SIZE_VERDICTS = {
         885,
         "accept: re-judged 2026-10-09 at 885 (author's verdict; needs an independent re-judge) when "
         "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
-        "client, so it stays with that state machine. If the file grows past 1035, split the hub link "
+        "client, so it stays with that state machine. Past HARD_TIER (1000) it splits: the hub link moves "
         "into its own module. Before: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
