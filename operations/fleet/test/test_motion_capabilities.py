@@ -86,19 +86,44 @@ def test_slow_capability_read_does_not_delay_state_and_is_shared():
     asyncio.run(exercise())
 
 
-def test_expired_display_is_unknown_until_refresh_and_close_cancels_it():
+def test_expired_display_keeps_the_last_value_while_refreshing_and_close_cancels_it():
+    # Field check 2026-10-10: an expired cache whose refresh missed the 0.05 s wait read as
+    # unknown, so "수동 주행만 지원" and "주행 기능 확인 불가" swapped on every poll.
     async def exercise():
         robot, clock = CapRobot('one'), FakeClock()
         fleet = console(robot, clock)
         assert (await fleet.snapshot())['robots'][0]['capabilities'] == robot.caps
         clock.advance(6)
         robot.cap_gate = asyncio.Event()
-        assert (await fleet.snapshot())['robots'][0]['capabilities'] is None
+        for _ in range(3):
+            assert (await fleet.snapshot())['robots'][0]['capabilities'] == robot.caps
+        assert fleet._capability_display.age('one') == 6.0
         pending = list(fleet._capability_display.pending.values())
-        assert len(pending) == 1
+        assert len(pending) == 1 and robot.cap_reads == 2
         await fleet.aclose()
         assert pending[0].cancelled()
         assert not fleet._capability_display.pending
+    asyncio.run(exercise())
+
+
+def test_a_timed_out_refresh_keeps_capabilities_and_a_robot_refusal_clears_them():
+    async def exercise():
+        robot, clock = CapRobot('one'), FakeClock()
+        fleet = console(robot, clock)
+        try:
+            assert await fleet._shown_capabilities('one') == robot.caps
+            clock.advance(6)
+            robot.cap_error = httpx.ReadTimeout('slow robot')
+            await fleet._shown_capabilities('one')
+            await asyncio.sleep(0)
+            assert await fleet._shown_capabilities('one') == robot.caps
+            clock.advance(6)
+            robot.cap_error = RobotApiError('one', 404, 'NOT_FOUND', 'older image')
+            await fleet._shown_capabilities('one')
+            await asyncio.sleep(0)
+            assert await fleet._shown_capabilities('one') is None
+        finally:
+            await fleet.aclose()
     asyncio.run(exercise())
 
 

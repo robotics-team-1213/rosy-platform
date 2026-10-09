@@ -414,6 +414,7 @@ main {
 /* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */

@@ -46,7 +46,8 @@ def _robot(robot_id: str, pose: dict, **extra) -> dict:
     row = {
         "robot_id": robot_id, "online": True, "goal": None, "queued": None,
         "yielding": None, "error": None,
-        "state": {"robot_id": robot_id, "mode": "NAVIGATION", "navigation": "NAVIGATING",
+        # A Nav2 robot reports its map; the console draws only map poses (field check 2026-10-10).
+        "state": {"robot_id": robot_id, "mode": "NAVIGATION", "navigation": "NAVIGATING", "map_id": "map",
                   "pose": pose, "battery": {"percent": 90}, "safety": {"estop": False}},
     }
     row.update(extra)
