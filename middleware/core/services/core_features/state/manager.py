@@ -74,6 +74,8 @@ class StateManager:
         self._mode: RobotMode = RobotMode.IDLE
         self._navigation: NavigationState = NavigationState.IDLE
         self._pose = Pose()
+        #: D-559: "odom" while the bridge's map TF is stale and odom writes the pose.
+        self._pose_frame = "map"
         self._odom_pose: Optional[OdomPose] = None
         self._odom_rejected_logged = False
         self._velocity = Velocity()
@@ -138,10 +140,16 @@ class StateManager:
             self._navigation = state
             self._mark("navigation")
 
-    def set_pose(self, x: float, y: float, yaw: float) -> None:
+    def set_pose(self, x: float, y: float, yaw: float, frame: str = "map") -> None:
         with self._lock:
             self._pose = Pose(x=x, y=y, yaw=yaw)
+            self._pose_frame = frame
             self._mark("pose")
+
+    def pose_sample(self) -> tuple[float, float, float, str]:
+        """(x, y, yaw, frame) without building a snapshot (D-559 trail tick, 20 Hz)."""
+        with self._lock:
+            return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame
 
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt.

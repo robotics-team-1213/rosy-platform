@@ -146,3 +146,149 @@ def test_crumbs_far_behind_the_follower_are_pruned():
     # 자르기는 점을 더할 때만 한다: 리더가 선 뒤 팔로워가 gap 까지 더 간 만큼은 남는다.
     assert trail.progress - trail._s[0] < 1.0 + GAP + 0.1
     assert len(trail._s) < 100
+
+
+# --- SwarmManager trail 모드 ---------------------------------------------------
+
+from core_common.protocol.schemas import SwarmFollowParams  # noqa: E402
+from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits  # noqa: E402
+from core_features.state.manager import StateManager  # noqa: E402
+from core_features.swarm import ReferencePose, SwarmError, SwarmManager  # noqa: E402
+from test_swarm import CAPABLE, FakeClock, FakeEvents, FakeNav  # noqa: E402
+
+
+class Rig:
+    def __init__(self, gap=None):
+        self.clock, self.events, self.nav = FakeClock(), FakeEvents(), FakeNav()
+        self.state = StateManager(robot_id="rosy_01")
+        self.safety = SafetyManager(SpeedLimits(), BatteryPolicy(), self.events)
+        self.pose = (0.0, 0.0, 0.0, "map")
+        self.sent = []
+        #: (gap, stop, resume) or None (stale); gap None = clear
+        self.gap = gap or (lambda v, w, now: (None, 0.1, 0.13))
+        self.swarm = SwarmManager(
+            self.events, self.state, self.nav, self.safety, CAPABLE, clock=self.clock,
+            map_id_provider=lambda: self.state.map_id, robot_id="rosy_01",
+            pose_provider=lambda: self.pose, twist_sink=self.sent.append,
+            obstacle_gap=lambda v, w, now: self.gap(v, w, now))
+
+    def follow(self, **overrides):
+        body = {"target_robot_id": "rosy_02", "distance": 0.5, "mode": "trail"}
+        body.update(overrides)
+        return self.swarm.follow(SwarmFollowParams(**body))
+
+    def leader(self, x, y=0.0, yaw=0.0, frame="map", map_id=None):
+        self.swarm.on_reference_pose(ReferencePose("rosy_02", x, y, yaw, frame=frame, map_id=map_id))
+
+    def step(self, seconds=0.05):
+        self.clock.advance(seconds)
+        self.swarm.tick()
+        self.swarm.trail_tick(self.clock.now)
+        return self.sent[-1]
+
+    def hold_reason(self):
+        return self.swarm.state_payload()["trail"]["hold_reason"]
+
+
+def test_trail_mode_sends_no_nav2_goal_and_drives_the_nav_slot():
+    rig = Rig()
+    rig.follow()
+    for k in range(1, 30):
+        rig.leader(0.5 + 0.03 * k)
+        twist = rig.step()
+    assert rig.nav.goals == []
+    assert twist[0] > 0.1 and abs(twist[1]) < 1e-6
+    assert rig.swarm.state_payload()["mode"] == "trail"
+
+
+def test_trail_refuses_a_lateral_offset():
+    rig = Rig()
+    with pytest.raises(SwarmError) as raised:
+        rig.follow(lateral=0.2)
+    assert raised.value.code == "VALIDATION_ERROR"
+
+
+def test_a_lost_stream_holds_and_a_new_sample_resumes():
+    rig = Rig()
+    rig.follow()
+    rig.leader(1.2)
+    assert rig.step()[0] > 0
+    rig.clock.advance(1.1)
+    assert rig.step() is None
+    assert rig.hold_reason() == "stream_lost"
+    rig.leader(1.25)
+    assert rig.step() is not None
+
+
+def test_odom_frame_samples_hold_and_map_samples_resume():
+    rig = Rig()
+    rig.follow()
+    rig.leader(1.2)
+    rig.leader(1.3, frame="odom")
+    assert rig.step() is None
+    assert rig.hold_reason() == "reference_frame_odom"
+    assert ("swarm.hold", {"reason": "reference_frame_odom",
+                           "formation": "follow:rosy_02@0.50/0.00"}) in rig.events.published
+    rig.leader(1.3)
+    assert rig.step()[0] > 0
+
+
+def test_own_odom_pose_holds():
+    rig = Rig()
+    rig.follow()
+    rig.leader(1.2)
+    rig.pose = (0.0, 0.0, 0.0, "odom")
+    assert rig.step() is None
+    assert rig.hold_reason() == "own_pose_not_map"
+
+
+def test_a_leader_too_far_to_join_ends_the_follow():
+    rig = Rig()
+    rig.follow()
+    rig.leader(2.0)
+    assert not rig.swarm.active
+    assert rig.sent[-1] is None
+    assert any(t == "swarm.aborted" and d["reason"] == "trail_join_too_far"
+               for t, d in rig.events.published)
+
+
+def test_a_leader_jump_latches_trail_lost():
+    rig = Rig()
+    rig.follow()
+    rig.leader(1.0)
+    rig.leader(3.0)
+    assert rig.step() is None
+    rig.leader(1.05)
+    assert rig.step() is None
+    assert rig.hold_reason() == "trail_lost"
+
+
+def test_the_body_stop_holds_with_hysteresis_and_a_stale_sensor_holds():
+    gaps = {"gap": None}
+    rig = Rig(gap=lambda v, w, now: None if gaps["gap"] == "stale" else (gaps["gap"], 0.10, 0.13))
+    rig.follow()
+    rig.leader(1.2)
+    assert rig.step()[0] > 0
+    gaps["gap"] = 0.08
+    assert rig.step() is None and rig.hold_reason() == "obstacle"
+    gaps["gap"] = 0.12                                   # between stop and resume: still held
+    assert rig.step() is None
+    gaps["gap"] = 0.2
+    assert rig.step()[0] > 0
+    gaps["gap"] = "stale"
+    assert rig.step() is None and rig.hold_reason() == "obstacle_sensor_stale"
+
+
+def test_map_mismatch_holds_and_estop_cancels_and_clears_the_slot():
+    rig = Rig()
+    rig.state.set_map_id("site_a")
+    rig.follow()
+    rig.leader(1.2, map_id="site_a")
+    assert rig.step()[0] > 0
+    rig.leader(1.25, map_id="site_b")
+    assert rig.step() is None and rig.hold_reason() == "map_mismatch"
+    rig.safety.trigger_estop("test")
+    rig.swarm.tick()
+    assert not rig.swarm.active and rig.sent[-1] is None
+    rig.swarm.trail_tick(rig.clock.now)
+    assert rig.sent[-1] is None

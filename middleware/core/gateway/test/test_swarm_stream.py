@@ -280,3 +280,43 @@ def test_the_reference_socket_carries_the_map_id_through(client):
 
     assert svc.swarm.nav.goals == [], "a pose from another map must not become a goal"
     assert svc.swarm.state_payload()["map_mismatch"] == "site_b"
+
+
+# --- D-559 trail follow --------------------------------------------------------
+
+
+def test_the_leader_says_when_its_pose_fell_back_to_odom(client):
+    """map TF 가 끊기면 보고 pose 는 odom 이다. trail 팔로워는 그 표본을 자취에 넣지 않는다."""
+    tc, svc = client
+    svc.state.set_pose(1.0, 2.0, 0.0, frame="odom")
+
+    with tc.websocket_connect(f"/ws/swarm/pose?token={VIEWER_TOKEN}") as socket:
+        frame = socket.receive_json()
+
+    assert frame["payload"]["frame"] == "odom"
+    assert frame["payload"]["pose"] == {"x": 1.0, "y": 2.0, "yaw": 0.0}
+
+
+def test_a_trail_follower_takes_no_nav2_goal_and_owns_the_nav_slot(client):
+    from core.bridge import docking_mode
+    from core_features.command.manager import Twist
+
+    tc, svc = client
+    svc.swarm.nav = RecordingNav()
+    svc.state.set_pose(0.0, 0.0, 0.0)
+    response = tc.post(
+        "/api/v1/swarm/follow",
+        json={"target_robot_id": "rosy_02", "distance": 0.5, "mode": "trail"},
+        headers={"Authorization": f"Bearer {OPERATOR_TOKEN}"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["mode"] == "trail"
+
+    with tc.websocket_connect(f"/ws/swarm/reference?token={OPERATOR_TOKEN}") as socket:
+        socket.send_text(json.dumps(pose_frame(x=0.6, y=0.0)))
+        socket.send_text(json.dumps({"type": "ping"}))
+
+    assert svc.swarm.nav.goals == []
+    assert svc.swarm.state_payload()["trail"]["leader_s"] == pytest.approx(0.6)
+    assert svc.swarm.trail_active
+    assert not docking_mode.route_nav_cmd_vel(svc, Twist(0.2, 0.0))

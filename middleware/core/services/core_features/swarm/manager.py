@@ -7,6 +7,10 @@ websocket 도 fleet 도 등장하지 않는다.
 
 목표는 Nav2 moving goal 로 투입한다(SWM-001). 별도 cmd_vel 소스를 만들지
 않으므로 장애물 회피와 SAF-004 클리핑이 그대로 적용된다.
+
+D-559 trail 모드는 Nav2 를 쓰지 않는다. 리더 자취(trail.py)를 20 Hz `trail_tick` 이
+조향해 CommandManager 의 NAVIGATION 슬롯에 넣는다 — 차선 추종과 같은 길이라 SAF-004
+클리핑과 D-400 정책을 지나고, D-422 몸체 정지는 `obstacle_gap` 이 맡는다.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from core_common.protocol.schemas import (
 )
 from core_common.succession import next_leader
 from core_features.swarm.poses import ReferencePose, follow_goal
+from core_features.swarm.trail import Trail, TrailError, trail_twist
 
 #: SWM-002 v1: moving goal 갱신 상한. 군집 속도(<=0.2 m/s)에서 충분하고,
 #: 그 이상은 Nav2 플래너를 재시작시키기만 한다.
@@ -43,7 +48,8 @@ class SwarmManager:
 
     def __init__(self, events, state_manager, nav, safety, capability,
                  clock=time.monotonic, docking_active_provider=None,
-                 map_id_provider=None, robot_id: str = "") -> None:
+                 map_id_provider=None, robot_id: str = "", pose_provider=None,
+                 twist_sink=None, obstacle_gap=None) -> None:
         self._events = events
         self._state = state_manager
         self.nav = nav
@@ -77,6 +83,12 @@ class SwarmManager:
         #: 맞지 않는 맵 id. 스트림 단절과 원인은 다르지만 처신은 같다 —
         #: 목표를 거두고 세션은 살려 둔다.
         self._map_mismatch: Optional[str] = None
+        # D-559 trail: own pose (x, y, yaw, frame), the NAVIGATION twist slot ((v, w) or None),
+        # and the D-422 judgement (v, w, now) -> (gap, stop, resume) | None (no fresh sensor).
+        self._pose = pose_provider or (lambda: None)
+        self._twist_sink = twist_sink or (lambda twist: None)
+        self._obstacle_gap = obstacle_gap
+        self._reset_trail()
 
     # --- 조회 -----------------------------------------------------------------
 
@@ -84,6 +96,21 @@ class SwarmManager:
     def active(self) -> bool:
         with self._lock:
             return self._params is not None
+
+    @property
+    def trail_active(self) -> bool:
+        """D-559: this mode owns the NAVIGATION slot; Nav2's twist is dropped meanwhile."""
+        with self._lock:
+            return self._params is not None and self._params.mode == "trail"
+
+    def _reset_trail(self) -> None:
+        self._trail: Optional[Trail] = None
+        self._trail_hold: Optional[str] = None
+        self._trail_linear = 0.0
+        self._trail_at: Optional[float] = None
+        self._trail_blocked = False
+        self._trail_broken: Optional[str] = None  # latched: trail_lost
+        self._ref_odom = False
 
     @property
     def holding(self) -> bool:
@@ -115,6 +142,11 @@ class SwarmManager:
                 "source": self._params.source.value if self._params else None,
                 "max_speed": self._params.max_speed if self._params else None,
                 "map_mismatch": self._map_mismatch,
+                "mode": self._params.mode if self._params else None,
+                "trail": None if self._trail is None else {
+                    "leader_s": round(self._trail.leader_s, 3),
+                    "progress": round(self._trail.progress, 3),
+                    "hold_reason": self._trail_hold},
                 "stream_age_s": (
                     None if self._last_sample_at is None
                     else round(self._clock() - self._last_sample_at, 3)
@@ -156,6 +188,8 @@ class SwarmManager:
             raise SwarmError("VALIDATION_ERROR", "distance must be a positive number")
         if not math.isfinite(params.lateral):
             raise SwarmError("VALIDATION_ERROR", "lateral must be a finite number")
+        if params.mode == "trail" and params.lateral != 0.0:
+            raise SwarmError("VALIDATION_ERROR", "trail follow replays the path; lateral must be 0")
         if params.stream_timeout_ms <= 0:
             raise SwarmError("VALIDATION_ERROR", "stream_timeout_ms must be positive")
         if not math.isfinite(params.max_speed) or params.max_speed <= 0:
@@ -205,6 +239,7 @@ class SwarmManager:
                 self._map_mismatch = None
                 self._elected = False
                 self._successor = None
+                self._reset_trail()
                 status = self.status()
         if blocked is not None:
             raise SwarmError(*blocked)
@@ -214,7 +249,7 @@ class SwarmManager:
             "swarm.role_assigned", source="swarm_manager",
             data={"role": SwarmRole.FOLLOWER.value,
                   "formation": self._formation_label(params),
-                  "target_robot_id": params.target_robot_id,
+                  "target_robot_id": params.target_robot_id, "mode": params.mode,
                   "reference_source": params.source.value, "by": source},
         )
         return status
@@ -224,6 +259,7 @@ class SwarmManager:
             was_active = self._params is not None
             formation = self._formation_label(self._params) if self._params else None
             target = self._params.target_robot_id if self._params else None
+            was_trail = self._params is not None and self._params.mode == "trail"
             session = self._session
             self._params = None
             self._last_sample_at = None
@@ -234,10 +270,13 @@ class SwarmManager:
             self._elected = False
             self._successor = None
             self._session = None
+            self._reset_trail()
             self._safety.set_session_speed(None)
 
         if not was_active:
             return SwarmStatus()
+        if was_trail:
+            self._twist_sink(None)
 
         # 우리 세션만 닫는다. 락을 놓은 사이에 운영자가 follow 를 다시 걸었다면
         # 그 새 세션은 우리 것이 아니다 — 닫으면 살아 있어 보이는데 목표는
@@ -273,6 +312,7 @@ class SwarmManager:
             announce = False
             resumed = False
             spec = None
+            join_error: Optional[TrailError] = None
 
             if mismatched:
                 announce = self._map_mismatch != reference.map_id
@@ -287,14 +327,17 @@ class SwarmManager:
                 resumed = self._holding or self._map_mismatch is not None
                 self._holding = False
                 self._map_mismatch = None
-                if (self._last_goal_at is not None
+                if params.mode == "trail":
+                    join_error = self._feed_trail(reference)
+                elif (self._last_goal_at is not None
                         and now - self._last_goal_at < _MIN_GOAL_INTERVAL_S):
                     # SWM-002: <=2 Hz. 버리지 않고 들고 있다가 tick 에서 낸다.
                     self._pending = reference
                     return False
-                self._last_goal_at = now
-                self._pending = None
-                spec = follow_goal(reference, params.distance, params.lateral)
+                else:
+                    self._last_goal_at = now
+                    self._pending = None
+                    spec = follow_goal(reference, params.distance, params.lateral)
 
         if mismatched:
             if not announce:
@@ -311,10 +354,95 @@ class SwarmManager:
                       "reference_map_id": reference.map_id, "map_id": ours})
             return False
 
+        if join_error is not None:
+            self.cancel(source="swarm", reason=join_error.code.lower())
+            return False
         if resumed:
             self._state.set_swarm(self.status())
+        if spec is None:
+            return False  # trail: no Nav2 goal, trail_tick steers
         # 락 밖에서 부른다. 취소와 뒤바뀌어도 토큰이 맞지 않으면 저쪽이 버린다.
         return self.nav.moving_goal(spec, source="swarm", session=session)
+
+    def _feed_trail(self, reference: ReferencePose) -> Optional[TrailError]:
+        """D-559: one leader sample into the trail. Locked. The error ends the follow."""
+        self._ref_odom = reference.frame == "odom"
+        if self._ref_odom:
+            return None  # an odom-frame pose is not a place on our map
+        if self._trail is None:
+            own = self._pose()
+            if own is None or own[3] != "map":
+                return None  # seeded by a later sample; trail_tick holds meanwhile
+            try:
+                self._trail = Trail(own[:2], (reference.x, reference.y))
+            except TrailError as exc:
+                return exc
+        elif not self._trail.add(reference.x, reference.y, reference.yaw):
+            self._trail_broken = "trail_lost"  # a jump the trail cannot bridge
+        return None
+
+    def trail_tick(self, line_now: Optional[float] = None) -> None:
+        """D-559 20 Hz: one twist into the NAVIGATION slot, or None (hold).
+
+        `line_now` is the obstacle evidence clock (sim seconds under use_sim_time).
+        """
+        with self._lock:
+            params = self._params
+            if params is None or params.mode != "trail":
+                return
+            now = self._clock()
+            dt = 0.05 if self._trail_at is None else min(now - self._trail_at, 0.2)
+            self._trail_at = now
+            own = self._pose()
+            twist = None
+            if self._holding:
+                reason = "stream_lost"
+            elif self._map_mismatch is not None:
+                reason = "map_mismatch"
+            elif self._trail_broken is not None:
+                reason = self._trail_broken
+            elif self._ref_odom:
+                reason = "reference_frame_odom"
+            elif own is None or own[3] != "map":
+                reason = "own_pose_not_map"
+            elif self._trail is None:
+                reason = "waiting_for_leader"
+            else:
+                linear, angular, reason = trail_twist(
+                    self._trail, *own[:3], gap=params.distance, max_speed=params.max_speed,
+                    max_angular=self._safety.limits.max_angular,
+                    prev_linear=self._trail_linear, dt=dt)
+                if reason is None:
+                    twist = (linear, angular)
+                else:
+                    self._trail_broken = reason
+            blocked = self._trail_blocked
+        if twist is not None and twist != (0.0, 0.0) and self._obstacle_gap is not None:
+            # D-422 body stop on the twist we are about to send (outside our lock: the
+            # judge takes the line-follow lock). No fresh obstacle sensor = no motion.
+            judged = self._obstacle_gap(twist[0], twist[1], line_now)
+            if judged is None:
+                reason, twist = "obstacle_sensor_stale", None
+            else:
+                gap, stop, resume = judged
+                blocked = gap is not None and gap < (resume if blocked else stop)
+                if blocked:
+                    reason, twist = "obstacle", None
+        with self._lock:
+            if self._params is not params:
+                return  # canceled or re-armed meanwhile; cancel cleared the slot
+            self._trail_blocked = blocked
+            self._trail_linear = 0.0 if twist is None else twist[0]
+            announce = reason != self._trail_hold and reason in (
+                "trail_lost", "reference_frame_odom", "own_pose_not_map", "obstacle",
+                "obstacle_sensor_stale")
+            self._trail_hold = reason
+            # Under our lock: a cancel after this point clears what we wrote.
+            self._twist_sink(twist)
+            formation = self._formation_label(params)
+        if announce:
+            self._events.publish("swarm.hold", severity="warning", source="swarm_manager",
+                                 data={"reason": reason, "formation": formation})
 
     def tick(self, now: Optional[float] = None) -> None:
         """SWM-004 단절 판정, 밀린 목표 투입, 그리고 추종을 끝내야 할 사유들.
