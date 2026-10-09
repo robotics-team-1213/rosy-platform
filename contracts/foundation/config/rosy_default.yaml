@@ -172,6 +172,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
   recovery_local_enabled: true
   recovery_ask_s: 15.0             # console answer window before the local fallback
+  stuck_report_s: 5.0              # active mode, zero command this long for any reason -> stuck no_motion to Fleet (0 = off)
   recovery_back_m: 0.08            # one back-off (<= 0.20)
   recovery_back_speed: 0.03        # m/s ceiling; actual = min(safety.manual_linear, this)
   recovery_rear_clear_m: 0.06      # rear clearance from the body rear, before and during
