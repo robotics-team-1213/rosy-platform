@@ -7382,3 +7382,9 @@ osy-d395-s1d\`.
 - 변경: 현재 로컬 main `247561153`을 모델 PC에 격리 빌드하고 B9 SIM에서 60/70 mm 선 길이 조건을 각각 2회 CORE 폐루프로 비교했다.
 - 증거: `validation/lane-short-boundary-closed-loop-2026-10-09/result.md`. 기준은 교차부 횡선 뒤 2/2 HOLD, 70 mm는 교차부 명령 전 2/2 LOST. 전역 길이 증가 가설을 채택하지 않는다.
 - gate 변화: 없음. 사람 물리 경계 ID·실물 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Pinky 현장 램프 재대조와 이동 전 재확인
+
+- 변경: 인증된 램프 자가 시험과 Rosy Cam으로 정지 중 `rosy_26`·`rosy_60`의 현재 몸체 위치를 다시 대조했다.
+- 증거: [현장 재확인](validation/pinky-live-readback-2026-10-09/result.md). 두 장치 시험 `done`, 전후 영상 SHA-256, 설치 LCD 파일 해시, LiDAR 섹터 거리와 Fleet 상태를 기록했다.
+- gate 변화: 현재 위치의 일회성 몸체 대조는 확인. LCD 전면 픽셀, 안전 증거, 이동 경로 및 실제 이동은 HOLD.
