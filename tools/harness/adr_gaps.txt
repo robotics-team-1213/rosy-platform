@@ -18,6 +18,7 @@ D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; imp
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
+D-559 reserved in another active branch (feat/route-context-core-publish); D-560 lands independently
 D-559 reserved in another active branch (swarm trail follow, feat/swarm-trail-follow); remove when it lands
 D-560 reserved in another active branch (fleet S2 capture); remove when it lands
 D-563 reserved in another active branch (drivable near-road false negative and map-pose recording labels); remove when it lands
@@ -27,3 +28,8 @@ D-566 reserved in another active branch (v13.1.00 off-road false positive gate a
 D-567 reserved in another active branch (Fleet console map-plane floor work); remove when it lands
 D-568 reserved in another active branch (compute host pool); remove when it lands
 D-569 reserved in another active branch (site release health vs robot inventory drift); remove when it lands
+D-563 reserved in another active branch (drivable near-road false negative and map-pose recording labels); remove when it lands
+D-564 reserved in another active branch (ceiling place markers teach); remove when it lands
+D-565 reserved on fix/fleet-tls-renumber-enroll; remove when it lands
+D-566 reserved in another active branch (v13.1.00 off-road gate and model PC long-job guard); remove when it lands
+D-568 reserved in another active branch (compute host pool); remove when it lands

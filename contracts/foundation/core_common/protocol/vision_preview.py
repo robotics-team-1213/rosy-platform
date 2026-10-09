@@ -22,6 +22,8 @@ class PreviewRectification:
 
     #: D-484: "manual" corners come from this lease; "auto" asks Vision to use the
     #: field-boundary calibration's accepted quad instead (lens fields still apply).
+    #: D-560: "map" asks Vision for the top-down map plane from the approved tracking
+    #: calibration record; it carries no other field.
     mode: str = "manual"
     fx: float = 1.0
     fy: float = 1.0
@@ -38,8 +40,8 @@ class PreviewRectification:
     output_aspect: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.mode not in ("manual", "auto"):
-            raise ValueError("rectification mode must be manual or auto")
+        if self.mode not in ("manual", "auto", "map"):
+            raise ValueError("rectification mode must be manual, auto or map")
         for name in ("fx", "fy"):
             _bounded(getattr(self, name), name, 0.25, 4.0)
         for name in ("cx", "cy"):
@@ -75,6 +77,8 @@ class PreviewRectification:
                    "corners", "output_aspect"}
         if raw.keys() - allowed:
             raise ValueError("rectification settings contain unknown fields")
+        if raw.get("mode") == "map" and raw.keys() != {"mode"}:
+            raise ValueError("map rectification takes no other fields")
         corners = raw.get("corners", cls.corners)
         if not isinstance(corners, (tuple, list)) or any(
                 not isinstance(point, (tuple, list)) for point in corners):
@@ -84,6 +88,8 @@ class PreviewRectification:
         return cls(**values)
 
     def as_dict(self) -> dict:
+        if self.mode == "map":
+            return {"mode": "map"}
         return {"mode": self.mode, "fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
                 "k1": self.k1, "k2": self.k2, "p1": self.p1, "p2": self.p2,
                 "k3": self.k3, "corners": [list(point) for point in self.corners],

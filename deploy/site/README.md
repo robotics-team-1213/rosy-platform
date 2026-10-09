@@ -1161,9 +1161,14 @@ Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태�
 Use an enrolled viewer credential in a separate absolute regular file protected
 by host permissions. It is read at request time and never placed in command
 arguments or logs. Only these GET APIs on the health URL's HTTPS origin are
-allowed; authenticated redirects are refused. The gate checks response structure
-and required IDs before staging and after switching. A failing preflight leaves
-the current installation in place; failure after switching triggers rollback.
+allowed; authenticated redirects are refused. The updater checks response
+structure and a nonempty authenticated inventory before staging. It records
+missing `required_ids` as `inventory-drift` in the journal and
+`last_run.inventory_drift` in the state file (D-569). After switching, every ID
+observed before staging must remain; a loss triggers rollback. The setup tool
+still requires configured IDs to match when it first provisions the gate.
+A stale ID must be reconciled with Fleet enrollment; mDNS discovery alone does
+not enroll a robot or prove its identity.
 Hosts without this setting retain the liveness-only gate. Listing a camera is
 not proof of advancing frames, and listing a robot is not physical acceptance.
 Record actual camera frame reception separately without sending motion.
