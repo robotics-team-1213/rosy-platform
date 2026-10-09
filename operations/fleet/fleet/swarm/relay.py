@@ -260,7 +260,8 @@ class Relay:
         for robot_id, lane in self._lanes.items():
             out = frame if routed is None else routed.get(robot_id)
             if out is None:
-                continue               # D-581: no anchor for this follower; it holds on silence
+                lane.latest = None     # D-581: an unusable leader frame; no older frame goes out
+                continue
             lane.latest = out          # 깊이 1: 덮는다
             lane.wake.set()
 

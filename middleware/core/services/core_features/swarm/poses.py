@@ -28,6 +28,7 @@ class ReferencePose:
     #: D-581: "fleet" when Fleet re-expressed the leader in `for_robot_id`'s odom frame.
     anchor: Optional[str] = None
     for_robot_id: Optional[str] = None
+    anchor_hold: Optional[str] = None
 
 
 def follow_goal(reference: ReferencePose, distance: float, lateral: float) -> NavGoalSpec:

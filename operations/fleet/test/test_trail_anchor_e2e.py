@@ -97,12 +97,12 @@ def simulate(seed=581, duration=34.0):
             ox, oy, oyaw = leader.odom
             frame = json.dumps({"type": "pose", "payload": {
                 "robot_id": LEADER, "pose": {"x": ox, "y": oy, "yaw": oyaw}, "seq": seq, "frame": "odom"}})
-            out = anchor.route(frame)[FOLLOWER]
-            if out is None:
+            out = json.loads(anchor.route(frame)[FOLLOWER])["payload"]
+            if out.get("anchor_hold"):
                 withheld += 1 if t > 2.0 else 0
             else:
                 sent += 1
-                deliveries.append((t + WIFI_DELAY, json.loads(out)["payload"]))
+                deliveries.append((t + WIFI_DELAY, out))
         while deliveries and deliveries[0][0] <= t + 1e-9:
             sample = deliveries.pop(0)[1]["pose"]
             if trail is None:

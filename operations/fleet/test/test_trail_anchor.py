@@ -56,6 +56,11 @@ def frame(x, y, yaw, frame_name="odom", seq=7):
                                    "seq": seq, "map_id": None, "frame": frame_name}})
 
 
+def hold(routed, robot=FOLLOWER):
+    """The anchor_hold reason of the frame sent to `robot` (None: a usable sample)."""
+    return json.loads(routed[robot])["payload"].get("anchor_hold")
+
+
 def rig():
     clock, poses = Clock(), Poses()
     return TrailAnchor(poses, LEADER, [FOLLOWER], clock=clock), poses, clock
@@ -93,20 +98,22 @@ def test_a_missing_or_stale_anchor_withholds_and_says_why(robot, change, reason)
     anchor, poses, _ = rig()
     for key, value in change.items():
         getattr(poses, key)[robot] = value
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    routed = anchor.route(frame(0.0, 0.0, 0.0))
+    assert hold(routed) == reason                         # an explicit hold, not silence (M3)
+    assert PoseSample.model_validate(json.loads(routed[FOLLOWER])["payload"]).for_robot_id == FOLLOWER
     assert anchor.status()["followers"] == {FOLLOWER: reason}
 
 
 def test_degraded_freezes_the_frame_for_a_short_bridge_only():
     anchor, poses, clock = rig()
-    assert anchor.route(frame(0.0, 0.0, 0.0))[FOLLOWER] is not None
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0))) is None
     poses.state[FOLLOWER] = DEGRADED
     poses.T[FOLLOWER] = (0.1, 0.0, 0.0)                   # the jumped re-anchor is not adopted
     clock.now += anchor_mod.DEGRADED_HOLD_S - 0.1
     first = payload(anchor.route(frame(0.0, 0.0, 0.0)))
     assert first["pose"]["x"] == pytest.approx(1.0)
     clock.now += 0.2
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0)))
 
 
 def test_degraded_on_a_new_anchor_or_a_new_odom_epoch_is_not_frozen():
@@ -115,13 +122,13 @@ def test_degraded_on_a_new_anchor_or_a_new_odom_epoch_is_not_frozen():
     poses.state[FOLLOWER] = DEGRADED
     poses.anchor_at[FOLLOWER] = 2.0                       # the tracker re-anchored since
     clock.now += 0.1
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0)))
     anchor, poses, clock = rig()
     anchor.route(frame(0.0, 0.0, 0.0))
     poses.epoch[FOLLOWER] = 1                             # an odom reset: T is from a dead frame
     poses.state[FOLLOWER] = DEGRADED
     clock.now += 0.1
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0)))
 
 
 def test_an_odom_reset_then_a_sighting_within_two_seconds_withholds():
@@ -143,10 +150,10 @@ def test_an_odom_reset_then_a_sighting_within_two_seconds_withholds():
 
     for _ in range(5):
         tick((3.0, 0.0, 0.0), (-2.0, 1.0, 0.0))
-    assert anchor.route(frame(3.0, 0.0, 0.0))[FOLLOWER] is not None
+    assert hold(anchor.route(frame(3.0, 0.0, 0.0))) is None
     tick((3.0, 0.0, 0.0), (0.0, 0.0, 0.0), seen=False)     # the follower's odom restarts at 0
     tick((3.0, 0.0, 0.0), (0.0, 0.0, 0.0))                  # one sighting on the new odom
-    assert anchor.route(frame(3.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(3.0, 0.0, 0.0)))
     assert anchor.status()["followers"][FOLLOWER] == f"{FOLLOWER}:map_pose_degraded"
 
 
@@ -154,8 +161,8 @@ def test_a_leader_stream_off_the_tracker_odom_withholds():
     anchor, poses, _ = rig()
     poses.arbitrated_pose = lambda rid, base=poses.arbitrated_pose: replace(
         base(rid), odom_stamp=time.time())
-    assert anchor.route(frame(0.05, 0.0, 0.0))[FOLLOWER] is not None
-    assert anchor.route(frame(2.0, 0.0, 0.0)) == {FOLLOWER: None}   # restarted leader stream
+    assert hold(anchor.route(frame(0.05, 0.0, 0.0))) is None
+    assert hold(anchor.route(frame(2.0, 0.0, 0.0)))   # restarted leader stream
     assert anchor.status()["followers"][FOLLOWER] == f"{LEADER}:leader_odom_mismatch"
 
 
@@ -188,7 +195,7 @@ def test_a_yaw_correction_turns_about_the_robot_not_the_odom_origin():
     anchor.route(frame(0.0, 0.0, 0.0))
     poses.T[FOLLOWER] = compose((5.0, 0.0, math.radians(3)), (-5.0, 0.0, 0.0))
     clock.now += 0.1
-    assert anchor.route(frame(0.0, 0.0, 0.0))[FOLLOWER] is not None   # 3 deg here is no jump
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0))) is None   # 3 deg here is no jump
     assert anchor.status()["robots"][FOLLOWER]["residual_m"] < 0.01
 
 
@@ -197,13 +204,13 @@ def test_a_jump_stops_that_follower_until_the_relay_resumes():
     anchor.route(frame(0.0, 0.0, 0.0))
     poses.T[FOLLOWER] = (anchor_mod.JUMP_M + 0.05, 0.0, 0.0)
     clock.now += 0.1
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0)))
     poses.T[FOLLOWER] = (0.0, 0.0, 0.0)                   # latched even if it comes back
     clock.now += 0.1
-    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0)))
     assert anchor.status()["jumps"] == 1
     anchor.reset()
-    assert anchor.route(frame(0.0, 0.0, 0.0))[FOLLOWER] is not None
+    assert hold(anchor.route(frame(0.0, 0.0, 0.0))) is None
 
 
 def test_the_relay_writes_each_follower_its_own_frame_or_nothing():
@@ -216,7 +223,9 @@ def test_the_relay_writes_each_follower_its_own_frame_or_nothing():
     poses.state["rosy_42"], poses.age["rosy_42"] = UNKNOWN, None
     relay._on_frame(frame(0.0, 0.0, 0.0))
     assert json.loads(relay._lanes[FOLLOWER].latest)["payload"]["anchor"] == "fleet"
-    assert relay._lanes["rosy_42"].latest is None
+    assert json.loads(relay._lanes["rosy_42"].latest)["payload"]["anchor_hold"] == "rosy_42:no_map_pose"
+    relay._on_frame(frame(math.nan, 0.0, 0.0))            # unusable: nothing stale goes out
+    assert relay._lanes[FOLLOWER].latest is None
     relay._on_frame(frame(0.0, 0.0, 0.0, frame_name="map"))
     assert relay._lanes["rosy_42"].latest == frame(0.0, 0.0, 0.0, frame_name="map")
 

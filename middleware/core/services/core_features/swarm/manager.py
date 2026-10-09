@@ -400,7 +400,8 @@ class SwarmManager:
         if (reference.anchor == "fleet" and reference.frame == "odom" and self._robot_id
                 and reference.for_robot_id == self._robot_id
                 and params.source is SwarmReferenceSource.FLEET):
-            return "fleet", None
+            # Fleet says it has no anchor now: hold, but the stream (and the leader) is alive.
+            return (None, "anchor_withheld") if reference.anchor_hold else ("fleet", None)
         return None, "reference_anchor_invalid"  # another robot's odom, or an unknown anchor
 
     def _own_pose(self, kind: Optional[str]):
@@ -411,6 +412,10 @@ class SwarmManager:
                     params: SwarmFollowParams) -> Optional[TrailError]:
         """D-559: one leader sample into the trail. Locked. The error ends the follow."""
         kind, self._ref_bad = self._sample_kind(reference, params)
+        if self._ref_bad == "anchor_withheld":
+            # The jump bound restarts here: a leader that drove on during a long withhold is
+            # not bridged by a straight line afterwards (trail_lost), a short one still is.
+            self._trail_sample_at = self._clock()
         if kind is None:
             return None
         self._ref_kind = kind
@@ -499,7 +504,8 @@ class SwarmManager:
             self._trail_linear = 0.0 if twist is None else twist[0]
             announce = reason != self._trail_hold and reason in (
                 "trail_lost", "reference_frame_not_map", "own_pose_not_map", "own_pose_stale", "obstacle",
-                "obstacle_sensor_stale", "reference_anchor_invalid", "reference_frame_changed")
+                "obstacle_sensor_stale", "reference_anchor_invalid", "reference_frame_changed",
+                "anchor_withheld")
             self._trail_hold = reason
             # Under our lock: a cancel after this point clears what we wrote.
             self._twist_sink(twist)

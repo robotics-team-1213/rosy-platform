@@ -98,3 +98,20 @@ def test_the_contract_carries_the_anchor_fields():
         "robot_id": "rosy_40", "pose": {"x": 1, "y": 2, "yaw": 0}, "seq": 3, "map_id": "site",
         "frame": "odom", "anchor": "fleet", "for_robot_id": "rosy_41", "anchor_age_s": 0.4})
     assert sample.anchor == "fleet" and sample.for_robot_id == "rosy_41"
+
+
+def test_a_fleet_hold_sample_keeps_the_stream_and_holds_the_trail():
+    """D-581 M3: a withheld anchor is not a dead leader; a long withhold breaks the trail."""
+    rig = AnchorRig()
+    rig.follow(members=["rosy_02", "rosy_01"])
+    rig.anchored(1.0)
+    assert rig.step()[0] > 0
+    for _ in range(30):                                  # 3 s of hold samples at 10 Hz
+        rig.swarm.on_reference_pose(ReferencePose(
+            "rosy_02", 1.0, 0.0, 0.0, frame="odom", anchor="fleet", for_robot_id="rosy_01",
+            anchor_hold="rosy_01:anchor_stale"))
+        assert rig.step(0.1) is None
+    assert rig.swarm.active and rig.hold_reason() == "anchor_withheld"
+    assert rig.held("anchor_withheld")
+    rig.anchored(1.6)                                    # the leader drove on 0.6 m meanwhile
+    assert rig.step() is None and rig.hold_reason() == "trail_lost"

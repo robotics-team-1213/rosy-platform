@@ -16,6 +16,9 @@ by a first-order filter, capped per second, measured at the robot (a 1 deg yaw c
 about an odom origin 5 m away would move the robot 9 cm). A disagreement beyond JUMP_M /
 JUMP_DEG is a relocalisation, not drift: that robot's samples stop (the follower holds on its
 stream timeout) until the relay resumes after a reform.
+
+While an anchor is missing the follower gets an explicit hold sample (`anchor_hold: <reason>`)
+on every leader frame instead of silence, so a withheld anchor is not read as a dead leader.
 """
 
 from __future__ import annotations
@@ -148,7 +151,12 @@ class TrailAnchor:
                 log.warning("trail anchor: samples to %s stop: %s", robot_id, reason)
             self._reasons[robot_id] = reason
             if reason is not None:
-                routed[robot_id] = None
+                # An explicit hold, not silence: silence past stream_timeout_ms reads as a dead
+                # leader on the robot (D-20 succession). The pose is the leader's own odom and
+                # the follower never puts it in the trail; a dead leader still goes silent.
+                routed[robot_id] = json.dumps({**envelope, "payload": {
+                    **payload, "frame": "odom", "anchor": "fleet", "for_robot_id": robot_id,
+                    "anchor_hold": reason}})
                 continue
             x, y, yaw = relative(follower.T, compose(leader.T, odom))
             ages = [a for a in (leader.anchor_age_s, follower.anchor_age_s) if a is not None]

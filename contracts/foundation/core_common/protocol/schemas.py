@@ -1012,6 +1012,7 @@ class PoseSample(BaseModel):
     anchor: Optional[Literal["fleet"]] = None
     for_robot_id: Optional[str] = None
     anchor_age_s: Optional[float] = None  # oldest of the two camera anchors behind this sample
+    anchor_hold: Optional[str] = None  # set: Fleet has no usable anchor (why); hold, keep the stream
 
 
 class LineStuckStatus(BaseModel):
