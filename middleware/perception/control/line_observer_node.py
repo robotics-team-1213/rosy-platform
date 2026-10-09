@@ -41,7 +41,7 @@ from .sensing.perception.lane import (
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
-from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX
+from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -105,12 +105,9 @@ class LineObserverNode(Node):
         # D-570: move an older mask to this frame by the odometry between the two frame stamps
         # (ground-plane homography); within these bounds the turn-rate rule above does not apply.
         self.declare_parameter('learned_paint_motion_compensation', False, _READ_ONLY)
-        self.declare_parameter('learned_paint_max_age_s', 0.9)
-        self.declare_parameter('learned_paint_max_dxy_m', 0.10)
-        self.declare_parameter('learned_paint_max_dyaw_rad', 0.40)
-        # 'every_n': submit every Nth keep frame; 'idle': the newest frame once the worker is idle,
-        # at most every Nth frame (never queues a frame behind a running inference).
-        self.declare_parameter('learned_paint_cadence', 'every_n', _READ_ONLY)
+        self.declare_parameter('learned_paint_max_age_s', 0.9, _READ_ONLY)
+        self.declare_parameter('learned_paint_max_dxy_m', 0.10, _READ_ONLY)
+        self.declare_parameter('learned_paint_max_dyaw_rad', 0.40, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
@@ -402,8 +399,6 @@ class LineObserverNode(Node):
         threads = int(self.get_parameter('learned_paint_threads').value)
         if every_n < 1 or threads < 1:
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
-        if str(self.get_parameter('learned_paint_cadence').value) not in ('every_n', 'idle'):
-            raise ValueError('learned_paint_cadence must be every_n or idle')
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
             folder, threads=threads, allow_spinning=False)) if pointer else None
         return LearnedPaintWorker(slot,
@@ -430,10 +425,10 @@ class LineObserverNode(Node):
                 frame, every_n if motion is not None else reuse_n, stamp,
                 clean=lambda m: clean_learned_mask(m, ground.horizon_row),
                 motion=motion, max_age_s=float(self.get_parameter('learned_paint_max_age_s').value),
-                reuse_n=reuse_n, when_idle=str(self.get_parameter('learned_paint_cadence').value) == 'idle')
+                reuse_n=reuse_n)
             reuse = self._paint_worker.reuse
-            if compensate and motion is None and reuse and reuse['paint_fallback_reason'] == 'off':
-                reuse['paint_fallback_reason'] = 'no_odom'
+            if compensate and motion is None and reuse and reuse['paint_warp_skipped'] == 'off':
+                reuse['paint_warp_skipped'] = 'no_odom'
             if mask is not None:
                 return mask, 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
@@ -455,7 +450,8 @@ class LineObserverNode(Node):
             if isinstance(moved, str):
                 return moved
             homography, dxy, dyaw = moved
-            return warp_mask(mask, homography, cut), dxy, dyaw
+            # resampling can split tape into specks: drop them like clean_learned_mask does
+            return drop_small_components(warp_mask(mask, homography, cut)), dxy, dyaw
         return motion
 
     def _on_camera(self, msg: Image) -> None:

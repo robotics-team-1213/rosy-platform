@@ -83,7 +83,7 @@ OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
                            "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
-                           "learned_paint_motion_compensation", "learned_paint_cadence")
+                           "learned_paint_motion_compensation")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -128,8 +128,6 @@ def operator_overlay_problem(data) -> Optional[str]:
         value = params["learned_lane_pointer"]
         if not isinstance(value, str) or not value.startswith("/"):
             return "learned_lane_pointer must be an absolute path"
-    if params.get("learned_paint_cadence", "every_n") not in ("every_n", "idle"):
-        return "learned_paint_cadence must be every_n or idle"
     if params.get("paint_source") == "learned" and not params.get("learned_lane_pointer"):
         return "learned paint needs learned_lane_pointer in the same file"
     # every_n up to 4: measured Pi 5 lane-seg inference is ~240-300 ms, about

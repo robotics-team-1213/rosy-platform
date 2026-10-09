@@ -20,7 +20,7 @@ for _p in (_HERE.parents[1], _HERE.parents[3] / "contracts" / "foundation"):
 import yaml  # noqa: E402
 
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
-from control.sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX  # noqa: E402
+from control.sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components  # noqa: E402
 from control.sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask  # noqa: E402
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker  # noqa: E402
 
@@ -81,7 +81,7 @@ class _Slot:
         return _Model()
 
 
-def simulate(latency_s, every_n, *, new, wz=0.0, when_idle=False, frames=200, odom_lag_s=0.02,
+def simulate(latency_s, every_n, *, new, wz=0.0, frames=200, odom_lag_s=0.02,
              max_age_s=0.9, max_dxy_m=0.10, max_dyaw_rad=0.40, reuse_max_wz=0.15):
     """(learned share of frames after warm-up, mean IoU of served vs fresh mask, inferences per
     second, mean IoU the same aged masks would have had unwarped)."""
@@ -106,7 +106,7 @@ def simulate(latency_s, every_n, *, new, wz=0.0, when_idle=False, frames=200, od
         if a is None or b is None:
             return 'no_odom'
         got = mask_homography(GROUND, X_OFFSET, a, b, mask.shape, CUT, max_dxy_m=max_dxy_m, max_dyaw_rad=max_dyaw_rad)
-        return got if isinstance(got, str) else (warp_mask(mask, got[0], CUT), got[1], got[2])
+        return got if isinstance(got, str) else (drop_small_components(warp_mask(mask, got[0], CUT)), got[1], got[2])
 
     warm = 8
     for k in range(frames):
@@ -121,15 +121,13 @@ def simulate(latency_s, every_n, *, new, wz=0.0, when_idle=False, frames=200, od
         truth = current[0] = render(pose_at(t, wz), wz)
         every = every_n if new or not turning else 1
         mask = worker.mask_for(truth, every, t, motion=motion if new else None, max_age_s=max_age_s,
-                               reuse_n=1 if turning else every_n, when_idle=when_idle)
+                               reuse_n=1 if turning else every_n)
         if inflight is None and worker._pending is not None:
             inflight, worker._pending = (t + latency_s, worker._pending), None
-            worker._busy = True
             runs += 1
         if k >= warm and mask is not None:
             used += 1
             ious += iou(mask, truth)
-    worker._busy = False
     n = frames - warm
     return (used / n, (ious / used if used else float("nan")), runs / (frames * PERIOD),
             float(np.mean(raw)) if raw else float("nan"))
@@ -142,15 +140,14 @@ def table():
             for every_n in (2, 4):
                 old = simulate(latency, every_n, new=False, wz=wz)
                 new = simulate(latency, every_n, new=True, wz=wz)
-                idle = simulate(latency, every_n, new=True, wz=wz, when_idle=True)
-                rows.append((latency, label, every_n, old, new, idle))
+                rows.append((latency, label, every_n, old, new))
     return rows
 
 
 if __name__ == "__main__":
     print("| latency ms | motion | every_n | old used % | new used % (IoU warped / unwarped) "
-          "| new+idle used % (IoU) | inferences/s old/new/idle |")
-    print("|---|---|---|---|---|---|---|")
-    for latency, label, every_n, old, new, idle in table():
+          "| inferences/s old/new |")
+    print("|---|---|---|---|---|---|")
+    for latency, label, every_n, old, new in table():
         print(f"| {latency * 1000:.0f} | {label} | {every_n} | {old[0] * 100:.0f} | {new[0] * 100:.0f} ({new[1]:.2f} / {new[3]:.2f}) "
-              f"| {idle[0] * 100:.0f} ({idle[1]:.2f}) | {old[2]:.1f}/{new[2]:.1f}/{idle[2]:.1f} |")
+              f"| {old[2]:.1f}/{new[2]:.1f} |")

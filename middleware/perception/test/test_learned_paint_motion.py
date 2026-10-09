@@ -104,48 +104,120 @@ def _worker_with_mask(src_stamp=10.0):
     (lambda m, a, b: 'motion_bound', 0.5, 'motion_bound'),
     (lambda m, a, b: (m * 0 + 7, 0.04, 0.1), 1.0, 'too_old'),
 ])
-def test_gate_reports_each_fallback_reason(motion, age, reason):
+def test_gate_reports_each_skipped_warp(motion, age, reason):
     worker, frame = _worker_with_mask()
     for k in range(1, 5):                                    # frames 1..4 at 8 Hz; reuse_n 1 below
         worker.mask_for(frame, 4, 10.0 + k * 0.125, motion=motion, max_age_s=0.9, reuse_n=1)
     assert worker.mask_for(frame, 4, 10.0 + age, motion=motion, max_age_s=0.9, reuse_n=1) is None
-    assert worker.reuse["paint_fallback_reason"] == reason and not worker.reuse["paint_compensated"]
+    assert worker.reuse["paint_warp_skipped"] == reason and worker.reuse["paint_reuse"] == 'none'
     empty = LearnedPaintWorker(_Slot(), clock=lambda: 0.0, start=False)
     assert empty.mask_for(frame, 4, 0.0, motion=motion, max_age_s=0.9) is None
-    assert empty.reuse["paint_fallback_reason"] == 'no_mask'
+    assert empty.reuse["paint_reuse"] == 'none' and empty.reuse["paint_warp_skipped"] == 'no_mask'
 
 
-def test_a_compensated_mask_is_served_with_its_motion_and_revision():
+def test_a_stamp_before_the_mask_is_clock_back_not_too_old():
+    worker, frame = _worker_with_mask()
+    assert worker.mask_for(frame, 4, 9.9, motion=lambda m, a, b: (m, 0.0, 0.0), max_age_s=0.9) is None
+    assert worker.reuse["paint_warp_skipped"] == 'clock_back'
+
+
+def test_the_worker_clock_also_caps_a_warped_mask():
+    now = [10.0]
+    worker = LearnedPaintWorker(_Slot(), stale_s=0.6, clock=lambda: now[0], start=False)
+    frame = np.zeros((240, 320, 3), np.uint8)
+    worker.mask_for(frame, 4, 10.0)
+    worker.step()
+    now[0] = 11.1                                            # stamps say 0.5 s, the clock says 1.1 s
+    assert worker.mask_for(frame, 4, 10.5, motion=lambda m, a, b: (m, 0.0, 0.0), max_age_s=0.9) is None
+    assert worker.reuse["paint_warp_skipped"] == 'too_old'
+    now[0] = 10.9                                            # within max(stale_s, max_age_s) + margin
+    assert worker.mask_for(frame, 4, 10.625, motion=lambda m, a, b: (m, 0.0, 0.0), max_age_s=0.9) is not None
+
+
+def test_a_warped_mask_is_served_with_its_motion_and_revision():
     worker, frame = _worker_with_mask()
     got = worker.mask_for(frame, 4, 10.625, motion=lambda m, a, b: (m * 0 + 7, 0.05, -0.2), max_age_s=0.9)
     assert got is not None and got.max() == 7
-    assert worker.reuse == dict(paint_mask_age_s=0.625, paint_compensated=True, paint_motion_dxy_m=0.05,
-                                paint_motion_dyaw_rad=-0.2, paint_fallback_reason=None)
+    assert worker.reuse == dict(paint_reuse='warped', paint_warp_skipped=None, paint_mask_age_s=0.625,
+                                paint_motion_dxy_m=0.05, paint_motion_dyaw_rad=-0.2)
     assert worker.used_model_revision == "m1"
 
 
-def test_without_compensation_the_old_unwarped_reuse_still_serves():
+def test_a_skipped_warp_still_serves_the_old_unwarped_reuse_and_says_so():
     worker, frame = _worker_with_mask()
-    got = worker.mask_for(frame, 4, 10.125, motion=lambda m, a, b: 'no_odom', max_age_s=0.9, reuse_n=4)
-    assert got is not None and worker.reuse["paint_fallback_reason"] == 'no_odom'
+    got = worker.mask_for(frame, 4, 10.125, motion=lambda m, a, b: 'motion_bound', max_age_s=0.9, reuse_n=4)
+    assert got is not None
+    assert worker.reuse["paint_reuse"] == 'unwarped' and worker.reuse["paint_warp_skipped"] == 'motion_bound'
+    off, frame = _worker_with_mask()
+    assert off.mask_for(frame, 4, 10.125) is not None
+    assert off.reuse["paint_reuse"] == 'unwarped' and off.reuse["paint_warp_skipped"] == 'off'
 
 
-def test_idle_cadence_never_queues_behind_a_running_inference_and_keeps_the_cap():
-    worker = LearnedPaintWorker(_Slot(), clock=lambda: 0.0, start=False)
-    frame = np.zeros((240, 320, 3), np.uint8)
-    worker.mask_for(frame, 2, 0.0, when_idle=True)
-    assert worker._pending is not None
-    pending, worker._pending, worker._busy = worker._pending, None, True    # inference running
-    worker.mask_for(frame, 2, 0.125, when_idle=True)
-    worker.mask_for(frame, 2, 0.25, when_idle=True)
-    assert worker._pending is None                           # nothing waits behind it
-    worker._pending = pending
-    worker.step()                                            # done; worker idle again
-    worker.mask_for(frame, 2, 0.375, when_idle=True)
-    assert worker._pending is not None and worker._pending[2] == 3
-    worker.step()
-    worker.mask_for(frame, 2, 0.5, when_idle=True)
-    assert worker._pending is None                           # idle, but only 1 frame since the last: cap
+def test_same_relative_motion_gives_the_same_homography_anywhere_in_odom():
+    h0, *_ = mask_homography(GROUND, X_OFFSET, (0, 0, 0), (0.04, 0.01, 0.1), (240, 320), CUT, **BOUNDS)
+    src = (1.0, 2.0, math.pi / 2)
+    c, s = math.cos(src[2]), math.sin(src[2])                # the same body-frame step from src
+    dst = (src[0] + 0.04 * c - 0.01 * s, src[1] + 0.04 * s + 0.01 * c, src[2] + 0.1)
+    h1, *_ = mask_homography(GROUND, X_OFFSET, src, dst, (240, 320), CUT, **BOUNDS)
+    assert np.allclose(h0 / h0[2, 2], h1 / h1[2, 2], atol=1e-9)
+
+
+def _paint_for():
+    """line_observer_node._paint_for compiled alone (no rclpy on the host)."""
+    import ast
+    from pathlib import Path
+    from control.sensing.perception.lane_bev import pose_if_fresh
+    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    fn = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef) and n.name == "_paint_for")
+    namespace = dict(pose_if_fresh=pose_if_fresh, clean_learned_mask=lambda m, h: m,
+                     denoise_white_mask=lambda f, h: "denoise")
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), "line_observer_node.py", "exec"), namespace)
+    return namespace["_paint_for"]
+
+
+class _Param:
+    def __init__(self, value):
+        self.value = value
+
+
+class _Recorder:
+    reuse = None
+    used_model_revision = None
+
+    def __init__(self):
+        self.calls = []
+
+    def mask_for(self, frame, every_n, stamp, **kw):
+        self.calls.append((every_n, kw.get("motion"), kw.get("reuse_n")))
+        return None
+
+
+class _Node:
+    def __init__(self, wz, compensate):
+        self.params = dict(paint_source='learned', learned_paint_every_n=4, learned_paint_reuse_max_wz=0.15,
+                           learned_paint_motion_compensation=compensate, learned_paint_max_age_s=0.9)
+        self._odom_twist = None if wz is None else (0.08, wz)
+        self._odom_stamp = 10.0
+        self._paint_worker = _Recorder()
+        self._paint_motion = lambda ground: "warp"
+
+    def get_parameter(self, name):
+        return _Param(self.params[name])
+
+
+@pytest.mark.parametrize("wz, every_n", [(0.0, 4), (0.5, 1), (None, 1)])
+def test_default_off_passes_exactly_the_pre_d570_cadence(wz, every_n):
+    node = _Node(wz, compensate=False)
+    ground = type("G", (), {"horizon_row": 80.0})()
+    assert _paint_for()(node, np.zeros((240, 320, 3), np.uint8), ground, 10.0) == ("denoise", "denoise_fallback")
+    assert node._paint_worker.calls == [(every_n, None, every_n)]   # turning / no odom: every frame, as before
+
+
+def test_compensation_keeps_the_cadence_while_turning():
+    node = _Node(0.5, compensate=True)
+    ground = type("G", (), {"horizon_row": 80.0})()
+    _paint_for()(node, np.zeros((240, 320, 3), np.uint8), ground, 10.0)
+    assert node._paint_worker.calls == [(4, "warp", 1)]
 
 
 def test_simulated_cadence_old_vs_new():
