@@ -94,6 +94,7 @@ class CoreServicesLike(Protocol):
     inventory: Any
     maps: Any
     line_follow: Any
+    line_advice: Any
     localization: Any
     modes: Any
     nav: Any
