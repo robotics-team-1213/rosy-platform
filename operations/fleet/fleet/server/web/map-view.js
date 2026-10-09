@@ -12,7 +12,6 @@ import {
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
-import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -358,6 +357,22 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.closePath();
   }
 
+  // D-573 1/7: 활성 현장 지도의 횡단보도 면(점선 윤곽)과 대기 띠. 읽기 전용이고, 상태색은 (f)에서 더한다.
+  function drawCrosswalks(ctx, toPoint, lineWidth) {
+    ctx.save();
+    ctx.lineWidth = lineWidth;
+    for (const crosswalk of layerOn("site") ? view.activeSiteMap?.map?.crosswalks || [] : []) {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = css("--series-secondary");
+      for (const band of crosswalk.approach || []) { tracePolygon(ctx, band, toPoint); ctx.stroke(); }
+      ctx.setLineDash([lineWidth * 3, lineWidth * 2]);
+      ctx.strokeStyle = css("--ink");
+      tracePolygon(ctx, crosswalk.polygon, toPoint);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 점유 격자 위에 사이트 사각형 윤곽과 카메라 관측을 겹친다(같은 map 프레임).
   function drawSiteOverlay(ctx, grid) {
     const toCell = (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; };
@@ -371,6 +386,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.stroke();
     }
     ctx.restore();
+    drawCrosswalks(ctx, toCell, 0.5);
     drawCameraTracking(ctx, toCell, size, 0.5);
     if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
@@ -402,17 +418,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.scale(dpr, dpr);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
     // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
-    // 돌리므로 글자는 똑바로 선다. 클릭은 돌림을 먼저 풀고 미터 뷰를 거꾸로 푼다.
+    // 돌리므로 글자는 똑바로 선다.
     const rot = view.siteViewTurn || 0;
     const side = rot === 90 || rot === 270;
     const fw = side ? height : width, fh = side ? width : height;
     const t = fitTransform(bounds, fw, fh, 32);
     const turn = quarterTurn(rot, fw, fh);
     const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
-    view.cameraPick = rot ? (bx, by) => {
-      const q = turn.unpoint(bx / dpr, by / dpr);
-      return { x: (q.x - t.ox) / t.scale, y: (t.oy - q.y) / t.scale };
-    } : null;
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
@@ -521,10 +533,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
+    drawCrosswalks(ctx, toPx, 1.5);
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
-    drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     guide(ctx, toPx);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
@@ -541,8 +553,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   };
 
   function describeSightings() {
-    const fresh = view.sightings.filter((s) => s.state === "fresh").length;
-    return `카메라 관측 ${fresh}/${view.sightings.length}대`;
+    const observed = new Set(view.sightings.filter((s) => s.state === "fresh").map((s) => s.robot_id));
+    for (const row of view.cameraTracking?.robots || []) observed.add(row.robotId);
+    return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
   function activeCall(robotId) {
@@ -576,7 +589,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
-    drawStartPointMarks(ctx, (x,y)=>{const p=cellOf(grid,x,y);return {x:p.cx,y:p.cy};}, view.startPoints, [grid.map_id], css('--series-secondary'), .6);
     if (view.stateUnavailable) {
       el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
       canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
@@ -683,15 +695,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       life.check();
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
-      // Show the read-only site layer while a robot map request is still pending.
-      if (!view.map && !auth.locked) showSiteMap();
       if (Date.now() - calibrationsAt > 30000) {
-        try {
-          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
-          life.check();
-          camera.setCalibrations(result.calibrations || []);
-          calibrationsAt = Date.now();
-        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
         try {
           view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
@@ -701,6 +705,17 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           if (error.name === "AbortError") return;
           if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
         }
+        // The first site draw must use the active map turn; drawing at 0° then turning to 90°
+        // makes the whole map jump while the camera and robot map requests are still pending.
+        if (!view.map && !auth.locked) showSiteMap();
+        try {
+          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
+          life.check();
+          camera.setCalibrations(result.calibrations || []);
+          calibrationsAt = Date.now();
+        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
+      } else if (!view.map && !auth.locked) {
+        showSiteMap();
       }
     } catch (err) {
       if (err.name === "AbortError") return;

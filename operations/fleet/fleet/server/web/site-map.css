@@ -37,6 +37,12 @@ a { color: var(--ink); }
 #site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
 #site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
+/* D-573 1/7: crosswalk areas (outline = no live state on this page) and waiting bands. */
+#site-map-svg .crosswalk { fill: var(--ink-quiet); fill-opacity: .12; stroke: var(--ink); stroke-width: 2px; stroke-dasharray: 5 3; cursor: pointer; }
+#site-map-svg .crosswalk.selected { stroke: var(--series-primary); stroke-width: 4px; }
+#site-map-svg .crosswalk-approach { fill: var(--series-secondary); fill-opacity: .18; stroke: var(--series-secondary); stroke-width: 2px; pointer-events: none; }
+#site-map-svg .band-draft { fill: none; stroke: var(--series-secondary); stroke-width: 3px; stroke-dasharray: 3 3; pointer-events: none; }
+#site-map-svg.drawing { cursor: crosshair; }
 #robot-layer { pointer-events: none; }
 #robot-layer .c1 { color: var(--robot-1); } #robot-layer .c2 { color: var(--robot-2); } #robot-layer .c3 { color: var(--robot-3); }
 #robot-layer .trip-line { fill: none; stroke: currentColor; stroke-width: 4px; stroke-opacity: .7; stroke-linecap: round; }
