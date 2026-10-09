@@ -31,7 +31,7 @@ def _client(robot, moving=True):
     app = FastAPI()
     nobody = lambda: None
     velocity = {"linear": 0.1 if moving else 0.0, "angular": 0.0}
-    # D-472 addendum 5: only a moving robot is asked; the tracking stub supplies its state.
+    # The tracking stub supplies the robot state (D-596: moving or not, it is asked).
     tracking = SimpleNamespace(sources=(), robot_state=lambda _rid: {"velocity": velocity})
     install_console_routes(app, console=Console(robot), sightings=None, require_viewer=nobody,
                            read_guard=[], operator_guard=[], require_operator=nobody,
@@ -55,8 +55,9 @@ def test_identify_is_bounded_to_one_known_robot_and_never_claims_visual_identity
     assert robot.colors == [None]
 
 
-def test_a_parked_robot_is_not_asked():
+def test_a_parked_robot_is_asked_too():
+    """D-596 1: identify never needs a move; the robot is not told to move."""
     robot = Robot()
     answer = _client(robot, moving=False).post("/api/fleet/robots/rosy_26/identify")
-    assert answer.status_code == 409 and answer.json()["detail"]["code"] == "IDENTIFY_NOT_MOVING"
-    assert robot.colors == []
+    assert answer.status_code == 200 and answer.json()["state"] == "pending_visual_confirmation"
+    assert robot.colors == [None]
