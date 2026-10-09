@@ -29,3 +29,4 @@ D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; 
 D-574 reserved in another active branch (feat/v13-map-projected-labels); remove when it lands
 D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet on main; remove when it lands
 D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
+D-578 reserved in another active branch (lane failure analysis loop); remove when it lands
