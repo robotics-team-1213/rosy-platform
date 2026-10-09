@@ -416,7 +416,7 @@ def test_a_ghost_needs_consecutive_frames_and_is_never_reported_meanwhile():
         assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
     assert len(detector._suspects) == 1
     assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
-    assert detector._suspects == [] and detector._frames is None
+    assert detector._suspects == [] and len(detector._frames) == 30  # kept for later ghosts
 
 
 def _robot_with_deck(image=None):
@@ -437,9 +437,9 @@ def test_the_whole_ghost_blob_is_healed_and_a_robot_parking_there_is_seen_whole(
     assert found.footprint_m == pytest.approx(2.0 * math.sqrt(22 * 22 * 1e-4 / math.pi), abs=0.003)
 
 
-def test_without_suspects_the_learning_frames_are_freed():
-    assert _learned()._frames is None
-    assert _learned(floor=_parked_robot_floor)._frames is not None
+def test_the_learning_frames_are_kept_with_or_without_suspects():
+    assert len(_learned()._frames) == 30
+    assert len(_learned(floor=_parked_robot_floor)._frames) == 30
 
 
 @pytest.mark.parametrize("how", ["relearn", "scene"])
@@ -464,5 +464,50 @@ def test_a_wrong_kept_background_is_guessed_and_healed_without_rewriting_the_sto
     assert guess.score <= BAKED_SCORE_MAX
     for index in range(GHOST_CONFIRM_FRAMES + 2):
         assert after.detect(Frame(_floor(), 101.0 + index / 3), CAL).detections == ()
-    assert after._suspects == [] and after._frames is None
+    assert after._suspects == []
     assert store.path.read_bytes() == kept
+
+
+
+# D-547 addendum: ghosts without a suspect.
+
+def _coloured_robot_floor(image=None):
+    image = _floor() if image is None else image
+    image[141:159, 291:309] = (60, 60, 120)  # not dark, so the suspect search misses it
+    return image
+
+
+def test_an_unsuspected_ghost_is_never_reported_and_healed_after_three_frames():
+    detector = _learned(floor=_coloured_robot_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(GHOST_CONFIRM_FRAMES - 1):
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+        assert detector._model is model
+    assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
+    assert detector._model is not model  # healed
+    for index in range(3):
+        assert detector.detect(Frame(_floor(), 12.34 + index / 3), CAL).detections == ()
+    (found,) = detector.detect(Frame(_coloured_robot_floor(), 14.0), CAL).detections
+    assert found.score > BAKED_SCORE_MAX  # back on the healed spot: a live blob
+
+
+@pytest.mark.parametrize("cx", [150, 300, 450])
+def test_a_visible_robot_is_never_healed_wherever_it_stands(cx):
+    detector = _learned()
+    model = detector._model
+    for index in range(10):
+        assert len(detector.detect(Frame(_with_square(18, cx=cx), 11.0 + index / 3), CAL).detections) == 1
+    assert detector._model is model
+
+
+def test_a_large_dark_occluder_like_a_chair_is_not_healed():
+    detector = _learned(floor=_coloured_robot_floor)
+    model = detector._model
+    for index in range(10):
+        frame = _coloured_robot_floor()
+        frame[130:170, 280:320] = (20, 30, 40)  # a chair seat over the spot and the floor around it
+        frame[60:90, 420:450] = (20, 30, 40)    # and on plain floor elsewhere
+        frame[250:270, 420:440] = 140             # floor-coloured paper on plain floor
+        detector.detect(Frame(frame, 11.0 + index / 3), CAL)
+    assert detector._model is model
