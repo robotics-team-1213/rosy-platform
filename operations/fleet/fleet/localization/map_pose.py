@@ -236,6 +236,11 @@ class MapPoseTracker:
         self._refused_reason: Optional[str] = None
 
     @property
+    def sourced(self) -> bool:
+        """A sighting for this robot was ever accepted or filtered (D-577 1: a lost pose, not none)."""
+        return self._newest_sighting is not None or self._filtered_map_id > 0
+
+    @property
     def latest_odom_stamp(self) -> Optional[float]:
         return self._odom[-1].stamp if self._odom else None
 

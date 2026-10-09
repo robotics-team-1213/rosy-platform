@@ -58,7 +58,7 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/roster.js": 1,
     # Activation, camera-draft replacement (D-497); trip cancel left with the 운행 panel (D-540 4).
     "operations/fleet/fleet/server/web/site-map.js": 2,
-    "operations/fleet/fleet/server/web/tracking-view.js": 1,
+    "operations/fleet/fleet/server/web/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

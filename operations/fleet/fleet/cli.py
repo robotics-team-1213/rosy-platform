@@ -96,8 +96,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--stuck-resolver", action="store_true",
-                         help="D-438: answer lane stucks with rules for robots that have a "
-                              "resolver_token in robots.yaml; others go to the console")
+                         help="D-577 2: accepted for compatibility; the resolver is on by default")
+    console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
+                         help="D-438/D-577 2: turn off the Fleet stuck resolver (on by default; it "
+                              "answers only robots with a resolver_token in robots.yaml, others go "
+                              "to the console)")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
     console.add_argument("--tls-key", default=None, type=Path,
@@ -581,13 +584,15 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
-    if getattr(args, "stuck_resolver", False):
+    if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
             for ep in endpoints if ep.resolver_token}
         if not stuck_resolver_clients:
-            print("warning: --stuck-resolver set but no robot has a resolver_token; "
-                  "every stuck will be escalated", file=sys.stderr)
+            print("note: stuck resolver on, but no robot has a resolver_token; "
+                  "every stuck goes to the console (no_resolver_token)", file=sys.stderr)
+        else:
+            print("stuck resolver answers: " + ", ".join(sorted(stuck_resolver_clients)), file=sys.stderr)
     central_registry = None
     if getattr(args, "central", False):
         # D-454 1단계: 중앙 프로파일 — 등록 로스터가 정본이므로 등록 저장소가 필요하다.
@@ -688,6 +693,7 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
+            site_maps.import_source = Path(source)
             # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
             # report; the default "site" would filter every sighting (map pose UNKNOWN).
             site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),

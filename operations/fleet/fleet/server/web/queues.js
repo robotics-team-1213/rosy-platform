@@ -66,6 +66,16 @@ export function endedTripText(view, robotId) {
   return tripEndText((view.endedTrips || []).find((trip) => trip.robot_id === robotId));
 }
 
+// D-577 8: an escalated stuck nobody answered within this many seconds rises to the top. The robot
+// keeps holding; nothing moves on silence. Console only — no phone or messenger alert (user, 2026-10-09).
+const HUMAN_DEADLINE_S = 30;
+
+function stuckOverdue(stuck) {
+  const note = stuck && stuck.resolver;
+  return Boolean(note && note.escalated && note.escalated !== "human_claimed"
+    && typeof note.age_s === "number" && note.age_s >= HUMAN_DEADLINE_S);
+}
+
 export function createQueues({ scope, el, view, render, streamEvidence }) {
   // D-493 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
   // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
@@ -75,8 +85,11 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // robot keeps the row (last value, answers locked) so the question does not vanish with the link.
     const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
     const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
+    const overdue = stuckOverdue(robot.line_stuck);
     const stuck = robot.line_stuck
-      ? [{ severity: "crit", text: `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}`, decision: "stuck" }] : [];
+      ? [{ severity: "crit", decision: "stuck", overdue,
+           text: overdue ? `: 판단 요청 — 30초 넘게 답 없음, 로봇은 멈춰 기다립니다${staleNote}`
+             : `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}` }] : [];
     // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 큐는 비어 있었다. 가장 흔한 예외부터 말한다.
     if (!robot.online && robot.link === "degraded") return [{ severity: "warn", text: ": 응답 지연" }, ...stuck];
     if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }, ...stuck];
@@ -199,6 +212,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }
+    rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);
     syncRows(critList, rows.crit, open);

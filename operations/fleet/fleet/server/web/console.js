@@ -8,7 +8,6 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
-import { createStartPointView } from "./start-point-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
@@ -112,7 +111,7 @@ function markLocked(reason = "auth") {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
       traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
-    visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
+    visionView.reset(); visionView.refreshSources(); trackingView.reset();
   }
   render();
   // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
@@ -305,7 +304,6 @@ function render() {
   formation.fillLeaders();
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
-  startPointView.updateAuthorization();
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -826,8 +824,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
-const startPointView = createStartPointView({scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw()});
+const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
