@@ -549,7 +549,9 @@ async function refreshAuthorization() {
     loginForm.refresh(false);
     render();
     // Independent panels refresh side by side; one slow source does not delay the rest.
+    // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
+      mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
       refreshDiscovery(),
@@ -924,7 +926,6 @@ pageScope.onResume(() => {
   visionView.reset();
   trackingView.reset();
   trackingView.refresh();
-  refreshAuthorization();
+  refreshAuthorization();  // refreshes the map once the session answers
   visionView.refreshSources();
-  mapView.refresh();
 });
