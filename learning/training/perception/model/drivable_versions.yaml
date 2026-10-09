@@ -38,3 +38,14 @@ models:
   - D-566 1-5
   status: shadow
   note: head=context; raw fp 0.008, post fp 0.005, near 0.886 vs label 0.793; intake PASS
+- version: v13.3.00
+  revision: v13-drivable-20261010-a236feaf
+  onnx_sha256: a236feafe57b332957f9ec340eeca4d66a9100a55130c7bb143dbc50985a2ba5
+  dataset: v13-map-projected-union
+  dataset_sha256: 79e8c653d9e3d67ccd2c408a1cc001317eff523172ee0f8955a5f28056137f73
+  rules:
+  - D-563 3
+  - D-576 4
+  - D-566 1-5
+  status: rejected
+  note: 'map-only labels 0.15–0.40 m: near rows untrained, lane val IoU 0.486, intake refused (no lane classes → no beyond-line metric)'
