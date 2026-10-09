@@ -696,6 +696,20 @@ the track is kept too and replayed at every restart. To recover, relearn on an
 empty mat, or stop the stack and run `docker volume rm rosy-site_vision_state`;
 the next start then learns live as before.
 
+## 가상 신호등(D-525) 켜기
+
+Fleet은 `/etc/rosy/site/fleet-site.yaml`이 있을 때만 읽는다(`--site-config-optional`). 없으면 기본값으로 뜬다.
+신호등은 이 파일의 `fleet.traffic.signals`로 정한다. `authority`는 false(D-550 J2 경고만)라 화면 표시용이다.
+
+```bash
+cd /opt/rosy   # fleet-site.yaml.example을 복사해 고친 파일이 있는 곳
+sudo install -m 0644 -o root -g root fleet-site.yaml /etc/rosy/site/fleet-site.yaml
+```
+
+- 적용: 다음 Fleet 재시작이나 릴리스 때 읽는다. 바로 쓰려면 `docker compose ... up -d fleet`로 Fleet만 다시 띄운다.
+- 확인: `/api/fleet/traffic`의 `signals`가 비어 있지 않다. 새로 뜬 Fleet은 전부 적색이고, 운영자가 콘솔에서 자동(cycle)을 눌러야 돈다.
+- 끄기: `sudo rm /etc/rosy/site/fleet-site.yaml` 후 Fleet을 다시 띄운다.
+
 ## Durable task queue smoke check
 
 Fleet stores operator tasks in SQLite at `/var/lib/rosy/fleet.sqlite3`, on the
@@ -1147,9 +1161,14 @@ Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태�
 Use an enrolled viewer credential in a separate absolute regular file protected
 by host permissions. It is read at request time and never placed in command
 arguments or logs. Only these GET APIs on the health URL's HTTPS origin are
-allowed; authenticated redirects are refused. The gate checks response structure
-and required IDs before staging and after switching. A failing preflight leaves
-the current installation in place; failure after switching triggers rollback.
+allowed; authenticated redirects are refused. The updater checks response
+structure and a nonempty authenticated inventory before staging. It records
+missing `required_ids` as `inventory-drift` in the journal and
+`last_run.inventory_drift` in the state file (D-569). After switching, every ID
+observed before staging must remain; a loss triggers rollback. The setup tool
+still requires configured IDs to match when it first provisions the gate.
+A stale ID must be reconciled with Fleet enrollment; mDNS discovery alone does
+not enroll a robot or prove its identity.
 Hosts without this setting retain the liveness-only gate. Listing a camera is
 not proof of advancing frames, and listing a robot is not physical acceptance.
 Record actual camera frame reception separately without sending motion.
