@@ -141,7 +141,9 @@ def ssh_argv(host: str, local_appdata: Path, command: str = DPKG_COMMAND) -> lis
 
 def run_ssh(argv: list[str]) -> tuple[int, str, str]:
     try:
-        done = subprocess.run(argv, capture_output=True, timeout=60)
+        # Windows OpenSSH with -J hangs on an inherited stdin under the scheduled
+        # robot CD task (second robot timed out every tick, 2026-10-09).
+        done = subprocess.run(argv, capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as error:
         return 255, "", f"{type(error).__name__}: {error}"
     return (done.returncode, done.stdout.decode("utf-8", "replace"), done.stderr.decode("utf-8", "replace"))
