@@ -234,6 +234,7 @@ class MapPoseTracker:
         self._consistent = 0
         self._refused = 0
         self._refused_reason: Optional[str] = None
+        self._epoch = 0   # D-581: odom resets so far (odom_to_map)
 
     @property
     def sourced(self) -> bool:
@@ -254,13 +255,15 @@ class MapPoseTracker:
                    or abs(_wrap(o.pose[2] - base.pose[2])) > min_rad
                    for o in self._odom if o.stamp >= since)
 
-    def odom_to_map(self) -> Optional[tuple[Pose, Pose]]:
-        """D-581: (map <- odom transform of the current anchor, newest odom pose); None unanchored.
-        Read beside `pose()`, which says whether the anchor may be used."""
+    def odom_to_map(self) -> Optional[tuple[Pose, Pose, float, int]]:
+        """D-581: (map <- odom of the current anchor, newest odom pose, the anchor's captured_at,
+        odom epoch); None unanchored. The epoch counts odom resets: a transform from another epoch
+        belongs to an odom frame that no longer exists. Read beside `pose()` (may it be used)."""
         if self._anchor is None or not self._odom:
             return None
         anchor = self._anchor
-        return compose(anchor.map_pose, relative(anchor.odom.pose, (0.0, 0.0, 0.0))), self._odom[-1].pose
+        return (compose(anchor.map_pose, relative(anchor.odom.pose, (0.0, 0.0, 0.0))),
+                self._odom[-1].pose, anchor.captured_at, self._epoch)
 
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
@@ -339,6 +342,7 @@ class MapPoseTracker:
                        anchor_age, anchor.map_id, odom_stamp=latest.stamp, **diag)
 
     def _reset(self, since: float) -> None:
+        self._epoch += 1
         self._odom.clear()
         self._anchor = None
         while self._pending and self._pending[0].captured_at < since:

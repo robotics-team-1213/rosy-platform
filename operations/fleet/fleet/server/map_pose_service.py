@@ -138,7 +138,7 @@ class MapPoseService:
             self._wall() - self.config.max_odom_age_s, min_m, math.radians(min_deg))
 
     def odom_to_map(self, robot_id: str):
-        """D-581 trail anchor: the tracker's (map <- odom, newest odom pose), or None."""
+        """D-581 trail anchor: the tracker's (map <- odom, newest odom, anchor captured_at, epoch)."""
         tracker = self._tracker(robot_id)
         return tracker.odom_to_map() if tracker is not None else None
 

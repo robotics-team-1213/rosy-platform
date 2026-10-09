@@ -53,6 +53,13 @@ JUMP_DEG = 15.0
 REFRESH_S = 0.5
 #: One correction step covers at most this much time (a long gap is not a licence to snap).
 MAX_STEP_S = 0.2
+#: The leader's streamed odom must sit within this speed x (age of the tracker's newest odom) +
+#: margin of that odom: farther, the stream and the tracker are not in one odom frame (a CORE or
+#: driver restart the 2 Hz tracker has not seen yet). Above any Pinky speed.
+LEADER_ODOM_MPS = 0.5
+LEADER_ODOM_MARGIN_M = 0.10
+#: An odom refresh (robot REST read) gives up after this (s).
+REFRESH_TIMEOUT_S = 2.0
 
 
 def _wrap(angle: float) -> float:
@@ -66,6 +73,8 @@ class _Held:
     at: float
     anchor_age_s: Optional[float]
     map_id: Optional[str]
+    anchor_at: float          # the tracker anchor (captured_at) T last came from
+    epoch: int                # the tracker's odom epoch T belongs to
     residual_m: float = 0.0
     residual_deg: float = 0.0
 
@@ -76,13 +85,15 @@ class TrailAnchor:
     def __init__(self, poses, leader_id: str, follower_ids: Iterable[str], *,
                  enabled: Callable[[], bool] = lambda: True,
                  refresh: Optional[Callable[[str], Awaitable[None]]] = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 wall: Callable[[], float] = time.time) -> None:
         self._poses = poses
         self._leader = leader_id
         self._followers = list(follower_ids)
         self._enabled = enabled
         self._refresh = refresh
         self._clock = clock
+        self._wall = wall           # odom stamps are UTC epoch seconds
         self._refreshed: dict[str, float] = {}
         self._tasks: set[asyncio.Future] = set()
         self._frames: dict[str, _Held] = {}
@@ -92,10 +103,10 @@ class TrailAnchor:
         self.jumps = 0
 
     def reset(self) -> None:
-        """Relay resume (after a reform): a robot that jumped starts over from its anchor."""
-        for robot_id in self._jumped:
-            self._frames.pop(robot_id, None)
+        """Relay resume (after a reform): every robot starts over from its tracker anchor."""
+        self._frames.clear()
         self._jumped.clear()
+        self._reasons.clear()
 
     def route(self, frame: str) -> Optional[dict[str, Optional[str]]]:
         """None: relay `frame` unchanged. Else follower -> its own frame text, None = withhold."""
@@ -114,7 +125,7 @@ class TrailAnchor:
             return {robot_id: None for robot_id in self._followers}
         self._schedule_refresh()
         now = self._clock()
-        leader, why = self._frame(self._leader, now)
+        leader, why = self._frame(self._leader, now, streamed=odom)
         routed: dict[str, Optional[str]] = {}
         for robot_id in self._followers:
             follower, why_f = self._frame(robot_id, now) if leader is not None else (None, None)
@@ -148,23 +159,36 @@ class TrailAnchor:
             "jumps": self.jumps,
         }
 
-    def _frame(self, robot_id: str, now: float) -> tuple[Optional[_Held], Optional[str]]:
+    def _frame(self, robot_id: str, now: float,
+               streamed: Optional[Pose] = None) -> tuple[Optional[_Held], Optional[str]]:
         if robot_id in self._jumped:
             return None, "anchor_jump"
         pose = self._poses.arbitrated_pose(robot_id)
         raw = self._poses.odom_to_map(robot_id)
         if pose is None or raw is None or pose.state == UNKNOWN:
+            self._frames.pop(robot_id, None)    # the tracker reset: its odom frame is gone
             return None, "no_map_pose"
+        target, odom, anchor_at, epoch = raw
+        held = self._frames.get(robot_id)
+        if held is not None and held.epoch != epoch:
+            del self._frames[robot_id]          # odom reset since: never reuse T on new odom
+            held = None
+        if streamed is not None and pose.odom_stamp is not None:
+            # The stream's odom and the tracker's newest odom must be one odom frame.
+            slack = LEADER_ODOM_MPS * max(0.0, self._wall() - pose.odom_stamp) + LEADER_ODOM_MARGIN_M
+            if math.dist(streamed[:2], odom[:2]) > slack:
+                self._frames.pop(robot_id, None)
+                return None, "leader_odom_mismatch"
         if pose.anchor_age_s is None or pose.anchor_age_s > ANCHOR_MAX_AGE_S:
             return None, "anchor_stale"
-        held = self._frames.get(robot_id)
         if pose.state != LOCALIZED:
-            if held is None or now - held.at > DEGRADED_HOLD_S:
+            # Frozen: odom bridges a short DEGRADED, but only on the anchor T came from.
+            if held is None or now - held.at > DEGRADED_HOLD_S or held.anchor_at != anchor_at:
                 return None, "map_pose_degraded"
-            return held, None                   # frozen: odom bridges a short DEGRADED
-        target, odom = raw
+            return held, None
         if held is None:
-            held = self._frames[robot_id] = _Held(target, now, pose.anchor_age_s, pose.map_id)
+            held = self._frames[robot_id] = _Held(target, now, pose.anchor_age_s, pose.map_id,
+                                                  anchor_at, epoch)
             return held, None
         here, there = compose(held.T, odom), compose(target, odom)
         ex, ey, eyaw = there[0] - here[0], there[1] - here[1], _wrap(there[2] - here[2])
@@ -184,7 +208,7 @@ class TrailAnchor:
         scale = step / error if error > 0.0 else 0.0
         moved = (here[0] + ex * scale, here[1] + ey * scale, _wrap(here[2] + turn))
         held.T = compose(moved, relative(odom, (0.0, 0.0, 0.0)))
-        held.at, held.anchor_age_s, held.map_id = now, pose.anchor_age_s, pose.map_id
+        held.at, held.anchor_age_s, held.map_id, held.anchor_at = now, pose.anchor_age_s, pose.map_id, anchor_at
         if step > 0.002 or abs(turn) > math.radians(0.2):
             log.debug("trail anchor: %s corrected %.4f m %.3f deg (residual %.3f m %.2f deg)",
                       robot_id, step, math.degrees(turn), error, math.degrees(eyaw))
@@ -205,6 +229,6 @@ class TrailAnchor:
 
     async def _refresh_one(self, robot_id: str) -> None:
         try:
-            await self._refresh(robot_id)
+            await asyncio.wait_for(self._refresh(robot_id), REFRESH_TIMEOUT_S)
         except Exception as exc:                # an unreachable robot goes stale, then stops
             log.debug("trail anchor: odom refresh of %s failed: %r", robot_id, exc)

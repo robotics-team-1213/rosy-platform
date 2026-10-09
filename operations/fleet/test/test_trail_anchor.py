@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import math
+import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 from core_common.protocol.schemas import PoseSample
 from fleet.localization.map_pose import (DEGRADED, LOCALIZED, UNKNOWN, MapPose, MapPoseTracker,
                                          OdomSample, Sighting, compose, relative)
+from fleet.server.map_pose_service import MapPoseService
 from fleet.swarm import anchor as anchor_mod
 from fleet.swarm.anchor import TrailAnchor
 from fleet.swarm.relay import Relay
@@ -34,6 +37,8 @@ class Poses:
         self.odom = {LEADER: (0.0, 0.0, 0.0), FOLLOWER: (0.0, 0.0, 0.0)}
         self.state = {LEADER: LOCALIZED, FOLLOWER: LOCALIZED}
         self.age = {LEADER: 0.2, FOLLOWER: 0.2}
+        self.anchor_at = {LEADER: 1.0, FOLLOWER: 1.0}
+        self.epoch = {LEADER: 0, FOLLOWER: 0}
 
     def arbitrated_pose(self, robot_id):
         x, y, yaw = compose(self.T[robot_id], self.odom[robot_id])
@@ -41,7 +46,8 @@ class Poses:
                        anchor_age_s=self.age[robot_id], map_id="site")
 
     def odom_to_map(self, robot_id):
-        return self.T[robot_id], self.odom[robot_id]
+        return (self.T[robot_id], self.odom[robot_id], self.anchor_at.get(robot_id, 1.0),
+                self.epoch.get(robot_id, 0))
 
 
 def frame(x, y, yaw, frame_name="odom", seq=7):
@@ -103,6 +109,66 @@ def test_degraded_freezes_the_frame_for_a_short_bridge_only():
     assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
 
 
+def test_degraded_on_a_new_anchor_or_a_new_odom_epoch_is_not_frozen():
+    anchor, poses, clock = rig()
+    anchor.route(frame(0.0, 0.0, 0.0))
+    poses.state[FOLLOWER] = DEGRADED
+    poses.anchor_at[FOLLOWER] = 2.0                       # the tracker re-anchored since
+    clock.now += 0.1
+    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+    anchor, poses, clock = rig()
+    anchor.route(frame(0.0, 0.0, 0.0))
+    poses.epoch[FOLLOWER] = 1                             # an odom reset: T is from a dead frame
+    poses.state[FOLLOWER] = DEGRADED
+    clock.now += 0.1
+    assert anchor.route(frame(0.0, 0.0, 0.0)) == {FOLLOWER: None}
+
+
+def test_an_odom_reset_then_a_sighting_within_two_seconds_withholds():
+    """Real tracker: CORE restarts (odom back to 0) and the camera sees the robot 0.3 s later."""
+    wall = {"t": 1000.0}
+    service = MapPoseService(lambda: [LEADER, FOLLOWER], wall=lambda: wall["t"])
+    clock = Clock()
+    anchor = TrailAnchor(service, LEADER, [FOLLOWER], clock=clock, wall=lambda: wall["t"])
+
+    def tick(odom_l, odom_f, seen=True):
+        for rid, odom, true in ((LEADER, odom_l, (1.0, 0.0, 0.0)), (FOLLOWER, odom_f, (0.5, 0.0, 0.0))):
+            if seen:
+                service.observe_sighting({"robot_id": rid, "x": true[0], "y": true[1], "yaw": true[2],
+                                          "captured_at": wall["t"] - 0.05})
+            service.observe_state(rid, {"odom_pose": {"x": odom[0], "y": odom[1], "yaw": odom[2],
+                                                      "stamp": wall["t"]}})
+        wall["t"] += 0.2
+        clock.now += 0.2
+
+    for _ in range(5):
+        tick((3.0, 0.0, 0.0), (-2.0, 1.0, 0.0))
+    assert anchor.route(frame(3.0, 0.0, 0.0))[FOLLOWER] is not None
+    tick((3.0, 0.0, 0.0), (0.0, 0.0, 0.0), seen=False)     # the follower's odom restarts at 0
+    tick((3.0, 0.0, 0.0), (0.0, 0.0, 0.0))                  # one sighting on the new odom
+    assert anchor.route(frame(3.0, 0.0, 0.0)) == {FOLLOWER: None}
+    assert anchor.status()["followers"][FOLLOWER] == f"{FOLLOWER}:map_pose_degraded"
+
+
+def test_a_leader_stream_off_the_tracker_odom_withholds():
+    anchor, poses, _ = rig()
+    poses.arbitrated_pose = lambda rid, base=poses.arbitrated_pose: replace(
+        base(rid), odom_stamp=time.time())
+    assert anchor.route(frame(0.05, 0.0, 0.0))[FOLLOWER] is not None
+    assert anchor.route(frame(2.0, 0.0, 0.0)) == {FOLLOWER: None}   # restarted leader stream
+    assert anchor.status()["followers"][FOLLOWER] == f"{LEADER}:leader_odom_mismatch"
+
+
+def test_reset_starts_every_robot_over():
+    anchor, poses, clock = rig()
+    anchor.route(frame(0.0, 0.0, 0.0))
+    poses.state[FOLLOWER] = UNKNOWN
+    anchor.route(frame(0.0, 0.0, 0.0))
+    anchor.reset()
+    status = anchor.status()
+    assert status["robots"] == {} and status["followers"] == {}
+
+
 def test_corrections_are_rate_limited_and_converge():
     anchor, poses, clock = rig()
     anchor.route(frame(0.0, 0.0, 0.0))
@@ -161,7 +227,7 @@ def test_the_tracker_exposes_map_from_odom_of_its_anchor():
     tracker.add_odom(OdomSample(0.3, 0.1, 0.2, 10.0), now=10.0)
     tracker.add_sighting(Sighting(FOLLOWER, 2.0, 1.0, 1.0, 10.0), now=10.1)
     tracker.add_odom(OdomSample(0.5, 0.2, 0.3, 10.5), now=10.5)
-    T, odom = tracker.odom_to_map()
+    T, odom, anchor_at, epoch = tracker.odom_to_map()
     pose = tracker.pose(10.5)
-    assert odom == (0.5, 0.2, 0.3)
+    assert odom == (0.5, 0.2, 0.3) and anchor_at == 10.0 and epoch == 0
     assert compose(T, odom) == pytest.approx((pose.x, pose.y, pose.yaw))
