@@ -324,3 +324,16 @@ def test_a_trail_follower_takes_no_nav2_goal_and_owns_the_nav_slot(client):
     assert svc.swarm.state_payload()["trail"]["leader_s"] == pytest.approx(0.6)
     assert svc.swarm.trail_active
     assert not docking_mode.route_nav_cmd_vel(svc, Twist(0.2, 0.0))
+
+
+def test_the_reference_socket_reads_the_fleet_anchor_fields():
+    """D-581: `anchor`/`for_robot_id` reach the manager; junk types read as absent."""
+    from core_api_web.api.ws import _reference_from
+
+    frame = pose_frame(map_id="site")
+    frame["payload"].update(frame="odom", anchor="fleet", for_robot_id="rosy_01", anchor_age_s=0.3)
+    reference = _reference_from(frame)
+    assert (reference.frame, reference.anchor, reference.for_robot_id) == ("odom", "fleet", "rosy_01")
+    frame["payload"].update(anchor=1, for_robot_id=["rosy_01"])
+    reference = _reference_from(frame)
+    assert reference.anchor is None and reference.for_robot_id is None
