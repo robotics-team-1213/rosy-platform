@@ -90,7 +90,7 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · docs(fleet): D-560 S2 캡처 경로 바로잡기
+- 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영
 - 2026-10-09 · uncommitted · feat(fleet): Rosy Cam 지도 평면 영상을 받아 그대로 그린다 (D-560 S2)
 - 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
 - 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
