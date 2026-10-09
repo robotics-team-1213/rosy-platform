@@ -177,6 +177,15 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         """D-517 3 (M1): the block table of the last trip period; nothing of it is sent to robots."""
         return runner.traffic.view()
 
+    @app.get("/api/fleet/traffic/signals/ahead/{robot_id}", dependencies=read_guard, tags=["fleet"])
+    def fleet_traffic_signal_ahead(robot_id: str) -> dict:
+        """D-525 rev 3: the next virtual signal on this robot's trip and its countdown (advisory: only
+        the D-517 authority lets a robot in). 404 SIGNAL_NONE_AHEAD when its route crosses none."""
+        ahead = runner.traffic.signal_ahead(robot_id)
+        if ahead is None:
+            raise _refuse("SIGNAL_NONE_AHEAD", status=404)
+        return ahead
+
     @app.post("/api/fleet/traffic/signals/presence", tags=["fleet"])
     def fleet_traffic_signal_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         """D-525 4: the operator's console is open; a manual green lasts while this keeps coming."""
