@@ -10,14 +10,19 @@ import lane_derived_drivable as ldd  # noqa: E402
 import train_job  # noqa: E402
 from job_state import JobError  # noqa: E402
 from store import Store, content_sha  # noqa: E402
-from test_lane_derived_drivable import _frame, _source  # noqa: E402
+from test_lane_derived_drivable import _frame, _source, review  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def few_canaries(monkeypatch):
+    monkeypatch.setattr(ldd, "MIN_CANARIES", 1)
 
 
 def _setup(tmp_path):
     from export_cell import write_manifest
     derived = tmp_path / "derived"
     ldd.derive(_source(tmp_path, [("train", "a", _frame()), ("val", "b", _frame())]), derived)
-    ldd.judge(derived, lambda original, view: {"verdict": "ok", "reason": "fine"}, model="m", endpoint="e")
+    review(tmp_path, derived, canaries=0.5)
     ldd.finalize(derived)
     store = Store(tmp_path / "store")
     path, digest = store.put_dataset(derived, "lane-derived")
@@ -69,6 +74,7 @@ def test_derived_dataset_admits_drivable_head_and_rechecks_hashes(tmp_path, monk
     assert seen["lane_derived"]["annotation_origin"] == "derived_from_reviewed_lanes"
     assert seen["lane_derived"]["adr"] == "D-554"
     assert seen["lane_derived"]["judge"]["counts"]["ok"] == 2
+    assert seen["lane_derived"]["judge"]["canaries"]["rate"] == 1.0
     assert seen["camera_provenance"] == "provisional"
     assert seen["parent_lane_model"]["model_revision"].startswith("lane-seg-")
     assert "learning/training/perception/dataset/lane_derived_drivable.py" in seen["source_files"]
@@ -84,6 +90,13 @@ def test_derived_recheck_binds_parent_files(tmp_path, monkeypatch):
 
     monkeypatch.setattr(train_job, "_run_drivable_candidate", candidate)
     with pytest.raises(JobError, match="parent/trainer source changed"):
+        train_job.run(config, tmp_path / "job")
+
+
+def test_ignore_top_must_match_the_dataset(tmp_path):
+    config, _, _ = _setup(tmp_path)
+    config["training"]["ignore_top"] = 100
+    with pytest.raises(JobError, match="ignore_top differs"):
         train_job.run(config, tmp_path / "job")
 
 

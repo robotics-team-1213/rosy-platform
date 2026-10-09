@@ -245,6 +245,8 @@ def _run(config, out, indexed_review, admission_stack):
             derived_doc = verify_dataset(dataset, finalized=True)
         except (ValueError, OSError, KeyError, TypeError) as exc:
             raise JobError(f"D-554 lane-derived admission denied: {exc}") from exc
+        if drivable_head and training["ignore_top"] != derived_doc["params"]["ignore_top"]:
+            raise JobError("training ignore_top differs from the D-554 dataset ignore_top")
     if indexed:
         from review_admission import IndexedReview
         if type(indexed_review) is not IndexedReview:

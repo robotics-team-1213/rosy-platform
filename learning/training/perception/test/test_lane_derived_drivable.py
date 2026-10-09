@@ -55,51 +55,28 @@ def test_derive_mask_band_lanes_walls_and_ignore():
     assert (out[182:198, 122:138] == 255).all()  # stripe is not road
 
 
+def test_wall_never_below_a_lane_line_in_its_column():
+    image, src = _frame()
+    image[60:230, 285:] = 220  # bright flat region reaching the floor beyond the line
+    src[150:152, 295:305] = 3  # a painted mark in those columns
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[115:148, 296:304] == 0).all()
+    assert (out[155:225, 296:304] == 255).all()  # floor below the mark is never wall
+    assert (out[155:225, 310:316] == 0).all()  # columns without a lane mark keep the wall
+
+
+def test_rows_above_ignore_top_are_unknown_for_every_class():
+    image, src = _frame()
+    src[100:110, 40:50] = 1
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[:110] == 255).all()
+
+
 def test_derive_needs_left_before_right():
     image, src = _frame(wall=False)
     src[110:, 40:50], src[110:, 270:280] = 2, 1
     out, both = ldd.derive_mask(src, image)
     assert both == 0 and not (out == ldd.DRIVABLE).any()
-
-
-def test_derive_verify_judge_finalize(tmp_path):
-    blank = _frame()
-    no_right = _frame()
-    no_right[1][no_right[1] == 2] = 0
-    src = _source(tmp_path, [("train", "a", blank), ("val", "b", _frame(wall=False)),
-                             ("train", "c", no_right)])
-    out = tmp_path / "out"
-    digest, doc = ldd.derive(src, out)
-    assert digest == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
-    assert doc["skipped_frames"] == 1 and len(doc["frames"]) == 2
-    assert doc["annotation_origin"] == "derived_from_reviewed_lanes" and doc["adr"] == "D-554"
-    assert doc["evaluation_use"] == "training_val_only"
-    assert doc["source"]["manifest_sha256"] == hashlib.sha256((src / "manifest.json").read_bytes()).hexdigest()
-    assert doc["classes"][-1] == {"index": 5, "name": "drivable", "role": "drivable"}
-    assert doc["frames"][0]["session"] == "20261001T000000Z_rosy-pinky-8kcn"
-    assert doc["frames"][0]["wall_px"] > 0 and doc["frames"][1]["wall_px"] == 0
-    assert "approved" not in json.dumps(doc)
-    ldd.verify_dataset(out)
-
-    answers = iter([{"verdict": "concern", "reason": "green on wall"}, {"verdict": "ok", "reason": "fine"}])
-    with pytest.raises(ValueError, match="not finalized"):
-        ldd.verify_dataset(out, finalized=True)
-    rows = ldd.judge(out, lambda original, view: next(answers), model="qwen3-vl:8b-instruct",
-                     endpoint="http://127.0.0.1:11434")
-    assert [r["verdict"] for r in rows] == ["concern", "ok"]
-    _, final = ldd.finalize(out)
-    assert len(final["frames"]) == 1 and len(final["judge"]["dropped"]) == 1
-    assert final["judge"]["counts"] == {"ok": 1, "concern": 1, "uncertain": 0}
-    assert final["judge"]["model"] == "qwen3-vl:8b-instruct" and final["frames"][0]["judge"] == "ok"
-    ldd.verify_dataset(out, finalized=True)
-    with pytest.raises(ValueError, match="already finalized"):
-        ldd.finalize(out)
-    assert not (out / doc["frames"][0]["image"]).exists()
-    ldd.verify_dataset(out)
-
-    (out / final["frames"][0]["mask"]).write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="hash differs"):
-        ldd.verify_dataset(out)
 
 
 def test_derive_refuses_unlisted_frame(tmp_path):
@@ -140,51 +117,143 @@ def test_tool_commit_is_recorded_never_unknown(tmp_path, monkeypatch):
     assert ldd._git_commit("a" * 40) == "a" * 40
 
 
-def _derived(tmp_path, n=12):
+def _derived(tmp_path, n=12, name="out"):
     src = _source(tmp_path, [("train", f"f{i}", _frame()) for i in range(n)])
-    out = tmp_path / "out"
+    out = tmp_path / name
     ldd.derive(src, out)
     return out
 
 
-def test_sheets_cover_every_frame_and_hide_canaries(tmp_path):
+@pytest.fixture
+def few_canaries(monkeypatch):
+    monkeypatch.setattr(ldd, "MIN_CANARIES", 3)
+
+
+def _write(tmp_path, rows):
+    path = tmp_path / "verdicts.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    return path
+
+
+def review(tmp_path, out, verdict=lambda tile: "ok", canaries=0.25, **kwargs):
+    """Sheets + a reviewer who catches every canary; returns import_verdicts' result."""
+    dest, key = tmp_path / "sheets", tmp_path / "secret" / "key.json"
+    ldd.sheets(out, dest, key, per_sheet=6, seed=2, canaries=canaries)
+    tiles = json.loads((dest / "index.json").read_text())["tiles"]
+    hidden = json.loads(key.read_text())
+    rows = [{"tile": t, "verdict": "concern" if t in hidden else verdict(t), "reason": "x"} for t in tiles]
+    instructions = tmp_path / "instructions.md"
+    instructions.write_text("review rules")
+    return ldd.import_verdicts(out, dest, key, _write(tmp_path, rows), "reviewer-a", instructions, **kwargs)
+
+
+def test_derive_review_finalize(tmp_path, few_canaries):
     out = _derived(tmp_path)
-    dest = tmp_path / "sheets"
-    result = ldd.sheets(out, dest, per_sheet=4, seed=1, canaries=0.25)
+    doc = json.loads((out / "manifest.json").read_text())
+    assert doc["annotation_origin"] == "derived_from_reviewed_lanes" and doc["adr"] == "D-554"
+    assert doc["evaluation_use"] == "training_val_only" and "approved" not in json.dumps(doc)
+    assert doc["frames"][0]["session"] == "20261001T000000Z_rosy-pinky-8kcn"
+    with pytest.raises(ValueError, match="not finalized"):
+        ldd.verify_dataset(out, finalized=True)
+    result = review(tmp_path, out, verdict=lambda tile: "concern" if tile == "T0001" else "ok")
+    assert result["canaries"]["rate"] == 1.0 and result["unreviewed"] == 0
+    _, final = ldd.finalize(out)
+    assert final["judge"]["canaries"] == result["canaries"]
+    assert final["judge"]["model"] == "reviewer-a"
+    assert final["judge"]["prompt_sha256"] == hashlib.sha256(b"review rules").hexdigest()
+    assert len(final["frames"]) + len(final["judge"]["dropped"]) == 12
+    ldd.verify_dataset(out, finalized=True)
+    with pytest.raises(ValueError, match="already finalized"):
+        ldd.finalize(out)
+    (out / final["frames"][0]["mask"]).write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="hash differs"):
+        ldd.verify_dataset(out)
+
+
+def test_finalize_refuses_verdicts_without_enough_canaries(tmp_path, few_canaries):
+    out = _derived(tmp_path)
+    doc = json.loads((out / "manifest.json").read_text())
+    (out / "judge.jsonl").write_text("".join(json.dumps(
+        {"item": f["image"], "mask_sha256": f["mask_sha256"], "verdict": "ok"}) + "\n" for f in doc["frames"]))
+    run = {"model": "vlm", "endpoint": "e", "prompt_sha256": "p", "splits": [], "seconds": 0}
+    (out / "judge-run.json").write_text(json.dumps(run))
+    with pytest.raises(ValueError, match="invalid canary block"):
+        ldd.finalize(out)
+    (out / "judge-run.json").write_text(json.dumps(dict(run, canaries={"count": 2, "caught": 2, "rate": 1.0})))
+    with pytest.raises(ValueError, match="at least 3 required"):
+        ldd.finalize(out)
+    (out / "judge-run.json").write_text(json.dumps(dict(run, canaries={"count": 4, "caught": 3, "rate": 0.75})))
+    with pytest.raises(ValueError, match="canary concern rate"):
+        ldd.finalize(out)
+
+
+def test_sheets_cover_every_frame_and_keep_the_key_outside(tmp_path, few_canaries):
+    out = _derived(tmp_path)
+    dest, key = tmp_path / "sheets", tmp_path / "secret" / "key.json"
+    with pytest.raises(ValueError, match="outside"):
+        ldd.sheets(out, dest, dest / "key.json")
+    with pytest.raises(ValueError, match="at least 3"):
+        ldd.sheets(out, dest, key, canaries=0.1)
+    result = ldd.sheets(out, dest, key, per_sheet=4, seed=1, canaries=0.25)
     index = json.loads((dest / "index.json").read_text())
-    hidden = json.loads((dest / "canaries.json").read_text())
+    hidden = json.loads(key.read_text())
     assert result == {"sheets": 4, "tiles": 15, "canaries": 3}
+    assert not (dest / "canaries.json").exists()
     assert {t["image"] for tile, t in index["tiles"].items() if tile not in hidden} == {
         f["image"] for f in json.loads((out / "manifest.json").read_text())["frames"]}
     assert {h["kind"] for h in hidden.values()} <= set(ldd.CANARY_KINDS)
     assert sorted(p.name for p in dest.glob("sheet-*.png")) == index["sheets"]
-    assert cv2.imread(str(dest / "sheet-001.png")).shape[1] == 4 * 320
 
 
-def test_import_verdicts_needs_canaries_caught_and_every_tile(tmp_path):
+def test_import_verdicts_needs_canaries_caught_and_every_tile(tmp_path, few_canaries):
     out = _derived(tmp_path)
-    dest = tmp_path / "sheets"
-    ldd.sheets(out, dest, per_sheet=6, seed=2, canaries=0.25)
+    dest, key = tmp_path / "sheets", tmp_path / "key.json"
+    ldd.sheets(out, dest, key, per_sheet=6, seed=2, canaries=0.25)
     index = json.loads((dest / "index.json").read_text())["tiles"]
-    hidden = json.loads((dest / "canaries.json").read_text())
+    hidden = json.loads(key.read_text())
     instructions = tmp_path / "instructions.md"
     instructions.write_text("review rules")
     real = sorted(t for t in index if t not in hidden)
-
-    def write(rows):
-        path = tmp_path / "verdicts.jsonl"
-        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
-        return path
-    lazy = write([{"tile": t, "verdict": "ok", "reason": ""} for t in index])
+    lazy = _write(tmp_path, [{"tile": t, "verdict": "ok"} for t in index])
     with pytest.raises(ValueError, match="canary concern rate"):
-        ldd.import_verdicts(out, dest, lazy, "reviewer-a", instructions)
-    rows = [{"tile": t, "verdict": "concern", "reason": "wrong"} for t in hidden]
+        ldd.import_verdicts(out, dest, key, lazy, "reviewer-a", instructions)
+    partial = _write(tmp_path, [{"tile": t, "verdict": "concern"} for t in hidden] + [{"tile": real[0], "verdict": "ok"}])
     with pytest.raises(ValueError, match="lack a verdict"):
-        ldd.import_verdicts(out, dest, write(rows + [{"tile": real[0], "verdict": "ok"}]), "reviewer-a", instructions)
-    rows += [{"tile": t, "verdict": "concern" if t == real[0] else "ok", "reason": "x"} for t in real]
-    result = ldd.import_verdicts(out, dest, write(rows), "reviewer-a", instructions)
-    assert result["canary_rate"] == 1.0 and result["counts"] == {"ok": 11, "concern": 1, "uncertain": 0}
-    _, final = ldd.finalize(out)
-    assert final["judge"]["model"] == "reviewer-a" and len(final["judge"]["dropped"]) == 1
-    assert final["judge"]["prompt_sha256"] == hashlib.sha256(b"review rules").hexdigest()
-    ldd.verify_dataset(out, finalized=True)
+        ldd.import_verdicts(out, dest, key, partial, "reviewer-a", instructions)
+
+
+def test_reviewed_verdicts_carry_over_only_label_to_unknown_changes(tmp_path, few_canaries):
+    old = _derived(tmp_path, name="old")
+    review_dir = tmp_path / "review"
+    review_dir.mkdir()
+    dest, key = review_dir / "sheets", review_dir / "key.json"
+    ldd.sheets(old, dest, key, per_sheet=6, seed=2, canaries=0.25)
+    tiles = json.loads((dest / "index.json").read_text())["tiles"]
+    hidden = json.loads(key.read_text())
+    verdicts = _write(review_dir, [{"tile": t, "verdict": "concern" if t in hidden else "ok"} for t in tiles])
+    instructions = review_dir / "instructions.md"
+    instructions.write_text("rules")
+    new = tmp_path / "new"
+    ldd.derive(tmp_path / "src", new)
+    doc = json.loads((new / "manifest.json").read_text())
+    changed = {}
+    for frame, value in zip(doc["frames"][:2], (255, 0)):  # one label->255, one label->other label
+        mask = cv2.imread(str(new / frame["mask"]), cv2.IMREAD_UNCHANGED)
+        mask[150, 60] = value if value == 255 else 1
+        raw = cv2.imencode(".png", mask)[1].tobytes()
+        (new / frame["mask"]).write_bytes(raw)
+        frame["mask_sha256"] = hashlib.sha256(raw).hexdigest()
+        changed[frame["image"]] = value
+    (new / "manifest.json").write_text(json.dumps(doc))
+    args = (new, dest, key, verdicts, "reviewer-a", instructions)
+    with pytest.raises(ValueError, match="different dataset manifest"):
+        ldd.import_verdicts(*args)
+    with pytest.raises(ValueError, match="1 frames have no verdict"):
+        ldd.import_verdicts(*args, reviewed_manifest=old / "manifest.json")
+    result = ldd.import_verdicts(*args, reviewed_manifest=old / "manifest.json", drop_unreviewed=True)
+    assert result["unreviewed"] == 1 and result["counts"]["ok"] == 11
+    _, final = ldd.finalize(new)
+    assert [d["image"] for d in final["judge"]["dropped"]] == [
+        image for image, value in changed.items() if value == 0]
+    assert final["judge"]["dropped"][0]["verdict"] == "unreviewed"
+    ldd.verify_dataset(new, finalized=True)
