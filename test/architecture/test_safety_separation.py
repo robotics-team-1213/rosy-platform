@@ -261,6 +261,7 @@ KNOWN_SAFETY_VIOLATIONS = {
     ("1", "operations/fleet/fleet/server/console.py", "fleet.server.console_view"): "mixed file",
     ("1", "operations/fleet/fleet/server/console.py", "fleet.server.traffic"): "mixed file",
     ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.robots"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.anchor"): "mixed file",
     ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.session"): "mixed file",
     ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.transport"): "mixed file",
     # mixed file task_dispatch_routes.py (rearm handler) -> decision
