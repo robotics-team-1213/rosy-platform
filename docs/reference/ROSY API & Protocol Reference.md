@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.172
+**Version:** v1.173
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1555,11 +1555,12 @@ change sightings, navigation, mission acceptance, or robot motion.
 Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사각형·차선 맞춤 보정으로 투영한다.
 로봇 마커가 보이면 그것을 우선하고 없으면 익명 배경 blob으로 폴백한다.
 `robot_markers`는 `robot_ids`의 중복 없는 부분집합이며 빈 대응도 허용한다.
+`robot_ids: enrolled`(D-580, v1.173)이면 대상은 Fleet의 살아 있는 명단이고, `robot_markers`는 예외만 적는다(명단에 없는 로봇은 무시). 나머지 로봇의 마커는 로봇 번호(`rosy_NN`의 NN, 40–49)이며 모서리·장소 마커·예외 값과 겹치면 배정하지 않는다.
 
 | Method | Path | Credential | 내용 |
 |---|---|---|---|
 | POST | `/api/fleet/detections` | source Bearer | `OverheadDetectionsPayload` 제출. source/map/revision·1 s lease 검사 |
-| GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq. v1.130(D-472): `identity_challenge` `{request_id, color, not_before, not_after}`(Fleet 벽시계, 창 ≤ 6 s) 또는 null — 이 source가 보는 로봇에 열린 LED 확인 요청 |
+| GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq. v1.130(D-472): `identity_challenge` `{request_id, color, not_before, not_after}`(Fleet 벽시계, 창 ≤ 6 s) 또는 null — 이 source가 보는 로봇에 열린 LED 확인 요청. v1.173(D-580): `robot_markers` `{robot_id: marker_id}` — 이 source의 현재 로봇 마커(`robot_ids: enrolled` source는 살아 있는 명단, 마커 = YAML 예외 또는 로봇 번호 40–49). Vision은 이 값을 YAML보다 먼저 쓴다 |
 | POST | `/api/fleet/detections/identity` | source Bearer | D-472 (v1.130). 한 `identity_challenge`에 대한 Vision 판정: `{source_id, map_id, request_id, processor_revision, state:"matched"\|"ambiguous", reason?:"none"\|"multiple"\|"frames_missing"\|"stale"\|"calibration_changed", x?, y?, captured_at?, calibration_revision?, evidence}`. 숫자만, 영상 바이트 없음(D-136). 다른 키 422. `matched`는 창 안 `captured_at`, source의 현재 map·보정 revision, 최신 탐지에서 0.25 m 안의 이어지는 익명 blob이 있고 0.30 m 안에 다른 blob이 없을 때만 확인 트랙이 된다. 열린 요청이 아니면 409 `IDENTIFY_NOT_PENDING`, 묻지 않은 source 409 `IDENTIFY_SOURCE_MISMATCH`. 응답 `{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason?}` |
 | GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps, robots 대조, unknown 위치 |
 | GET | `/api/fleet/tracking/identity` | viewer 이상 | D-472 (v1.130), 읽기 전용. `{ts, use:"observation-only", pending:{robot_id, request_id, color, sources, not_before, not_after}\|null, robots:[{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason, x, y, yaw:null, age_s, source_id, map_id, calibration_revision, confirmed_at, use, last}], config:{window_s, identity_ttl_s, overlap_m, auto_request}}`. 확인 트랙은 트랙 손실(`track_lost_s` 1 s)·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s` 경과 중 하나로 UNKNOWN이 된다(addendum 4). D-511 차로 준수 입력과 콘솔 표시 전용이며 `map-pose` 중재·trip·initialpose·경로·명령에 쓰지 않는다(addendum 3) |
@@ -2613,6 +2614,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.173 | 2026-10-09 | Additive (D-580, feat/fleet-managed-site-roster): `GET /api/fleet/detections/config` `robot_markers`. `site-cameras.yaml` source `robot_ids: enrolled`(Fleet 명단을 따른다; `GET /api/fleet/site-map` 등의 `robot_ids`·`robot_markers`는 등록·해제 때 바뀐다). `POST /api/fleet/enrollment/robots`: 등록되었다 해제된 TLS binding은 다른 `robot_id`를 받는다(새 오류 코드 없음, 다른 binding의 ID면 `code_consumed` reason `robot_id_conflict`); 감사 동작 `tls_renumber`. `autoupdate.conf` `/api/fleet/state` 검사 `required_ids: "enrolled"` |
 | v1.172 | 2026-10-09 | 동작 변경 (D-517 3 개정, fix/trip-lap-hold-outside-zone, AI PC 신호 SIM): 현장 구역이 있으면 trip이 구역 안에 서지 않는다. 구역 차로로 들어오는 목적지나 반복 운행 바퀴의 마지막 장소는 경로를 따라 구역 밖에 설 수 있는 가장 가까운 장소로 옮긴다(사용자 결정 "다음 지점까지 가서 섬"). trip 보기 선택 필드 `stop_moved {from, to}`(옮기지 않았으면 null), 구역 옆 장소의 `stop`은 `stop_after_m`을 줄여 구역 밖에서 선다. 그런 장소가 경로에 없을 때만 `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_STOP_IN_ZONE`(`detail {place, repeat}`). 출발 차로를 고를 때 막힌 차로를 뺀다. Robot API·CORE 명령·envelope 1.0 그대로 |
 | v1.171 | 2026-10-09 | Additive (D-575, fix/ceiling-marker-missed-and-unassigned): `GET /api/fleet/tracking` `unknown[].marker_id`(익명은 null, 배정 로봇 없는 마커는 그 id). Vision은 `robot_markers`에 없는 D-562 로봇 범위 마커(40–49)도 검출 payload에 싣는다(스키마 변화 없음). 표시 전용, 로봇 명령·envelope 1.0 변화 없음 |
 | v1.170 | 2026-10-09 | Additive (D-559, feat/swarm-trail-follow): `POST /api/v1/swarm/follow` 선택 필드 `mode: offset\|trail`(기본 offset, 이전과 같다), `GET /api/v1/swarm/state` 의 `mode`·`trail`, §7.8 `payload.frame: map\|odom`, `swarm.hold` trail 사유, `swarm.aborted` `trail_join_too_far`, Fleet `formation: TRAIL`. trail 은 CORE 가 NAVIGATION 슬롯을 직접 조향한다(SAF-004 클리핑·D-400·D-422 몸체 정지를 지난다). envelope 1.0 유지 |
