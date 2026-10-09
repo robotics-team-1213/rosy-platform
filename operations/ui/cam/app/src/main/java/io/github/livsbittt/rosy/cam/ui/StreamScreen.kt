@@ -46,6 +46,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.camera.ExposureVerdict
+import io.github.livsbittt.rosy.cam.camera.Antibanding
+import io.github.livsbittt.rosy.cam.camera.TuningMode
 import io.github.livsbittt.rosy.cam.link.LinkState
 import io.github.livsbittt.rosy.cam.service.CameraSessionPlan
 import io.github.livsbittt.rosy.cam.service.StreamService
@@ -116,6 +118,20 @@ fun StreamScreen(
                     light.dark -> R.string.light_dark
                     else -> R.string.light_ready
                 }), style = MaterialTheme.typography.bodySmall)
+                val tuning = state.tuning
+                val applied = tuning.applied
+                when (tuning.mode) {
+                    null -> null
+                    TuningMode.VISION -> stringResource(R.string.tuning_vision,
+                        listOfNotNull(
+                            stringResource(if (applied.aeLock) R.string.tuning_locked else R.string.tuning_adjusting),
+                            tuning.evText,
+                            if (applied.antibanding == Antibanding.HZ60) "60Hz" else null,
+                        ).joinToString(" · "))
+                    TuningMode.LOCAL -> stringResource(if (tuning.localAssist) R.string.tuning_wait_local else R.string.tuning_wait_default)
+                    TuningMode.DISABLED -> stringResource(R.string.tuning_disabled)
+                    TuningMode.THERMAL_HOLD -> stringResource(R.string.tuning_thermal_hold, tuning.evText)
+                }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 val exposure = state.exposure
                 if (exposure.supported) {
                     Text(stringResource(when {

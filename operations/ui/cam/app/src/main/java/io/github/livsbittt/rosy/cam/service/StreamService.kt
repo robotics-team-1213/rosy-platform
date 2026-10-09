@@ -27,6 +27,7 @@ import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.camera.LensPick
 import io.github.livsbittt.rosy.cam.camera.LensProbe
 import io.github.livsbittt.rosy.cam.camera.LensSelector
+import io.github.livsbittt.rosy.cam.camera.TuningStatus
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.DeviceHealthMonitor
 import io.github.livsbittt.rosy.cam.health.HealthText
@@ -85,6 +86,8 @@ data class StreamState(
     val route: SiteRoute? = null,
     val lighting: LightingStatus = LightingStatus(),
     val exposure: ExposureStatus = ExposureStatus(),
+    /** D-589: who sets the camera now (Vision, local, off, heat hold) and what it runs with. */
+    val tuning: TuningStatus = TuningStatus(),
     val photoSaving: Boolean = false,
     val photoName: String? = null,
     val photoFailed: Boolean = false,
@@ -243,11 +246,13 @@ class StreamService : LifecycleService() {
                 },
                 onLighting = { status -> if (sessionActive) _state.update { it.copy(lighting = status) } },
                 onExposure = { status -> if (sessionActive) _state.update { it.copy(exposure = status) } },
+                onTuning = { status -> if (sessionActive) _state.update { it.copy(tuning = status) } },
             )
             link = newLink
             camera = newCamera
             launch {
                 monitor.health.collect { health ->
+                    newCamera.setThermalStatus(health?.thermalStatus ?: DeviceHealth.THERMAL_UNKNOWN)
                     newCamera.setThermalBlocked(
                         (health?.thermalStatus ?: -1) >= 3 ||
                             (health?.temperatureC ?: 0.0) >= DeviceHealth.HOT_BATTERY_C,
@@ -268,6 +273,7 @@ class StreamService : LifecycleService() {
             newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT, pick?.camera?.id)
             newCamera.setExposureAssist(store.autoExposure.first())
+            launch { store.recognitionExposure.distinctUntilChanged().collect { newCamera.setRecognitionTuning(it) } }
 
             // Lens changes from the settings screen apply live: rebind, then a fresh hello.
             launch {
@@ -337,7 +343,7 @@ class StreamService : LifecycleService() {
         healthMonitor = null
         _state.update { current ->
             current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
-                photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(),
+                photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(), tuning = TuningStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
     }

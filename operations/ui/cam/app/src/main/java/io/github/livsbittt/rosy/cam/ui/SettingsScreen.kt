@@ -68,6 +68,9 @@ fun SettingsScreen(
     development: LinkPolicy? = null,
     onDevelopmentImport: (DevelopmentBootstrap, (Boolean) -> Unit) -> Unit = { _, result -> result(false) },
     onDevelopmentRevoke: () -> Unit = {},
+    /** D-589 6: obey Vision `camera` messages; applies live, also while the camera runs. */
+    recognitionExposure: Boolean = true,
+    onRecognitionExposure: (Boolean) -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
@@ -132,6 +135,15 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
         LensSection(lens, backCameras, running = locked, onLens = onLens)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Checkbox(checked = recognitionExposure, onCheckedChange = onRecognitionExposure)
+            Text(stringResource(R.string.settings_recognition_exposure))
+        }
+        Text(
+            stringResource(R.string.settings_recognition_exposure_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             enabled = !locked,
