@@ -362,10 +362,9 @@ class TrafficService:
                 **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
 
     def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
-        """Operator verb (D-525 4): ``cycle``, ``hold``, ``all_red``, ``demand`` (rev 4: the next green
-        follows controller demands) or ``set_aspect`` (green for one approach while the operator is
-        present). KeyError: unknown signal; ValueError: bad verb or approach; PermissionError: a manual
-        green without presence."""
+        """Operator verb (D-525 4): ``cycle``, ``hold``, ``all_red``, ``demand`` (rev 4) or ``set_aspect``
+        (green for one approach while the operator is present). KeyError: unknown signal; ValueError: bad
+        verb or approach; PermissionError: a manual green without presence."""
         plan = self._signals[signal_id]
         now = self._signal_clock()
         if verb == "set_aspect":
@@ -378,10 +377,8 @@ class TrafficService:
         signal_phase.command(plan, self._phase[signal_id], verb, now, approach)
         return self._signal_row(plan, None)
 
-    def signal_demand(self, signal_id: str, approach: Optional[str], ttl_s: float, reason: str = "") -> tuple[dict, bool]:
-        """D-525 rev 4: the AI PC controller asks for a green (``approach`` None: alive, nobody waits).
-        Only a request: the phase machine still decides. Returns the row and whether this approach's
-        demand is new. KeyError: unknown signal; PermissionError: not in demand mode; ValueError: approach."""
+    def signal_demand(self, signal_id: str, approach: Optional[str], ttl_s: float, reason: str = ""):
+        """D-525 rev 4: a controller's request (``signal_phase.demand``); (row, new demand)."""
         plan = self._signals[signal_id]
         fresh = signal_phase.demand(plan, self._phase[signal_id], approach, self._signal_clock(), ttl_s, reason)
         return self._signal_row(plan, None), fresh
@@ -436,12 +433,10 @@ class TrafficService:
                 row["stop_line"] = {"x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4)}
             approaches.append(row)
         manual = plan.phases[state.manual][0] if state.mode == "manual" and state.manual is not None else None
-        demanding = state.mode == "demand"
-        demands = [{"approach": a, "age_s": round(now - state.demands[a][0], 1), "reason": state.demands[a][2]}
-                   for a in signal_phase.queue(plan, state, now)] if demanding else []
         return {"signal_id": plan.id, "zone": plan.zone, "virtual": True, "mode": state.mode, "manual": manual,
-                "demands": demands,
-                "controller_age_s": round(now - state.heard, 1) if demanding else None,
+                "demands": [{"approach": a, "age_s": round(now - state.demands[a][0], 1), "reason": state.demands[a][2]}
+                            for a in signal_phase.queue(plan, state, now)] if state.mode == "demand" else [],
+                "controller_age_s": round(now - state.heard, 1) if state.mode == "demand" else None,
                 "aspect": "all_red" if errors else state.aspect,
                 "left_s": None if left is None or errors else round(max(0.0, left), 1),
                 "zone_busy": busy,
