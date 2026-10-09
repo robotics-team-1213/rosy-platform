@@ -64,12 +64,14 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
     assert (live.request["to"], live.request["via"], live.request["cycle"]) == ("NE", ["NW", "SE"], ["SE", "NW"])
     assert [s["edge_id"] for s in view["plan"]["segments"]] == ["east", "ring_n", "west", "ring_s", "east"]
     assert view["plan"]["places"][-1] == "NE" and view["hold"] is None
-    for i, seg in enumerate(live.segments):  # every place a hold may stop at, robot clear of the zone
+    unholdable = set()
+    for i, seg in enumerate(live.segments):  # a hold stops clear of the zone, or never happens there
         back = runner.traffic.hold_back_m(seg)
-        if live.place(i):
-            assert back is not None, live.place(i)
+        if live.place(i) and back is None:
+            unholdable.add(live.place(i))
+        elif live.place(i):
             assert not _zone_units(runner, store, live.arc(i).point_at(seg["s_to"] - back)), live.place(i)
-    assert runner.traffic.hold_back_m(live.segments[3]) is None  # ring_s itself: no hold there
+    assert unholdable == {"NW", "SE"}  # reached over ring_n / ring_s, inside the roundabout
 
     # The robot drives the ring (holds the zone), then reaches the lap's last place with a failed lap check.
     ring_s = graph.arcs["ring_s:fwd"]
