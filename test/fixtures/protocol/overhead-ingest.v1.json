@@ -135,7 +135,7 @@
       "ev": -1,
       "ae_lock": true,
       "awb_lock": true,
-      "max_exposure_us": 8333,
+      "max_exposure_us": 33333,
       "antibanding": "60hz"
     },
     "camera_state_example": {
