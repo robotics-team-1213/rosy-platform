@@ -14,7 +14,11 @@ export function createConnectionView({scope, el}) {
     event.preventDefault(); setTopbarOpen(true);
     // D-519 — the 아이디 field when the login form shows, else the token field.
     const form = document.getElementById("password-login");
-    ((form && !form.hidden && form.querySelector("[data-login=login]")) || el("console-token")).focus();
+    if (form && !form.hidden) form.querySelector("[data-login=login]").focus();
+    else {
+      el("token-access").open = true;
+      el("console-token").focus();
+    }
   });
 
   function show(reason, token) {

@@ -120,13 +120,25 @@ class LCD():
 
     def show_panel(self, pixel):
         """D-433: draw bytes ``info_screen.to_panel`` already made (rosy-face's frame cache)."""
+        previous = getattr(self, "_last_panel", None)
+        if previous is None or previous.shape != pixel.shape:
+            x0, y0, x1, y1 = 0, 0, self.w, self.h
+        else:
+            ys, xs = np.nonzero(np.any(pixel != previous, axis=2))
+            if not len(xs):
+                return
+            x0, y0 = int(xs.min()), int(ys.min())
+            x1, y1 = int(xs.max()) + 1, int(ys.max()) + 1
+        self._last_panel = None  # a partial SPI failure needs a full redraw next time
         self._write_cmd(0x36)
         self._write_data(0x08)
-        self._set_windows(0, 0, self.w, self.h)
+        self._set_windows(x0, y0, x1, y1)
 
-        self._write_data_buffer(pixel)
+        self._write_data_buffer(pixel[y0:y1, x0:x1])
+        self._last_panel = pixel.copy()
 
     def clear(self, color=0x0000):
+        self._last_panel = None
         color_high = color >> 8
         color_low = color & 0xff
         
@@ -143,12 +155,14 @@ class LCD():
 
     def sleep(self):
         """디스플레이 OFF + Sleep In (0x28/0x10). 대기 전력 절감용."""
+        self._last_panel = None
         self._write_cmd(0x28)
         self._write_cmd(0x10)
         time.sleep(0.005)
 
     def wake(self):
         """Sleep Out + 디스플레이 ON (0x11/0x29). 데이터시트상 120 ms 대기 필요."""
+        self._last_panel = None
         self._write_cmd(0x11)
         time.sleep(0.12)
         self._write_cmd(0x29)

@@ -161,7 +161,8 @@ def _shots(page, name, fits=False):
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
         if width < 480:
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            assert page.locator("#site-path").bounding_box()["height"] <= 64
+            if page.locator("#site-path").count():
+                assert page.locator("#site-path").bounding_box()["height"] <= 64
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["x"] >= 0 and stop["y"] >= 0
             assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height

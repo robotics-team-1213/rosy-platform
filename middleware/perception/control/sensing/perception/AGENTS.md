@@ -34,6 +34,7 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 
 - Do not import ROS. Observation nodes live above this folder and publish facts.
 - Do not import `core` or emit a twist.
+- This folder is the P1a perception evidence size unit; package imports remain `control.sensing.perception` until a separately reviewed package move.
 - The learned backend (`learned/`) is shadow-only (D-356): it publishes `perception/learned/shadow` and never feeds control. Model weights never live in `src/`; they arrive through `learning/training/perception/model/deliver.py`. It returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
 
 ### Testing Requirements

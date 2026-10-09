@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
-- 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
-- 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
-- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
-- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
+- 2026-10-09 · uncommitted · docs: SIM 벽 근처 LiDAR HOLD 원인 범위
+- 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별
+- 2026-10-09 · uncommitted · docs: SIM 카메라 밝기 게이트 반례
+- 2026-10-09 · uncommitted · fix: D-535 연결 사유 안전 검토 기록
+- 2026-10-09 · uncommitted · docs: 경로 이탈의 새 카메라 관측과 폐루프 한계

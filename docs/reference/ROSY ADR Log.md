@@ -515,6 +515,7 @@
 | D-516 | AI PC의 Decision 후보는 동일한 오프라인 사건으로 비교하고, VLM 관측과 실행 권한을 분리한다 | Accepted (2026-10-08, 사용자 결정: 모델 PC 학습·평가, AI PC 추론 전용, Fleet 판단·승인, CORE 재검사; 현장 활성화 별도) |
 | D-517 | 여러 로봇이 같은 차로망을 동시에 달린다: 로봇마다 trip 하나·반복 운행, Fleet 고정 블록 통행권(블록 길이는 몸체·정지 거리·위치 불확실성·경로 감시 거리에서 계산, 구역·양방 차로는 블록 묶음, 고리 수용 N·h ≤ S−1), CORE는 자세 odom 기준 통행권 끝·`ttl_s` 만료에서 서고 통행권은 줄지 않는다, 막히면 로봇 → Fleet 해결기 → 사람(D-494 1·14항 개정) | Accepted (2026-10-08, 사용자 결정 "바로 처리" + 리더–팔로워 포함 로드맵 9항 M0–M7; rev 2 독립 검토 반영; CORE 통행권·따라가기는 단계별 Safety-Review) |
 | D-520 | 곡률을 아는 차로 구간(회전교차로 ring)에서는 CORE가 지도의 호(ω = v·κ)를 주 명령으로 달리고 카메라는 바깥선을 반지름 고정 원으로 맞춰 옆 보정만 준다; 구간 기하는 D-507 교차로 지시의 `exit_segment`로 보내고 IR 가드(`clear`만)와 D-422가 지킨다 | Accepted (2026-10-08, 사용자 확정; 결정 방향: 지도 호 feed-forward 주 명령 + 카메라 호 맞춤 보정, 단계 1 feed-forward SIM → 단계 2 보정; 문서만, 구현·SIM·DEVICE 별도) |
+| D-523 | AI PC 질의는 정체 사실 또는 허용 후보만 반환한다 | Accepted (2026-10-08, 사용자 계획 승인; 내부 파서, 현장 활성화 아님) |
 | D-521 | Rosy Cam 원격 입회로 G4/G5를 진행하고 별도 현장 담당자를 필수로 두지 않는다 | Accepted (2026-10-08, 사용자 결정; DEVICE/FIELD 미수용) |
 | D-522 | 개발 환경 원격 이동은 사용자 지시로 진행하며 반복 승인 대신 장치 증거를 확인한다 | Accepted (2026-10-08, 사용자 지시; DEVICE/FIELD 미수용) |
 | D-524 | Service Control. 관제 API가 사이트·AI·모델 Ubuntu의 재부팅과 허용된 systemd 유닛 정지·재시작만 받는다. pkill·셸·프로세스 이름은 거절하고, 재부팅은 shutdown -r +10이다 | Proposed (2026-10-08, 사용자 지시; 구현은 feat/host-control, 현장 설치·재부팅 없음) |
@@ -525,4 +526,8 @@
 | D-532 | 주행 가능 영역 추가 모델은 v13-drivable 계열로 구분하고 불변 revision·승인 데이터·기존 차선 모델의 계보를 각각 기록한다 | Accepted (2026-10-09, 사용자 결정; SOURCE 이름 규칙, 실제 학습·접수·배포 별도) |
 | D-531 | CORE가 지금 받아 둔 교차로·굽이·호 지시에서 경로 문맥을 만들어 `line/route_context`(String JSON, VOLATILE, 5 Hz, 만료 포함)로 인식 keeper에 준다; 문맥은 거부(HOLD 쪽)로만 쓰고 없거나 낡으면 keeper는 main과 같다; B9 `bend_expected`는 이 통로로만 켜진다; 실물 434프레임 HOLD → 주행은 독립 검증 없이 0 | Proposed (2026-10-09, 사용자 방향 결정 "둘 다": D-520 단계 2 먼저, 경로 문맥은 다음 단계; 문서만, 구현·SIM·DEVICE 별도) |
 | D-533 | Fleet의 TLS 공개 identity 조회는 source별 300회/분으로 따로 세고, 승인 challenge/session 증명은 기존 30회/분을 유지한다; 매 REST 요청의 CA·hostname·identity 검사를 생략하지 않는다 | Accepted (2026-10-09, 현장 429 재현; SOURCE 수정, DEVICE/FIELD 별도) |
+| D-535 | 연결이 안 되면 이유 코드 하나(21개, `connect-reasons.v1.json`)와 운영자 문장·할 일을 보인다; CORE 피어 승인·`/auth/connection` 거절은 기존 상태·`detail`에 `error.code`를 더하고, `/auth/connection`은 인증 없이 LAN·출발지별 30회/분으로 `core_ready`·`release`·`tls_hostname`·`pairing`을 답한다; 닿지 못한 실패는 클라이언트가 같은 코드로 분류(Fleet `link_reason`, Pilot `LinkReason`) | Proposed (2026-10-09, 8kcn 조사; SOURCE, Pilot 채택·DEVICE·FIELD 별도) |
+| D-536 | Fleet 로봇 상황과 좌표 안내: 로봇마다 지도 자세·u·몸체 반경·차로 문맥(옆 벗어남, 방향 오차, 구역, 다음 장소)을 한 기록으로 내고(`GET /api/fleet/guide`), 문제마다 좌표 목표가 붙은 안내(카메라 못 봄, 로봇 시계 앞섬, 위치 모름, 차로 이탈, 역주행, 구역 안 정지, 너무 가까움)를 예외 큐에 낸다; 관제 지도에 몸체 원·방향·불확실성 고리·목표 점선을 그린다; 로봇에 아무것도 보내지 않는다 | Accepted (2026-10-09, 사용자 요청; G1 읽기·표시 구현, G2 동작 버튼·G3 좌표 확장·G4 자동은 별도) |
+| D-537 | 현장 일회성 기체 몸체 대조는 인증된 장치 시험과 연속 영상으로 판정한다 | Accepted (2026-10-09, 두 Pinky 현재 배치 몸체 대조; Fleet 자동 추적·이동 수용 별도) |
 | D-534 | Pinky Pilot 녹화는 모델 PC가 정지 확인 후 자동 수신하고 검수 대기로 넘긴다 | Accepted (2026-10-09, 사용자 지시; SOURCE 계약·수신 타이머, 모델 PC 활성화와 실제 녹화 수신은 별도 확인) |
+| D-538 | 객체·픽셀 검수 스튜디오는 같은 작업 순서와 단축키를 보여주되 독립 결정·저장 조건을 유지한다 | Accepted (2026-10-09, 사용자 지시; SOURCE/브라우저·모델 PC 별도) |

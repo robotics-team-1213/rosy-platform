@@ -35,12 +35,35 @@ flowchart TB
 |---|---|---|
 | **CORE** | 각 로봇 | 외부와 말하는 유일한 창구. 상태·안전을 지키고 최종 주행 명령을 혼자 낸다 |
 | **Fleet** | 현장 PC | 여러 로봇에 미션을 나누고 작업 원장을 소유한다. 로봇 모터를 직접 움직이지 않는다 |
-| **Vision** | 현장 PC | 천장 카메라 영상에서 로봇 위치를 뽑아 Fleet에 준다 |
-| **인지·내비게이션** | 각 로봇 | 차선·장애물 증거, 경로 계획. 명령은 CORE를 거친다 |
+| **Vision** | 현장 PC | 천장 카메라로 지도 위 위치 관측을 만든다. 표시와 감시에 쓰고, 최종 주행 명령은 CORE가 낸다 |
+| **인지·내비게이션** | 각 로봇 | 차선·장애물 사실과 경로. 층과 모델의 자리는 아래 「인지와 판단」 |
 | **학습·평가** | 모델 PC | 데이터·사람 정답으로 모델을 학습·평가하고 고정 산출물의 승격 증거를 만든다 |
 | **AI 추론** | AI PC | 승인된 모델 버전으로 정체 사실 또는 Mission/Task 후보만 낸다. Fleet 원장·장치 명령 권한은 없다. 현재는 오프라인 연결 시험 단계 |
 
 시험도 개발 로컬 PC 계약 검사 → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](docs/adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md)).
+
+## 인지와 판단
+
+사실 → 나이 → 규칙 → CORE. `world`는 관측과 확정 사건을 대조하는 상태이고, 생성형 월드 모델이 아니다 ([v0.2 §3.1](docs/reference/ROSY_Platform_Architecture_Design_v0.2.md), [D-290](docs/adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)).
+
+```mermaid
+flowchart LR
+    sense["Perception<br/>사실"] --> world["World State<br/>나이"]
+    world --> rule["Supervisor<br/>규칙"]
+    rule --> core["CORE<br/>재검사 · 최종 명령"]
+    learn["모델 PC"] -.-> ai["AI PC"]
+    ai -.-> rule
+```
+
+| 층 | 자리 | 지금 |
+|---|---|---|
+| **Perception** | `middleware/perception` · `operations/vision` · `learning/training/perception` | 동작. 학습 차선은 섀도 ([D-356](docs/adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
+| **World State** | Fleet `MapPose`. `operations/world`는 다음 소비자 때 | [D-503](docs/adr/D-503-autonomy-chain-facts-and-exception-queue.md) Proposed |
+| **Supervisor** | Fleet `stuck_resolver` | 규칙 · 사람 |
+| **모델** | 모델 PC 평가 → AI PC 승인 버전 | [D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md) 경계. 점선은 목표. VLM은 [D-492](docs/adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) Proposed |
+| **CORE** | `middleware/core/gateway` | 최종 `/cmd_vel` (D-2) |
+
+정체(`wall` · `object` · `robot` · `person` · `unknown`)와 텍스트 후보는 별도 작업이다. 다섯 층은 [D-503](docs/adr/D-503-autonomy-chain-facts-and-exception-queue.md)이 문서만으로 제안한다. 절차는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md).
 
 ## 시작하기
 
@@ -64,7 +87,7 @@ flowchart LR
 | 제품 | [PRODUCT.md](PRODUCT.md) 누구를 위한 제품인가 · [CONCEPTS.md](CONCEPTS.md) 공통 용어 · [DESIGN.md](DESIGN.md) 화면 규칙 |
 | 요구사항·계약 | [CORE SRS](docs/spec/ROSY%20CORE%20SRS.md) · [FLEET SRS](docs/spec/ROSY%20FLEET%20SRS.md) · [API & Protocol Reference](docs/reference/ROSY%20API%20&%20Protocol%20Reference.md) |
 | 결정 | [ADR Log](docs/reference/ROSY%20ADR%20Log.md) · [개별 ADR](docs/adr/) |
-| 설계 | [목표 아키텍처](docs/architecture/) |
+| 설계 | [목표 아키텍처](docs/architecture/) · [인지와 판단](#인지와-판단) · [Decision 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md) |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
 | 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
 
