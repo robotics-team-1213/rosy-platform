@@ -131,6 +131,34 @@ def test_near_extension_refused_on_a_bad_fit_or_narrow_road():
     assert (out[200] == ldd.DRIVABLE).any() and not (out[201:] == ldd.DRIVABLE).any()
 
 
+def _labelled(road_cols=(60, 260)):
+    """Rows >= 110 labelled: band 0 at 0-49 and 270-319, lanes 50-59 / 260-269, drivable between."""
+    mask = np.full((240, 320), 255, np.uint8)
+    mask[110:] = 0
+    mask[110:, 50:60], mask[110:, 260:270] = 1, 2
+    mask[110:, road_cols[0]:road_cols[1]] = ldd.DRIVABLE
+    mask[110:, 60:road_cols[0]] = 0
+    mask[110:, road_cols[1]:260] = 0
+    return mask
+
+
+def test_canaries_change_at_least_800px_and_15_percent_of_labelled():
+    mask = _labelled()
+    removed = ldd._corrupt(mask, "drivable_removed", 110)
+    assert (removed[mask == ldd.DRIVABLE] == 0).all()  # cyan, not unknown
+    wall = ldd._corrupt(mask, "wall_over_road", 110)
+    assert (wall[mask == ldd.DRIVABLE] == 0).sum() >= 0.5 * (mask == ldd.DRIVABLE).sum()
+    off = ldd._corrupt(mask, "drivable_over_offroad", 110)
+    assert (off[110:, :50] == ldd.DRIVABLE).all() and (off[110:, 270:] == ldd.DRIVABLE).all()
+    assert (off[110:, 50:60] == 1).all() and (off[:110] == 255).all()
+    narrow = _labelled((150, 160))  # 1300 px of road < 15 % of 41600 labelled
+    assert ldd._corrupt(narrow, "drivable_removed", 110) is None
+    assert ldd._corrupt(narrow, "wall_over_road", 110) is None
+    tiny = np.full((240, 320), 255, np.uint8)
+    tiny[200:220, 100:130] = ldd.DRIVABLE  # 600 px: under the 800 px floor
+    assert ldd._corrupt(tiny, "drivable_removed", 110) is None
+
+
 def test_derive_needs_left_before_right():
     image, src = _frame(wall=False)
     src[110:, 40:50], src[110:, 270:280] = 2, 1

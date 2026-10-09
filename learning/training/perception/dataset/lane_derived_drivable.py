@@ -292,30 +292,48 @@ def _check_canary_count(count, frames):
         raise ValueError(f"{count} canaries for {frames} frames; at least {need} required")
 
 
-CANARY_KINDS = ("drivable_over_wall", "wall_over_road", "drivable_outside_lines", "drivable_removed")
-SHEET_COLORS = {DRIVABLE: (0, 255, 0), 0: (128, 128, 128), 1: (255, 0, 0), 2: (0, 0, 255),
+# Wall pixels above ignore_top are not in the mask, so a wall canary would hide in the label-0
+# band; drivable_over_offroad paints that band and everything out to the frame edge instead.
+CANARY_KINDS = ("drivable_over_offroad", "wall_over_road", "drivable_outside_lines", "drivable_removed")
+# BGR; label 0 is saturated cyan so "not drivable" reads apart from the grey carpet (sheets2:
+# reviewers caught 136/181 canaries with a grey overlay).
+SHEET_COLORS = {DRIVABLE: (0, 255, 0), 0: (255, 255, 0), 1: (255, 0, 0), 2: (0, 0, 255),
                 3: (0, 255, 255), 4: (0, 128, 255)}
-LEGEND = ("green drivable | grey wall | magenta unlabelled | blue lane_left | red lane_right | "
-          "yellow crosswalk | orange speed_bump")
+SHEET_ALPHA = {0: .6}
+LEGEND = ("green drivable | cyan = NOT drivable (wall / off-road floor) | magenta unlabelled | "
+          "blue lane_left | red lane_right | yellow crosswalk | orange speed_bump")
+# A canary must change at least this many pixels: max(floor, fraction of labelled pixels).
+CANARY_MIN_PX, CANARY_MIN_FRACTION = 800, 0.15
 
 
 def _corrupt(mask, kind, ignore_top):
-    """A known-wrong copy of mask for a canary tile, or None when this frame cannot show that error."""
+    """A known-wrong copy of mask for a canary tile, or None when this frame cannot show that error
+    on at least max(CANARY_MIN_PX, CANARY_MIN_FRACTION of its labelled pixels)."""
     bad, below = mask.copy(), np.arange(mask.shape[0])[:, None] >= ignore_top
-    source = {"drivable_over_wall": mask == 0, "wall_over_road": mask == DRIVABLE,
-              "drivable_outside_lines": (mask == IGNORE) & below, "drivable_removed": mask == DRIVABLE}[kind]
-    if source.sum() < 500:
-        return None
-    bad[source] = {"drivable_over_wall": DRIVABLE, "wall_over_road": 0,
-                   "drivable_outside_lines": DRIVABLE, "drivable_removed": IGNORE}[kind]
-    return bad
+    road = mask == DRIVABLE
+    if kind == "drivable_over_offroad":
+        for row in np.flatnonzero((mask == 0).any(axis=1) & road.any(axis=1) & below[:, 0]):
+            cols, zeros = np.flatnonzero(road[row]), np.flatnonzero(mask[row] == 0)
+            lane = (mask[row] >= 1) & (mask[row] <= 4)
+            for span in ((slice(0, zeros[zeros < cols.min()].max() + 1) if (zeros < cols.min()).any() else None),
+                         (slice(zeros[zeros > cols.max()].min(), mask.shape[1]) if (zeros > cols.max()).any() else None)):
+                if span is not None:
+                    bad[row, span][~lane[span]] = DRIVABLE
+    elif kind == "wall_over_road":
+        xs = np.nonzero(road)[1]
+        bad[road & (np.arange(mask.shape[1])[None, :] <= (np.median(xs) if xs.size else -1))] = 0
+    else:
+        source = {"drivable_outside_lines": (mask == IGNORE) & below, "drivable_removed": road}[kind]
+        bad[source] = {"drivable_outside_lines": DRIVABLE, "drivable_removed": 0}[kind]
+    need = max(CANARY_MIN_PX, CANARY_MIN_FRACTION * int((mask != IGNORE).sum()))
+    return bad if int((bad != mask).sum()) >= need else None
 
 
 def _tile(image, mask, label, ignore_top):
     view = image.copy()
     for value, color in SHEET_COLORS.items():
-        pixels = mask == value
-        view[pixels] = (image[pixels] * .45 + np.asarray(color) * .55).astype(np.uint8)
+        pixels, alpha = mask == value, SHEET_ALPHA.get(value, .55)
+        view[pixels] = (image[pixels] * (1 - alpha) + np.asarray(color) * alpha).astype(np.uint8)
     unknown = (mask == IGNORE) & (np.arange(mask.shape[0])[:, None] >= ignore_top)
     view[unknown] = (image[unknown] * .45 + np.asarray((255, 0, 255)) * .55).astype(np.uint8)
     head = np.full((40, image.shape[1] * 2, 3), 255, np.uint8)
@@ -338,14 +356,19 @@ def sheets(out, dest, key, *, per_sheet=20, seed=0, canaries=0.1):
     load = lambda f: (cv2.imread(str(out / f["image"])),  # noqa: E731
                       cv2.imread(str(out / f["mask"]), cv2.IMREAD_UNCHANGED))
     items = [(f, None) for f in frames]
-    wanted, secret = round(len(frames) * canaries), []
-    for number, index in enumerate(rng.permutation(len(frames))):
+    wanted, secret, turn = round(len(frames) * canaries), [], 0
+    for index in rng.permutation(len(frames)):
         if len(secret) >= wanted:
             break
-        kind = CANARY_KINDS[number % len(CANARY_KINDS)]
-        if _corrupt(load(frames[index])[1], kind, ignore_top) is not None:
-            secret.append(len(items))
-            items.append((frames[index], kind))
+        mask = load(frames[index])[1]
+        # Kinds rotate; a frame too small for this turn's kind is tried with the next ones.
+        for step in range(len(CANARY_KINDS)):
+            kind = CANARY_KINDS[(turn + step) % len(CANARY_KINDS)]
+            if _corrupt(mask, kind, ignore_top) is not None:
+                secret.append(len(items))
+                items.append((frames[index], kind))
+                turn += step + 1
+                break
     _check_canary_count(len(secret), len(frames))
     order = rng.permutation(len(items))
     dest.mkdir(parents=True)
