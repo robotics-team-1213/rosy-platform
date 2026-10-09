@@ -37,6 +37,20 @@ from fleet.swarm.relay import Relay
 log = logging.getLogger(__name__)
 
 
+def formation_relay_kwargs(relay_factory, poses, enabled: Callable[[], bool]) -> dict:
+    """FormationSession kwargs: a given (test) factory wins; else the anchored relay when there is
+    a map pose service; else the session default."""
+    if relay_factory is not None:
+        return {"relay_factory": relay_factory}
+    return {} if poses is None else {"relay_factory": anchored_relay_factory(poses, enabled)}
+
+
+def anchor_status(relay) -> Optional[dict]:
+    """Formation status `anchor` block: None when the relay does not anchor."""
+    anchor = getattr(relay, "anchor", None)
+    return None if anchor is None else anchor.status()
+
+
 def anchored_relay_factory(poses, enabled: Callable[[], bool]):
     """FormationSession `relay_factory`: a Relay with a TrailAnchor over `poses` (MapPoseService),
     refreshing both robots' odom from REST while it anchors."""
