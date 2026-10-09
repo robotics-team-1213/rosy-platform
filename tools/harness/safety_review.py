@@ -292,6 +292,12 @@ EXEMPT: dict[str, str] = {
         "No stop, rearm, command, authority or D-430 import boundary changes; 16 focused "
         "remote tests passed with 0 new failures. See docs/validation/"
         "d581-trail-anchor-safety-review-2026-10-10/result.md; TRAIL driving remains HOLD.",
+    "4c2b14ec8ec8d3a370f6bd008ea474d56650a180":  # git commit revision
+        "Independent D-430 review, 2026-10-10: merge first-parent diff in safety-tagged "
+        "body_stop.py changes only a robot-name comment. D-591 blind-floor behavior came from "
+        "94a6aa65a, which has a Safety-Review trailer; no new executable stop logic in this merge. "
+        "Remote AI/model-PC tests on follow-up af2933291f passed with 0 new failures. See "
+        "docs/validation/d591-merge-safety-review-2026-10-10/result.md; device acceptance separate.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
