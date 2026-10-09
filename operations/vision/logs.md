@@ -372,5 +372,6 @@
 
 ## 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
 - 변경: `detect.py`가 `_detector_parameters`가 돌려준 객체에 `minMarkerPerimeterRate = 0.015`를 둔다(4.6 segfault 회피로 새 객체를 만들지 않음). 로봇 윗면이 40 mm 스티커만 받기 때문이다.
-- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:\DevTemp\marker-id-planun-1.txt.
+- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:\DevTemp\marker-id-plan
+un-1.txt.
 - gate 변화: SOURCE. 현장 Vision 갱신 뒤 실제 스티커로 MARKER 확인은 열림.
