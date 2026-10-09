@@ -19,7 +19,7 @@ def _frame(wall=True):
     mask[200:210, 100:120] = 3
     if wall:
         image[60:160, 285:] = 220  # flat white wall continuing above row 110
-    image[180:200, 120:140] = 220  # bright flat patch not connected to row 110: stays ignored
+    image[180:200, 120:140] = 220  # unlabelled bright stripe between the lanes: stays ignored
     return image, mask
 
 
@@ -52,6 +52,7 @@ def test_derive_mask_band_lanes_walls_and_ignore():
     assert (out[115:155, 290:] == 0).sum() > 0.9 * 40 * 30  # wall negatives
     assert (out[230, 285:] == 255).all()  # carpet outside lanes stays unknown
     assert (out[180:200, 0:40] == 255).all()
+    assert (out[182:198, 122:138] == 255).all()  # stripe is not road
 
 
 def test_derive_needs_left_before_right():
@@ -81,10 +82,18 @@ def test_derive_verify_judge_finalize(tmp_path):
     ldd.verify_dataset(out)
 
     answers = iter([{"verdict": "concern", "reason": "green on wall"}, {"verdict": "ok", "reason": "fine"}])
-    rows = ldd.judge(out, lambda original, view: next(answers))
+    with pytest.raises(ValueError, match="not finalized"):
+        ldd.verify_dataset(out, finalized=True)
+    rows = ldd.judge(out, lambda original, view: next(answers), model="qwen3-vl:8b-instruct",
+                     endpoint="http://127.0.0.1:11434")
     assert [r["verdict"] for r in rows] == ["concern", "ok"]
     _, final = ldd.finalize(out)
     assert len(final["frames"]) == 1 and len(final["judge"]["dropped"]) == 1
+    assert final["judge"]["counts"] == {"ok": 1, "concern": 1, "uncertain": 0}
+    assert final["judge"]["model"] == "qwen3-vl:8b-instruct" and final["frames"][0]["judge"] == "ok"
+    ldd.verify_dataset(out, finalized=True)
+    with pytest.raises(ValueError, match="already finalized"):
+        ldd.finalize(out)
     assert not (out / doc["frames"][0]["image"]).exists()
     ldd.verify_dataset(out)
 
@@ -113,3 +122,19 @@ def test_verify_refuses_approval_fields_and_wrong_origin(tmp_path):
     (out / "manifest.json").write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="D-554"):
         ldd.verify_dataset(out)
+
+
+def test_tool_commit_is_recorded_never_unknown(tmp_path, monkeypatch):
+    head = ldd._git_commit()
+    assert len(head) == 40
+    with pytest.raises(ValueError, match="differs"):
+        ldd._git_commit("0" * 40)
+
+    def no_git(*args, **kwargs):
+        raise OSError("no git")
+    monkeypatch.setattr(ldd.subprocess, "run", no_git)
+    with pytest.raises(ValueError, match="tool commit unknown"):
+        ldd._git_commit()
+    with pytest.raises(ValueError, match="tool commit unknown"):
+        ldd._git_commit("unknown")
+    assert ldd._git_commit("a" * 40) == "a" * 40

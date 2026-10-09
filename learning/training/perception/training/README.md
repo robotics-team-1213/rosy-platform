@@ -374,9 +374,10 @@ baseline/enhanced recipe는 돌리지 않는다.
 
 ```bash
 python dataset/lane_derived_drivable.py derive --src ~/rosy-ml/data/v13-lane-ai/data-v13 \
-    --out ~/rosy-ml/data/v13-lane-derived/out [--min-both-rows 20] [--ignore-top 110]
+    --out ~/rosy-ml/data/v13-lane-derived/out [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150] \
+    [--tool-commit <git get-tar-commit-id 값>]   # git checkout 밖(git archive 사본)에서는 필수
 python dataset/lane_derived_drivable.py judge --out ~/rosy-ml/data/v13-lane-derived/out \
-    [--endpoint http://127.0.0.1:11434] [--model qwen3-vl:8b-instruct] [--limit N]
+    [--endpoint http://127.0.0.1:11434] [--model qwen3-vl:8b-instruct] [--limit N] [--splits train,val,test]
 python dataset/lane_derived_drivable.py finalize --out ~/rosy-ml/data/v13-lane-derived/out
 python dataset/publish.py ~/rosy-ml/data/v13-lane-derived/out --store <store> --name v13-lane-derived
 python training/train_job.py config.json --out <store>/jobs/<new-job>
@@ -387,9 +388,14 @@ export는 manifest `dataset`에 `annotation_origin`, `adr`를 같이 적는다. 
 `v13-drivable`만 받아 lane_seg shadow 슬롯에 넣는다. 그 밖의 v13은 계속 거부하고 lane_seg에는 promote가 없다.
 
 `judge`는 조언용이다. `concern` 프레임만 `finalize`가 빼고 manifest의 `judge.dropped`에 남긴다.
+`finalize`는 `judge` 블록(모델, endpoint, prompt sha256, 판정 수, 제외 목록)과 프레임별 판정을 적는다.
+train_job은 이 블록이 없거나 train/val 프레임 중 판정이 `ok`/`uncertain`이 아닌 것이 있으면 거부한다.
+도구 commit은 40자리 hex여야 하고 `unknown`은 거부한다.
 `config.json`은 위 `drivable_head` 형식 그대로이고 `dataset`에 publish가 찍은
 `v13-lane-derived@<content_sha>`를 넣는다. 벽 판정 값(`WALL`: 밝기 125, 7x7 표준편차 12, 면적 200)은
-아레나 프레임으로 맞춘 기본값이며 manifest `params.wall`에 남는다.
+아레나 프레임으로 맞춘 기본값이며 manifest `params.wall`에 남는다. 두 차선 사이에서 밝기 150 이상인
+화소(라벨 없는 페인트 줄)는 drivable이 아니라 255로 둔다(`params.stripe_min`).
+
 # Indexed review producer composition
 
 The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an

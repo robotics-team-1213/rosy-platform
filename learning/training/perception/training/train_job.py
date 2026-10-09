@@ -242,7 +242,7 @@ def _run(config, out, indexed_review, admission_stack):
     if derived:
         from lane_derived_drivable import verify_dataset
         try:
-            derived_doc = verify_dataset(dataset)
+            derived_doc = verify_dataset(dataset, finalized=True)
         except (ValueError, OSError, KeyError, TypeError) as exc:
             raise JobError(f"D-554 lane-derived admission denied: {exc}") from exc
     if indexed:
@@ -286,7 +286,8 @@ def _run(config, out, indexed_review, admission_stack):
     if derived:
         inputs["lane_derived"] = {"annotation_origin": derived_doc["annotation_origin"],
                                   "adr": derived_doc["adr"], "source": derived_doc["source"],
-                                  "tool": derived_doc["tool"], "params": derived_doc["params"]}
+                                  "tool": derived_doc["tool"], "params": derived_doc["params"],
+                                  "judge": {k: v for k, v in derived_doc["judge"].items() if k != "dropped"}}
     admitted = None
     if indexed:
         expected_files = {gate_path: inputs["gate_sha"], profile: inputs["camera_sha"],
@@ -304,7 +305,7 @@ def _run(config, out, indexed_review, admission_stack):
             admitted.check()
         if derived:  # D-554 re-check at every boundary, as IndexedReview does
             try:
-                verify_dataset(dataset)
+                verify_dataset(dataset, finalized=True)
                 changed = [str(path) for path, digest in bound.items() if sha(path) != digest]
             except (ValueError, OSError, KeyError, TypeError) as exc:
                 raise JobError(f"D-554 lane-derived dataset changed after admission: {exc}") from exc

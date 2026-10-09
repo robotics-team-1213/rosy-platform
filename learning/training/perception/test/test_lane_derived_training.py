@@ -17,6 +17,8 @@ def _setup(tmp_path):
     from export_cell import write_manifest
     derived = tmp_path / "derived"
     ldd.derive(_source(tmp_path, [("train", "a", _frame()), ("val", "b", _frame())]), derived)
+    ldd.judge(derived, lambda original, view: {"verdict": "ok", "reason": "fine"}, model="m", endpoint="e")
+    ldd.finalize(derived)
     store = Store(tmp_path / "store")
     path, digest = store.put_dataset(derived, "lane-derived")
     evaluation = tmp_path / "replay" / "eval"
@@ -66,6 +68,7 @@ def test_derived_dataset_admits_drivable_head_and_rechecks_hashes(tmp_path, monk
         train_job.run(config, tmp_path / "job")
     assert seen["lane_derived"]["annotation_origin"] == "derived_from_reviewed_lanes"
     assert seen["lane_derived"]["adr"] == "D-554"
+    assert seen["lane_derived"]["judge"]["counts"]["ok"] == 2
     assert seen["parent_lane_model"]["model_revision"].startswith("lane-seg-")
     assert "learning/training/perception/dataset/lane_derived_drivable.py" in seen["source_files"]
     assert not (tmp_path / "job").exists()
@@ -80,6 +83,17 @@ def test_derived_recheck_binds_parent_files(tmp_path, monkeypatch):
 
     monkeypatch.setattr(train_job, "_run_drivable_candidate", candidate)
     with pytest.raises(JobError, match="parent/trainer source changed"):
+        train_job.run(config, tmp_path / "job")
+
+
+def test_unfinalized_derived_dataset_is_refused(tmp_path):
+    config, dataset, _ = _setup(tmp_path)
+    doc = json.loads((dataset / "manifest.json").read_text())
+    doc.pop("judge")
+    (dataset / "manifest.json").write_text(json.dumps(doc))
+    renamed = dataset.rename(dataset.with_name(content_sha(dataset)))
+    config["dataset"] = "lane-derived@" + renamed.name
+    with pytest.raises(JobError, match="not finalized"):
         train_job.run(config, tmp_path / "job")
 
 
