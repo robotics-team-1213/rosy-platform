@@ -20,7 +20,7 @@ _REQUIRED = {
 }
 _ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
                         "corner_marker_ids", "calibration_source",
-                        "place_markers"}
+                        "place_markers", "auto_tune"}
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -34,6 +34,9 @@ class VisionSourceConfig:
     sighting_token: str
     fleet_base_url: str
     credential: str = "static"
+    #: D-589 6: Vision tunes this camera's exposure for recognition (needs --track); false
+    #: sends no camera messages and the phone follows its own D-544 settings.
+    auto_tune: bool = True
 
 
 def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -132,10 +135,13 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             calibration_source=calibration_source,
             place_markers=place_markers,
         )
+        auto_tune = row.get("auto_tune", True)
+        if type(auto_tune) is not bool:
+            raise ValueError(f"sources[{index}].auto_tune must be true or false")
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
         source_ids.add(camera.source_id)
         phone_token = secrets[0] if credential == "static" else None
         configs.append(VisionSourceConfig(camera, phone_token, secrets[-1], row["fleet_base_url"],
-                                          credential))
+                                          credential, auto_tune))
     return configs

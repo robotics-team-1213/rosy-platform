@@ -35,6 +35,7 @@ from rosy_vision.publish import SightingPublishError, SightingPublisher
 from rosy_vision.vision_config import load_vision_sources
 from rosy_vision.track.fleet_client import TrackClient
 from rosy_vision.track.background_blob import BackgroundBlobDetector, BackgroundStore
+from rosy_vision.track.tuning import Tuner, TuningLog
 from rosy_vision.track.worker import TrackWorker
 from rosy_vision.worker import VisionWorker
 from core_common.protocol.vision_preview import VisionLeaseSigner
@@ -333,8 +334,11 @@ async def _run_vision(args: argparse.Namespace) -> int:
                     raise ValueError("--track-state needs source ids that are plain file names")
                 detector = None if state is None else BackgroundBlobDetector(
                     store=BackgroundStore(state / f"{config.camera.source_id}.npz"))
+                # D-589: per-source tuning records sit beside the kept background.
+                tuner = Tuner(log=TuningLog(
+                    None if state is None else state / f"{config.camera.source_id}.tuning.json"))
                 tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client,
-                                      detector=detector)
+                                      detector=detector, auto_tune=config.auto_tune, tuner=tuner)
                 trackers.append(tracker)
             calibrator = None
             if config.camera.calibration_source == "field_boundary":
