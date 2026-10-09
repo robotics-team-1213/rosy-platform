@@ -52,9 +52,11 @@ CLAMP_ROWS = 10
 #: Components shorter than END_PX block their rows on the outer side instead;
 #: components under MIN_LINE_PX px are speckle and only block themselves.
 END_PX, WALL_PX, MIN_LINE_PX = 20, 3, 30
-#: Seed search depth: the drivable pixel nearest the centre column within this
-#: many rows of the lowest drivable row.
-SEED_ROWS = 8
+#: Seed search depth: rows above the lowest drivable row in which the seed
+#: region is chosen: the centre column's, or when a line covers the centre
+#: column there the one with most drivable pixels (D-576: a line across the
+#: bottom centre must not leave the fill in a sliver beside it).
+SEED_ROWS = 15
 #: Shadow `visible` latch on confidence (audit 2026-10-02): on at 0.35, off below 0.25.
 VISIBLE_ENTER = 0.35
 VISIBLE_EXIT = 0.25
@@ -154,8 +156,10 @@ def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, i
                           boundary: tuple[int, int] | None = None) -> np.ndarray:
     """Drivable pixels 4-connected to the road ahead without entering a lane pixel (D-566 item 4).
 
-    Seed: the drivable pixel nearest the centre column in the lowest SEED_ROWS rows that hold
-    drivable. Region: the seed's 4-connected component of passable pixels (drivable, or
+    Seed region: within the lowest SEED_ROWS rows that hold drivable, the region of the centre
+    column's lowest drivable pixel, or when the centre column has none there (a line covers it)
+    the region with most drivable pixels in those rows; seed at its pixel nearest the centre
+    column. Region: the seed's 4-connected component of passable pixels (drivable, or
     through_idxs such as crosswalk paint, never lane_idxs). Going up from the seed row, a region
     row wider than max_row_growth x the widest unclipped span of the CLAMP_ROWS rows below keeps
     only its run nearest the middle of the row below, clipped around it (the first CLAMP_ROWS
@@ -172,11 +176,16 @@ def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, i
     if not rows.size:
         return out
     low = max(rows.max() - SEED_ROWS + 1, 0)
-    ys, xs = np.nonzero(drivable[low:rows.max() + 1] & passable[low:rows.max() + 1])
-    pick = np.argmin(np.abs(xs - (labels.shape[1] - 1) / 2.0))
-    seed_row, seed_col = int(ys[pick]) + low, int(xs[pick])
     _, comp = cv2.connectedComponents(passable.astype(np.uint8), connectivity=4)
-    region = comp == comp[seed_row, seed_col]
+    ys, xs = np.nonzero(drivable[low:rows.max() + 1] & passable[low:rows.max() + 1])
+    ids = comp[ys + low, xs]
+    centre = ids[xs == labels.shape[1] // 2]
+    # The centre column's region when the robot's front is drivable there; when a line covers it,
+    # the region with most drivable pixels in the seed rows (D-576, drive frame 32).
+    best = centre[np.argmax(ys[xs == labels.shape[1] // 2])] if centre.size else np.bincount(ids).argmax()
+    pick = np.flatnonzero(ids == best)[np.argmin(np.abs(xs[ids == best] - (labels.shape[1] - 1) / 2.0))]
+    seed_row, seed_col = int(ys[pick]) + low, int(xs[pick])
+    region = comp == best
     cols = np.arange(labels.shape[1])
     out[seed_row] = _row_runs(passable[seed_row], cols == seed_col)
     below, recent = out[seed_row], []
