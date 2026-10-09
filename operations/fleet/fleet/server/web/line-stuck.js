@@ -76,6 +76,19 @@ export function resolverText(note) {
   return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision}`;
 }
 
+const AI_STATE_TEXT = Object.freeze({ present: "AI 판단 있음", absent: "AI 판단 없음" });
+
+/** D-577 5·8: the AI chip and one line per live fact (kind, confidence, source, evidence ids); shadow only. */
+export function aiLines(stuck) {
+  const ai = stuck.ai;
+  if (!ai) return [];
+  const chip = ai.state === "present" && ai.owner_mode === "owner_busy" ? "AI 판단 없음 (소유자 사용 중)"
+    : AI_STATE_TEXT[ai.state] || "AI 판단 없음";
+  const facts = (stuck.ai_facts || []).map((fact) => `AI 사실 ${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`
+    + ` · ${fact.source} · 근거 ${JSON.stringify(fact.evidence)}`);
+  return [chip, ...facts];
+}
+
 const OUTCOME_TEXT = Object.freeze({
   hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
   back: "후진 후 재시도를 시작했습니다",
@@ -308,6 +321,12 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       const line = document.createElement("p");
       line.className = "stuck-resolver";
       line.textContent = note;
+      li.append(line);
+    }
+    for (const text of aiLines(stuck)) {
+      const line = document.createElement("p");
+      line.className = "stuck-resolver";
+      line.textContent = text;
       li.append(line);
     }
     li.append(actions);

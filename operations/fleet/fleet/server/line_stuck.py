@@ -50,6 +50,7 @@ class LineStuckBoard:
         self._resolver: dict[tuple[str, str], dict] = {}
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
+        self.ai_view: Optional[Callable[[str], dict]] = None   # D-577 8: AI chip + live facts (shadow)
         self.map_pose: Optional[Callable[[str], object]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
@@ -213,6 +214,8 @@ class LineStuckBoard:
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {
             **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
+        if self.ai_view is not None:
+            shown.update(self.ai_view(robot_id))
         return shown
 
     def pending(self) -> list[dict]:
