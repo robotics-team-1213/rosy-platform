@@ -137,7 +137,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const battery = nodeWithText("span", "robot-line-battery");
       battery.dataset.fact = "battery";
       battery.append(nodeWithText("span", "sr-only", "배터리 "),
-        nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
+        nodeWithText("strong", "", power.battery));  // the card reads the same value
       line.append(nodeWithText("b", "", displayName),
         nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
       if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
