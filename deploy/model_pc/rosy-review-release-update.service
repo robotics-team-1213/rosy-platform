@@ -8,4 +8,3 @@ EnvironmentFile=%h/.config/rosy/review-release.env
 ExecStart=/usr/bin/python3 -I %h/rosy-ml/bin/auto_review_release.py --model-code-root %h/.local/share/rosy/model-code --review-root %h/rosy-ml/review-v13-code --state %h/rosy-ml/review-v13-drivable/state --python %h/rosy-ml/.venv/bin/python --host ${REVIEW_HOST} --minimum-sequence ${MINIMUM_SEQUENCE}
 TimeoutStartSec=2min
 NoNewPrivileges=yes
-
