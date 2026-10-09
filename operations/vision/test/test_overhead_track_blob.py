@@ -5,7 +5,9 @@ import math
 import numpy as np
 import pytest
 
-from rosy_vision.track.background_blob import PROCESSOR_REVISION, BackgroundBlobDetector, BackgroundStore
+from rosy_vision.track.background_blob import (
+    BAKED_SCORE_MAX, PROCESSOR_REVISION, BackgroundBlobDetector, BackgroundStore,
+)
 from rosy_vision.track.model import ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, Calibration, Frame
 
 CAL = Calibration(source_id="ceiling_north", map_id="map_v2_fleet", revision="paint-3f9a1c2b7d40",
@@ -293,10 +295,11 @@ def test_a_restart_replays_the_operator_relearn_and_sees_a_parked_robot_at_once(
     assert result.detections[0].x == pytest.approx(2.995, abs=0.006)
 
 
-def test_without_a_kept_background_a_restart_learns_the_parked_robot_as_before(tmp_path):
+def test_without_a_kept_background_a_parked_robot_is_learned_and_only_guessed(tmp_path):
     detector = BackgroundBlobDetector(store=BackgroundStore(tmp_path / "ceiling_north.npz"))
     _learned(detector, floor=_parked_robot_floor)
-    assert detector.detect(Frame(_parked_robot_floor(), 11.0), CAL).detections == ()
+    (guess,) = detector.detect(Frame(_parked_robot_floor(), 11.0), CAL).detections  # D-547
+    assert guess.score <= BAKED_SCORE_MAX
 
 
 def test_the_startup_learn_is_not_kept_only_an_operator_relearn_is(tmp_path):
@@ -342,3 +345,53 @@ def test_a_truncated_kept_background_learns_live(tmp_path):
     _learned(before)
     store.path.write_bytes(store.path.read_bytes()[:4096])
     assert BackgroundBlobDetector(store=store).detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+
+
+# D-547: robots baked into a startup learn are guessed; their ghosts are healed.
+
+def test_a_baked_robot_is_guessed_while_its_spot_shows_the_background():
+    detector = _learned(floor=_parked_robot_floor)
+    for index in range(5):
+        result = detector.detect(Frame(_parked_robot_floor(), 11.0 + index / 3), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+    guess = result.detections[0]
+    assert (guess.x, guess.y) == pytest.approx((2.995, 2.105), abs=0.006)
+    assert guess.footprint_m == pytest.approx(0.2031, abs=0.003)
+    assert 0.0 < guess.score <= BAKED_SCORE_MAX
+
+
+def _sign_floor():
+    image = _with_square(10)  # 0.11 m base: below the footprint window
+    _with_square(14, cx=450, cy=150, image=image)
+    image[110:143, 449:452] = 30  # in-window base with its pole: not compact
+    image[250:256, 200:240] = 30  # a dark strip
+    return image
+
+
+def test_sign_bases_poles_and_strips_in_the_background_are_not_guessed():
+    detector = _learned(floor=_sign_floor)
+    assert detector.detect(Frame(_sign_floor(), 11.0), CAL).detections == ()
+
+
+def test_a_ghost_is_not_reported_and_its_spot_is_relearned():
+    detector = _learned(floor=_parked_robot_floor)
+    for index in range(5):  # the parked robot drove off the mat
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+    back = detector.detect(Frame(_parked_robot_floor(), 13.0), CAL).detections
+    assert len(back) == 1 and back[0].score > BAKED_SCORE_MAX  # a live blob again, not a guess
+
+
+def test_a_baked_robot_that_moved_is_found_at_its_new_place_only():
+    detector = _learned(floor=_parked_robot_floor)
+    for index in range(5):
+        result = detector.detect(Frame(_with_square(18, cx=450), 11.0 + index / 3), CAL)
+        assert len(result.detections) == 1
+        assert result.detections[0].x == pytest.approx(4.495, abs=0.006)
+        assert result.detections[0].score > BAKED_SCORE_MAX
+
+
+def test_a_clean_learn_has_no_suspects_and_detects_as_before():
+    detector = _learned()
+    result = detector.detect(Frame(_with_square(18), 11.0), CAL)
+    assert len(result.detections) == 1 and result.detections[0].score > BAKED_SCORE_MAX
+    assert detector.detect(Frame(_floor(), 11.34), CAL).detections == ()
