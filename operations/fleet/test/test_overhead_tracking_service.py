@@ -386,7 +386,7 @@ def test_duplicate_robot_targets_source_ids_or_tokens_are_refused(sources):
 def test_config_returns_the_approved_record_and_relearn_counter():
     service, _ = _service()
     assert service.config_for(AUTH) == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                        "calibration": None, "relearn_seq": 0}
+                                        "calibration": None, "relearn_seq": 0, "robot_markers": {}}
     record = service.approve(dict(APPROVAL), approved_by="operator-1")
     assert service.request_relearn("ceiling_north") == {"source_id": "ceiling_north", "relearn_seq": 1}
     config = service.config_for(AUTH)

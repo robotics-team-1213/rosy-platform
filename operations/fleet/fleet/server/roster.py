@@ -24,10 +24,11 @@ class RosterConflict(HubError):
 
 
 class SiteRoster:
-    def __init__(self, console, *, task_service=None, sightings=None) -> None:
+    def __init__(self, console, *, task_service=None, sightings=None, tracking=None) -> None:
         self._console = console
         self._task_service = task_service
         self._sightings = sightings
+        self._tracking = tracking
         self.static_ids = frozenset(console.robot_ids)
 
     @property
@@ -42,7 +43,9 @@ class SiteRoster:
         if self._task_service is not None:
             self._task_service.robot_ids = ids
         if self._sightings is not None:
-            self._sightings.known_robot_ids = ids
+            self._sightings.retarget(ids)
+            if self._tracking is not None:
+                self._tracking.retarget(self._sightings.sources)
 
     def add(self, endpoint: RobotEndpoint, client: RobotClient, *, source: str = "enrolled") -> None:
         if source != "enrolled":

@@ -47,6 +47,8 @@
 
 ### 운영 절차 — TLS 로봇 번호 바꾸기
 
+> 2026-10-09 [D-580](D-580-site-roster-follows-fleet-enrollment.md): 옛 ID가 이 Fleet에 등록되었던 binding이면 3·4단계(파일 수정, Fleet 재시작)는 필요 없다. 콘솔 등록 해제 → 번호 변경 → 콘솔 등록이다. 아래 절차는 처음 들어오는 로봇과 sudo 대체 경로로 남는다.
+
 1. 콘솔에서 옛 ID(예: rosy_26)를 등록 해제한다. 결과가 `removed`여야 한다. `pending_logout`이면 로봇이 보일 때 로그아웃이 끝날 때까지 기다린다(그 행이 남아 있으면 같은 호스트 이름의 새 binding은 기동에서 거절된다).
 2. 로봇 번호를 바꾸고 재부팅한다(D-562). 로봇의 호스트 이름과 CA는 그대로다.
 3. 관리자가 binding 파일의 그 행에서 `robot_id`만 새 ID(예: rosy_41)로 바꾼다. `hostname`·`port`·`tls_ca_file`·`tls_ca_sha256`은 그대로 둔다. 소유자·권한은 그대로다.
