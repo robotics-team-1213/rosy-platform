@@ -41,6 +41,11 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "f14e20e2fc52ff0fb9e8d7267dbeb0f7e6596d70":  # git commit revision
+        "Independently reviewed on 2026-10-09: D-526 follow-up moves the TRUSTED map-pose check verbatim "
+        "into tether_routes so the safety-tagged tether_watch imports no decision module; still fail-closed "
+        "(19 tether tests). Part of the D-526 landing the user approved on 2026-10-09. See docs/validation/"
+        "d526-tether-watch-safety-review-2026-10-09/result.md.",
     "66f0e629d4aad3533ad2c8ff07b7f95a9e817a14":  # git commit revision
         "Independently reviewed on 2026-10-09 (three rounds, final APPROVE): D-526 Fleet tether watch "
         "stops a tethered robot through the existing CORE E-Stop client on radius, turn or a stale "

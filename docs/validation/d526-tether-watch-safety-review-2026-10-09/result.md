@@ -9,3 +9,7 @@
 시험: 원격 호스트에서 `operations/fleet/test` 전체 2919 passed, 1 failed(`test_overhead_tracking_api`의 상태 경과 시험, main에서도 실패). 이 변경을 증명하는 시험은 `test_tether_routes.py`의 `test_a_frozen_pose_with_a_moving_timestamp_trips_unless_core_calls_it_fresh`, `test_a_stamp_repeating_at_the_1_hz_heartbeat_does_not_trip_on_its_own`, `test_a_frozen_pose_stamp_trips_pose_stale_and_a_legacy_robot_is_stopped`, `test_trip_stops_through_the_existing_core_estop_client_and_shows_in_the_list`, `test_repeated_stop_failures_raise_an_operator_alarm_and_keep_retrying`다(18 passed). 경보 배너 문구(`enrollment.js`)는 diff로만 확인했다.
 
 검토 범위는 Fleet 쪽 감시 논리와 기존 E-Stop 경로의 호스트 시험이다. 시뮬레이션, 실제 로봇 주행, 현장 수용은 이 리뷰로 승인되지 않는다(D-480 등급).
+
+## 추가 검토 — `f14e20e2fc52ff0fb9e8d7267dbeb0f7e6596d70`
+
+D-430 §3 분리 시험(안전 파일은 결정 모듈을 가져오지 않는다)을 지키려고 신뢰 판정(`classify == TRUSTED`)을 `tether_watch.py`에서 `tether_routes.trusted_map_pose`로 그대로 옮겼다. `pose()`는 여전히 신뢰된 지도 좌표에 `evidence.pose`가 fresh일 때만 위치를 주고, 위치가 2 s 넘게 없으면 감시가 멈춤과 E-Stop을 보낸다. 독립 검증 APPROVE, `test_tether_routes.py` 19 passed. 남은 점: `TetherWatch(pose=...)`는 아무 함수나 받으므로, 운영 생성 지점은 `tether_routes.py` 한 곳으로 유지한다. 같은 날 사용자가 승인한 D-526 착지의 후속 커밋으로 사후 검토 목록에 넣는다.
