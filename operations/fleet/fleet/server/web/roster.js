@@ -391,6 +391,26 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       else [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     }));
+    // D-593 운영자 핀: 지도에서 이 로봇의 위치(누른 점)와 방향(끈 방향)을 찍어 Fleet 지도 자세의 앵커로 둔다.
+    // 로봇에 아무것도 보내지 않는다. 이름 있는 운영자만, 운행 중이 아닐 때만.
+    const pin = document.createElement("ui-button");
+    pin.setAttribute("kind", "toggle");
+    pin.type = "button";
+    pin.dataset.pinRobotId = robot.robot_id;
+    pin.textContent = view.pinning === robot.robot_id ? "위치를 찍고 방향으로 끄세요" : "위치 찍기";
+    pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
+    blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
+      : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
+        : !view.map ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
+    pin.addEventListener("click", scope.guard(() => {
+      view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
+      if (view.pinning) {
+        view.selected = null; view.cursor = null;
+        el("map-stage").dataset.view = "map"; el("birdseye-toggle").setAttribute("aria-pressed", "false");
+      }
+      el("map-canvas").classList.toggle("idle", !view.pinning);
+      render();
+    }));
     // D-540 1/3: 이 로봇 정지 = 운행 취소 한 자리. 열린 trip이면 trip을, 없으면 목표(와 켜진 차선 주행)를
     // 멈춘다. 멈춤이라 quiet·확인 없음이고 이름 없는 운영자에게도 열려 있다(D-540 9). Fleet의 trip은
     // 로봇이 오프라인이어도 취소할 수 있다.
@@ -519,7 +539,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    actions.append(aim, trip.toggle(robot), cancel, identify);
+    actions.append(aim, pin, trip.toggle(robot), cancel, identify);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");

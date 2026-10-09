@@ -96,7 +96,10 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         record["pose"] = {"x": round(pose.x, 3), "y": round(pose.y, 3),
                           "yaw": None if pose.yaw is None else round(pose.yaw, 4), "state": pose.state,
                           "source": pose.source, "u_m": round(uncertainty_m(pose.dead_reckon_m, config), 3),
-                          "age_s": pose.age_s}
+                          "age_s": pose.age_s,
+                          # D-593: who set the anchor and how old it is ("운영자 핀 · 4 s")
+                          "anchor_source": getattr(pose, "anchor_source", None),
+                          "anchor_age_s": getattr(pose, "anchor_age_s", None)}
     if not online:
         return record          # the roster already says "연결 끊김"; a stale pose stays drawn faded
     status = (tracking_row or {}).get("status")

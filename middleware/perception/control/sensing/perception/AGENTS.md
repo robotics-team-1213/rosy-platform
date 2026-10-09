@@ -39,7 +39,7 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 
 ### Testing Requirements
 
-`middleware/perception/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`, `test_learned_manifest.py`, `test_learned_lane_mask.py`, `test_learned_runner.py`, `test_learned_shadow.py`
+`middleware/perception/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`, `test_learned_manifest.py`, `test_learned_lane_mask.py`, `test_learned_runner.py`, `test_learned_drivable_paint.py`, `test_learned_shadow.py`
 
 ## Dependencies
 
