@@ -1,6 +1,10 @@
 # Rosy Pilot Android
 
 앱을 열면 같은 LAN에서 켜진 로봇을 찾아 목록에 보여준다. 로봇을 누르면 연결한다.
+연결 화면의 `두 번째 로봇`에서 다른 로봇을 고르면 두 화면을 나란히 연다(D-582).
+두 화면은 각자 인증한 로봇에만 카메라·조종 요청을 보낸다. 각 화면에서 `주행 시작`을
+따로 눌러야 조종 모드가 열리며, 앱을 닫거나 화면을 끄면 두 연결 모두 종료한다.
+두 로봇의 동시 실물 주행은 별도 FIELD 수용 대상이다.
 파일 가져오기, 주소 입력, CA 설정은 사용자 흐름에 없다. 선택한 CORE의
 `/api/v1/auth/connection`이 개발 모드이면 한 시간짜리 세션을 자동으로 받고,
 페어링이 필요하면 기존 숫자·영문 8자리 코드를 한 번 입력한다. 4자리 단축은 후속 ADR 제안이다.
@@ -22,7 +26,7 @@ D-340 native shell의 조건은 태블릿 설치와 Android NSD다. 기존 `midd
 shared/web의 canonical allowlist 자산을 APK 안에 묶는다. 로봇에서 UI를 내려받지 않는다.
 로봇이 없어도 앱의 선택 화면은 실행되며 bundled 화면은 네트워크 없이 제공된다.
 private loopback proxy는 무작위 HttpOnly
-cookie, 정확한 Host/Origin 검사, 경로 allowlist로 제한한다. JS bridge·외부 탐색·파일
+cookie(두 로봇에서는 프록시마다 다른 이름), 정확한 Host/Origin 검사, 경로 allowlist로 제한한다. JS bridge·외부 탐색·파일
 접근은 없다. CORE 응답의 `X-Rosy-*` 카메라 증명 헤더(출처·시퀀스·촬영시각·변형)는
 번들 화면의 프레임 검증(web_common evidence.js)을 위해 그대로 전달한다. PWA의 sessionStorage 자격을 URL·로그에 넣지 않고 쿠키를 CORE로 전달하지
 않는다. CORE로는 API와 WS만 전달하며 API는 PWA의 Authorization을 사용한다.
