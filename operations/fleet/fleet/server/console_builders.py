@@ -85,7 +85,7 @@ def build_enrollment(*, console, task_service, sighting_service, enrollment_stor
     enrollment = EnrollmentService(enrollment_store, roster, key=robot_key,
                                    key_error=robot_key_error,
                                    fleet_name=console.fleet_name, discovery=discovery,
-                                   tls_bindings=EnrolledTlsBindings(tls_file) if tls_file else None,
+                                   tls_bindings=EnrolledTlsBindings(tls_file, enrollment_store) if tls_file else None,
                                    hub_link=hub_link)
     enrollment.load()
     roster.sync()

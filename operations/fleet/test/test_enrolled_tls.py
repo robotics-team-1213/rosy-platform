@@ -594,3 +594,66 @@ def test_two_pending_bindings_on_one_hostname_are_refused_at_enroll(tmp_path, mo
     with pytest.raises(EnrollmentError, match='HTTPS requires'):
         asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
     assert calls == [] and store.rows() == []
+
+
+def renumber_service(tmp_path, monkeypatch, core, identity, *, retired=True):
+    """D-580: rosy_09 was enrolled through this binding and unenrolled; the robot comes back renumbered."""
+    _, _, _, file = approved(tmp_path)
+    old, _, _, discovery, store, _ = build(tmp_path, {})
+    if retired:
+        store.audit(action='unenroll', outcome='removed', principal_id='alice', target='rosy_09')
+    bindings = EnrolledTlsBindings(file, store)
+    service, store, calls = pending_service(tmp_path, monkeypatch, core, identity, bindings)
+    return service, store, calls, bindings, file
+
+
+def test_renumbered_robot_re_enrolls_through_its_proven_binding_without_editing_the_file(tmp_path, monkeypatch):
+    _, binding, identity, _ = approved(tmp_path)
+    identity['receiver_id'] = 'rosy_41'
+    core = FakeCore(robot_id='rosy_41')
+    service, store, calls, bindings, file = renumber_service(tmp_path, monkeypatch, core, identity)
+    asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert store.get('rosy_41')['state'] == 'active' and 'rosy_41' in service._roster.robot_ids
+    assert store.tls_markers()['rosy_41']['origin'] == 'https://'+NAME+'.local:8080'
+    assert all(r.url.scheme == 'https' for r in calls)
+    assert bindings.binding('rosy_41').hostname == NAME+'.local' and bindings.binding('rosy_09') is None
+    assert any(a['action'] == 'tls_renumber' and a['target'] == 'rosy_09->rosy_41' and a['principal_id'] == 'alice'
+               for a in store.audit_rows())
+    # A restart reads the same file and the learned id; the file still says rosy_09.
+    assert 'rosy_09' in file.read_text()
+    restarted = EnrolledTlsBindings(file, store)
+    assert restarted.validate(store.rows()) == [] and restarted.binding('rosy_41') is not None
+
+
+def test_never_enrolled_binding_keeps_the_d565_id_check(tmp_path, monkeypatch):
+    _, _, identity, _ = approved(tmp_path)
+    core = FakeCore(robot_id='rosy_41')
+    service, store, _, bindings, _ = renumber_service(tmp_path, monkeypatch, core, identity, retired=False)
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.reason == 'tls_binding_mismatch' and core.logged_out == [core.token]
+    assert store.rows() == [] and store.tls_renumbers() == {} and bindings.binding('rosy_09') is not None
+
+
+def test_renumber_refuses_an_id_another_binding_owns(tmp_path, monkeypatch):
+    _, row, identity, file = approved(tmp_path)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[
+        row, {**row, 'robot_id': 'rosy_41', 'hostname': 'other.local'}])))
+    identity['receiver_id'] = 'rosy_41'
+    core = FakeCore(robot_id='rosy_41')
+    old, _, _, _, store, _ = build(tmp_path, {})
+    store.audit(action='unenroll', outcome='removed', principal_id='alice', target='rosy_09')
+    service, store, _ = pending_service(tmp_path, monkeypatch, core, identity, EnrolledTlsBindings(file, store))
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.reason == 'robot_id_conflict' and core.logged_out == [core.token]
+    assert store.rows() == [] and store.tls_renumbers() == {}
+
+
+def test_learned_id_drops_when_the_file_changes_the_ca(tmp_path):
+    _, row, _, file = approved(tmp_path)
+    old, _, _, _, store, _ = build(tmp_path, {})
+    store.renumber_tls(row['hostname'], row['tls_ca_sha256'], 'rosy_41')
+    assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_41'}
+    store.renumber_tls(row['hostname'], '0'*64, 'rosy_41')
+    assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_09'}
