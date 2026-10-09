@@ -388,7 +388,8 @@ async function refreshState() {
     view.stateLoaded = true;
     if (view.selected) {
       const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-      if (!selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
+      const lagging = !selectedRobot?.online && selectedRobot?.link === "degraded";
+      if ((!selectedRobot?.online && !lagging) || (!lagging && selectedRobot.state?.safety?.estop !== false)) {
         disarmGoal("안전·연결 상태가 바뀌어 목표 지정 취소");
       }
     }
@@ -396,8 +397,11 @@ async function refreshState() {
     el("fleet-name").textContent = snapshot.fleet.name || "사이트";
     const pill = el("online-pill");
     delete pill.dataset.locked;
-    pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
-    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
+    // A robot answering late (link "degraded") still counts as connected on the pill.
+    const linked = snapshot.robots.filter(robot => robot.online || robot.link === "degraded").length;
+    pill.textContent = `${linked}/${snapshot.fleet.total} 연결`;
+    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral"
+      : linked === snapshot.fleet.total ? "warn" : "crit");
     render();
     if (requestedRobotFocus) {
       const card = [...el("roster").querySelectorAll("article")]
