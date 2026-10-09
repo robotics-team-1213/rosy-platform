@@ -144,7 +144,6 @@ stay published below, but no per-package C6 scan covers them yet.
 | `power/manager.py` | **Accepted.** Mode → attribute dispatch over the module's own config object. |
 | `system/host_agent_client.py` *(moved to `core_api_web/api/` under D-126 S5; out of this package's scan)* | **Platform guard, not a seam.** `AF_UNIX` is absent on the Windows dev host. |
 | `fleet_loss_wiring.py` ×2 — `getattr(fleet_agent, "armed", True)`, `getattr(fleet_agent, "relinked_at", None)` | **Accepted (D-555).** Optional public link state on the injected FleetAgent: an older agent or a test double without the fields reads as armed and never relinked, which is today's boot behaviour. The values only decide when SAF-003 starts counting the link (arm grace after a runtime relink); they never authorize motion. |
-| `bridge/observation.py` — `getattr(line, "wants_crosswalk_scan", False)` | **Accepted (D-573).** Optional public flag on the injected line-follow feature: a line follower built without the D-573 crosswalk gate (default off) or a test double reads as not asking for the scan, and the bridge then skips the extra ray pass. |
 
 | Reach | Verdict |
 |---|---|

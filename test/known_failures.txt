@@ -6,5 +6,3 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
-test/architecture/test_platform_parts.py::test_import_rules_only_shrink  # main c2a0a5d83 (2026-10-10): D-563 ceiling_pose.py imports rosy_vision.track (learning -> operations/vision, 091f72769); owner to move or record
-test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # main c2a0a5d83 (2026-10-10): perception 12004 > 11737+150 after D-597; owner to re-judge

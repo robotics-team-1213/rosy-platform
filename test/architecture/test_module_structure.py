@@ -1067,7 +1067,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_737,
+        12_004,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1077,7 +1077,10 @@ SIZE_VERDICTS = {
         "backend it serves and does not change the split plan. Re-judged at 11737 on 2026-10-10 "
         "for D-597 (learned/drivable_paint.py: the drivable way and its boundary paint for keep mode, "
         "plus input.crop in manifest/lane_mask/runner and the paint worker's drivable kind), which "
-        "also lives in the learned backend it serves; the split plan is unchanged.",
+        "also lives in the learned backend it serves; the split plan is unchanged. Re-judged at 12004 "
+        "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
+        "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
+        "learned backend it serves; the split plan is unchanged.",
     ),
     "control": (
         34_619,

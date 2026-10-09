@@ -88,7 +88,6 @@ ALLOWED = Counter({
     # counts the link, never motion.
     ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"armed"'): 1,
     ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"relinked_at"'): 1,
-    ("bridge/observation.py", "getattr", "line", '"wants_crosswalk_scan"'): 1,
 })
 
 
