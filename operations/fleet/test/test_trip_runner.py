@@ -610,6 +610,23 @@ def test_free_trip_sends_d463_points_ahead_across_the_place_and_arrives():
     assert runner.view("p1")["state"] == "arrived"
 
 
+def test_each_trip_step_renews_the_goal_lease_and_a_failed_renewal_keeps_the_trip():
+    """D-550 10: the trip loop is the renewer of trip goals; a renewal error is left to CORE."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    renewed = []
+
+    async def renew(robot_id):
+        renewed.append(robot_id)
+        if len(renewed) == 2:
+            raise ConnectionError("no route")
+
+    runner._renew_lease = renew
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports, n=3)
+    assert renewed == ["rosy_60"] * 3 and runner.view("p1")["state"] == "running"
+
+
 def test_a_free_robot_error_fails_the_trip_and_cancels_the_goal():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
     _plan(store, ports, "ab:fwd", 0.1, "C")

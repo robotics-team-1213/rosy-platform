@@ -185,12 +185,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_324,
-        "split: re-judged at 47324 on 2026-10-09 (author's verdict; needs an independent re-judge): "
-        "D-555 adds the enrolled-robot hub link (server/enrollment.py link_hub/unlink_hub, hub digest "
-        "check, CLI flags, console control) and its tests. Robots get a hub credential only over the "
-        "TLS-bound enrollment; no robot command path or package owner is added. The site-map split "
-        "stays next; +150 allowance unchanged, measured from 47324. Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        47_539,
+        "split: re-judged at 47539 on 2026-10-09 (author's record; needs an independent re-judge): D-555 (+212 over 47327) enrolled-robot hub link (server/enrollment.py link_hub/unlink_hub, hub digest check, CLI flags, console control) on top of the D-550 10 goal lease; robots get a hub credential only over the TLS-bound enrollment, no robot command path or package owner is added; +150 allowance unchanged, measured from 47539. Previously re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
+        "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
+        "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
+        "presence route and wiring, +13 transport, +10 trip_runner, +4 signals.js presence; console.py "
+        "net -1. No new package owner; the only new robot call is the lease renewal of a goal Fleet "
+        "already sent. The site-map web/server split in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance unchanged, "
+        "measured from 47327. "
+        "Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
         "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
         "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
         "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
@@ -1071,10 +1076,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1239,
-        "accept: re-judged at 1239 on 2026-10-09 for D-548: the DEV prefix on the face strip and the status "
-        "line belongs to the process that draws them; zero growth allowance remains. "
-        "Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        1265,
+        "accept: re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
+        "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
+        "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
         "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
         "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
         "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "

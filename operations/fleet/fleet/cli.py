@@ -465,7 +465,8 @@ def run_console(args: argparse.Namespace) -> None:
     if pairing_configured and not console_token:
         sys.exit("--token or --token-env is required to protect the CORE registry endpoint")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
-                           signal_console=signal_console, event_store=event_store)
+                           signal_console=signal_console, event_store=event_store,
+                           goal_lease_ttl_s=_goal_lease_ttl_s(args))
     sightings_db = getattr(args, "sightings_db", None)
     sightings_config = getattr(args, "sightings_config", None)
     if sightings_db is not None and sightings_config is None:
@@ -605,6 +606,28 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _goal_lease_ttl_s(args) -> float:
+    """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
+    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
+    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
+    on its renewal still renews before the lease runs out."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"goal lease config: {exc}")
+    trip = _trip_config(args)
+    floor = 2 * trip.port_timeout_s + trip.period_s
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
+            value == 0 or floor <= value <= 5):
+        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
+    return float(value)
 
 
 def _trip_config(args):
