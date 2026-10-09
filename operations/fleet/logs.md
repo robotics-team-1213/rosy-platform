@@ -2805,6 +2805,12 @@
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
 
+## 2026-10-09 · uncommitted · fix(fleet): 후진 중 차로 여유 감시 유지
+
+- 변경: 일방 차로에서 후진 복구 방향도 같은 물리 차로에 투영한다. 양방향 차로의 진행 방향별 호 선택과 차로 밖 UNKNOWN은 유지한다. Fleet 감시 판정만 바꾸며 로봇 명령은 보내지 않는다.
+- 증거: 모델 PC에서 수정 전 2 failed/9 passed, 수정 후 차로 판정·감시 20 passed, `known_failures.py` 0 NEW (`X:/DevTemp/fleet-reverse-lane-{red,green2}/run-1.txt`).
+- gate 변화: SOURCE/LOCAL 회귀 근거. D-511 M1/M2, 현장 지도 자세·Rosy Cam·실물 주행 수용은 아직 HOLD.
+
 ## 2026-10-09 · uncommitted · uiux(fleet): Cell 화면 목적과 미구성 복구 안내
 
 - 변경: Cell 첫 화면에 문서 준비→미리보기→작업 제안→현재 5단계 승인·진행의 목적을 드러냈다. Cell 서비스 미구성 응답은 원시 코드 대신 사이트 설치 담당자의 다음 행동으로 설명한다.

@@ -38,7 +38,7 @@ from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
-from core_features.navigation.manager import NavigationError
+from core_features.navigation.manager import GOAL_LEASE_MAX_S, NavigationError
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
@@ -52,6 +52,7 @@ __all__ = [
     "TripLeaseError",
     "Mode",
     "NavigationError",
+    "GOAL_LEASE_MAX_S",
     "DockError",
     "DockInstance",
     "DockType",
