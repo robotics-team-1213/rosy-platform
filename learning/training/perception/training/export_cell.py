@@ -76,7 +76,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
                    val_iou=None, date=None, precision="fp32", experiment=None,
                    revision_prefix="lane-seg", parent_lane_model=None, dataset_annotation=None,
-                   camera_provenance=None, model_version=None) -> dict:
+                   camera_provenance=None, model_version=None, metrics=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
     {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"} (path relative, e.g. runs/<run_id>)
@@ -132,7 +132,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         "output": {"layout": "nchw_logits", "classes": entries},
         "dataset": {"repo": dataset_repo, "revision": dataset_revision, **(dataset_annotation or {})},
         "camera_profile_revision": camera_profile_revision,
-        "metrics": {"val_iou": val_iou or {}},
+        "metrics": {"val_iou": val_iou or {}, **(metrics or {})},
         "trainer": trainer,
     }
     if exp_doc is not None:

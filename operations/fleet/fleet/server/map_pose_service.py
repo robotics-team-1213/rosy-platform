@@ -4,7 +4,8 @@ Sightings come only from `SightingService.accept` (source token bound to the rob
 order) and, when a map id provider is given, only for the active site map frame. Odom comes from
 every state snapshot the console reads (hub heartbeat or REST) and from `refresh`.
 `arbitrated_pose` is for the trip loop (D-494 5) and the D-511 lane-compliance monitor; `/route`, D-395 and traffic keep
-`FleetConsole.trusted_map_pose`. D-457 tracking is not an input.
+`FleetConsole.trusted_map_pose`. D-457 tracking is not an input. D-593: a named operator's map
+pin (`POST /api/fleet/robots/{id}/map-pin`) is the other anchor; it is a site map event.
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ from dataclasses import asdict
 from typing import Awaitable, Callable, Iterable, Mapping, Optional
 
 import httpx
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.localization.map_pose import (MapPose, MapPoseConfig, MapPoseTracker,
@@ -142,6 +144,23 @@ class MapPoseService:
         tracker = self._tracker(robot_id)
         return tracker.odom_to_map() if tracker is not None else None
 
+    async def pin(self, robot_id: str, pose: tuple[float, float, float]
+                  ) -> tuple[Optional[str], Optional[MapPose]]:
+        """D-593: anchor the robot's map pose on an operator pin at its newest odom.
+
+        Reads the robot's state first so the pin pairs with fresh odom. Returns (refusal code or
+        None, the pose after the pin); (`UNKNOWN_ROBOT`, None) off the roster."""
+        try:
+            await self.refresh(robot_id, force_rest=True)
+        except (HubError, RobotApiError, OSError, httpx.HTTPError, asyncio.TimeoutError):
+            pass    # pinned against the last odom, which must still be fresh
+        tracker = self._tracker(robot_id)
+        if tracker is None:
+            return "UNKNOWN_ROBOT", None
+        now, active = self._wall(), self.active_map_id()
+        refused = tracker.add_pin(pose, now, active)
+        return refused, tracker.pose(now, active)
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""
@@ -173,4 +192,44 @@ def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None
         pose = service.arbitrated_pose(robot_id)
         if pose is None:            # removed from the roster while the read was in flight
             raise unknown
+        return {"robot_id": robot_id, **asdict(pose)}
+
+
+class MapPinRequest(BaseModel):
+    """D-593: the robot's map pose as the operator placed it (map frame, metres, yaw in radians)."""
+    model_config = ConfigDict(extra="forbid")
+    x: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
+    y: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
+    yaw: float = Field(ge=-2 * math.pi, le=2 * math.pi, allow_inf_nan=False)
+
+
+def install_map_pin_route(app, *, service: MapPoseService, require_named_operator,
+                          record_event: Callable[[str, str, dict], None],
+                          busy: Callable[[str], bool] = lambda robot_id: False) -> None:
+    """D-593: a named operator pins a robot's map pose; refused while that robot runs a trip."""
+
+    def refuse(status: int, code: str, message: str) -> HTTPException:
+        return HTTPException(status_code=status, detail={"code": code, "message": message})
+
+    @app.post("/api/fleet/robots/{robot_id}/map-pin", tags=["fleet"])
+    async def robot_map_pin(robot_id: str, body: MapPinRequest,
+                            principal=Depends(require_named_operator)) -> dict:
+        if not service.knows(robot_id):
+            raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+        if busy(robot_id):
+            raise refuse(409, "MAP_PIN_TRIP_ACTIVE", "the robot is on a trip; stop it before pinning")
+        before = service.arbitrated_pose(robot_id)
+        refused, pose = await service.pin(robot_id, (body.x, body.y, body.yaw))
+        if refused == "UNKNOWN_ROBOT":
+            raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+        if refused is not None:
+            raise refuse(409, f"MAP_PIN_{refused}", "no fresh robot odom to pin against"
+                         if refused == "ODOM_STALE" else "pin pose is not usable")
+        record_event("map_pin", principal.principal_id, {
+            "robot_id": robot_id, "x": body.x, "y": body.y, "yaw": body.yaw, "map_id": pose.map_id,
+            "before": None if before is None else {
+                "state": before.state, "anchor_source": before.anchor_source,
+                "x": before.x, "y": before.y, "yaw": before.yaw}})
+        logger.info("map pose: %s pinned by %s at (%.3f, %.3f, %.3f) map %s",
+                    robot_id, principal.principal_id, body.x, body.y, body.yaw, pose.map_id)
         return {"robot_id": robot_id, **asdict(pose)}
