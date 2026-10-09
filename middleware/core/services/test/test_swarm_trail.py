@@ -226,11 +226,13 @@ def test_odom_frame_samples_hold_and_map_samples_resume():
     rig.leader(1.2)
     rig.leader(1.3, frame="odom")
     assert rig.step() is None
-    assert rig.hold_reason() == "reference_frame_odom"
-    assert ("swarm.hold", {"reason": "reference_frame_odom",
+    assert rig.hold_reason() == "reference_frame_not_map"
+    assert ("swarm.hold", {"reason": "reference_frame_not_map",
                            "formation": "follow:rosy_02@0.50/0.00"}) in rig.events.published
     rig.leader(1.3)
     assert rig.step()[0] > 0
+    rig.leader(1.35, frame=None)                         # a leader that does not say
+    assert rig.step() is None and rig.hold_reason() == "reference_frame_not_map"
 
 
 def test_own_odom_pose_holds():

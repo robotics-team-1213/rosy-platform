@@ -2,11 +2,12 @@
 # D-559 trail follow SIM on the model PC (never on the Windows laptop).
 # Two Pinky in rosy_swarm_bench (6 x 6 m room), Nav2 + AMCL per robot (map frame), CORE per robot.
 #
-#   WS=~/rosy_trail_ws bash run_sim.sh <run-name>      # nohup it
+#   WS=~/rosy_trail_ws bash run_sim.sh <run-name> [--direct]      # nohup it
 #
 # The workspace holds a git-archive snapshot of the branch HEAD in src/rosy-platform, built with
 #   colcon build --symlink-install --packages-up-to gz_sim core control description
-# CORE Python deps (fastapi, uvicorn, websockets, pydantic) in $WS/pydeps, Fleet deps in $WS/pyfleet.
+# CORE Python deps (fastapi, uvicorn, websockets, pydantic) in $WS/pydeps, Fleet deps in $WS/pyfleet
+# and $WS/pyextra (httpx), copied from an earlier SIM workspace on the same host.
 WS=${WS:-$HOME/rosy_trail_ws}
 NAME=${1:-r1}
 PORT=${PORT:-8130}
@@ -14,7 +15,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$WS" || exit 1
 export PATH=/usr/bin:/bin:$PATH
 source /opt/ros/jazzy/setup.bash; source install/setup.bash
-export PYTHONPATH=$WS/pydeps:$WS/src/rosy-platform/operations/fleet:$WS/pyfleet:$PYTHONPATH
+export PYTHONPATH=$WS/pydeps:$WS/src/rosy-platform/operations/fleet:$WS/pyfleet:$WS/pyextra:$PYTHONPATH
+# The `rosy.*` namespace packages (rosy.contracts.motion, ...) live in */src/rosy dirs, not colcon.
+for d in $(find -L "$WS/src/rosy-platform" -path '*/.worktrees' -prune -o -type d -name rosy -path '*/src/rosy' -print); do
+  PYTHONPATH=$(dirname "$d"):$PYTHONPATH
+done
+export PYTHONPATH
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-79} GZ_PARTITION=${GZ_PARTITION:-rosy_trail}
 RUN=$WS/runs/$NAME; mkdir -p "$RUN"
 # Stop every process of an earlier run of this partition (environment carries GZ_PARTITION).
@@ -35,7 +41,7 @@ YAML
 chmod 600 "$RUN/robots.yaml"
 # trail_sim.py waits for both APIs and LOCALIZED (D-395 gate on follow) before arming.
 uptime > "$RUN/ready.txt"
-python3 "$HERE/trail_sim.py" --robots "$RUN/robots.yaml" --out "$RUN" > "$RUN/driver.log" 2>&1
+python3 "$HERE/trail_sim.py" --robots "$RUN/robots.yaml" --out "$RUN" "${@:2}" > "$RUN/driver.log" 2>&1
 echo "driver exit $?" >> "$RUN/driver.log"
 python3 "$HERE/analyze.py" "$RUN" > "$RUN/analyze.log" 2>&1
 kill $LPID

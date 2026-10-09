@@ -7,7 +7,12 @@ teleop (MANUAL, 10 Hz) along a scripted S-curve / arc / pivot path with a 10 s s
 relay is paused for CUT_S on the last straight (stream cut). Gazebo truth for both robots
 comes from `gz topic -e .../dynamic_pose/info --json-output`.
 
-    python trail_sim.py --robots robots.yaml --world rosy_swarm_bench --out runs/r1
+    python trail_sim.py --robots robots.yaml --world rosy_swarm_bench --out runs/r1 [--direct]
+
+--direct arms POST /api/v1/swarm/follow (mode trail, no `members`) and relays the leader's
+/ws/swarm/pose frames unchanged to the follower's /ws/swarm/reference itself, like
+fleet/swarm/relay.py. A Fleet formation always sends `members`, so there a stream loss ends the
+follow by succession (D-20); without members it is the SWM-004 HOLD this run measures.
 
 Writes truth.jsonl (t, sim_t, robot, x, y, yaw), swarm.jsonl (follower /swarm/state at 5 Hz,
 leader /state mode), events.jsonl (phase marks) and summary.json (analyze.py).
@@ -24,6 +29,8 @@ import threading
 import time
 from pathlib import Path
 
+import websockets
+from core_common.protocol.schemas import SwarmFollowParams
 from fleet.bench import (Formation, FormationSession, FormationSpec, HttpRobotClient,
                          SessionState, load_robots)
 
@@ -97,12 +104,44 @@ async def teleop_loop(leader: HttpRobotClient, mark, cut) -> None:
     mark("phase", "done")
 
 
+def ws_url(robot, path: str) -> str:
+    return robot.base_url.replace("http", "ws", 1) + f"{path}?token={robot.token}"
+
+
+async def pose_frame(robot) -> str:
+    """The `frame` of one leader-stream sample of this robot (D-559 field)."""
+    async with websockets.connect(ws_url(robot, "/ws/swarm/pose")) as ws:
+        return json.loads(await asyncio.wait_for(ws.recv(), 5.0))["payload"].get("frame")
+
+
+class DirectRelay:
+    """fleet/swarm/relay.py in miniature: leader frames to the follower, unchanged, pausable."""
+
+    def __init__(self, leader, follower) -> None:
+        self.leader, self.follower, self.paused = leader, follower, False
+        self._task = None
+
+    async def _run(self) -> None:
+        async with websockets.connect(ws_url(self.leader, "/ws/swarm/pose")) as src,                 websockets.connect(ws_url(self.follower, "/ws/swarm/reference")) as dst:
+            async for frame in src:
+                if not self.paused:
+                    await dst.send(frame)
+
+    def start(self) -> None:
+        self._task = asyncio.get_running_loop().create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+
+
 async def main_async(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     robots = load_robots(Path(args.robots))
     clients = {r.robot_id: HttpRobotClient(r) for r in robots}
     leader, follower = clients[args.leader], clients[args.follower]
+    rows = {r.robot_id: r for r in robots}
     events = (out / "events.jsonl").open("w", encoding="utf-8")
 
     def mark(kind, value, **extra):
@@ -114,8 +153,16 @@ async def main_async(args) -> int:
     session = FormationSession(leader, [follower], FormationSpec(Formation.TRAIL, spacing=args.gap,
                                                                    max_speed=args.max_speed))
 
+    relay = DirectRelay(rows[args.leader], rows[args.follower]) if args.direct else None
+
     async def cut_stream():
         mark("cut", "pause")
+        if relay is not None:
+            relay.paused = True
+            await asyncio.sleep(CUT_S)
+            mark("cut", "relay_resume")
+            relay.paused = False
+            return
         session.relay.pause()
         await asyncio.sleep(CUT_S)
         if session.state is SessionState.HOLDING:
@@ -134,8 +181,9 @@ async def main_async(args) -> int:
             try:
                 sw = await follower.swarm_state()
                 swarm_fh.write(json.dumps({"t": time.monotonic(), "swarm": sw,
-                                           "session": session.state.value,
-                                           "relay_paused": session.relay.paused}) + "\n")
+                                           "session": "direct" if relay else session.state.value,
+                                           "relay_paused": (relay.paused if relay
+                                                            else session.relay.paused)}) + "\n")
             except Exception as exc:  # noqa: BLE001 - a missed sample is a gap, not an end
                 swarm_fh.write(json.dumps({"t": time.monotonic(), "error": str(exc)}) + "\n")
             await asyncio.sleep(0.2)
@@ -152,6 +200,17 @@ async def main_async(args) -> int:
             except Exception:  # noqa: BLE001 - CORE still starting
                 pass
             await asyncio.sleep(1.0)
+        # Nav2/AMCL start 15 s after launch: wait until both CORE poses are map frame (D-559 field).
+        frames = None
+        for _ in range(240):
+            try:
+                frames = [await pose_frame(rows[rid]) for rid in (args.leader, args.follower)]
+                if frames == ["map", "map"]:
+                    break
+            except Exception:  # noqa: BLE001 - not up yet
+                frames = None
+            await asyncio.sleep(1.0)
+        mark("frames", frames)
         await asyncio.sleep(args.settle)
         for _ in range(100):
             if args.leader in truth.latest and args.follower in truth.latest:
@@ -162,8 +221,16 @@ async def main_async(args) -> int:
             st = await c.state()
             mark("state", rid, pose=st.get("pose"), mode=st.get("mode"),
                  localization=(st.get("localization") or {}).get("state"))
-        await session.start()
-        mark("armed", session.assignment and {k: vars(v) for k, v in session.assignment.items()})
+        if relay is not None:
+            relay.start()
+            await asyncio.sleep(0.5)
+            reply = await follower.follow(SwarmFollowParams(
+                target_robot_id=args.leader, distance=args.gap, mode="trail",
+                max_speed=args.max_speed))
+            mark("armed", {"direct": reply})
+        else:
+            await session.start()
+            mark("armed", session.assignment and {k: vars(v) for k, v in session.assignment.items()})
         poller = asyncio.create_task(poll())
         await teleop_loop(leader, mark, cut)
         stop.set()
@@ -173,7 +240,11 @@ async def main_async(args) -> int:
     finally:
         stop.set()
         try:
-            await session.stop()
+            if relay is not None:
+                await follower.swarm_cancel()
+                await relay.stop()
+            else:
+                await session.stop()
         except Exception as exc:  # noqa: BLE001
             mark("stop_failed", str(exc))
         try:
@@ -198,6 +269,7 @@ def main() -> int:
     p.add_argument("--max-speed", type=float, default=0.18)
     p.add_argument("--out", required=True)
     p.add_argument("--settle", type=float, default=10.0, help="s after ready before arming")
+    p.add_argument("--direct", action="store_true", help="own relay, follow without members")
     return asyncio.run(main_async(p.parse_args()))
 
 

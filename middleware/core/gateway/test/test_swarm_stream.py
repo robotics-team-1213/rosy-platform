@@ -313,7 +313,11 @@ def test_a_trail_follower_takes_no_nav2_goal_and_owns_the_nav_slot(client):
     assert response.json()["mode"] == "trail"
 
     with tc.websocket_connect(f"/ws/swarm/reference?token={OPERATOR_TOKEN}") as socket:
-        socket.send_text(json.dumps(pose_frame(x=0.6, y=0.0)))
+        unsaid = pose_frame(x=0.5, y=0.0)                 # an older leader: no frame, not trusted
+        socket.send_text(json.dumps(unsaid))
+        said = pose_frame(x=0.6, y=0.0)
+        said["payload"]["frame"] = "map"
+        socket.send_text(json.dumps(said))
         socket.send_text(json.dumps({"type": "ping"}))
 
     assert svc.swarm.nav.goals == []

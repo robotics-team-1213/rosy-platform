@@ -378,9 +378,11 @@ class SwarmManager:
 
     def _feed_trail(self, reference: ReferencePose) -> Optional[TrailError]:
         """D-559: one leader sample into the trail. Locked. The error ends the follow."""
-        self._ref_odom = reference.frame == "odom"
+        # Only a pose the leader itself calls "map": "odom" is no place on our map, and a
+        # leader that does not say (pre-D-559, or no pose yet) is not trusted for a trail.
+        self._ref_odom = reference.frame != "map"
         if self._ref_odom:
-            return None  # an odom-frame pose is not a place on our map
+            return None
         if self._trail is None:
             own = self._pose()
             if own is None or own[3] != "map":
@@ -421,7 +423,7 @@ class SwarmManager:
             elif self._trail_broken is not None:
                 reason = self._trail_broken
             elif self._ref_odom:
-                reason = "reference_frame_odom"
+                reason = "reference_frame_not_map"
             elif own is None or own[3] != "map":
                 reason = "own_pose_not_map"
             elif own[4] > OWN_POSE_MAX_AGE_S:
@@ -460,7 +462,7 @@ class SwarmManager:
             self._trail_resume = latched
             self._trail_linear = 0.0 if twist is None else twist[0]
             announce = reason != self._trail_hold and reason in (
-                "trail_lost", "reference_frame_odom", "own_pose_not_map", "own_pose_stale", "obstacle",
+                "trail_lost", "reference_frame_not_map", "own_pose_not_map", "own_pose_stale", "obstacle",
                 "obstacle_sensor_stale")
             self._trail_hold = reason
             # Under our lock: a cancel after this point clears what we wrote.
