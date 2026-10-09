@@ -732,8 +732,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const traffic = await call("/api/fleet/traffic", { signals: [life.signal] });
       life.check();
       trafficGate.ok();
-      view.trafficTrips = traffic.robots.length
-        ? ((await call("/api/fleet/trips", { signals: [life.signal] })).open || []) : [];
+      // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
+      const trips = traffic.robots.length || view.trafficTrips?.length
+        ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      view.trafficTrips = trips.open || [];
+      view.endedTrips = trips.trips || [];
       life.check();
       if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
         view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });

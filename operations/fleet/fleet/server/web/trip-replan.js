@@ -1,7 +1,7 @@
 // D-494 5 / D-540 3 — a trip held at a place for a changed route asks the operator in its queue row:
 // `바뀐 경로로 계속` (confirm-replan, a move: named operator, D-540 9) or `운행 취소` (a stop: quiet, no confirm).
 import { tripErrorText } from "/console/assets/site-map-model.js";
-import { primaryButton, quietButton, setReason } from "./line-stuck.js";
+import { primaryButton, quietButton, setReason } from "./queues.js";
 
 /** What the slot shows for one held trip: the changed route, or why there is none. */
 export function replanView(trip, { operator, named = "", busy = false }) {

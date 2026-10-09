@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+// The button helpers live in queues.js (D-540 (d)), which imports the browser's "/common/..." modules.
+const { register } = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
+register("./resolve-console-assets.mjs", import.meta.url);
+const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, confirmText, decisionButtons, needsConfirm, outcomeText,
   pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-} from "../../fleet/server/web/line-stuck.js";
+} = await import("../../fleet/server/web/line-stuck.js");
 
 const STUCK = {
   stuck_id: "stuck-abc", cause: "obstacle_ahead", phase: "ASKING", held_s: 12.4,
