@@ -16,6 +16,7 @@ The model half of the D-356 learned-perception loop: export a trained model to O
 |------|-------------|
 | `export_onnx.py` | TorchScript to ONNX (opset 17, 1x3x240x320) with a fixed-seed parity check; writes the model folder and manifest |
 | `intake.py` | Shadow-deployment eligibility report for a model folder, `store-inbox:<folder>` (taken only when its READY marker matches its content) or `hf:org/repo@<40-hex sha>`; thresholds come from `intake_gate.yaml` |
+| `drivable_versions.py` / `drivable_versions.yaml` | D-558 ledger of `v13-drivable` model versions (`v<major>.<minor>.<NN>`, one revision each, status candidate/shadow/rejected/retired); intake refuses a missing, malformed, off-lineage or taken version; CLI `show`/`add`/`set-status` |
 | `intake_gate.yaml` | Gate values: p50 host latency, NaN frames, minimum visible-lane fraction, replay sources and frame cap; D-379 eval set keys (`eval_set`, `eval_max_frames`, `min_eval_miou`, `max_eval_miou_drop`, `min_lane_marking_iou`; `eval_set: null` = no eval; gated mIoU leaves out background). Eligibility only, not the D-205 selection gate |
 | `deliver.py` | `push`, `rollback`, `release-hold`, `status` against a robot over ssh (default root `/var/lib/rosy/models`); refuses a model whose intake failed |
 | `watch.py` | Site-host watcher (D-373): intake plus shadow push for each READY inbox folder (or each new HF commit with `backend: hf`); reads `/etc/rosy/model-watch.yaml` |

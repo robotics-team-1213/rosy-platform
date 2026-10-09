@@ -51,6 +51,7 @@ from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
                               v13_lineage_error)
+import drivable_versions  # noqa: E402  D-558 ledger
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
 REPORT_NAME = "intake_report.json"
@@ -472,7 +473,7 @@ def replay_videos(gate: dict, root) -> list[Path]:
 
 
 def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
-        downloader=None, store=None) -> tuple[int, dict]:
+        downloader=None, store=None, ledger=None) -> tuple[int, dict]:
     """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
     gate = load_gate(gate_path)
     max_frames = max_frames or gate["max_frames_per_source"]
@@ -486,8 +487,12 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                                 store=store)
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
-        if manifest.model_revision.startswith("v13-drivable-") and v13_lineage_error(manifest.raw):
-            raise ValueError(v13_lineage_error(manifest.raw))
+        if manifest.model_revision.startswith("v13-drivable-"):  # D-554 lineage, D-558 version
+            error = v13_lineage_error(manifest.raw) or drivable_versions.intake_error(
+                manifest.raw, ledger or drivable_versions.LEDGER)
+            if error:
+                raise ValueError(error)
+            report["model_version"] = manifest.model_version
         verify_files(manifest)
         check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.
@@ -565,7 +570,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         if source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
             for d in (folder, Path(str(folder).removesuffix(".real"))):
                 shutil.rmtree(d, ignore_errors=True)
-        print(f"PASS {report['model_revision']} -> {dest}")
+        version = f" ({report['model_version']})" if report.get("model_version") else ""
+        print(f"PASS {report['model_revision']}{version} -> {dest}")
         return 0, report
     if folder and not source.startswith(STORE_INBOX):
         target = Path(folder).parent / f"{Path(folder).name}.{REPORT_NAME}"

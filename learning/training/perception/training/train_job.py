@@ -198,7 +198,7 @@ def _run(config, out, indexed_review, admission_stack):
     training = config["training"]
     drivable_head = training.get("recipe") == "drivable_head"
     keys = ({"seed", "epochs", "lr", "batch_size", "recipe", "parent_model",
-             "parent_torchscript", "ignore_top"} if drivable_head else
+             "parent_torchscript", "ignore_top", "model_version"} if drivable_head else
             {"seed", "epochs", "lr", "batch_size", "base", "recipe"})
     if set(training) != keys:
         raise JobError(f"training needs exactly {sorted(keys)}")
@@ -211,6 +211,9 @@ def _run(config, out, indexed_review, admission_stack):
                 or any(not isinstance(training[name], str) or not training[name].strip()
                        for name in ("parent_model", "parent_torchscript"))):
             raise JobError("drivable_head needs parent paths and ignore_top in [0,239]")
+        from drivable_versions import version_error  # D-558
+        if version_error(training["model_version"], "v13-drivable-"):
+            raise JobError(version_error(training["model_version"], "v13-drivable-"))
     elif training["recipe"] not in ("baseline", "enhanced") or training["base"] not in (8, 16):
         raise JobError("recipe baseline/enhanced, base 8/16 required")
     if type(training["lr"]) not in (int, float) or not 0 < training["lr"] < 1:
@@ -512,6 +515,7 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          dataset_revision=dataset.name,
                          camera_profile_revision="training-provenance-" + sha(profile),
                          trainer="rosy-frozen-drivable-head", revision_prefix="v13-drivable",
+                         model_version=training["model_version"],
                          parent_lane_model=parent["lineage"],
                          camera_provenance=inputs["camera_provenance"],
                          dataset_annotation=(None if "lane_derived" not in inputs else
