@@ -242,6 +242,7 @@ class BackgroundBlobDetector:
                     self._model.apply(background, learningRate=-1)
                 self._frames.extend(kept)
                 self._ready = True
+                self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
         if not self._ready:
             self._model.apply(image, learningRate=-1)
@@ -258,6 +259,7 @@ class BackgroundBlobDetector:
                         self._store.save(calib.revision, list(self._frames))
                     except Exception as exc:  # tracking goes on; the next restart learns live
                         logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
+                self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
             return DetectorResult((), "LEARNING")
         raw = self._model.apply(image, learningRate=0)
@@ -327,14 +329,25 @@ class BackgroundBlobDetector:
             x, y = geometry.parallax_correct((x, y), camera, self._robot_height_m)
         return Detection(x=float(x), y=float(y), footprint_m=diameter, score=self._score(diameter))
 
+    def _learn_background(self, mask: np.ndarray) -> None:
+        """At ready: the learned background image, its dark level and its floor (track) colour."""
+        background = self._model.getBackgroundImage()
+        if background is None or background.ndim != 3:
+            self._background = None
+            return
+        bright = background.max(axis=2)
+        self._dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
+        floor = (mask > 0) & (bright >= self._dark_level)
+        self._track_colour = np.median(background[floor], axis=0) if floor.any() else np.zeros(3)
+        self._background = background
+
     def _find_baked(self, mask: np.ndarray, work_to_map, camera) -> None:
         """D-547: robot-sized dark compact blobs in the learned background become suspects."""
         self._suspects = []
-        background = self._model.getBackgroundImage()
-        if background is not None and background.ndim == 3:
+        background = self._background
+        if background is not None:
             bright = background.max(axis=2)
-            dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
-            dark = np.where((bright < dark_level) & (mask > 0), 255, 0).astype(np.uint8)
+            dark = np.where((bright < self._dark_level) & (mask > 0), 255, 0).astype(np.uint8)
             dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, _OPEN_KERNEL)
             dark = cv2.bitwise_and(cv2.morphologyEx(dark, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
             count, labels, stats, centroids = cv2.connectedComponentsWithStats(dark, connectivity=8)
@@ -342,8 +355,6 @@ class BackgroundBlobDetector:
             grow = np.ones((2 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
             ring_grow = np.ones((6 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
             floor = (mask > 0) & (dark == 0)
-            track_colour = np.median(background[floor], axis=0) if floor.any() else np.zeros(3)
-            self._background, self._dark_level, self._track_colour = background, dark_level, track_colour
             for label in range(1, count):
                 pixels = int(stats[label, cv2.CC_STAT_AREA])
                 detection = self._measure(pixels, centroids[label], work_to_map, camera)
