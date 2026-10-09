@@ -1,7 +1,8 @@
-"""Run pytest for one commit on the model PC (OMEN) or the AI PC, not on this laptop.
+"""Run pytest for one commit on the model PC, AI PC or site PC (D-568), not on this laptop.
 
     python tools/remote/remote_pytest.py [--sha REV] [--log-dir DIR] [--affected-json FILE|-]
                                          [--skip PATH ...] [-- <pytest paths/args>]
+    python tools/remote/remote_pytest.py --pick sim     # print the host a Gazebo run should use
 
 Only the committed ``--sha`` (default HEAD) is tested: uncommitted changes are not
 shipped. The commit travels as a git bundle (so guard tests that run git see a real
@@ -9,11 +10,13 @@ shipped. The commit travels as a git bundle (so guard tests that run git see a r
 as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
 under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
 (``.github/workflows/ci.yml``); different dependency versions can run together.
-Each pytest runs under a 6 GB memory cap.
+Each pytest runs under a 6 GB memory cap, nice 15 and idle I/O.
 
-Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC then AI PC. One
-invocation runs on the first reachable host; several are spread over every
-reachable host at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
+Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
+host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
+and the ones above the class floor are used, most headroom first; the site PC only
+when no other host qualifies (D-568). Several invocations are spread over the chosen
+hosts at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
 is for explicit diagnostics.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
@@ -35,7 +38,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_HOSTS = "rosy@100.98.162.71 ai@100.108.76.123"
+SITE_HOST = "robttt@100.82.51.8"  # live Fleet: last, Fleet reserve, CPU cap (D-568 3)
+DEFAULT_HOSTS = f"rosy@100.98.162.71 ai@100.108.76.123 {SITE_HOST}"
+# D-568 2: (free cores, free GB) a host needs for one job of the class.
+NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
+SITE_RESERVE = (2, 4)
+SITE_CPU_QUOTA = "400%"
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
@@ -106,14 +114,31 @@ mv "$N" "$V"
 echo "[remote] ready $V"
 """
 
+# $3 = CPUQuota ('' = none). The job lock holds this shell's pid, which exec keeps.
 PYTEST = r"""set -euo pipefail
-R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; cd "$R/runs/$1"; shift 2
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; CPU=$3; cd "$R/runs/$1"
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
+mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; shift 3
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
-exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
+exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
+  nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
+"""
+
+# One line: nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb. Dead-pid locks go.
+PROBE = r"""J=~/rosy-jobs; c=0; m=0
+for f in "$J"/*.lock; do
+  [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
+  if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); else rm -f "$f"; fi
+done
+py=0; /usr/bin/python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1
+s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
+b=0; [ -e "$J/busy" ] && b=1
+echo "$(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
+  "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m"
 """
 
 CLEANUP = r"""R=~/rosy-test
+rm -f ~/rosy-jobs/"$1".lock
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
@@ -138,25 +163,41 @@ def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subproce
         return subprocess.CompletedProcess([], 124, b"", b"")
 
 
-def reachable(host: str) -> bool:
+def probe(host: str) -> dict | None:
+    """Measured headroom inputs of host (PROBE), or None when it does not answer."""
     try:
-        return subprocess.run([*SSH, host, "true"], stdin=subprocess.DEVNULL, capture_output=True,
-                              timeout=15).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
-def pick_host(hosts: list[str] | None = None, probe=None) -> str | None:
-    """First reachable host, or None (run locally)."""
-    if os.environ.get("ROSY_TEST_LOCAL") == "1":
+        out = subprocess.run([*SSH, host, "bash -c " + shlex.quote(PROBE)], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=15).stdout
+        n, load, avail, total, py, sim, busy, cores, gb = out.split()
+        return {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
+                "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
+                "lock_cores": int(cores), "lock_gb": int(gb)}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
-    if hosts is None:
-        hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
-    return next((h for h in hosts if (probe or reachable)(h)), None)
 
 
-def reachable_hosts(hosts: list[str] | None = None, probe=None) -> list[str]:
-    """Every reachable host in listed order; empty when forced local."""
+def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
+    """(hosts above the cls floor, most headroom first, the site PC only when no other fits; a note per host)."""
+    need_c, need_m = NEEDS[cls]
+    ranked, notes = [], []
+    for i, (host, p) in enumerate(zip(hosts, probes)):
+        if p is None:
+            notes.append(f"{host}: unreachable")
+            continue
+        site = host == SITE_HOST
+        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
+        mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+               else f"below {cls} floor {need_c} cores/{need_m} GB" if cores < need_c or mem < need_m else "ok")
+        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{' (site PC)' if site else ''} - {why}")
+        if why == "ok":
+            ranked.append((site, -min(cores / need_c, mem / need_m), i, host))
+    ranked.sort()
+    return [r[3] for r in ranked if not r[0]] or [r[3] for r in ranked], notes
+
+
+def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
+    """Hosts for cls by measured headroom (D-568), printing why; empty when forced local or none fits."""
     if os.environ.get("ROSY_TEST_LOCAL") == "1":
         return []
     if hosts is None:
@@ -164,8 +205,18 @@ def reachable_hosts(hosts: list[str] | None = None, probe=None) -> list[str]:
     if not hosts:
         return []
     with ThreadPoolExecutor(len(hosts)) as pool:
-        up = list(pool.map(probe or reachable, hosts))
-    return [h for h, ok in zip(hosts, up) if ok]
+        probes = list(pool.map(probe, hosts))
+    chosen, notes = place(cls, hosts, probes)
+    for note in notes:
+        print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
+    if not chosen and cls == "pytest":
+        # D-568 7: busy hosts must not stop the gate; the site PC never takes this fallback.
+        chosen = [h for h, p in zip(hosts, probes) if p and p["pytest"] and not p["busy"] and h != SITE_HOST]
+        if chosen:
+            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
+                  file=sys.stderr, flush=True)
+    print(f"[remote-pytest] {cls} -> {' '.join(chosen) or 'no host'}", file=sys.stderr, flush=True)
+    return chosen
 
 
 def bundle_base(repo: Path, sha: str) -> str | None:
@@ -234,7 +285,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
     if not invocations:
         return []
-    hosts = [] if local else (reachable_hosts() if len(invocations) > 1 else [h for h in [pick_host()] if h])
+    hosts = [] if local else placed_hosts("pytest")
     if not hosts:
         if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
@@ -281,8 +332,9 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         codes = []
         for inv, log in zip(invocations, logs):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
+            cpu = SITE_CPU_QUOTA if host == SITE_HOST else ""
             codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
-                                  + " ".join(map(shlex.quote, [name, deps_sha, *inv, *PYTEST_TAIL]))], log))
+                                  + " ".join(map(shlex.quote, [name, deps_sha, cpu, *inv, *PYTEST_TAIL]))], log))
         return codes
     finally:
         remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
@@ -314,8 +366,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--local", action="store_true", help="run here (same as ROSY_TEST_LOCAL=1)")
     parser.add_argument("--require-host", action="store_true",
                         help="fail instead of running locally when no host answers (ROSY_TEST_LOCAL=1 overrides)")
+    parser.add_argument("--pick", choices=sorted(NEEDS),
+                        help="only print the host with the most headroom for this job class (D-568)")
     parser.add_argument("pytest_args", nargs="*", help="one pytest invocation (after --)")
     args = parser.parse_args(argv)
+    if args.pick:
+        chosen = placed_hosts(args.pick)
+        if chosen:
+            print(chosen[0])
+        return 0 if chosen else 1
     invocations = [args.pytest_args] if args.pytest_args else []
     if args.affected_json:
         text = sys.stdin.read() if args.affected_json == "-" else Path(args.affected_json).read_text("utf-8")
