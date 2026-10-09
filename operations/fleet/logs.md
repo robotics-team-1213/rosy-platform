@@ -2747,6 +2747,11 @@
 - 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
 - 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
 
+## 2026-10-08 · a5c1bb395 · fix(fleet): 개발 세션 인증 뒤 모바일 설정 메뉴 복귀
+- 변경: 잠금 때문에 자동으로 연 Fleet Console 설정 메뉴만 인증 성공 후 접는다. 사용자가 직접 연 설정은 유지한다.
+- 증거: 390×844 회귀 수정 전 실패·수정 후 통과, 1440×900 화면 캡처, `known_failures.py` 0 new. `docs/validation/uiux-fleet-dev-menu-2026-10-08/result.md`.
+- gate 변화: 없음. LOCAL 브라우저 증거만이며 D-153 전체 G1/G2/G3 및 설치 이미지 수용은 HOLD.
+
 ## 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
 - 변경: `web/shared/site-map-model.js` 에 `TRIP_AUTHORITY_SITE_OFF`, `TRIP_AUTHORITY_NOT_REQUIRED`, `TRIP_CONVOY_NOT_BEHIND`, `TRIP_ROBOT_BUSY`, `TRIP_GOAL_REFUSED` 운영자 문구 추가(전에는 원시 코드가 보였다); `test/test_trip_error_labels.py` 가 Fleet 이 내는 모든 `TRIP_*` 코드에 문구가 있는지 지킨다
 - 증거: 모델 PC `operations/fleet/test/` (아래 커밋 메시지)
