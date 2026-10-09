@@ -1483,13 +1483,16 @@ Vision worker가 수용한 필드 경계 사각형으로 평면 보정한다(렌
 D-560(v1.167)부터 `rectification`에 `{"mode": "map"}`이 추가됐다. `map`은 다른 필드를
 받지 않는다(있으면 lease 생성 422). Vision은 추적이 Fleet `/api/fleet/detections/config`에서
 이미 읽는 승인 보정 기록(D-457 `map_to_image`, `image`, `track_bounds_m`, `lens`,
-`calibration_revision`)으로 최신 원본을 지도 평면에 편다.
+`calibration_revision`)으로 최신 원본을 지도 평면에 편다. 그 기록은 추적 worker가 넘기므로
+그 source에 추적(`rosy-vision` `--track`)이 켜져 있어야 평면이 나온다. 꺼져 있으면 늘 409다.
 
 - 영역: `track_bounds_m`에 여유 `0.15 m`를 더한 직사각형. 지도 `+x`가 오른쪽, `+y`가 위.
 - 축척: `400 px/m`. 긴 변이 1920 px를 넘으면 그 안으로 줄인다(소수 넷째 자리에서 내림).
 - 화면 밖이었던 부분은 어두운 고정색(BGR 24,24,24)이다. JPEG 품질 88.
 - 응답 헤더: `X-Frame-Rectified: map`, `X-Frame-Plane: <min_x>,<min_y>,<max_x>,<max_y>,<px_per_m>`
   (미터, 여유 포함, 소수 넷째 자리; `px_per_m`은 줄인 뒤 값), `X-Frame-Calibration: <calibration_revision>`.
+  픽셀 수를 반올림한 뒤 `max_x = min_x + 폭 / px_per_m`, `min_y = max_y − 높이 / px_per_m`로 다시 정하므로
+  이 사각형은 영상 크기 / `px_per_m`와 같다.
   `X-Frame-Width`·`X-Frame-Height`는 평면 영상 크기이고 `X-Frame-Rotation-Deg`는 `0`이다.
   `X-Frame-Seq`·`X-Frame-Age-Ms`·`X-Frame-Captured-At`·`X-Source-Lens`는 원본 프레임 그대로다.
 - 픽셀↔지도: 캔버스 좌표(픽셀 모서리 기준) `(u, v)`는 `x = min_x + u / px_per_m`,
