@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from fleet.traffic.blocks import (
-    BlockRules, Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, release_robot, step,
-    wait_cycle)
+    ZONE_STOP_CLEARANCE_M, BlockRules, Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity,
+    release_robot, step, wait_cycle)
 from fleet.routing.graph import build_graph
 from fleet.site_map import SiteMap, from_lane_graph
 
@@ -274,6 +274,48 @@ def test_a_robot_waiting_at_a_merge_gets_in_within_the_wait_bound():
             break
         assert result.authority_end[leaving.id] > 0.65, "inside-zone robot goes first before the bound"
     assert admitted_at is not None and 19.5 <= admitted_at <= 20.5
+
+
+def _zone_approaches():
+    """Two approaches into a capacity-1 ring: ``w`` from arc ``a`` (red), ``x`` from arc ``b`` (green)."""
+    layout = Layout({"a": Unit("a"), "b": Unit("b"), "ring": Unit("ring", 1, zone=True)}, {})
+    w = Robot("w", (Span("a", 0, 0.65), Span("ring", 0.65, 1.3, entry="a_arc")), 0.2, 0.6, 0.12, BODY)
+    x = Robot("x", (Span("b", 0, 0.65), Span("ring", 0.65, 1.3, entry="b_arc")), None, 0.3, 0.12, BODY)
+    return layout, w, x, {"ring": frozenset({"b_arc"})}
+
+
+@pytest.mark.parametrize("jitter", [-1e-6, 0.0, 1e-6])
+def test_a_robot_waiting_at_a_zone_stops_clear_of_it(jitter):
+    """D-517 3 zone stop clearance (AI PC signal SIM): a robot stopped at its authority before a zone it does not hold
+    pads (front + u) at least ZONE_STOP_CLEARANCE_M short of the zone: not busy, not a holder."""
+    layout, w, x, green = _zone_approaches()
+    state = TableState()
+    first = step(layout, [w], state, now=0.0, green=green)
+    assert first.waiting_for["w"] == ("signal:ring",)
+    stop = first.authority_end["w"]
+    assert 0.65 - (stop + w.uncertainty_m) >= ZONE_STOP_CLEARANCE_M - 1e-9
+    w.d = stop + jitter  # it stands at its authority end, float noise either way
+    again = step(layout, [w], state, now=0.5, green=green)
+    assert "ring" not in again.busy
+    assert "ring" not in state.last_occupied["w"]
+    assert all(unit != "ring" for unit, _f in state.held["w"].values())
+    assert again.authority_end["w"] == pytest.approx(stop) and again.waiting_for["w"] == ("signal:ring",)
+    # the green approach gets the capacity-1 ring past the waiter; a granted robot pins it
+    x.d = 0.3
+    both = step(layout, [w, x], state, now=1.0, green=green)
+    assert any(unit == "ring" for unit, _f in state.held["x"].values())
+    assert both.authority_end["x"] > 0.65 and "ring" in both.busy and not both.conflicts
+    assert both.waiting_for["w"] == ("signal:ring",)
+
+
+def test_the_clearance_is_only_before_a_zone():
+    """A stop before a plain block keeps end − u: the clearance is the zone's, not every block's."""
+    layout = Layout({"a": Unit("a"), "b": Unit("b")}, {})
+    holder = Robot("h", (Span("b", 0, 0.65),), 0.3, 0.3, 0.12, BODY)
+    w = Robot("w", (Span("a", 0, 0.65), Span("b", 0.65, 1.3)), 0.2, 0.6, 0.12, BODY)
+    result = step(layout, [holder, w], TableState(), now=0.0)
+    assert result.waiting_for["w"] == ("h",)
+    assert result.authority_end["w"] == pytest.approx(0.65 - 0.12)
 
 
 def test_wait_cycle_is_found():
