@@ -639,8 +639,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
+    marker_sources = sightings is not None and any(s.place_markers for s in sightings.sources)  # D-564
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
-                                                   roster=lambda: console.robot_ids),
+                                                   roster=lambda: console.robot_ids,
+                                                   place_markers=sightings.fresh_place_marker
+                                                   if marker_sources else None),
                          read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,

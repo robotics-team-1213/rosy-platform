@@ -27,12 +27,12 @@ CAMERA_FORBIDDEN = {
 }
 # 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write, the
 #    D-457 detections write and own-config read, plus the D-341 12 read of paired-camera
-#    credential digests.
+#    credential digests, and the D-564 place marker write.
 VISION_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "Fleet route other than sightings or detections": re.compile(
-        r"/api/fleet/(?!sightings\b)(?!detections\b)(?!pairing/v1/credentials\b)"),
+        r"/api/fleet/(?!sightings\b)(?!detections\b)(?!place-markers\b)(?!pairing/v1/credentials\b)"),
 }
 # 3. Fleet vision routes pass the video-route regex of test_no_video_relay because they
 #    only issue a lease; the browser fetches frames from Vision directly (D-318).
@@ -104,6 +104,7 @@ def test_vision_has_no_robot_command_and_writes_only_sightings_and_detections_to
     assert VISION.is_dir()
     assert _hits(VISION, (".py",), VISION_FORBIDDEN) == []
     assert "/api/fleet/sightings" in (VISION / "publish.py").read_text(encoding="utf-8")
+    assert "/api/fleet/place-markers" in (VISION / "publish.py").read_text(encoding="utf-8")  # D-564
     assert "/api/fleet/detections" in (VISION / "track" / "fleet_client.py").read_text(encoding="utf-8")
 
 
