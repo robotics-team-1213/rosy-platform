@@ -70,7 +70,7 @@ def simulate(seed=581, duration=34.0):
     clock = {"t": 0.0}
     wall = lambda: WALL0 + clock["t"]  # noqa: E731
     poses = MapPoseService(lambda: [LEADER, FOLLOWER], wall=wall)
-    anchor = TrailAnchor(poses, LEADER, [FOLLOWER], clock=lambda: clock["t"])
+    anchor = TrailAnchor(poses, LEADER, [FOLLOWER], clock=lambda: clock["t"], wall=wall)
 
     sightings, deliveries = [], []          # (deliver_at, row) / (deliver_at, payload)
     trail, linear, withheld, sent, seq = None, 0.0, 0, 0, 0

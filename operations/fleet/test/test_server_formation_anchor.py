@@ -32,10 +32,12 @@ def odom_frame(x, seq):
                                                    "seq": seq, "frame": "odom"}})
 
 
-async def _sent(robot, count):
+async def _sent(robot, seq):
+    """The frame for leader `seq` that reached the robot's reference socket."""
     for _ in range(200):
-        if robot.sinks and len(robot.sinks[-1].sent) >= count:
-            return robot.sinks[-1].sent
+        for text in (robot.sinks[-1].sent if robot.sinks else []):
+            if json.loads(text)["payload"]["seq"] == seq:
+                return text
         await asyncio.sleep(0.01)
     raise AssertionError(f"{robot.robot_id} got {robot.sinks and robot.sinks[-1].sent}")
 
@@ -54,16 +56,21 @@ def test_a_trail_formation_anchors_and_a_column_reform_relays_bytes():
         leader.pose_frames.put_nowait(odom_frame(0.2, 1))   # the relay is ready on a leader frame
         await console.formation_start("rosy_01", "TRAIL", 0.5)
         leader.pose_frames.put_nowait(odom_frame(0.3, 2))
-        payload = json.loads((await _sent(follower, 1))[-1])["payload"]
+        payload = json.loads(await _sent(follower, 2))["payload"]
         assert payload["anchor"] == "fleet" and payload["for_robot_id"] == "rosy_02"
         assert payload.get("anchor_hold") is None
         assert console.formation_status()["anchor"]["followers"] == {"rosy_02": None}
+        assert "anchor_hold" not in console.formation_status()["stream_evidence"]["rosy_02"]
+        poses.arbitrated_pose = lambda rid: MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
+        leader.pose_frames.put_nowait(odom_frame(0.3, 3))
+        await _sent(follower, 3)
+        evidence = console.formation_status()["stream_evidence"]["rosy_02"]
+        assert evidence["anchor_hold"] == "rosy_01:no_map_pose"
         assert ("rosy_02", True) in poses.refreshed
 
         await console.formation_reform("COLUMN", 0.5)
-        sent = len(follower.sinks[-1].sent)
-        leader.pose_frames.put_nowait(odom_frame(0.4, 3))
-        assert (await _sent(follower, sent + 1))[-1] == odom_frame(0.4, 3)   # D-31 bytes
+        leader.pose_frames.put_nowait(odom_frame(0.4, 4))
+        assert await _sent(follower, 4) == odom_frame(0.4, 4)   # COLUMN: D-31 bytes unchanged
         await console.formation_stop()
 
     run(scenario())

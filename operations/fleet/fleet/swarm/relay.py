@@ -56,6 +56,8 @@ class RelayStats:
     follower_last_tx_age_s: dict[str, Optional[float]] = field(default_factory=dict)
     follower_connected: dict[str, bool] = field(default_factory=dict)
     follower_last_error: dict[str, Optional[str]] = field(default_factory=dict)
+    #: D-581: follower -> why it gets anchor hold samples (absent while it gets usable ones).
+    follower_anchor_hold: dict[str, str] = field(default_factory=dict)
 
 
 class _Rate:
@@ -196,6 +198,8 @@ class Relay:
             follower_last_tx_age_s={rid: lane.rate.age_s() for rid, lane in self._lanes.items()},
             follower_connected={rid: lane.connected for rid, lane in self._lanes.items()},
             follower_last_error={rid: lane.last_error for rid, lane in self._lanes.items()},
+            follower_anchor_hold={} if self.anchor is None else {
+                rid: why for rid, why in self.anchor.status()["followers"].items() if why},
         )
 
     # --- 리더 --------------------------------------------------------------------
