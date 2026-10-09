@@ -7394,3 +7394,9 @@ osy-d395-s1d\`.
 - 변경: Gazebo 전용 route_a 시제품이 지도 경로에서 크게 벗어난 자세의 카메라 ONE 후보를 내던 것을, 경계 기억·잠금 폐기와 해당 경로 실행 중단으로 바꿨다.
 - 증거: `validation/lane-route-offmap-stop-2026-10-09/result.md`. B9 저장 프레임의 80 mm 반례 두 건은 후보→STOP; 정상 자세 BOTH는 유지. route_camera 30건 통과. 기존 drift 표 미달과 실물 정답 부재는 HOLD.
 - gate 변화: 출하 keep/CORE final cmd_vel 변경 없음. 실물 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 경로 이탈의 새 카메라 관측과 폐루프 한계
+
+- 변경: 격리 ROS-SIM에서 `route_a`를 주행시키고, 새 카메라 프레임을 받는 경로 위→80 mm 이탈→복귀를 관찰했다.
+- 증거: `validation/lane-route-live-offmap-2026-10-09/result.md`. 이탈 전 가시 후보, 이탈과 복귀 뒤 비가시 후보. 정적 경로 주행은 장애물 HOLD에서 끝나 B9 경계 공백에 닿지 않았다.
+- gate 변화: 없음. 60 mm는 실험값이며 사람 GT·운영 keep·실물 수용은 HOLD.
