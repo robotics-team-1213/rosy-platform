@@ -68,7 +68,7 @@
   - 한 번에 한 항목만 펼친다. 큐는 D-493 1항 규칙(`attentionItems`)과 순서를 그대로 쓴다. 로봇 이름은 무리 머리에서 한 번만 쓴다(행 안 반복 없음).
 - **로봇 카드는 그 로봇의 유일한 동작 자리다.**
   - 동작: `목표 지정`, `운행…`(출발 자리·목적지 고르기 → `운행 시작` / `반복 운행 시작`, 고리 정원 "고리 2/3대"), `운행 취소`(지금 카드 `취소` = 목표 취소와 현장 지도 `운행 취소`를 합친다: trip이 있으면 trip 취소, 없으면 목표·차선 주행 취소), `LED로 찾기`, `새 주소로 옮기기…`. 막힘·재계획·위치 결정은 카드에 두지 않고 큐 항목으로 보낸다(카드는 "판단 요청 · 큐에서 결정" 한 줄과 그 항목으로 가는 링크).
-  - **기본 접힘 규칙(결정).** 정상 로봇은 한 줄로 접힌다: 이름 · 운행 한 줄(D-517 10항) · 배터리 잔량. 예외(`attentionItems` 비어 있지 않음)가 있거나 지도·큐에서 고른 로봇은 펼친다. 펼친 카드는 사용자가 접을 수 있고, 예외가 새로 생기면 다시 펼친다. 지금의 `전체 로봇 보기 · 정상 N대` 토글은 없앤다. 정상 로봇도 목록에서 사라지지 않는다.
+  - **기본 접힘 규칙(결정).** 정상 로봇은 한 줄로 접힌다: 이름 · 운행 한 줄(D-517 10항) · 배터리 잔량. 예외(`attentionItems` 비어 있지 않음)가 있거나 지도·큐에서 고른 로봇은 펼친다. 다음은 `attentionItems`에 없더라도 **반드시 펼친다**: 오프라인(연결 끊김·상태 없음), 비상 정지 래치 걸림, 안전 결함(CORE 안전 상태가 정상 아님), 보정 진행 중(보정 lease 있음). 사용자가 접어도 이 넷이 이어지는 동안은 다시 펼친다. 펼친 카드는 사용자가 접을 수 있고, 예외가 새로 생기면 다시 펼친다. 지금의 `전체 로봇 보기 · 정상 N대` 토글은 없앤다. 정상 로봇도 목록에서 사라지지 않는다.
   - 카드 줄 내용: 운영 모드 문구(원시 enum은 `title`), 운행 한 줄, 위치·방향, 배터리 잔량, 안전, CORE `motion_reason`(8항), 보정 lease 보유자·현재 운전자(8항), payload 버전(읽기 전용, 8항), Cell 작업 진행 한 줄.
 - **로봇 목록 머리.** `전체 주행 취소`(quiet)와 발행 띠(`대기 작업 재허가`)는 머리 줄에 있고, 1024에서 레일 폭이 모자라면 머리 아래 줄로 접는다(버튼 글자는 한 줄).
 - **대형 블록은 `대형·대열`이다.** D-20 대형(무장 / 대형 변경 / 재개 / 해제)과 D-517 M3 대열(리더와 팔로워 고르기 → `POST /trip`의 `convoy`)을 한 블록에 둔다. 비활성 사유는 블록 한 줄로 모으고 버튼마다 `위 사유`(DESIGN.md "한 원인은 한 번 말한다")다.
@@ -138,9 +138,9 @@
 
 #### 9. 움직이는 경로는 이름 있는 운영자, 멈춤은 열려 있다
 
-- **이름 있는 운영자(`require_named_operator`)로 바꾸는 Fleet 경로:** `POST /robots/{id}/goal`, `/robots/{id}/line-follow`, `/robots/{id}/route`(지우기 전까지), `/formation/{start,reform,resume,stop}`, `/robots/{id}/line-stuck/decision`(모든 결정: WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT)과 `/claim`, `/signals/{id}/command`, `/start-points` 쓰기, `/api/fleet/do`, `/robots/{id}/identify`(LED, 장치를 움직이지 않지만 현장 장치 명령이라 같게 둔다). 이미 이름 있는 경로(trip, teach, site-map, traffic signals, hosts)는 그대로다.
-  - `formation/stop`과 막힘 `ABORT`도 이름을 요구한다(결정): 같은 경로에 움직이는 결정이 함께 있어서 결정 값마다 권한을 나누지 않는다. 멈추고 싶은 운영자에게는 아래 열린 경로가 있다.
-- **열린 채로 남는 멈춤(`require_operator`, 이름 없어도 됨):** `POST /api/fleet/estop`, `/cancel-all`, `/robots/{id}/cancel`, `/trips/{id}/cancel`, `/tasks/{id}/cancel`. 공유 토큰으로 접속한 화면에서도 멈출 수 있다.
+- **이름 있는 운영자(`require_named_operator`)로 바꾸는 Fleet 경로:** `POST /robots/{id}/goal`, `/robots/{id}/line-follow`, `/robots/{id}/route`(지우기 전까지), `/formation/{start,reform,resume}`, `/robots/{id}/line-stuck/decision`의 움직이는 답(RESUME·BACK_AND_RETRY·MANUAL·YIELD), `/signals/{id}/command`, `/start-points` 쓰기, `/api/fleet/do`, `/robots/{id}/identify`(LED, 장치를 움직이지 않지만 현장 장치 명령이라 같게 둔다). 이미 이름 있는 경로(trip, teach, site-map, traffic signals, hosts)는 그대로다.
+  - 막힘 결정 경로는 **값으로 권한을 나눈다**: 움직이는 답만 이름을 요구하고 WAIT·ABORT는 열려 있다. CORE `POST /line-follow/stuck/decision`이 이미 같은 값으로 나눈다(`line_follow.py`, 움직이는 답만 보정 lease 검사). Fleet 경로는 본문 `decision`을 먼저 보고 움직이는 값일 때만 `require_named_operator`를 적용한다. API Reference 행에 이 나눔을 적는다.
+- **열린 채로 남는 멈춤(`require_operator`, 이름 없어도 됨):** `POST /api/fleet/estop`, `/cancel-all`, `/robots/{id}/cancel`, `/trips/{id}/cancel`, `/tasks/{id}/cancel`, `/formation/stop`(해제만 하는 경로, `console_routes.py` "해제는 거절하지 않는다"), 막힘 WAIT·ABORT, `/robots/{id}/line-stuck/claim`(사람이 맡기만 하고 움직이지 않음). 공유 토큰으로 접속한 화면에서도 멈출 수 있다.
 - 거절은 403 `OPERATOR_IDENTITY_REQUIRED`(지금 코드)다. 화면은 그 버튼을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠그고 머리 로그인으로 안내한다. 감사 기록의 actor는 principal 이름이다(`site-console` 아님).
 - Fleet 안의 기계 행위자(막힘 해결기 루프, trip 루프)는 HTTP 경로를 거치지 않으므로 바뀌지 않는다. 그 행위는 trip을 시작한 운영자 이름을 감사 기록에 함께 남긴다.
 - **현장 이행(운영 메모).** 이 변경이 배포되는 순간 `site-users.yaml`이 없거나 로그인 줄이 없는 현장은 목표·차선 주행·대형·막힘 결정을 공유 토큰으로 보낼 수 없다(멈춤은 된다). 배포 전에 현장 관리자가 한다.
@@ -168,7 +168,7 @@
 | 운행 취소를 카드와 현장 지도 둘 다에 | 멈추는 자리가 둘이면 어디서 누르는지 다시 배워야 한다. "한 자리" 원칙과 어긋나 기각 |
 | 큐 높이 상한을 키워 막힘 버튼을 보이게 | 겹친 스크롤 세 개가 남고 1024에서 다시 잘린다. 레일 한 스크롤로 기각 |
 | 정상 로봇을 늘 펼침 | 30대 목표(D-517 7항)에서 레일이 길어진다. 늘 접힘은 운행 중 로봇이 안 보인다(감사 A3). 예외·선택 때 펼침으로 |
-| 움직임 경로마다 결정 값별 권한(ABORT만 열기) | 경로 하나에 권한 둘이면 화면과 시험이 갈린다. 경로 단위로 정하고 멈춤은 전용 열린 경로로 |
+| 막힘 결정 경로 전체에 이름 요구(값으로 나누지 않음) | 멈춤은 언제나 열려 있어야 한다는 사용자 규칙과 어긋나고, CORE가 이미 값으로 나눈다. 기각. 값으로 나누고 움직이는 답만 이름 |
 | Fleet 전용 문구 파일을 따로 | 출처가 둘이 된다. `core_ui_logic.js` 표 하나에 더한다 |
 
 ### Consequences
@@ -185,3 +185,7 @@
 - 브라우저: 네 문서 × 1920·1440·1024·390 캡처와 7항 계약 측정(모델 PC Chromium). 디자인 검토(impeccable 또는 동등한 독립 검토).
 
 **References:** `X:\DevTemp\fleet-ui-audit\audit.md`, `X:\DevTemp\fleet-ui-audit\features.md`, `operations/fleet/fleet/server/site_auth.py`, `operations/fleet/fleet/server/task_dispatch_routes.py`, `operations/fleet/fleet/server/web/{roster.js,line-stuck.js,site-map.js,formation.js}`, `DESIGN.md`.
+
+### 개정 이력
+
+- rev 1 (2026-10-09, 독립 검토 반영): `formation/stop`·막힘 WAIT·ABORT·claim은 열린 멈춤으로(이름은 움직이는 답에만), 막힘 결정 권한을 값으로 나눔, 접힌 카드가 반드시 펼쳐지는 네 조건(오프라인, 비상 정지 래치, 안전 결함, 보정 진행 중).
