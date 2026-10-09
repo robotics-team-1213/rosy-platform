@@ -34,12 +34,13 @@
 
 ### (a) `fix/fleet-named-operator-motion-routes`
 
-- **무엇:** D-540 9항. 움직이는 Fleet 경로를 `require_named_operator`로 바꾼다: `/robots/{id}/goal`, `/line-follow`, `/route`, `/formation/{start,reform,resume,stop}`, `/line-stuck/decision`·`/claim`, `/signals/{id}/command`, `/start-points` 쓰기, `/api/fleet/do`, `/robots/{id}/identify`. 멈춤(`/estop`, `/cancel-all`, `/robots/{id}/cancel`, `/trips/{id}/cancel`, `/tasks/{id}/cancel`)은 `require_operator` 그대로. 화면은 403 `OPERATOR_IDENTITY_REQUIRED`일 때 버튼을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. 감사 actor = principal 이름.
+- **무엇:** D-540 9항. 움직이는 Fleet 경로를 `require_named_operator`로 바꾼다: `/robots/{id}/goal`, `/line-follow`, `/route`, `/formation/{start,reform,resume}`, `/line-stuck/decision`의 움직이는 답(RESUME·BACK_AND_RETRY·MANUAL·YIELD, 본문 `decision`으로 나눔), `/signals/{id}/command`, `/start-points` 쓰기, `/api/fleet/do`, `/robots/{id}/identify`. 멈춤(`/estop`, `/cancel-all`, `/robots/{id}/cancel`, `/trips/{id}/cancel`, `/tasks/{id}/cancel`, `/formation/stop`, 막힘 WAIT·ABORT, `/line-stuck/claim`)은 `require_operator` 그대로. 화면은 403 `OPERATOR_IDENTITY_REQUIRED`일 때 버튼을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. 감사 actor = principal 이름.
 - **파일:** `operations/fleet/fleet/server/{task_dispatch_routes.py,lane_route_routes.py,console_routes.py,signal_routes.py,start_point_routes.py,intent_routes.py}`, formation 경로, `web/roster.js`·`line-stuck.js`·`formation.js`·`signals.js` 잠금 사유.
 - **Safety-Review:** 예(움직임 권한). 멈춤 경로가 열린 채인지를 리뷰 항목으로.
-- **시험:** 경로마다 공유 토큰 403 / 로그인·개발 세션 200 / 멈춤 경로 공유 토큰 200 표 시험(새 `operations/fleet/test/test_named_operator_motion_routes.py`). 막힘 해결기 루프·trip 루프가 영향받지 않음(기존 시험).
+- **시험:** 경로마다 공유 토큰 403 / 로그인·개발 세션 200 / 멈춤 경로 공유 토큰 200 표 시험, 막힘 결정 값별 표(WAIT·ABORT 공유 토큰 200, 움직이는 넷 403)(새 `operations/fleet/test/test_named_operator_motion_routes.py`). 막힘 해결기 루프·trip 루프가 영향받지 않음(기존 시험).
 - **운영 메모(릴리스 노트에 싣는다):** D-540 9항 이행 순서 — `site-users.yaml`에 `login`·`password_scrypt` 줄, Fleet 재시작, 다른 PC 로그인 → 목표 한 번 → 감사 actor 확인. 개발 연결 모드 현장은 변화 없음.
-- **API Ref:** 해당 행의 권한 칸을 "이름 있는 운영자"로.
+- **API Ref:** 해당 행의 권한 칸을 "이름 있는 운영자"로(막힘 결정 행은 값별 나눔, D-540 rev 1에서 미리 적어 둠).
+- **착지 조건:** 이 브랜치는 현장 이행 메모(site-users 로그인 줄)와 같은 착지·같은 릴리스 노트로만 나간다. 메모 없이 착지하지 않는다.
 - **되돌리기:** 커밋 revert 하나. 현장에서 로그인 줄을 못 넣은 채 배포됐다면 멈춤은 계속 되므로 급한 되돌리기는 필요 없다. 그래도 운용이 막히면 직전 payload로 롤백(D-412).
 
 ### (b) `uiux/fleet-shared-header`
@@ -67,7 +68,7 @@
 - **파일:** `web/roster.js`, `web/console.js`, `web/formation.js`, `web/shared/site-map-model.js`(계획 호출 공용), `DESIGN.md`, D-517 개정 줄(이미 이 문서 브랜치에 제안으로 있음 → ADR 수락 시 문구 확정).
 - **의존:** (a)(trip 시작이 이미 이름 있는 운영자이고 카드 목표도 같아야 함), (c)(재계획 확인 자리).
 - **Safety-Review:** 예, 가볍게. 화면만 옮기지만 운행 취소의 의미 합치기(trip vs 목표)가 멈춤 경로라서 "카드 운행 취소가 어느 상태에서든 로봇을 멈추게 하는 요청을 보낸다"를 리뷰한다.
-- **시험:** 카드 동작이 부르는 경로 표(운행 취소 분기 둘), 기본 접힘 규칙, `대형·대열` 대열 시작 거절 코드 문구(`TRIP_CONVOY_*`), `test_list_row_irreversible.py`(카드 행에 위험 채움 없음), DESIGN.md 고정 시험.
+- **시험:** 카드 동작이 부르는 경로 표(운행 취소 분기 둘), 기본 접힘 규칙(오프라인·비상 정지 래치·안전 결함·보정 진행 중이면 사용자가 접어도 펼침, 네 조건 각각 시험), `대형·대열` 대열 시작 거절 코드 문구(`TRIP_CONVOY_*`), `test_list_row_irreversible.py`(카드 행에 위험 채움 없음), DESIGN.md 고정 시험.
 - **수용 캡처:** 운행 중 1대 + 막힘 1대 + 오프라인 1대(감사 로봇 셋)로 네 뷰포트. 정상 로봇이 한 줄로 보이는 것.
 - **되돌리기:** revert 하나. 이때 현장 지도 운행 칸은 아직 있으므로((e) 전) 운행 시작 길이 남는다.
 
@@ -109,16 +110,16 @@
 | (h2) `feat/fleet-stuck-human-evidence` | 큐 막힘 펼침에 전면 프레임 한 장(`/vision/front/frame`) 또는 Rosy Cam 잘라 낸 그림 + 해결기 이유. 위치 확인 필요(D-395) 펼침 `이 자리로 확정…`(이름 있는 운영자) | 예(D-395 확정은 로봇 위치를 바꾼다) | 프레임 없을 때 문구, 확정 경로 권한·본문 |
 | (h3) `refactor/fleet-retire-duplicate-routes` | `/robots/{id}/route`(D-463) 제거, tether `POST/DELETE` 제거(읽기 유지), 그 시험 정리 | 아니오(경로 제거) | 경로 404, 남은 호출자 0(grep 시험), API Ref 행 제거 |
 | (h4) `feat/fleet-host-control-install`, 또는 D-524 기각 시 `refactor/fleet-remove-host-control` | 설치·보정 `호스트 서비스` 작업, 또는 `/hosts*` 제거 | 예(D-524가 이미 Safety-Review 대상) | D-524 시험 + 설치 작업 브라우저 |
-| (h5) `refactor/fleet-cell-ledger-only` | Cell 5단계 승인·진행·ID 손 입력 제거, 읽기 원장과 `작업 취소…`(D-371 확인)만. (c)·(d) 착지 뒤 | 아니오 | Cell 브라우저 시험, 큐 승인 왕복 | 아니오 | Cell 브라우저 시험, 큐 승인 왕복 |
+| (h5) `refactor/fleet-cell-ledger-only` | Cell 5단계 승인·진행·ID 손 입력 제거, 읽기 원장과 `작업 취소…`(D-371 확인)만. (c)·(d) 착지 뒤 | 아니오 | Cell 브라우저 시험, 큐 승인 왕복 |
 
 - **되돌리기:** 각자 revert 하나. (h3)는 되돌리면 경로가 돌아올 뿐 화면이 없으므로 위험 없음.
 
 ### (i) CORE trip lease (D-541) — 두 브랜치, Safety-Review
 
-- **(i1) `feat/core-trip-lease`:** CORE `PUT/DELETE /api/v1/trip-lease`, `/takeover`, `require_trip_owner`(구동 경로마다 `require_calibration_owner` 옆 한 줄), 모드 떠남·만료·비상 정지에서 끝, 만료 시 IDLE, 스냅숏 `trip_lease`·`trip_lease_ended`, 능력 `trip_lease`, 보정 lease 배타. API Ref 한 버전. D-430 체인 표 한 줄.
+- **(i1) `feat/core-trip-lease`:** CORE `PUT/DELETE /api/v1/trip-lease`, `/takeover`, lease 검사를 `require_calibration_owner` 안 한 곳에(모든 구동·모드 쓰기와 움직이는 막힘 답이 지남) + `/ws/swarm/reference` 프레임 버림, `stuck_resolver` 토큰은 WAIT·ABORT만, 같은 토큰의 다른 `lease_id` 409, IDLE·MANUAL·도킹·비상 정지·ABORT·만료·넘겨받기에서 끝(주인의 lane ↔ free 전환은 유지), 만료 시 IDLE, 스냅숏 `trip_lease`·`trip_lease_ended`, 능력 `trip_lease`, 보정 lease 배타. API Ref 한 버전. D-430 체인 표 한 줄.
   - 파일: `middleware/core/api_web/core_api_web/api/v1/{common.py,control.py,line_follow.py,navigation.py,docking.py,calibration.py}` + 새 `trip_lease.py`, 서비스 쪽 lease 상태(보정 lease 상태 모양 재사용), `core_common.protocol` 스키마.
-  - 시험: D-541 Validation CORE 단위 전부. 로봇 대시보드·Pilot이 409 `TRIP_LEASED`를 받았을 때 문장 표시(대시보드는 이 브랜치, Pilot `넘겨받기`는 Pilot 저장소 작업으로 따로).
-- **(i2) `feat/fleet-trip-lease-holder`:** Fleet trip 시작에서 lease 열기, 주기 renew, 잃으면 `stopped(lease_lost)`·명령 0·다시 열지 않음, 끝에서 DELETE, `fleet.trip_lease_required`(기본 false). 카드 운행 한 줄에 끝 이유.
+  - 시험: D-541 Validation CORE 단위 전부, 특히 live lease 아래 lane → free → lane 유지. 로봇 대시보드·Pilot이 409 `TRIP_LEASED`를 받았을 때 문장 표시(대시보드는 이 브랜치, Pilot `넘겨받기`는 Pilot 저장소 작업으로 따로).
+- **(i2) `feat/fleet-trip-lease-holder`:** Fleet trip 시작에서 lease 열기, 주기 renew, 잃으면 `stopped(lease_lost)`·명령 0·다시 열지 않음, 끝에서 DELETE, `fleet.trip_lease_required`(기본 false), `fleet.trip_lease_ttl_s`(기본 5, ≤ 10). lease를 여는 CORE 토큰이 Fleet 전용인지 설정 검사와 시험. 릴리스 노트: Wi-Fi 끊김이 TTL을 넘으면 trip이 끝난다(현장별 10 s까지). 카드 운행 한 줄에 끝 이유.
   - 의존: (i1) 착지, (d) 착지(카드 문구 자리).
   - 시험: D-541 Validation Fleet 단위·통합(가짜 CORE).
 - **SIM:** 모델 PC 또는 관제 PC Gazebo, 2대 고리 trip 중 Fleet kill → 5 s 안에 IDLE, 통행권 켬·끔.

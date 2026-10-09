@@ -18,22 +18,24 @@
 ### Decision
 
 1. **trip lease(CORE, API Ref additive + 동작 변경).**
-   - `PUT /api/v1/trip-lease`(operator) 본문 `{lease_id, trip_id, holder, operator_name, ttl_s}`. 처음 부르면 연다. 같은 토큰·같은 `lease_id`가 다시 부르면 만료를 늘린다(renew). `holder`는 Fleet 사이트 이름(1–64자), `operator_name`은 trip을 시작한 이름 있는 운영자(D-540 9항, 1–64자, 표시·감사용), `ttl_s`는 1–10 s(기본 5)다.
+   - `PUT /api/v1/trip-lease`(operator) 본문 `{lease_id, trip_id, holder, operator_name, ttl_s}`. 처음 부르면 연다. 같은 토큰·같은 `lease_id`가 다시 부르면 만료를 늘린다(renew). lease가 살아 있는 동안 **다른 `lease_id`는 토큰이 같아도 409 `TRIP_LEASED`**다(한 로봇에 trip 하나; 같은 토큰의 새 trip도 앞 lease를 DELETE한 뒤 연다). `holder`는 Fleet 사이트 이름(1–64자), `operator_name`은 trip을 시작한 이름 있는 운영자(D-540 9항, 1–64자, 표시·감사용), `ttl_s`는 1–10 s(기본 5)다.
    - `DELETE /api/v1/trip-lease/{lease_id}`(주인 토큰): 정상 끝. 로봇을 멈추지 않는다(Fleet이 trip 끝에서 이미 `stop`/goal 취소를 보낸 뒤 부른다).
    - `POST /api/v1/trip-lease/takeover`(operator, 주인 아닌 토큰) 본문 `{lease_id, reason}`: 명시적 넘겨받기(4항).
-   - 상태 스냅숏 선택 필드 `trip_lease {lease_id, trip_id, holder, operator_name, mode, since, expires_in_s}`(없으면 키 없음)와 끝난 직후 한 번 `trip_lease_ended {lease_id, reason, by}`. 이벤트 `trip_lease.opened|renewed|ended`.
+   - 상태 스냅숏 선택 필드 `trip_lease {lease_id, trip_id, holder, operator_name, since, expires_in_s}`(없으면 키 없음)와 끝난 직후 한 번 `trip_lease_ended {lease_id, reason, by}`. 이벤트 `trip_lease.opened|renewed|ended`.
    - 능력 필드 `trip_lease: true`(`rosy.controls/1`)로 Fleet이 지원 여부를 안다.
+   - **주인 신원 = CORE 토큰.** Fleet은 로봇마다 자기 전용 CORE 토큰(D-361 등록 자격)으로 lease를 연다. 그 토큰을 로봇 대시보드·Pilot·스크립트와 나눠 쓰면 그들도 "주인"이 되어 lease가 아무것도 막지 못한다(무효). Fleet은 등록 자격이 Fleet 전용임을 전제로 하고, 같은 `token_id`가 Fleet 밖에서 쓰인 흔적(다른 출발지의 teleop·`/ws/state`)이 보이면 CORE가 `trip_lease.shared_token` 경고 이벤트를 낸다.
    - 상태는 메모리에만 둔다. CORE가 다시 시작하면 lease는 없다(그 사이 모드도 IDLE이다).
-2. **여는 조건.** 다음이면 409로 거절한다: 다른 토큰의 lease가 살아 있음 `TRIP_LEASED`, 보정 lease가 다른 토큰 것 `CALIBRATION_ACTIVE`, 모드가 MANUAL(`manual_active`와 관계없이) `MANUAL_MODE`, 비상 정지 걸림 `EMERGENCY_ACTIVE`. 즉 **Pilot이 손을 뗀 뒤에도 MANUAL 모드인 로봇은 trip이 가져가지 못한다.** 운영자가 로봇을 IDLE로 둔 뒤(멈춤, 누구나 가능) 새 trip을 시작해야 한다.
-3. **lease가 사는 동안 CORE가 하는 것.** 주인 아닌 토큰의 다음 요청은 409 `TRIP_LEASED`이고 `detail {lease_id, trip_id, holder, operator_name, expires_in_s}`를 싣는다: `POST /mode`(MANUAL·NAVIGATION·DOCKING), `/teleop`, `/navigation/goal`, `PUT /line-follow/mode`(켜기), `/line-follow/hold`, `/line-follow/junction`, `/line-follow/authority`, 도킹·언도킹, `POST /calibration/session`. 구현은 이 경로들이 이미 부르는 `require_calibration_owner` 옆에 `require_trip_owner`를 한 줄씩 더하는 것이다. 거절도 D-411 의도 기록(`note_intent`)에 남는다.
+2. **여는 조건.** 다음이면 409로 거절한다: 다른 lease가 살아 있음(토큰이 같아도) `TRIP_LEASED`, 보정 lease가 다른 토큰 것 `CALIBRATION_ACTIVE`, 모드가 MANUAL(`manual_active`와 관계없이) `MANUAL_MODE`, 비상 정지 걸림 `EMERGENCY_ACTIVE`. 즉 **Pilot이 손을 뗀 뒤에도 MANUAL 모드인 로봇은 trip이 가져가지 못한다.** 운영자가 로봇을 IDLE로 둔 뒤(멈춤, 누구나 가능) 새 trip을 시작해야 한다.
+3. **lease가 사는 동안 CORE가 하는 것.** 주인 아닌 토큰의 다음 요청은 409 `TRIP_LEASED`이고 `detail {lease_id, trip_id, holder, operator_name, expires_in_s}`를 싣는다: `POST /mode`(MANUAL·NAVIGATION·DOCKING), `/teleop`, `/navigation/goal`, `PUT /line-follow/mode`(켜기), `/line-follow/hold`, `/line-follow/junction`, `/line-follow/authority`, 도킹·언도킹, `POST /calibration/session`. 그리고 `/swarm/follow`, `/navigation/initialpose`, SLAM 시작·멈춤·초기화, 전원 모드·안전 한도 쓰기, 막힘 결정 중 움직이는 답(RESUME·BACK_AND_RETRY·MANUAL·YIELD)도 같다. **구현은 `require_calibration_owner` 안에 lease 검사를 넣는 것이다.** 모든 구동·모드 쓰기가 이미 그 함수 하나를 지나므로 경로마다 줄을 더하지 않고, 새 구동 경로도 그 함수를 부르면 저절로 막힌다. 함수 밖에서 보정 lease를 직접 보는 `/ws/swarm/reference`(`ws.py`, `svc.calibration.blocking`)는 같은 조건으로 주인 아닌 프레임을 버린다. 거절도 D-411 의도 기록(`note_intent`)에 남는다.
    - **늘 열린 것(lease를 보지 않음):** `POST /safety/stop`(비상 정지), `POST /mode IDLE`, `/navigation/cancel`, line-follow 끄기, `/swarm/cancel`, 막힘 결정 중 멈추는 답(WAIT·ABORT). 멈춤은 누구나 한다.
-   - 주인 토큰의 막힘 결정 MANUAL·BACK_AND_RETRY는 D-407 규칙 그대로이고 lease와 무관하다(Fleet이 D-540 9항 이름 있는 운영자로 거른다).
+   - 막힘 결정: CORE는 이미 값으로 나눈다(`line_follow.py`: WAIT·ABORT는 열림, 움직이는 답만 `require_calibration_owner`). 그래서 lease도 움직이는 답에만 걸린다. 주인 토큰(Fleet)의 움직이는 답은 통과하고, Fleet은 그것을 D-540 9항 이름 있는 운영자로 거른다.
+   - **`stuck_resolver` 역할(Fleet 해결기 토큰, `fleet/cli.py` `resolver_token`)은 lease 주인이 아니다.** lease가 있는 로봇에 WAIT·ABORT는 답할 수 있고, RESUME·BACK_AND_RETRY·YIELD는 409 `TRIP_LEASED`다(MANUAL은 이미 403). 이것은 D-517 M4(trip 로봇에는 해결기가 WAIT만 한다)를 CORE에서 한 번 더 지키는 것이다. 사람이 고른 움직이는 답은 Fleet 주인 토큰으로 간다.
 4. **명시적 넘겨받기.** 로봇 화면·Pilot이 409 `TRIP_LEASED`를 받으면 "Fleet 운행 중 · {operator_name} · {trip_id}" 문장과 `넘겨받기` 버튼을 보인다. 누르면 `takeover`를 부른다. CORE는 같은 처리 안에서 (a) lease를 끝내고(`reason: taken_over`, `by` = 넘겨받은 토큰의 라벨·역할), (b) line-follow를 끄고 내비게이션을 취소해 IDLE로 둔다, (c) 이벤트를 낸다. 넘겨받은 화면은 그다음에 MANUAL을 따로 요청한다. 넘겨받기와 MANUAL을 한 요청으로 합치지 않는다: 멈춤이 먼저 끝나야 사람이 이어받기 때문이다. teleop이 lease를 조용히 이기는 길(자동 넘겨받기)은 없다.
-5. **trip은 로봇이 trip의 모드를 떠나면 끝난다.** lease는 열 때의 운전 방식(`mode`: NAVIGATION 또는 line-follow 켬)을 기억한다. 다음 중 하나면 CORE가 lease를 끝내고 `trip_lease_ended.reason`에 쓴다: 그 모드를 떠남(`mode_left`: IDLE·MANUAL·도킹 전환, line-follow 꺼짐, D-407 ABORT), 비상 정지(`estop`), 넘겨받기(`taken_over`), 만료(`expired`), 주인 DELETE(`released`). D-494 교차로 HOLD, D-517 통행권 정지, 막힘 대기는 모드를 떠나는 것이 아니다.
+5. **trip은 로봇이 trip의 운전을 떠나면 끝난다.** lease는 운전 방식을 저장하지 않는다. trip은 구간마다 `lane`(line-follow)과 `free`(NAVIGATION)를 오간다(`routing/execute.py`, `trip_runner.py`). 주인의 `/navigation/goal`은 `enter_navigation_mode`에서 line-follow를 끄고, 주인의 line-follow 켜기는 NAVIGATION을 떠난다 — **주인이 하는 NAVIGATION ↔ line-follow 전환은 lease를 유지한다.** lease를 끝내는 것은 다음뿐이고 `trip_lease_ended.reason`에 쓴다: IDLE로 감(`mode_left`, 누가 보냈든), MANUAL로 감(`mode_left`, 넘겨받기 뒤에만 가능), 도킹·언도킹 시작(`mode_left`), D-407 ABORT(`mode_left`), 비상 정지(`estop`), 넘겨받기(`taken_over`), 만료(`expired`), 주인 DELETE(`released`). 주인 아닌 토큰의 line-follow 끄기·`/navigation/cancel`은 열린 멈춤이고 로봇을 IDLE로 두므로 `mode_left`로 끝난다. D-494 교차로 HOLD, D-517 통행권 정지, 막힘 대기는 끝이 아니다.
 6. **만료(죽은 Fleet).** 주인이 `ttl_s` 안에 늘리지 않으면 lease가 끝나고(`expired`) CORE는 line-follow를 끄고 내비게이션을 취소해 IDLE로 둔다. 주인 없는 trip을 계속 달리게 두지 않는다(결정). 시계는 보정 lease와 같은 CORE 단조 시계다. 비상 정지 해제는 lease를 되살리지 않는다.
 7. **Fleet trip 루프(D-494 5항 개정).**
    - trip 시작 검사에 lease 열기를 더한다. 첫 교차로 지시·목표 전에 `PUT /trip-lease`가 성공해야 한다. 거절은 trip 시작 거절로 그대로 올린다(`TRIP_ROBOT_LEASED`, `TRIP_ROBOT_MANUAL`, `CALIBRATION_ACTIVE`).
-   - 루프 주기마다(0.5 s, 늦어도 1 s) 늘린다. `ttl_s`는 5다. 늘리기가 409 또는 404로 lease가 없다고 하면 그 주기에 아무 명령도 보내지 않고 trip을 `stopped(lease_lost: <reason>)`로 끝낸다. **다시 열지 않는다.** 같은 로봇을 다시 몰려면 운영자가 새 trip을 시작한다(이름 있는 운영자). 이것으로 "Pilot이 손을 뗀 뒤 trip이 조용히 다시 모는" 길이 닫힌다.
+   - 루프 주기마다(0.5 s, 늦어도 1 s) 늘린다. `ttl_s`는 기본 5이고 사이트 설정 `fleet.trip_lease_ttl_s`로 10까지 늘릴 수 있다(Wi-Fi가 자주 끊기는 현장). 늘리기가 409 또는 404로 lease가 없다고 하면 그 주기에 아무 명령도 보내지 않고 trip을 `stopped(lease_lost: <reason>)`로 끝낸다. **다시 열지 않는다.** 같은 로봇을 다시 몰려면 운영자가 새 trip을 시작한다(이름 있는 운영자). 이것으로 "Pilot이 손을 뗀 뒤 trip이 조용히 다시 모는" 길이 닫힌다.
    - 정상 끝·취소·실패에서 `stop`/goal 취소 뒤 `DELETE`한다.
    - 능력 `trip_lease`가 없는 로봇: 사이트 설정 `fleet.trip_lease_required`(기본 false)가 참이면 trip을 열지 않는다(`TRIP_LEASE_UNSUPPORTED`). 두 시연 로봇의 payload가 이 CORE를 받으면 현장 설정을 true로 바꾸고, 다음 릴리스에서 기본을 true로 바꾼다(결정).
    - 관제 카드(D-540 3항)는 `trip_lease_ended`의 이유를 운행 한 줄에 쓴다. 예: "운행 끝 · 로봇 화면에서 넘겨받음(kim-tablet)".
@@ -72,17 +74,21 @@ D-460은 사람 운전자 사이의 운전석 임대를 거절했다: (a) D-411 
 ### Consequences
 
 - 로봇 화면·Pilot은 Fleet trip 중인 로봇을 그냥 가져가지 못하고, 누가 왜 쥐고 있는지 본다. 가져갈 때는 넘겨받기 한 번이 멈춤과 기록을 남긴다.
-- Fleet이 죽으면 5 s 안에 로봇이 IDLE로 선다. Fleet 일시 지연이 5 s를 넘으면 trip이 끝난다(재시작 시 자동 재출발 없음은 D-494 그대로).
+- Fleet이 죽으면 `ttl_s`(기본 5 s) 안에 로봇이 IDLE로 선다. **Wi-Fi 끊김이 `ttl_s`를 넘으면 trip이 끝난다**(릴리스 노트에 싣는다). 끊김이 잦은 현장은 `fleet.trip_lease_ttl_s`를 10까지 올린다. 끝난 trip은 다시 시작하지 않는다(D-494 그대로).
 - MANUAL 모드에 남아 있는 로봇에는 trip을 시작할 수 없다. 운영자는 먼저 멈춤(IDLE)을 보낸다. 관제 카드가 그 이유를 말한다.
 - 옛 payload 로봇은 `fleet.trip_lease_required`가 false인 동안 지금처럼 lease 없이 trip을 한다(감사가 찾은 틈이 남는다). 두 로봇 갱신 뒤 true로 바꾼다.
 - Pilot·로봇 대시보드의 `넘겨받기` 화면은 이 ADR이 정하는 계약을 쓰는 별도 작업이다.
 
 ### Validation (Safety-Review 범위)
 
-- CORE 단위: 열기 거절 넷, 주인 renew·DELETE, 주인 아닌 경로별 409와 `detail`, 열린 경로(비상 정지·IDLE·취소)가 lease를 보지 않음, 넘겨받기 = 끝 + IDLE + 이벤트, 모드 떠남 다섯 이유, 만료 → IDLE, 비상 정지 해제 뒤 lease 없음, 보정 lease와의 배타.
-- Fleet 단위: 시작 시 열기 실패 → 시작 거절, renew 실패 → `stopped(lease_lost)`와 명령 0, 다시 열지 않음, 끝에서 DELETE, `fleet.trip_lease_required` 분기.
+- CORE 단위: lease 아래 주인의 lane → free → lane 전환(line-follow 켬 → `/navigation/goal` → line-follow 켬)에서 lease 유지, 같은 토큰의 다른 `lease_id` 409, `stuck_resolver` 토큰의 WAIT 통과·RESUME 409, `require_calibration_owner`를 부르는 모든 경로(경로 목록을 라우터에서 모아 표 시험)와 `/ws/swarm/reference` 프레임 버림, 열기 거절 넷, 주인 renew·DELETE, 주인 아닌 경로별 409와 `detail`, 열린 경로(비상 정지·IDLE·취소)가 lease를 보지 않음, 넘겨받기 = 끝 + IDLE + 이벤트, 모드 떠남 다섯 이유, 만료 → IDLE, 비상 정지 해제 뒤 lease 없음, 보정 lease와의 배타.
+- Fleet 단위: lease를 여는 토큰이 Fleet 전용 등록 자격이고 대시보드·Pilot 설정과 같지 않음(설정 검사 시험), 시작 시 열기 실패 → 시작 거절, renew 실패 → `stopped(lease_lost)`와 명령 0, 다시 열지 않음, 끝에서 DELETE, `fleet.trip_lease_required` 분기.
 - 통합(가짜 CORE): trip 중 다른 토큰 teleop 409 → takeover → IDLE → Fleet trip 끝(다시 몰지 않음). Pilot이 손 뗀 MANUAL 로봇에 trip 시작 → `TRIP_ROBOT_MANUAL`.
 - SIM(모델 PC 또는 관제 PC Gazebo, 이 노트북 금지): 2대 고리 trip 중 Fleet 프로세스 kill → 5 s 안에 두 로봇 IDLE. 통행권 켬과 끔 두 경우.
 - DEVICE: 실물 한 대, E-stop을 쥔 사람 옆에서 trip 중 Pilot 넘겨받기와 Fleet 정지. 호스트 pytest 통과는 장치 수용이 아니다.
 
 **References:** `middleware/core/api_web/core_api_web/api/v1/{common.py,control.py,calibration.py,line_follow.py,navigation.py}`, `middleware/core/services/core_features/command/manager.py`, `operations/fleet/fleet/server/{trip_runner.py,trip_ports.py,trip_guard.py}`, `X:\DevTemp\fleet-ui-audit\features.md`.
+
+### 개정 이력
+
+- rev 1 (2026-10-09, 독립 검토 반영): lease에 운전 방식 저장을 없앰(주인의 lane ↔ free 전환은 유지), 검사를 `require_calibration_owner` 안 한 곳으로(`/swarm/follow`, initialpose, SLAM, 움직이는 막힘 답, `/ws/swarm/reference` 포함), `stuck_resolver` 토큰 규칙, 다른 `lease_id` 409, Fleet 전용 CORE 토큰 전제, `fleet.trip_lease_ttl_s`(≤ 10 s)와 Wi-Fi 끊김 메모. D-460·D-494·D-430에 개정 줄.
