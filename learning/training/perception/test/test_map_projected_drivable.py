@@ -215,7 +215,7 @@ def test_union_of_d554_and_d563_admits_drivable_head(tmp_path, monkeypatch):
     review(tmp_path, mine, canaries=0.5)
     ldd.finalize(mine)
     with pytest.raises(ValueError, match="not finalized"):
-        ldd.union([d554, _derived(tmp_path / "raw", n=4)], tmp_path / "bad")
+        ldd.union([d554, _derived(tmp_path, n=4, name="raw")], tmp_path / "bad")
     _, doc = ldd.union([d554, mine], tmp_path / "union")
     assert (doc["annotation_origin"], doc["adr"]) == ("derived_from_reviewed_lanes+map_projected", "D-554+D-563")
     assert {f["adr"] for f in doc["frames"]} == {"D-554", "D-563"}
