@@ -790,3 +790,8 @@
 - 변경: 823847295의 "승인 코드 입력칸이 한글 키보드에서 깨졌다" 기록에 빠진 표준 항목을 보완한다. 입력칸 `VISIBLE_PASSWORD`, 코드 알파벳 필터, 완료 키 보내기, 승인 폐기(401/403/409) 재요청 대화상자.
 - 증거: 823847295 Android 단위 시험(LinkStatusTest), 8kcn 태블릿 로그 "Approval code not accepted: PeerRefused HTTP 409".
 - gate 변화: SOURCE/LOCAL. 실기 화면 코드 승인은 릴리스 056 이후 DEVICE에서 확인.
+
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
+- 변경: 키보드 옵션(한 줄·완료)을 대화상자 표시 전에 정하고, Enter는 `IME_NULL`+`KEYCODE_ENTER` 누름으로 와도 보내도록 `LinkStatus.sendsCode` 한 곳에서 판정한다. 키를 뗄 때는 보내지 않는다.
+- 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
+- gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.

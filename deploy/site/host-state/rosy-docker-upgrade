@@ -1,0 +1,51 @@
+#!/bin/bash
+# Finish configuring and later upgrade the Ubuntu docker.io engine.
+# Never install docker-ce, and never configure ubuntu-fan: its first
+# configure enables a FAN bridge this host does not use.
+set -euo pipefail
+exec 9>/run/lock/rosy-host-update.lock
+if ! flock -n 9; then
+  echo "rosy-docker-upgrade: lock held"
+  exit 0
+fi
+export DEBIAN_FRONTEND=noninteractive
+echo "rosy-docker-upgrade: before"
+dpkg-query -W -f '${Package} ${db:Status-Abbrev} ${Version}\n' \
+  docker.io containerd runc docker-buildx-plugin docker-compose-plugin
+
+for package in runc containerd docker.io; do
+  state=$(dpkg-query -W -f '${db:Status-Status}' "$package")
+  if [ "$state" != "installed" ]; then
+    echo "rosy-docker-upgrade: configure $package ($state)"
+    dpkg --configure "$package"
+  fi
+done
+
+apt-get update -qq
+workdir=/var/lib/rosy-site/docker-debs
+rm -rf "$workdir"
+mkdir -p "$workdir"
+upgrade=0
+for package in runc containerd docker.io docker-buildx-plugin docker-compose-plugin; do
+  installed=$(dpkg-query -W -f '${Version}' "$package")
+  candidate=$(apt-cache policy "$package" | awk '/Candidate:/ {print $2; exit}')
+  if [ -n "$candidate" ] && dpkg --compare-versions "$candidate" gt "$installed"; then
+    echo "rosy-docker-upgrade: $package $installed -> $candidate"
+    upgrade=1
+  fi
+done
+if [ "$upgrade" -eq 1 ]; then
+  (
+    cd "$workdir"
+    apt-get download runc containerd docker.io docker-buildx-plugin docker-compose-plugin
+    dpkg -i ./*.deb
+  )
+else
+  echo "rosy-docker-upgrade: already current"
+fi
+rm -rf "$workdir"
+
+echo "rosy-docker-upgrade: after"
+dpkg-query -W -f '${Package} ${db:Status-Abbrev} ${Version}\n' \
+  docker.io containerd runc docker-buildx-plugin docker-compose-plugin
+docker version --format 'docker server {{.Server.Version}}'

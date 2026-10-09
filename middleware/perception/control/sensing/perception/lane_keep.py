@@ -282,6 +282,7 @@ class LaneKeeper:
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
+        prior_boundaries = self.last.get("boundaries", [])
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
                      "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1,
@@ -418,7 +419,7 @@ class LaneKeeper:
         # line, a crosswalk or a junction mouth, not an L-corner).
         corner = None
         if self._corner_turning and strategy != "both":
-            corner = self._corner(transverse, half, left + right + conflicts)
+            corner = self._corner(transverse, half, left + right + conflicts, left + right + prior_boundaries)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
@@ -487,9 +488,8 @@ class LaneKeeper:
                          error=round(error, 3), confidence=confidence)
         return LaneObservation(error=error, confidence=confidence)
 
-    def _corner(self, transverse, half, boundaries=()):
-        """(target, strategy) from the nearest L-corner line ahead, or None.
-        Updates the latched corner side."""
+    def _corner(self, transverse, half, boundaries=(), seed_boundaries=()):
+        """(target, strategy) from the nearest L-corner ahead; latch its side."""
         best = None
         for centre, direction, ends, steep in transverse:
             ys = sorted(float(p[1]) for p in ends)
@@ -521,6 +521,7 @@ class LaneKeeper:
             elif (right_reach - left_reach > CORNER_ASYMMETRY_M
                     and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
                 side = "right"
+        if side is not None and not any(row["side"] != side for row in seed_boundaries): side = None
         if side is not None:
             self._corner_side = side
         if self._corner_side is not None:

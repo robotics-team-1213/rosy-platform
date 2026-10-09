@@ -24,7 +24,9 @@
 
 같은 장치에서 기존 `tools/calibration/camera_capture.py`를 SSH 표준 입력으로 실행한 읽기 전용 정지 수집은 scan 40개, 영상 15개, odom 121개, 수집 fault 0개를 기록했다. 출력은 `X:/DevTemp/lane-live-readonly-20261009/camera-auto-candidate.json`, SHA-256 `bedbb4af817edb7ed405aac774d0e582086b13cc3ee85c25cdca2c988ffaa6948`이다. 계산기는 피치 `0.36826 rad`(약 21.1°), 높이 `0.0634 m`를 냈지만 `recommended=false`, 사유 `too few wall returns in view`였다. 높이는 `height_source=base`이며 실측값이 아니다. 보정 저장소·로봇 설정에는 적용하지 않았다.
 
-이 **거절된** 후보를 같은 PNG에 대입한 민감도 시험에서는 `corner_turning=false`가 `no_boundary`로 멈췄으나 `corner_turning=true`는 선택 경계 0개·횡단 후보 2개에서 `strategy=corner_left`, `error=-0.6`, `confidence=0.6`을 냈다. 이는 21.1°가 실제 카메라 피치라는 근거가 아니며, 잘못된 지면 투영과 모서리 규칙이 결합하면 STOP이 회전 후보로 바뀔 수 있다는 반사실 반례다. 자동 보정의 거절 판정과 승인된 장치별 지면 프로필을 `keep` 전환의 필수 게이트로 유지한다.
+이 **거절된** 후보를 같은 PNG에 대입한 수정 전 민감도 시험에서는 `corner_turning=false`가 `no_boundary`로 멈췄으나 `corner_turning=true`는 선택 경계 0개·횡단 후보 2개에서 `strategy=corner_left`, `error=-0.6`, `confidence=0.6`을 냈다. 이는 21.1°가 실제 카메라 피치라는 근거가 아니며, 잘못된 지면 투영과 모서리 규칙이 결합하면 STOP이 회전 후보로 바뀔 수 있다는 반사실 반례다. 자동 보정의 거절 판정과 승인된 장치별 지면 프로필을 `keep` 전환의 필수 게이트로 유지한다.
+
+후속 공통 `LaneKeeper` 수정은 처음 모서리 방향을 잡을 때 현재 또는 직전 프레임에 닫힌 쪽의 채택된 경계가 있어야 하게 했다. 수정 후 위 PNG와 거절된 피치의 같은 재생은 `None / no_boundary`, 선택 경계 0개, 횡단 후보 2개로 STOP한다. 합성 회귀에서는 경계 없는 잘린 가로 표시와 반대쪽 경계만 본 표시를 STOP하고, 닫힌 쪽 경계를 본 뒤 모서리에 도착하는 좌·우 정상 시퀀스는 유지한다. 이는 피치 오류 한 가지에 대한 관측 안전 보강이며 승인 GT·실물 주행 수용을 대신하지 않는다.
 
 ## 주행 권한과 다음 검증
 

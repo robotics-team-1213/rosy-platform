@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Hang guard for the model PC (OMEN). Run once on the model PC:
 #
-#   sudo deploy/site/install-model-pc-guard.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-model-guard"]
+#   sudo deploy/site/install-model-pc-guard.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-host-guard"]
 #
 # 2026-10-07 the model PC froze at 02:13 under memory pressure (NVIDIA NV_ERR_NO_MEMORY,
 # ollama "host memory pressure", then an endless i915 "Purging GPU memory") and stayed down
@@ -13,10 +13,10 @@
 #   2. kernel: panic=10 and softlockup_panic=1, so a detected lockup reboots instead of hanging.
 #   3. swap: turns the zvol swap off and comments its fstab line; zram grows to 100 % of RAM
 #      (compressed RAM, not ZFS). The 4 GiB encrypted swap partition stays.
-#   4. remote guard: /usr/local/sbin/rosy-model-guard-remote and a sudoers line that lets the
-#      login user run only `systemctl reboot`; with --site-key, an authorized_keys entry that
-#      can run nothing but that command (deploy/site/install-model-guard-check.sh is the
-#      site host side).
+#   4. remote guard: deploy/hosts/common/install-guard-remote.sh (forced command
+#      rosy-host-guard-remote and with --site-key the guard's key; deploy/site/install-host-guard.sh
+#      is the site host side). Its restart and reboot run the D-524 helper, installed with
+#      `rosy-host-state install model --approve ...` (D-530).
 # Idempotent. --dry-run prints what would change and needs no root.
 set -euo pipefail
 
@@ -70,17 +70,9 @@ if [ -f /etc/default/zramswap ]; then
   run systemctl restart zramswap.service
 fi
 
-# 4. remote guard command and its one sudo right
-run install -m 0755 "$HERE/rosy-model-guard-remote" /usr/local/sbin/rosy-model-guard-remote
-put /etc/sudoers.d/rosy-model-guard 0440 "$USER_NAME ALL=(root) NOPASSWD: /usr/bin/systemctl reboot"
-[ "$DRY" = 1 ] || visudo -cf /etc/sudoers.d/rosy-model-guard >/dev/null
-if [ -n "$SITE_KEY" ]; then
-  KEYS=/home/$USER_NAME/.ssh/authorized_keys
-  LINE="command=\"/usr/local/sbin/rosy-model-guard-remote\",restrict $SITE_KEY"
-  if [ "$DRY" = 1 ]; then echo "+ append to $KEYS: $LINE"
-  elif ! grep -qF "$SITE_KEY" "$KEYS" 2>/dev/null; then
-    install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "/home/$USER_NAME/.ssh"
-    printf '%s\n' "$LINE" >> "$KEYS" && chown "$USER_NAME:$USER_NAME" "$KEYS" && chmod 0600 "$KEYS"
-  fi
-fi
+# 4. remote guard forced command and the site key (D-530, shared with the AI PC)
+remote_args=()
+[ "$DRY" = 1 ] && remote_args+=(--dry-run)
+[ -n "$SITE_KEY" ] && remote_args+=(--site-key "$SITE_KEY")
+SUDO_USER=$USER_NAME "$HERE/../hosts/common/install-guard-remote.sh" "${remote_args[@]}"
 echo "done. Check: swapon --show; ls /dev/watchdog*; sysctl kernel.panic; sudo -l -U $USER_NAME"
