@@ -1384,3 +1384,8 @@
 - 변경: `lane_boundary_identity.py`가 정지 odom에서 새 좌·우 선 성분과 기억의 공통 BEV 거리 행 횡중심 이동을 비교한다. `lane_bev.py`는 20 mm 초과 시 기억을 버리고 `boundary_identity_unconfirmed`로 관측을 중단하며 코너 인계도 막는다. 기존 동선·명령 소유권은 그대로다.
 - 근거: 합성 같은 자세에서 30 mm 옮긴 단일 선이 이전 좌/우 경계로 승격되어 error +0.252/-0.218을 냈다. 수정 전 반례 시험 실패, 수정 후 `test_lane_edge.py` 전체 통과. `docs/validation/lane-stationary-boundary-identity-2026-10-10/result.md`.
 - gate 변화: SOURCE 후보. 일반 keep 모드·RoadState·ROS-SIM·장치·현장 수용은 별도이며, 동일 위치의 다른 물리 선은 카메라+odom만으로 구분되지 않는다.
+
+## 2026-10-10 · feat/drivable-keep-steer · feat(control): keep 모드 learned paint를 drivable 길로 (D-597)
+- 변경: 읽기 전용 `learned_paint_target`(기본 `lane_marking`, `drivable`). `drivable`이면 paint worker가 `infer_drivable`을 불러 `learned/drivable_paint.py`가 D-566 영역(성장 제한 없음, ignore 역할은 도로)에서 로봇 아래 도로부터 위로 이어지는 길을 만들고, 갈래가 나뉘면 가장 오른쪽(D-384 2항)을 따른다. 길 양쪽 바깥에 선 폭 띠를 그려 keeper 페인트로 준다. drivable 없음·근거리 2% 미만이면 같은 추론의 lane_marking. 매니페스트 `input.crop` 지원(자르기·background로 되돌리기). keep_debug `paint_source_used: learned_drivable`, `paint_target_requested`, `paint_drivable`. 운영자 overlay 허용 키와 `--paint-target` CLI 플래그, CORE readback은 `learned_drivable`을 `learned`로 보고.
+- 증거: `test_learned_drivable_paint.py`(직선·갈래 우측·횡단보도·덮개 부족·크롭·keeper 종단 오차가 테이프 경로와 0.05 안), overlay·CLI·readback 시험. 원격 pytest 통과(현장 PC).
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다. Pi 지연, 실프레임 재생, 실물은 별도다.
