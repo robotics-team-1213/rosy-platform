@@ -25,7 +25,7 @@
    - **한 자취에 프레임을 섞지 않는다.** 자취는 처음 쌓인 종류(map 또는 fleet)로 정해진다. 다른 종류 표본이 오면 `reference_frame_changed`로 서고 follow를 다시 걸 때까지 유지한다.
    - **map_id.** Fleet 기준 표본의 `map_id`는 천장 카메라 사이트 맵이고 자취는 로봇 odom에 있으므로, 로봇 자신의 `map_id`와 비교하지 않는다(로봇 맵 비교는 `anchor` 없는 표본에만 그대로). 두 로봇의 기준이 같은 사이트 맵인지는 Fleet이 본다(추적기는 활성 사이트 맵 sighting만 쓰고, 두 기준의 `map_id`가 다르면 `map_id_differs`로 멈춘다).
 5. **안전은 그대로다.** D-422 몸체 정지, 스트림 단절 HOLD, SAF-004 클리핑·세션 `max_speed`, D-400 평가는 D-559와 같은 길이다. 새 HOLD 사유 두 개(`reference_anchor_invalid`, `reference_frame_changed`)는 `swarm.hold`로 한 번 알린다.
-6. **API v1.173**(추가): §7.8 `anchor`·`for_robot_id`·`anchor_age_s`, `swarm.hold` 사유 두 개, `swarm/state` `trail.anchor`, Fleet `formation.anchor`.
+6. **API v1.176**(추가): §7.8 `anchor`·`for_robot_id`·`anchor_age_s`, `swarm.hold` 사유 두 개, `swarm/state` `trail.anchor`, Fleet `formation.anchor`.
 
 ### Consequences
 
