@@ -359,6 +359,20 @@ batch_size 외에 `parent_model`(lane-seg manifest 폴더), `parent_torchscript`
 기록한다. 기존 intake·READY·장치 전달은 v13을 계속 거부하며, 후보 생성은 주행
 수용 증거가 아니다.
 
+D-558: `drivable_head`의 `training`에는 `model_version`(`v13.<minor>.<두 자리 patch>`, 예 `"v13.1.00"`)이
+꼭 있어야 한다. major는 계열 숫자(13)와 같아야 하고, 값은 모델 manifest의 `model_version`과 run 기록
+(`config.json`의 `training`)에 남는다. minor는 라벨·출력 규칙 변경, patch는 같은 규칙의 재학습이다.
+intake는 `v13-drivable-*`에 `model_version`이 없거나 형식·major가 틀리거나, 원장
+`model/drivable_versions.yaml`에 같은 버전이 다른 revision으로(또는 같은 revision이 다른 버전으로) 있으면
+거부하고, 통과하면 `PASS <revision> (<version>)`을 찍는다. `deliver.py status`와 로봇의 `shadow model` 로그도
+revision 옆에 버전을 보여 준다. 거절·폐기한 후보도 버전을 차지하므로 intake·전달 뒤 원장에 적는다:
+
+```bash
+python model/drivable_versions.py show [v13.1.00]
+python model/drivable_versions.py add v13.1.00 v13-drivable-YYYYMMDD-<sha8> --onnx-sha256 <64hex>     --dataset v13-lane-derived@<content_sha> --rule "D-554 1-9" --status candidate --note "<한 줄>"
+python model/drivable_versions.py set-status v13.1.00 shadow   # candidate|shadow|rejected|retired
+```
+
 ### D-554 차선 파생 drivable 데이터셋
 
 `drivable_head`는 `IndexedReview` 대신 D-554 파생 데이터셋도 받는다. 사람이 검수한 5클래스
