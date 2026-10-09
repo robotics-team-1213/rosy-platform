@@ -76,11 +76,13 @@ def build_pairing(args: argparse.Namespace, *, tls_cert, tasks_db, sighting_serv
 
 
 def build_enrollment(*, console, task_service, sighting_service, enrollment_store,
-                     robot_key, robot_key_error, discovery, tls_file, hub_link=None):
+                     robot_key, robot_key_error, discovery, tls_file, hub_link=None,
+                     tracking_service=None):
     from fleet.server.enrollment import EnrollmentService
     from fleet.server.roster import SiteRoster
 
-    roster = SiteRoster(console, task_service=task_service, sightings=sighting_service)
+    roster = SiteRoster(console, task_service=task_service, sightings=sighting_service,
+                        tracking=tracking_service)
     from fleet.server.enrollment_tls import EnrolledTlsBindings
     enrollment = EnrollmentService(enrollment_store, roster, key=robot_key,
                                    key_error=robot_key_error,
