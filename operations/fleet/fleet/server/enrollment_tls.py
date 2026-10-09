@@ -165,6 +165,12 @@ class EnrolledTlsBindings:
                 raise EnrollmentTlsError('TLS hostname differs from enrolled identity')
         return sorted(self._approved.keys() - rows.keys())
 
+    def claims(self, hostnames: set[str], robot_ids: set[str]) -> bool:
+        """True when an approved binding (pending or bound) owns one of these names or ids."""
+        names = {name.lower().rstrip('.') for name in hostnames if name}
+        names |= {name + '.local' for name in names if not name.endswith('.local')}
+        return any(b.hostname in names or b.robot_id in robot_ids for b in self._approved.values())
+
     def pending(self, rows: list[dict], hostname: str, port: int) -> EnrolledTlsBinding | None:
         """The one unenrolled binding at this hostname:port. Selection only: TLS proves it."""
         enrolled = {row['robot_id'] for row in rows}

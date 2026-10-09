@@ -398,6 +398,12 @@ class EnrollmentService:
             raise EnrollmentError("tls_binding_required", 409, "HTTPS requires an approved TLS binding")
         return binding
 
+    def _refuse_http_for_binding(self, hostnames: set[str], address: str) -> None:
+        """D-565: a name or address an approved binding owns never enrolls over plain HTTP."""
+        bound = {row["robot_id"] for row in self._store.rows() if row["address"] == address}
+        if self._tls_bindings is not None and self._tls_bindings.claims(hostnames, bound):
+            raise EnrollmentError("tls_binding_required", 409, "that robot has an approved TLS binding")
+
     def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None, Any]:
         if (discovery_name is None) == (address is None):
             raise EnrollmentError("bad_request", 400, "choose one discovered robot or one address")
@@ -411,6 +417,10 @@ class EnrollmentService:
             if secure and (len(enrolled) != 1 or self._tls_bindings is None
                            or self._tls_bindings.binding(enrolled[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
+            if not secure:
+                self._refuse_http_for_binding(
+                    {row["hostname"] for row in (self._discovery.rows() if self._discovery else [])
+                     if f"{row['address']}:{row['port']}" == target}, target)
             return target, None, None
         if self._discovery is None:
             raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
@@ -436,6 +446,8 @@ class EnrollmentService:
             elif (len(registered) != 1 or self._tls_bindings is None
                     or self._tls_bindings.binding(registered[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
+        else:
+            self._refuse_http_for_binding({row["hostname"]}, f"{row['address']}:{row['port']}")
         if not row.get("enrollable"):
             raise EnrollmentError("not_enrollable", 409, "that row is not waiting for registration")
         return f"{row['address']}:{row['port']}", row, pending
@@ -550,11 +562,13 @@ class EnrollmentService:
                     renamed and renamed.group("base") == row["name"].lower()))
         if not isinstance(robot_id, str) or not robot_id:
             raise self._consumed("wrong_robot", avahi_renamed=False)
+        if (http.base_url.scheme != "https" and self._tls_bindings is not None
+                and self._tls_bindings.claims({hostname}, {robot_id})):
+            raise self._consumed("tls_binding_required")  # a bound identity answered over HTTP
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
         if pending is not None and robot_id != pending.robot_id:
-            raise EnrollmentError("tls_binding_mismatch", 409,
-                                  "the robot reports a robot_id other than its approved TLS binding")
+            raise self._consumed("tls_binding_mismatch")
         token_id = str(paired.get("id") or me.get("id") or "")
         if not token_id:
             raise self._consumed("verify_failed")
