@@ -21,15 +21,18 @@ LOW_MEMORY = "2 95 3.0 24 7200 -"
 UNIT_DOWN = "60 5 1.2 24 7200 pinky-nav2.service"
 
 
-def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00"):
-    """Run the guard with a stub ssh that answers ``health`` and records every remote command."""
+def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00",
+           action_rc=0, env_extra=None):
+    """Run the guard with a stub ssh that answers ``health`` and records every remote command.
+
+    Any other command exits ``action_rc`` (a nonzero one also writes a refusal to stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     calls = tmp_path / "calls"
     (bin_dir / "ssh").write_text(
         "#!/bin/sh\n"
         f'eval "last=\\${{$#}}"; echo "$last" >> {calls}\n'
-        '[ "$last" = health ] || exit 0\n'
+        f'[ "$last" = health ] || {{ [ {action_rc} = 0 ] || echo "refused: $last" >&2; exit {action_rc}; }}\n'
         f"echo '{answer}'; exit {exit_code}\n")
     (bin_dir / "ssh").chmod(0o755)
     (tmp_path / "hosts.conf").write_text(conf)
@@ -159,8 +162,7 @@ def _remote(tmp_path, command, units="pinky-nav2.service\n"):
         (bin_dir / name).chmod(0o755)
     (tmp_path / "units").write_text(units)
     if role:
-        (tmp_path / "role").write_text(role + "
-")
+        (tmp_path / "role").write_text(role + "\n")
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
            "GUARD_UNITS": str(tmp_path / "units"), "GUARD_ROLE_FILE": str(tmp_path / "role"), "CALLS": str(tmp_path / "rcalls")}
     result = subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, text=True, timeout=10)
