@@ -62,15 +62,14 @@ def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked,
                          traffic) -> tuple[dict, dict, list] | None:
     """D-517 3 (2026-10-09 signal SIM): a lap holds at its last place, so that place must be one a robot
     can stand at outside every zone (``hold_back_m(traffic, segment)`` is not None). Else the lap end moves on along
-    the next lap to the first place that is; the old end becomes the cycle's last via. ``(plan, request,
-    lap route)``, unchanged when nothing moves; None when no place of the next lap will do."""
+    the next lap to the first place that is; an old end place becomes the cycle's last via (a coordinate end
+    lies on the lap's own lanes and is dropped). ``(plan, request, lap route)``, unchanged when nothing moves;
+    None when no place of the next lap will do."""
     graph = active[2]
     last = tail(graph, plan["segments"])
     if last is None or hold_back_m(traffic, last) is not None:
         return plan, request, route_key(plan["segments"])
     to, via = request["to"], list(request.get("via", ()))
-    if not isinstance(to, str):
-        return None
     end = graph.arcs[arc_id(plan["segments"][-1])].point_at(plan["segments"][-1]["s_to"])
     lap, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
     k = next((k for k, seg in enumerate((lap or {}).get("segments", ()))
@@ -81,8 +80,9 @@ def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked,
     ends = [graph.arcs[arc_id(s)].length_m if ends_at_place(graph, s) else s["s_to"] for s in joined]  # 4-decimal s
     body = plan_body(_assemble(graph, [(arc_id(s), s["s_from"], e) for s, e in zip(joined, ends)], 0.0, routing))
     plan = {**plan, **{key: body[key] for key in ("segments", "places", "actions")}}
-    moved = {**request, "to": ends_at_place(graph, lap["segments"][k]), "via": [*via, to],
-             "cycle": request.get("cycle") or [to, *via]}  # the operator's cycle (convoy check)
+    moved = {**request, "to": ends_at_place(graph, lap["segments"][k])}
+    if isinstance(to, str):
+        moved.update(via=[*via, to], cycle=request.get("cycle") or [to, *via])  # the operator's cycle (convoy check)
     # Lap 1 runs start -> moved end; the next laps run moved end -> moved end over the same edges.
     nxt, _hold = plan_again(active, graph.arcs[arc_id(joined[-1])].point_at(joined[-1]["s_to"]), moved, caps,
                             blocked, set(), routing, max_turn_deg)

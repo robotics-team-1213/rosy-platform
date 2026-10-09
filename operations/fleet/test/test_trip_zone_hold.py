@@ -156,3 +156,25 @@ def test_a_lap_with_closed_chords_carries_on_without_a_hold():
     view = runner.view("a")
     assert view["lap"] == 2 and view["hold"] is None
     assert not {s["edge_id"] for s in view["plan"]["segments"]} & fleet.blocked
+
+
+def test_a_coordinate_lap_end_whose_last_place_is_in_the_zone_moves_on():
+    """The earlier SIM's laps: the goal is the start point on east, so the lap's last place is SE (in the zone)."""
+    runner, store, fleet = _setup()
+    graph = store.active()[2]
+    arc, s = graph.arcs["east:fwd"], _s_of(store, "east:fwd", START_N)
+    fleet.at("a", arc, s)
+    x, y, yaw = arc.point_at(s)
+    plan = plan_trip(graph, PlanRequest(store.active()[0], (x, y, yaw), (x, y, yaw), via=("NW",),
+                                        blocked_edges=fleet.blocked), store.routing_config)
+    store.record_plan(plan_id="a", robot_id="a", principal_id="bob", map_version=plan.map_version,
+                      request={"to": {"x": x, "y": y, "yaw": yaw}, "via": ["NW"], "repeat": True},
+                      result={"plan": plan_body(plan)})
+    view = run(runner.start("a", "bob"))
+    live = runner._live["a"]
+    assert (live.request["to"], live.request["via"]) == ("NE", ["NW"]) and view["plan"]["places"][-1] == "NE"
+    tail = len(live.segments) - 1
+    live.view["segment_index"] = tail
+    fleet.at("a", live.arc(tail), live.segments[tail]["s_to"] - 0.3)
+    _ticks(runner, fleet)
+    assert runner.view("a")["lap"] == 2 and runner.view("a")["hold"] is None
