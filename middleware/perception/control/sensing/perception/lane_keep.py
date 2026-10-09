@@ -419,8 +419,7 @@ class LaneKeeper:
         # line, a crosswalk or a junction mouth, not an L-corner).
         corner = None
         if self._corner_turning and strategy != "both":
-            corner = self._corner(transverse, half, left + right + conflicts,
-                                  left + right + prior_boundaries)
+            corner = self._corner(transverse, half, left + right + conflicts, left + right + prior_boundaries)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
@@ -490,8 +489,7 @@ class LaneKeeper:
         return LaneObservation(error=error, confidence=confidence)
 
     def _corner(self, transverse, half, boundaries=(), seed_boundaries=()):
-        """(target, strategy) from the nearest L-corner line ahead, or None.
-        Updates the latched corner side."""
+        """(target, strategy) from the nearest L-corner ahead; latch its side."""
         best = None
         for centre, direction, ends, steep in transverse:
             ys = sorted(float(p[1]) for p in ends)
@@ -523,8 +521,7 @@ class LaneKeeper:
             elif (right_reach - left_reach > CORNER_ASYMMETRY_M
                     and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
                 side = "right"
-        if side is not None and not any(row["side"] != side for row in seed_boundaries):
-            side = None  # An open-ended crossbar without its closed-side boundary is ambiguous.
+        if side is not None and not any(row["side"] != side for row in seed_boundaries): side = None
         if side is not None:
             self._corner_side = side
         if self._corner_side is not None:
