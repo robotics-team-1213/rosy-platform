@@ -38,6 +38,7 @@ class RouteContextInput:
 
 def bend_expected(context: RouteContext | None) -> bool:
     return bool(context is not None and context.kind == "bend"
-                and context.ahead_m is not None
-                and context.ahead_m[0] <= JUNCTION_AHEAD_M + BEND_LEAD_M
-                and context.ahead_m[1] >= 0.0)
+                and (context.bend_phase in ("bending", "reacquiring")
+                     or (context.ahead_m is not None
+                         and context.ahead_m[0] <= JUNCTION_AHEAD_M + BEND_LEAD_M
+                         and context.ahead_m[1] >= 0.0)))

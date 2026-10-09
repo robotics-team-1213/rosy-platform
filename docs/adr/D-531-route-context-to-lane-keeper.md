@@ -25,6 +25,7 @@
    | `stamp_s`, `valid_until_s` | CORE ROS 시계(sim 시간 포함) 기준 만든 시각과 만료 | CORE |
    | `kind` | 현재 구간의 종류: `junction`, `bend`, `ring` | `left`·`right`·`straight`(창 있음) → `junction`; `bend` → `bend`; 실제 D-520 호가 `running`인 동안만 `ring`. `exit_segment`가 있어도 호 시작 전 접근 차로는 `junction` |
    | `ahead_m` | `[lo, hi]`: 지금 자세에서 그 장소의 기대 가로선(`junction`) 또는 호 시작점(`bend`)까지 차로를 따른 거리의 창 | `expect_in_m − pivot_past_line_m − 전진 거리 ± expect_tol_m`, `bend_in_m − 전진 거리 ± bend_tol_m`. 창이 없는 지시는 이 필드 없음 |
+   | `bend_phase` | 굽이 진입 뒤 `bending` 또는 차선 재획득 중 `reacquiring`. 이때 접근 거리 `ahead_m` 대신 보낸다 | CORE 굽이 상태. `kind: bend`일 때만 |
    | `lane_turn_deg` | 장소까지 차로의 방향 변화(왼쪽 +) | `lane_turn_deg`(straight), `turn_deg`(bend) |
    | `curvature_1pm` | 지금 달리는 차로의 부호 있는 곡률(왼쪽 +). `ring`일 때만 | `exit_segment.curvature_1pm` |
 
