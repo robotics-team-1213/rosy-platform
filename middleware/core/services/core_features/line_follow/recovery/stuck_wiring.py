@@ -17,6 +17,7 @@ from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
+from core_features.line_follow.recovery.junction.gate import MANEUVER
 from core_features.line_follow.recovery.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
 
 #: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
@@ -297,7 +298,9 @@ class StuckRecoveryMixin:
     def _apply_recovery(self, now: float, decision: LineFollowDecision) -> LineFollowDecision:
         if self._mode is LineFollowMode.OFF:
             return decision
-        if abs(decision.linear) > 1e-6 or abs(decision.angular) > 1e-6:
+        junction = self._junction  # a D-495 maneuver supplies its own twist after this (gate.py)
+        if (abs(decision.linear) > 1e-6 or abs(decision.angular) > 1e-6
+                or junction is not None and junction.get("state") in MANEUVER):
             self._still_since = None
         elif self._still_since is None:
             self._still_since = now
