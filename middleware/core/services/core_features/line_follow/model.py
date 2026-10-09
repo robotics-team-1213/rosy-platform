@@ -168,6 +168,9 @@ class LineFollowConfig:
     obstacle_resume_hysteresis_m: float = 0.03
     obstacle_ultrasonic_half_angle_deg: float = 15.0
     obstacle_ultrasonic_stale_s: float = 0.3
+    # D-591: off = the stop gap is not raised to the LiDAR range_min band (driving beside
+    # walls); remembered returns and the ultrasonic still stop the robot.
+    obstacle_blind_floor: bool = True
     # D-476 expected-road bridge: on a short lane loss right after confident following, drive
     # the followed lane's straight extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
