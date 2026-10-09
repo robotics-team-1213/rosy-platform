@@ -14,8 +14,6 @@ import logging
 import uuid
 from typing import Optional
 
-from fleet.swarm.transport import RobotApiError
-
 logger = logging.getLogger("fleet.goal_lease")
 
 
@@ -71,10 +69,8 @@ class GoalLeases(dict):
                 continue
             try:
                 await client.navigation_goal_lease(lease["correlation_id"], lease["ttl_s"])
-            except RobotApiError as exc:
-                if exc.status == 409 and self.get(rid) is lease:
+            except Exception as exc:  # RobotApiError carries .status; no import (D-430 §3 rule 1)
+                if getattr(exc, "status", None) == 409 and self.get(rid) is lease:
                     self.pop(rid, None)
                 else:
                     logger.warning("goal lease renewal for %s failed: %s", rid, exc)
-            except Exception as exc:
-                logger.warning("goal lease renewal for %s failed: %s", rid, exc)

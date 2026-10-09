@@ -680,6 +680,7 @@ safety_modules:
   - operations/fleet/fleet/server/task_dispatch_routes.py
   - operations/fleet/fleet/server/owner_recovery_routes.py
   - operations/fleet/fleet/server/console.py
+  - operations/fleet/fleet/server/goal_lease.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
