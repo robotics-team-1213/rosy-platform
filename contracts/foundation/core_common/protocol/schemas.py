@@ -1007,6 +1007,11 @@ class PoseSample(BaseModel):
     #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
     map_id: Optional[str] = None
     frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
+    #: D-581 additive. "fleet": Fleet re-expressed the leader in `for_robot_id`'s own odom frame
+    #: from ceiling-camera anchors (frame "odom"); only that follower's trail accepts it.
+    anchor: Optional[Literal["fleet"]] = None
+    for_robot_id: Optional[str] = None
+    anchor_age_s: Optional[float] = None  # oldest of the two camera anchors behind this sample
 
 
 class LineStuckStatus(BaseModel):

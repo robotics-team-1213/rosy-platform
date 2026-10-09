@@ -154,6 +154,12 @@ class StateManager:
             age = float("inf") if at is None else self._monotonic() - at
             return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame, age
 
+    def odom_sample(self) -> Optional[tuple[float, float, float, float]]:
+        """D-581: (x, y, yaw, age_s) of the odom-frame pose; None before the first one."""
+        with self._lock:
+            odom = self._odom_pose
+            return None if odom is None else (odom.x, odom.y, odom.yaw, self._clock() - odom.stamp)
+
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
 
