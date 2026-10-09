@@ -89,7 +89,7 @@ test("a virtual signal in demand mode shows the AI request tag and the AI 요청
   }
 });
 
-test("a virtual signal in occupancy mode says the zone state in words and has the 점유 기반 verb (D-525 rev 5)", async () => {
+test("a virtual signal in occupancy mode says the zone state in words and has the 점유 기반 verb (D-525 rev 6)", async () => {
   class Node {
     constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.classList = { add() {} }; }
     append(...children) { this.children.push(...children); }

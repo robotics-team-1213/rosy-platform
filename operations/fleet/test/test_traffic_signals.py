@@ -42,7 +42,7 @@ def _signals(runner):
 
 
 def test_a_fresh_signal_is_occupancy_red_until_the_table_knows_the_zone_with_a_stop_line_per_approach():
-    """D-525 rev 5: a (re)started Fleet is in occupancy mode; its lamps are red until the first table
+    """D-525 rev 6: a (re)started Fleet is in occupancy mode; its lamps are red until the first table
     period on the active map knows the zone, then follow it (free: every approach green)."""
     runner, store, _fleet, entries = _setup()
     before = runner.traffic._signal_view(None)[0]

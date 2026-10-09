@@ -205,7 +205,7 @@ main {
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
   #fleet-main > .console-primary > .panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
-  #fleet-main .map-stage { flex: none; min-height: max(20rem, calc(100dvh - 18rem)); }
+  #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
   #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
   .ops-block { gap: var(--space-2); }
@@ -540,7 +540,7 @@ main {
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
-  #map-canvas { height: min(74vw, 22rem); }
+  .map-stage #map-canvas { height: min(150vw, 30rem); }
   .map-stage[data-map-state="unavailable"] #map-canvas { height: 11rem; }
   .queues-container { flex-direction: column; }
   .adjustment-columns { grid-template-columns: minmax(0, 1fr); }

@@ -125,7 +125,7 @@ test('TRIP_BUSY is per robot and TRIP_LOOP_FULL names robots and capacity', () =
   assert.equal(tripStartReason({role: 'operator', plan: {}, running: {trip_id: 'a'}}), '이 로봇은 이미 운행 중입니다');
 });
 
-test('occupancy-mode signals (D-525 rev 5) say green, orange or red with the zone state in words', () => {
+test('occupancy-mode signals (D-525 rev 6) say green, orange or red with the zone state in words', () => {
   const sig = (state, holder, lamps) => ({signal_id: 'sig', zone: 'ring_zone', mode: 'occupancy', errors: [],
     occupancy: {state, holder, approach: holder ? 'a:fwd' : null},
     approaches: Object.entries(lamps).map(([approach, lamp]) => ({approach, lamp,

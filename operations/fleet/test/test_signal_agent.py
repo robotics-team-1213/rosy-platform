@@ -61,7 +61,7 @@ def test_decide_is_fifo_by_first_seen_and_keeps_alive_when_nobody_waits():
 
 
 def test_signals_not_in_demand_mode_get_nothing():
-    for mode in ("cycle", "occupancy", "all_red", "hold", "manual"):   # D-525 rev 5: occupancy is the default
+    for mode in ("cycle", "occupancy", "all_red", "hold", "manual"):   # D-525 rev 6: occupancy is the default
         sends, _memory = decide(_traffic(mode=mode, robots=[_ahead("a", "east:fwd", 0.3)]),
                                 _guide(_rec("b", 1.0, arc="west:fwd")), {"xy": {"b": (1.0, 0.0)}}, 0.0)
         assert sends == [], mode

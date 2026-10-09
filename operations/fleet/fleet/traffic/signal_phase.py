@@ -5,7 +5,7 @@ robot never sees a colour; ``green()`` only feeds ``blocks.step(green=...)``.
 
 - Every change of approach goes green → yellow → all red → green, and the next green waits until
   the zone is not busy (no holder, no unknown body), however long that takes (D-525 3).
-- D-525 rev 5 ``occupancy`` (the default, a fresh state): no phase machine. Every approach may ask
+- D-525 rev 6 ``occupancy`` (the default, a fresh state): no phase machine. Every approach may ask
   the D-517 table (``green`` is all of them) and capacity 1 alone lets one robot in. The lamps are
   derived each period from the zone's live table state (``zone_occupancy``, ``occupancy_lamps``):
   free -> all green; granted, not yet entered -> the holder's approach green, the rest yellow (shown
@@ -42,7 +42,7 @@ class SignalPlan:
 
 @dataclass
 class SignalState:
-    mode: str = "occupancy"                  # occupancy (rev 5 default) | cycle | hold | all_red | manual | demand
+    mode: str = "occupancy"                  # occupancy (rev 6 default) | cycle | hold | all_red | manual | demand
     aspect: str = "all_red"                  # green | yellow | all_red (the phase machine; idle in occupancy)
     phase: int = -1                          # the phase green last (or now)
     since: float = 0.0                       # aspect start
@@ -83,14 +83,14 @@ def check(plan: SignalPlan, graph: Graph, layout: Layout) -> list[str]:
     return errors
 
 
-#: mode verbs besides ``set_aspect`` (D-443 §1.3, rev 4 ``demand``, rev 5 ``occupancy``)
+#: mode verbs besides ``set_aspect`` (D-443 §1.3, rev 4 ``demand``, rev 6 ``occupancy``)
 VERBS = ("occupancy", "cycle", "hold", "all_red", "demand")
 
 
 def command(plan: SignalPlan, state: SignalState, verb: str, now: float, approach: Optional[str] = None) -> None:
     """D-443 §1.3 verbs. ``all_red`` (E-stop, presence lost) is immediate; the rest change mode only.
     ``demand`` (D-525 rev 4) hands the choice of the next green to the controller's demands.
-    ``occupancy`` (rev 5) leaves the phase machine at all red, so a later phase verb starts from all
+    ``occupancy`` (rev 6) leaves the phase machine at all red, so a later phase verb starts from all
     red and waits for a free zone, as after a restart."""
     if verb == "set_aspect":
         state.manual = next(i for i, (a, _g) in enumerate(plan.phases) if a == approach)
@@ -168,7 +168,7 @@ def green(plan: SignalPlan, state: SignalState) -> frozenset[str]:
     return frozenset((plan.phases[state.phase][0],)) if state.aspect == "green" else frozenset()
 
 
-#: ``(state, holder, approach)`` of a signalled zone (rev 5): ``free``, ``reserved`` (granted, not yet
+#: ``(state, holder, approach)`` of a signalled zone (rev 6): ``free``, ``reserved`` (granted, not yet
 #: entered), ``occupied`` or ``unknown``; ``holder`` the robot holding or inside it, ``approach`` the
 #: arc it was granted from (None when not known).
 UNKNOWN = ("unknown", None, None)
@@ -219,7 +219,7 @@ def forecast(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool,
     (``hold``, operator ``all_red``, a manual green, or no next phase). Advisory only: a robot may show
     it or slow down earlier; only the D-517 authority lets it in. ``demand`` (rev 4): a green is
     open-ended (None) and only demanded approaches get a ``green_in_s`` lower bound, in queue order.
-    ``occupancy`` (rev 5): lamps from ``occupancy_lamps``; no time is known (the holder leaves when it
+    ``occupancy`` (rev 6): lamps from ``occupancy_lamps``; no time is known (the holder leaves when it
     leaves), so ``left_s`` is None and ``green_in_s`` is 0 on green, else None.
     """
     if state.mode == "occupancy":

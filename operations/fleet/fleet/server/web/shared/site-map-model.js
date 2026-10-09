@@ -513,7 +513,7 @@ export function trafficDrawing(traffic, active, trips = []) {
     for (const row of signal.approaches || []) {
       if (!row.stop_line) continue;
       const count = countdownText(row);
-      const occupancy = occupancyLampText(signal, row);  // D-525 rev 5: the zone state in words
+      const occupancy = occupancyLampText(signal, row);  // D-525 rev 6: the zone state in words
       signals.push({ x: row.stop_line.x, y: row.stop_line.y, angle: row.stop_line.yaw, lamp: row.lamp,
         label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id,
         count, approach: row.approach,
@@ -529,14 +529,14 @@ export function trafficDrawing(traffic, active, trips = []) {
 const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
 export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
 
-/** D-525 rev 5 the occupancy-mode zone state: "비어 있음", "점유 예정 · rosy_01", "점유 중 · rosy_01". */
+/** D-525 rev 6 the occupancy-mode zone state: "비어 있음", "점유 예정 · rosy_01", "점유 중 · rosy_01". */
 function occupancyStateText(occupancy) {
   const who = occupancy?.holder ? ` · ${occupancy.holder}` : "";
   return { free: "비어 있음", reserved: `점유 예정${who}`, occupied: `점유 중${who}` }[occupancy?.state]
     || "상태 모름 · 적색";
 }
 
-/** D-525 rev 5: one approach's lamp in words in occupancy mode (never colour alone): "초록 · 비어 있음",
+/** D-525 rev 6: one approach's lamp in words in occupancy mode (never colour alone): "초록 · 비어 있음",
  * "주황 · 점유 예정 · rosy_01", "적 · 점유 중 · rosy_01"; the holder's own approach while reserved is
  * "초록 · 진입 차례 · rosy_01". null outside occupancy mode or with a config error. */
 export function occupancyLampText(signal, row) {

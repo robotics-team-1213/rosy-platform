@@ -5,7 +5,7 @@ Every 0.5 s it reads ``GET /api/fleet/traffic`` (signals, each trip robot's ``si
 in ``demand`` mode where a robot waits, sends ``POST /api/fleet/traffic/signals/{id}/demand``
 (ttl 2 s). A signal with nobody waiting gets a keep-alive (no approach) so Fleet knows the controller
 is alive. It sends nothing else: no robot command, no signal verb. A signal in any other mode (the
-default ``occupancy``, D-525 rev 5, or an operator's cycle/hold/all_red) gets nothing, and a 409 from a
+default ``occupancy``, D-525 rev 6, or an operator's cycle/hold/all_red) gets nothing, and a 409 from a
 mode change between read and send is dropped quietly. Fleet decides every green (the
 zone must be free) and the robots still move only on their D-517 authority.
 

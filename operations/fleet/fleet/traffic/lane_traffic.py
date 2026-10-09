@@ -13,7 +13,7 @@ grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it cl
 D-525 (S1): virtual signals from site config ``fleet.traffic.signals`` run here each period; a
 signalled zone is granted only to its green approach (``blocks.step(green=...)``). A plan that fails
 ``signal_phase.check`` on the active map keeps its zone red. Robots get no colour, only D-517 authority.
-D-525 rev 5: a signal starts in ``occupancy`` mode: every approach may be granted (capacity 1 decides)
+D-525 rev 6: a signal starts in ``occupancy`` mode: every approach may be granted (capacity 1 decides)
 and the lamps follow the zone's live table state (``signal_phase.zone_occupancy``).
 
 The single writer of lane-trip grants (D-517 3). ``traffic_reservations.py`` (D-426 segment
@@ -63,13 +63,13 @@ class TrafficService:
                  body=PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time,
                  signal_clock=time.monotonic) -> None:
         self._store, self._config, self._zones = store, config, dict(zones or {})
-        #: D-525: plan per signal id, its phase state (a restart starts in ``occupancy``, rev 5), the
+        #: D-525: plan per signal id, its phase state (a restart starts in ``occupancy``, rev 6), the
         #: active map's check errors, and the last table's busy units (None: not known yet, so busy)
         self._signals = {plan.id: plan for plan in signals}
         self._phase = {signal_id: signal_phase.SignalState() for signal_id in self._signals}
         self._signal_errors: dict[str, list[str]] = {}
         self._busy: Optional[frozenset] = None
-        #: rev 5: zone -> ``signal_phase.zone_occupancy`` of the last table (missing: unknown, red)
+        #: rev 6: zone -> ``signal_phase.zone_occupancy`` of the last table (missing: unknown, red)
         self._occupancy: dict[str, tuple] = {}
         self._signal_clock = signal_clock
         self._present_until = -math.inf  # D-525 4: a manual green needs an operator present
@@ -370,7 +370,7 @@ class TrafficService:
                 "occupancy": signal["occupancy"], **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
 
     def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
-        """Operator verb (D-525 4): ``occupancy`` (rev 5, the default), ``cycle``, ``hold``, ``all_red``,
+        """Operator verb (D-525 4): ``occupancy`` (rev 6, the default), ``cycle``, ``hold``, ``all_red``,
         ``demand`` (rev 4) or ``set_aspect`` (green for one approach while the operator is present).
         KeyError: unknown signal; ValueError: bad verb or approach; PermissionError: a manual green
         without presence."""
@@ -431,7 +431,7 @@ class TrafficService:
         occupancy = self._occupancy.get(plan.zone, signal_phase.UNKNOWN)
         ahead = signal_phase.forecast(plan, state, now, busy, occupancy)
         aspect = state.aspect
-        if state.mode == "occupancy":  # rev 5: a summary of the derived lamps; no time is known
+        if state.mode == "occupancy":  # rev 6: a summary of the derived lamps; no time is known
             aspect, left = {"free": "green", "reserved": "yellow"}.get(occupancy[0], "all_red"), None
         for approach, green_s in plan.phases:
             lamp = "red" if errors else ahead[approach]["lamp"]  # a refused plan's zone is never granted

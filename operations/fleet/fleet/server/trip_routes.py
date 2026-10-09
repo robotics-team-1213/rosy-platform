@@ -230,7 +230,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
     @app.post("/api/fleet/traffic/signals/{signal_id}", tags=["fleet"])
     def fleet_traffic_signal(signal_id: str, body: SignalCommand,
                              principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        """D-525 4: operator verb for a virtual signal: ``occupancy`` (rev 5, the default: lamps follow the
+        """D-525 4: operator verb for a virtual signal: ``occupancy`` (rev 6, the default: lamps follow the
         zone's live D-517 state), ``cycle``, ``hold``, ``all_red``, ``demand`` (rev 4: the next green
         follows controller demands), or ``set_aspect`` with ``approach`` (green for that
         approach while the operator's console sends presence)."""

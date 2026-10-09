@@ -60,7 +60,7 @@ def _drive(state, plan, times, busy=lambda t: False):
 
 
 def test_a_fresh_signal_is_occupancy_and_an_all_red_holds_until_an_operator_cycles_it():
-    """D-525 rev 5: a fresh (restarted) signal is in ``occupancy``: no phase, every approach may ask the
+    """D-525 rev 6: a fresh (restarted) signal is in ``occupancy``: no phase, every approach may ask the
     D-517 table and the zone's capacity decides. ``all_red`` still closes it until a verb reopens it."""
     state = SignalState()
     assert state.mode == "occupancy" and green(PLAN, state) == {"in_a", "in_b"}
@@ -242,7 +242,7 @@ def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_ra
 @pytest.mark.parametrize("n,seed,edge_rate,unknown_rate", [(2, 21, 0.0, 0.0), (3, 22, 0.0, 0.0),
                                                            (3, 23, 0.3, 0.1), (2, 24, 0.5, 0.15)])
 def test_occupancy_mode_loops_never_put_two_robots_in_the_zone_and_never_deadlock(n, seed, edge_rate, unknown_rate):
-    """D-525 rev 5: with every approach allowed, capacity 1 alone keeps one robot in the zone (no conflict,
+    """D-525 rev 6: with every approach allowed, capacity 1 alone keeps one robot in the zone (no conflict,
     no body inside without its own grant) and the signal adds no wait of its own, on the test loop and on
     the live site loop. It is then a plain D-517 zone: on the live loop (the zone passed twice a lap) three
     robots may report a wait cycle for a tick or two while a holder is about to leave (``wait_cycle``
@@ -280,7 +280,7 @@ def _zone_holders(table):
 
 
 def test_occupancy_two_robots_at_two_approaches_get_one_grant_the_other_sees_orange_then_red():
-    """The user's rule (D-525 rev 5): free -> green; granted but not in -> its approach green, the others
+    """The user's rule (D-525 rev 6): free -> green; granted but not in -> its approach green, the others
     orange; in -> red; and only the D-517 zone grant lets a robot in: two at once get exactly one grant."""
     layout, a, b = _two_approaches()
     signal, table = SignalState(), TableState()
@@ -452,7 +452,7 @@ def test_estop_all_red_is_immediate_in_demand_and_a_restart_refuses_demands():
         demand(PLAN, state, "in_a", 1.3, 2.0)
     assert _drive(state, PLAN, [2.0, 10.0])[-1][1] == "all_red"
     with pytest.raises(PermissionError):
-        demand(PLAN, SignalState(), "in_a", 0.0, 2.0)                         # restart: occupancy mode (rev 5)
+        demand(PLAN, SignalState(), "in_a", 0.0, 2.0)                         # restart: occupancy mode (rev 6)
 
 
 def test_demand_forecast_is_open_ended_green_and_a_queue_lower_bound():

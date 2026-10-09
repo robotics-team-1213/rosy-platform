@@ -132,7 +132,7 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/traffic/lane_traffic.py": (
         612,
-        "accept: measured at 612 on 2026-10-10 (author's record; NEEDS the independent re-judge). D-525 rev 5 "
+        "accept: measured at 612 on 2026-10-10 (author's record; NEEDS the independent re-judge). D-525 rev 6 "
         "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
         "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. The named "
         "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "

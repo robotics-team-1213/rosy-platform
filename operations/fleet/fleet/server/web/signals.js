@@ -156,7 +156,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
   }
 
   // D-525 가상 신호 — 장치가 아니라 Fleet 교통 규칙이다. 구동값·연결·관측 대신 단계와 남은 시간만 있다.
-  // 기본은 점유 기반(rev 5): 등은 구역의 실제 D-517 상태를 따른다(비면 초록, 허가만 쥐면 주황, 들어가면 적).
+  // 기본은 점유 기반(rev 6): 등은 구역의 실제 D-517 상태를 따른다(비면 초록, 허가만 쥐면 주황, 들어가면 적).
   // 버튼은 점유 기반·자동·유지·전체 적색과 입구마다 수동 녹색이다. 수동 녹색은 이 화면이 열려 있는 동안만 유지되고
   // (presence), 닫히면 전체 적색이 된다(D-525 4).
   const VIRTUAL_ASPECT = { green: "녹", yellow: "황", all_red: "전체 적색" };
