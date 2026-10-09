@@ -140,3 +140,17 @@ def test_overlays_grid(tmp_path):
     out = _derived(tmp_path, n=5)
     assert mpd.overlays(out, tmp_path / "quick.png", count=24) == 5
     assert cv2.imread(str(tmp_path / "quick.png")).shape[1] == 4 * 640
+
+
+def test_wall_occludes_the_floor_behind_it():
+    raster = _raster()
+    raster["cls"][: int((1.0 - 0.25) / R)] = mpd.WALL  # wall from y = 0.25 m outward
+    raster["boundary_m"] = mpd.boundary_distance(raster["cls"], R)
+    pose = (0.0, -0.12, math.pi / 2)
+    image = _render(raster, pose)
+    forward, left = mpd.ground_grid(CAMERA)
+    with np.errstate(invalid="ignore"):
+        image[np.isnan(forward) | (pose[1] + forward >= 0.25)] = 230  # the white wall face
+    mask, stats = mpd.label_frame(image, _pose(*pose), CAMERA, mpd.ground_grid(CAMERA), raster)
+    assert mask is not None and stats["line_iou"] > 0.5
+    assert (forward[mask != 255] < 0.37 - 0.0).all()

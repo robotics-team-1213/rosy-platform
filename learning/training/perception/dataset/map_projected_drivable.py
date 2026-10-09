@@ -21,7 +21,8 @@ road -> 5 drivable, off-road -> 0, line/other paint -> 255, everything else 255.
 a class boundary than the pose margin (sigma_m + forward * sigma_yaw + pitch error moved to the
 floor) stays 255, so far rows lose more. Rows above ignore_top are 255. A frame is rejected when
 fewer than min_line_px projected line pixels are in view, or the projected line cells and the
-observed bright pixels (gray >= stripe_min) of the ground region, both dilated by line_tol_px,
+observed bright pixels (walls are taller than the lens: a column above a ray that lands in a
+wall or off the map sees the wall and is left out) (gray >= stripe_min) of the ground region, both dilated by line_tol_px,
 have IoU below min_line_iou (pose or clock error). Labels are not human approval:
 annotation_origin map_projected, evaluation_use training_val_only.
 """
@@ -54,7 +55,7 @@ ADR = "D-563"
 BUNDLE = REPO / "middleware" / "perception" / "map" / "map_v2_fleet"
 CACHE = REPO / "data" / "perception" / "cache"
 HALF_WIDTH_M = 0.0925
-OFF, ROAD, LINE, PAINT = 0, 1, 2, 3
+OFF, ROAD, LINE, PAINT, WALL = 0, 1, 2, 3, 4
 PARAMS = {"near_m": 0.15, "far_m": 0.40, "ignore_top": 110, "stripe_min": ldd.STRIPE_MIN,
           "pitch_sigma_rad": math.radians(1.0), "min_line_iou": 0.3, "line_tol_px": 2, "min_line_px": 30,
           "min_spacing_s": 0.5}
@@ -87,7 +88,7 @@ def road_raster(bundle=BUNDLE, cache_dir=CACHE):
     bundle = Path(bundle)
     graph_raw = (bundle / "lane_graph.yaml").read_bytes()
     stl = sorted(bundle.glob("260919*.STL"))[0]
-    key = _sha(graph_raw + stl.read_bytes() + repr(HALF_WIDTH_M).encode())
+    key = _sha(graph_raw + stl.read_bytes() + repr((HALF_WIDTH_M, "walls")).encode())
     cached = Path(cache_dir) / f"road-raster-{key[:16]}.npz" if cache_dir else None
     if cached and cached.is_file():
         with np.load(cached) as z:
@@ -95,7 +96,8 @@ def road_raster(bundle=BUNDLE, cache_dir=CACHE):
     spec = importlib.util.spec_from_file_location("map_lane_graph", bundle / "scripts" / "lane_graph.py")
     lane_graph = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(lane_graph)
-    x0, y1, lines, bars = lane_graph.paint_masks(lane_graph.load_scene())
+    scene = lane_graph.load_scene()
+    x0, y1, lines, bars = lane_graph.paint_masks(scene)
     r = lane_graph.RASTER_M
     graph = yaml.safe_load(graph_raw)
     road = np.zeros(lines.shape, np.uint8)
@@ -108,6 +110,10 @@ def road_raster(bundle=BUNDLE, cache_dir=CACHE):
     cls[road > 0] = ROAD
     cls[bars] = PAINT
     cls[lines] = LINE
+    for w in scene.walls:
+        a = ((w.cx - w.size_x / 2 - x0) / r, (y1 - w.cy - w.size_y / 2) / r)
+        b = ((w.cx + w.size_x / 2 - x0) / r, (y1 - w.cy + w.size_y / 2) / r)
+        cv2.rectangle(cls, np.floor(a).astype(int).tolist(), np.ceil(b).astype(int).tolist(), WALL, -1)
     out = {"x0": float(x0), "y1": float(y1), "raster_m": float(r), "cls": cls,
            "boundary_m": boundary_distance(cls, r),
            "lane_graph_sha256": _sha(graph_raw), "stl_sha256": _file_sha(stl)}
@@ -117,14 +123,14 @@ def road_raster(bundle=BUNDLE, cache_dir=CACHE):
     return out
 
 
-def robot_camera(device, *, root=None, pitch_rad=None):
+def robot_camera(device, *, root=None, pitch_rad=None, height_m=None):
     """(Camera, values, source): URDF nominal profile < the device's accepted camera_profile < pitch override."""
     import yaml
     from core_common.calibration_store import resolve
     static = yaml.safe_load(Path(PROFILE_PATH).read_text(encoding="utf-8"))
     values, source = resolve("camera_profile", static, fallback_source=str(PROFILE_PATH.name), robot=device,
                              root=root or str(REPO / "data" / "calibration"),
-                             override=None if pitch_rad is None else {"pitch_rad": pitch_rad})
+                             override={"pitch_rad": pitch_rad, "height_m": height_m})
     camera = Camera(int(values["width"]), int(values["height"]), float(values["fx"]), float(values["cx"]),
                     float(values["cy"]), float(values["pitch_rad"]), float(values["height_m"]),
                     float(values.get("x_offset_m", 0.0)))
@@ -156,10 +162,18 @@ def label_frame(image, pose, camera, grid, raster, params=PARAMS):
     with np.errstate(invalid="ignore"):
         row = np.rint((raster["y1"] - wy) / raster["raster_m"])
         col = np.rint((wx - raster["x0"]) / raster["raster_m"])
-    inside = region & (row >= 0) & (row < cls_map.shape[0]) & (col >= 0) & (col < cls_map.shape[1])
+    in_map = (row >= 0) & (row < cls_map.shape[0]) & (col >= 0) & (col < cls_map.shape[1])
+    seen = np.full(region.shape, 255, np.uint8)
+    seen[in_map] = cls_map[row[in_map].astype(np.intp), col[in_map].astype(np.intp)]
+    # Walls are taller than the lens: in a column, everything above a ray that lands in a wall or
+    # beyond the map sees the wall, not the floor.
+    blocked = np.isfinite(forward) & (~in_map | (seen == WALL))
+    occluded = np.maximum.accumulate(blocked[::-1], axis=0)[::-1]
+    region &= ~occluded
+    inside = region & in_map
     r, k = row[inside].astype(np.intp), col[inside].astype(np.intp)
     cls = np.full(region.shape, 255, np.uint8)
-    cls[inside] = cls_map[r, k]
+    cls[inside] = seen[inside]
     near_edge = np.ones(region.shape, bool)
     h = camera.height_m
     margin = (pose["sigma_m"] + forward * pose["sigma_yaw"]
@@ -297,6 +311,7 @@ def main(argv=None):
     p.add_argument("--split", default="train", choices=("train", "val", "test"))
     p.add_argument("--clock-offset-s", default="0", help="robot - site clock (s), or 'auto'")
     p.add_argument("--pitch-deg", type=float, help="session camera pitch override")
+    p.add_argument("--height-m", type=float, help="session camera height override")
     p.add_argument("--pitch-sigma-deg", type=float, default=math.degrees(PARAMS["pitch_sigma_rad"]))
     for key in ("near_m", "far_m", "min_line_iou", "min_spacing_s"):
         p.add_argument("--" + key.replace("_", "-"), type=float, default=PARAMS[key])
@@ -316,7 +331,8 @@ def main(argv=None):
     if args.video is not None and args.sidecar is None:
         parser.error("--video needs --sidecar")
     camera, values, source = robot_camera(args.robot, root=args.calibration_root,
-                                          pitch_rad=None if args.pitch_deg is None else math.radians(args.pitch_deg))
+                                          pitch_rad=None if args.pitch_deg is None else math.radians(args.pitch_deg),
+                                          height_m=args.height_m)
     odom, frames, inputs = _read_robot(args.session, args.video, args.sidecar)
     params = {key: getattr(args, key) for key in PARAMS if key != "pitch_sigma_rad"}
     params["pitch_sigma_rad"] = math.radians(args.pitch_sigma_deg)
