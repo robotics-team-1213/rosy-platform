@@ -45,7 +45,9 @@ def main() -> int:
     os.replace(tmp, conf)
     print(f"set {line}")
     if not os.environ.get("ROSY_AVAHI_ROOT"):
-        subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], check=False)
+        # --no-block: this unit is ordered Before=avahi-daemon, so a blocking restart from inside
+        # its own start job deadlocks (avahi waits for us, we wait for avahi; seen 2026-10-09).
+        subprocess.run(["systemctl", "--no-block", "try-restart", "avahi-daemon.service"], check=False)
     return 0
 
 

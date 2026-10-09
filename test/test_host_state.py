@@ -317,3 +317,12 @@ def test_avahi_interfaces_unit_is_in_the_common_manifest():
     assert "safe enabled rosy-avahi-interfaces.service" in manifest
     unit = (ROOT / "deploy/hosts/common/rosy-avahi-interfaces.service").read_text(encoding="utf-8")
     assert "Before=avahi-daemon.service" in unit
+
+
+def test_avahi_restart_never_blocks_its_own_start_job():
+    """rosy-avahi-interfaces runs Before=avahi-daemon; a blocking restart from inside it deadlocks."""
+    script = (ROOT / "deploy" / "hosts" / "common" / "rosy-avahi-interfaces").read_text(encoding="utf-8")
+    for line in script.splitlines():
+        if "try-restart" in line or '"restart"' in line:
+            assert "--no-block" in line, line
+
