@@ -100,6 +100,20 @@ def test_parent_torchscript_and_delivered_onnx_agree_on_input_frames(tmp_path):
                       opset_version=17, input_names=['x'], output_names=['logits'])
     frames = [torch.rand(1, 3, 240, 320), torch.rand(1, 3, 240, 320)]
     assert dh.verify_parent_parity(parent, script, onnx, frames, ignore_top=110)['samples'] == 2
+
+    class Roi(torch.nn.Module):  # the delivered v11 wrapper: rows above ignore_top forced
+        def __init__(self, inner):
+            super().__init__()
+            self.inner = inner
+
+        def forward(self, x):
+            y = self.inner(x)
+            top = y[:, :, :110]
+            forced = torch.cat([top.amax(dim=1, keepdim=True) + 1.0, top[:, 1:] - 1000.0], 1)
+            return torch.cat([forced, y[:, :, 110:]], 2)
+    torch.onnx.export(Roi(lane).eval(), torch.rand(1, 3, 240, 320), str(onnx),
+                      opset_version=17, input_names=['x'], output_names=['logits'])
+    assert dh.verify_parent_parity(parent, script, onnx, frames, ignore_top=110)['max_abs'] < 1e-3
     other = _lane(4)
     torch.onnx.export(other, torch.rand(1, 3, 240, 320), str(onnx),
                       opset_version=17, input_names=['x'], output_names=['logits'])
