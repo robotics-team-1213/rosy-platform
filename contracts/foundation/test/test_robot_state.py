@@ -360,3 +360,17 @@ def test_the_mode_lamp_names_are_the_helper_s_vocabulary():
     # D-381: MODE_LAMP stays the truth for the plain mode patterns even though
     # lamp_pattern() spells the priority out — pin the two together.
     assert all(rs.lamp_pattern(rs.READY, mode) == pattern for mode, pattern in rs.MODE_LAMP.items())
+
+
+@pytest.mark.parametrize("state,mode,recovery,pattern", [
+    ("ready", "NAVIGATION", "retrace", "recovering"),
+    ("ready", "IDLE", "return", "recovering"),
+    ("ready", "MANUAL", "bridge", "bridging"),
+    ("caution", "NAVIGATION", "retrace", "recovering"),  # D-546: recovering beats caution
+    ("ready", "EMERGENCY", "retrace", "emergency"),  # the e-stop always wins
+    ("failed", "NAVIGATION", "retrace", "failed"),
+    ("ready", "NAVIGATION", None, "navigating"),
+    ("ready", "NAVIGATION", "sideways", "navigating"),  # unknown = absent
+])
+def test_a_lane_recovery_phase_shows_the_amber_hazard_lamp(state, mode, recovery, pattern):
+    assert rs.lamp_pattern(state, mode, None, recovery) == pattern

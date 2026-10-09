@@ -2216,3 +2216,84 @@ def test_an_identity_helper_that_survives_sigkill_is_logged_and_the_state_patter
     assert spawn.processes[-1].killed and lamp.pattern is None
     assert any("SIGKILL" in line for line in lines)
     assert lamp.show("ready") and spawn.patterns[-1] == "ready"  # next step() shows the state pattern
+
+
+# --- D-546: the lane-recovery signals ---------------------------------------------------
+
+
+def _recovering(tmp_path, **inputs):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn()
+    display, lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn,
+                                                          wall=lambda: WALL)
+    _face_inputs(tmp_path, **inputs)
+    return module, display, lamp, clock, gpio, spawn
+
+
+def test_reversing_beeps_once_a_second_only_while_the_phase_is_retrace(tmp_path):
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    ready = len(_starts(gpio))  # the ready chirp
+    assert lamp.pattern == "recovering" and ("pwm", 22, module.BUZZER_FREQUENCY_HZ) in gpio.events
+    assert ("change", module.BUZZER_REVERSE_HZ) in gpio.events and ready == 2
+    clock.now += 0.5
+    display.step()
+    assert len(_starts(gpio)) == ready  # still inside the 1 s period
+    clock.now += 0.5
+    display.step()
+    assert len(_starts(gpio)) == ready + 1
+
+    _face_inputs(tmp_path, recovery="return")  # aligning: lamp and LCD, no reversing alarm
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 1 and lamp.pattern == "recovering"
+
+    _face_inputs(tmp_path, recovery="retrace")
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 2  # a new retrace beeps at once
+    _face_inputs(tmp_path, recovery=None)
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == ready + 2 and lamp.pattern == "ready"
+
+
+def test_the_bridge_is_a_soft_lamp_only_and_estop_beats_recovering(tmp_path):
+    _module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="bridge")
+    display.step()
+    assert lamp.pattern == "bridging" and len(_starts(gpio)) == 1  # the ready chirp only
+    assert display.screen["strip"] is None  # no LCD line for the bridge
+
+    _face_inputs(tmp_path, recovery="retrace", robot_mode="EMERGENCY", estop=True)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    before = len(_starts(gpio))
+    clock.now += 1
+    display.step()
+    assert lamp.pattern == "emergency" and display.screen["kind"] == "stopped"
+    assert len(_starts(gpio)) == before + 4  # the e-stop alarm, no reversing beep
+
+
+def test_recovering_names_the_phase_on_the_lcd_and_refuses_an_identify_blink(tmp_path):
+    module, display, lamp, clock, _gpio, spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    assert display.screen["strip"] == "Recovering: reversing" and display.screen["strip_tone"] == "caution"
+    _hand_over(tmp_path, "identify_blue", at=WALL)
+    assert display.handle_test() == "failed"
+    assert _answer(tmp_path)["state"] == "failed" and "identify_blue" not in spawn.patterns
+    assert lamp.pattern == "recovering"
+
+
+def test_an_old_hand_over_without_recovery_and_an_unknown_value_signal_nothing(tmp_path):
+    module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path)  # no recovery key at all
+    display.step()
+    assert lamp.pattern == "ready" and display.screen["strip"] is None and len(_starts(gpio)) == 1
+    _face_inputs(tmp_path, recovery="teleporting")
+    assert display._core()["recovery"] is None
+
