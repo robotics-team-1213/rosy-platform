@@ -10,10 +10,19 @@
 
 2026-10-08 23:50–23:51 UTC의 1280×720 Rosy Cam 연속 프레임을 직접 검토했다. 각 시험에서 요청한 기체만 빨강에서 초록으로 변했고 다른 기체는 변하지 않았다.
 
-| 장치 ID | 장치 시험 결과 | 영상 속 몸체 | 대표 원본 SHA-256 (`시험 전` / `빨강` / `초록`) |
-|---|---|---|---|
-| `rosy_26` | 요청 `ff977f9c16c0a230` 수락, `done`, 23:50:29 UTC 완료 | 왼쪽 위 | `702508c4cb79cbe1671ffaa09b9e1f963d7c07c2b968d6b2c277cd37ce708e75` / `ea8393daf615f2dc6f1f4880bd60488e3af9c69f1dc822d5041380d483d46fc1` / `f0f360bb33d711c87fa4d311bb7d16282df419c4e8b309cab88eab7ef02c840d` |
-| `rosy_60` | 요청 `cc10b3abfb651a24` 수락, `done`, 23:51:21 UTC 완료 | 왼쪽 아래 | `065a3f8640045675d3b702bddcad882e415d54fe20956ef06823334316e5cbe3` / `4a01ea09afe5c3013016e809d7d86eb22cc7f79dcf29d1dff9d3bcea2c7429b9` / `98534f65cefae44a41ea16a99651cf4d02efcbe378eca1fbc42a872facd87029` |
+| 장치 ID | 장치 시험 결과 | 영상 속 몸체 |
+|---|---|---|
+| `rosy_26` | 요청 `ff977f9c16c0a230` 수락, `done`, 23:50:29 UTC 완료 | 왼쪽 위 |
+| `rosy_60` | 요청 `cc10b3abfb651a24` 수락, `done`, 23:51:21 UTC 완료 | 왼쪽 아래 |
+
+대표 원본 SHA-256:
+
+- `rosy_26` 시험 전 `00.jpg`: sha256: `702508c4cb79cbe1671ffaa09b9e1f963d7c07c2b968d6b2c277cd37ce708e75`
+- `rosy_26` 빨강 `20.jpg`: sha256: `ea8393daf615f2dc6f1f4880bd60488e3af9c69f1dc822d5041380d483d46fc1`
+- `rosy_26` 초록 `26.jpg`: sha256: `f0f360bb33d711c87fa4d311bb7d16282df419c4e8b309cab88eab7ef02c840d`
+- `rosy_60` 시험 전 `00.jpg`: sha256: `065a3f8640045675d3b702bddcad882e415d54fe20956ef06823334316e5cbe3`
+- `rosy_60` 빨강 `18.jpg`: sha256: `4a01ea09afe5c3013016e809d7d86eb22cc7f79dcf29d1dff9d3bcea2c7429b9`
+- `rosy_60` 초록 `24.jpg`: sha256: `98534f65cefae44a41ea16a99651cf4d02efcbe378eca1fbc42a872facd87029`
 
 비공개 원본은 각각 `X:/DevTemp/rosy-id-proof-1009/rosy-id-proof-1009-26-b/`와 `...-60-b/`에 보관했다. 두 `manifest.json`의 SHA-256은 순서대로 `cb5df9bb6a8c6b44e59c5cfb080b575268a04197e1fdf0a15ab9fa46792970f6`, `687b478366be369f0e8827e60a1e99e6a83c11e16b32cbbbb497726bbba07af3`이다. 이는 [D-537](../../adr/D-537-one-time-physical-identity-proof.md)의 현재 주차 위치 대조다. 몸체나 카메라가 움직이면 다시 대조해야 한다.
 
