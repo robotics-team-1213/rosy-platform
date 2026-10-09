@@ -340,6 +340,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      if (item.markerId !== undefined) drawChip(ctx, null, p.x, p.y - size * 1.8, `ArUco ${item.markerId} · 미등록`);
     }
     ctx.restore();
   }

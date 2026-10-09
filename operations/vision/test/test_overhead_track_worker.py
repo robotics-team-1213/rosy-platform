@@ -126,6 +126,19 @@ def test_marker_frame_retains_blobs_for_single_deduplication_in_fleet():
     assert [d.x for d in result.detections if d.marker_id is None] == [1, 1.22]
 
 
+
+def test_an_unassigned_robot_sticker_is_sent_and_other_ids_are_not():
+    # D-575: id 41 (D-562 robot range) has no robot in robot_markers yet; Fleet shows it
+    # as an unknown robot. A game marker (12) on the floor is not a robot.
+    worker = TrackWorker(camera=CAMERA, ingest=_Ingest(), client=_Client(),
+                         detector=_Detector(DetectorResult((), "OK")),
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8))
+    markers = {7: ((98, 48), (102, 48), (102, 52), (98, 52)),
+               41: ((198, 48), (202, 48), (202, 52), (198, 52)),
+               12: ((298, 48), (302, 48), (302, 52), (298, 52))}
+    _, result = worker._detect(JPEG, 99.75, markers, CONFIG["calibration"], None, None)
+    assert sorted(d.marker_id for d in result.detections) == [7, 41]
+
 def _frame(seq=1, captured_at=99.75, jpeg=JPEG):
     return SimpleNamespace(header=SimpleNamespace(seq=seq), jpeg=jpeg, captured_at=captured_at,
                            received_at=100.0)
