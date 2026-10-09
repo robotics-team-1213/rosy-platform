@@ -42,6 +42,18 @@ class LinkStatusTest {
         assertEquals("B2A", LinkStatus.codeFilter.filter("뮤B2O0A!", 0, 7, null, 0, 0).toString())
         assertNull(LinkStatus.codeFilter.filter("ABC234", 0, 6, null, 0, 0))
     }
+    @Test fun codeFieldSendsOnDoneOrEnterDownOnly() {
+        // 2026-10-09 tablet walk: Enter arrived as IME_NULL + KEYCODE_ENTER and the code was never sent.
+        assertTrue(LinkStatus.sendsCode(android.view.inputmethod.EditorInfo.IME_ACTION_DONE, null, null))
+        assertTrue(LinkStatus.sendsCode(android.view.inputmethod.EditorInfo.IME_NULL,
+            android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.ACTION_DOWN))
+        assertFalse(LinkStatus.sendsCode(android.view.inputmethod.EditorInfo.IME_NULL,
+            android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.ACTION_UP))
+        assertFalse(LinkStatus.sendsCode(android.view.inputmethod.EditorInfo.IME_NULL, android.view.KeyEvent.KEYCODE_A,
+            android.view.KeyEvent.ACTION_DOWN))
+        assertFalse(LinkStatus.sendsCode(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT, null, null))
+    }
+
     @Test fun caShortIsWhatTheLcdDraws() {
         assertEquals("0123 4567 89ab cdef", LinkStatus.caShort("0123456789abcdef" + "f".repeat(48)))
     }
