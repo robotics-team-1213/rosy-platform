@@ -19,7 +19,7 @@
 <ui-shell grammar="procedure">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
-    <ui-brand><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="접속과 화면 표시" title="접속과 화면 표시" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
