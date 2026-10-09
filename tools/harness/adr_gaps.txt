@@ -18,3 +18,7 @@ D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; imp
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
+D-559 reserved in another active branch (Leader trail follow (path replay) CORE mode, feat/swarm-trail-follow)
+D-560 reserved in another active branch (Rosy Cam serves the map-plane picture, feat/rosy-cam-map-plane)
+D-561 reserved in another active branch (model PC signed code review UI auto activation, feat/model-review-autoupdate)
+D-562 reserved in another active branch (ceiling marker id equals robot number, feat/ceiling-marker-id-plan)
