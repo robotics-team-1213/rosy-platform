@@ -303,16 +303,22 @@ _INSIDE = """() => { const box = document.querySelector('#site-map-svg').getBoun
 
 
 @pytest.mark.parametrize("turn", [0, 90])
-def test_site_map_keeps_edge_robots_and_labels_on_the_map(site, monkeypatch, turn):
-    """D-540 4: a robot on (or past) any map edge keeps its uncertainty ring and label inside the SVG."""
+def test_site_map_fit_stays_fixed_while_robots_move(site, monkeypatch, turn):
+    """D-595: the site map is fitted once per map and view turn. A robot on any map edge keeps its body ring
+    and label inside the SVG (D-540 4), and robots moving past the edges with growing uncertainty never
+    re-fit (zoom) the map on a poll."""
     from playwright.sync_api import expect, sync_playwright
 
-    edges = {"rosy_n": (1.0, 1.35), "rosy_s": (1.0, -0.15), "rosy_e": (2.2, 0.6), "rosy_w": (-0.25, 0.6)}
-    monkeypatch.setitem(API, "/api/fleet/guide", {"map_version": 4, "camera": None, "robots": [
-        _guide_row(rid, x, y, 0.0, "DEGRADED", 0.25) for rid, (x, y) in edges.items()]})
+    def guide(spots, u_m):
+        return {"map_version": 4, "camera": None, "robots": [
+            _guide_row(rid, x, y, 0.0, "DEGRADED", u_m) for rid, (x, y) in spots.items()]}
+
+    on_edges = {"rosy_n": (1.0, 1.2), "rosy_s": (1.0, 0.0), "rosy_e": (2.0, 0.6), "rosy_w": (0.0, 0.6)}
+    monkeypatch.setitem(API, "/api/fleet/guide", guide(on_edges, 0.03))
     active = json.loads(json.dumps(ACTIVE))
     active["map"]["view_turn_deg"] = turn
     monkeypatch.setitem(API, "/api/fleet/site-map/active", active)
+    lane = "() => document.querySelector('#site-map-svg [data-edge=\"east\"]').getAttribute('points')"
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console/site-map", [])
         try:
@@ -324,10 +330,16 @@ def test_site_map_keeps_edge_robots_and_labels_on_the_map(site, monkeypatch, tur
                 if page.locator("#site-map-svg [data-robot]").count() == 4:
                     break
             expect(page.locator("#site-map-svg [data-robot]")).to_have_count(4)
-            page.clock.run_for(1100)  # the poll that refits for the rings
             clipped = [row for row in page.evaluate(_INSIDE) if not row[2]]
+            assert not clipped, clipped
+            fitted = page.evaluate(lane)
+            API["/api/fleet/guide"] = guide({"rosy_n": (1.0, 1.35), "rosy_s": (1.0, -0.15),
+                                             "rosy_e": (2.2, 0.6), "rosy_w": (-0.25, 0.6)}, 0.25)
+            for _ in range(3):
+                page.clock.run_for(1100)
+            assert page.evaluate(lane) == fitted
+            clipped = [row for row in page.evaluate(_INSIDE) if not row[2] and "label" in row[1]]
             assert not clipped, clipped
             assert not errors, errors
         finally:
             browser.close()
-

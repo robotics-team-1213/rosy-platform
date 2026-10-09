@@ -1388,11 +1388,11 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         browser.close()
 
 
-def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
+def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url):
     from playwright.sync_api import sync_playwright
 
     # 카메라를 재조준한 뒤의 조감도: 정지 로봇의 추적 차이(offset_m)가 3폴링 연속 한계를
-    # 넘으면 낡은 교정으로 실영상을 얹지 않고 미터 눈금으로 돌아간다(map-view drawSiteView).
+    # 넘으면 경고만 한다. D-595: 그림은 수락된 보정 그대로다(폴링마다 바뀌지 않는다).
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT,
         "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
@@ -1436,13 +1436,13 @@ def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
         tag = page.inner_text("#map-tag")
-        assert "Rosy Cam 평면 영상" not in tag and "브라우저 보정(대체)" not in tag, tag
-        # 낡은 교정이므로 실영상(빨강)을 캔버스에 얹지 않았다 — 미터 눈금 바탕이다.
+        assert "paint-test" in tag, tag
+        # 수락된 보정의 실영상(빨강)이 사이트 가운데에 그대로 있다.
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
-                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
-                             "return p[0] < 100 && p[1] < 100; }")
+                             "const p = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; "
+                             "return p[0] > 150 && p[1] < 100; }")
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
-                             ".includes('미터 눈금')")
+                             ".includes('맵 고정을 다시 하세요')")
         assert not errors
         browser.close()
 
