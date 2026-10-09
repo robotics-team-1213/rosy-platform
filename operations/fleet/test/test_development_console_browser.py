@@ -59,6 +59,11 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     }]}))
                     # A slow robot map must not leave the authenticated site view locked.
                     page.route("**/api/fleet/map", lambda route: None)
+                    page.route("**/api/fleet/tracking", lambda route: route.fulfill(json={
+                        "lease_s": 1, "sources": [{"source_id": "camera", "status": "OK", "age_ms": 50}],
+                        "robots": [{"robot_id": "rosy_01", "status": "MARKER",
+                                    "camera": {"x": 1, "y": 1}, "pose": None}], "unknown": [],
+                    }))
                 page.goto(origin + path)
                 # D-540 2: the development principal id lives in title; the badge says development once.
                 expect(page.locator(identity)).to_have_attribute("title", re.compile("^development-"), timeout=15000)
@@ -73,6 +78,7 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     expect(page.locator("#connection-guide")).to_be_hidden()
                     expect(page.locator("#map-stage")).to_have_attribute("data-map-state", "site", timeout=10000)
                     expect(page.locator("#map-canvas")).to_have_attribute("role", "img")
+                    expect(page.locator("#map-tag")).to_contain_text("카메라 관측 1/1대", timeout=10000)
                     assert page.locator("ui-topbar").bounding_box()["height"] < 170
                     output = os.environ.get("ROSY_UX_EVIDENCE_DIR")
                     if output:
