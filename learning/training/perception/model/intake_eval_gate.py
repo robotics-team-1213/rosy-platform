@@ -23,6 +23,23 @@ def v13_lineage_error(doc: dict) -> str | None:
     return None
 
 
+# D-566 shadow gate on the trainer's val numbers (manifest metrics).
+MAX_OUTSIDE_BAND_FP, MIN_NEAR_CENTRE_RATIO = 0.15, 0.8
+
+
+def v13_quality_error(doc: dict) -> str | None:
+    """D-566: refuse a v13-drivable candidate that paints the off-road band or misses the road ahead."""
+    metrics = doc.get("metrics") or {}
+    fp, near = metrics.get("val_outside_band_fp"), metrics.get("val_near_centre_drivable")
+    if not _number(fp) or not isinstance(near, dict) or not _number(near.get("pred"))             or not _number(near.get("label")):
+        return "v13-drivable needs metrics val_outside_band_fp and val_near_centre_drivable (D-566)"
+    if fp > MAX_OUTSIDE_BAND_FP:
+        return f"val_outside_band_fp {fp:.3f} > {MAX_OUTSIDE_BAND_FP} (D-566)"
+    if near["pred"] < MIN_NEAR_CENTRE_RATIO * near["label"]:
+        return (f"near-centre predicted drivable {near['pred']:.3f} < {MIN_NEAR_CENTRE_RATIO} x label "
+                f"{near['label']:.3f} (D-566)")
+    return None
+
 
 def _number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v)

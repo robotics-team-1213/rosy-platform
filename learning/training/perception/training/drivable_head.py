@@ -18,7 +18,9 @@ count as "not drivable", and its ignore_index pixels are left out. Val IoU is
 scored where the lane model says background (the only pixels the head can
 change); the IoU over all labelled pixels is reported beside it, and the outside-band FP:
 the fraction of label-0 pixels in rows that hold drivable labels (D-554 item 9 band, not
-walls) that the model calls drivable.
+walls) that the model calls drivable, and the near-centre drivable fraction (rows of the
+bottom 40 %, cols 110-210) predicted vs labelled. D-566: pos_weight balances the loss (train
+non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_lambda * FP.
 """
 
 from __future__ import annotations
@@ -187,16 +189,21 @@ def _drivable_index(dataset) -> int:
     return found[0]
 
 
+NEAR_ROWS, NEAR_COLS = slice(144, 240), slice(110, 211)  # bottom 40 %, centre cols (D-563/D-566)
+
+
 def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_size, device,
-               log=print) -> dict:
-    """Adam on the head only, BCE on labelled pixels; ends with the best val drivable IoU's weights."""
+               log=print, pos_weight=None, fp_lambda=1.0) -> dict:
+    """Adam on the head only, BCE on labelled pixels; ends with the best epoch's weights
+    (val drivable IoU - fp_lambda * outside-band FP)."""
     index, ignore = _drivable_index(train_ds), train_ds.ignore_index
     if _drivable_index(val_ds) != index:
         raise ValueError("train and val disagree on the drivable class index")
     model = model.to(device)
     drivable_channel = model.lane.head.out_channels
     opt = torch.optim.Adam(model.drivable.parameters(), lr=lr)
-    bce = nn.BCEWithLogitsLoss(reduction="none")
+    bce = nn.BCEWithLogitsLoss(reduction="none", pos_weight=(
+        None if pos_weight is None else torch.tensor(float(pos_weight), device=device)))
     loader = dict(batch_size=batch_size, num_workers=0)
     train_dl = torch.utils.data.DataLoader(train_ds, shuffle=True, **loader)
     val_dl = torch.utils.data.DataLoader(val_ds, **loader)
@@ -218,6 +225,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
         model.eval()
         counts = {"all": [0, 0], "lane_background": [0, 0]}
         band_fp = [0, 0]
+        near = [0, 0, 0]  # predicted drivable, labelled drivable, pixels
         with torch.no_grad():
             for x, y in val_dl:
                 x, y = x.to(device), y.to(device)
@@ -233,13 +241,19 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                 band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
                 band_fp[0] += int((pred & band).sum())
                 band_fp[1] += int(band.sum())
+                near[0] += int(pred[..., NEAR_ROWS, NEAR_COLS].sum())
+                near[1] += int(truth[..., NEAR_ROWS, NEAR_COLS].sum())
+                near[2] += pred[..., NEAR_ROWS, NEAR_COLS].numel()
         ious = {k: (i / u if u else None) for k, (i, u) in counts.items()}
         iou = ious["lane_background"]
         row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou,
                "val_drivable_iou_all": ious["all"],
-               "val_outside_band_fp": band_fp[0] / band_fp[1] if band_fp[1] else None}
+               "val_outside_band_fp": band_fp[0] / band_fp[1] if band_fp[1] else None,
+               "val_near_centre_drivable": {"pred": near[0] / near[2], "label": near[1] / near[2]}
+               if near[2] else None}
+        row["score"] = None if iou is None else iou - fp_lambda * (row["val_outside_band_fp"] or 0.0)
         history.append(row)
-        if iou is not None and (best is None or iou > best["val_drivable_iou"]):
+        if iou is not None and (best is None or row["score"] > best["score"]):
             best, best_state = row, copy.deepcopy(model.drivable.state_dict())
         if log:
             fmt = lambda v: "-" if v is None else f"{v:.3f}"  # noqa: E731
@@ -251,4 +265,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
     return {"history": history, "best_epoch": best["epoch"] if best else None,
             "val_drivable_iou": best["val_drivable_iou"] if best else None,
             "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None,
-            "val_outside_band_fp": best["val_outside_band_fp"] if best else None}
+            "val_outside_band_fp": best["val_outside_band_fp"] if best else None,
+            "val_near_centre_drivable": best["val_near_centre_drivable"] if best else None,
+            "selection": {"score": "val_drivable_iou - fp_lambda * val_outside_band_fp",
+                          "fp_lambda": fp_lambda, "pos_weight": pos_weight}}
