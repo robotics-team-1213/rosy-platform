@@ -302,7 +302,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · docs: 활성 웹 레이아웃 적용 경로
+- 2026-10-09 · uncommitted · docs(lane): Fleet pivot 기록 공백 확인
 - 2026-10-09 · uncommitted · docs(lane): NE 호 blind 거리와 반지름 오차 교차점
 - 2026-10-09 · uncommitted · docs(lane): 링 진입 자세 오차 원시 로그 재계산
 - 2026-10-09 · uncommitted · docs(lane): Fleet 계획과 한쪽선 주행 증거 설계
-- 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가

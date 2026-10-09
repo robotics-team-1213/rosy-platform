@@ -1360,3 +1360,10 @@
 - 변경: 신선한 CORE `bend_phase`가 굽이 진행·재획득을 가리킬 때도 기존 B9 기대 굽이 규칙을 사용한다. 문맥 부재·만료 시 기존 판단으로 돌아간다.
 - 증거: `test_route_context_input.py` 집중 검사. 계약 v1.166.
 - gate 변화: SOURCE. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
+
+- 변경: `ir_overlay.py`가 `learned_paint_every_n`을 [1, 4]로 받는다(`learned_paint_threads`는 [1, 2] 그대로). `line_observer_overrides apply --paint-every-n 1..4`로 쓸 수 있다. paint_worker 게이트는 바꾸지 않았다.
+- 이유: 9dfk 실물에서 `learned_paint_every_n: 2`가 84프레임 중 0프레임에 학습 마스크를 썼다(전부 `denoise_fallback`). 카메라 8 Hz에서 every_n 2의 컷오프는 250 ms인데 Pi 5 추론은 약 240~300 ms(약 2.4프레임)다. 전에는 범위 밖 값이 overlay 전체를 건너뛰게 해 운영자가 올릴 수 없었다. D-408 ADR은 기본값 2만 적고 범위를 계약으로 두지 않는다.
+- 증거: `test_ir_overlay.py` 경계(4 허용, 5 거부). 실물 9dfk 0/84(2026-10-09), 시뮬레이션 every_n 4는 300 ms에서 50%.
+- gate 변화: SOURCE. 기본값 2는 그대로. DEVICE에서 every_n 3~4 적중률은 HOLD.
