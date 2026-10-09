@@ -685,6 +685,19 @@ private key readable only to root and group `10001` (`0440`, group `10001`),
 and make the certificate and CA readable by UID/GID `10001` (`0444`). Never
 commit these files. Provision the CA on ceiling phones and operator browsers.
 
+## Service Control (D-524)
+
+`install-host-control.sh` installs the allowlisted helper and, with `--fleet-key`, the Fleet
+container's forced-command key on each PC. Where the key is accepted from (`--from`):
+
+- Site PC: the Docker pool `172.16.0.0/12`, not one subnet, because the compose subnet changes
+  when the stack restarts (seen 172.20 then 172.18).
+- Model and AI PCs: `<site PC LAN address>`.
+
+Write the targets file with LAN addresses (`<role> <user>@<LAN address>`), never the tailnet name:
+Tailscale SSH bypasses `authorized_keys` forced commands, so a tailnet target would skip the
+restriction. Keep the host keys in `known_hosts` next to it. D-530 records the decision.
+
 ## Tracking background volume (D-539)
 
 Vision keeps the frames of the last operator **배경 다시 학습** in the named
@@ -1161,9 +1174,14 @@ Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태�
 Use an enrolled viewer credential in a separate absolute regular file protected
 by host permissions. It is read at request time and never placed in command
 arguments or logs. Only these GET APIs on the health URL's HTTPS origin are
-allowed; authenticated redirects are refused. The gate checks response structure
-and required IDs before staging and after switching. A failing preflight leaves
-the current installation in place; failure after switching triggers rollback.
+allowed; authenticated redirects are refused. The updater checks response
+structure and a nonempty authenticated inventory before staging. It records
+missing `required_ids` as `inventory-drift` in the journal and
+`last_run.inventory_drift` in the state file (D-569). After switching, every ID
+observed before staging must remain; a loss triggers rollback. The setup tool
+still requires configured IDs to match when it first provisions the gate.
+A stale ID must be reconciled with Fleet enrollment; mDNS discovery alone does
+not enroll a robot or prove its identity.
 Hosts without this setting retain the liveness-only gate. Listing a camera is
 not proof of advancing frames, and listing a robot is not physical acceptance.
 Record actual camera frame reception separately without sending motion.

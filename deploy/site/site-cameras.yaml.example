@@ -23,6 +23,10 @@ sources:
     robot_markers:
       rosy_40: 40
     heading_edge: [1, 2]
+    # D-564: floor place markers Fleet may teach draft places from (34 start-south,
+    # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
+    # edge forward as the robot stickers (heading_edge). Omit to send none.
+    place_markers: [34, 35, 36, 37, 38]
 
   # A second source needs its own sighting token wired in too: add a secret file and its
   # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet

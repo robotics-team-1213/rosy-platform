@@ -1,4 +1,4 @@
-"""D-517 10 (M1b) traffic view in real Chromium (opt-in, ROSY_RUN_BROWSER_TESTS=1).
+"""D-517 10 (M1b) traffic view and the D-540 4 site-map robot layer in real Chromium (opt-in, ROSY_RUN_BROWSER_TESTS=1).
 
 The real Fleet app serves the pages and the asset allowlist; every /api call is a fake answer:
 two robots on a square loop, one junction zone held by rosy_01 and rosy_02 waiting at its entry.
@@ -218,39 +218,77 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             browser.close()
 
 
-def test_site_map_repeat_start_pairs_robot_and_start_place(site):
+def _guide_row(robot_id, x, y, yaw, state, u_m):
+    return {"robot_id": robot_id, "online": True, "body_radius_m": 0.09, "lane": None, "findings": [], "worst": None,
+            "pose": {"x": x, "y": y, "yaw": yaw, "state": state, "source": "sighting", "u_m": u_m, "age_s": 0.2}}
+
+
+GUIDE = {"map_version": 4, "camera": "cam-1",
+         "robots": [_guide_row("rosy_01", 2.0, 0.6, 1.5708, "LOCALIZED", 0.03),
+                    _guide_row("rosy_02", 1.6, 0.0, 0.0, "DEGRADED", 0.12)]}
+_MARKS = """() => Object.fromEntries([...document.querySelectorAll('#site-map-svg [data-robot]')].map((g) => {
+  const body = g.querySelector('.robot-body'), head = g.querySelector('.robot-heading');
+  return [g.dataset.robot, {c: [+body.getAttribute('cx'), +body.getAttribute('cy')],
+    h: [head.getAttribute('x2') - head.getAttribute('x1'), head.getAttribute('y2') - head.getAttribute('y1')]}];
+}))"""
+
+
+def _unit_vector(a, b):
+    d = ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+    return ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
+
+
+def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, monkeypatch):
+    """D-540 4: the /guide robots and open trip lines on the site map, turned with view_turn_deg; no trip
+    controls on this page, one read line and a link to the 관제 card instead."""
     from playwright.sync_api import expect, sync_playwright
 
+    monkeypatch.setitem(API, "/api/fleet/guide", GUIDE)
     posts = []
-    loop_full = {"code": "TRIP_LOOP_FULL", "detail": {"robots": 4, "capacity": 3, "held_per_robot": 3}}
-    answers = {"/api/fleet/robots/rosy_02/trip": (200, {"plan_id": "p-9", "map_version": 4, "segments": [],
-                                                       "places": [], "actions": [], "length_m": 0, "eta_s": 0}),
-               "/api/fleet/trips/p-9/start": (422, {"detail": loop_full})}
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, "/console/site-map", posts, answers)
+        browser, page, errors = _open(playwright, site, "/console/site-map", posts)
         try:
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
             expect(page.locator("#user-role")).to_contain_text("bob")
             page.clock.run_for(1500)
-            expect(page.locator("#trip-loop")).to_have_text("고리 2/3대")
-            page.locator("#trip-robot").select_option("rosy_01")
-            expect(page.locator("#trip-repeat")).to_be_disabled()  # rosy_01 already runs its trip
-            assert page.locator("#trip-repeat").get_attribute("reason") == "이 로봇은 이미 운행 중입니다"
-            # The running line names the selected robot's trip; a third robot is not in this fake.
-            page.locator("#trip-robot").select_option("rosy_02")
-            page.locator("#trip-start-place").select_option("start_s")
-            _shots(page, "site-map-run")
-            page.set_viewport_size({"width": 1920, "height": 1080})
-            api_open = {"running": None, "trips": [], "open": [OPEN[0]]}
-            page.route("**/api/fleet/trips", lambda route: route.fulfill(json=api_open))
+            expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
+            expect(page.locator('#site-map-svg [data-robot="rosy_02"]')).to_have_class("robot c2 degraded")
+            expect(page.locator("#site-map-svg .trip-line")).to_have_count(4)  # two open trips, two lanes each
+            expect(page.locator("#site-map-svg .robot-label").first).to_have_text("rosy_01 · ±0.03 m")
+            expect(page.locator("#trip-run")).to_contain_text("이 지도로 운행 중 · 운행 중 · rosy_01")
+            link = page.locator("#trip-console-link")
+            expect(link).to_have_text("운행은 관제의 로봇 카드에서")
+            assert link.get_attribute("href") == "/console"
+            for gone in ("trip-start", "trip-repeat", "trip-confirm", "trip-cancel", "trip-leader",
+                         "trip-start-place", "trip-loop"):
+                expect(page.locator(f"#{gone}")).to_have_count(0)
+            assert page.get_by_text("운행 취소").count() == 0
+            straight = page.evaluate(_MARKS)
+            if out := os.environ.get("ROSY_SHOT_DIR"):
+                for width, height in ((1440, 900), (1024, 768)):
+                    page.set_viewport_size({"width": width, "height": height})
+                    page.clock.run_for(1500)
+                    page.screenshot(path=str(Path(out) / f"site-map-robots-{width}x{height}.png"), full_page=True)
+            _shots(page, "site-map-robots")
+
+            turned = json.loads(json.dumps(ACTIVE))
+            turned["map"]["view_turn_deg"] = 90
+            monkeypatch.setitem(API, "/api/fleet/site-map/active", turned)
+            page.set_viewport_size({"width": 1440, "height": 900})
+            page.locator("#token-save").dispatch_event("click")  # reconnect; the button sits in the folded header
+            expect(page.locator("#map-view-turn")).to_have_value("90")
             page.clock.run_for(1500)
-            expect(page.locator("#trip-repeat")).to_be_enabled()
-            page.locator("#trip-repeat").click()
-            expect(page.locator("#notice")).to_contain_text("운행 거절")
-            expect(page.locator("#notice")).to_contain_text("고리 4/3대")
-            assert [path for path, _ in posts] == ["/api/fleet/robots/rosy_02/trip", "/api/fleet/trips/p-9/start"]
-            assert json.loads(posts[0][1]) == {"to": "start_s", "via": ["start_n"], "repeat": True}
+            expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
+            rotated = page.evaluate(_MARKS)
+            # A clockwise screen turn sends (dx, dy) to (-dy, dx): positions and headings alike.
+            dx, dy = _unit_vector(straight["rosy_01"]["c"], straight["rosy_02"]["c"])
+            ux, uy = _unit_vector(rotated["rosy_01"]["c"], rotated["rosy_02"]["c"])
+            assert abs(ux + dy) < 0.01 and abs(uy - dx) < 0.01, (straight, rotated)
+            hx, hy = _unit_vector((0, 0), straight["rosy_01"]["h"])
+            vx, vy = _unit_vector((0, 0), rotated["rosy_01"]["h"])
+            assert abs(hy + 1) < 0.01 and abs(vx - 1) < 0.01, (straight, rotated)  # yaw +90°: up, then right
+            assert not posts, posts
             assert not errors, errors
         finally:
             browser.close()
