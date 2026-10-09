@@ -146,10 +146,12 @@ class StateManager:
             self._pose_frame = frame
             self._mark("pose")
 
-    def pose_sample(self) -> tuple[float, float, float, str]:
-        """(x, y, yaw, frame) without building a snapshot (D-559 trail tick, 20 Hz)."""
+    def pose_sample(self) -> tuple[float, float, float, str, float]:
+        """(x, y, yaw, frame, age_s) without building a snapshot (D-559 trail tick, 20 Hz)."""
         with self._lock:
-            return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame
+            at = self._received_mono.get("pose")
+            age = float("inf") if at is None else self._monotonic() - at
+            return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame, age
 
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt.

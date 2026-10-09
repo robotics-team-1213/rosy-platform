@@ -219,7 +219,7 @@ async def ws_swarm_pose(websocket: WebSocket):
         while True:
             snapshot = svc.state.snapshot()
             # D-559: pose and its frame in one read; an odom fallback must not pass as map.
-            x, y, yaw, frame = svc.state.pose_sample()
+            x, y, yaw, frame, _age = svc.state.pose_sample()
             seq += 1
             await websocket.send_json(
                 _pose_envelope(svc.identity.robot_id, Pose(x=x, y=y, yaw=yaw), seq,

@@ -162,7 +162,7 @@ class Rig:
         self.clock, self.events, self.nav = FakeClock(), FakeEvents(), FakeNav()
         self.state = StateManager(robot_id="rosy_01")
         self.safety = SafetyManager(SpeedLimits(), BatteryPolicy(), self.events)
-        self.pose = (0.0, 0.0, 0.0, "map")
+        self.pose = (0.0, 0.0, 0.0, "map", 0.0)
         self.sent = []
         #: (gap, stop, resume) or None (stale); gap None = clear
         self.gap = gap or (lambda v, w, now: (None, 0.1, 0.13))
@@ -237,9 +237,12 @@ def test_own_odom_pose_holds():
     rig = Rig()
     rig.follow()
     rig.leader(1.2)
-    rig.pose = (0.0, 0.0, 0.0, "odom")
+    rig.pose = (0.0, 0.0, 0.0, "odom", 0.0)
     assert rig.step() is None
     assert rig.hold_reason() == "own_pose_not_map"
+    rig.pose = (0.0, 0.0, 0.0, "map", 0.6)               # a map pose that stopped updating
+    assert rig.step() is None
+    assert rig.hold_reason() == "own_pose_stale"
 
 
 def test_a_leader_too_far_to_join_ends_the_follow():
@@ -253,14 +256,41 @@ def test_a_leader_too_far_to_join_ends_the_follow():
 
 
 def test_a_leader_jump_latches_trail_lost():
+    """10 Hz samples: a 0.5 m step is a relocalisation, not driving (bound 0.3 m + ceiling x dt)."""
     rig = Rig()
     rig.follow()
     rig.leader(1.0)
-    rig.leader(3.0)
+    rig.clock.advance(0.1)
+    rig.leader(1.5)
     assert rig.step() is None
-    rig.leader(1.05)
+    rig.leader(1.55)
     assert rig.step() is None
     assert rig.hold_reason() == "trail_lost"
+
+
+def test_after_a_stream_gap_the_jump_bound_grows_with_time():
+    rig = Rig()
+    rig.follow()
+    rig.leader(0.6)
+    rig.clock.advance(5.0)                                # a 5 s cut, leader drove 0.6 m on
+    rig.leader(1.2)
+    assert rig.swarm.state_payload()["trail"]["leader_s"] == pytest.approx(1.2)
+
+
+def test_the_body_stop_resumes_only_past_the_gap_that_stopped_it():
+    """Path-mode gaps scale with speed: the slow restart twist must not use its own small resume."""
+    gaps = {"gap": None}
+    rig = Rig(gap=lambda v, w, now: (gaps["gap"], 0.02 + 0.5 * v, 0.05 + 0.5 * v))
+    rig.follow()
+    rig.leader(1.2)
+    for _ in range(10):
+        rig.step()                                       # up to speed (0.15): stop 0.095, resume 0.125
+    gaps["gap"] = 0.09
+    assert rig.step() is None
+    gaps["gap"] = 0.10                                   # beyond the 0.025 m/s restart's resume 0.0625
+    assert rig.step() is None and rig.hold_reason() == "obstacle"
+    gaps["gap"] = 0.13
+    assert rig.step()[0] > 0
 
 
 def test_the_body_stop_holds_with_hysteresis_and_a_stale_sensor_holds():

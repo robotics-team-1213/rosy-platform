@@ -20,8 +20,10 @@ CRUMB_M = 0.03
 PRUNE_BEHIND_M = 1.0
 #: 점 개수 상한. 3 cm 간격이면 60 m 다 — 팔로워가 그만큼 뒤처졌으면 이미 끊긴 대형이다.
 MAX_CRUMBS = 2000
-#: 시작할 때 팔로워–리더 직선 거리 상한, 그리고 한 표본에서 리더가 건너뛸 수 있는 거리 (m).
+#: 시작할 때 팔로워–리더 직선 거리 상한, 그리고 표본 사이 건너뜀의 절대 상한 (m).
 #: 그 사이는 직선으로 이을 수밖에 없는데, 실제 경로를 모르는 직선을 길게 그으면 벽을 지난다.
+#: 표본 사이 상한은 호출자가 시간으로 준다(`add(max_jump=...)`): 10 Hz 스트림에서 0.3 m 넘게
+#: 튄 표본은 재지역화이지 주행이 아니다.
 JOIN_MAX_M = 1.5
 #: 자취에서 이만큼 벗어나면 따라가지 않는다 (m). 위치가 튀었거나 밀렸다.
 LOST_M = 0.30
@@ -65,8 +67,8 @@ class Trail:
     def leader_s(self) -> float:
         return self._s[-1]
 
-    def add(self, x: float, y: float, yaw: float) -> bool:
-        """리더 표본 하나. False 면 리더가 JOIN_MAX_M 넘게 건너뛰었다(자취를 이을 수 없다).
+    def add(self, x: float, y: float, yaw: float, max_jump: float = JOIN_MAX_M) -> bool:
+        """리더 표본 하나. False 면 리더가 max_jump(≤ JOIN_MAX_M) 넘게 건너뛰었다(자취를 이을 수 없다).
 
         뒤로 가는 리더(이동이 리더 heading 반대쪽)는 점을 쌓지 않는다 — 진행 거리가
         줄지 않으니 남은 간격만 줄어 팔로워는 선다. 리더가 마지막 점을 다시 지나면 이어 쌓는다.
@@ -77,7 +79,7 @@ class Trail:
             return True
         if dx * math.cos(yaw) + dy * math.sin(yaw) < 0.0:
             return True
-        if distance > JOIN_MAX_M:
+        if distance > min(max_jump, JOIN_MAX_M):
             return False
         self._append(x, y)
         return True

@@ -1084,8 +1084,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `mission.completed/failed/canceled` | info/error/info | Fleet | `{mission_id, reason}` |
 | `robot.online/offline` | info/warning | Fleet | `{robot_id}` |
 | `pairing.requested/approved/revoked` | warning | Fleet | `{robot_id}` |
-| `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, reference_source, by}` |
-| `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) \| D-559 trail (v1.166): `trail_lost`(자취에서 0.30 m 넘게 벗어났거나 리더가 한 표본에 1.5 m 넘게 건너뜀, follow 를 다시 걸 때까지 유지) \| `reference_frame_odom` \| `own_pose_not_map` \| `obstacle`(D-422 몸체 정지) \| `obstacle_sensor_stale` |
+| `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, mode, reference_source, by}` — `mode` 는 D-559 (`offset`\|`trail`) |
+| `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) \| D-559 trail (v1.166): `trail_lost`(자취에서 0.30 m 넘게 벗어났거나 리더가 표본 사이에 0.3 m + SAF-004 `max_linear` × 경과 시간(최대 1.5 m)보다 멀리 건너뜀, follow 를 다시 걸 때까지 유지) \| `reference_frame_odom` \| `own_pose_not_map` \| `own_pose_stale`(자기 map pose 가 0.5 s 넘게 갱신되지 않음) \| `obstacle`(D-422 몸체 정지, 멈춘 판정의 재개 거리를 넘어야 다시 간다) \| `obstacle_sensor_stale` |
 | `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.72) \| `trail_join_too_far`(D-559, v1.166) |
 | `swarm.succession` | warning | 로봇 | `{leader, dead, role, by}` — 명단이 공유된 대형에서 리더(`dead`)를 잃은 팔로워가 follow 를 끝내고 낸다. `leader` 는 `next_leader` 규칙이 고른 다음 리더(없으면 `null`), `role` 은 이 로봇의 새 역할, `by`: `followers` |
 

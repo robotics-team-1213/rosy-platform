@@ -35,6 +35,9 @@ from core_features.swarm.trail import Trail, TrailError, trail_twist
 #: 그 이상은 Nav2 플래너를 재시작시키기만 한다.
 MAX_GOAL_RATE_HZ = 2.0
 _MIN_GOAL_INTERVAL_S = 1.0 / MAX_GOAL_RATE_HZ
+#: D-559: own map pose older than this holds the trail (state tick 10 Hz; TF stalls otherwise
+#: leave a frozen pose labelled "map" for MAP_POSE_TTL_S = 2 s).
+OWN_POSE_MAX_AGE_S = 0.5
 
 
 class SwarmError(Exception):
@@ -108,7 +111,9 @@ class SwarmManager:
         self._trail_hold: Optional[str] = None
         self._trail_linear = 0.0
         self._trail_at: Optional[float] = None
-        self._trail_blocked = False
+        #: D-422 hold latched with the resume gap of the judgement that stopped us (None = clear).
+        self._trail_resume: Optional[float] = None
+        self._trail_sample_at: Optional[float] = None
         self._trail_broken: Optional[str] = None  # latched: trail_lost
         self._ref_odom = False
 
@@ -228,6 +233,8 @@ class SwarmManager:
             if blocked is None:
                 # 세션을 여는 것과 무장은 한 구간이다. 여기서 락을 놓으면 그
                 # 사이의 cancel 이 임자 없는 세션을 남긴다.
+                previous = self._params
+                session = self._session
                 self._params = params.model_copy()
                 # 검증만 하고 흘려보내면 계약이 거짓이 된다. 실제로 바퀴에
                 # 닿는 값을 줄인다 (D-2 의 단일 통로를 그대로 쓴다).
@@ -243,6 +250,11 @@ class SwarmManager:
                 status = self.status()
         if blocked is not None:
             raise SwarmError(*blocked)
+        # D-559 re-follow across modes: no leftover of the other mode may keep driving.
+        if params.mode == "trail":
+            self.nav.cancel(source="swarm", close_session=False, session=session)  # an offset goal
+        elif previous is not None and previous.mode == "trail":
+            self._twist_sink(None)
 
         self._state.set_swarm(status)
         self._events.publish(
@@ -377,8 +389,15 @@ class SwarmManager:
                 self._trail = Trail(own[:2], (reference.x, reference.y))
             except TrailError as exc:
                 return exc
-        elif not self._trail.add(reference.x, reference.y, reference.yaw):
-            self._trail_broken = "trail_lost"  # a jump the trail cannot bridge
+        else:
+            # A jump bounded by how far a robot of our ceiling could drive since the last
+            # sample: at 10 Hz anything past 0.3 m is a relocalisation, not driving.
+            now = self._clock()
+            dt = 0.0 if self._trail_sample_at is None else now - self._trail_sample_at
+            jump = 0.3 + self._safety.limits.max_linear * dt
+            if not self._trail.add(reference.x, reference.y, reference.yaw, max_jump=jump):
+                self._trail_broken = "trail_lost"  # a jump the trail cannot bridge
+        self._trail_sample_at = self._clock()
         return None
 
     def trail_tick(self, line_now: Optional[float] = None) -> None:
@@ -405,6 +424,8 @@ class SwarmManager:
                 reason = "reference_frame_odom"
             elif own is None or own[3] != "map":
                 reason = "own_pose_not_map"
+            elif own[4] > OWN_POSE_MAX_AGE_S:
+                reason = "own_pose_stale"
             elif self._trail is None:
                 reason = "waiting_for_leader"
             else:
@@ -416,7 +437,7 @@ class SwarmManager:
                     twist = (linear, angular)
                 else:
                     self._trail_broken = reason
-            blocked = self._trail_blocked
+            latched = self._trail_resume
         if twist is not None and twist != (0.0, 0.0) and self._obstacle_gap is not None:
             # D-422 body stop on the twist we are about to send (outside our lock: the
             # judge takes the line-follow lock). No fresh obstacle sensor = no motion.
@@ -425,16 +446,21 @@ class SwarmManager:
                 reason, twist = "obstacle_sensor_stale", None
             else:
                 gap, stop, resume = judged
-                blocked = gap is not None and gap < (resume if blocked else stop)
-                if blocked:
+                # Held: clear only beyond the resume gap of the judgement that stopped us. The
+                # restart twist is slow and its own resume gap is smaller (review M1).
+                if latched is not None:
+                    latched = latched if gap is not None and gap < latched else None
+                elif gap is not None and gap < stop:
+                    latched = resume
+                if latched is not None:
                     reason, twist = "obstacle", None
         with self._lock:
             if self._params is not params:
                 return  # canceled or re-armed meanwhile; cancel cleared the slot
-            self._trail_blocked = blocked
+            self._trail_resume = latched
             self._trail_linear = 0.0 if twist is None else twist[0]
             announce = reason != self._trail_hold and reason in (
-                "trail_lost", "reference_frame_odom", "own_pose_not_map", "obstacle",
+                "trail_lost", "reference_frame_odom", "own_pose_not_map", "own_pose_stale", "obstacle",
                 "obstacle_sensor_stale")
             self._trail_hold = reason
             # Under our lock: a cancel after this point clears what we wrote.

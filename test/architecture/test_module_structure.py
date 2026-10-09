@@ -79,7 +79,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
-#: docs/plans/2026-10-09-core-localization-size-unit.md
+#: docs/plans/2026-10-09-core-localization-size-unit.md,
+#: docs/plans/2026-10-09-core-swarm-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
