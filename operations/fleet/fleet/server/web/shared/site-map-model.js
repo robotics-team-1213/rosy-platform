@@ -525,6 +525,8 @@ export function trafficCardLine(traffic, robotId) {
     parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
+  const advice = robot.advice;  // D-551: display-only signal advice to CORE
+  if (advice?.signal) parts.push(`신호 참고 전송 · seq ${advice.sent_seq}${advice.accepted ? "" : ` · ${advice.reason || "미수락"}`}`);
   return parts.join(" · ");
 }
 
