@@ -50,6 +50,10 @@ class InputSpec:
     scale: float
     mean: tuple[float, float, float]
     std: tuple[float, float, float]
+    #: Optional `input.crop` (cropped-input models): (frame_h, frame_w, row_from, row_to). The
+    #: frame is resized to frame_h x frame_w and rows row_from..row_to-1 are the model input;
+    #: the model output covers only those frame rows. None: the whole resized frame.
+    crop: tuple[int, int, int, int] | None = None
 
     @property
     def height(self) -> int:
@@ -150,7 +154,25 @@ def _parse_input(doc: dict) -> InputSpec:
     std = _finite(doc.get("std"), "input.std", 3)
     if any(s <= 0 for s in std):
         raise ManifestError("input.std must be > 0")
-    return InputSpec(tuple(shape), color, scale, mean, std)
+    return InputSpec(tuple(shape), color, scale, mean, std, _parse_crop(doc.get("crop"), shape))
+
+
+def _parse_crop(crop, shape) -> tuple[int, int, int, int] | None:
+    """`input.crop = {from_frame: [H, W], rows: [a, b]}`: model input = rows a..b-1 of the frame
+    resized to H x W; W must be the input width and b - a its height."""
+    if crop is None:
+        return None
+    def ints(value, n):
+        return (isinstance(value, list) and len(value) == n
+                and all(isinstance(v, int) and not isinstance(v, bool) for v in value))
+    if (not isinstance(crop, dict) or set(crop) != {"from_frame", "rows"}
+            or not ints(crop["from_frame"], 2) or not ints(crop["rows"], 2)):
+        raise ManifestError("input.crop: expected {from_frame: [H, W], rows: [from, to]}")
+    (frame_h, frame_w), (row_from, row_to) = crop["from_frame"], crop["rows"]
+    if (frame_w != shape[3] or row_to - row_from != shape[2]
+            or not 0 <= row_from < row_to <= frame_h):
+        raise ManifestError("input.crop: rows must be inside from_frame and match input H, W")
+    return (frame_h, frame_w, row_from, row_to)
 
 
 def _parse_classes(doc: dict, task: str = "lane_seg") -> tuple[ClassSpec, ...]:
@@ -281,15 +303,20 @@ def load_manifest(path: str | Path) -> ModelManifest:
     spec = _parse_input(_req(doc, "input", dict))
     if task == "object_det" and (spec.height % 32 or spec.width % 32):
         raise ManifestError("input.shape: object_det H and W must be a multiple of 32 (stride)")
+    if spec.crop is not None and task != "lane_seg":
+        raise ManifestError("input.crop: lane_seg only")
     files = _parse_files(doc.get("files"))
     backend = _backend(doc, files, task)
+    classes = _parse_classes(_req(doc, "output", dict), task)
+    if spec.crop is not None and not any(c.role == "background" for c in classes):
+        raise ManifestError("input.crop: needs a background class for the rows outside the crop")
     return ModelManifest(
         folder=path.parent,
         model_revision=revision,
         task=task,
         files=files,
         input=spec,
-        classes=_parse_classes(_req(doc, "output", dict), task),
+        classes=classes,
         dataset_repo=_req_text(dataset, "repo"),
         dataset_revision=_req_text(dataset, "revision"),
         camera_profile_revision=_req_text(doc, "camera_profile_revision"),
