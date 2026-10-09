@@ -113,7 +113,11 @@ SIZE_VERDICTS = {
         "tests. Budget and allowance unchanged",
     ),
     "fleet/fleet/server/trip_runner.py": (
-        686,
+        837,
+        "split: re-judged at 837 on 2026-10-09 (author's record; NEEDS the independent re-judge): D-517 3 no stop "
+        "inside a zone adds one arrival line (a stop short of a zone counts from that point); the zone rules live in "
+        "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. The named split stays the next "
+        "step. +150 allowance measured from 837. Previously "
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
         "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
         "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
@@ -201,7 +205,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_952,
+        49_252,
+        "split: re-judged at 49252 on 2026-10-09 after merging fix/trip-lap-hold-outside-zone (author's record; "
+        "+139 over main 49113, which itself stood 11 past 48952+150): D-517 3 no stop inside a zone (AI PC signal "
+        "SIM): lap-end and one-way destination moves and the onward search in server/trip_laps.py, the allowed-arc "
+        "start in routing/snap.py, the stop_moved line in web/shared/site-map-model.js. Existing owners, no new "
+        "route or command path; the hold distance itself is in the traffic unit (traffic/zone_hold.py). +150 "
+        "allowance measured from 49252. Previously "
         "split: re-judged at 48952 on 2026-10-09 after merging D-564 (+241 over main 48711; floor place markers: "
         "ingest and lease in server/sightings.py, teach-from-marker in teach_service.py and teach_routes.py, "
         "console list in web/site-map-teach.js; existing owners, no command path, no new owner). Previously "
