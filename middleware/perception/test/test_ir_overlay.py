@@ -158,12 +158,9 @@ def test_learned_paint_motion_compensation_loads(tmp_path):
 
 def test_learned_paint_floor_gate_can_be_switched_off(tmp_path):
     target = tmp_path / "d588.yaml"
-    target.write_text(OPERATOR + "    paint_source: learned
-"
-                      "    learned_lane_pointer: /var/lib/rosy/models/shadow
-"
-                      "    learned_paint_floor_gate: false
-",
+    target.write_text(OPERATOR + "    paint_source: learned\n"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow\n"
+                      "    learned_paint_floor_gate: false\n",
                       encoding="utf-8")
     assert usable_operator_overlay(str(target))[0] == str(target)
 
