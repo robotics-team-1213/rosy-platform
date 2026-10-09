@@ -67,8 +67,11 @@ def test_label_frame_road_offroad_margin_and_pose_check():
     assert (wide == ldd.DRIVABLE).sum() < road.sum()  # pose margin widens the ignored band
     bad, why = mpd.label_frame(_render(raster, (0, 0.06, 0)), _pose(), CAMERA, grid, raster)
     assert bad is None and why["reason"] == "line_iou"
-    none, why = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(y=0.6), CAMERA, grid, raster)
+    across = (0, 0, math.pi / 2)  # facing across the road: the lines are nearer than 0.15 m
+    none, why = mpd.label_frame(_render(raster, across), _pose(*across), CAMERA, grid, raster)
     assert none is None and why["reason"] == "no_line_in_view"
+    off, why = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(y=0.6), CAMERA, grid, raster)
+    assert off is None and why["reason"] == "robot_off_road"
 
 
 def _derived(tmp_path, n=8, name="out"):
@@ -146,14 +149,14 @@ def test_wall_occludes_the_floor_behind_it():
     raster = _raster()
     raster["cls"][: int((1.0 - 0.25) / R)] = mpd.WALL  # wall from y = 0.25 m outward
     raster["boundary_m"] = mpd.boundary_distance(raster["cls"], R)
-    pose = (0.0, -0.12, math.pi / 2)
+    pose = (0.0, -0.07, math.pi / 2)
     image = _render(raster, pose)
     forward, left = mpd.ground_grid(CAMERA)
     with np.errstate(invalid="ignore"):
         image[np.isnan(forward) | (pose[1] + forward >= 0.25)] = 230  # the white wall face
     mask, stats = mpd.label_frame(image, _pose(*pose), CAMERA, mpd.ground_grid(CAMERA), raster)
     assert mask is not None and stats["line_iou"] > 0.5
-    assert (forward[mask != 255] < 0.37 - 0.0).all()
+    assert (forward[mask != 255] < 0.32).all()
 
 
 def test_only_the_robots_own_road_is_drivable():
