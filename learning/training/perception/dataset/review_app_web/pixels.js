@@ -6,16 +6,33 @@ reviewViewport(document.querySelector('.pixel-stage'),$('pixel-canvas'),document
 const toolOptions=document.querySelector('.pixel-editor-column section .ui-workspace-bar');
 document.querySelector('.pixel-quick-tools').prepend($('pixel-tool-hint'),$('pixel-quick-classes'),document.querySelector('.pixel-quick-actions'));
 document.querySelector('.pixel-quick-actions').after(toolOptions);
+$('pixel-view-status').before(document.querySelector('.pixel-ribbon-nav'),document.querySelector('.pixel-layout .review-view-bar'));
+document.querySelector('.pixel-editor-column').append(document.querySelector('.pixel-quick-tools'));
+const pixelContent=$('pixel-content'),pixelPreparation=$('pixel-preparation');
+$('pixel-title').after($('pixel-reload'));
+$('pixel-reload').textContent='새로고침';
+$('pixel-reload').setAttribute('aria-label','최신 픽셀 검수 내용 불러오기');
+pixelContent.insertBefore(document.querySelector('#pixel-main > .ui-workspace-bar'),pixelPreparation);
+pixelContent.insertBefore($('pixel-flow').parentElement,pixelPreparation);
+pixelContent.insertBefore($('pixel-frames'),pixelPreparation);
+const pixelResult=document.createElement('p');pixelResult.id='pixel-result';pixelResult.className='review-result';pixelResult.setAttribute('role','status');
+const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-result-note';pixelResultNote.className='review-result-note';pixelResultNote.setAttribute('role','status');
+$('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
+pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
+pixelResultNote.after($('pixel-quick-classes'));
+for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
+$('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
+for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
+for(const button of document.querySelectorAll('.pixel-quick-actions ui-button'))button.setAttribute('aria-label',button.title);
 for(const id of ['pixel-flood','pixel-brush-tool','pixel-polygon-tool'])$(id).setAttribute('aria-describedby','pixel-tool-hint');
 const states={pending:'픽셀 검수 대기',approved:'픽셀 승인',excluded:'픽셀 제외'};
 const serverReasons={'known mask index required':'등록된 픽셀 클래스만 사용할 수 있습니다.','flood seed outside original image':'누른 점이 원본 사진 범위를 벗어났습니다.','bounded flood tolerance required':'비슷한 색 허용치는 0~100 사이 정수입니다.','bounded brush radius required':'브러시 반지름은 0~128 사이 정수입니다.','bounded brush points required':'브러시 획이 너무 깁니다. 나누어 그리세요.','brush point outside original image':'브러시 획이 원본 사진 범위를 벗어났습니다.','3..128 polygon points required':'영역은 꼭짓점 3~128개가 필요합니다.','polygon point outside original image':'영역 꼭짓점이 사진 밖에 있습니다.','mask encoding failed':'마스크를 저장하지 못했습니다.','no unknown pixels remain':'남은 미검수 픽셀이 없습니다.','exactly one background class required':'배경 클래스가 정확히 하나여야 합니다.','drivable outside visible lane boundary':'보이는 왼쪽 차선 바깥 또는 오른쪽 차선 바깥에 주행 가능 영역이 있습니다. 해당 픽셀을 배경이나 미검수로 수정하세요.','unknown pixel review action':'지원하지 않는 동작입니다.'};
 function readableError(message){return serverReasons[message]||message;}
 serverReasons['draft has no labels for remaining unknown pixels']='이 초안은 남은 255 영역에 제안한 라벨이 없습니다. 다른 초안을 선택하거나 직접 검수하세요.';
 let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],tool='sample',polygon=[];
+let savedPixelSummary='';
 let candidatePreviewDigest='';
 const mergeCandidate=document.createElement('ui-button');mergeCandidate.id='pixel-merge-candidate';mergeCandidate.setAttribute('data-action-icon','pixels');mergeCandidate.setAttribute('kind','primary');mergeCandidate.textContent='사람 라벨 유지 · 255만 초안 보완';$('pixel-apply-candidate').before(mergeCandidate);
-$('pixel-view-status').before($('pixel-candidate-tools'));
-$('pixel-candidate-tools').after($('pixel-candidate-preview'));
 $('pixel-candidate-tools').classList.add('review-draft-bar');
 $('pixel-preview-candidate').textContent='초안 미리보기';
 $('pixel-candidate-image').alt='선택한 자동 초안을 원본 사진 위에 표시';
@@ -45,7 +62,7 @@ let candidateKey='';
 function v13Review(){return !!review?.classes?.classes.some(row=>row.name==='lane_left')&&!!review?.classes?.classes.some(row=>row.name==='lane_right'&&row.role==='lane_marking')&&!!review?.classes?.classes.some(row=>row.name==='drivable');}
 function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(row=>row.sha256===$('pixel-candidates').value)?.origin==='v12_pixel_mask_candidate';}
 function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>`${row.sha256}:${row.origin}`).join(',')}`,select=$('pixel-candidates');
- if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_road_visible_lane_clip':'SAM3 차선 밖 미검수 보정','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||'자동 초안'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
+ if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_road_visible_lane_clip':'SAM3 차선 밖 미검수 보정','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||row.origin||'출처 미기록'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
   $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
   $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';
   mergeCandidate.disabled=select.disabled||!rows.length||!unknownPixels||frame?.status==='excluded'||review?.status==='excluded';
@@ -111,6 +128,8 @@ function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygo
   }
  }
  $('pixel-approval-hint').textContent=ready&&$('pixel-approve').disabled?$('pixel-approve').reason:'';
+ pixelResultNote.textContent=ready&&$('pixel-approve').disabled?`승인 대기 · ${$('pixel-approve').reason}`:ready?'승인 조건을 충족했습니다. 원본과 경계를 직접 확인한 뒤 결정하세요.':'';
+ if(savedPixelSummary)pixelResult.textContent=`${savedPixelSummary} · ${dirty?`${draft.length}개 미저장 획`:'미저장 획 없음'}`;
  $('pixel-approve').reason='';
  const rows=visible(),pos=rows.findIndex(row=>row.index===frame?.index);
  for(const [id,available] of [['pixel-prev',pos>0],['pixel-next',pos>=0&&pos<rows.length-1],['pixel-next-pending',workspace?.frames.some(row=>row.pixel_status==='pending'&&row.status!=='excluded'&&row.index!==frame?.index)]]){$(id).disabled=busy||!!stroke||dirty||selection||!ready||!available;$(id).reason=!available?id==='pixel-next-pending'?'다른 검수 대기 사진이 없습니다.':'현재 필터에서 더 이동할 사진이 없습니다.':busy||stroke||dirty||selection?'현재 초안을 적용하거나 버린 뒤 이동하세요.':'';}
@@ -142,12 +161,14 @@ function overlay(){ // Recoloured mask layer (D-469): rebuild when frame, versio
   if(overlayCanvas&&overlayKey===key)return overlayCanvas;
   const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;
   const other=off.getContext('2d');other.drawImage(maskImage,0,0);
-  const data=other.getImageData(0,0,off.width,off.height),colors=palette();const opacity=Number($('pixel-opacity').value)/100;let unknown=0;
-  for(let i=0;i<data.data.length;i+=4)if(data.data[i]===255)unknown++;
+  const data=other.getImageData(0,0,off.width,off.height),colors=palette();const opacity=Number($('pixel-opacity').value)/100,counts=new Map();let unknown=0;
+  for(let i=0;i<data.data.length;i+=4){const value=data.data[i];counts.set(value,(counts.get(value)||0)+1);if(value===255)unknown++;}
   const rare=unknown>0&&unknown*100<off.width*off.height;
   for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(!color||(value===255&&!$('pixel-show-unknown').checked)){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=value===255&&rare?255:Math.round(opacity*(value===255?180:255));}
   unknownPixels=unknown;totalPixels=off.width*off.height;
   $('pixel-coverage').textContent=`${workspace.workspace_kind==='evaluation'?'255 가림 후보':'미검수'} ${unknown.toLocaleString()}픽셀 / ${(off.width*off.height).toLocaleString()}픽셀 (${rare?'<1':Math.round(unknown/(off.width*off.height)*100)}%)`;
+  savedPixelSummary=`픽셀 ${states[review.status]} · 저장 v${review.version} · 후보 ${review.draft_candidates?.length||0}개 · ${review.classes?.classes.map(cls=>`${className(cls)} ${Number(counts.get(cls.index)||0).toLocaleString()}`).join(' · ')||'클래스 미연결'}`;
+  pixelResult.textContent=`${savedPixelSummary} · ${draft.length?`${draft.length}개 미저장 획`:'미저장 획 없음'}`;
   other.putImageData(data,0,0);overlayCanvas=off;overlayKey=key;return off;
 }
 function sampleOverlay(){if(!sampleImage)return null;const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;const ctx=off.getContext('2d');ctx.drawImage(sampleImage,0,0);const data=ctx.getImageData(0,0,off.width,off.height),colors=palette(),opacity=Number($('pixel-opacity').value)/100;for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255||!color){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*255);}ctx.putImageData(data,0,0);return off;}
@@ -166,7 +187,7 @@ function paint(){if(!ready)return;const canvas=$('pixel-canvas'),ctx=canvas.getC
   const radius=Math.max(3,5*canvas.width/Math.max(1,canvas.getBoundingClientRect().width));ctx.lineWidth=Math.max(2,radius/2);for(const [x,y] of seeds){ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.fillStyle=cssColor('--ink');ctx.fill();ctx.strokeStyle=cssColor('--ground');ctx.stroke();}
 }
 async function loadVlm(index,ticket){const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');state.setAttribute('state','pending');state.textContent='현재 저장된 마스크의 AI 의견을 확인하는 중입니다.';note.textContent='';try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial)return;if(!value.available){state.textContent='아직 이 사진의 AI 확인 결과가 없습니다.';return;}if(!value.current){state.setAttribute('state','warning');state.textContent='마스크가 바뀌어 AI 의견이 오래됐습니다. 새 검사가 필요합니다.';return;}const labels={concern:'검토할 부분 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};state.setAttribute('state',value.review_blocked||value.feedback.verdict==='concern'?'warning':'ready');state.textContent=`${labels[value.feedback.verdict]} · 255 미검수 ${value.unknown_pixels.toLocaleString()}픽셀`;note.textContent=value.feedback.note;}catch{if(ticket!==serial)return;state.setAttribute('state','warning');state.textContent='AI 의견을 불러오지 못했습니다. 원본과 마스크를 직접 확인하세요.';}}
-async function select(index){const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
+async function select(index){const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
  $('review-history-summary').textContent='검수 기록을 불러오는 중…';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
    .catch(()=>{if(ticket===serial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.';});
@@ -221,6 +242,7 @@ canvas.onpointermove=event=>{if(!stroke){brushAt(event);return;}brush.hidden=tru
 canvas.onpointerup=event=>{if(!stroke||stroke.id!==event.pointerId)return;const finished=stroke;stroke=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);draft.push(finished);paint();enable();};
 function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);paint();enable();}canvas.onpointercancel=cancel;canvas.onlostpointercapture=cancel;canvas.addEventListener('pointerleave',()=>{brush.hidden=true;});
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){event.preventDefault();cancel();}else if(event.key==='Escape'&&polygon.length){event.preventDefault();polygon=[];paint();enable();}else if(event.key==='Escape'&&seeds.length){event.preventDefault();clearSamples();}
+   if(event.code==='KeyZ'&&(event.ctrlKey||event.metaKey)&&!event.shiftKey&&!event.isComposing&&!event.target?.matches?.('input, textarea, select, [contenteditable]')&&!event.repeat&&!$('pixel-undo').disabled){event.preventDefault();$('pixel-undo').click();return;}
   // Arrow keys move between photos; number fields keep their native stepping.
   if((event.key==='ArrowLeft'||event.key==='ArrowRight')&&!['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)){
     const button=$(event.key==='ArrowLeft'?'pixel-prev':'pixel-next');

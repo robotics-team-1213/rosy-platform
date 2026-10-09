@@ -221,3 +221,60 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
   #pixel-radius { max-width: 100%; }
   #pixel-prev, #pixel-next { min-width: 0; }
 }
+
+/* D-542: keep the photo and its current result ahead of secondary controls. */
+.workspace > #editor { order: 0; }
+.workspace > .photo-sidebar { order: 1; }
+#editor, #pixel-main { padding-top: var(--space-3); }
+#pixel-main { position: relative; }
+#pixel-title { padding-right: 8rem; margin-bottom: 0; }
+#pixel-reload { position: absolute; top: var(--space-3); right: var(--space-5); }
+#frame-progress { margin-top: 0; }
+#review-content { display: flex; flex-direction: column; }
+#review-content > .frame-heading { order: 0; }
+#review-content > .frame-navigation { order: 1; }
+#review-content > .review-layout { order: 2; }
+#review-content > .review-flow { order: 3; }
+#review-content > .preparation { order: 4; }
+.review-stage > .review-editor-canvas, .pixel-editor-column > section { grid-column: 2; grid-row: 1; }
+.review-stage > .review-editor-tools, .pixel-editor-column > .pixel-quick-tools { grid-column: 1; grid-row: 1; }
+.review-editor-canvas > .review-view-bar { margin-bottom: var(--space-2); }
+.review-editor-canvas > .review-view-bar, .pixel-editor-column .review-view-bar { flex-wrap: nowrap; overflow-x: auto; }
+.review-editor-canvas > .review-view-bar > *, .pixel-editor-column .review-view-bar > * { flex: none; }
+.review-editor-canvas .review-viewport-controls, .pixel-editor-column .review-viewport-controls { margin-inline-start: 0; }
+.review-result { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--series-primary); background: var(--ground-deep); font-size: var(--text-label); line-height: var(--leading-copy); font-variant-numeric: tabular-nums; }
+.review-result-note { margin: var(--space-2) 0; color: var(--status-warn); font-size: var(--text-label); line-height: var(--leading-copy); }
+.review-editor-canvas > .review-class-row, .pixel-editor-column section > .pixel-quick-classes { display: flex; flex-wrap: nowrap; gap: var(--space-2); max-height: none; overflow-x: auto; overflow-y: hidden; padding-bottom: var(--space-2); }
+#pixel-content > .ui-workspace-bar, #pixel-content > .review-flow, #pixel-content > .pixel-frame-strip { margin-top: var(--space-4); }
+.pixel-editor-column .pixel-ribbon-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-1); }
+.pixel-editor-column .pixel-ribbon-nav ui-button { flex: 1; min-width: 0; }
+.frame-navigation ui-button > small[data-reason], .pixel-ribbon-nav ui-button > small[data-reason] { display: none; }
+.pixel-editor-column .review-view-bar { margin-bottom: var(--space-2); }
+#pixel-view-status { margin-bottom: 0; }
+.pixel-editor-column .pixel-vlm-feedback { margin-top: var(--space-3); }
+#pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
+@media (width < 64rem) {
+  .review-stage, .pixel-editor-column { display: flex; flex-direction: column; }
+  .review-editor-canvas, .pixel-editor-column > section { width: 100%; }
+  .review-editor-tools, .pixel-quick-tools { width: 100%; margin-top: var(--space-3); }
+}
+@media (width < 40rem) {
+  #editor, #pixel-main { padding: var(--space-3); }
+  #pixel-reload { right: var(--space-3); }
+  #frame-progress { margin-top: 0; }
+  .frame-navigation { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); margin-block: 0 var(--space-1); }
+  .frame-navigation ui-button { width: 100%; min-width: 0; font-size: var(--text-label); }
+  .frame-navigation ui-button > span, .pixel-ribbon-nav ui-button > span,
+  .review-editor-tools .toolbar ui-button > span, .pixel-quick-actions ui-button > span { display: none; }
+  .frame-navigation ui-button, .pixel-ribbon-nav ui-button,
+  .review-editor-tools .toolbar ui-button, .pixel-quick-actions ui-button { justify-content: center; }
+  #next-pending::after { content: 'N'; font: var(--text-micro) var(--mono); }
+  .frame-navigation [data-spacer] { display: none; }
+  .pixel-editor-column .pixel-ribbon-nav ui-button { font-size: var(--text-label); }
+  .review-editor-canvas > .review-view-bar, .pixel-editor-column .review-view-bar { gap: var(--space-1); }
+  .review-viewport-controls { margin-inline-start: 0; }
+  .review-result { margin-block: var(--space-2); }
+  .image-stage, .pixel-stage { padding: var(--space-2); }
+  #pixel-main > h2 { margin-bottom: var(--space-2); }
+  .pixel-editor-column .pixel-ribbon-nav, .pixel-editor-column .review-view-bar { margin-bottom: var(--space-1); }
+}
