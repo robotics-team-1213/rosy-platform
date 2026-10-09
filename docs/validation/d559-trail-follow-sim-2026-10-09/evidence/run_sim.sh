@@ -13,8 +13,10 @@ NAME=${1:-r1}
 PORT=${PORT:-8130}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$WS" || exit 1
+# ENV_SCRIPT: a host without system Gazebo/Nav2 (AI PC) sources its user-space overlay instead.
+if [ -n "$ENV_SCRIPT" ]; then source "$ENV_SCRIPT"; else source /opt/ros/jazzy/setup.bash; fi
 export PATH=/usr/bin:/bin:$PATH
-source /opt/ros/jazzy/setup.bash; source install/setup.bash
+source install/setup.bash
 export PYTHONPATH=$WS/pydeps:$WS/src/rosy-platform/operations/fleet:$WS/pyfleet:$WS/pyextra:$PYTHONPATH
 # The `rosy.*` namespace packages (rosy.contracts.motion, ...) live in */src/rosy dirs, not colcon.
 for d in $(find -L "$WS/src/rosy-platform" -path '*/.worktrees' -prune -o -type d -name rosy -path '*/src/rosy' -print); do
@@ -31,7 +33,7 @@ done
 sleep 4
 ros2 launch gz_sim gz_multi.launch.py robots:=2 mode:=nav core:=true headless:=true \
   world_name:=rosy_swarm_bench.world spawn_poses:="-1.8,-2.2,0;-2.4,-2.2,0" \
-  api_port_base:=$PORT nav_composition:=true > "$RUN/launch.log" 2>&1 &
+  api_port_base:=$PORT nav_composition:=${NAV_COMPOSITION:-true} loc_assist:=${LOC_ASSIST:-true} > "$RUN/launch.log" 2>&1 &
 LPID=$!
 cat > "$RUN/robots.yaml" <<YAML
 robots:
@@ -43,7 +45,8 @@ chmod 600 "$RUN/robots.yaml"
 uptime > "$RUN/ready.txt"
 python3 "$HERE/trail_sim.py" --robots "$RUN/robots.yaml" --out "$RUN" "${@:2}" > "$RUN/driver.log" 2>&1
 echo "driver exit $?" >> "$RUN/driver.log"
-python3 "$HERE/analyze.py" "$RUN" > "$RUN/analyze.log" 2>&1
+# system numpy/matplotlib, not the pydeps copy
+env -u PYTHONPATH /usr/bin/python3 "$HERE/analyze.py" "$RUN" > "$RUN/analyze.log" 2>&1
 kill $LPID
 sleep 3
 for p in $(pgrep -u "$(id -u)"); do

@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 
 import websockets
+from core_common.protocol.localization import DecisionSource, LocalizationDecision
 from core_common.protocol.schemas import SwarmFollowParams
 from fleet.bench import (Formation, FormationSession, FormationSpec, HttpRobotClient,
                          SessionState, load_robots)
@@ -172,6 +173,23 @@ async def main_async(args) -> int:
             mark("cut", "relay_resume")
             session.relay.resume()
 
+    decided: set = set()
+
+    async def decide(rid, client, gt):
+        """D-395: the answer to CANDIDATES. The SIM stands in for the operator who sees the robot
+        (source human; the bench has no square/paint/peer cue): it picks the robot's own candidate
+        nearest to Gazebo truth, never a made-up pose."""
+        report = await client.localization_candidates()
+        if report is None or report.request_id in decided:
+            return
+        best = min(range(len(report.candidates)), key=lambda i: math.hypot(
+            report.candidates[i].x - gt[0], report.candidates[i].y - gt[1]))
+        decided.add(report.request_id)
+        reply = await client.localization_decision(LocalizationDecision(
+            request_id=report.request_id, candidate_index=best, source=DecisionSource.HUMAN,
+            evidence={"sim_truth": [round(v, 3) for v in gt]}))
+        mark("decision", rid, candidate=best, n=len(report.candidates), reply=reply)
+
     cut = {"done": False, "run": cut_stream}
     swarm_fh = (out / "swarm.jsonl").open("w", encoding="utf-8")
     stop = asyncio.Event()
@@ -190,16 +208,26 @@ async def main_async(args) -> int:
 
     try:
         # Both APIs up, localization LOCALIZED in map (or no D-395 state), then truth flowing.
-        for _ in range(300):
+        locs = None
+        for k in range(300):
             try:
                 states = [await c.state() for c in clients.values()]
                 locs = [s.get("localization") for s in states]
-                if all(loc is None or (loc.get("state") == "LOCALIZED" and loc.get("pose_frame") == "map")
+                if all(loc and loc.get("state") == "LOCALIZED" and loc.get("pose_frame") == "map"
                        for loc in locs):
                     break
-            except Exception:  # noqa: BLE001 - CORE still starting
-                pass
+                if k >= 60 and all(loc is None for loc in locs):
+                    break  # no D-395 localization state on this CORE: the follow gate is open
+                for rid, loc in zip(clients, locs):
+                    if loc and loc.get("state") == "CANDIDATES" and rid in truth.latest:
+                        await decide(rid, clients[rid], truth.latest[rid])
+            except Exception as exc:  # noqa: BLE001 - CORE still starting
+                if k % 10 == 0:
+                    mark("wait", repr(exc)[:200])
             await asyncio.sleep(1.0)
+        mark("localization", [None if loc is None else {key: loc.get(key) for key in
+                                                         ("state", "pose_frame", "reason")}
+                              for loc in (locs or [])])
         # Nav2/AMCL start 15 s after launch: wait until both CORE poses are map frame (D-559 field).
         frames = None
         for _ in range(240):
