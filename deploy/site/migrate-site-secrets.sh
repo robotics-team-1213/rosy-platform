@@ -17,9 +17,12 @@ run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
 if [ -d "$OLD" ] && [ ! -L "$OLD" ]; then
   [ ! -e "$NEW" ] || { echo "both $OLD and $NEW exist; merge by hand" >&2; exit 1; }
   run mv "$OLD" "$NEW"
+fi
+# After a crash between mv and ln the rerun lands here: link whenever the old path is gone.
+if [ -d "$NEW" ] && [ ! -e "$OLD" ] && [ ! -L "$OLD" ]; then
   run ln -s "$NEW" "$OLD"
 fi
 if [ -f "$ENVF" ] && grep -q '^ROSY_SITE_SECRETS_DIR=' "$ENVF"; then
-  run sed -i "s#^ROSY_SITE_SECRETS_DIR=.*#ROSY_SITE_SECRETS_DIR=$NEW#" "$ENVF"
+  run sed -i --follow-symlinks "s#^ROSY_SITE_SECRETS_DIR=.*#ROSY_SITE_SECRETS_DIR=$NEW#" "$ENVF"
 fi
 echo "secrets dir: $NEW"

@@ -611,9 +611,14 @@ config directory, Vision (uid 10001, accepts phone uploads) mounts only
 (`registry_token`, `discovery_token` and `robot_credential_key` are Fleet only;
 `test_vision_cannot_reach_fleet_secrets` pins this). A site that still has
 `/etc/rosy/site/secrets` runs `sudo sh deploy/site/migrate-site-secrets.sh`
-(`--dry-run` first), then restarts `rosy-site-stack.service`; the script moves the
+(`--dry-run` first), then restarts `rosy-site-stack.service`. Run it before (or right after) installing a
+candidate with these changes; hosts that update first keep working because the
+mdns-bridge and model-watch units, preflight and functional setup fall back to
+the old path while the new directory is missing. The script moves the
 directory, sets `ROSY_SITE_SECRETS_DIR` in `site.env` and leaves a symlink at the
-old path for host units that are not updated yet. Copy
+old path for host units that are not updated yet. Vision bind-mounts the single
+file `site-cameras.yaml`: after replacing it atomically (write a temp file, then
+rename) restart Vision, because the container keeps the old inode. Copy
 `site-cameras.yaml.example`, `robots.yaml.example`, and
 `site-users.yaml.example` there, then replace every map/calibration/device
 placeholder with reviewed site data. `robots.yaml` contains CORE credentials

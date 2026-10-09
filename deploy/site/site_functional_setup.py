@@ -105,6 +105,12 @@ def replace(path, entry):
         Path(temporary).unlink(missing_ok=True)
 
 
+def _secret(name):
+    """New secrets dir; the pre-migration one while migrate-site-secrets.sh has not run."""
+    new = Path('/etc/rosy/site-secrets')
+    return (new if new.is_dir() else Path('/etc/rosy/site/secrets')) / name
+
+
 class Transaction:
     """Recover config-only changes; refuse to overwrite any unknown concurrent edit."""
 
@@ -212,7 +218,7 @@ class Host:
         self.command(['docker', 'restart', 'rosy-site-fleet-1'])
 
     def guard(self):
-        operator = Path('/etc/rosy/site-secrets/operator.token')
+        operator = _secret('operator.token')
         control = self.get('/api/fleet/dispatch-control', operator)
         if control.get('queued_tasks') != 0 or control.get('unresolved_actions') != 0:
             raise ValueError('site has queued or unresolved work; setup deferred')
@@ -276,7 +282,7 @@ def main(argv=None):
     from site_update_io import Paths, load_config, read_env, run_lock
     from rosy_site_autoupdate import SiteUpdater
     paths = Paths()
-    targets = {'token': Path('/etc/rosy/site-secrets/site-update-viewer.token'),
+    targets = {'token': _secret('site-update-viewer.token'),
                'users': Path('/etc/rosy/site/site-users.yaml'), 'config': paths.config}
     journal = Path('/var/lib/rosy/site-functional-setup.json')
     receipt = Path('/var/lib/rosy/site-functional-setup-receipt.json')
@@ -312,7 +318,7 @@ def main(argv=None):
         code = 'import sys,json,yaml;print(json.dumps(yaml.safe_load(sys.stdin.buffer.read())))'
         users = json.loads(host.command(['docker', 'exec', '-i', '--user', '0:0',
                                         'rosy-site-fleet-1', 'python3', '-I', '-c', code], input=raw_users))
-        operator = Path('/etc/rosy/site-secrets/operator.token')
+        operator = _secret('operator.token')
         token_entry = snapshot(operator)
         if not token_entry or token_entry['uid'] != 0 or token_entry['mode'] & 0o077:
             raise ValueError('setup operator credential must be root-only')

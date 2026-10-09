@@ -1,5 +1,6 @@
 """D-524 Service Control. No network and no real shutdown."""
 
+import json
 import os
 import re
 import shutil
@@ -143,6 +144,18 @@ def test_vision_cannot_reach_fleet_secrets():
     for forbidden in ("registry_token", "discovery_token", "robot_credential_key"):
         assert forbidden not in services["vision"]["secrets"]
         assert forbidden not in services["proxy"]["secrets"]
+    # Every credential path an app reads names a secret the service itself is given.
+    pairing = yaml.safe_load((SITE / "compose.pairing.yaml").read_text(encoding="utf-8"))
+    for name in ("fleet", "vision"):
+        paths = json.loads(services[name]["environment"]["ROSY_CREDENTIAL_PATHS"]).values()
+        extra = pairing["services"][name]["environment"]["ROSY_CREDENTIAL_PATHS"]
+        paths = list(paths) + list(json.loads(extra).values())
+        allowed = {"/run/secrets/" + s for s in own[name] | {"pairing_sync_token"}}
+        assert set(paths) <= allowed, name
+        assert {Path(p).name for p in paths}.isdisjoint(
+            {"robot_credential_key"} if name == "vision" else set()), name
+    for source in list(compose["secrets"].values()) + list(pairing["secrets"].values()):
+        assert source["file"].startswith("${ROSY_SITE_SECRETS_DIR:?"), source
     pairing = yaml.safe_load((SITE / "compose.pairing.yaml").read_text(encoding="utf-8"))
     assert pairing["services"]["vision"].get("volumes") is None
     for name in ("fleet", "vision"):
