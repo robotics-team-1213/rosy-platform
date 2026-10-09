@@ -369,7 +369,7 @@ class EnrollmentService:
                 # D-555: never the digest itself.
                 "hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
                 "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
-                "hub_linkable": self._hub_link is not None and self._tls_bound(row["robot_id"]),
+                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
                 "static_robot_ids": sorted(self._roster.static_ids), "robots": robots,

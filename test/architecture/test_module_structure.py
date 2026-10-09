@@ -185,8 +185,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_539,
-        "split: re-judged at 47539 on 2026-10-09 (author's record; needs an independent re-judge): D-555 (+212 over 47327) enrolled-robot hub link (server/enrollment.py link_hub/unlink_hub, hub digest check, CLI flags, console control) on top of the D-550 10 goal lease; robots get a hub credential only over the TLS-bound enrollment, no robot command path or package owner is added; +150 allowance unchanged, measured from 47539. Previously re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        47_595,
+        "split: re-judged at 47595 on 2026-10-09 (author's record; needs an independent re-judge): D-555 (+268 over 47327, incl. the security-review fixes) enrolled-robot hub link (server/enrollment.py link_hub/unlink_hub, hub digest check, CLI flags, console control) on top of the D-550 10 goal lease; robots get a hub credential only over the TLS-bound enrollment, no robot command path or package owner is added; +150 allowance unchanged, measured from 47595. Previously re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
         "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
         "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
         "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
@@ -577,8 +577,8 @@ SIZE_VERDICTS = {
         "grows past 800",
     ),
     "fleet/fleet/server/enrollment.py": (
-        885,
-        "accept: re-judged 2026-10-09 at 885 (author's verdict; needs an independent re-judge) when "
+        932,
+        "accept: re-judged 2026-10-09 at 932 (author's verdict; needs an independent re-judge) when "
         "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
         "client, so it stays with that state machine. Past HARD_TIER (1000) it splits: the hub link moves "
         "into its own module. Before: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
