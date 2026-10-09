@@ -21,7 +21,7 @@ on:
         description: Payload builder image pinned by digest (build-payload-builder.yml)
         required: true
         type: string
-        default: ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:PENDING
+        default: ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:01aa35089dd1a392d41b04678f5dd0bbea569d727162d121ead9ad61097d6762
 
 permissions:
   contents: read
