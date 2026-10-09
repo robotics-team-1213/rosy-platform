@@ -84,7 +84,7 @@ test('invalid draft errors list the fields', async () => {
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStatusText, tripStartReason, tripCancelReason} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {tripStatusText, tripStartReason} = await import('../../fleet/server/web/shared/site-map-model.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
@@ -101,8 +101,6 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
-  assert.equal(tripCancelReason({role: 'operator', running: trip}), '');
-  assert.match(tripCancelReason({role: 'operator', running: null}), /없습니다/);
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {

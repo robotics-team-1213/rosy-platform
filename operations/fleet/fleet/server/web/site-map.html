@@ -72,7 +72,7 @@
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
       </div>
-      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
       <details class="plane-tools">
         <summary>평면 영상 도구 · 표시 전용</summary>
         <div class="plane-tools-body">
@@ -100,17 +100,8 @@
       </ui-section>
       <ui-section aria-labelledby="run-heading">
         <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
-        <ui-text>계산한 경로를 30초 안에 출발시킵니다. 로봇마다 운행 하나입니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
         <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
-        <label><span id="trip-start-label">고른 로봇의 출발 자리</span><select class="ui-field" id="trip-start-place"></select></label>
-        <label>대열 리더<select class="ui-field" id="trip-leader"><option value="">대열 없음 · 혼자 반복 운행</option></select></label>
-        <ui-status id="trip-loop" state="empty">반복 운행 없음</ui-status>
-        <div class="actions">
-          <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>
-          <ui-button id="trip-repeat" kind="primary" disabled reason="관제 접속이 필요합니다">반복 운행 시작</ui-button>
-          <ui-button id="trip-confirm" kind="quiet" hidden>바뀐 경로로 계속</ui-button>
-          <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
-        </div>
+        <a id="trip-console-link" href="/console">운행은 관제의 로봇 카드에서</a>
       </ui-section>
       <ui-section aria-labelledby="edit-heading">
         <ui-head><ui-text id="edit-heading" scale="label">초안 편집</ui-text></ui-head>
