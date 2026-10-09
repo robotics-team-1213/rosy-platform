@@ -10,7 +10,11 @@ see host-guard.conf.example) lists one host per line:
 A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
 the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
 GUARD_BAD_CHECKS bad answers in a row -> restart the watched user units that are down (or reboot
-when none are down); still bad at twice that count -> reboot. Never inside the host's quiet
+when none are down); still bad at twice that count -> reboot. High load alone is only reported
+(training is legitimately heavy); it counts only together with memory pressure or a down unit.
+At most GUARD_MAX_REBOOTS reboots per host until a healthy check, and GUARD_REBOOT_MIN_GAP_S
+between two (persisted in status.json). A refused restart or reboot is logged as refused and the
+ladder does not advance as if it had worked. Never inside the host's quiet
 window (its nightly reboot; a reboot whose +10 min lands in the window is not sent), never within GUARD_MIN_UPTIME_S of boot. An unreachable pc is only
 logged: the hardware watchdog and the host-local rosy-ssh-watchdog own that case. Robots are only
 probed on their CORE port; their recovery belongs to D-412 and the rosy-* units.
@@ -37,6 +41,8 @@ MIN_AVAIL_PCT = int(os.environ.get("GUARD_MIN_AVAIL_PCT", "3"))
 MAX_SWAP_PCT = int(os.environ.get("GUARD_MAX_SWAP_PCT", "80"))
 MAX_LOAD_PER_CORE = float(os.environ.get("GUARD_MAX_LOAD_PER_CORE", "4"))
 MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
+MAX_REBOOTS = int(os.environ.get("GUARD_MAX_REBOOTS", "2"))
+REBOOT_MIN_GAP_S = int(os.environ.get("GUARD_REBOOT_MIN_GAP_S", "3600"))
 REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
 
 
@@ -51,14 +57,29 @@ def in_quiet(window: str, now: str) -> bool:
     return start <= now < end if start <= end else (now >= start or now < end)
 
 
-def ssh(target: str, command: str) -> str | None:
+def ssh_run(target: str, command: str) -> subprocess.CompletedProcess | None:
     cmd = ["ssh", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
            "-o", "ServerAliveInterval=10", "-o", f"UserKnownHostsFile={KNOWN}", target, command]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired:
         return None
-    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def ssh(target: str, command: str) -> str | None:
+    result = ssh_run(target, command)
+    return result.stdout.strip() if result is not None and result.returncode == 0 else None
+
+
+def remote_action(name: str, target: str, command: str, reason: str) -> bool:
+    """Run restart/reboot through the forced command. Logs what really happened; True when accepted."""
+    result = ssh_run(target, command)
+    if result is not None and result.returncode == 0:
+        act(name, command, reason)
+        return True
+    detail = "timeout" if result is None else f"rc={result.returncode} {result.stderr.strip()[:200]}"
+    act(name, f"{command} refused", f"{detail}; {reason}")
+    return False
 
 
 def tcp_ok(address: str) -> bool:
@@ -87,61 +108,81 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
         entry["state"] = "unreachable"
         print(f"{name}: unreachable (watchdog's job if it froze)", flush=True)
         return
-    fields = answer.split()
+    fields = answer.split()  # a malformed reply raises here, before any counter changes
     avail, swap, load, cores, uptime = int(fields[0]), int(fields[1]), float(fields[2]), int(fields[3]), int(fields[4])
     down = [] if len(fields) < 6 or fields[5] == "-" else fields[5].split(",")
     reasons = []
     if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
         reasons.append(f"memory avail {avail}% swap {swap}%")
-    if load > cores * MAX_LOAD_PER_CORE:
-        reasons.append(f"load {load}/{cores} cores")
     if down:
         reasons.append("down " + ",".join(down))
+    high_load = load > cores * MAX_LOAD_PER_CORE
     if not reasons:
-        entry.update(state="ok", bad=0, restarted=False)
+        entry.update(state="load-high" if high_load else "ok", bad=0, restarted=False, reboots=0)
+        if high_load:
+            print(f"{name}: load {load}/{cores} cores (report only)", flush=True)
         return
+    if high_load:
+        reasons.append(f"load {load}/{cores} cores")
     entry["bad"] = entry.get("bad", 0) + 1
     entry["state"] = "bad"
     reason = f"{entry['bad']}/{BAD_CHECKS}: " + "; ".join(reasons)
     print(f"{name}: unhealthy {reason}", flush=True)
     if entry["bad"] >= BAD_CHECKS and down and not entry.get("restarted"):
-        for unit in down:
-            ssh(target, f"restart {unit}")
-            act(name, f"restart {unit}", reason)
-        entry["restarted"] = True
-    elif entry["bad"] >= BAD_CHECKS * (2 if entry.get("restarted") else 1):
+        # restarted stays False when every restart was refused, so the ladder goes on to a reboot
+        entry["restarted"] = any([remote_action(name, target, f"restart {unit}", reason) for unit in down])
+        if entry["restarted"]:
+            return
+    if entry["bad"] >= BAD_CHECKS * (2 if entry.get("restarted") else 1):
         if uptime < MIN_UPTIME_S:
             print(f"{name}: would reboot, but it booted {uptime}s ago", flush=True)
             return
         if in_quiet(quiet, plus_minutes(now_hhmm(), REBOOT_DELAY_MIN)):
             print(f"{name}: would reboot, but the delayed reboot lands in its nightly window", flush=True)
             return
-        ssh(target, "reboot")
-        act(name, "reboot", reason)
-        entry.update(bad=0, restarted=False)
+        if entry.get("reboots", 0) >= MAX_REBOOTS:
+            print(f"{name}: rebooted {entry['reboots']} times without recovery; no reboot", flush=True)
+            return
+        if time.time() - entry.get("last_reboot", 0) < REBOOT_MIN_GAP_S:
+            print(f"{name}: rebooted recently; no reboot", flush=True)
+            return
+        if remote_action(name, target, "reboot", reason):
+            entry.update(bad=0, restarted=False, reboots=entry.get("reboots", 0) + 1, last_reboot=int(time.time()))
 
 
 def main() -> int:
     STATE.mkdir(parents=True, exist_ok=True)
     status_file = STATE / "status.json"
-    status = json.loads(status_file.read_text(encoding="utf-8")) if status_file.exists() else {}
+    try:
+        status = json.loads(status_file.read_text(encoding="utf-8")) if status_file.exists() else {}
+        if not isinstance(status, dict):
+            raise ValueError("status.json is not an object")
+    except (OSError, ValueError) as exc:
+        # A corrupt state file must not stop the guard for good: start clean. The
+        # reboot cap restarts too, but the 1 h gap is re-learned from the next reboot.
+        print(f"rosy-host-guard: unreadable {status_file} ({exc}); starting from empty state", file=sys.stderr)
+        status = {}
     now = now_hhmm()
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()
         if not line:
             continue
-        name, kind = line[0], line[1]
-        entry = status.setdefault(name, {})
-        if kind == "robot":
-            entry["state"] = "ok" if tcp_ok(line[2]) else "unreachable"
-        elif kind == "pc":
-            if in_quiet(line[3], now):
-                entry["state"] = "quiet"
+        entry = status.setdefault(line[0], {})
+        try:
+            name, kind = line[0], line[1]
+            if kind == "robot":
+                entry["state"] = "ok" if tcp_ok(line[2]) else "unreachable"
+            elif kind == "pc":
+                if in_quiet(line[3], now):
+                    entry["state"] = "quiet"
+                else:
+                    check_pc(name, line[2], line[3], entry)
             else:
-                check_pc(name, line[2], line[3], entry)
-        else:
-            print(f"{name}: unknown kind {kind}", flush=True)
-            continue
+                print(f"{name}: unknown kind {kind}", flush=True)
+                continue
+        except Exception as exc:  # one bad line or reply must not stop the other hosts
+            entry["state"] = "error"
+            print(f"{line[0]}: check failed: {exc!r}", flush=True)
         entry["time"] = int(time.time())
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")

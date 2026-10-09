@@ -26,6 +26,12 @@
 
 같은 시각 ROS 노드 목록에 `line_observer_node`는 있고 `learned_lane_node`는 없었다. 이는 이 구독 창에서 학습 도색이 사용되지 않았다는 증거다. 앞의 한 프레임 `corner_right`가 이 창에도 계속 나왔다고 말할 수는 없다. 토픽 관측은 로봇 이동·차로 위치·명령 수용을 기록하지 않았으므로 84/84 HOLD를 주행 성공 또는 실패율로 세지 않는다.
 
+### 지도 자세 선행 조건 재확인
+
+04:30 UTC에 두 장치에서 읽기 전용으로 재확인했다. 모두 `ROSY_RUNTIME_MODE=motor`, `rosy-navigation`과 `rosy-localization`은 inactive이고 `/var/lib/rosy/maps` 아래 파일은 0개였다. 일반 계정의 설정 파일 읽기는 권한 거부였으므로 허용된 `sudo -n`으로 해당 값과 파일 수만 다시 읽었다. 이 확인은 장치의 현재 지도·localization 준비가 없음을 보여 준다. Fleet의 같은 시각 `MapPose` 상태 자체는 조회하지 않았고, 앞선 [현장 Fleet 판독](../uiux-fleet-live-runtime-2026-10-09/result.md)은 02:41 UTC 이전에 두 로봇의 지도 위치와 실명 영상 식별이 없었다고 기록한다.
+
+[D-520 진입 오차 분리](../lane-arc-fit-observability-2026-10-09/result.md)는 NE의 약 15° 진입 방향 오차를 SIM에서 재현했고 참값으로 회전 지시를 바꾼 격리 실험에서 원호 오차가 약 5 mm로 줄었다. 참값 보정량을 현장 로봇에 복사할 수 없다. 현재 장치 상태에서는 Fleet 지도 자세로 회전 목표를 보정하는 실물 시험의 선행 조건이 충족되지 않는다. 지도·카메라 보정과 독립 자세 기준을 먼저 확보하고, 같은 시각과 odom epoch의 증거가 없으면 진입에서 HOLD해야 한다.
+
 ## 주행 로직 판단
 
 Fleet의 계획은 계속 활용한다. 이미 [D-520](../../adr/D-520-map-guided-ring-arc-following.md)은 선택한 `exit_segment`의 곡률·길이를 CORE의 원형 구간 주행 목표로 쓰고, 카메라 도색 점으로 그 호를 보정하는 단계 2를 정했다. [D-476](../../adr/D-476-lane-loss-expected-road-bridge.md)은 확신했던 차로가 잠깐 사라진 경우 최근 차로의 연장선과 Fleet 방향 힌트로 제한된 거리를 잇는 경로다. 둘 다 CORE의 장애물·바닥·몸 쓸기 판정과 단일 최종 `cmd_vel`을 통과해야 한다.
