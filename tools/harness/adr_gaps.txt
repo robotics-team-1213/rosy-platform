@@ -20,3 +20,8 @@ D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
 D-559 reserved in another active branch (swarm trail follow, feat/swarm-trail-follow); remove when it lands
 D-560 reserved in another active branch (fleet S2 capture); remove when it lands
+D-563 reserved in another active branch (drivable near-road false negative, map-pose labels); remove when it lands
+D-564 reserved in another active branch (ceiling place markers teach); remove when it lands
+D-565 reserved in another active branch (fleet TLS re-enroll after renumber); remove when it lands
+D-566 reserved in another active branch (v13.1.00 off-road gate, model PC long-job guard); remove when it lands
+D-567 reserved in another active branch (Fleet plan-synced floor boundary drive correction); remove when it lands

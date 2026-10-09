@@ -554,3 +554,4 @@
 | D-562 | 천장 마커 번호는 로봇 번호와 같다 — 로봇은 40–49번, 스티커는 40 mm, 검출기 둘레 하한 0.015 | Accepted (2026-10-09, 사용자 결정; SOURCE·호스트 테스트만, 기존 로봇 번호 바꾸기·스티커 부착은 별도 운영 단계) |
 | D-558 | drivable 모델은 불변 revision(D-532) 옆에 `model_version` `v<major>.<minor>.<patch:2자리>`를 붙인다: major=학습 계열(원본 자료 세대·부모 차선 모델), minor=라벨·출력·게이트 규칙, patch=같은 규칙의 재학습; 한 버전에 revision 하나, 원장 `drivable_versions.yaml`, intake가 형식·major·중복을 확인; 982b09a9=`v13.0.00`(rejected), D-554 9항 첫 후보=`v13.1.00` | Accepted (2026-10-09, 사용자 결정) |
 | D-561 | 모델 PC 검수 UI는 승인된 서명 코드 릴리스를 따라간다 | Accepted (2026-10-09, 사용자 요청; 모델 PC 자동 전환·현장 화면 검증 별도) |
+| D-568 | 계산 PC 풀: pytest·Gazebo를 모델 PC·AI PC·현장 PC 가운데 잰 여유(코어·메모리·잠금 `~/rosy-jobs`, 하한 pytest 2코어·6 GB, sim 6코어·8 GB)로 고름; 현장 PC는 맨 뒤·Fleet 몫 2코어·4 GB 제외·CPUQuota 400%·`busy` 표시면 거절, 모든 pytest는 MemoryMax 6G+nice 15+ionice idle, `--pick sim`, 노트북 제외; D-553 4·5항 고침 | Proposed (2026-10-09, 사용자 지시; SOURCE·호스트 테스트만, 호스트 설치·현장 PC Python 3.12 준비는 별도) |
