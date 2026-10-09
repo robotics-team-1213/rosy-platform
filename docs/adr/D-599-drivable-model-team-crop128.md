@@ -52,4 +52,4 @@
   - 3항 intake·승격 규칙(사용자 결정)
   - junction·로터리 장면이 적은 자료(README §8)의 보강
 
-**Related:** [D-378](D-378-real-drive-errors-and-autonomy-gates.md), [D-384](D-384-road-state-estimator-and-road-behaviour.md), [D-408](D-408-lane-paint-source-learned-floor-mask-with-opencv-fallback.md), [D-475](D-475-human-reviewed-fixed-eval-truth.md), [D-532](D-532-v13-drivable-model-lineage.md), [D-554](D-554-v13-drivable-lane-derived-labels.md), [D-558](D-558-drivable-model-semantic-version.md), D-576, D-592, D-597.
+**Related:** [D-378](D-378-real-drive-errors-and-autonomy-gates.md), [D-384](D-384-road-state-estimator-and-road-behaviour.md), [D-408](D-408-lane-paint-source-learned-floor-mask-with-opencv-fallback.md), [D-475](D-475-human-reviewed-fixed-eval-truth.md), [D-532](D-532-v13-drivable-model-lineage.md), [D-554](D-554-v13-drivable-lane-derived-labels.md), [D-558](D-558-drivable-model-semantic-version.md), [D-576](D-576-drivable-own-road-beyond-boundary-blocked.md), [D-592](D-592-drivable-steering-field-test-pc-loop.md), [D-597](D-597-drivable-keep-steering-source.md).

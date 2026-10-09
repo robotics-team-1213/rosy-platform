@@ -66,7 +66,7 @@ tags: [drivable, learned-paint, lane_marking_mask, consumer-path, authority-gap,
 ## Related
 
 - 모델 선택 ADR(이 브랜치): [D-599](../../adr/D-599-drivable-model-team-crop128.md)
-- D-592 drivable 실물 조향 시험(로봇/Fleet 루프, CORE teleop), D-597 drivable keep 조향 소스(`learned_paint_target`) — 둘 다 별도 브랜치에서 진행 중
+- [D-592](../../adr/D-592-drivable-steering-field-test-pc-loop.md) drivable 실물 조향 시험(로봇/Fleet 루프, CORE teleop), [D-597](../../adr/D-597-drivable-keep-steering-source.md) drivable keep 조향 소스(`learned_paint_target`)
 - [D-554](../../adr/D-554-v13-drivable-lane-derived-labels.md) 6항, [D-475](../../adr/D-475-human-reviewed-fixed-eval-truth.md) §8, [D-408](../../adr/D-408-lane-paint-source-learned-floor-mask-with-opencv-fallback.md), [D-209](../../adr/D-209-perception-folder-and-learned-backend.md)
 - [learned paint 프레임 수 게이트가 느린 마스크를 버린다](../logic-errors/learned-paint-frame-count-gate-drops-slow-masks-2026-10-10.md) — 소비 경로가 있어도 느리면 닿지 않는다
 - [모든 후보 모델을 장치 전에 SIM 폐루프로 시험한다](test-every-candidate-model-in-the-closed-loop-harness-before-device-2026-10-10.md)
