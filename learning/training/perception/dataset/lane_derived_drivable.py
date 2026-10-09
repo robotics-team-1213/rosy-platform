@@ -16,6 +16,7 @@ so these masks are never D-475 evaluation truth.
            --instructions FILE [--reviewed-manifest OLD/manifest.json [--drop-unreviewed]]
            reviewer jsonl {tile, verdict ok|concern|uncertain, reason}; refused below 0.9 canary concern
   finalize --out DIR   (drops concern/unreviewed frames, writes the judge block training requires)
+  union --parts DIR DIR [...] --out DIR   finalized D-554/D-563 sets -> one store-ready union (UNION_SCHEMA)
 
 Verdicts come only from import-verdicts: finalize, verify_dataset(finalized=True) and train_job
 require its canary block (count >= MIN_CANARIES, count/frames >= MIN_CANARY_FRACTION, rate >= 0.9).
@@ -54,6 +55,9 @@ SOURCE_SCHEMA = "pinky-lane-dataset-v1"
 # Schemas verify_dataset (and so sheets, import-verdicts, finalize, train_job) admits: this one and
 # D-563 map-projected labels (map_projected_drivable.py), each with its own origin and ADR.
 ADMITTED = {SCHEMA: (ORIGIN, ADR), "rosy.map-projected-drivable/1": ("map_projected", "D-563")}
+# A union of finalized ADMITTED datasets (union command): parts copied whole under parts/pN/, each
+# re-verified with its own schema; frames keep their part's annotation_origin and adr.
+UNION_SCHEMA = "rosy.drivable-union/1"
 IGNORE = 255
 DRIVABLE = 5
 # Parent v11 output order and roles (lane-seg-20261006-5f5ddcd9) + one final drivable class,
@@ -251,6 +255,8 @@ def verify_dataset(folder, *, finalized=False):
     ok or uncertain."""
     folder = Path(folder)
     doc = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    if doc.get("schema") == UNION_SCHEMA:
+        return _verify_union(folder, doc)
     if (ADMITTED.get(doc.get("schema")) != (doc.get("annotation_origin"), doc.get("adr"))
             or doc.get("evaluation_use") != "training_val_only"
             or doc.get("classes") != CLASSES or doc.get("ignore_index") != IGNORE):
@@ -275,6 +281,66 @@ def verify_dataset(folder, *, finalized=False):
             raise ValueError("D-554 dataset is not finalized: import reviewer verdicts, then finalize")
         _check_canaries(block["canaries"], len(frames) + len(block["dropped"]))
     return doc
+
+
+def _union_frames(folder, parts):
+    """(frames, part docs) rebuilt from the parts, each verified finalized under its own schema."""
+    frames, docs = [], []
+    for i, part in enumerate(parts):
+        path = folder / part["dir"]
+        if part["dir"] != f"parts/p{i}" or _sha((path / "manifest.json").read_bytes()) != part["manifest_sha256"]:
+            raise ValueError(f"union part {i} manifest differs")
+        doc = verify_dataset(path, finalized=True)
+        if doc["schema"] not in ADMITTED:
+            raise ValueError("a union part must be a D-554 or D-563 dataset")
+        docs.append(doc)
+        frames += [dict(f, image=f"{part['dir']}/{f['image']}", mask=f"{part['dir']}/{f['mask']}", part=i,
+                        annotation_origin=doc["annotation_origin"], adr=doc["adr"]) for f in doc["frames"]]
+    return frames, docs
+
+
+def _union_label(docs):
+    pairs = sorted({(d["annotation_origin"], d["adr"]) for d in docs})
+    return "+".join(p[0] for p in pairs), "+".join(p[1] for p in pairs)
+
+
+def _verify_union(folder, doc):
+    frames, docs = _union_frames(folder, doc.get("parts") or [])
+    if len(docs) < 2 or doc.get("frames") != frames:
+        raise ValueError("union frames differ from their parts")
+    if any(d["params"]["ignore_top"] != doc["params"]["ignore_top"] for d in docs):
+        raise ValueError("union parts disagree on ignore_top")
+    if ((doc.get("annotation_origin"), doc.get("adr")) != _union_label(docs) or doc.get("classes") != CLASSES
+            or doc.get("ignore_index") != IGNORE or doc.get("evaluation_use") != "training_val_only"):
+        raise ValueError("not a drivable union dataset")
+    return doc
+
+
+def union(parts, out, *, tool_commit=None):
+    """Finalized datasets -> one store-ready folder: parts copied under parts/pN/, frames concatenated."""
+    import shutil
+    out = Path(out)
+    if out.exists():
+        raise ValueError("new output directory required")
+    if len(parts) < 2:
+        raise ValueError("a union needs two or more datasets")
+    entries = []
+    for i, part in enumerate(parts):
+        verify_dataset(part, finalized=True)
+        shutil.copytree(part, out / f"parts/p{i}")
+        entries.append({"dir": f"parts/p{i}", "manifest_sha256": _sha((Path(part) / "manifest.json").read_bytes())})
+    frames, docs = _union_frames(out, entries)
+    tops = {d["params"]["ignore_top"] for d in docs}
+    if len(tops) != 1:
+        raise ValueError(f"parts disagree on ignore_top {sorted(tops)}")
+    origin, adr = _union_label(docs)
+    doc = {"schema": UNION_SCHEMA, "annotation_origin": origin, "adr": adr, "evaluation_use": "training_val_only",
+           "parts": entries, "source": [d["source"] for d in docs],
+           "tool": {"name": "lane_derived_drivable.py union", "git_commit": _git_commit(tool_commit)},
+           "params": {"ignore_top": tops.pop()},
+           "judge": {"parts": [{k: v for k, v in d["judge"].items() if k != "dropped"} for d in docs]},
+           "classes": CLASSES, "ignore_index": IGNORE, "frames": frames}
+    return _write_manifest(out, doc), doc
 
 
 def _check_canaries(block, frames):
@@ -542,6 +608,10 @@ def main(argv=None):
     p.add_argument("--instructions", type=Path, required=True)
     p = sub.add_parser("finalize")
     p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("union")
+    p.add_argument("--parts", type=Path, nargs="+", required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--tool-commit")
     args = parser.parse_args(argv)
     if args.command == "derive":
         digest, doc = derive(args.src, args.out, min_both_rows=args.min_both_rows, ignore_top=args.ignore_top,
@@ -554,6 +624,9 @@ def main(argv=None):
     elif args.command == "sheets":
         print(json.dumps(sheets(args.out, args.dest, args.key, per_sheet=args.per_sheet, seed=args.seed,
                                 canaries=args.canaries)))
+    elif args.command == "union":
+        digest, doc = union(args.parts, args.out, tool_commit=args.tool_commit)
+        print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]), "adr": doc["adr"]}))
     elif args.command == "import-verdicts":
         print(json.dumps(import_verdicts(args.out, args.sheets, args.key, args.verdicts, args.judge_name,
                                          args.instructions, reviewed_manifest=args.reviewed_manifest,

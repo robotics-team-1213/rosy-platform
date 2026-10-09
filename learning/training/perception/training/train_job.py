@@ -242,7 +242,8 @@ def _run(config, out, indexed_review, admission_stack):
                       and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources))
     # D-554: labels derived from reviewed lane masks admit only a drivable_head candidate.
     # D-563: map-projected labels are admitted the same way (verify_dataset + judge/canary finalize).
-    derived = dataset_doc.get("schema") in ("rosy.lane-derived-drivable/1", "rosy.map-projected-drivable/1")
+    derived = dataset_doc.get("schema") in ("rosy.lane-derived-drivable/1", "rosy.map-projected-drivable/1",
+                                            "rosy.drivable-union/1")
     if derived and not drivable_head:
         raise JobError("D-554 lane-derived datasets train only the drivable_head recipe")
     if drivable_head and not (indexed or derived):

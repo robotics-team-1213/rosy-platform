@@ -9,6 +9,13 @@ V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "
                    {"annotation_origin": "map_projected", "adr": "D-563"})
 
 
+def _v13_annotation_ok(dataset: dict) -> bool:
+    """One admitted pair, or a drivable union's '+'-joined pairs (each admitted)."""
+    origins, adrs = str(dataset.get("annotation_origin")).split("+"), str(dataset.get("adr")).split("+")
+    return len(origins) == len(adrs) and all({"annotation_origin": o, "adr": a} in V13_ANNOTATIONS
+                                             for o, a in zip(origins, adrs))
+
+
 def v13_lineage_error(doc: dict) -> str | None:
     """D-554: a v13-drivable manifest may pass intake and reach the lane_seg shadow slot only with
     parent lane model lineage, a content-addressed dataset and derived-lane annotation; else refuse."""
@@ -17,7 +24,7 @@ def v13_lineage_error(doc: dict) -> str | None:
             or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", str(parent.get("model_revision")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(parent.get("onnx_sha256")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(dataset.get("revision")))
-            or {k: dataset.get(k) for k in ("annotation_origin", "adr")} not in V13_ANNOTATIONS
+            or not _v13_annotation_ok(dataset)
             or doc.get("camera_provenance") not in ("accepted", "provisional")):
         return ("v13-drivable needs lane_seg parent_lane_model lineage, a 64-hex dataset revision, "
                 "dataset annotation_origin derived_from_reviewed_lanes (D-554) or map_projected (D-563) and a camera_provenance "

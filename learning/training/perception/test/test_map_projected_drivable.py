@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "training"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "model"))
 import lane_derived_drivable as ldd  # noqa: E402
 import map_projected_drivable as mpd  # noqa: E402
 from geometry import Camera, PoseSeries  # noqa: E402
@@ -74,19 +75,19 @@ def test_label_frame_road_offroad_margin_and_pose_check():
     assert off is None and why["reason"] == "robot_off_road"
 
 
-def _derived(tmp_path, n=8, name="out"):
-    """Robot drives map +x along the road at 0.1 m/s; robot clock = site clock + 2 s."""
+def _derived(tmp_path, n=8, name="out", speed=0.1):
+    """Robot drives map +x along the road at `speed` m/s; robot clock = site clock + 2 s."""
     raster = _raster()
     t = np.arange(10.0, 10.0 + n + 1, 0.1)
-    odom = PoseSeries(t, 0.1 * (t - 10.0) - 1.0, np.zeros_like(t), np.zeros_like(t))
+    odom = PoseSeries(t, speed * (t - 10.0) - 1.0, np.zeros_like(t), np.zeros_like(t))
     ceiling = tmp_path / "ceiling"
     ceiling.mkdir(exist_ok=True)
-    rows = [{"t": rt - 2.0, "x": 0.1 * (rt - 10.0) - 0.5, "y": 0.0, "yaw": 0.0, "src": "aruco",
+    rows = [{"t": rt - 2.0, "x": speed * (rt - 10.0) - 0.5, "y": 0.0, "yaw": 0.0, "src": "aruco",
              "reproj_err": 0.001} for rt in np.arange(10.0, 10.0 + n + 1, 0.5)]
     (ceiling / "poses.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     (ceiling / "calibration.json").write_text(json.dumps({"record": {"calibration_revision": "paint-test",
                                                                      "map_id": "test"}}))
-    frames = [(10.0 + i, _render(raster, (0.1 * i - 0.5, 0.0, 0.0))) for i in range(n)]
+    frames = [(10.0 + i, _render(raster, (speed * i - 0.5, 0.0, 0.0))) for i in range(n)]
     frames.append((10.0 + n + 30.0, frames[0][1]))  # no detection near: rejected
     out = tmp_path / name
     mpd.derive(out, frames=frames, odom=odom, robot_inputs={"bag": "b" * 64}, ceiling=ceiling, camera=CAMERA,
@@ -185,3 +186,60 @@ def test_cli_exposes_every_param(monkeypatch):
     with pytest.raises(StopIteration):
         mpd.main(["derive", "--session", "s", "--ceiling", "c", "--robot", "r", "--out", "o"])
     assert all(hasattr(seen["args"], key) for key in mpd.PARAMS if key != "pitch_sigma_rad")
+
+
+def test_stationary_frames_are_dropped(tmp_path):
+    doc = ldd.verify_dataset(_derived(tmp_path, n=6, speed=0.0))
+    assert len(doc["frames"]) == 1 and doc["rejected"] == {"stationary": 5, "no_detection": 1}
+
+
+def test_fit_camera_recovers_session_pitch_and_height():
+    true = Camera(320, 240, CAMERA.fx, CAMERA.cx, CAMERA.cy, math.radians(11.0), 0.059, CAMERA.x_offset_m)
+    raster = _raster()
+    samples = [(_render(raster, (x, 0.0, 0.0), camera=true), _pose(x=x)) for x in (-0.5, -0.2, 0.1)]
+    cam, fit = mpd.fit_camera(samples, CAMERA, raster, pitch_deg=np.arange(8.0, 13.01, 0.5),
+                              height_m=(0.055, 0.059, 0.063))
+    assert (fit["pitch_deg"], fit["height_m"]) == (11.0, 0.059) and fit["median_iou"] > 0.9
+    assert cam.pitch_rad == pytest.approx(math.radians(11.0))
+
+
+def test_union_of_d554_and_d563_admits_drivable_head(tmp_path, monkeypatch):
+    import train_job
+    from intake_eval_gate import v13_lineage_error
+    from store import Store
+    from test_lane_derived_drivable import review
+    from test_lane_derived_training import Boundary, _setup
+    monkeypatch.setattr(ldd, "MIN_CANARIES", 1)
+    config, d554, _ = _setup(tmp_path / "base")  # a finalized D-554 set, in the store
+    mine = _derived(tmp_path, n=6)
+    review(tmp_path, mine, canaries=0.5)
+    ldd.finalize(mine)
+    with pytest.raises(ValueError, match="not finalized"):
+        ldd.union([d554, _derived(tmp_path / "raw", n=4)], tmp_path / "bad")
+    _, doc = ldd.union([d554, mine], tmp_path / "union")
+    assert (doc["annotation_origin"], doc["adr"]) == ("derived_from_reviewed_lanes+map_projected", "D-554+D-563")
+    assert {f["adr"] for f in doc["frames"]} == {"D-554", "D-563"}
+    assert ldd.verify_dataset(tmp_path / "union", finalized=True)["schema"] == ldd.UNION_SCHEMA
+    _, digest = Store(config["store"]).put_dataset(tmp_path / "union", "union")
+    config["dataset"] = "union@" + digest
+    seen = {}
+
+    def candidate(cfg, job, ds, profile, training, parent, inputs, check):
+        seen.update(inputs)
+        check()
+        (ds / doc["frames"][-1]["mask"]).write_bytes(b"tampered")
+        with pytest.raises(train_job.JobError, match="changed after admission"):
+            check()
+        raise Boundary
+
+    monkeypatch.setattr(train_job, "_run_drivable_candidate", candidate)
+    monkeypatch.setattr(train_job, "gpu_lease", lambda: pytest.fail("no real GPU"))
+    with pytest.raises(Boundary):
+        train_job.run(config, tmp_path / "job")
+    assert seen["lane_derived"]["adr"] == "D-554+D-563"
+    lineage = {"task": "lane_seg", "camera_provenance": "provisional",
+               "parent_lane_model": {"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64},
+               "dataset": {"revision": "a" * 64, "annotation_origin": doc["annotation_origin"], "adr": doc["adr"]}}
+    assert v13_lineage_error(lineage) is None
+    lineage["dataset"]["adr"] = "D-554+D-554"
+    assert v13_lineage_error(lineage) is not None

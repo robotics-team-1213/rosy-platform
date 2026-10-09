@@ -59,7 +59,8 @@ HALF_WIDTH_M = 0.0925
 OFF, ROAD, LINE, PAINT, WALL = 0, 1, 2, 3, 4
 PARAMS = {"near_m": 0.15, "far_m": 0.40, "ignore_top": 110, "stripe_min": ldd.STRIPE_MIN,
           "pitch_sigma_rad": math.radians(1.0), "min_line_iou": 0.3, "line_tol_px": 2, "min_line_px": 30,
-          "min_spacing_s": 0.5, "own_road_radius_m": 0.6, "seed_radius_m": 0.03}
+          "min_spacing_s": 0.5, "own_road_radius_m": 0.6, "seed_radius_m": 0.03,
+          "dedupe_m": 0.02, "dedupe_yaw_deg": 2.0}
 
 
 def _sha(data):
@@ -232,6 +233,54 @@ def label_frame(image, pose, camera, grid, raster, params=PARAMS):
     return mask, stats
 
 
+def _moved(pose, last, p):
+    """False while the robot stands within dedupe_m / dedupe_yaw_deg of the last kept pose."""
+    return last is None or (math.hypot(pose["x"] - last["x"], pose["y"] - last["y"]) >= p["dedupe_m"]
+                            or abs(math.remainder(pose["yaw"] - last["yaw"], math.tau))
+                            >= math.radians(p["dedupe_yaw_deg"]))
+
+
+def fit_camera(samples, camera, raster, *, pitch_deg=np.arange(8.0, 14.01, 0.25),
+               height_m=np.arange(0.055, 0.0651, 0.002), params=PARAMS):
+    """Session pitch/height: the pair maximising the median projected-line vs observed-white IoU
+    over samples [(bgr, fused pose)]. -> (Camera, {"pitch_deg", "height_m", "median_iou", "frames"})."""
+    p = {**PARAMS, **params, "min_line_iou": 0.0}
+    best = None
+    for pitch in pitch_deg:
+        for height in height_m:
+            cam = Camera(camera.width, camera.height, camera.fx, camera.cx, camera.cy, math.radians(pitch),
+                         float(height), camera.x_offset_m)
+            grid = ground_grid(cam)
+            ious = [label_frame(bgr, pose, cam, grid, raster, p)[1]["line_iou"] for bgr, pose in samples]
+            ious = [v for v in ious if v is not None]
+            if len(ious) * 2 < len(samples) or not ious:
+                continue
+            score = float(np.median(ious))
+            if best is None or score > best[0]:
+                best = (score, cam, float(pitch), float(height), len(ious))
+    if best is None:
+        raise ValueError("camera fit: too few frames with lines in view")
+    return best[1], {"pitch_deg": round(best[2], 3), "height_m": round(best[3], 4),
+                     "median_iou": round(best[0], 4), "frames": best[4]}
+
+
+def fit_samples(frames, detections, odom, clock_offset_s, *, count=40, spacing_s=2.0, fuse_params=FUSE,
+                params=PARAMS):
+    """Up to `count` usable, moved frames at least spacing_s apart for fit_camera."""
+    p = {**PARAMS, **params}
+    out, last, last_t = [], None, None
+    for t, bgr in frames:
+        if last_t is not None and t - last_t < spacing_s:
+            continue
+        pose = fuse(detections, odom, [t], clock_offset_s=clock_offset_s, params=fuse_params)[0]
+        if pose["usable"] and _moved(pose, last, p):
+            out.append((bgr, pose))
+            last, last_t = pose, t
+            if len(out) >= count:
+                break
+    return out
+
+
 def _read_robot(session=None, video=None, sidecar=None):
     """(odometry PoseSeries, frame iterator of (stamp, bgr), input hashes)."""
     import autolabel
@@ -246,7 +295,8 @@ def _read_robot(session=None, video=None, sidecar=None):
 
 
 def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, camera_source, raster,
-           session, split="train", clock_offset_s=0.0, params=PARAMS, fuse_params=FUSE, tool_commit=None):
+           session, split="train", clock_offset_s=0.0, params=PARAMS, fuse_params=FUSE, tool_commit=None,
+           camera_fit=None):
     out, ceiling = Path(out), Path(ceiling)
     p = {**PARAMS, **params}
     if out.exists():
@@ -263,7 +313,7 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
     grid = ground_grid(camera)
     (out / "images").mkdir(parents=True)
     (out / "masks").mkdir()
-    kept, rejected, last_t, seen = [], {}, None, 0
+    kept, rejected, last_t, last_pose, seen = [], {}, None, None, 0
     for t, bgr in frames:
         seen += 1
         if last_t is not None and t - last_t < p["min_spacing_s"]:
@@ -274,11 +324,14 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
         if not pose["usable"]:
             rejected[pose["reason"]] = rejected.get(pose["reason"], 0) + 1
             continue
+        if not _moved(pose, last_pose, p):
+            rejected["stationary"] = rejected.get("stationary", 0) + 1
+            continue
         mask, stats = label_frame(bgr, pose, camera, grid, raster, p)
         if mask is None:
             rejected[stats["reason"]] = rejected.get(stats["reason"], 0) + 1
             continue
-        last_t = t
+        last_t, last_pose = t, pose
         name = f"{session}-{len(kept):06d}"
         image_raw = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
         mask_raw = cv2.imencode(".png", mask)[1].tobytes()
@@ -298,7 +351,8 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
                       "ceiling_calibration_revision": calibration.get("calibration_revision"),
                       "map_id": calibration.get("map_id"),
                       "lane_graph_sha256": raster["lane_graph_sha256"], "stl_sha256": raster["stl_sha256"],
-                      "camera_profile": {"values": camera_values, "source": camera_source}},
+                      "camera_profile": {"values": camera_values, "source": camera_source},
+                      "camera_fit": camera_fit},
            "tool": {"name": "map_projected_drivable.py", "git_commit": tool_commit},
            "params": {**p, "fuse": dict({**FUSE, **fuse_params}), "half_width_m": HALF_WIDTH_M},
            "pose_stats": {"src": "aruco+odom", "detections": len(detections), "frames_seen": seen,
@@ -345,8 +399,11 @@ def main(argv=None):
     p.add_argument("--clock-offset-s", default="0", help="robot - site clock (s), or 'auto'")
     p.add_argument("--pitch-deg", type=float, help="session camera pitch override")
     p.add_argument("--height-m", type=float, help="session camera height override")
+    p.add_argument("--fit-camera", type=int, default=0, metavar="N",
+                   help="fit session pitch/height on N moved frames first (overrides --pitch-deg/--height-m)")
     p.add_argument("--pitch-sigma-deg", type=float, default=math.degrees(PARAMS["pitch_sigma_rad"]))
-    for key in ("near_m", "far_m", "min_line_iou", "min_spacing_s", "own_road_radius_m", "seed_radius_m"):
+    for key in ("near_m", "far_m", "min_line_iou", "min_spacing_s", "own_road_radius_m", "seed_radius_m",
+                "dedupe_m", "dedupe_yaw_deg"):
         p.add_argument("--" + key.replace("_", "-"), type=float, default=PARAMS[key])
     for key in ("ignore_top", "stripe_min", "line_tol_px", "min_line_px"):
         p.add_argument("--" + key.replace("_", "-"), type=int, default=PARAMS[key])
@@ -370,11 +427,23 @@ def main(argv=None):
     params = {key: getattr(args, key) for key in PARAMS if key != "pitch_sigma_rad"}
     params["pitch_sigma_rad"] = math.radians(args.pitch_sigma_deg)
     offset = args.clock_offset_s if args.clock_offset_s == "auto" else float(args.clock_offset_s)
+    fuse_params = {key: getattr(args, key) for key in FUSE}
+    raster, fitted = road_raster(), None
+    if args.fit_camera:
+        detections = [json.loads(line) for line in (args.ceiling / "poses.jsonl").read_text().splitlines() if line]
+        fit_offset = estimate_clock_offset(detections, odom) if offset == "auto" else offset
+        samples = fit_samples(frames, detections, odom, fit_offset or 0.0, count=args.fit_camera,
+                              fuse_params=fuse_params, params=params)
+        camera, fitted = fit_camera(samples, camera, raster, params=params)
+        values = {**values, "pitch_rad": camera.pitch_rad, "height_m": camera.height_m}
+        source += f"; session fit pitch {fitted['pitch_deg']} deg height {fitted['height_m']} m"
+        print(json.dumps({"camera_fit": fitted}), flush=True)
+        odom, frames, inputs = _read_robot(args.session, args.video, args.sidecar)
     digest, doc = derive(args.out, frames=frames, odom=odom, robot_inputs=inputs, ceiling=args.ceiling,
-                         camera=camera, camera_values=values, camera_source=source, raster=road_raster(),
+                         camera=camera, camera_values=values, camera_source=source, raster=raster,
                          session=args.session_name or (args.session or args.video).stem, split=args.split,
                          clock_offset_s=offset, params=params,
-                         fuse_params={key: getattr(args, key) for key in FUSE}, tool_commit=args.tool_commit)
+                         fuse_params=fuse_params, tool_commit=args.tool_commit, camera_fit=fitted)
     print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]), "rejected": doc["rejected"],
                       "pose_stats": doc["pose_stats"]}))
     return 0
