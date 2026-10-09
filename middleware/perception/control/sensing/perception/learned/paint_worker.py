@@ -8,6 +8,8 @@ its fallback paint source for that frame and says so.
 target "drivable" (learned_paint_target): the model's infer_drivable gives the drivable way
 (kind "drivable") or, without a usable drivable class, the lane_marking mask (kind
 "lane_marking"); the caller cleans each kind with its own function and reads `used_paint_kind`.
+The same inference's crosswalk class mask (info "crosswalk_mask", D-597 amendment) is served beside
+the paint as `used_crosswalk`, moved like the paint when the paint is warped (D-570).
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ class LearnedPaintWorker:
         self.used_model_revision: str | None = None
         self.used_paint_kind: str | None = None
         self.used_drivable: dict | None = None
+        self.used_crosswalk: np.ndarray | None = None
         self._thread = threading.Thread(target=self._run, name="learned-paint", daemon=True) if start else None
         if self._thread:
             self._thread.start()
@@ -102,7 +105,7 @@ class LearnedPaintWorker:
         None and the caller falls back for this frame. `self.reuse` says what happened
         (keep_debug telemetry: paint_reuse warped|unwarped|fresh|none, paint_warp_skipped).
         A mask of kind "drivable" is cleaned by `clean_drivable` instead of `clean` (required then)."""
-        self.used_model_revision = self.used_paint_kind = self.used_drivable = None
+        self.used_model_revision = self.used_paint_kind = self.used_drivable = self.used_crosswalk = None
         reuse_n = every_n if reuse_n is None else reuse_n
         stamp = self._clock() if stamp is None else float(stamp)
         if self._last_stamp is not None and stamp > self._last_stamp:
@@ -134,9 +137,14 @@ class LearnedPaintWorker:
                 moved = motion(self._cleaned(result, clean, clean_drivable), summary["stamp"], stamp)
             if not isinstance(moved, str):
                 warped, dxy, dyaw = moved
+                crosswalk = summary.get("crosswalk")
+                if crosswalk is not None:
+                    crosswalk = motion(crosswalk, summary["stamp"], stamp)
+                    crosswalk = None if isinstance(crosswalk, str) else crosswalk[0]
                 self.reuse.update(paint_reuse='warped', paint_warp_skipped=None,
                                   paint_motion_dxy_m=round(dxy, 4), paint_motion_dyaw_rad=round(dyaw, 4))
                 self._mark_used(summary)
+                self.used_crosswalk = crosswalk
                 return warped
             self.reuse['paint_warp_skipped'] = moved
         if (self._clock() - submitted_at > self._stale_s or index - summary["tag"] > reuse_n
@@ -150,6 +158,7 @@ class LearnedPaintWorker:
         self.used_model_revision = summary['model_revision']
         self.used_paint_kind = summary.get('paint_kind', 'lane_marking')
         self.used_drivable = summary.get('drivable')
+        self.used_crosswalk = summary.get('crosswalk')
 
     def _cleaned(self, result, clean, clean_drivable=None):
         if result[2].get('paint_kind') == 'drivable':
@@ -169,7 +178,7 @@ class LearnedPaintWorker:
             self._generation += 1
             self._pending = self._result = None
         self._clean_cache = None
-        self.used_model_revision = self.used_paint_kind = self.used_drivable = None
+        self.used_model_revision = self.used_paint_kind = self.used_drivable = self.used_crosswalk = None
         self.reuse = None
         self._frames, self._last_stamp, self._period = 0, None, None
 
@@ -194,8 +203,9 @@ class LearnedPaintWorker:
             self._warn(f"learned paint: {self.last_error}")
             return
         self.last_error = None
+        crosswalk = drivable.pop("crosswalk_mask", None) if drivable else None
         summary = {"model_revision": model.model_revision, "latency_ms": round(latency_ms, 1), "tag": tag, "stamp": stamp,
-                   "paint_kind": kind, "drivable": drivable}
+                   "paint_kind": kind, "drivable": drivable, "crosswalk": crosswalk}
         with self._lock:
             if generation == self._generation:   # a reset during the inference drops its mask
                 self._result = (submitted_at, mask, summary)

@@ -547,6 +547,8 @@ class LineObserverNode(Node):
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
+                    crosswalk_mask=(self._paint_worker.used_crosswalk  # D-597 amendment: D-491 extent
+                                    if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
                 latest = self._paint_worker.latest_way() if self._drivable_steer is not None else None
