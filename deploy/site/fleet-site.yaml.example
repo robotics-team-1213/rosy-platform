@@ -1,0 +1,20 @@
+# 현장 Fleet 선택 설정(D-525 가상 신호등). 없으면 Fleet은 기본값으로 뜬다.
+# 설치: sudo install -m 0644 -o root -g root fleet-site.yaml /etc/rosy/site/fleet-site.yaml
+# 소유자 root, 모드 0644. 다음 Fleet 재시작 때 적용된다.
+#
+# authority는 false로 둔다(D-550 J2 경고만). 신호등은 화면 표시용이고 로봇을 막지 않는다.
+# 새로 뜬 Fleet은 전부 적색에서 시작한다. 운영자가 콘솔에서 자동(cycle)을 눌러야 돈다.
+fleet:
+  traffic:
+    zones:
+      roundabout:            # map_v2_fleet v4, 일방통행 순환로
+        edges: [ring_n, ring_s, ring_e, ring_w]
+        capacity: 1
+    signals:
+      sig_ring:
+        zone: roundabout
+        phases:
+          - {approach: "east:fwd", green_s: 8}
+          - {approach: "west:fwd", green_s: 8}
+        yellow_s: 2
+        all_red_s: 1
