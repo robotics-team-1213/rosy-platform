@@ -1510,6 +1510,26 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_state(tmp_path)
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
+def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    lamp.enabled = False
+    display.step()
+    assert spawn.patterns == []
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.enabled is False
+    display.step()
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.pattern == "ready"
+
+
 def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tmp_path):
     # D-472 addendum 5: Fleet asks moving robots; the blink stands in for the drive pattern.
     module = _display()
