@@ -1,18 +1,18 @@
 {
   "arcs": {
     "ring_e": {
-      "min_proxy_clearance_m": -0.0229,
-      "negative_proxy_ticks": 51,
+      "min_proxy_clearance_m": -0.0351,
+      "negative_proxy_ticks": 57,
       "ticks": 57
     },
     "ring_n": {
-      "min_proxy_clearance_m": -0.0097,
-      "negative_proxy_ticks": 11,
+      "min_proxy_clearance_m": -0.0219,
+      "negative_proxy_ticks": 25,
       "ticks": 36
     },
     "ring_s": {
-      "min_proxy_clearance_m": -0.0164,
-      "negative_proxy_ticks": 18,
+      "min_proxy_clearance_m": -0.0287,
+      "negative_proxy_ticks": 27,
       "ticks": 39
     }
   },
@@ -20,6 +20,6 @@
     0.155,
     0.345
   ],
-  "nominal_radius_m": 0.076,
+  "sim_box_radius_m": 0.08826,
   "trip_result": "arrived"
 }
