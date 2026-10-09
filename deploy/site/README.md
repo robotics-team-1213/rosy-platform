@@ -685,6 +685,19 @@ private key readable only to root and group `10001` (`0440`, group `10001`),
 and make the certificate and CA readable by UID/GID `10001` (`0444`). Never
 commit these files. Provision the CA on ceiling phones and operator browsers.
 
+## Service Control (D-524)
+
+`install-host-control.sh` installs the allowlisted helper and, with `--fleet-key`, the Fleet
+container's forced-command key on each PC. Where the key is accepted from (`--from`):
+
+- Site PC: the Docker pool `172.16.0.0/12`, not one subnet, because the compose subnet changes
+  when the stack restarts (seen 172.20 then 172.18).
+- Model and AI PCs: `<site PC LAN address>`.
+
+Write the targets file with LAN addresses (`<role> <user>@<LAN address>`), never the tailnet name:
+Tailscale SSH bypasses `authorized_keys` forced commands, so a tailnet target would skip the
+restriction. Keep the host keys in `known_hosts` next to it. D-530 records the decision.
+
 ## Tracking background volume (D-539)
 
 Vision keeps the frames of the last operator **배경 다시 학습** in the named

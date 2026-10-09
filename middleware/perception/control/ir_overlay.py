@@ -82,7 +82,8 @@ OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
                    "camera_height_m_override": (0.02, 0.2)}
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
-                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads")
+                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
+                           "learned_paint_motion_compensation")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -99,7 +100,7 @@ def operator_overlay_problem(data) -> Optional[str]:
     if ("camera_ground_source" in params
             and params["camera_ground_source"] not in OPERATOR_GROUND_SOURCES):
         return f"camera_ground_source must be one of {list(OPERATOR_GROUND_SOURCES)}"
-    for key in ("allow_nominal_ground", "debug_overlay"):
+    for key in ("allow_nominal_ground", "debug_overlay", "learned_paint_motion_compensation"):
         if key in params and type(params[key]) is not bool:
             return f"{key} must be true or false"
     if "nominal_camera_profile_path" in params:
