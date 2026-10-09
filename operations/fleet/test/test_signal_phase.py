@@ -10,6 +10,7 @@ from fleet.traffic.signal_phase import (SignalPlan, SignalState, advance, alert,
                                         occupancy_lamps, zone_occupancy)
 
 from fleet.site_map import SiteMap, from_lane_graph
+from fleet.traffic.handover import CYCLE_PERIODS
 from fleet.traffic.signal_phase import entering_arcs
 from test_blocks import BODY, DEMO, LANE_GRAPH, U_DEMO, _demo_map
 
@@ -152,11 +153,12 @@ def _spans(cycle, start, laps):
 
 
 def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, body=0.12, ticks=2400,
-              mode="cycle"):
+              mode="cycle", cycle_run=0):
     """Robots on a one-way loop of ``cycle`` ``(unit, length, entry)`` with ``plan`` gating its zone.
     Estimates are true ± u, at the ±u edge with ``edge_rate`` (the worst case D-517 allows); CORE drives to ``authority − estimate`` past the true
     position (odom-anchored, D-517 4). Checks every tick: no zone grant on red, no real body in the
-    zone without a grant, no green while busy, no circular wait; at the end every robot did a lap."""
+    zone without a grant, no green while busy, no circular wait (``cycle_run``: a reported cycle
+    may last that many ticks in a row, below the resolver's ``CYCLE_PERIODS``); at the end every robot did a lap."""
     zone = plan.zone
     rng = random.Random(seed)
     assert n <= loop_capacity(_spans(cycle, 0, 1), layout, 3)
@@ -170,6 +172,7 @@ def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, 
     state, signal, busy = TableState(), SignalState(), True
     command(plan, signal, mode, 0.0)
     progress = dict.fromkeys(true_d, 0.0)
+    run = 0
     for tick in range(ticks):
         now = tick * 0.5
         was = signal.aspect
@@ -207,7 +210,8 @@ def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, 
             for i, s in enumerate(r.spans):
                 if s.unit == zone and s.d1 > true_d[r.id] - body and s.d0 < true_d[r.id]:
                     assert (r.id, i) in granted_on, f"tick {tick}: {r.id} in the zone without a grant"
-        assert wait_cycle(result.waiting_for) is None, f"tick {tick}: circular wait"
+        run = run + 1 if wait_cycle(result.waiting_for) else 0
+        assert run <= cycle_run, f"tick {tick}: circular wait for {run} ticks"
     loop_m = sum(length for _u, length, _e in cycle)
     assert min(progress.values()) > loop_m, f"a robot starved: {progress}"
 
@@ -239,15 +243,18 @@ def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_ra
                                                            (3, 23, 0.3, 0.1), (2, 24, 0.5, 0.15)])
 def test_occupancy_mode_loops_never_put_two_robots_in_the_zone_and_never_deadlock(n, seed, edge_rate, unknown_rate):
     """D-525 rev 5: with every approach allowed, capacity 1 alone keeps one robot in the zone (no conflict,
-    no body inside without its own grant) and adds no wait that could close a cycle, on the test loop and
-    on the live site loop."""
+    no body inside without its own grant) and the signal adds no wait of its own, on the test loop and on
+    the live site loop. It is then a plain D-517 zone: on the live loop (the zone passed twice a lap) three
+    robots may report a wait cycle for a tick or two while a holder is about to leave (``wait_cycle``
+    counts any holder); none lasts the resolver's ``CYCLE_PERIODS`` and every robot keeps lapping."""
     layout, cycle = _loop_with_two_entries(5, 2, 0.65)
-    _simulate(layout, cycle, PLAN, n, seed, edge_rate, unknown_rate, mode="occupancy")
+    _simulate(layout, cycle, PLAN, n, seed, edge_rate, unknown_rate, mode="occupancy",
+              cycle_run=CYCLE_PERIODS - 1)
     graph, real = _demo()
     plan = SignalPlan("sig_ring", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0)))
     lap = real.route(graph, ["east:fwd", "ring_n:fwd", "west:fwd", "ring_s:fwd"])
     _simulate(real, [(s.unit, s.d1 - s.d0, s.entry) for s in lap], plan, n, seed, edge_rate, unknown_rate,
-              u=U_DEMO, body=BODY, ticks=3200, mode="occupancy")
+              u=U_DEMO, body=BODY, ticks=3200, mode="occupancy", cycle_run=CYCLE_PERIODS - 1)
 
 
 def _two_approaches():
