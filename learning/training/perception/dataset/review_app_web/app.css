@@ -231,6 +231,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 #pixel-workspace-mode { font-size: var(--text-label); margin-bottom: var(--space-1); }
 #pixel-reload { position: absolute; top: var(--space-3); right: var(--space-5); }
 #frame-progress { margin-top: 0; }
+#object-workspace-mode { font-size: var(--text-label); }
 #review-content { display: flex; flex-direction: column; }
 #review-content > .frame-heading { order: 0; }
 #review-content > .frame-navigation { order: 1; }
@@ -255,6 +256,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .pixel-editor-column .pixel-vlm-feedback { margin-top: var(--space-3); }
 #pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
 @media (max-height: 700px) and (min-width: 64rem) {
+  #canvas { width: auto; height: clamp(12rem, calc(100dvh - 20rem), 24rem); max-width: 100%; }
   #pixel-flow ol { display: none; }
   #pixel-main > .ui-workspace-bar { margin-block: var(--space-2); }
   .pixel-frame-strip { margin-block: var(--space-1); }
