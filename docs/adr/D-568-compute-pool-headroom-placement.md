@@ -24,20 +24,22 @@
    - `pytest`(브라우저 시험 포함): 커밋 하나의 pytest invocation.
    - `sim`: Gazebo 한 판. ROS Jazzy, gz, `ros_gz`, nav2가 있어야 한다.
    - `model`: GPU 학습·내보내기. 모델 PC만 한다. 바뀌지 않으며 이 도구가 배치하지 않는다.
-2. **순서가 아니라 잰 여유로 고른다.** 일을 줄 때마다 각 호스트를 ssh로 한 번 잰다(5 s 연결 제한, 동시에). 재는 값: `nproc`, 1분 loadavg, `MemAvailable`·`MemTotal`, 능력(`pytest` = `/usr/bin/python3`가 3.12, `sim` = `/opt/ros/jazzy/share/ros_gz_sim`와 `nav2_bringup`이 있음), 작업 잠금, 사용 중 표시.
-   - **작업 잠금:** 호스트의 `~/rosy-jobs/<이름>.lock` 한 줄 `pid 종류 코어 GB`. pytest는 `remote_pytest.py`가 쓰고 지운다(`<pid> pytest 2 6`). Gazebo 스크립트는 시작할 때 `echo "$$ sim 6 8" > ~/rosy-jobs/sim-$$.lock`를 쓰고 끝날 때 지운다. pid가 죽은 잠금은 잴 때 지운다.
-   - **여유:** 코어 = `nproc − max(load1, 잠금 코어 합)`, 메모리 = `min(MemAvailable, MemTotal − 잠금 GB 합)`. 막 시작해 아직 load에 잡히지 않은 일을 잠금이 메운다.
+2. **순서가 아니라 잰 여유로 고른다.** 일을 줄 때마다 각 호스트를 ssh로 한 번 잰다(5 s 연결 제한, 동시에). 재는 값: `nproc`, 1분 loadavg, `MemAvailable`·`MemTotal`, 능력(`pytest` = Python 3.12가 `/usr/bin/python3`나 uv의 `~/.local/bin/python3.12`에 있음, `sim` = `/opt/ros/jazzy/share/ros_gz_sim`와 `nav2_bringup`이 있음), 작업 잠금과 예약, 사용 중 표시(`busy`), 현장 표시(`site`). 결과는 `ROSYPROBE`로 시작하는 한 줄이고 그 줄만 읽는다. 로그인 셸이 찍는 다른 줄은 무시한다.
+   - **작업 잠금:** 호스트의 `~/rosy-jobs/<이름>.lock` 한 줄 `pid 종류 코어 GB`. pytest는 `remote_pytest.py`가 쓰고 지운다(`<pid> pytest 2 6`). Gazebo 스크립트는 시작할 때 `echo "$$ sim 6 8" > ~/rosy-jobs/sim-$$.lock`를 쓰고 끝날 때 지운다. pid가 죽은 잠금은 잴 때 지운다. 코어·GB가 정수가 아닌 잠금은 0으로 센다(파일 내용을 셸 산술로 평가하지 않는다).
+   - **예약:** 배치한 순간 `~/rosy-jobs/<이름>.resv`에 `만료시각 종류 코어 GB`를 쓴다. pytest는 커밋 전송의 첫 줄에서 75분(저장소 잠금 600 s + venv 3600 s + 여유)짜리를 쓰고, pytest가 시작해 잠금을 쓰면 예약을 지운다. `--pick`은 고른 호스트에 10분짜리를 쓴다. 만료 안 된 예약은 잠금처럼 센다.
+   - **여유:** 코어 = `nproc − max(load1, 잠금 코어 합)`, 메모리 = `min(MemAvailable, MemTotal − 잠금 GB 합)`. 막 배치해 아직 load에 잡히지 않은 일을 예약과 잠금이 메운다.
    - **하한:** `pytest` 코어 2·메모리 6 GB(pytest 한 invocation의 `MemoryMax=6G`와 같다). `sim` 코어 6·메모리 8 GB(Pinky 한 대 Gazebo 서버·센서 렌더링 + Nav2 + CORE를 위한 추정이다. 실측 기록이 없어 첫 측정 뒤 `NEEDS`를 고친다). 하한 아래인 호스트는 고르지 않는다.
    - **순위:** 하한을 넘은 호스트를 `min(코어 여유/코어 하한, 메모리 여유/메모리 하한)`이 큰 순서로 쓴다. 같으면 `ROSY_TEST_HOSTS`의 순서다.
    - invocation이 여럿이면 하한을 넘은 호스트 모두에 `k % n`으로 나눈다(D-553 4항의 분배와 실패 인계는 그대로).
 3. **현장 PC는 라이브 Fleet가 먼저다.**
+   - 현장 호스트는 `robttt@100.82.51.8`, 그리고 `~/rosy-jobs/site` 파일이 있는 모든 호스트다. ssh 이름(LAN 주소, 별칭)과 무관하게 아래 규칙이 붙는다. 라이브 Fleet가 도는 호스트에는 이 파일을 둔다(2026-10-09 현장 PC에 둠).
    - 맨 뒤다. 다른 호스트가 하나도 하한을 넘지 못할 때만 받는다.
    - 여유를 잴 때 Fleet 몫으로 코어 2개와 4 GB를 먼저 뺀다. 8스레드라 `sim` 하한(6)은 사실상 넘지 못한다.
-   - 상한: pytest는 `systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400%` 안에서 `nice -n 15 ionice -c3`로 돈다.
+   - 상한: 커밋 전송, venv 빌드, pytest, 정리 모두 `systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400%` 안에서 `nice -n 15 ionice -c3`로 돈다. ssh로 연 셸에서 user scope가 되고 stdin과 exit code가 그대로 지나가는 것을 2026-10-09 현장 PC(26.04)에서 확인했다.
    - Fleet이 운영 중이면 받지 않는다. Fleet의 읽기 엔드포인트(`/api/fleet/trips` 등)는 토큰이 있어야 하고, 인증 없는 `/healthz`는 살아 있는지만 알려 준다. 그래서 판단은 운영자 표시 파일 `~/rosy-jobs/busy`로 한다. 시연·주행 전에 `touch ~/rosy-jobs/busy`, 끝나면 지운다. 이 파일은 어느 호스트에나 둘 수 있다(AI PC 주인도 쓸 수 있다).
    - `model` 일은 받지 않는다.
    - Wi-Fi만 있다. 커밋 번들(첫 회 전체 이력)과 venv 내려받기가 유선보다 느리다. 하한을 넘는 다른 호스트가 있으면 쓰지 않는 이유 하나다.
-4. **AI PC는 다른 사람의 PC다.** 모든 pytest는 `MemoryMax=6G`와 `nice -n 15 ionice -c3` 안에서 돈다. 모델 PC에도 같은 줄을 쓴다. 한 경로가 단순하고, 모델 PC에서도 학습이 우선이다.
+4. **AI PC는 다른 사람의 PC다.** 모든 pytest는 `MemoryMax=6G`와 `nice -n 15 ionice -c3` 안에서 돈다. 커밋 전송·venv 빌드·정리도 `nice -n 15 ionice -c3`로 돈다. 모델 PC에도 같은 줄을 쓴다. 한 경로가 단순하고, 모델 PC에서도 학습이 우선이다.
 5. **`sim` 준비는 사람이 한다.** 도구는 능력만 보고 설치하지 않는다. sudo가 있는 사람이 Ubuntu 24.04 + Jazzy 호스트에 한 번 한다.
 
    ```bash
@@ -47,14 +49,15 @@
 
    Gazebo 스크립트는 `python tools/remote/remote_pytest.py --pick sim`으로 호스트를 받는다. 표준 출력 한 줄이 호스트, 표준 오류가 호스트마다의 여유와 이유다. 맞는 호스트가 없으면 exit 1이다. 데몬이나 대기열은 만들지 않는다.
 6. **배치는 보인다.** 도구는 잰 호스트마다 `호스트: 코어·GB 여유, 고름/뺀 이유`를 찍고, 고른 호스트를 찍는다.
-7. **잴 수 없을 때는 예전처럼 한다.** `ROSY_TEST_HOSTS`는 그대로 덮어쓴다(기본 모델 PC, AI PC, 현장 PC). `ROSY_TEST_LOCAL=1`·`--local`도 그대로다. pytest에서 하한을 넘는 호스트가 없으면 닿는 비현장 호스트(python 3.12)를 목록 순서로 쓰고 경고를 찍는다. 게이트가 바쁘다는 이유만으로 멈추지 않게 한다. 현장 PC는 이 대체 경로에 들어가지 않는다. `sim`은 대체하지 않는다.
+7. **잴 수 없을 때는 예전처럼 한다.** `ROSY_TEST_HOSTS`는 그대로 덮어쓴다(기본 모델 PC, AI PC, 현장 PC). `ROSY_TEST_LOCAL=1`·`--local`도 그대로다(`--pick`은 그 이유를 찍고 exit 1). pytest에서 하한을 넘는 호스트가 없으면 닿는 비현장 호스트(python 3.12)를 목록 순서로 쓰고 경고를 찍는다. 게이트가 바쁘다는 이유만으로 멈추지 않게 한다. 현장 PC는 이 대체 경로에 들어가지 않는다. `sim`은 대체하지 않는다.
 
 ### Consequences
 
 - 꽉 찬 모델 PC는 pytest를 받지 않고, 여유가 있는 AI PC가 받는다. 시뮬레이션은 능력과 여유가 있는 곳으로 간다.
 - 일을 줄 때마다 ssh 잼 한 번(호스트 셋, 동시)이 더 든다. 1–2 s다.
-- 잠금은 협조적이다. 이 도구와 잠금을 쓰는 스크립트만 서로 본다. 다른 사람의 일은 load와 MemAvailable로만 보인다.
-- load1은 1분 평균이라 늦다. 같은 순간에 시작한 둘이 같은 호스트를 고를 수 있다. 잠금이 그 창을 몇 초로 줄인다.
+- 잠금과 예약은 협조적이다. 이 도구와 잠금을 쓰는 스크립트만 서로 본다. 다른 사람의 일은 load와 MemAvailable로만 보인다.
+- load1은 1분 평균이라 늦다. 예약은 배치 직후 첫 ssh 단계에서 쓰이므로, 두 배치가 같은 호스트를 고를 수 있는 창은 잼과 그 첫 단계 사이(ssh 왕복 몇 번, 보통 수 초, Wi-Fi 현장 PC나 느린 연결에서는 더 길다)다. 완전히 막으려면 잼과 예약을 한 호스트 잠금(`flock`) 안에서 해야 하며, 지금은 하지 않는다.
+- `--pick` 예약(10분)과 Gazebo 스크립트의 잠금이 겹치는 동안은 같은 일이 두 번 세어진다. 그 호스트가 그동안 덜 골린다.
 - `nice`/`ionice` 때문에 바쁜 호스트에서는 pytest가 느려질 수 있다. 시간 제한(`ROSY_TEST_TIMEOUT`)은 그대로다.
 - 시험: `test/test_remote_pytest.py`(가짜 잼 값으로 하한·순위·현장 PC 뒤·busy·능력·대체 경로).
 
@@ -66,7 +69,8 @@
 
 ### Open items
 
-- **현장 PC는 오늘 아무 일도 받지 못한다.** Ubuntu 26.04라 `/usr/bin/python3`가 3.14다. pytest venv는 3.12 휠 해시를 쓴다. 3.12 인터프리터(uv의 `uv python install 3.12`, sudo 불필요)와 `VENV`의 `-p` 변경이 따로 필요하다. Jazzy deb는 24.04용이라 `sim`은 컨테이너로 돌리거나, 확인될 때까지 현장 PC는 pytest 전용이다.
+- **현장 PC Python.** Ubuntu 26.04라 시스템 `/usr/bin/python3`가 3.14다. 2026-10-09 `uv python install 3.12`(sudo 불필요)로 `~/.local/bin/python3.12`를 두었고, 잼과 venv 빌드가 그것으로 대체한다(이 변경으로 모든 호스트의 venv 해시가 한 번 바뀐다). 현장 PC에서 실제 pytest 한 판은 아직 돌지 않았다.
+- **현장 PC `sim`.** Jazzy deb는 24.04용이라 `sim`은 컨테이너로 돌리거나, 확인될 때까지 현장 PC는 pytest 전용이다.
 - AI PC의 `sim` 능력은 D-559용 설치가 끝나면 생긴다. 이 도구는 설치를 기다리지 않고 잴 때 본다.
 - Fleet 운영 판단을 자동으로(읽기 토큰으로 활성 trip·연결 로봇 수를 보기) 바꾸는 것은 뒤로 미룬다. 지금은 `~/rosy-jobs/busy`다.
 - 기존 `run_sim.sh`(증거 폴더)는 고치지 않는다. 새 Gazebo 스크립트가 `--pick sim`과 잠금 줄을 쓴다.
