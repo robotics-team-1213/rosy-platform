@@ -12,7 +12,7 @@
 
 1. **선 바깥 오탐을 shadow 게이트에 넣는다.** drivable 후보는 val의 drivable IoU와 함께 `val_outside_band_fp`를 기록한다. shadow intake는 `val_outside_band_fp ≤ 0.15`일 때만 통과한다. 화면 아래 40% 가운데 열의 예측 drivable 비율은 라벨 비율의 0.8배 이상이어야 한다(D-563 4항의 앞길 지표). 기준을 넘지 못한 후보는 원장(D-558)에 `rejected`로 남긴다. 실물 shadow는 기준을 넘은 후보만 올린다.
 2. **같은 규칙으로 다시 학습한다(`v13.1.01`, patch).** 라벨 규칙은 그대로 두고 학습만 바꾼다.
-   - 손실의 drivable/비drivable 화소 가중치를 val 화소 비율의 역수로 둔다.
+   - 손실의 drivable/비drivable 화소 가중치를 train 화소 비율의 역수로 둔다.
    - best epoch를 IoU 대신 `IoU − λ·outside_band_fp`(λ는 기록)로 고른다.
    - 기준을 넘지 못하면 띠 폭 `k`(D-554 9항)를 늘리는 minor 변경(`v13.2.xx`)을 따로 결정한다. 지도 투영 라벨(D-563 3항)이 그 다음 minor다.
 3. **모델 PC의 긴 작업 규칙.** 학습, intake, 대량 추론처럼 5분을 넘는 작업은 다음을 지킨다.
