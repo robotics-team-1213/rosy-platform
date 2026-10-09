@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별
 - 2026-10-09 · uncommitted · docs: SIM 카메라 밝기 게이트 반례
 - 2026-10-09 · uncommitted · fix: D-535 연결 사유 안전 검토 기록
 - 2026-10-09 · uncommitted · docs: 경로 이탈의 새 카메라 관측과 폐루프 한계
 - 2026-10-09 · uncommitted · fix: 경로 밖 카메라 후보 중단 래치
-- 2026-10-09 · uncommitted · docs: Pinky 현장 램프 재대조와 이동 전 재확인
