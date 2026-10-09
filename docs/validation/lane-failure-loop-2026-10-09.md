@@ -4,7 +4,7 @@
 
 ## 입력과 실행 조건
 
-- 도구 커밋 `4b079efe66a4c1e73d37576d7e9d8fec7bb03605`(git archive 스냅숏), 실행 이름 `20261009-b`.
+- 도구 커밋 `4b079efe6`(git archive 스냅숏), 실행 이름 `20261009-b`.
 - 녹화 6개(9dfk; `rosy_26`은 9dfk의 옛 장치 이름): `20261009T130633Z_rosy_41`(첫 사례), `20261009T120055Z_rosy_41`, `20261008T163945Z_rosy_26`, `20261008T164108Z_rosy_26`, `20261006T130504Z_rosy_26`, `20261005T150437Z_rosy_26`. 녹화당 가장 긴 사건 2개, 사건당 3프레임. 8kcn(`rosy_60`)의 10-07·10-09 녹화 17개도 받았지만 keep_debug가 없어(line-follow 아님) 사건이 없다.
 - 모델: 9dfk shadow `lane-seg-20261006-28e8454d`. 학습 paint를 쓴 녹화는 keep_debug의 revision, threshold·denoise_fallback 녹화는 `--model-for rosy_26=…`(로봇이 그 모델을 쓰지 않았다는 출처와 함께).
 - VLM: 모델 PC에 이미 설치된 `qwen3-vl:8b-instruct`(Ollama, loopback), 프롬프트 `lane-failure-identity/1`, 42프레임 프레임당 약 2–4 s(한 번 34 s). AI PC에는 Ollama·VLM이 없어 쓰지 않았다(아래).
