@@ -7564,3 +7564,9 @@ osy-d395-s1d\`.
 - 변경: 격리 모델 PC 작업공간에 현행 D-520 코드를 설치·빌드해 Gazebo 한 바퀴를 실행하고, D-567의 합격 목표를 경계 내 차체 sweep·필요시 사전 STOP·완주 순서로 정리했다.
 - 증거: `docs/validation/lane-parallel-correction-baseline-2026-10-09/result.md`; trip `arrived`, 호 최대 반지름 오차 34/41/30 mm. SIM 충돌 상자 외접 원의 도색선 중심 여유 최소 −35.1 mm로 재계산했고, 두 실물 로봇의 측정·적용 보정과 차체 범위를 분리했다.
 - gate 변화: ROS-SIM 완주만 관측. 실제 차체 형상·도색선 허용 범위와 오차·정지 여유, 후보 병렬 보정, 두 로봇 DEVICE는 미판정/HOLD.
+
+## 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
+
+- 변경: `convert.py --int8`를 quant_pre_process 뒤 s8 활성·채널별 s8 가중치 QDQ로 바꾸고, `--int8-fp32-nodes`(lane_seg 기본 `first_conv last_conv`, object_det 기본 없음)로 남길 fp32 노드를 고른다. 보정 메모리 상한 `CalibMaxIntermediateOutputs=7`과 그 배수 프레임 수를 하나 줄이는 처리(ORT 1.26)를 넣었다. 새 결정이 아니라 D-423 3항(보정 이미지 int8, 판정은 intake)의 매개변수다.
+- 증거: 모델 PC `~/rosy-ml/scratch/lane-int8-hf-20261009`: 챔피언 62db9403의 int8-hf 사본 lane-seg-20261009-3831b20d가 평가 집합 rosy26-heldout-wall-role-20261006에서 mIoU 0.8110(fp32 0.8109), lane_line 0.9007, drivable 0.5608. 8kcn Pi 5 `infer_mask` 2스레드 스핀 끔 80회 두 번: fp32 p50 329.8/324.9 ms, int8-hf p50 195.5/197.7 ms(p95 220.5/236.8, 부하 8–12). convert 시험 19 passed(모델 PC).
+- gate 변화: 현행 intake는 챔피언 fp32와 int8-hf 둘 다 「training dataset overlaps or cannot exclude reserved eval sources」로 떨어뜨린다(d379-auto-lanes-rosy26-v1 세션에 capture_group 없음). 이 때문에 READY 게시와 로봇 전달은 HOLD.
