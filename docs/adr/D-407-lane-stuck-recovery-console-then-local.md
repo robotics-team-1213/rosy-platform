@@ -89,3 +89,16 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
 D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한다"를 Fleet 판단기(규칙 → 비전 모델 → 사람, CORE `stuck_resolver` 역할)로, Fleet 쪽 구현 메모의 영상 해석을 "판단 한 번에 미리보기 한 장, 저장·중계 없음"으로 고친다. 다섯 답과 CORE 재검사는 그대로다.
 
 **개정 (2026-10-07, [D-495](D-495-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다. 사용자 결정(2026-10-07)에 따라 이 기본값은 이 ADR의 자율 로컬 후진도 켠다. 대상은 URDF 몸 기하가 있는 모든 로봇이다. 결정 3항과 설정 문단의 "기본 꺼짐, self-mask 측정 뒤 로봇별로 켬" 조건은 D-495의 승격 규칙으로 바뀐다(D-495 결정 개정 5항).
+
+## 개정 (2026-10-10): CAMERA_LINE 차선 상실 잠금은 차선이 다시 보이면 같은 모드로 풀린다
+
+사용자 지시(2026-10-10, 원문): "keep 모드일 때 다시 길에 놓게 되면 계속해서 그 모드를 계속하도록 해야 해."
+
+**왜.** 2026-10-10 8kcn 실주행(릴리스 072, `X:\DevTemp\drivable-keep-run\drive-8kcn-2.txt`)은 `TRACKING` → `HOLD camera_line_not_visible` → `RECOVERING stuck_back_off` → `HOLD stuck_resumed` → `HOLD obstacle_ahead` → `LOST camera_reselection_required`로 갔고, 확신 0.9 프레임이 40 s 넘게 들어오는데도 다시 가지 않았다. 배경의 "`LOST` 는 3 s 뒤 운전자 재선택 전까지 고정된다"는 로봇을 길에 다시 놓아도 사람이 모드를 다시 골라야 한다는 뜻이다. 이 개정은 그 잠금을 CAMERA_LINE에서 바꾼다.
+
+1. **풀림 조건.** CAMERA_LINE `LOST`는 다음이 모두 참인 틱에 풀린다. (a) `line_follow.lost_resume_frames`(기본 3, D-495 `junction_reacquire_frames`와 같은 값)개의 연속 프레임이 보이고 확신이 `min_confidence` 이상이다. 보이지 않거나 확신이 낮은 프레임, `invalidate`, 저조도·과노출 프레임 하나가 연속을 끊는다. (b) 연속의 첫 프레임부터 `lost_resume_s`(기본 1.0 s, 결정 3의 `recovery_settle_s`와 같은 값)가 지났다. (c) 마지막 프레임이 `stale_after_s` 안이다. (d) 앞 물체 정지(D-344 §11, D-422)와 LiDAR stale 정지가 없다. 이 둘은 잠금 검사보다 먼저 멈춘다. (e) IR 감시가 꺼져 있거나 비어 있다(`clear`). 가운데 이탈(`lane_departure`), stale, 좌우 경계(`lane_edge_*`), 횡단보도 쉼에서는 풀지 않는다.
+2. **같은 모드로 잇는다.** 모드·세대(generation)를 바꾸지 않고 잠금과 손실 시계만 지운다. 그 틱부터 보통의 `FOLLOW` 경로가 명령을 정하고, 지면 `NOMINAL`의 운전자 조건(D-364 §3), 계단 한도(D-344 §13), D-517 권한 게이트, D-573 횡단보도 게이트는 그대로 뒤에서 깎는다. `nav.lane_reacquired` `{mode, frames, since_s}`를 한 번 낸다. 열린 `lane_lost` 막힘은 원인이 사라져 `cleared`로 닫힌다(후진·정착 중이면 그 단계가 먼저 끝난다).
+3. **바뀌지 않는 것.** E-stop, OFF, 운전자 hold 만료, watchdog은 `set_mode(OFF)`로 끝나며 풀림이 없다. IR_LINE의 `LOST reselection_required` 잠금(D-313 감독 시연)은 그대로다. 저조도·과노출 `LOST`도 그대로다. 상태·사유 문자열은 바꾸지 않는다.
+4. **설정.** `line_follow.lost_auto_resume`(기본 `true`), `lost_resume_frames`, `lost_resume_s`. `false`면 옛 잠금이다. API Ref v1.181.
+
+**검증.** 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_lost_resume.py`(안정 프레임 뒤 풀림, 깜빡임·한 프레임 뒤 침묵에서 안 풀림, 앞 물체·IR 이탈·경계에서 안 풀림, 끔이면 잠금, IR_LINE 잠금, 후진 막힘 흐름 뒤 풀림)를 현장 PC에서 돌렸다. 장치·현장 수용은 아니다.

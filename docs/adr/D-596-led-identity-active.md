@@ -25,7 +25,7 @@
    - 로봇마다 `auto_min_interval_s`(30 s)에 한 번. 상태가 신선하고 `safety.estop`이 정확히 false인 로봇만. 확인된 로봇, 확인 중인 로봇, 카메라 source가 보지 않는 로봇은 묻지 않는다.
 4. **2–3 fps에서 읽히게.** 판정 `led-identity/2`: 측정한 꺼짐(앞 켜짐의 마지막 프레임부터 뒤 켜짐의 첫 프레임까지)은 램프의 실제 1 s 꺼짐보다 늘 길다. `min_off_s` 0.8 s(3 fps에서 한 프레임 깜빡임은 0.67 s로 거절), `max_off_s` 2.2 s, `max_gap_s` 1.1 s(2 fps에서 한 프레임 빠짐 허용). 점멸이 읽히지 않았어도 창의 모든 프레임에 익명 blob이 정확히 하나이고 그 blob이 꺼짐 프레임 뒤 연속 2 프레임 이상 그 색으로 켜지면 `matched`, `evidence.mode = "steady"`(정색 표시). 램프 패턴(1 s 켬·1 s 끔·1 s 켬)과 6 s 창은 그대로다.
 5. **콘솔.** "LED로 찾기"는 서 있는 로봇에도 쓰이고 색은 Fleet이 고른다. 요청 뒤 창이 끝나면 결과(확인됨, 또는 이유)를 기록줄에 보인다. 주의 큐의 `CAMERA_NOT_SEEING`은 익명 blob이 보이면 LED 확인(`action.kind: identify`)을, 보이지 않으면 배경 다시 학습만 권한다.
-6. **바뀌지 않는 것.** D-472 addendum 3: 확인 트랙은 D-511 입력과 콘솔 표시 전용이다. D-494 지도 자세 중재, trip, `initialpose`, 경로, 명령에 쓰지 않는다. D-472 5항: E-Stop·고장·주의·운행 상태 표시가 우선하고 `rosy-face`가 거절·중단한다. 로봇의 배터리 절약 기본값(`ROSY_LAMP_ENABLED=false`)은 그대로이고 식별할 때만 켰다가 끈다. API는 v1.181.
+6. **바뀌지 않는 것.** D-472 addendum 3: 확인 트랙은 D-511 입력과 콘솔 표시 전용이다. D-494 지도 자세 중재, trip, `initialpose`, 경로, 명령에 쓰지 않는다. D-472 5항: E-Stop·고장·주의·운행 상태 표시가 우선하고 `rosy-face`가 거절·중단한다. 로봇의 배터리 절약 기본값(`ROSY_LAMP_ENABLED=false`)은 그대로이고 식별할 때만 켰다가 끈다. API는 v1.185.
 
 7. **자동 요청은 조용히, 주황은 조심해서** (2026-10-10 조정 지시).
    - 자동 요청은 호출음 없이 점멸한다: Fleet이 CORE `POST /host/lamp/identify?quiet=true`로 요청하고 CORE는 `identify_<색>_quiet`를 rosy-hw-test·rosy-face에 넘기며, rosy-face는 이때 `call` 소리를 내지 않는다. 운영자가 누른 "LED로 찾기"는 지금처럼 소리를 낸다. 이 로봇 쪽 변경은 다음 payload부터다. 이전 payload의 CORE는 쿼리를 무시하고 소리를 낸다(본문 스키마는 그대로라 거절은 없다).

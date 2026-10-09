@@ -67,6 +67,9 @@ KNOWN_VIOLATIONS = {
     ("learning/training/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
     ),
+    ("learning/training/perception", "operations/vision"): (
+        "learning -> operations: D-563 ceiling_pose reuses Rosy Cam tracking geometry/calibration (lazy imports)"
+    ),
 }
 
 

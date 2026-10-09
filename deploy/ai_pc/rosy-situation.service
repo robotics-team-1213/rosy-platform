@@ -1,0 +1,21 @@
+[Unit]
+Description=ROSY situation service (D-577; reads Fleet, posts facts as ai_observer, never commands robots)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/rosy-platform/operations/situation
+# FLEET_URL, FLEET_TOKEN_FILE (ai_observer token), FLEET_CA; optional ROSY_SITUATION_STATE,
+# ROSY_SITUATION_OWNER_MODE (file only the owner writes: available | shared | owner_busy; missing = owner_busy)
+EnvironmentFile=%h/.config/rosy/situation.env
+ExecStart=/usr/bin/python3 -m rosy_situation.service
+Restart=on-failure
+RestartSec=5s
+# D-577 10: bounded on the shared AI PC
+MemoryMax=2G
+CPUQuota=100%
+Nice=10
+
+[Install]
+WantedBy=default.target

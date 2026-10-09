@@ -339,6 +339,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
+        path_task = asyncio.create_task(app.state.paths.run())  # D-594
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -370,7 +371,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task):
+                               lease_task, path_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -563,6 +564,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
+    from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
+    app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
+                                           db_path=task_service.store.path if task_service else None)
+    app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
@@ -654,6 +659,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
+    from fleet.server.path_history import PathRecorder, PathStore, install_path_routes  # D-594 display only
+    app.state.paths = PathRecorder(
+        PathStore(task_service.store.path if task_service is not None else None),
+        roster=lambda: console.robot_ids, gather=_gather_state, map_pose=map_pose,
+        tracking=tracking if tracking is not None and tracking.enabled else None,
+        trips=trip_runner.open_trips, formation=console.formation_status)
+    install_path_routes(app, paths=app.state.paths, read_guard=read_guard)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
                         require_operator=require_operator,
