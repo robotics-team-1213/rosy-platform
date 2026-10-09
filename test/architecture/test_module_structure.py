@@ -73,7 +73,8 @@ FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
-             "operations/site_devices")  # site device firmware (D-427 wave 3b)
+             "operations/site_devices",  # site device firmware (D-427 wave 3b)
+             "operations/situation")  # D-577 AI PC situation service (outside the fleet package)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
@@ -213,11 +214,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_631,
-        "split: re-judged at 50631 on 2026-10-10 for the no_motion stuck path (+227; self-judged): R6 in "
-        "the existing resolver rule, the enrolled-robot credential and AI PC shadow ask in the resolver "
-        "loop/cli, one small stuck_ai.py fact checker; most new lines are test_stuck_no_motion_fleet.py. "
-        "No new robot command path (answers stay the D-407 decision API). Previously "
+        50_857,
+        "split: re-judged at 50857 on 2026-10-10 after D-577 (b)+(c) over main 50460 (+397; independent "
+        "read-only critic). (b) evidence picture/alert in existing owners line_stuck.py, line-stuck.js, "
+        "queues.js, console_routes.py, HttpRobotClient.front_frame; (c) one new shadow-only module "
+        "server/ai_facts.py (ai_observer facts/heartbeat, no command path). The AI PC service is "
+        "operations/situation (outside the package). Next D-577 growth (acting, plan step 6) first moves "
+        "line_stuck/stuck_*/ai_facts into a fleet/fleet/stuck SIZE_UNITS subpackage by a dated plan. See "
+        "docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "

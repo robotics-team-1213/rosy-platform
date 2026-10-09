@@ -8,7 +8,7 @@ import pytest
 from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
 from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
 from control.sensing.perception.learned.drivable_paint import (
-    boundary_paint, drivable_target, lateral_px_per_m, right_branch)
+    boundary_paint, drivable_target, lateral_px_per_m, right_branch, right_exit_way)
 from control.sensing.perception.learned.lane_mask import preprocess, uncrop_logits
 from control.sensing.perception.learned.manifest import ClassSpec, ManifestError, load_manifest
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
@@ -59,6 +59,40 @@ def test_right_branch_starts_on_the_road_under_the_robot():
     region[15:, 0:5] = True                                  # another strip, bottom left, not joined
     way, branches = right_branch(region)
     assert branches == 1 and way[12, 15:25].all() and not way[:, 0:5].any()
+
+
+def test_a_t_junction_opening_sideways_turns_right():
+    # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10): at a T the crossbar opens
+    # to both frame sides and no row splits, so the row scan saw one branch and went straight.
+    labels = np.zeros((240, 320), np.int64)
+    labels[150:, 120:200] = 5                                # the robot's own road
+    labels[125:150, :] = 5                                   # the crossing road, both ways out of view
+    labels[118:125, :] = 1                                   # its far line
+    way, info = drivable_target(_logits(labels), CLASSES, ignore_top=112)
+    assert info["reason"] == "ok" and info["branches"] == 2
+    assert way[135, 300:].all() and not way[135, :20].any() and way[220, 120:200].all()
+
+
+def test_a_ring_entry_takes_the_right_branch_behind_a_model_hole():
+    # Replay 2026-10-10, 8kcn at a ring entry: the ring road to the right showed only beyond a patch
+    # the model left unlabelled, joined to the road ahead near the top of the view.
+    region = np.zeros((240, 320), bool)
+    region[160:, 100:220] = True                             # own road
+    region[125:160, 0:200] = True                            # ring road going left in front of the island
+    region[112:125, 180:] = True                             # far rows joining to the right
+    region[112:150, 260:] = True                             # ring road going right, behind the hole
+    way, exits = right_exit_way(region, 112)
+    assert exits == 2 and way[140, 280:].all() and not way[140, :40].any()
+
+
+def test_a_ragged_far_edge_and_an_open_floor_are_one_exit():
+    region = np.zeros((240, 320), bool)
+    region[112:, 60:260] = True
+    region[112:116, 150:175] = False                         # a notch in the far edge
+    assert right_exit_way(region, 112) == (None, 1)
+    region = np.zeros((240, 320), bool)
+    region[112:, 40:] = True                                 # the 9dfk ring exit of D-592: one open floor
+    assert right_exit_way(region, 112) == (None, 1)
 
 
 def test_crosswalk_paint_on_the_road_does_not_cut_the_way():
@@ -243,3 +277,79 @@ def test_an_enclosed_hole_is_not_a_fork():
     labels[150:170, 150:170] = 0                             # a box on the road, background around it
     way, info = drivable_target(_logits(labels), CLASSES)
     assert info["branches"] == 1 and way[160, 120:200].all()  # filled: the edges stay the road's
+
+
+# D-597 amendment (2026-10-10, user: "drivable에서 빠지면 횡단보도일 경우 멈췄다가 건너도록 하는 걸로
+# 처리해."): the drivable way runs through a crosswalk, and the same inference's crosswalk class gives
+# CORE the D-491 extent its D-573 gate stops, looks and crosses on.
+
+def _keep_with_crosswalk(class_mask):
+    from control.sensing.perception.lane_containment import containment_payload
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    observation = keeper.update(image, GROUND, lane_half_width_m=HALF, paint_mask=_way_paint(0.0),
+                                crosswalk_mask=class_mask)
+    payload = containment_payload(keeper.last, GROUND, stamp=1.0, source="GAZEBO", camera_x=X_OFFSET)
+    return observation, keeper, payload
+
+
+def test_crosswalk_class_ahead_gives_core_the_crosswalk_and_the_keeper_still_steers():
+    band = ((X >= 0.25) & (X < 0.37) & (np.abs(Y) < HALF)).astype(np.uint8)
+    observation, keeper, payload = _keep_with_crosswalk(band)
+    near, far = keeper.last["crosswalk"]
+    assert near == pytest.approx(0.25, abs=0.01)                          # base_link x
+    assert far - near == pytest.approx(0.12, abs=0.02)
+    assert payload["crosswalk"] == dict(near_m=near, far_m=far)
+    assert observation is not None and keeper.last["strategy"] == "both"   # tracking goes on across it
+
+
+def test_no_crosswalk_class_is_no_crosswalk_and_a_shape_mismatch_is_refused():
+    observation, keeper, payload = _keep_with_crosswalk(np.zeros(X.shape, np.uint8))
+    assert keeper.last["crosswalk"] is None and "crosswalk" not in payload and observation is not None
+    with pytest.raises(ValueError):
+        _keep_with_crosswalk(np.zeros((10, 10), np.uint8))
+
+
+def test_a_white_line_across_the_road_still_ends_the_way_and_is_no_crosswalk():
+    labels = _road()
+    labels[150:156, 120:200] = 1                             # lane paint across the road (stop line)
+    way, info = drivable_target(_logits(labels), CLASSES)
+    assert info["reason"] == "ok" and way[200, 120:200].all() and not way[:156].any()
+    crosswalk = (labels == 3).astype(np.uint8)
+    assert not crosswalk.any()                               # nothing for the crosswalk extent
+
+
+def test_runner_hands_the_crosswalk_class_mask_beside_the_way(tmp_path, monkeypatch):
+    from control.sensing.perception.learned.runner import LaneSegModel
+    labels = _road()
+    labels[170:180, 120:200] = 3
+    model = LaneSegModel.__new__(LaneSegModel)
+    model.manifest = type("M", (), dict(classes=CLASSES, input=type("I", (), dict(crop=None))()))()
+    monkeypatch.setattr(model, "_logits", lambda bgr: _logits(labels))
+    mask, kind, info, _ = model.infer_drivable(np.zeros((480, 640, 3), np.uint8))
+    assert kind == "drivable" and mask[350, 300]                # the way runs through the crosswalk
+    assert info["crosswalk_mask"].shape == (480, 640) and info["crosswalk_mask"][350, 300]
+    assert not info["crosswalk_mask"][300, 300]
+
+
+class _CrosswalkModel(_DrivableModel):
+    def infer_drivable(self, frame):
+        mask, kind, info, latency = super().infer_drivable(frame)
+        info["crosswalk_mask"] = np.full(frame.shape[:2], 1, np.uint8)
+        return mask, kind, info, latency
+
+
+def test_worker_serves_the_crosswalk_mask_beside_the_paint_and_moves_it_with_the_paint():
+    worker = LearnedPaintWorker(_Slot(_CrosswalkModel("drivable")), stale_s=5.0, clock=lambda: 0.0, start=False,
+                                target="drivable")
+    frame = np.zeros((240, 320, 3), np.uint8)
+    worker.mask_for(frame, 1, 10.0)
+    worker.step()
+    worker.mask_for(frame, 1, 10.125, clean_drivable=lambda m: m)
+    assert worker.used_crosswalk is not None and worker.used_crosswalk.all()
+    assert "crosswalk_mask" not in worker.used_drivable                 # keep_debug stays JSON
+    moved = worker.mask_for(frame, 2, 10.25, clean_drivable=lambda m: m, max_age_s=1.0,
+                            motion=lambda m, a, b: (m * 0 + 2, 0.01, 0.0))
+    assert int(moved.max()) == 2 and int(worker.used_crosswalk.max()) == 2
+    worker.reset()
+    assert worker.used_crosswalk is None

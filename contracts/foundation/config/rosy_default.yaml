@@ -101,7 +101,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
                                    # 0 disables this floor; max_angular_follows_manual: false does NOT bypass it
   min_confidence: 0.35
   stale_after_s: 0.30              # stop immediately when evidence lease expires
-  lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
+  lost_after_s: 3.0                # latch LOST (IR_LINE: operator must explicitly reselect)
+  # D-407 개정 2026-10-10: CAMERA_LINE LOST resumes in the same mode after lost_resume_frames
+  # consecutive fresh confident frames over lost_resume_s, no obstacle hold, IR guard clear.
+  lost_auto_resume: true
+  lost_resume_frames: 3            # = D-495 junction_reacquire_frames
+  lost_resume_s: 1.0               # = D-407 recovery_settle_s
   ir_calibration_revision: null    # must match the configured IR line-observer digest
   # D-344 §11 stop / resume distances from the LiDAR origin. D-422: left unset here on
   # purpose (a value in this layer would count as an operator override). Unset: sector mode

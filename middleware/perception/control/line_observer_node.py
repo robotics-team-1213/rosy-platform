@@ -36,6 +36,7 @@ from .sensing.perception.lane import (
     LaneCornerTracker,
     detect_ir_line,
     detect_lane_centre,
+    LaneObservation,
     detect_lane_error,
     line_observation_payload,
 )
@@ -44,6 +45,7 @@ from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
+from .sensing.perception.learned.drivable_steer import DrivableSteer
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -170,6 +172,9 @@ class LineObserverNode(Node):
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
         self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
+        # D-597 amendment 2: with the drivable target, keep steers from the way itself.
+        self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
+                                and self._paint_worker.target == 'drivable' else None)
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -532,15 +537,38 @@ class LineObserverNode(Node):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
-                    if self._paint_worker is not None:
+                    # A drivable pivot turns toward the way it saw: keep its masks (odometry moves the target).
+                    if self._paint_worker is not None and (self._drivable_steer is None or not _spinning_in_place(cmd)):
                         self._paint_worker.reset()
+                    if self._drivable_steer is not None and not _spinning_in_place(cmd):
+                        self._drivable_steer.reset()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
+                    crosswalk_mask=(self._paint_worker.used_crosswalk  # D-597 amendment: D-491 extent
+                                    if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
+                latest = self._paint_worker.latest_way() if self._drivable_steer is not None else None
+                if latest is not None:
+                    way, way_stamp = latest
+                    error, confidence, steer = self._drivable_steer.update(
+                        way, way_stamp, ground, self._lane_keeper._x_offset,
+                        float(self.get_parameter('lane_half_width_m').value),
+                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp))
+                    observation = None if error is None else LaneObservation(error=error, confidence=confidence)
+                    self._lane_keeper.last.update(
+                        strategy=steer['strategy'], drivable_steer=steer,
+                        error=None if error is None else round(error, 3), confidence=confidence,
+                        target_m=list(steer.get('target_now_m') or steer['target_m'] or []) or None,
+                        reason=steer.get('reason'))
+                    # the way chose the branch already: the tape keeper's junction HOLD does not apply
+                    self._lane_keeper.last.pop('junction_ahead_m', None)
+                    paint_used = 'learned_drivable'
+                elif self._drivable_steer is not None:
+                    self._drivable_steer.reset()
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,

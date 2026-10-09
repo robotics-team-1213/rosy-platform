@@ -435,6 +435,14 @@ roots:
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
+  - path: operations/situation
+    part: operations
+    d427_target: operations/situation
+    wave: none
+    import_prefix: [rosy_situation]
+    concern: other
+    note: >-
+      D-577 3 AI PC situation service; reads Fleet and posts facts only (shadow), no robot or command path.
   - path: operations/vision
     part: operations
     d427_target: operations/vision

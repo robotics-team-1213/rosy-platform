@@ -51,6 +51,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._ir_received_at: Optional[float] = None
         self._loss_started_at: Optional[float] = None
         self._lost_latched = False
+        self._resume_streak: tuple[int, Optional[float]] = (0, None)  # D-407 개정 2026-10-10
         self._invalid_observation = False
         self._status = LineFollowStatus()
         self._route_context_current = None
@@ -142,6 +143,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._escalated = False
             self._received_at = None
             self._lost_latched = False
+            self._resume_streak = (0, None)
             self._invalid_observation = False
             self._loss_started_at = None if selected is LineFollowMode.OFF else self._clock()
             self._status = LineFollowStatus(
@@ -187,10 +189,14 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._received_at = effective_received_at
             self._evidence_revision += 1
             if observation.visible and observation.confidence >= self._config.min_confidence:
+                count, since = self._resume_streak
+                self._resume_streak = (count + 1, effective_received_at if count == 0 else since)
                 if not self._lost_latched:
                     self._loss_started_at = None
-            elif self._loss_started_at is None:
-                self._loss_started_at = float(now)
+            else:
+                self._resume_streak = (0, None)
+                if self._loss_started_at is None:
+                    self._loss_started_at = float(now)
             return True
 
     def ir_fallback_readiness(self, *, now: Optional[float] = None) -> tuple[bool, tuple[str, ...]]:
@@ -237,6 +243,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._invalid_observation = True
             self._return_evidence.invalidate_lane()
             self._confident_frames = 0  # D-476: an invalid frame breaks the arming streak
+            self._resume_streak = (0, None)
             self._evidence_revision += 1
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)
@@ -546,7 +553,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 return self._stop_decision("HOLD", "lane_guard_stale")
             if guard == "centre":
                 return self._stop_decision("HOLD", "lane_departure")
-        if self._lost_latched:
+        if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
                       if self._mode is LineFollowMode.CAMERA_LINE
                       else "reselection_required")
@@ -669,6 +676,30 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         if observation.error >= self._config.ir_guard_edge_error:
             return "right"
         return "centre"
+
+    def _lost_resumed(self, now: float, guard: Optional[str]) -> bool:
+        """D-407 개정 2026-10-10: a CAMERA_LINE LOST unlatches in the same mode once the lane is back.
+
+        Reached only after the obstacle hold, a stale IR guard and an IR centre departure have
+        already returned. Needs lost_resume_frames consecutive fresh confident camera frames
+        spanning lost_resume_s and the IR guard clear (or off); E-stop, OFF and driver-hold loss
+        still go through set_mode(OFF). The normal FOLLOW path below decides the twist.
+        """
+        config = self._config
+        count, since = self._resume_streak
+        if (self._mode is not LineFollowMode.CAMERA_LINE or not config.lost_auto_resume
+                or guard not in (None, "clear") or self._invalid_observation
+                or count < config.lost_resume_frames or since is None or self._received_at is None
+                or now - since < config.lost_resume_s
+                or not 0.0 <= now - self._received_at <= config.stale_after_s):
+            return False
+        self._lost_latched = False
+        self._loss_started_at = None
+        self._events.publish(
+            "nav.lane_reacquired", source="line_follow_manager",
+            data={"mode": self._mode.value, "frames": count, "since_s": round(now - since, 3)},
+        )
+        return True
 
     def _loss_or_stop(self, now: float, state: str, reason: str,
                       age: Optional[float]) -> LineFollowDecision:
