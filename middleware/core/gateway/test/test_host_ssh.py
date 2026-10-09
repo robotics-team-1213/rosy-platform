@@ -154,8 +154,9 @@ def test_a_dev_mode_robot_never_opens_ssh_to_the_shared_dev_admin(robot, monkeyp
     robot.config["auth"]["tokens"].append({"token": "rosy-dev-" + "admin", "role": "administrator"})
     dev = {"Authorization": "Bearer rosy-dev-" + "admin"}
 
-    # D-548: the marker opens the API (keys list is admin-only) but not the shell.
-    assert robot.client.get("/api/v1/host/ssh/host-keys", headers=dev).status_code == 200
+    # D-548: the marker opens the API but not the shell, through any SSH route.
+    assert robot.client.get("/api/v1/host/ssh/host-keys", headers=dev).status_code == 403
+    assert robot.client.post("/api/v1/host/ssh/pair", headers=dev, json={}).status_code == 403
     assert robot.client.post("/api/v1/host/ssh/keys", headers=dev,
                              json={"public_key": _key(), "label": "dev:x", "expires_days": 1}).status_code == 403
     assert robot.client.get("/api/v1/host/ssh/password", headers=dev).status_code == 403

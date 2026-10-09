@@ -362,8 +362,10 @@ def new_token_record(token: str, role: str, label: str = "", *, source: str = "m
 def persist_token_records(svc: "CoreServicesLike", records: list[dict[str, Any]]) -> None:
     """토큰 목록을 오버레이와 메모리 설정에 쓴다. 만료된 레코드는 여기서 지운다."""
     stored = stored_token_entries([item for item in records if not is_expired(item)])
+    # D-548: the shared dev tokens come from the marker at each start, never from /etc.
+    on_disk = [entry for entry in stored if not (device_mode() and entry["sha256"] in DEV_TOKEN_DIGESTS)]
     try:
-        patch_local_config({"auth": {"tokens": stored}})
+        patch_local_config({"auth": {"tokens": on_disk}})
     except (ConfigError, OSError) as exc:
         raise ApiError("INTERNAL_ERROR", 500, f"failed to persist tokens: {exc}")
     svc.config.setdefault("auth", {})["tokens"] = stored
@@ -414,9 +416,21 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
     raise ApiError("UNAUTHORIZED", 401, "missing or invalid token")
 
 
+#: D-548: on a device the shared dev tokens drive the robot but never hand out a shell, a
+#: credential that outlives the marker, or a new network, release or boot.
+SHARED_DEV_REFUSED_PREFIXES = ("/api/v1/host/ssh", "/api/v1/auth/enrollment-codes")
+SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens")
+
+
 def auth_dependency(request: Request,
                     authorization: Optional[str] = Header(default=None)) -> AuthContext:
-    return authenticate(request.app.state.core.config, authorization, None)
+    auth = authenticate(request.app.state.core.config, authorization, None)
+    if auth.shared_dev and device_mode():
+        path = request.url.path
+        if (path.startswith(SHARED_DEV_REFUSED_PREFIXES)
+                or (request.method not in ("GET", "HEAD") and path.startswith(SHARED_DEV_REFUSED_WRITES))):
+            raise ApiError("FORBIDDEN", 403, "공용 개발 토큰으로는 이 작업을 할 수 없습니다 (D-548)")
+    return auth
 
 
 def require_role(min_role: str):

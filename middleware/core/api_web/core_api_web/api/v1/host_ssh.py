@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 
-from core_api_web.api.deps import AuthContext, CoreServicesLike, device_mode, get_services
+from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1 import ssh_handoff
 from core_api_web.api.v1.common import admin
@@ -82,9 +82,6 @@ def requester(auth: AuthContext) -> str:
 
 
 def _call(svc: CoreServicesLike, auth: AuthContext, action: str, params: dict[str, Any]) -> dict[str, Any]:
-    if auth.shared_dev and device_mode():
-        # D-548: a dev-mode robot hands its API to anyone on the network, never its shell.
-        raise ApiError("FORBIDDEN", 403, "공용 개발 토큰으로는 SSH 접속을 열 수 없습니다")
     request_path, response_path, _keys = _paths(svc)
     # One deadline for the lock and the exchange: the caller waits at most the contract's 10 s.
     deadline = time.monotonic() + wait_seconds(svc.config)

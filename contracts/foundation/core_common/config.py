@@ -107,11 +107,16 @@ def _append_dev_tokens(config: dict[str, Any], dev_layer: dict[str, Any]) -> Non
     tokens = auth.get("tokens") or []
     if not isinstance(tokens, list):
         return
-    listed = {item.get("sha256") or (hashlib.sha256(str(item["token"]).encode("utf-8")).hexdigest()
-                                     if item.get("token") else None)
-              for item in tokens if isinstance(item, dict)}
+    def digest(item: Any) -> Optional[str]:
+        if not isinstance(item, dict):
+            return None
+        if item.get("sha256"):
+            return str(item["sha256"]).strip().lower()
+        return hashlib.sha256(str(item["token"]).encode("utf-8")).hexdigest() if item.get("token") else None
+
+    listed = {digest(item) for item in tokens}
     auth["tokens"] = tokens + [item for item in (dev_layer.get("auth") or {}).get("tokens") or []
-                               if hashlib.sha256(str(item["token"]).encode("utf-8")).hexdigest() not in listed]
+                               if digest(item) is not None and digest(item) not in listed]
 
 
 def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:

@@ -460,6 +460,17 @@ def test_device_dev_mode_marker_opens_only_the_shared_dev_tokens(robot, monkeypa
     assert tc.get("/api/v1/robot/state", headers=bearer("plain-" + "operator-value")).status_code == 401
     assert tc.get("/api/v1/robot/state", headers=CARD).status_code == 200
 
+    # D-548: no credential that outlives the marker, no new network, release or boot.
+    for method, path in (("post", "/api/v1/system/tokens"), ("delete", "/api/v1/system/tokens/card01"),
+                         ("post", "/api/v1/auth/enrollment-codes"), ("post", "/api/v1/host/reboot"),
+                         ("post", "/api/v1/host/network/connect")):
+        assert getattr(tc, method)(path, headers=DEV_ADMIN).status_code == 403, path
+    assert tc.get("/api/v1/system/tokens", headers=DEV_ADMIN).status_code == 200
+    assert tc.post("/api/v1/system/tokens", headers=CARD, json={"role": "viewer"}).status_code == 201
+    stored = (tmp_path / "rosy.yaml").read_text(encoding="utf-8")
+    assert hashlib.sha256(("rosy-dev-" + "admin").encode()).hexdigest() not in stored  # never written to /etc
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 200  # still live in memory
+
     # A dev digest an earlier write stored is not listed twice; removing the marker closes it at once.
     hashed = {"id": "devstored", "role": "administrator", "source": "legacy",
               "sha256": hashlib.sha256(("rosy-dev-" + "admin").encode()).hexdigest()}
