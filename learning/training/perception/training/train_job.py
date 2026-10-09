@@ -200,7 +200,7 @@ def _run(config, out, indexed_review, admission_stack):
     keys = ({"seed", "epochs", "lr", "batch_size", "recipe", "parent_model",
              "parent_torchscript", "ignore_top", "model_version"} if drivable_head else
             {"seed", "epochs", "lr", "batch_size", "base", "recipe"})
-    if set(training) - ({"fp_lambda"} if drivable_head else set()) != keys:  # D-566: optional
+    if set(training) - ({"fp_lambda", "head"} if drivable_head else set()) != keys:  # D-566: optional
         raise JobError(f"training needs exactly {sorted(keys)}")
     for name in (("seed", "epochs", "batch_size") if drivable_head else
                  ("seed", "epochs", "batch_size", "base")):
@@ -213,6 +213,8 @@ def _run(config, out, indexed_review, admission_stack):
             raise JobError("drivable_head needs parent paths and ignore_top in [0,239]")
         if type(training.get("fp_lambda", 1.0)) not in (int, float) or not 0 <= training.get("fp_lambda", 1.0) < 100:
             raise JobError("fp_lambda must be a number in [0,100)")
+        if training.get("head", "local") not in ("local", "context", "context_lane"):  # D-566 item 5
+            raise JobError("head must be local, context or context_lane")
         from drivable_versions import version_error  # D-558
         if version_error(training["model_version"], "v13-drivable-"):
             raise JobError(version_error(training["model_version"], "v13-drivable-"))
@@ -481,7 +483,8 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                 tracker.write_config({**inputs, "training": training,
                                       "gpu": torch.cuda.get_device_name(0),
                                       "coverage": coverage, "parent_parity": parent_parity})
-                model = LaneWithDrivable(lane, ignore_top=training["ignore_top"])
+                model = LaneWithDrivable(lane, ignore_top=training["ignore_top"],
+                                         head=training.get("head", "local"))
                 try:
                     # D-566: balance the loss by the train labelled-pixel ratio.
                     result = train_head(model, train_ds, val_ds, epochs=training["epochs"],
@@ -511,7 +514,8 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
             check_indexed()
             metrics = json.loads(Path(trained["metrics"]).read_text(encoding="utf-8"))
             frozen, _ = load_frozen_lane(parent["torchscript"], classes=train_ds.classes[:-1])
-            model = LaneWithDrivable(frozen, ignore_top=training["ignore_top"])
+            model = LaneWithDrivable(frozen, ignore_top=training["ignore_top"],
+                                     head=training.get("head", "local"))
             model.drivable.load_state_dict(torch.load(trained["checkpoint"], map_location="cpu",
                                                       weights_only=True))
             artifact = out / f"export-{attempt}"
