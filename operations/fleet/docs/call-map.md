@@ -1,6 +1,6 @@
 # Fleet 호출 지도
 
-현재 소스의 호출 지도다. 기준은 local main `3b6072a46`(2026-10-09). 계약은 ADR과 API Reference다. 화면 구조의 결정은 [D-540](../../../docs/adr/D-540-fleet-console-structure-v2.md)(Proposed)이고, CORE trip 소유는 [D-541](../../../docs/adr/D-541-core-fleet-trip-lease.md)(Proposed)이다. 구현 순서는 [콘솔 v2 계획](../../../docs/plans/2026-10-09-fleet-console-v2.md)이다. 이 문서는 그 결정을 바꾸지 않는다. D-540은 Proposed인 채로 브랜치 (a) 이름 있는 운영자, (b) 공통 머리, (c) 예외 큐 펼침이 이 트리에 있다. D-541 7의 Fleet trip lease holder도 있다. 기본은 `fleet.trip_lease_required` false라 lease를 열지 않는다.
+현재 소스의 호출 지도다. 기준은 local main `d8f12328b`(2026-10-09). 계약은 ADR과 API Reference다. 화면 구조의 결정은 [D-540](../../../docs/adr/D-540-fleet-console-structure-v2.md)(Proposed)이고, CORE trip 소유는 [D-541](../../../docs/adr/D-541-core-fleet-trip-lease.md)(Proposed)이다. 구현 순서는 [콘솔 v2 계획](../../../docs/plans/2026-10-09-fleet-console-v2.md)이다. 이 문서는 그 결정을 바꾸지 않는다. D-540은 Proposed인 채로 브랜치 (a) 이름 있는 운영자, (b) 공통 머리, (c) 예외 큐 펼침이 이 트리에 있다. D-541 7의 Fleet trip lease holder도 있다. 기본은 `fleet.trip_lease_required` false라 lease를 열지 않는다.
 
 현장에 올라가 있는 Fleet 이미지가 이 커밋보다 이전일 수 있다. 이 문서는 그 이미지를 열어서 확인하지 않았다. 소스·호스트 대조는 장치 주행과 현장 수용을 대신하지 않는다.
 
@@ -27,6 +27,7 @@
 |---|---|---|
 | 상태·세션 | `GET /api/fleet/state`, `GET /api/fleet/session` | 로봇 행, 세션 역할. D-540 2가 말한 `/auth/session` 하나로의 합치기는 아직이다 |
 | 목표 | `POST /api/fleet/robots/{id}/goal` | `{x, y, yaw}`. 지도 클릭은 `yaw: 0`과 `Idempotency-Key`(UUID)를 보낸다. 작업 서비스가 켜져 있으면 헤더가 없으면 400 `IDEMPOTENCY_KEY_REQUIRED`. 이름 있는 운영자만 보낸다(D-540 9). 공유 토큰은 403 `OPERATOR_IDENTITY_REQUIRED`. Fleet은 CORE `POST /api/v1/navigation/goal`에 `correlation_id`를 보탠다. 로봇이 `goal_lease`를 알리면 `lease_ttl_s`를 넣을 수 있다(D-550 10). 갱신은 `POST /api/v1/navigation/goal/lease` |
+| 목표 lease presence | `POST /api/fleet/goal-lease/presence` | 보이는 운영 콘솔이, 어떤 로봇의 `goal.goal_lease`가 `leased`인 동안만 보낸다. lease가 꺼져 있으면 새 호출이 없다 |
 | 목표 버튼 | 위와 같음 | 첫 잠금은 이름 있는 운영자(`이름 있는 운영자 로그인이 필요합니다`). 그 다음 Fleet 상태 없음, 오프라인, `navigation.goal_navigation` 없음, 지도 없음, 비상 정지, 안전 상태 미확인, 라인 추종 중이다. 지도 프레임 `LOCALIZED`가 아니어도 버튼은 눌린다. CORE가 거절하면 로그에 미션 거절로 남는다 |
 | 라인 추종 | `POST /api/fleet/robots/{id}/line-follow` `{mode}` | 화면은 `IR_LINE`과 `OFF`만 보낸다. 클라이언트도 그 둘만 `PUT /api/v1/line-follow/mode` 한다. 이름 있는 운영자다 |
 | 취소·전체 취소 | `POST .../cancel`, `POST /api/fleet/cancel-all` | 로봇 취소, 전체 취소 |
