@@ -80,6 +80,12 @@ class Presentation:
     sound: Optional[str]
     reversing: bool
 
+    @property
+    def bar(self) -> tuple:
+        """(face, text, level, battery percent, charging): what the expression and the status bar draw."""
+        return (self.expression, self.status_text, self.status_level, self.battery_percent,
+                self.battery_charging)
+
 
 def _text(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value else None
@@ -101,6 +107,8 @@ def present(*, state: Any, robot_mode: Any = None, nav_state: Any = None,
             state = robot_state.CAUTION  # a CORE caution code is a caution, not just an amber strip
     else:
         mode, nav, recovery = robot_mode, nav_state, None
+    if recovery == "bridge" and state == robot_state.CAUTION:
+        recovery = None  # the soft D-476 bridge yields to a caution the bar is already saying
     if estop:
         mode = "EMERGENCY"
     kind = screen.get("kind") if screen else None

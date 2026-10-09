@@ -54,7 +54,7 @@ def test_battery_fill_grows_with_the_charge_and_charging_marks_the_icon():
     body = (SIZE[0] - 34, 8, SIZE[0] - 10, I.BAR_HEIGHT - 8)
 
     def lit(percent):
-        return sum(1 for pixel in _bar(percent=percent)[0].crop(body).getdata() if pixel == I._FG)
+        return sum(1 for pixel in _bar(percent=percent)[0].crop(body).getdata() if pixel != I._BG)
 
     assert lit(100.0) > lit(50.0) > lit(10.0)
     plain, bolt = _bar(percent=60.0)[0], _bar(percent=60.0, charging=True)[0]

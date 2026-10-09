@@ -2378,12 +2378,14 @@ def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
     assert _starts(gpio) == [] and lamp.pattern == "recovering"
 
 
-def test_a_core_common_without_the_presentation_record_still_gets_a_lamp_pattern(monkeypatch):
+def test_a_core_common_without_the_presentation_record_still_gets_a_lamp_pattern(tmp_path, monkeypatch):
     module = _display()
     monkeypatch.setattr(module, "presentation", None)
     view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
     assert module.FaceDisplay.lamp_pattern_for(view, "caution") == "caution"
+    display, *_ = _face_loop(module, tmp_path)
+    assert display.screen_of({"stage": "CORE_READY"}, 0.0) is None  # no record, no face: the status card only
 
 
 def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():

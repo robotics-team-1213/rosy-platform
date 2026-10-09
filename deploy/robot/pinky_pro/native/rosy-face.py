@@ -6,9 +6,10 @@ the lamp from power-on to shutdown (formerly rosy-boot-display, which drew only
 the boot card). What the LCD draws comes from one rule table,
 ``core_common.face_screen.screen_for``: status cards (failure, update, e-stop,
 AP, booting, CORE not responding, unused login code) hide the face; otherwise
-the emotion GIF CORE chose plays, with the D-394 drive card, the PWR-003 wake
-card or a strip (caution, test, calibration, charging) over it. CORE hands its
-part over in /run/rosy/face-inputs.json (rosy-core's runtime directory, 0644,
+the emotion GIF CORE chose plays under a status bar (text, level colour, battery), or
+the D-394 drive / PWR-003 wake card takes its place. The lamp, the bar, the expression and
+the sound all come from one core_common.presentation record (D-552).
+CORE hands its part over in /run/rosy/face-inputs.json (rosy-core's runtime directory, 0644,
 rewritten every second); older than three seconds is no hand-over, so a dead
 CORE sends the screen back to the status card. GIF frames are converted to the
 panel's bytes once, lazily, and replayed (D-185 budget). The buzzer and lamp
@@ -718,7 +719,7 @@ class FaceDisplay:
     @staticmethod
     def _present(view: dict, state: str, core: dict | None, screen: dict | None):
         """The one record for lamp, bar, expression and sound (core_common.presentation); None on a
-        release without it, where the stage-only lamp mapping stands."""
+        release without it, where the stage-only lamp mapping stands and no face is drawn."""
         if presentation is None or robot_state is None:
             return None
         return presentation.present(state=state, robot_mode=view.get("robot_mode"),
@@ -837,7 +838,7 @@ class FaceDisplay:
 
     def screen_of(self, view: dict, now: float) -> dict | None:
         """D-433: the situation table's answer for this poll (None on a release without it)."""
-        if face_screen is None or robot_state is None:
+        if face_screen is None or robot_state is None or presentation is None:
             return None
         core = self._core()
         mode = core.get("robot_mode") if core else None
@@ -924,7 +925,7 @@ class FaceDisplay:
         redrawn = False
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); a strip rides every frame.
-            self.animating = self._bar(screen, pres)
+            self.animating = pres.bar
             self._drawn = None
         else:
             self.animating = None
@@ -935,7 +936,7 @@ class FaceDisplay:
                 if screen is not None:
                     card["screen"] = screen
                     if kind == "face":
-                        card["bar"] = self._bar(screen, pres)[1:]
+                        card["bar"] = pres.bar[1:]
                     if screen.get("line"):
                         card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
                     if kind == "update":
@@ -956,15 +957,6 @@ class FaceDisplay:
         self._announce(state, pattern, now)
         self._reverse_alarm(core, pattern, now)
         return redrawn
-
-    @staticmethod
-    def _bar(screen: dict, pres) -> tuple:
-        """(face, text, level, battery percent, charging): what the expression and the status bar show."""
-        if pres is None:  # a release without the record: the table's own strip, no battery
-            return (screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok",
-                    None, None)
-        return (pres.expression or screen["face"], pres.status_text, pres.status_level,
-                pres.battery_percent, pres.battery_charging)
 
     def _reverse_alarm(self, core: dict | None, pattern: str | None, now: float) -> None:
         """D-546: one reversing beep per BUZZER_REVERSE_S while CORE says ``retrace``; silent
