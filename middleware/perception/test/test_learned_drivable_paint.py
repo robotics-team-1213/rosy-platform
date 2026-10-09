@@ -227,3 +227,19 @@ def test_runner_falls_back_to_lane_marking_without_a_drivable_class(tmp_path):
     mask, kind, info, latency_ms = model.infer_drivable(np.zeros((480, 640, 3), np.uint8))
     assert kind == "lane_marking" and info["reason"] == "no_drivable_class"
     assert mask.shape == (480, 640) and mask.any() and latency_ms >= 0
+
+
+def test_a_ragged_edge_finger_is_not_a_branch():
+    region = np.zeros((40, 60), bool)
+    region[20:, 20:40] = True                                # own road
+    region[5:20, 20:36] = True                               # the road going on
+    region[5:20, 38:40] = True                               # a 2 px finger on the right edge
+    way, branches = right_branch(region)
+    assert branches == 1 and way[10, 20:36].all() and not way[10, 38:40].any()
+
+
+def test_an_enclosed_hole_is_not_a_fork():
+    labels = _road()
+    labels[150:170, 150:170] = 0                             # a box on the road, background around it
+    way, info = drivable_target(_logits(labels), CLASSES)
+    assert info["branches"] == 1 and way[160, 120:200].all()  # filled: the edges stay the road's
