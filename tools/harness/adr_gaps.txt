@@ -29,3 +29,6 @@ D-587 reserved on marker-sightings for ceiling marker map pose; remove when it l
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-589 reserved on cam-auto-tune for recognition-driven exposure; remove when it lands
 D-591 reserved in another active branch (refs/adr/D-591)
+D-594 reserved in another active branch (refs/adr/D-594); remove when it lands
+D-595 reserved in another active branch (refs/adr/D-595); remove when it lands
+D-596 reserved in another active branch (refs/adr/D-596); remove when it lands
