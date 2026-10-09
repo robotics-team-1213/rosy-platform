@@ -26,7 +26,7 @@ The model half of the D-356 learned-perception loop: export a trained model to O
 ### Working In This Directory
 
 - Delivery refuses a model whose intake failed; never add a force path around it.
-- New `v13-drivable` intake and push are refused by D-532 until trusted owner approval lineage and parent lane hash are verified; the current refusal is a final fail, not a retriable HOLD.
+- `v13-drivable` intake and push are refused (final fail, not a retriable HOLD) unless the manifest carries D-554 lineage: `parent_lane_model` (lane-seg revision, ONNX sha256), a 64-hex dataset revision and `dataset.annotation_origin: derived_from_reviewed_lanes` with `dataset.adr: D-554`, plus a `camera_provenance` mark (accepted or provisional, D-554 item 7) (`intake_eval_gate.v13_lineage_error`). Push goes only to the lane_seg shadow slot; lane_seg has no promote.
 - HF revisions must be 40-hex commit hashes, not tags. The store folder is the source of truth.
 - Robot writes use the operator SSH options in `../operator_ssh.py` (user `rosy`, key plus pinned known_hosts, BatchMode, `sudo -n`).
 - Model weights never go in `src/` or git.
