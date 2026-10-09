@@ -146,6 +146,10 @@ class TrackWorker:
             self._config_log.failed((("error_type", type(exc).__name__),))
         else:
             self._config_log.ok()
+            # D-560: the ingest warps the map plane with the same record tracking uses.
+            self.ingest.report_calibration(self.camera.source_id,
+                                           (self._config or {}).get("calibration"),
+                                           self.camera.map_id)
 
     async def run_config_sync(self, stop_event: asyncio.Event,
                               interval_s: float = CONFIG_REFRESH_S) -> None:

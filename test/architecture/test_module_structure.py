@@ -187,7 +187,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_481,
+        48_711,
+        "split: re-judged at 48711 on 2026-10-09 merging D-560 S2 (+230 over main 48481; Fleet draws Rosy Cam's "
+        "map plane, display only): web/shared/vision-view.js plane header, lease, freshness rule and feed, "
+        "web/camera-backdrop.js plane draw, web/site-map.js plane view, web/field-view.js plane check and "
+        "map-metre grid. Existing owners, no command or stop path, no new owner; the D-515 warp stays as the "
+        "fallback. +150 allowance unchanged. Previously "
         "split: re-judged at 48481 on 2026-10-09 (independent re-judge, critic agent): D-540 (d) robot card trips: "
         "web/card-trip.js 230 (card 운행 form, convoy block), shared/site-map-model.js +40 (one plan/start/cancel "
         "path, site-map.js uses it, −4), queues.js split from roster.js done (roster.js −117). No new route or "
