@@ -1274,6 +1274,9 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
+        # D-560: this Vision answers the map-plane lease with a raw frame (no D-560), so the D-515
+        # browser warp is the fallback and the tag says so.
+        assert "브라우저 보정(대체)" in page.inner_text("#map-tag")
         # D-487: the calibrated canvas carries the frame; no second copy under the map.
         assert page.locator("#map-camera").count() == 0
         # D-515: the frame is laid top-down on the metre view. The site centre (canvas centre for
@@ -1288,6 +1291,99 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         frame_age["ms"] = "4000"
         page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
                                timeout=7000)
+        assert not errors
+        browser.close()
+
+
+def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(console_url):
+    """D-560 S2: the console asks Vision for the map plane and lays it on toPx without a warp."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+    }
+    # Plane 1.3 x 1.3 m at 100 px/m from (-0.15, -0.15): blue, with a red map square
+    # x 0..0.5, y 0.5..1 (pixels u 15..65, v 15..65).
+    plane_svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="130" height="130">'
+                 '<rect width="130" height="130" fill="#2040bf"/>'
+                 '<rect x="15" y="15" width="50" height="50" fill="#bf2030"/></svg>')
+    raw_svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+               '<rect width="1280" height="720" fill="#20bf40"/></svg>')
+    leases = []
+    plane = {"status": 200}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_lease(route):
+            body = route.request.post_data_json
+            leases.append(body)
+            token = "plane-lease" if (body.get("rectification") or {}).get("mode") == "map" else "raw-lease"
+            route.fulfill(status=200, json={"source_id": "ceiling_north", "lease": token,
+                                            "frame_path": "/api/vision/sources/ceiling_north/frame",
+                                            "expires_in_s": 60})
+
+        def serve_frame(route):
+            base = {"X-Frame-Seq": "42", "X-Frame-Age-Ms": "20",
+                    "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"}
+            if route.request.headers.get("authorization") != "Bearer plane-lease":
+                route.fulfill(status=200, content_type="image/svg+xml", body=raw_svg,
+                              headers={**base, "X-Frame-Rectified": "false"})
+            elif plane["status"] == 409:
+                route.fulfill(status=409, json={"detail": "plane unavailable"},
+                              headers={"X-Frame-State": "plane-unavailable"})
+            else:
+                route.fulfill(status=200, content_type="image/svg+xml", body=plane_svg,
+                              headers={**base, "X-Frame-Rectified": "map",
+                                       "X-Frame-Plane": "-0.15,-0.15,1.15,1.15,100",
+                                       "X-Frame-Calibration": "paint-test"})
+
+        page.route("**/api/fleet/vision/lease", serve_lease)
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 평면 영상 · paint-test')",
+            timeout=10000)
+        assert {"mode": "map"} in [body.get("rectification") for body in leases]
+        # Known map points land on the canvas pixel the map's own toPx gives (siteBounds 0.25 margin,
+        # fitTransform pad 32, no view turn): red inside the square, blue outside, ground beyond the plane.
+        # Points stay off the 0.5 m grid lines.
+        sample = """async (points) => {
+          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
+          const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          return Object.fromEntries(Object.entries(points).map(([name, [x, y]]) => { const p = project(t, x, y);
+            return [name, [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data]]; }));
+        }"""
+        colours = page.evaluate(sample, {"red": [0.25, 0.75], "blue": [0.75, 0.25],
+                                         "edge": [-0.1, 0.3], "out": [-0.22, 0.3]})
+        red, blue, edge, out = colours["red"], colours["blue"], colours["edge"], colours["out"]
+        assert red[0] > 150 and red[2] < 100, colours
+        assert blue[2] > 150 and blue[0] < 100, colours
+        assert edge[2] > 150 and edge[0] < 100, colours  # the plane margin is part of the picture
+        assert not (out[2] > 150 and out[0] < 100), colours  # beyond the plane stays ground
+        save_temp_screenshot(page, "fleet_map_plane_1920.png")
+
+        plane["status"] = 409
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('브라우저 보정(대체) · paint-test')",
+            timeout=10000)
+        # The fallback warps the raw (green) frame; the red plane square is gone.
+        inside = page.evaluate(sample, {"site": [0.25, 0.75]})["site"]
+        assert inside[1] > 150 and inside[0] < 100, inside
         assert not errors
         browser.close()
 
@@ -1339,7 +1435,8 @@ def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
-        assert not page.evaluate("() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 실영상')")
+        tag = page.inner_text("#map-tag")
+        assert "Rosy Cam 평면 영상" not in tag and "브라우저 보정(대체)" not in tag, tag
         # 낡은 교정이므로 실영상(빨강)을 캔버스에 얹지 않았다 — 미터 눈금 바탕이다.
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
