@@ -1389,3 +1389,8 @@
 - Change: Added two host closed-loop cases for the operational LaneKeeper using rendered floor paint and the CORE steering-law mirror.
 - Evidence: A 0.20 m missing left stripe on a straight is crossed; a 65 degree bend with route context stops about 0.18 m before its vertex when the parallel boundary vanishes. Related host tests: 111 passed, 2 skipped, 0 new failures.
 - Gate: HOST-SIM diagnostic only. Bend completion, ROS-SIM, device and field acceptance remain HOLD; CORE command ownership unchanged.
+
+## 2026-10-10 · uncommitted · docs(control): verify CORE bend handoff and body footprint
+- Change: Corrected the keeper gap note to the D-507/D-531 owner split and added a reproducible operational keeper plus CORE host loop and start-pose sensitivity sweep.
+- Evidence: Valid bend instruction reached reacquisition; no instruction stopped. Nominal 0.15 m radius crossed painted lane under the body on 12 ticks; 0/9 perturbed starts avoided contact. An exploratory 0.08 m radius with earlier entry avoided contact at only 1/9 starts.
+- Gate: HOST-SIM containment HOLD; no operational control or device setting changed.
