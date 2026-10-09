@@ -364,3 +364,8 @@
 - 변경: 트래커가 확인 요청과 상관없이 최근 `RING_S`(창 6 s + 설정 읽기 지연 2×2 s + 1 s)의 LED 표본을 확인 색(파랑·주황)마다 모아 두고, 판정은 그 링에서 창 안 표본만 쓴다. 링은 최신 `MAX_SAMPLES`까지. 판정 규칙(`max_gap_s` 0.7 s, 창 끝 포함)은 그대로다.
 - 증거: 현장 2026-10-09 Fleet 갱신 뒤 9dfk(rosy_26) 이동 중 `identify`가 처음 수락(200)됐으나 판정은 `UNKNOWN frames_missing`. 요청은 2 s 설정 읽기로 늦게 도착하고 표본은 그때부터만 모여 창 앞이 비었다. 새 시험 `test_frames_before_the_challenge_arrives_still_fill_the_window` 포함 30 passed.
 - gate 변화: SOURCE. 현장 vision 갱신 뒤 LED 확인 matched 확인.
+
+## 2026-10-09 · uncommitted · refactor(vision): LED 링 뒤 쓰이지 않는 challenge 인자 제거
+- 변경: 링이 요청과 상관없이 표본을 모으므로 `_detect`·`_identity_sample`의 `challenge` 인자를 지웠다. `MAX_SAMPLES`가 약 5.8 fps 위에서 링 범위를 정한다는 한계를 주석으로 남겼다(독립 검증 지적).
+- 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
+- gate 변화: 없음(동작 같음).

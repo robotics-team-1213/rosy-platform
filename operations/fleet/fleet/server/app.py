@@ -141,7 +141,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
-               traffic_signal_advice=False,
+               traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
@@ -556,6 +556,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_viewer=require_viewer, read_guard=read_guard,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
+                           require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
     if tracking is not None and tracking.enabled:
@@ -566,9 +567,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
                                                               calibrations=tracking.calibrations),
-                                   read_guard=read_guard, require_operator=require_operator)
+                                   read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator,
+                          require_operator=require_operator, require_named_operator=require_named_operator,
                           # D-519: login accounts are configured named operators too.
                           auth_configured=bool(principals or console_token) or password_sessions is not None)
 
@@ -601,13 +602,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
-                              site_maps=site_maps, require_operator=require_operator,
-                              operator_guard=operator_guard)
+                              site_maps=site_maps, require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
         """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
         return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
 
+    if (trip_lease or {}).get("required") and console_token and console.uses_rest_token(console_token):
+        # D-541 1: the lease owner is the robot REST token; browsers hold the console token
+        raise ValueError("D-541: a robot REST token must be Fleet's own, not the console token")
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
@@ -617,6 +620,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
                              roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
                              traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
+                             lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
@@ -641,6 +645,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
+                        require_operator=require_operator,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
     from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
@@ -672,6 +677,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,
+                          require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport),

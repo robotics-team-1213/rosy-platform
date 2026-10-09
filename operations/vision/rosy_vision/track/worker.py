@@ -180,7 +180,7 @@ class TrackWorker:
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn, challenge=challenge))
+                lens, relearn))
         if challenge is not None:
             await self._report_identity(challenge, frame.captured_at)
         if step is None:
@@ -223,7 +223,7 @@ class TrackWorker:
             self._publish_log.failed((("identity_error_type", type(exc).__name__),))
 
     def _identity_sample(self, image: np.ndarray, captured_at: float, calibration: Calibration,
-                         result: DetectorResult, challenge: dict | None) -> None:
+                         result: DetectorResult) -> None:
         """Ring samples of the anonymous blobs for every identify colour (detection thread)."""
         self._identity_ring = [(at, by) for at, by in self._identity_ring if captured_at - RING_S <= at < captured_at]
         if result.status != "OK":
@@ -242,15 +242,17 @@ class TrackWorker:
                 continue
             radius = math.hypot((ex - px) * scale_x, (ey - py) * scale_y)
             blobs.append(led_identity.Blob(px * scale_x, py * scale_y, radius, d.x, d.y))
-        self._identity_ring = self._identity_ring[-(led_identity.MAX_SAMPLES - 1):]   # newest kept
+        # ponytail: MAX_SAMPLES (64) bounds memory; above ~5.8 fps it, not RING_S, sets the reach,
+        # so a window head could drop out again. Raise it with the camera rate.
+        self._identity_ring = self._identity_ring[-(led_identity.MAX_SAMPLES - 1):]
         self._identity_ring.append((captured_at, {
             color: led_identity.sample_frame(image, captured_at=captured_at,
                                              calibration_revision=calibration.revision, blobs=blobs,
                                              color=color, config=self.led_config)
             for color in self.led_config.hues}))
 
-    def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens, relearn: int | None,
-                challenge: dict | None = None) -> tuple[Calibration | None, DetectorResult] | None:
+    def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
+                relearn: int | None) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, decode, choose the calibration, detect."""
         if relearn is not None:
             if self._relearn_seen is not None and relearn > self._relearn_seen:
@@ -265,7 +267,7 @@ class TrackWorker:
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
         result = self.detector.detect(Frame(image, captured_at), calibration)
-        self._identity_sample(image, captured_at, calibration, result, challenge)
+        self._identity_sample(image, captured_at, calibration, result)
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []

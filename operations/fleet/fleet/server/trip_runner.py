@@ -33,6 +33,7 @@ from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, Tri
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
+from fleet.traffic.trip_lease import TripLease
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     lap_due, lap_retry_due)
@@ -78,7 +79,7 @@ class TripRunner:
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
                  traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
-                 traffic_signals=(), signal_advice: bool = False,
+                 traffic_signals=(), signal_advice: bool = False, lease: Optional[dict] = None,
                  renew_lease: Optional[Callable[[str], Awaitable[None]]] = None) -> None:
         self._store = store
         self._routing = routing_config
@@ -101,6 +102,7 @@ class TripRunner:
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
+        self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -155,34 +157,41 @@ class TripRunner:
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
             pose = await self._pose_checks(robot_id, graph, plan["segments"])
-            graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
-            caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
-                         "lane_arc": caps.lane_arc,
-                         "line_follow_authority": getattr(caps, "line_follow_authority", False),
-                         "line_follow_advice": getattr(caps, "line_follow_advice", False),
-                         "lane_bend": caps.lane_bend}
-            arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
-                            frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
-            leader = (row["request"].get("convoy") or {}).get("leader")
-            refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
-                self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
-            if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
-                raise TripError(422, *refused)
-            refused = self.traffic.signal_refusal(plan["segments"], self.authority.mode(caps))
-            if refused:  # D-525 1/6: not from inside a signalled zone; crossing one needs CORE authority
-                raise TripError(422, *refused)
-            if repeat:  # D-517 3: no await from this check to the trip opening
-                full = self.traffic.loop_full(arcs, self._live.values())
-                if full is not None:  # a convoy counts as 1 + N robots
-                    raise TripError(422, "TRIP_CONVOY_LOOP_FULL" if leader else "TRIP_LOOP_FULL", full)
+            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
+            try:
+                graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
+                caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
+                             "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
+                             "lane_arc": caps.lane_arc,
+                             "line_follow_authority": getattr(caps, "line_follow_authority", False),
+                             "line_follow_advice": getattr(caps, "line_follow_advice", False),
+                             "lane_bend": caps.lane_bend}
+                arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
+                                frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
+                leader = (row["request"].get("convoy") or {}).get("leader")
+                refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
+                    self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
+                if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
+                    raise TripError(422, *refused)
+                refused = self.traffic.signal_refusal(plan["segments"], self.authority.mode(caps))
+                if refused:  # D-525 1/6: not from inside a signalled zone; crossing one needs CORE authority
+                    raise TripError(422, *refused)
+                if repeat:  # D-517 3: no await from this check to the trip opening
+                    full = self.traffic.loop_full(arcs, self._live.values())
+                    if full is not None:  # a convoy counts as 1 + N robots
+                        raise TripError(422, "TRIP_CONVOY_LOOP_FULL" if leader else "TRIP_LOOP_FULL", full)
+            except TripError:  # the lease opened for a trip that did not start
+                if lease is not None:
+                    await self.lease.release(robot_id, lease["lease_id"])
+                raise
             now = self._clock()
             view = {"trip_id": plan_id, "plan_id": plan_id, "robot_id": robot_id, "started_by": principal_id,
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
-                    "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader}}
+                    "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
+                    "lease": lease}
             live = LiveTrip(view, graph, row["request"])
             live.lap_route, live.lap_arcs = route_key(plan["segments"]), arcs
             self._live[robot_id] = live
@@ -344,6 +353,7 @@ class TripRunner:
         """One period (D-517 7): every open trip steps at once, each under its own lock and its own
         bounded robot calls. A robot still in its last step is left to finish and skips this
         period, so a slow robot never holds another back; then the block table is computed."""
+        self.lease.period(self._live.values())  # D-541 7: renews first, from their own slot
         for robot_id, live in list(self._live.items()):
             task = self._inflight.get(robot_id)
             if live.open and (task is None or task.done()):
@@ -751,6 +761,16 @@ class TripRunner:
             live.view["detail"].update(await self._halt(live))
         self._save(live)
 
+    async def _lease_lost(self, live: LiveTrip, detail: dict) -> None:
+        """D-541 7: closed before the lock, so a step in flight sends nothing more; free: goal cancelled."""
+        if live.open:
+            live.view.update(state="stopped", reason="lease_lost")
+            live.view["detail"].update(detail)
+            async with self._lock_for(live.view["robot_id"]):
+                if live.arc(live.view["segment_index"]).drive_mode != "lane":
+                    live.view["detail"].update(await self._halt(live))
+                self._save(live)
+
     async def _halt(self, live: LiveTrip) -> dict:
         i = live.view["segment_index"]
         return await self.halts.halt_robot(live.view["robot_id"], live.arc(i).drive_mode == "lane", live.place(i))
@@ -810,5 +830,6 @@ class TripRunner:
     def _save(self, live: LiveTrip) -> None:
         if not live.open:
             live.view["detail"].pop("bend_candidate", None)
+            self.lease.close(live)  # D-541 7: DELETE after the halt
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)

@@ -125,6 +125,8 @@ class TripCaps:
     line_follow_advice: bool = False
     #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
     lane_bend: bool = False
+    #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
+    trip_lease: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -151,7 +153,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
-                            lane_bend=item.get("lane_bend") is True)
+                            lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True)
     return None
 
 
