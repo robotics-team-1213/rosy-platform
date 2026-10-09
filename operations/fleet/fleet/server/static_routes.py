@@ -65,6 +65,7 @@ CONSOLE_ASSETS = {
     "site-layer.js": ("site-layer.js", "application/javascript"),
     "tracking-layer.js": ("tracking-layer.js", "application/javascript"),
     "tracking-view.js": ("tracking-view.js", "application/javascript"),
+    "tracking-relearn.js": ("tracking-relearn.js", "application/javascript"),
     "start-point-layer.js": ("start-point-layer.js", "application/javascript"),
     "start-point-view.js": ("start-point-view.js", "application/javascript"),
     "trail-view.js": ("trail-view.js", "application/javascript"),

@@ -10,6 +10,7 @@ import {
   fitFromCalibration,
 } from "/console/assets/map-fit.js";
 import { warpImage } from "./field-view.js";
+import { drawStartPointMarks } from "./start-point-layer.js";
 
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
 const tone = (name) => window.RosyPalette.cssColor(name);
@@ -51,6 +52,24 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   let pending = null;        // { source, norm } 검토 중인 Vision 응답
   let lastFrame = null;
   let warped = null;         // { key, data }
+  let shownTop = null;       // { layout, bounds, source, mapId } 지금 그린 위에서 본 그림 — 시작점 고르기용
+
+  // D-540 5: 시작점(start-point-view.js)은 이 그림에서 고른다. canvas 는 object-fit: contain 이다.
+  const mapFitPick = (clientX, clientY) => {
+    if (!mapFitPick.ready()) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+    if (!(scale > 0)) return null;
+    const px = (clientX - rect.left - (rect.width - canvas.width * scale) / 2) / scale;
+    const py = (clientY - rect.top - (rect.height - canvas.height * scale) / 2) / scale;
+    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
+    const [x, y] = project(shownTop.layout.canvasToMap, px, py);
+    const b = shownTop.bounds;
+    if (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y) return null;
+    return { x, y, source: shownTop.source, mapId: shownTop.mapId };
+  };
+  mapFitPick.ready = () => Boolean(shownTop) && !figure.hidden;
+  view.mapFitPick = mapFitPick;
 
   async function ensureLanes({ force = false } = {}) {
     const life = scope.capture();
@@ -185,8 +204,10 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     const show = Boolean(view.layers.maptop && fit && laneSet && frame && !frame.rectified
       && frame.source === visionView.currentSource() && image?.naturalWidth);
     figure.hidden = !show;
+    shownTop = null;
     if (!show) return;
     const layout = topDownLayout(laneSet.bounds, 640, 400, 0.1);
+    shownTop = { layout, bounds: laneSet.bounds, source: frame.source, mapId: laneSet.mapId };
     canvas.width = layout.width;
     canvas.height = layout.height;
     const ctx = canvas.getContext("2d");
@@ -201,6 +222,8 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     }
     const stroke = colour(fit.kind);
     drawLanes(ctx, layout.mapToCanvas, laneSet, stroke, 1.5);
+    const toPx = (x, y) => { const [px, py] = project(layout.mapToCanvas, x, y); return { x: px, y: py }; };
+    drawStartPointMarks(ctx, toPx, view.startPoints, [laneSet.mapId], tone("--series-secondary"), 2);
     // 카메라 시야(원본 네 모서리)를 지도 위에 그린다. 지평선 너머 모서리는 뺀다.
     const w = image.naturalWidth - 1;
     const h = image.naturalHeight - 1;

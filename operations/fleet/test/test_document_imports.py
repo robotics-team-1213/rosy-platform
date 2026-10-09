@@ -2,6 +2,7 @@
 
 D-410 splits operate and install. D-450 keeps Cell on `/console/cell`.
 D-518 adds the site-map document and names the shared-read modules; D-519 adds password-login.js; D-540 adds fleet-header.js.
+D-540 5 moves the start points and the background relearn from the console to install.
 An entry that reaches another document's module fails this test.
 """
 
@@ -41,8 +42,6 @@ OWN = {
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
-        "start-point-view.js",
-        "start-point-layer.js",
         "trail-view.js",
         "site-path.js",
         "site-layer.js",
@@ -65,6 +64,9 @@ OWN = {
         "field-layers.js",
         "map-fit-view.js",
         "peer-picker.js",
+        "start-point-view.js",  # D-540 5: 카메라 설치·보정
+        "start-point-layer.js",
+        "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
     },
     "cell.js": {
         "cell-document-editor.js",

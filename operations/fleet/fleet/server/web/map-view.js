@@ -12,7 +12,6 @@ import {
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
-import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
@@ -397,17 +396,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.scale(dpr, dpr);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
     // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
-    // 돌리므로 글자는 똑바로 선다. 클릭은 돌림을 먼저 풀고 미터 뷰를 거꾸로 푼다.
+    // 돌리므로 글자는 똑바로 선다.
     const rot = view.siteViewTurn || 0;
     const side = rot === 90 || rot === 270;
     const fw = side ? height : width, fh = side ? width : height;
     const t = fitTransform(bounds, fw, fh, 32);
     const turn = quarterTurn(rot, fw, fh);
     const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
-    view.cameraPick = rot ? (bx, by) => {
-      const q = turn.unpoint(bx / dpr, by / dpr);
-      return { x: (q.x - t.ox) / t.scale, y: (t.oy - q.y) / t.scale };
-    } : null;
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
@@ -519,7 +514,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
-    drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     guide(ctx, toPx);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
@@ -571,7 +565,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
-    drawStartPointMarks(ctx, (x,y)=>{const p=cellOf(grid,x,y);return {x:p.cx,y:p.cy};}, view.startPoints, [grid.map_id], css('--series-secondary'), .6);
     if (view.stateUnavailable) {
       el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
       canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
