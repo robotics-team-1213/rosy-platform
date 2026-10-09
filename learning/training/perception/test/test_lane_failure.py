@@ -156,7 +156,9 @@ def test_canary_transforms():
     assert not lf.exposure_bad(lf.image_facts(lf.canary_image(img, "ok_run")))
     erased = lf.canary_class_map(_along_map(), CLASSES, "erased_mask")
     assert not (erased == 1).any() and (lf.canary_class_map(_along_map(), CLASSES, "ok_run") == 1).any()
-    assert lf.canary_keep({"strategy": "both", "reason": None}, "keeper_drop")["strategy"] == "none"
+    for kind in ("keeper_drop", "erased_mask", "dark", "bright"):
+        assert lf.canary_keep({"strategy": "both", "reason": None}, kind)["strategy"] == "none"
+    assert lf.canary_keep({"strategy": "both", "reason": None}, "ok_run")["strategy"] == "both"
 
 
 # --- CLI steps after collect (collect itself needs MCAP + ONNX; it ran on the model PC) ----------

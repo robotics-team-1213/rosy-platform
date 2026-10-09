@@ -324,7 +324,7 @@ def _vlm_by_tile(run):
 def _facts_text(tile, vote):
     s, f0 = tile["summary"], tile["frames"][0]
     keep = f0["keep"] or {}
-    fr = f0["model"]["fractions"]
+    shown = [f"{k} {v}" for k, v in f0["model"]["fractions"].items() if v >= 0.01]
     lines = [tile["tile"],
              f"LiDAR front: {s['lidar_front_m']} m",
              f"odom: moved {tile['motion']['moved_m']} m, turned {tile['motion']['turned_deg']} deg",
@@ -333,8 +333,7 @@ def _facts_text(tile, vote):
              f"  transverse {s['transverse']}, rejected {','.join(keep.get('rejected') or []) or '-'}",
              f"  failing share {s['keep_failing']}",
              f"model: lane near {s['lane_near']}, dir {s['lane_direction']}",
-             *["  " + ", ".join(f"{k} {v}" for k, v in list(fr.items())[i:i + 2] if v >= 0.01)
-               for i in range(0, len(fr), 2)],
+             *["  " + ", ".join(pair) for pair in (shown[i:i + 2] for i in range(0, len(shown), 2))],
              f"image: mean {f0['image']['mean_gray']}, sat {f0['image']['saturated']}, dark {f0['image']['dark']}",
              f"calibration active: {s['calibration_active']}"]
     if vote:

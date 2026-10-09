@@ -327,8 +327,8 @@ def canary_class_map(class_map, classes, kind):
 
 
 def canary_keep(keep, kind):
-    """keeper_drop: keep_debug as when the keeper drops lines the model marked."""
-    if kind in ("keeper_drop", "erased_mask"):
+    """Synthetic canaries (all but ok_run) are lane losses: keep_debug as when the keeper lost the lane."""
+    if kind in ("keeper_drop", "erased_mask", "dark", "bright"):
         return dict(keep or {}, strategy="none", reason="no_boundary", boundaries=0, transverse=0, rejected=[])
     return keep
 
