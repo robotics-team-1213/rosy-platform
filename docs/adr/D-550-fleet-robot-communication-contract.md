@@ -138,6 +138,14 @@
     | 5 | 로봇마다 규칙 M 강제(`422 LINK_UNBOUNDED_MOTION`). trip 밖 LINE_FOLLOW 거절과 현장 lane trip 통행권 요구는 J2 재검토(D-517 M2 Safety-Review) 뒤 | 사용자 결정 | 그 로봇을 `rule_m: warn`으로 |
     | 뒤 | D-474 `expires_at` → `ttl_s`(구현 때), 하트비트 `question` 필드 | 별도 ADR 행 | — |
 
+### 확인: 현장 로봇은 설정만으로 페어링되지 않는다 (2026-10-09)
+
+J4(지금 페어링)를 준비하며 현장을 읽기 전용으로 확인했다.
+
+- 현장 로봇 둘은 콘솔 등록(D-361)으로 들어왔다. 등록에서 만든 로봇 끝점은 REST 토큰만 가진다(`operations/fleet/fleet/server/enrollment.py:281`, `enrollment_tls.py:175`). `fleet_pairing_token`이 없다.
+- Fleet은 `robots.yaml`의 로봇 중 `fleet_pairing_token`이 있을 때만 허브를 켠다(`operations/fleet/fleet/cli.py:438`). 현장 `robots.yaml`의 `robots`는 비어 있다. 그래서 현장에서는 허브 자체가 돌지 않는다.
+- 따라서 페어링은 새 코드가 필요하다: 등록이 로봇별 허브 페어링 자격을 만들어 저장하고(digest만), Fleet이 등록 로봇에도 허브를 켜고, 로봇이 `fleet.pairing_token`과 `hub_url`(또는 승인된 발견 프로필)을 받는다. 새 자격 경로라 보안 검토가 필요하다. 별도 설계로 사용자에게 가져간다(J4는 그때까지 보류가 아니라 '설계 필요'로 남는다).
+
 ### Alternatives
 
 | 대안 | 판단 |
