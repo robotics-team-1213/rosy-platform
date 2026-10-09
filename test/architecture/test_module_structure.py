@@ -213,7 +213,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_404,
+        50_631,
+        "split: re-judged at 50631 on 2026-10-10 for the no_motion stuck path (+227; self-judged): R6 in "
+        "the existing resolver rule, the enrolled-robot credential and AI PC shadow ask in the resolver "
+        "loop/cli, one small stuck_ai.py fact checker; most new lines are test_stuck_no_motion_fleet.py. "
+        "No new robot command path (answers stay the D-407 decision API). Previously "
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "

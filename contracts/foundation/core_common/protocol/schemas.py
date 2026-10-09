@@ -1029,8 +1029,7 @@ class LineStuckStatus(BaseModel):
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
-    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost;
-    # no_motion: the line-follow HOLD/LOST reason (e.g. lane_departure)
+    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; no_motion: HOLD reason
     detail: Optional[str] = None
 
 
