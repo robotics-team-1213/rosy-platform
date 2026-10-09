@@ -185,8 +185,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_012,
-        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        47_248,
+        "split: re-judged at 47248 on 2026-10-09: D-546 6 adds the pose-request answer "
+        "(localization/pose_request.py, a LocalizationService step, RobotClient.localization_request) "
+        "and its tests. It reads one CORE route and posts the existing localization decision; it adds "
+        "no command path or package owner, and the VLM hook returns None. The site-map split stays "
+        "next; +150 allowance unchanged, measured from 47248. Previously "
+        "re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
         "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
         "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
         "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
