@@ -96,7 +96,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     plane_image[:, :100] = [0, 255, 0]
     plane_png = cv2.imencode(".png", plane_image)[1].tobytes()
     raw_png = cv2.imencode(".png", np.zeros((200, 300, 3), np.uint8))[1].tobytes()
-    leases, plane = [], {"status": 200}
+    leases, plane = [], {"status": 200, "revision": "paint-test"}
 
     def serve_lease(route):
         body = route.request.post_data_json
@@ -114,7 +114,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
         else:
             route.fulfill(body=plane_png, content_type="image/png",
                           headers={"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "map",
-                                   "X-Frame-Plane": "-1,-1,3,1,50", "X-Frame-Calibration": "paint-test"})
+                                   "X-Frame-Plane": "-1,-1,3,1,50", "X-Frame-Calibration": plane["revision"]})
 
     page.route("**/api/fleet/calibrations", lambda route: route.fulfill(json={"calibrations": [record]}))
     page.route("**/api/fleet/vision/lease", serve_lease)
@@ -141,12 +141,20 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     assert abs(x) <= 0.01 and abs(y - 0.5) <= 0.01, (x, y)
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
 
+    # A plane made with another calibration revision is neither drawn nor picked.
+    plane["revision"] = "paint-old"
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("보정 revision이 다릅니다")
+    expect(page.locator("#site-map-svg image")).to_have_count(0)
+    expect(page.locator("#plane-pick")).to_be_disabled()
+    plane["revision"] = "paint-test"
+
     plane["status"] = 409
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("브라우저 보정(대체)")
     expect(page.locator("#site-map-svg image")).to_be_visible()
     assert page.locator("#site-map-svg image").get_attribute("href").startswith("data:image/png")
-    assert [body.get("rectification") for body in leases[1:]] == [{"mode": "map"}, None]
+    assert [body.get("rectification") for body in leases[1:]] == [{"mode": "map"}, {"mode": "map"}, None]
 
 
 def test_import_camera_map_draft_never_activates(page_site):
