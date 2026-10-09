@@ -339,6 +339,7 @@ class RouteCameraFollower:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
                 pose = None
+        self.last = {}
         if pose is None or self._manoeuvre == "ABORTED" or self._route_invalidated:
             self._tracker.gate = None
             self._tracker.update(now_s, None, bgr, ground, **kwargs)
@@ -381,6 +382,11 @@ class RouteCameraFollower:
         heading_error = abs(_wrap(pose[2] - fix.heading))
         self.last = {"fix": fix, "camera_tier": tier, "near_node": near_node,
                      "gated": self._tracker.gate is not None, "tracker": self._tracker.last}
+
+        if self._tracker.last.get("reason") == "washed":
+            self.state = "STOP"
+            self.last["reason"] = "washed"
+            return None
 
         if self.route.length_m - self._s <= TERMINAL_STOP_M:
             self._manoeuvre = None

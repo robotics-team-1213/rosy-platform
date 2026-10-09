@@ -1,7 +1,9 @@
 """Prototype A: route-driven junction manoeuvres over centre-line following."""
 
 import math
+from pathlib import Path
 
+import cv2
 import lane_sim
 import numpy as np
 import pytest
@@ -76,6 +78,41 @@ def test_camera_candidate_stops_when_pose_is_outside_the_active_route():
     assert not subject.locked
     assert subject.update(0.4, pose, image, lane_sim.GROUND, **lane_sim.KW) is None
     assert subject.state == "STOP"
+
+
+def test_washed_bev_stops_even_with_a_locked_route_near_a_node():
+    """A bright but still partly textured Gazebo frame must not start a blind turn."""
+    image = cv2.imread(str(Path(__file__).resolve().parents[3] /
+                          'docs/validation/lane-route-wash-gate-2026-10-09/evidence/camera-loss.png'))
+    assert image is not None
+    pose = (-1.270897, 0.180065, -1.61405)
+    subject = RouteCameraFollower(GRAPH, ['west:r', 'ring_s:f'],
+                                  start_pose=pose, camera_x_offset_m=.03317)
+    subject.locked = True
+    ground = lane_sim.simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=320, height_px=240, height_m=.06343, pitch_rad=math.radians(8),
+        hfov_rad=2 * math.atan(160 / 281.6), max_range_m=.6)
+    assert subject.update(25.25, pose, image, ground, lane_half_width_m=.0925,
+                          bright_threshold=180, roi_top_fraction=.4,
+                          roi_bottom_fraction=1., washed_fraction=.4) is None
+    assert subject.state == 'STOP'
+    assert subject.last['reason'] == 'washed'
+    assert subject.update(25.375, None, image, ground, lane_half_width_m=.0925,
+                          bright_threshold=180, washed_fraction=.4) is None
+    assert subject.last == {}  # a later odometry loss is not stale exposure evidence
+
+
+def test_washed_bev_cannot_start_a_route_manoeuvre():
+    points = directed_points(GRAPH, 'west:r')
+    dx, dy = points[-1] - points[-2]
+    pose = (float(points[-1][0]), float(points[-1][1]), math.atan2(dy, dx))
+    subject = RouteCameraFollower(GRAPH, ['west:r', 'ring_s:f'], start_pose=pose)
+    subject.locked = True
+    white = np.full_like(WORLD.render(pose), 255)
+    assert subject.update(1.0, pose, white, lane_sim.GROUND, **dict(lane_sim.KW, washed_fraction=.4)) is None
+    assert subject.state == 'STOP'
+    assert subject.last['reason'] == 'washed'
 
 
 def test_south_west_bend_stops_before_a_long_paint_gap():

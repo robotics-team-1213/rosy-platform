@@ -425,7 +425,10 @@ class LaneEdgeFollower:
         paint = view.sample(gray > bright_threshold)
         self.last = {"paint": paint}
         observable = int(view.observable.sum())
-        if observable == 0 or paint.sum() > washed_fraction * observable:
+        if observable == 0:
+            return None
+        if paint.sum() > washed_fraction * observable:
+            self.last["reason"] = "washed"
             return None
 
         if self._last_pose is not None:
