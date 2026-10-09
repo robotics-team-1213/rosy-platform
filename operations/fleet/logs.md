@@ -2811,3 +2811,9 @@
 - gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
 - 결정: 없음. 계약은 ADR과 API Reference. 화면 구조는 Proposed D-540.
 - 교훈: 호출이 맞는 것과 화면 자리가 하나인 것은 다른 기록이다. 후자는 D-540이 이미 처분한다.
+
+## 2026-10-09 · uncommitted · docs(fleet): 호출 지도에 목표 lease presence
+- 변경: `POST /api/fleet/goal-lease/presence`는 임대 중인 목표가 있을 때만 보낸다. 지도 기준을 local main `d8f12328b`로 올렸다.
+- 증거: `signals.js`의 presence 조건(`e42ecc073`).
+- gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
+- 결정: 없음.
