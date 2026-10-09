@@ -87,6 +87,13 @@ class LineFollowConfig:
     min_confidence: float = 0.35
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
+    # D-407 개정 (2026-10-10): CAMERA_LINE LOST resumes in the same mode once the lane is seen
+    # again for lost_resume_frames consecutive fresh confident frames spanning lost_resume_s, with
+    # no obstacle hold and the IR guard clear. Values = D-495 junction_reacquire_frames and D-407
+    # recovery_settle_s. false = today's latch until the operator reselects.
+    lost_auto_resume: bool = True
+    lost_resume_frames: int = 3
+    lost_resume_s: float = 1.0
     ir_calibration_revision: Optional[str] = None
     # D-344 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
     # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
@@ -391,6 +398,10 @@ class LineFollowConfig:
                              "path (D-573 2)")
 
     def _check_junction(self) -> None:
+        if type(self.lost_resume_frames) is not int or not 1 <= self.lost_resume_frames <= 20:
+            raise ValueError("lost_resume_frames must be a whole number in [1, 20]")
+        if not _finite(self.lost_resume_s) or not 0.0 <= self.lost_resume_s <= 10.0:
+            raise ValueError("lost_resume_s must be in [0, 10]")
         if type(self.junction_reacquire_frames) is not int or not 1 <= self.junction_reacquire_frames <= 20:
             raise ValueError("junction_reacquire_frames must be a whole number in [1, 20]")
         if not _finite(self.junction_turn_lead_s) or not 0.0 <= self.junction_turn_lead_s <= 1.0:
