@@ -15,12 +15,13 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package docstring: model contract, pre/post-processing, runner; weights never live in `src/` |
-| `manifest.py` | `rosy.perception.model/1` manifest: schema, roles, sha256 and shape checks, fail-closed `ManifestError` |
+| `manifest.py` | `rosy.perception.model/1` manifest: schema, roles, sha256 and shape checks, optional `input.crop` (D-597), fail-closed `ManifestError` |
 | `lane_mask.py` | `preprocess` (frame to NCHW) and `lane_evidence` (logits to visible/error/confidence), near-field band, `wall` never a target |
 | `runner.py` | `LaneSegModel` (lazy `onnxruntime`, warm-up check) and `ModelSlot` (pointer-file hot swap; failed swap keeps previous model) |
 | `shadow.py` | `perception/learned/shadow` payload pairing learned and rule error; no command fields |
 | `status.py` | `perception/learned/status` payload: counters, latency, "no shadow model loaded" |
 | `paint_worker.py` | `LearnedPaintWorker`: one thread infers on the latest frame; keeper takes the newest mask within `stale_s` or falls back (D-408) |
+| `drivable_paint.py` | D-597: the drivable way for keep mode (`learned_paint_target: drivable`): D-566 region without the row-growth clamp, rightmost branch at a split (D-384), too little near = none; `boundary_paint` draws a line-wide strip just outside each side so the keeper's inner paint edge is the drivable edge. Pure numpy, no ROS |
 | `paint_motion.py` | D-570: `OdomHistory` (pose at a frame stamp), ground-plane homography that moves an older paint mask to the current frame by odometry, bounded by age/dxy/dyaw; no odom or too much motion = fallback |
 
 ## For AI Agents

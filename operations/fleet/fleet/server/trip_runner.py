@@ -24,6 +24,7 @@ import httpx
 
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
+from fleet.localization.map_pose import OPERATOR_PIN
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
@@ -232,10 +233,18 @@ class TripRunner:
                 raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
         pose = await self._pose(robot_id)
         anchor_age = getattr(pose, "anchor_age_s", None)
-        if pose is None or pose.state != LOCALIZED or anchor_age is None or                 anchor_age > self.config.start_anchor_age_s:
+        if pose is None or pose.state != LOCALIZED or anchor_age is None or (
+                anchor_age > self.config.start_anchor_age_s and not self._still_on_pin(pose)):
             raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None,
                                                          "anchor_age_s": anchor_age})
         return pose
+
+    def _still_on_pin(self, pose: MapPose) -> bool:
+        """D-593 7: a LOCALIZED operator-pin pose (its anchor is then <= max_anchor_age_s old) whose
+        odom has not moved since the pin. An odom reset drops the anchor, so it is never still."""
+        return (getattr(pose, "anchor_source", None) == OPERATOR_PIN
+                and pose.dead_reckon_m <= self.config.pin_start_still_m
+                and getattr(pose, "bridge_turn_deg", math.inf) <= self.config.pin_start_still_deg)
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""

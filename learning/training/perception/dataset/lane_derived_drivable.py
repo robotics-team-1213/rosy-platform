@@ -7,6 +7,7 @@ class 5 drivable. Labels are derived, never approved: evaluation_use is training
 so these masks are never D-475 evaluation truth.
 
   derive   --src DIR --out DIR [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150]
+           [--outside-k inf] [--near-fit 30] [--near-max-resid 3] [--near-min-width 20]
            [--tool-commit SHA]   (required outside a git checkout, e.g. a git archive snapshot)
   sheets   --out DIR --dest DIR --key FILE [--per-sheet 20] [--seed S] [--canaries 0.1]
            numbered review sheets of every frame; canary tiles (known corruptions) listed only in
@@ -15,6 +16,7 @@ so these masks are never D-475 evaluation truth.
            --instructions FILE [--reviewed-manifest OLD/manifest.json [--drop-unreviewed]]
            reviewer jsonl {tile, verdict ok|concern|uncertain, reason}; refused below 0.9 canary concern
   finalize --out DIR   (drops concern/unreviewed frames, writes the judge block training requires)
+  union --parts DIR DIR [...] --out DIR   finalized D-554/D-563 sets -> one store-ready union (UNION_SCHEMA)
 
 Verdicts come only from import-verdicts: finalize, verify_dataset(finalized=True) and train_job
 require its canary block (count >= MIN_CANARIES, count/frames >= MIN_CANARY_FRACTION, rate >= 0.9).
@@ -22,6 +24,18 @@ require its canary block (count >= MIN_CANARIES, count/frames >= MIN_CANARY_FRAC
 Per frame: everything starts 255; source lane classes 1..4 are copied; on each row >= ignore_top
 where lane_left and lane_right both exist and max(L) < min(R), source-0 pixels strictly between
 become 5, except bright ones (gray >= stripe_min: unlabelled paint) which stay 255.
+Outside band negatives (0, D-554 item 9): on those rows, with W = min(R) - max(L) - 1, up to
+round(outside_k * W) pixels left of min(L) and right of max(R), walking outward and stopping at the
+first lane-class or bright pixel; only source-0 pixels become 0. D-576: outside_k defaults to inf
+(recorded as null): on those both-line rows the outside runs to the frame edge or the next
+lane/paint pixel, and near-extension rows (item 10) keep their outer sides 255.
+Coloured mats and kerbs (HSV saturation >= MAT min_sat with value >= min_val) inside the band
+stay 255, not drivable.
+Near extension (D-554 item 10): below the lowest qualifying row, where a line has left the frame,
+max(L) and min(R) are extrapolated from a linear fit over the lowest near_fit qualifying rows
+(skipped when either fit's RMS residual > near_max_resid px); an observed edge wins in its row.
+Source-0 non-bright pixels strictly between become 5 down to the last row, stopping where the
+road width falls below near_min_width. The outside band runs there only beside a visible line.
 Wall negatives (0): bright, low-texture source-0 regions connected to row ignore_top,
 outside the drivable band and above the topmost lane-class pixel of their column (floor beyond a
 line is never wall). Rows above ignore_top are 255 for every class. Everything else stays 255.
@@ -38,10 +52,23 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+_ROOT = Path(__file__).resolve().parents[4]
+for _p in (_ROOT / "middleware" / "perception", _ROOT / "contracts" / "foundation"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+from control.sensing.perception.learned.lane_mask import beyond_boundary  # noqa: E402  D-576
+
+
 SCHEMA = "rosy.lane-derived-drivable/1"
 ORIGIN = "derived_from_reviewed_lanes"
 ADR = "D-554"
 SOURCE_SCHEMA = "pinky-lane-dataset-v1"
+# Schemas verify_dataset (and so sheets, import-verdicts, finalize, train_job) admits: this one and
+# D-563 map-projected labels (map_projected_drivable.py), each with its own origin and ADR.
+ADMITTED = {SCHEMA: (ORIGIN, ADR), "rosy.map-projected-drivable/1": ("map_projected", "D-563")}
+# A union of finalized ADMITTED datasets (union command): parts copied whole under parts/pN/, each
+# re-verified with its own schema; frames keep their part's annotation_origin and adr.
+UNION_SCHEMA = "rosy.drivable-union/1"
 IGNORE = 255
 DRIVABLE = 5
 # Parent v11 output order and roles (lane-seg-20261006-5f5ddcd9) + one final drivable class,
@@ -58,6 +85,12 @@ WALL = {"min_gray": 125, "max_std": 12.0, "window": 7, "min_area": 200}
 # Between-lane pixels this bright are unlabelled paint, not road (28 arena frames 2026-10-09:
 # 150 removes <1.5% of the band; 130 also cut lit carpet, up to 21%).
 STRIPE_MIN = 150
+# Near-field extension: fit window (rows), max RMS fit residual (px), min road width (px).
+NEAR = {"fit_rows": 30, "max_resid": 3.0, "min_width": 20}
+# Coloured mats / kerbs are not road (sheets4 review 2026-10-09: 302 tiles "green on coloured mats").
+# 226 derived frames: drivable carpet saturation median 46, p90 112, with a separate tail from red/
+# blue/orange mats and yellow kerbs; 110 with value >= 50 (dark carpet has noisy saturation).
+MAT = {"min_sat": 110, "min_val": 50}
 APPROVAL_KEYS = ("approved", "approval", "mask_decision", "review_approved")
 VERDICTS = ("ok", "concern", "uncertain")
 MIN_CANARIES, MIN_CANARY_FRACTION, MIN_CANARY_RATE = 20, 0.08, 0.9
@@ -67,20 +100,75 @@ def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN):
+def _run(stops):
+    """Pixels walked before the first stop in an outward-ordered slice."""
+    hit = np.flatnonzero(stops)
+    return int(hit[0]) if hit.size else stops.size
+
+
+def _near_fits(rows, near):
+    """Linear x(row) for max(L) and min(R) over the lowest qualifying rows, or None."""
+    rows = rows[-near["fit_rows"]:] if near["fit_rows"] else []
+    if len(rows) < 2:
+        return None
+    y = np.array([r[0] for r in rows], float)
+    fits = []
+    for column in (1, 2):
+        x = np.array([r[column] for r in rows], float)
+        coef = np.polyfit(y, x, 1)
+        if np.sqrt(np.mean((np.polyval(coef, y) - x) ** 2)) > near["max_resid"]:
+            return None
+        fits.append(coef)
+    return fits
+
+
+def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN, outside_k=math.inf,
+                near=NEAR, mat=MAT):
     """Source 5-class mask + BGR image -> (6-class mask, both_rows)."""
     out = np.full(src.shape, IGNORE, np.uint8)
     lane = (src >= 1) & (src <= 4)
     out[lane] = src[lane]
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    stop = lane | (gray >= stripe_min)
     band = np.zeros(src.shape, bool)
-    both = 0
-    for row in range(ignore_top, src.shape[0]):
+    outside = np.zeros(src.shape, bool)
+    height, width_px = src.shape
+
+    def fill(row, xl, xr, left, right, outer=True):
+        band[row, max(xl + 1, 0):max(xr, 0)] = True
+        if not outer:
+            return
+        width = width_px if math.isinf(outside_k) else round(outside_k * (xr - xl - 1))
+        if left.size:
+            edge = left.min()
+            n = _run(stop[row, max(edge - width, 0):edge][::-1])
+            outside[row, edge - n:edge] = True
+        if right.size:
+            edge = right.max() + 1
+            n = _run(stop[row, edge:edge + width])
+            outside[row, edge:edge + n] = True
+
+    qualifying = []
+    for row in range(ignore_top, height):
         left, right = np.flatnonzero(src[row] == 1), np.flatnonzero(src[row] == 2)
         if left.size and right.size and left.max() < right.min():
-            both += 1
-            band[row, left.max() + 1:right.min()] = True
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    out[band & (src == 0) & (gray < stripe_min)] = DRIVABLE
+            qualifying.append((row, left.max(), right.min()))
+            fill(row, left.max(), right.min(), left, right)
+    both = len(qualifying)
+    fits = _near_fits(qualifying, near)
+    for row in range(qualifying[-1][0] + 1 if fits else height, height):
+        left, right = np.flatnonzero(src[row] == 1), np.flatnonzero(src[row] == 2)
+        # Clip to just outside the frame so an off-frame line leaves column 0 / W-1 as road.
+        xl = int(np.clip(left.max() if left.size else round(np.polyval(fits[0], row)), -1, width_px))
+        xr = int(np.clip(right.min() if right.size else round(np.polyval(fits[1], row)), -1, width_px))
+        if xr - xl - 1 < near["min_width"]:
+            break
+        # D-576: unbounded outside only on both-line rows; a finite k keeps item 10 behaviour.
+        fill(row, xl, xr, left, right, outer=not math.isinf(outside_k))
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    mat = (hsv[..., 1] >= mat["min_sat"]) & (hsv[..., 2] >= mat["min_val"])
+    out[band & (src == 0) & (gray < stripe_min) & ~mat] = DRIVABLE
+    out[outside & (src == 0)] = 0
     k = (wall["window"], wall["window"])
     mean = cv2.blur(gray, k)
     std = np.sqrt(np.maximum(cv2.blur(gray * gray, k) - mean * mean, 0))
@@ -128,7 +216,7 @@ def _write_manifest(out, doc):
 
 
 def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN,
-           tool_commit=None):
+           outside_k=math.inf, near=NEAR, tool_commit=None):
     src, out = Path(src), Path(out)
     if out.exists():
         raise ValueError("new output directory required")
@@ -154,7 +242,7 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
             if image is None or source_mask is None or source_mask.shape != image.shape[:2]:
                 raise ValueError(f"{split}/{image_path.name}: unreadable or mismatched frame")
             mask, both = derive_mask(source_mask, image, ignore_top=ignore_top, wall=wall,
-                                     stripe_min=stripe_min)
+                                     stripe_min=stripe_min, outside_k=outside_k, near=near)
             if both < min_both_rows:
                 skipped += 1
                 continue
@@ -175,19 +263,23 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
                       "dataset_revision": source.get("dataset_revision")},
            "tool": {"name": "lane_derived_drivable.py", "git_commit": tool_commit},
            "params": {"min_both_rows": min_both_rows, "ignore_top": ignore_top, "wall": dict(wall),
-                      "stripe_min": stripe_min},
+                      "stripe_min": stripe_min, "outside_k": None if math.isinf(outside_k) else outside_k,
+                      "outside_rows": "both lines visible (D-576)", "mat": dict(MAT),
+                      "near": dict(near)},
            "classes": CLASSES, "ignore_index": IGNORE, "skipped_frames": skipped, "frames": frames}
     return _write_manifest(out, doc), doc
 
 
 def verify_dataset(folder, *, finalized=False):
-    """D-554 admission: schema/origin/adr/classes match and every image/mask hash verifies.
+    """D-554 admission (D-563 map-projected too): schema/origin/adr/classes match and every image/mask hash verifies.
     finalized (training): finalize wrote the judge block and every train/val frame was judged
     ok or uncertain."""
     folder = Path(folder)
     doc = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    if (doc.get("schema") != SCHEMA or doc.get("annotation_origin") != ORIGIN
-            or doc.get("adr") != ADR or doc.get("evaluation_use") != "training_val_only"
+    if doc.get("schema") == UNION_SCHEMA:
+        return _verify_union(folder, doc)
+    if (ADMITTED.get(doc.get("schema")) != (doc.get("annotation_origin"), doc.get("adr"))
+            or doc.get("evaluation_use") != "training_val_only"
             or doc.get("classes") != CLASSES or doc.get("ignore_index") != IGNORE):
         raise ValueError("not a D-554 lane-derived drivable dataset")
     frames = doc.get("frames")
@@ -212,6 +304,81 @@ def verify_dataset(folder, *, finalized=False):
     return doc
 
 
+def _in_val_block(frame, part, blocks):
+    return any(b["part"] == part and b["t0"] <= frame.get("t", float("nan")) <= b["t1"] for b in blocks)
+
+
+def _union_frames(folder, parts, val_blocks=()):
+    """(frames, part docs) rebuilt from the parts, each verified finalized under its own schema;
+    frames inside a recorded val block (part, t0..t1 of the frame's "t") become split "val"."""
+    frames, docs = [], []
+    for i, part in enumerate(parts):
+        path = folder / part["dir"]
+        if part["dir"] != f"parts/p{i}" or _sha((path / "manifest.json").read_bytes()) != part["manifest_sha256"]:
+            raise ValueError(f"union part {i} manifest differs")
+        doc = verify_dataset(path, finalized=True)
+        if doc["schema"] not in ADMITTED:
+            raise ValueError("a union part must be a D-554 or D-563 dataset")
+        docs.append(doc)
+        frames += [dict(f, image=f"{part['dir']}/{f['image']}", mask=f"{part['dir']}/{f['mask']}", part=i,
+                        annotation_origin=doc["annotation_origin"], adr=doc["adr"],
+                        **({"split": "val"} if _in_val_block(f, i, val_blocks) else {}))
+                   for f in doc["frames"]]
+    return frames, docs
+
+
+def _union_label(docs):
+    pairs = sorted({(d["annotation_origin"], d["adr"]) for d in docs})
+    return "+".join(p[0] for p in pairs), "+".join(p[1] for p in pairs)
+
+
+def _verify_union(folder, doc):
+    frames, docs = _union_frames(folder, doc.get("parts") or [], doc.get("val_blocks") or [])
+    if len(docs) < 2 or doc.get("frames") != frames:
+        raise ValueError("union frames differ from their parts")
+    if any(d["params"]["ignore_top"] != doc["params"]["ignore_top"] for d in docs):
+        raise ValueError("union parts disagree on ignore_top")
+    if ((doc.get("annotation_origin"), doc.get("adr")) != _union_label(docs) or doc.get("classes") != CLASSES
+            or doc.get("ignore_index") != IGNORE or doc.get("evaluation_use") != "training_val_only"):
+        raise ValueError("not a drivable union dataset")
+    return doc
+
+
+def union(parts, out, *, tool_commit=None, val_last=0.0):
+    """Finalized datasets -> one store-ready folder: parts copied under parts/pN/, frames concatenated.
+    val_last > 0: in every part whose frames carry "t", the last val_last of its frames by time form
+    one contiguous val block (recorded as val_blocks; for sessions that all have to train)."""
+    import shutil
+    out = Path(out)
+    if out.exists():
+        raise ValueError("new output directory required")
+    if len(parts) < 2:
+        raise ValueError("a union needs two or more datasets")
+    entries = []
+    for i, part in enumerate(parts):
+        verify_dataset(part, finalized=True)
+        shutil.copytree(part, out / f"parts/p{i}")
+        entries.append({"dir": f"parts/p{i}", "manifest_sha256": _sha((Path(part) / "manifest.json").read_bytes())})
+    blocks = []
+    if val_last > 0:
+        for i, entry in enumerate(entries):
+            ts = sorted(f["t"] for f in verify_dataset(out / entry["dir"])["frames"] if "t" in f)
+            if ts:
+                blocks.append({"part": i, "t0": ts[int(len(ts) * (1 - val_last))], "t1": ts[-1]})
+    frames, docs = _union_frames(out, entries, blocks)
+    tops = {d["params"]["ignore_top"] for d in docs}
+    if len(tops) != 1:
+        raise ValueError(f"parts disagree on ignore_top {sorted(tops)}")
+    origin, adr = _union_label(docs)
+    doc = {"schema": UNION_SCHEMA, "annotation_origin": origin, "adr": adr, "evaluation_use": "training_val_only",
+           "parts": entries, "val_blocks": blocks, "source": [d["source"] for d in docs],
+           "tool": {"name": "lane_derived_drivable.py union", "git_commit": _git_commit(tool_commit)},
+           "params": {"ignore_top": tops.pop()},
+           "judge": {"parts": [{k: v for k, v in d["judge"].items() if k != "dropped"} for d in docs]},
+           "classes": CLASSES, "ignore_index": IGNORE, "frames": frames}
+    return _write_manifest(out, doc), doc
+
+
 def _check_canaries(block, frames):
     """Reviewer verdicts count only with enough hidden canaries caught (D-554)."""
     if (not isinstance(block, dict) or set(block) != {"count", "caught", "rate"}
@@ -230,30 +397,46 @@ def _check_canary_count(count, frames):
         raise ValueError(f"{count} canaries for {frames} frames; at least {need} required")
 
 
-CANARY_KINDS = ("drivable_over_wall", "wall_over_road", "drivable_outside_lines", "drivable_removed")
-SHEET_COLORS = {DRIVABLE: (0, 255, 0), 0: (128, 128, 128), 1: (255, 0, 0), 2: (0, 0, 255),
+# Wall pixels above ignore_top are not in the mask, so a wall canary would hide in the label-0
+# band; drivable_over_offroad paints that band and everything out to the frame edge instead.
+CANARY_KINDS = ("drivable_over_offroad", "wall_over_road", "drivable_outside_lines", "drivable_removed")
+# BGR; label 0 is saturated cyan so "not drivable" reads apart from the grey carpet (sheets2:
+# reviewers caught 136/181 canaries with a grey overlay).
+SHEET_COLORS = {DRIVABLE: (0, 255, 0), 0: (255, 255, 0), 1: (255, 0, 0), 2: (0, 0, 255),
                 3: (0, 255, 255), 4: (0, 128, 255)}
-LEGEND = ("green drivable | grey wall | magenta unlabelled | blue lane_left | red lane_right | "
-          "yellow crosswalk | orange speed_bump")
+SHEET_ALPHA = {0: .6}
+LEGEND = ("green drivable | cyan = NOT drivable (wall / off-road floor) | magenta unlabelled | "
+          "blue lane_left | red lane_right | yellow crosswalk | orange speed_bump")
+# A canary must change at least this many pixels: max(floor, fraction of labelled pixels).
+CANARY_MIN_PX, CANARY_MIN_FRACTION = 800, 0.15
 
 
 def _corrupt(mask, kind, ignore_top):
-    """A known-wrong copy of mask for a canary tile, or None when this frame cannot show that error."""
+    """A known-wrong copy of mask for a canary tile, or None when this frame cannot show that error
+    on at least max(CANARY_MIN_PX, CANARY_MIN_FRACTION of its labelled pixels)."""
     bad, below = mask.copy(), np.arange(mask.shape[0])[:, None] >= ignore_top
-    source = {"drivable_over_wall": mask == 0, "wall_over_road": mask == DRIVABLE,
-              "drivable_outside_lines": (mask == IGNORE) & below, "drivable_removed": mask == DRIVABLE}[kind]
-    if source.sum() < 500:
-        return None
-    bad[source] = {"drivable_over_wall": DRIVABLE, "wall_over_road": 0,
-                   "drivable_outside_lines": DRIVABLE, "drivable_removed": IGNORE}[kind]
-    return bad
+    road = mask == DRIVABLE
+    # Green canaries paint only over real label 0 (cyan): a 255 pixel can be real green in the
+    # near-extension rows, so reviewers could not tell those canaries apart (sheets5 review).
+    beyond = (mask == 0) & below & beyond_boundary(mask, 1, 2)
+    if kind == "drivable_over_offroad":  # label-0 floor/wall that is not beyond a line
+        bad[(mask == 0) & below & ~beyond] = DRIVABLE
+    elif kind == "drivable_outside_lines":  # beyond the lines on both-line rows
+        bad[beyond] = DRIVABLE
+    elif kind == "wall_over_road":
+        xs = np.nonzero(road)[1]
+        bad[road & (np.arange(mask.shape[1])[None, :] <= (np.median(xs) if xs.size else -1))] = 0
+    else:
+        bad[road] = 0  # drivable_removed
+    need = max(CANARY_MIN_PX, CANARY_MIN_FRACTION * int((mask != IGNORE).sum()))
+    return bad if int((bad != mask).sum()) >= need else None
 
 
 def _tile(image, mask, label, ignore_top):
     view = image.copy()
     for value, color in SHEET_COLORS.items():
-        pixels = mask == value
-        view[pixels] = (image[pixels] * .45 + np.asarray(color) * .55).astype(np.uint8)
+        pixels, alpha = mask == value, SHEET_ALPHA.get(value, .55)
+        view[pixels] = (image[pixels] * (1 - alpha) + np.asarray(color) * alpha).astype(np.uint8)
     unknown = (mask == IGNORE) & (np.arange(mask.shape[0])[:, None] >= ignore_top)
     view[unknown] = (image[unknown] * .45 + np.asarray((255, 0, 255)) * .55).astype(np.uint8)
     head = np.full((40, image.shape[1] * 2, 3), 255, np.uint8)
@@ -276,14 +459,19 @@ def sheets(out, dest, key, *, per_sheet=20, seed=0, canaries=0.1):
     load = lambda f: (cv2.imread(str(out / f["image"])),  # noqa: E731
                       cv2.imread(str(out / f["mask"]), cv2.IMREAD_UNCHANGED))
     items = [(f, None) for f in frames]
-    wanted, secret = round(len(frames) * canaries), []
-    for number, index in enumerate(rng.permutation(len(frames))):
+    wanted, secret, turn = round(len(frames) * canaries), [], 0
+    for index in rng.permutation(len(frames)):
         if len(secret) >= wanted:
             break
-        kind = CANARY_KINDS[number % len(CANARY_KINDS)]
-        if _corrupt(load(frames[index])[1], kind, ignore_top) is not None:
-            secret.append(len(items))
-            items.append((frames[index], kind))
+        mask = load(frames[index])[1]
+        # Kinds rotate; a frame too small for this turn's kind is tried with the next ones.
+        for step in range(len(CANARY_KINDS)):
+            kind = CANARY_KINDS[(turn + step) % len(CANARY_KINDS)]
+            if _corrupt(mask, kind, ignore_top) is not None:
+                secret.append(len(items))
+                items.append((frames[index], kind))
+                turn += step + 1
+                break
     _check_canary_count(len(secret), len(frames))
     order = rng.permutation(len(items))
     dest.mkdir(parents=True)
@@ -431,6 +619,10 @@ def main(argv=None):
     p.add_argument("--min-both-rows", type=int, default=20)
     p.add_argument("--ignore-top", type=int, default=110)
     p.add_argument("--stripe-min", type=int, default=STRIPE_MIN)
+    p.add_argument("--outside-k", type=float, default=math.inf, help="inf (default, D-576): to the edge")
+    p.add_argument("--near-fit", type=int, default=NEAR["fit_rows"], help="0 disables near extension")
+    p.add_argument("--near-max-resid", type=float, default=NEAR["max_resid"])
+    p.add_argument("--near-min-width", type=int, default=NEAR["min_width"])
     p.add_argument("--tool-commit")
     p = sub.add_parser("sheets")
     p.add_argument("--out", type=Path, required=True)
@@ -450,15 +642,27 @@ def main(argv=None):
     p.add_argument("--instructions", type=Path, required=True)
     p = sub.add_parser("finalize")
     p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("union")
+    p.add_argument("--parts", type=Path, nargs="+", required=True)
+    p.add_argument("--val-last", type=float, default=0.0,
+                   help="hold out the last fraction of each timed part as one contiguous val block")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--tool-commit")
     args = parser.parse_args(argv)
     if args.command == "derive":
         digest, doc = derive(args.src, args.out, min_both_rows=args.min_both_rows, ignore_top=args.ignore_top,
-                             stripe_min=args.stripe_min, tool_commit=args.tool_commit)
+                             stripe_min=args.stripe_min, outside_k=args.outside_k,
+                             near={"fit_rows": args.near_fit, "max_resid": args.near_max_resid,
+                                   "min_width": args.near_min_width},
+                             tool_commit=args.tool_commit)
         print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]),
                           "skipped_frames": doc["skipped_frames"]}))
     elif args.command == "sheets":
         print(json.dumps(sheets(args.out, args.dest, args.key, per_sheet=args.per_sheet, seed=args.seed,
                                 canaries=args.canaries)))
+    elif args.command == "union":
+        digest, doc = union(args.parts, args.out, tool_commit=args.tool_commit, val_last=args.val_last)
+        print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]), "adr": doc["adr"]}))
     elif args.command == "import-verdicts":
         print(json.dumps(import_verdicts(args.out, args.sheets, args.key, args.verdicts, args.judge_name,
                                          args.instructions, reviewed_manifest=args.reviewed_manifest,
