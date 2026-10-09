@@ -61,3 +61,18 @@ def test_cli_refuses_duplicates_and_changes_status(tmp_path, capsys):
     assert dv.main([*base, "set-status", "v13.9.00", "retired"]) == 2
     assert dv.main([*base, "show", "v13.0.00"]) == 0
     assert "v13-drivable-20261009-982b09a9" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("version, word", [("v12.1.00", "major 12"), ("v13.1", "two-digit"), (None, "exactly")])
+def test_drivable_head_config_needs_lineage_model_version(version, word):
+    sys.path.insert(0, str(ROOT / "learning" / "training" / "perception" / "training"))
+    import train_job
+    from job_state import JobError
+    training = dict(seed=1, epochs=1, lr=0.001, batch_size=1, recipe="drivable_head",
+                    parent_model="p", parent_torchscript="t", ignore_top=110, model_version=version)
+    if version is None:
+        del training["model_version"]
+    config = {key: "unused" for key in ("store", "dataset", "gate", "replay_root", "intake_out",
+                                        "camera_profile")}
+    with pytest.raises(JobError, match=word):
+        train_job.run({**config, "training": training}, "unused")
