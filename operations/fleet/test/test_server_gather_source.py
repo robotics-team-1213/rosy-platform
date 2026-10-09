@@ -60,6 +60,33 @@ def test_power_health_is_bounded_and_one_failure_does_not_hide_another_robot():
     assert _state_rows(client)[0]["power_health"] is None
 
 
+def test_power_health_timeout_keeps_the_last_good_body_with_its_age_up_to_five_seconds():
+    # Field check 2026-10-10: the robot said 70 % fresh, the card said 확인 불가 — a read that
+    # missed the request's short wait became null. A timeout keeps the last good body (aging).
+    import httpx
+
+    clock = FakeClock()
+    robot = FakeRobot("rosy_01")
+    robot.power_health_value = _health(clock)
+    client = TestClient(create_app(_console(robot, clock=clock), console_token="viewer",
+                                   start_task_dispatcher=False))
+    assert _state_rows(client)[0]["power_health_age_s"] == 0.0
+    robot.power_health_error = httpx.ReadTimeout("slow robot")
+    clock.advance(3)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    row = _state_rows(client)[0]
+    assert row["power_health"]["battery"]["charging_state"] == "confirmed"
+    assert row["power_health_age_s"] == 3.0
+    assert robot.calls.count(("power_health",)) == 2
+    clock.advance(3)
+    row = _state_rows(client)[0]
+    assert row["power_health"] is None and row["power_health_age_s"] is None
+    robot.power_health_error = None
+    clock.advance(1)
+    _state_rows(client)
+    assert _state_rows(client)[0]["power_health_age_s"] is not None
+
+
 def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
     clock = FakeClock()
     first = FakeRobot("rosy_01")

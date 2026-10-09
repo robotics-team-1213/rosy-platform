@@ -214,7 +214,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_209,
+        51_521,
+        "split: re-judged at 51521 on 2026-10-10 after merging D-596 over main 51209 (+312; self-judged, "
+        "NEEDS the independent re-judge). One new pure module fleet/server/identity_triggers.py (automatic "
+        "LED identify rules), parallel per-colour requests in server/identity.py, the guide finding and the "
+        "roster LED button; the identity binding stays observation-only, no robot command path. Previously "
         "split: re-judged at 51209 on 2026-10-10 after merging D-594 robot path history over main 50857 (+352): "
         "one new display/replay owner fleet/server/path_history.py (recorder, site-DB store, viewer read route; "
         "reads the existing D-395 trust, D-494 3 map pose and D-457 tracking owners, never commands or stops a "

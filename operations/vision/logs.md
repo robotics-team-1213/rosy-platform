@@ -406,6 +406,12 @@
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
 
+## 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
+
+- 변경: `track/led_identity.py` `led-identity/2` — `min_off_s` 0.8, `max_off_s` 2.2, `max_gap_s` 1.1, 익명 blob 하나일 때 정색 표시(`evidence.mode: steady`). 추적 워커가 `identity_challenges`의 요청마다 판정하고, 열린 창 끝까지 `BackgroundBlobDetector.hold`로 배경을 얼린다(학습 프레임·장면 변경 재학습·유령 치유 없음, 박힌 로봇의 추정은 램프가 켜져도 유지)
+- 증거: 현장 프레임 2묶음(2026-10-10 06:47, 2.5 fps, 간격 최대 0.76 s)에 후면 빛을 그려 넣은 6 s 창 264개: 이전 값 6 `matched`(나머지 frames_missing), 새 값 264. 빛 없는 대조 0. 모델 PC pytest 통과
+- gate 변화: SOURCE. 실제 램프 가시성 미측정
+
 ## 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
 - 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
 - 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.

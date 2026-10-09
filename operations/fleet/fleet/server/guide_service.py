@@ -38,6 +38,7 @@ class GuideService:
         tracking = self._tracking.snapshot() if self._tracking is not None else {}
         tracked = {row.get("robot_id"): row for row in tracking.get("robots") or []}
         camera_ok = next((s.get("source_id") for s in tracking.get("sources") or [] if s.get("status") == "OK"), None)
+        anonymous = any(u.get("marker_id") is None for u in tracking.get("unknown") or [])  # D-596
         active = self._site_maps.active()
         graph = active[2] if active is not None else None
         zone_of = {edge: zone for zone, (edges, _cap) in (self._zones() or {}).items() for edge in edges}
@@ -49,7 +50,8 @@ class GuideService:
                 robot_id, online=bool(row.get("online")), pose=self._poses.arbitrated_pose(robot_id),
                 tracking_row=tracked.get(robot_id), camera_ok=camera_ok, graph=graph, zone_of=zone_of,
                 body_radius_m=self._body.rotation_radius_m, body_half_width_m=self._body.half_width_m,
-                stopped_s=self._stopped_s(robot_id, row.get("state"), now), config=self.config))
+                stopped_s=self._stopped_s(robot_id, row.get("state"), now), anonymous_seen=anonymous,
+                config=self.config))
         add_near(records, self.config)
         for record in records:
             record["worst"] = worst(record)
