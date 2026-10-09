@@ -7451,3 +7451,7 @@ osy-d395-s1d\`.
 - 변경: D-548 Accepted(D-193 7 개정), Log 행, API reference v1.156(`auth.development_mode`, 장치 개발 토큰 예외).
 - 증거: rosy_harness lint (D-544~547 빈칸은 다른 세션 선점).
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
+- 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
+- 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
+- gate 변화: 없음(제안).
