@@ -379,6 +379,15 @@ class RouteCameraFollower:
             now_s, pose if odom_pose is None else tuple(float(v) for v in odom_pose),
             bgr, ground, **kwargs)
         tier = self._tracker.tier
+        if self._tracker.last.get("reason") == "odom_discontinuity":
+            self._route_invalidated = True
+            self.locked = False
+            self.relock = False
+            self.state = "STOP"
+            self.last = {"fix": fix, "camera_tier": tier, "near_node": near_node,
+                         "gated": False, "tracker": self._tracker.last,
+                         "reason": "odom_discontinuity"}
+            return None
         if tier in _LOCK_TIERS:
             self.locked = True
         heading_error = abs(_wrap(pose[2] - fix.heading))

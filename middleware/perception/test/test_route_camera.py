@@ -7,6 +7,7 @@ import cv2
 import lane_sim
 import numpy as np
 import pytest
+from control.sensing.perception.lane_bev import BEV_CELL_M
 from control.sensing.perception.route_camera import MANOEUVRE_MAX_TRAVEL_M, RouteCameraFollower
 from lane_scenarios import (
     GRAPH,
@@ -292,9 +293,21 @@ def test_route_manoeuvre_stops_when_pose_leaves_the_lane():
         assert subject.state == ("MANOEUVRE_ABORT" if active else "STOP")
 
 
+def test_route_manoeuvre_cannot_override_odometry_jump_stop():
+    subject, pose = _locked_on_both("east:r", 0.35)
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    odom = (pose[0], pose[1] + 0.08, pose[2])
+    assert subject.update(0.6, pose, blank, lane_sim.GROUND,
+                          odom_pose=odom, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+    assert subject.last["reason"] == "odom_discontinuity"
+    assert subject.update(0.8, pose, blank, lane_sim.GROUND,
+                          odom_pose=odom, **lane_sim.KW) is None
+
+
 def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     """East:r 0.9 m in (off-node), locked on BOTH. The odometry that carries
-    the boundary memory then jumps 0.25 m sideways (the memory no longer
+    the boundary memory has drifted 0.25 m sideways (the memory no longer
     lies on any line) and only the right line is in view: the tracker's own
     pair seed has no pair and its memory refuses a line that does not
     continue it (RESEED_MAX_GAP_M). The localised pose arms the relock,
@@ -303,11 +316,12 @@ def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     subject, pose = _locked_on_both("east:r", 0.9)
     assert not subject.last["near_node"]
     tracker = subject._tracker
-    odom = (pose[0] - 0.25 * math.sin(pose[2]), pose[1] + 0.25 * math.cos(pose[2]), pose[2])
+    for memory in (tracker._left, tracker._right):
+        memory._keys[:, 1] += round(0.25 / BEV_CELL_M)
     frame = _world_right_of(pose).render(pose)
-    subject.update(0.6, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    subject.update(0.6, pose, frame, lane_sim.GROUND, **lane_sim.KW)
     assert subject.state not in ("BOTH", "ONE")
-    subject.update(0.8, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    subject.update(0.8, pose, frame, lane_sim.GROUND, **lane_sim.KW)
     assert subject.relock
     picks = tracker.last["route_seed"]
     assert picks[0] is None and picks[1] is not None
