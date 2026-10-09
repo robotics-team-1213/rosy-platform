@@ -7540,3 +7540,9 @@ osy-d395-s1d\`.
 - 변경: D-501 탭을 보존하며 제품 홈·문서 이동·문서 내부 단계·선택 맥락을 분리하는 구현 경로 추가.
 - 근거: 실제 Fleet HTML/CSS와 D-493/D-501/D-543.
 - gate: 구현 방법 기록. Fleet 홈 링크 외 화면 적용과 G1/G2/G3는 별도.
+
+## 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프
+
+- 변경: 16화면의 로컬 Chromium 캡처·가로 넘침·홈·탭·정지·오류를 검증 기록으로 남겼다. 설계의 Games 보드 경로를 실제 PreviewServer `/`로 정정하고 적용 상태를 일부 코드 적용으로 갱신했다.
+- 증거: `docs/validation/active-web-visual-loop-2026-10-09/result.md`, `captures.sha256`, 원본 PNG는 `X:/DevTemp/rosy-web-visual-loop/`.
+- gate 변화: 없음. 일부 G2 셀만 확인했으며 전체 G2·G3·현장 수용은 HOLD.
