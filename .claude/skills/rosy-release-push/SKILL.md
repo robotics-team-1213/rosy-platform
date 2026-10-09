@@ -33,8 +33,15 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    existing tags. Never reuse an id: an existing id is only re-checked, never overwritten.
    ```bash
    gh workflow run build-native-payload.yml --ref main -f release_id=<id>
-   gh run watch <run-id> --exit-status --interval 30
+   # The run is titled "Pinky payload <id>"; take its id instead of reading the list by eye.
+   run=$(gh run list --workflow build-native-payload.yml -L 5 --json databaseId,displayTitle \
+         -q '.[] | select(.displayTitle=="Pinky payload <id>") | .databaseId')
+   gh run watch "$run" --exit-status --interval 10
    ```
+   Dispatch right after `git push` (the workflow builds the pushed main commit; it does not
+   wait for CI) and start step 3 in the same command line as the watch, so no turn is spent
+   between them. Release 072 lost 67 s between push and dispatch and 104 s between build
+   end and download (D-553 addendum 2).
 3. **Download, check, sign and pack with one command.** Run with `PYTHONUTF8=1` on Windows.
    ```powershell
    python tools/release/prepare_payload_release.py --run <run-id> --robot <robot-ip>
@@ -87,7 +94,15 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    # Legacy HTTP receiver only:
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
+   # Several robots at the same time (D-553 addendum 2), one log each beside the tarball:
+   deploy\robot\pinky_pro\rosy-release-push-many.ps1 -Robot <ip-a>,<ip-b> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
+   deploy\robot\pinky_pro\rosy-release-push-many.ps1 -Robot <ip-a>,<ip-b> -Tarball <P>\<id>.tar.gz
    ```
+   - `rosy-release-push-many.ps1` runs the unchanged push once per robot, each with its own
+     claim, calibration guard, readiness check and automatic rollback, and exits 0 only when
+     every push did. It takes no TLS pair: for a TLS-enabled CORE push one robot at a time.
+     Push one robot first and the rest after you have looked (a canary) when the change
+     can break driving on both robots at once.
    - **Success** looks like `current release: <id> (previous: <old>)`, then
      `CORE runs the activated release: /opt/rosy/releases/<id>`, then `CORE readiness: PASS`.
    - `WARNING: CORE was still running the previous release after the switch ... restarted
