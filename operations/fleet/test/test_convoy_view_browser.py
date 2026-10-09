@@ -41,7 +41,6 @@ def test_console_draws_the_convoy_line_and_card(site, convoy_api):  # noqa: F811
             page.clock.run_for(1500)
             page.wait_for_function("() => window.__trafficLayer?.convoys === 1", timeout=15000)
             page.clock.run_for(5000)  # the roster redraws on its state poll with the traffic it holds
-            page.get_by_role("button", name="전체 로봇 보기").click()  # healthy robots are folded away
             expect(page.locator('#roster article[data-robot-id="rosy_02"] .trip-line')).to_have_text(
                 "반복 운행 1바퀴째 · 대열 · rosy_01 뒤 0.5 m")
             _shots(page, "console-convoy", fits=True)
