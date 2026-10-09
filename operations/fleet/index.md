@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · refactor(fleet): isolate stuck peer pose checks
 - 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
 - 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
 - 2026-10-09 · uncommitted · refactor(fleet): 시작점·배경 다시 학습을 설치·보정으로 (D-540 (f))
 - 2026-10-09 · uncommitted · fix(fleet): site-map robot rings and labels stay on the map
-- 2026-10-09 · uncommitted · uiux(fleet): 기기 이름과 ArUco 표지를 내부 ID와 구분

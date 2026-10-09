@@ -205,8 +205,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_303,
-        "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
+        49_742,
+        "split: re-judged at 49742 on 2026-10-10 after isolating the D-577 trusted pose and peer-band "
+        "helpers in server/stuck_peer_pose.py; the resolver returns below the 600-line file ceiling. "
+        "The package remains over its budget because Fleet owns the site trip, traffic and console "
+        "paths; retain the server/web split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. "
+        "Previously re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
         "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
         "split: re-judged at 49125 on 2026-10-09: power, dock, and charge tags stay with the "
