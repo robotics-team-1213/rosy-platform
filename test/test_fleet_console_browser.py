@@ -2542,6 +2542,30 @@ def test_phone_map_raster_stays_close_to_display_size(console_url):
     assert ratio <= 1.2, ratio
 
 
+@pytest.mark.parametrize("width,height", [(1920, 1080), (320, 568)])
+def test_robot_direction_marker_keeps_a_screen_sized_footprint(console_url, width, height):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__mapMarkers || []).length > 0")
+        marker_sizes = page.evaluate("""() => {
+          const canvas = document.querySelector('#map-canvas');
+          const box = canvas.getBoundingClientRect();
+          return window.__mapMarkers.map(m => Math.max(
+            Math.abs(m.w) * box.width / canvas.width,
+            Math.abs(m.h) * box.height / canvas.height));
+        }""")
+        assert not errors
+        save_temp_screenshot(page, f"fleet_marker_{width}x{height}.png")
+        page.locator("#map-stage").screenshot(path=str(Path(os.environ.get("TEMP", "/tmp")) / f"fleet_marker_map_{width}x{height}.png"))
+        browser.close()
+
+    assert max(marker_sizes) <= 42, marker_sizes
+
+
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
 def test_wordmark_stays_on_one_line(console_url, width, height):
     """D-359 US-008 capture: at 320px "ROSY FLEET" broke into two lines (brand column 83px,

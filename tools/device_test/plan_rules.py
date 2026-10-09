@@ -12,6 +12,10 @@ import yaml
 
 MAX_LINEAR = 0.10            # m/s, rosy_default.yaml line_follow.max_linear (host default)
 OVERLAY_PATH = "/var/lib/rosy/core/.rosy/rosy.yaml"   # rosy-core.service HOME (D-189 D3); the only one
+# D-512 amendment 2: events that abort_on_events globs may not abort on. Only informational
+# notices: safety.policy_off is CORE's one-time D-400 note on the first autonomous twist with the
+# safety policy off (command/manager.py). Every other safety.* event (API Ref section 8) still aborts.
+OK_EVENTS = {"safety.policy_off"}
 
 
 def _num(lo, hi, lo_open=False, integer=False):
@@ -45,6 +49,8 @@ RULES = {
     "line_follow.bridge_distance_scale": _num(1.08, 2.0),
     "line_follow.bridge_time_margin_s": _num(0.5, 2.0),
     "line_follow.ir_guard_enabled": (lambda v: v is True, "true (the guard may only be turned on)"),
+    # D-520 addendum 2026-10-09: on by default; a device run may only turn it off until its DEVICE checklist.
+    "line_follow.arc_enabled": (lambda v: v is False, "false (no ring arc before the D-520 DEVICE checklist)"),
     "line_follow.recovery_local_enabled": (_bool, "bool"),
     "line_follow.cruise_speed": _num(0, MAX_LINEAR, lo_open=True),
     "line_follow.max_linear": _num(0, MAX_LINEAR, lo_open=True),
@@ -83,6 +89,10 @@ def check_overlay(flat, accepted_risks=()):
             raise SystemExit(f"plan overlay {key}: not an allowed test key (RULES in plan_rules.py)")
         if not rule[0](value):
             raise SystemExit(f"plan overlay {key}={value!r}: must be {rule[1]}")
+    if "line_follow.site_floor_map_id" in flat and flat.get("line_follow.arc_enabled") is not False:
+        # D-520 addendum 2026-10-09: the arc is on by default and the site floor makes it a capability
+        raise SystemExit("plan overlay line_follow.site_floor_map_id needs line_follow.arc_enabled: false "
+                         "until the D-520 DEVICE checklist")
     coast, slow = flat.get("line_follow.bridge_coast_m", 0.10), flat.get("line_follow.bridge_slow_m", 0.25)
     if coast > slow:   # LineFollowConfig refuses coast > slow at CORE start
         raise SystemExit(f"bridge_coast_m {coast} > bridge_slow_m {slow}")
@@ -97,6 +107,9 @@ def load_plan(path):
         raise SystemExit(f"overlay_path must be {OVERLAY_PATH}")
     check_overlay(flatten(plan["overlay"]), plan.get("accepted_risks"))
     stop = plan.setdefault("stop", {})
+    ok = stop.setdefault("ok_events", [])
+    if not (isinstance(ok, list) and all(isinstance(e, str) and e in OK_EVENTS for e in ok)):
+        raise SystemExit(f"stop.ok_events: a list of {sorted(OK_EVENTS)} only (exact names, informational notices)")
     if not 0 < float(stop.get("duration_s", 0)) <= 600:
         raise SystemExit("stop.duration_s must be in (0, 600]")
     plan.setdefault("min_battery_percent", 40)

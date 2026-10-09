@@ -38,7 +38,7 @@ class PeerClientTest {
         val leaf = HeldCertificate.Builder().commonName("robot.local").addSubjectAlternativeName("robot.local").signedBy(ca).build()
         val server = MockWebServer()
         val requests = mutableListOf<RecordedRequest>()
-        var approved = true; var corrupt = ""; var confirmStatus = 200;var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
+        var approved = true; var terminal: String? = null; var corrupt = ""; var confirmStatus = 200;var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
         val identityRead = CountDownLatch(1); val statusRead = CountDownLatch(1)
         var candidate: Candidate
         val store = CandidateStore()
@@ -89,7 +89,7 @@ class PeerClientTest {
                         assertEquals("S".repeat(43), request.getHeader("X-Request-Secret"))
                         assertNull(request.getHeader("Authorization"))
                         statusRead.countDown(); statusHold?.await(4, TimeUnit.SECONDS)
-                        return json(state(if (request.method == "DELETE") "cancelled" else if (approved) "approved" else "pending"))
+                        return json(state(if (request.method == "DELETE") "cancelled" else terminal ?: if (approved) "approved" else "pending"))
                     }
                     if (relative.endsWith("/challenge")) {
                         if (corrupt == "challenge503") return MockResponse().setResponseCode(503)
@@ -144,6 +144,12 @@ class PeerClientTest {
     }
     @Test fun screenCodeConfirmApprovesThroughTheStatusPoll() {
         Fixture().use { f ->
+            var pendingCa: String? = "never pending"
+            f.approved = false
+            f.flow().connect({ pending -> pendingCa = pending.caSha256; f.approved = true }, { false })
+            assertNull(pendingCa)  // already-trusted TLS: nothing to compare
+        }
+        Fixture().use { f ->
             assertNull(confirmWhilePending(f))
             assertEquals(1, f.requests.count { it.path!!.endsWith("/confirm") && it.method == "POST" })
             assertThrows(IllegalArgumentException::class.java) { f.flow().confirm("abc234") }
@@ -163,6 +169,13 @@ class PeerClientTest {
             val outcome = confirmWhilePending(f)
             assertTrue(outcome is PeerRefused)
             assertEquals(400, (outcome as PeerRefused).status)
+        }
+    }
+    @Test fun receiverEndingTheRequestNamesHowItEnded() {
+        for (ended in listOf("rejected", "expired", "cancelled")) Fixture().use { f ->
+            f.approved = false; f.terminal = ended
+            val error = assertThrows(PeerEnded::class.java) { f.flow().connect({}, { false }) }
+            assertEquals(ended, error.state)
         }
     }
     @Test fun olderCoreWithoutConfirmRouteIsConsoleOnly() {
@@ -231,8 +244,11 @@ class PeerClientTest {
     }
     @Test fun privateCaCannotIssueSessionUntilActualFingerprintAnswerThenReconnectUsesSavedCa() {
         Fixture().use { f ->
-            var compared = false
-            val session = f.flow(lobbyClient(f.candidate)).connect({}, { offer ->
+            var compared = false; var pendingCa: String? = "never pending"
+            f.approved = false
+            // The LCD card goes away on approval, so the pending dialog must already carry the CA to compare.
+            val session = f.flow(lobbyClient(f.candidate)).connect({ pending -> pendingCa = pending.caSha256; f.approved = true }, { offer ->
+                assertEquals(offer.sha256, pendingCa)
                 assertEquals(PeerProof.hash(f.ca.certificate.encoded), offer.sha256)
                 assertFalse(f.requests.any { it.path!!.endsWith("/session") || it.getHeader("Authorization") != null })
                 compared = true; true

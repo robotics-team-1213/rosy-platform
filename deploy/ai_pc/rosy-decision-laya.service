@@ -1,5 +1,5 @@
 [Unit]
-Description=ROSY offline Laya decision evaluation (loopback only)
+Description=ROSY approved Laya inference smoke (loopback only)
 After=network.target
 StartLimitIntervalSec=60s
 StartLimitBurst=3

@@ -518,6 +518,16 @@ def test_corner_side_needs_an_open_end_or_a_latch():
     assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
 
 
+def test_cold_corner_without_a_side_boundary_holds():
+    # The closed-side line has left the view. A cropped crossbar alone cannot
+    # establish which physical lane the robot should turn into.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["strategy"] == "none"
+    keeper.update(_render([(HALF, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+
+
 def test_mid_turn_keeps_turning_toward_the_new_lane():
     # Latched left, then the robot has turned ~15 deg left: the corner line now
     # runs at 75 deg and its meeting point with the heading has moved away.
@@ -749,6 +759,21 @@ def test_every_frame_carries_the_junction_ahead_marker():
     keeper.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
     assert keeper.last["junction_ahead_v"] == 1 and "junction_ahead_m" in keeper.last
     assert _keep(_render([(0.0, 0.0)]))[1]["junction_ahead_v"] == 1
+
+
+def test_keep_debug_carries_bounded_ground_paint_points_without_selecting_a_boundary():
+    _, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)]))
+    points = last["paint_points_m"]
+    assert last["paint_points_v"] == 1
+    assert 8 <= len(points) <= 48
+    assert all(len(point) == 2 and 0.10 <= point[0] <= 0.40 for point in points)
+    assert any(point[1] > 0.05 for point in points)
+    assert any(point[1] < -0.05 for point in points)
+    assert len({min(11, int((point[0] - 0.10) / 0.025)) for point in points}) >= 8
+    assert all(point == [round(point[0], 3), round(point[1], 3)] for point in points)
+    assert json.loads(json.dumps(last))["paint_points_m"] == points
+    assert len(json.dumps({"paint_points_v": 1, "paint_points_m": points}).encode()) < 2048
+    assert _keep(_render())[1]["paint_points_m"] == []
 
 
 def test_right_only_fork_reports_the_diverging_branch_near_end():

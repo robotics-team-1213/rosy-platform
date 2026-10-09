@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll finished Pilot recordings from Pinky %i
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+Persistent=true
+Unit=rosy-pilot-fetch@%i.service
+
+[Install]
+WantedBy=timers.target

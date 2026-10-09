@@ -12,13 +12,16 @@ Pure: no network, clock, or robot calls. Fleet (M1) feeds it map poses and sends
   its authority ends at that member's rear − (d_stop + 2u + u_ahead), and only that member's units
   may be granted to it as well. Without it (member unknown, off the shared arcs, trip ended) the
   follower is back on fixed blocks, and a shared grant ends its authority while the member holds it.
+- D-525 virtual signal: ``green`` maps a signalled zone to the approach arcs allowed in now. A span
+  of that zone entered from any other arc is never granted, ahead or under the front; the robot
+  waits on the pseudo node ``signal:<zone>``, which waits on the zone's holders.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Mapping, Optional, Sequence
+from typing import Callable, Collection, Iterable, Mapping, Optional, Sequence
 
 from fleet.routing.graph import Graph
 
@@ -54,6 +57,7 @@ class Span:
     d0: float
     d1: float
     forward: bool = True
+    entry: str = ""                   # the arc driven into this span ("" when the route starts in it)
 
 
 @dataclass(frozen=True)
@@ -66,7 +70,7 @@ class Layout:
         """Unit spans along ``arc_ids`` driven in order; neighbouring spans of one unit merge."""
         spans: list[Span] = []
         base = 0.0
-        for arc_id in arc_ids:
+        for k, arc_id in enumerate(arc_ids):
             arc = graph.arcs[arc_id]
             length = arc.length_m
             parts = self.edge_units[arc.edge_id]
@@ -76,7 +80,8 @@ class Layout:
                 if spans and spans[-1].unit == unit:
                     spans[-1] = Span(unit, spans[-1].d0, base + s1, arc.forward)
                 else:
-                    spans.append(Span(unit, base + s0, base + s1, arc.forward))
+                    spans.append(Span(unit, base + s0, base + s1, arc.forward,
+                                      arc_ids[k - 1] if k and s0 == 0.0 else ""))
             base += length
         return tuple(spans)
 
@@ -170,6 +175,10 @@ class TickResult:
     #: robots with no position ever (never localized, nothing held): nobody gets a new grant
     #: while one exists, since its body could be anywhere. A trip starts only LOCALIZED (D-494).
     unplaced: tuple[str, ...] = ()
+    #: D-525: units someone holds, or a robot not localized this tick (UNKNOWN or missing) last
+    #: covered or pinned. A signal turns the next approach green only while its zone is not here.
+    #: A localized robot's padding is left out: one waiting at the line pads into the zone.
+    busy: frozenset[str] = frozenset()
 
 
 def _occupied(robot: Robot) -> set[int]:
@@ -178,7 +187,7 @@ def _occupied(robot: Robot) -> set[int]:
 
 
 def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float, *,
-         merge_max_wait_s: float = 20.0) -> TickResult:
+         merge_max_wait_s: float = 20.0, green: Mapping[str, Collection[str]] = {}) -> TickResult:
     """One Fleet tick: occupancy, release, grants in fair order, authority ends.
 
     1. A robot's grants and last padded body keep blocking others whether or not it is in
@@ -190,6 +199,7 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
     3. Then grants in order: robots that waited past ``merge_max_wait_s``, robots inside a
        zone, wait start, id. Grants are contiguous from the front; only grants extend a
        robot's own authority, padding only blocks others.
+    4. D-525: a span of a zone in ``green`` whose entry arc is not listed is refused in 2 and 3.
     """
     for robot in robots:
         if state.route.get(robot.id, robot.route_id) != robot.route_id:
@@ -235,9 +245,14 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
                 if layout.units[unit].two_way:
                     direction.setdefault(unit, forward)
 
+    def red(span: Span) -> bool:
+        return span.unit in green and span.entry not in green[span.unit]
+
     def free_for(robot: Robot, span: Span, by: Mapping[str, set[str]]) -> tuple[bool, tuple[str, ...], Optional[str]]:
         """``(free, blockers, via)``; ``via``: the convoy member it follows, whose unit it may share where
         the span reaches past the moving-block end (right behind that member, the same occurrence)."""
+        if red(span):
+            return False, (f"signal:{span.unit}",), None
         unit = layout.units[span.unit]
         others = by.get(span.unit, set()) - {robot.id}
         # Only a capacity-1 unit is shared: in a zone of capacity c the pair counts as two, never c + 1.
@@ -255,15 +270,23 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             state.shared.setdefault(robot.id, {})[index] = via
         add_grant(robot.id, span.unit, span.forward)
 
+    localized = {robot.id for robot in robots if robot.d is not None}
+    busy = set(granted)
+    for robot_id, units in state.pinned.items():
+        busy.update(units)
+    for robot_id, units in state.last_occupied.items():
+        if robot_id not in localized:
+            busy.update(units)
     unplaced = tuple(sorted(r.id for r in robots if r.d is None and not state.held.get(r.id)
                             and r.id not in state.last_occupied and r.id not in state.pinned))
     if unplaced:
         authority = {r.id: state.authority[r.id] for r in robots if r.d is not None and r.id in state.authority}
-        return TickResult(authority, {r.id: () for r in robots}, _conflicts(layout, granted, state), unplaced)
+        # a robot never placed could be in any zone: every signalled zone counts busy
+        return TickResult(authority, {r.id: () for r in robots}, _conflicts(layout, granted, state), unplaced,
+                          frozenset(busy | set(green)))
 
     # 2. the unit under each localized front, against grants and real (unpadded) bodies
     present: dict[str, set[str]] = {u: set(rs) for u, rs in granted.items()}
-    localized = {robot.id for robot in robots if robot.d is not None}
     for robot in robots:
         if robot.d is not None:
             for s in robot.spans:
@@ -333,12 +356,17 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
                 waiting_for[robot.id] = (robot.follows,)
         else:
             waiting_for[robot.id] = blockers
-            state.waiting_since.setdefault(robot.id, now)
+            # D-525 3: a red wait is not a merge wait; the bound counts from green
+            if blockers[:1] != (f"signal:{robot.spans[index].unit}",):
+                state.waiting_since.setdefault(robot.id, now)
+            else:
+                state.waiting_since.pop(robot.id, None)
+                waiting_for[blockers[0]] = tuple(sorted(granted.get(robot.spans[index].unit, set()) - {robot.id}))
         if robot.convoy is not None and issued < last:  # D-517 4: no smaller end; it stops on expiry
             waiting_for[robot.id] = waiting_for[robot.id] or (robot.follows or robot.convoy,)
             continue
         state.authority[robot.id] = authority[robot.id] = max(issued, last)
-    return TickResult(authority, waiting_for, _conflicts(layout, granted, state))
+    return TickResult(authority, waiting_for, _conflicts(layout, granted, state), busy=frozenset(busy | set(granted)))
 
 
 def _conflicts(layout: Layout, granted: Mapping[str, set[str]], state: TableState) -> tuple[str, ...]:

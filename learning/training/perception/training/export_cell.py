@@ -74,7 +74,8 @@ def _experiment_doc(experiment: dict) -> dict:
 
 def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
-                   val_iou=None, date=None, precision="fp32", experiment=None) -> dict:
+                   val_iou=None, date=None, precision="fp32", experiment=None,
+                   revision_prefix="lane-seg", parent_lane_model=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
     {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"} (path relative, e.g. runs/<run_id>)
@@ -82,6 +83,26 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
     key or token)."""
     entries = _class_entries(classes)
     _validate(entries, color, mean, std, scale)
+    if revision_prefix not in ("lane-seg", "v13-drivable"):
+        raise ValueError("unsupported model revision prefix")
+    if revision_prefix == "v13-drivable" and sum(c["role"] == "drivable" for c in entries) != 1:
+        raise ValueError("v13-drivable requires exactly one drivable class")
+    if revision_prefix == "v13-drivable":
+        if entries[-1]["role"] != "drivable":
+            raise ValueError("v13-drivable requires drivable as the last output class")
+        if not isinstance(dataset_revision, str) or not re.fullmatch(r"[0-9a-f]{64}", dataset_revision):
+            raise ValueError("v13-drivable dataset_revision must be 64 lowercase hex chars")
+        if (not isinstance(parent_lane_model, dict) or set(parent_lane_model) != {
+                "model_revision", "onnx_sha256", "torchscript_sha256"}
+                or not isinstance(parent_lane_model["model_revision"], str)
+                or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", parent_lane_model["model_revision"])
+                or not isinstance(parent_lane_model["onnx_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent_lane_model["onnx_sha256"])
+                or not isinstance(parent_lane_model["torchscript_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent_lane_model["torchscript_sha256"])):
+            raise ValueError("v13-drivable parent_lane_model needs lane-seg revision, ONNX and TorchScript sha256")
+    elif parent_lane_model is not None:
+        raise ValueError("parent_lane_model only applies to v13-drivable")
     exp_doc = _experiment_doc(experiment) if experiment is not None else None
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}, not {precision!r}")
@@ -95,7 +116,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
     date = date or datetime.date.today().strftime("%Y%m%d")
     doc = {
         "schema": SCHEMA,
-        "model_revision": f"lane-seg-{date}-{sha[:8]}",
+        "model_revision": f"{revision_prefix}-{date}-{sha[:8]}",
         "task": "lane_seg",
         "files": [{"name": ONNX_NAME, "sha256": sha, "precision": precision}],
         "input": {"shape": list(INPUT_SHAPE), "layout": "nchw", "color": color,
@@ -109,6 +130,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
     }
     if exp_doc is not None:
         doc["metrics"]["experiment"] = exp_doc
+    if parent_lane_model is not None:
+        doc["parent_lane_model"] = dict(parent_lane_model)
     (out_dir / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.

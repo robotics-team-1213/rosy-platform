@@ -45,6 +45,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 - Docs/STEPS.txt are Korean; code comments and logs are English. Comments explain *why* against measured hardware limits (lidar 5 cm min, US 2 cm blind zone, IR 4095 = ADC saturation, never a cliff).
 - Learned loop (D-356): `learned_lane_node` is shadow-only and never publishes a command. Weights never live in `src/`; dataset, training and delivery tooling is in `learning/training/perception/`.
 - Commits: short imperative behavioral summaries.
+- `control/sensing/perception/` is a separate P1a architecture size unit; its import path and colcon package still belong to `control`.
 
 ### Testing Requirements
 - `python3 -m pytest test/ -q` from this package directory (`middleware/perception`); needs numpy/OpenCV. ROS graph tests require a separate isolated ROS Jazzy run.

@@ -68,11 +68,14 @@ def test_core_kill_leaves_input_expired_within_the_bound():
 
 
 def test_cli_help_works_without_ros():
+    import os
     import subprocess
 
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8:surrogateescape"
     result = subprocess.run([sys.executable, str(SCRIPT), "--help"],
-                            capture_output=True, text=True, encoding="utf-8")
-    assert result.returncode == 0
+                            capture_output=True, text=True, encoding="utf-8", env=env)
+    assert result.returncode == 0, result.stderr
     assert "watchdog" in result.stdout or "EXPIRY_S" in result.stdout
 
 

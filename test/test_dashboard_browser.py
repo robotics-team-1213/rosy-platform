@@ -522,6 +522,20 @@ def test_development_entry_logs_in_without_a_code():
             "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
         browser.close()
 
+def test_paired_connection_never_offers_development_entry():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(
+            playwright, extra_init=DEV_ENTRY_INIT.replace("mode: 'development'", "mode: 'paired'"))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/auth/connection')")
+        assert page.locator("#dev-connect-row").is_hidden()
+        browser.close()
+
+
 def test_compatibility_development_entry_names_pending_reason():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -1159,6 +1173,30 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.waypoints=[];}")
         dialog.locator('ui-button[kind=irreversible]').click()
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1366, 768)])
+def test_compatibility_slam_start_reports_session_acceptance(width, height):
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=width, height=height)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('#slam-start').click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        expect(page.locator('#slam-message')).to_have_text('맵핑 세션을 수락했습니다. 지도 갱신은 확인되지 않았습니다.')
+        assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/slam/start')")
+        assert page.locator('.settings-card[aria-labelledby="slam-heading"]').evaluate('(card) => card.getBoundingClientRect().height') < 500
+        if shot_dir := os.environ.get('ROSY_DASHBOARD_STATE_SHOT_DIR'):
+            output = Path(shot_dir) / f"compatibility_slam_session_{width}x{height}_local.png"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(output), full_page=True)
+            card = page.locator('.settings-card[aria-labelledby="slam-heading"]')
+            card.evaluate('(element) => element.scrollIntoView({block: "center"})')
+            card.screenshot(path=str(output.with_name(f"compatibility_slam_card_{width}x{height}_local.png")))
         browser.close()
 
 

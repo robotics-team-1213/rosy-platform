@@ -1,0 +1,42 @@
+#!/bin/sh
+# Forced command for the host guard key (D-530; authorized_keys `command=...,restrict`).
+# health | restart <unit listed in /etc/rosy/host-guard/units> | reboot. Nothing else.
+# restart and reboot go through the D-524 Service Control helper (rosy-host-control), which
+# owns the closed unit set and reboots with shutdown -r +10; this script never runs systemctl
+# restart or reboot itself.
+# Installed by deploy/hosts/common/install-guard-remote.sh as /usr/local/sbin/rosy-host-guard-remote.
+set -euf
+UNITS=${GUARD_UNITS:-/etc/rosy/host-guard/units}
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+refuse() { echo "refused: ${SSH_ORIGINAL_COMMAND:-}" >&2; exit 2; }
+# shellcheck disable=SC2086 # split the command into words; set -f stops globbing
+set -- ${SSH_ORIGINAL_COMMAND:-health}
+case "$1" in
+  health)
+    [ $# -eq 1 ] || refuse
+    # avail% swap_used% load1 cores uptime_s down_units(comma list or -)
+    awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} /^SwapTotal:/{st=$2} /^SwapFree:/{sf=$2}
+         END {printf "%d %d ", 100*a/t, (st ? 100*(st-sf)/st : 0)}' /proc/meminfo
+    down=""
+    if [ -f "$UNITS" ]; then
+      for unit in $(grep -v '^#' "$UNITS"); do
+        systemctl --user is-active --quiet "$unit" || down="$down,$unit"
+      done
+    fi
+    down=${down#,}
+    printf '%s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" "${down:--}"
+    ;;
+  restart)
+    [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse
+    logger -t rosy-host-guard "restart $2 requested by the guard"
+    exec sudo -n /usr/local/sbin/rosy-host-control restart-unit "$2"
+    ;;
+  reboot)
+    [ $# -eq 1 ] || refuse
+    logger -t rosy-host-guard "reboot requested by the guard"
+    exec sudo -n /usr/local/sbin/rosy-host-control reboot
+    ;;
+  *)
+    refuse
+    ;;
+esac

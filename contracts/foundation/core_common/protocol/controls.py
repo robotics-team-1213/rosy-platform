@@ -46,7 +46,7 @@ class BaseVelocityControl(_Wire):
     ``junction_pivot`` (D-507 2) is true when CORE takes the junction instruction's ``map_id``,
     ``expect_in_m``, ``expect_tol_m`` and ``pivot_past_line_m``; Fleet sends them only then.
     ``lane_arc`` (D-520 1) is true when CORE takes the junction instruction's ``exit_segment``
-    (``line_follow.arc_enabled`` with its site floor declaration); Fleet sends it only then.
+    (``line_follow.arc_enabled``, on by default, and the site floor declaration); Fleet sends it only then.
     ``lane_bend`` (D-507 addendum) is true when CORE takes the junction instruction's action
     ``bend`` (``bend_in_m``, ``bend_tol_m``, ``bend_radius_m``); Fleet sends bends only then.
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id

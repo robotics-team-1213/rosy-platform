@@ -42,7 +42,8 @@ Which side message a frame gets (two classes, agreed with the D-356/D-373 owner)
     frame's log time: on 8kcn 45 of 2258 observations reach the recorder 37-61 us before
     their own image does (2026-09-30), and nothing can be computed before the capture;
   every other topic takes the latest message at or before the frame's log time, no older
-    than --max-gap (dt <= 0), so no later sample leaks into a frame.
+    than --max-gap (dt <= 0), so no later sample leaks into a frame. Camera ground
+    calibration status is republished every 2 s and expires after 2.5 s instead.
 """
 import argparse
 import bisect
@@ -60,6 +61,7 @@ import numpy as np
 
 import extract
 from control.recording import (
+    CAMERA_GROUND_STATUS_MAX_AGE_NS, CAMERA_GROUND_STATUS_TOPIC,
     CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC,
     SIDE_TOPICS, ir_range_sample)
 
@@ -287,7 +289,8 @@ def sidecar_rows(frames, side, max_gap_s: float, scans=None):
                 values[name] = None if hit is None else hit[1]
                 dts[name] = None if hit is None else round((hit[0] - f["log_ns"]) / 1e9, 4)
                 continue
-            j = latest(times, f["log_ns"], gap)
+            max_age = CAMERA_GROUND_STATUS_MAX_AGE_NS if name == CAMERA_GROUND_STATUS_TOPIC else gap
+            j = latest(times, f["log_ns"], max_age)
             values[name] = None if j is None else series[j]
             dts[name] = None if j is None else round((times[j] - f["log_ns"]) / 1e9, 4)
         if scans is not None:

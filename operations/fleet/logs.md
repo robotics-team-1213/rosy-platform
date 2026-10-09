@@ -2727,9 +2727,60 @@
 - gate 변화: 없음(SOURCE)
 - 결정: 회전 지시에는 싣지 않는다(방향은 action 이 말한다)
 - 교훈: 없음
-## 2026-10-08 · uncommitted · feat(fleet): D-526 1단계 Fleet tether 감시 (API v1.153)
+## 2026-10-08 · uncommitted · feat(fleet): D-526 1단계 Fleet tether 감시 (API v1.156)
 - 변경: `server/tether_watch.py` `TetherWatch`가 0.5 s마다 테더가 있는 로봇의 지도 자세(상태 pose, odom 프레임 제외)로 기준점 거리·펼친 누적 회전·자세 나이를 재고, 반경+0.15 m·405°·2 s 초과면 기존 로봇 E-Stop(`hub.scatter_estop`)을 보내고 trip을 `tether_trip`으로 끝낸다. 래치, 테더 POST가 재무장. `GET /api/fleet/tethers` 행 `watch`, 지도 원은 트립이면 `--status-crit`. `platform_parts.yaml` safety_modules에 태그(D-430)
 - 증거: `test_tether_routes.py`(반경, ±180° 넘는 회전, 자세 없음, 테더 없음, 정지 재시도, 실제 앱의 로봇 estop 호출), `web/trail-view.test.mjs`. 모델 PC 결과는 브랜치 보고
 - gate 변화: 없음(SOURCE). safety 태그 파일이라 독립 Safety-Review 전에는 착지하지 않음
 - 결정: 되돌아가기는 Fleet가 하지 않는다(로봇 odom 길은 D-512 도구에 있다). Fleet 한도는 D-512 도구 한도 위의 backstop
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(fleet): 실행 끝난 장소는 로봇이 다음 차로에 있을 때만 넘어간다 (lap SIM 2 lap_12)
+- 변경: `_locate` 의 `done`(CORE가 우리 지시를 끝냄 + `pass_window_m` 안)에 다음 차로 반폭 안 조건을 더했다
+- 증거: lap_12 `off_lane_m` 0.276은 ring_e까지 거리(참값 ring_s 밖 0.07 m). CORE가 D-407 후진 중 SE `straight` 를 닫자 Fleet이 SE 0.26 m 앞에서 ring_e로 넘어가 거기서 위치를 쟀다. 새 시험은 고치기 전 실패, 모델 PC `test_trip_runner.py` 87 passed
+- gate 변화: SOURCE
+- 결정: CORE가 직진을 일찍 닫는 일(후진 중 감지 끊김)은 그대로다. 그 경우 이제 잘못된 `pose` 대신 뒤의 `junction`·`stall` 로 끝날 수 있다
+- 교훈: 위치 판정은 로봇이 실제로 있는 차로에 대고 한다. 지시 완료는 위치의 증거가 아니다
+## 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
+- 변경: `turn_target` 이 `theta`(5 cm lead 접선) + 6° 대신, 들어오는 차로의 끝 방향(마지막 두 0.10 m 현: 마지막 현 + 차이의 절반)에서 나가는 차로 `start_tangent` 까지를 보낸다. `TURN_OVERTURN_DEG`·`BEND_MIN_DEG` 삭제, 0.20 m보다 짧은 차로는 `theta`. D-507 4항 개정 줄
+- 증거: 260919 SW lead 접선 72.6°(입구 polyline 잡음) vs 현 62.7°, 로봇 진입 59–60° → 회전 끝이 ring 접선보다 약 20° 바깥(lap SIM 2·3 rec_01–03). 고친 뒤 SIM 4회 회전 끝 −4.3…+0.3°. 모델 PC `test_routing_execute.py`·`test_trip_d507.py`·`test_trip_d520.py` 100 passed
+- gate 변화: SOURCE, ROS-SIM(SW 회전 끝 방향)
+- 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
+- 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
+
+## 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
+- 변경: `web/shared/site-map-model.js` 에 `TRIP_AUTHORITY_SITE_OFF`, `TRIP_AUTHORITY_NOT_REQUIRED`, `TRIP_CONVOY_NOT_BEHIND`, `TRIP_ROBOT_BUSY`, `TRIP_GOAL_REFUSED` 운영자 문구 추가(전에는 원시 코드가 보였다); `test/test_trip_error_labels.py` 가 Fleet 이 내는 모든 `TRIP_*` 코드에 문구가 있는지 지킨다
+- 증거: 모델 PC `operations/fleet/test/` (아래 커밋 메시지)
+- gate 변화: 없음
+- 결정: 없음(D-517 10 화면 문구)
+- 교훈: 새 오류 코드를 낼 때 화면 문구가 빠지기 쉽다 → 가드 테스트로 막는다
+
+## 2026-10-09 · uncommitted · refactor(fleet): traffic 설정 파서를 전용 단위로 이동
+- 변경: CLI의 zone·signal·authority YAML 파서를 `fleet.traffic.config`로 옮겼다. 호출·검증·오류 메시지는 유지하고 CLI와 Fleet 패키지 크기 판정을 실제 줄 수로 갱신했다
+- 증거: 구조·CLI·신호·차로 시험 107 passed, `known_failures.py` 0 NEW; harness lint 0 errors
+- gate 변화: SOURCE만 확인. ROS-SIM·DEVICE·FIELD 증거는 그대로다
+- 결정: 신호등 판정과 사이트 설정은 Fleet traffic 소유이며 CLI는 진입점이다
+- 교훈: 새 설정을 CLI에 누적하면 파일과 패키지 크기 계약이 함께 밀린다
+
+## 2026-10-09 · uncommitted · uiux(fleet): 연결 뒤 토큰 접기와 현장 지도 우선 배치
+- 변경: 공용 로그인에서 연결 성공 후 토큰 세부 입력을 접고, 현장 지도에서 표시 전용 평면 영상 도구를 지도 뒤로 옮겼다. 토큰 재접속 요약은 남긴다.
+- 증거: 320×568, 390×844, 1440×1000 브라우저 시나리오와 스크린샷, 평면 영상 좌표 표시 전용 검증. `docs/validation/uiux-fleet-map-first-2026-10-09/result.md`.
+- gate 변화: 없음. LOCAL 브라우저 확인이며 현장 배포·로봇 주행·사용자 G3 수용은 HOLD.
+- 결정: 지도와 연결 상태를 첫 화면의 우선 정보로 둔다.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
+- 변경: 격자 지도 로봇 방향 마커 크기를 셀 수가 아니라 캔버스 화면 픽셀 밀도에 맞춰 제한했다. 지도 좌표와 명령 경로는 그대로 둔다.
+- 증거: 1920×1080 기존 마커 상자 161.94px. 변경 후 데스크톱·320px 마커 42px 이하, 지도 라벨 겹침·모바일 래스터 회귀 6 passed / NEW 0. `docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md`.
+- gate 변화: 없음. LOCAL 합성 화면이며 DEVICE/FIELD/G3는 HOLD.
+- 결정: 지도와 경로·거리 라벨을 읽을 수 있도록 마커의 화면상 크기를 제한한다.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
+
+- 변경: 현장 지도 뒤에 경로 미리보기·운행을 이어 배치하고 초안 편집을 뒤로 옮겼다. 표시 전용 평면 영상 도구는 키보드로 여는 접힌 항목으로 시작한다.
+- 증거: [현장 지도 작업 순서](../../docs/validation/uiux-fleet-site-map-task-order-2026-10-09/result.md). 1440·390·320px 전후 화면, FastAPI/Chromium 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 흐름·반응형 근거 보강. 실제 지도·로봇 주행, 설치본·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
+
+- 변경: 인증 후 접히는 토큰 입력을 재접속 검사에서 다시 열고, 연결 안내가 해당 입력에 초점을 줄 때도 펼친다. 비동기 인증 조회가 사용자가 다시 연 입력을 뒤늦게 접지 않도록 접는 시점을 조정했다.
+- 증거: CI `37854678441`의 Fleet 브라우저 실패 19건을 모델 PC Chromium에서 다시 실행해 19 passed (46.09s). 비밀번호 로그인 브라우저 검사 1 passed, 변경 JavaScript 구문 검사 통과.
+- gate 변화: LOCAL/MODEL-PC 재현 검사 복구. 새 CI 전체 결과와 설치본·DEVICE/FIELD 수용은 별도 확인한다.

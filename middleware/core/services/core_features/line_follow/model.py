@@ -212,11 +212,11 @@ class LineFollowConfig:
     # and the D-468 retrace's rear path) and found no drop-off, hole or step. It is the floor
     # basis of motion_admitted's site basis (D-507 6 b/c); None = no declaration.
     site_floor_map_id: Optional[str] = None
-    # D-520 map-guided arc (step 1, feed-forward only; off by default, model and robot). On it
-    # needs the site floor declaration above. curvature gain g in omega = g*v*kappa (D-500 measured
+    # D-520 map-guided arc (on by default, user 2026-10-09): it drives only with the site floor
+    # declaration above (capability lane_arc). curvature gain g in omega = g*v*kappa (D-500 measured
     # motion response, [0.8, 1.25]); arc_blind_max_m: travel without a camera fit before
     # lane_arc_blind (step 1 SIM default: the whole segment, 1.0 m).
-    arc_enabled: bool = False
+    arc_enabled: bool = True
     arc_curvature_gain: float = 1.0
     arc_blind_max_m: float = 1.0
     authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
@@ -351,8 +351,6 @@ class LineFollowConfig:
         if not (_finite(self.arc_curvature_gain) and 0.8 <= self.arc_curvature_gain <= 1.25
                 and _finite(self.arc_blind_max_m) and 0.0 < self.arc_blind_max_m <= 1.0):
             raise ValueError("arc_curvature_gain must be in [0.8, 1.25] and arc_blind_max_m in (0, 1]")
-        if self.arc_enabled and (self.site_floor_map_id is None or not self.ir_guard_speed_scale > 0):
-            raise ValueError("arc_enabled needs site_floor_map_id (D-520 5) and ir_guard_speed_scale > 0")
         site = self.site_floor_map_id
         if site is None:
             return

@@ -289,7 +289,7 @@ class Run:
         """CORE line-follow at 10 Hz with the hold deadman, events and pose every 0.5 s."""
         stop, seen = self.plan["stop"], {"states": {}, "reasons": {}, "events": {}}
         abort_reasons, abort_events = stop.get("abort_on_reasons", []), stop.get("abort_on_events", [])
-        ok_still = stop.get("ok_still_reasons", [])
+        ok_still, ok_events = stop.get("ok_still_reasons", []), stop.get("ok_events", [])
         _, ev = self.r.core.call("GET", "/events?limit=1")
         since = ev.get("last_seq") if isinstance(ev, dict) else None
         t0 = last_ok = self.r.now()
@@ -314,7 +314,7 @@ class Run:
                         since = max(since or 0, int(e.get("seq", 0)))
                         typ = str(e.get("type"))
                         seen["events"][typ] = seen["events"].get(typ, 0) + 1
-                        if any(fnmatch.fnmatch(typ, p) for p in abort_events):
+                        if typ not in ok_events and any(fnmatch.fnmatch(typ, p) for p in abort_events):
                             raise Abort(f"event {typ}: {json.dumps(e.get('data'))[:200]}")
                 ss, st = self.call("GET", "/robot/state")
                 st = st if ss == 200 and isinstance(st, dict) else None
@@ -572,7 +572,7 @@ def main(argv=None, robot=None):
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--camera-verdict")
     mode.add_argument("--restore", metavar="EVIDENCE_DIR", help=f"undo a run that died, from its {MARKER}")
-    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); no robot call")
+    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); lamp blink only")
     ap.add_argument("--evidence-dir")
     ap.add_argument("--summary-dir")
     ap.add_argument("--dry-run", action="store_true")

@@ -1,0 +1,106 @@
+{
+ "ne_01": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_e": {
+    "start_dr": 0.0,
+    "start_dyaw_deg": 16.0,
+    "max_abs_dr": 0.0022,
+    "end_dr": -0.0022,
+    "correcting": false,
+    "ticks": 2
+   },
+   "ring_n": {
+    "start_dr": -0.0046,
+    "start_dyaw_deg": 14.7,
+    "max_abs_dr": 0.0521,
+    "end_dr": -0.0521,
+    "correcting": false,
+    "ticks": 34
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "ne_02": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_e": {
+    "start_dr": 0.0024,
+    "start_dyaw_deg": 15.6,
+    "max_abs_dr": 0.0024,
+    "end_dr": 0.0009,
+    "correcting": false,
+    "ticks": 2
+   },
+   "ring_n": {
+    "start_dr": -0.0015,
+    "start_dyaw_deg": 14.3,
+    "max_abs_dr": 0.0513,
+    "end_dr": -0.0513,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "ne_03": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_e": {
+    "start_dr": 0.0001,
+    "start_dyaw_deg": 16.2,
+    "max_abs_dr": 0.0024,
+    "end_dr": -0.0024,
+    "correcting": false,
+    "ticks": 2
+   },
+   "ring_n": {
+    "start_dr": -0.0049,
+    "start_dyaw_deg": 14.8,
+    "max_abs_dr": 0.0522,
+    "end_dr": -0.0522,
+    "correcting": false,
+    "ticks": 34
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ },
+ "ne_04": {
+  "result": "arrived",
+  "reason": null,
+  "arcs": {
+   "ring_e": {
+    "start_dr": 0.0024,
+    "start_dyaw_deg": 15.6,
+    "max_abs_dr": 0.0024,
+    "end_dr": 0.0009,
+    "correcting": false,
+    "ticks": 2
+   },
+   "ring_n": {
+    "start_dr": -0.0015,
+    "start_dyaw_deg": 14.2,
+    "max_abs_dr": 0.0514,
+    "end_dr": -0.0514,
+    "correcting": false,
+    "ticks": 35
+   }
+  },
+  "lane_arc_edge": false,
+  "near_stop": 0,
+  "unarmed": 0,
+  "last_reason": "mode_off"
+ }
+}

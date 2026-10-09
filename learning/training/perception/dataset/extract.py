@@ -21,6 +21,7 @@ One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
     `stamp_ns` (written before that field) attaches no stamped evidence: null.
 (b) Every other side topic (cmd_vel, odom, scan, ...) is the latest message
     logged at or before the frame's log time; a later one is never used.
+    Camera calibration status is null if its latest message is over 2.5 s old.
     From MCAP odom is {stamp_ns, log_ns, x, y, yaw, linear, angular} (pose and
     twist of nav_msgs/Odometry).
     From MCAP the LiDAR scan (sensor_msgs/LaserScan) is attached as {stamp,
@@ -62,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foun
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
+    CAMERA_GROUND_STATUS_MAX_AGE_NS, CAMERA_GROUND_STATUS_TOPIC,
     CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC,
     KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
@@ -348,7 +350,7 @@ def _mcap_frames(files, skipped=None, truncated=None):
             while early and early[0][0] / 1e9 + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
             # Channels carry absolute, possibly namespaced topics.
-            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC,
+            name = next((n for n in (*SIDE_TOPICS, IR_RANGE_TOPIC,
                                      CAMERA_TELEMETRY_TOPIC)
                          if _topic_is(ch.topic, n)), None)
             if name is not None:
@@ -401,6 +403,11 @@ def _mcap_frames(files, skipped=None, truncated=None):
             side = {n: v for n, (_, v) in latest.items()}
             dts = {n: round((log_ns - message.log_time) / 1e9, 4)
                    for n, (log_ns, _) in latest.items()}
+            ground_status = latest.get(CAMERA_GROUND_STATUS_TOPIC)
+            if ground_status and not (0 <= message.log_time - ground_status[0]
+                                      <= CAMERA_GROUND_STATUS_MAX_AGE_NS):
+                side[CAMERA_GROUND_STATUS_TOPIC] = None
+                dts[CAMERA_GROUND_STATUS_TOPIC] = None
             if stamp is not None:
                 for e_log, e_stamp, e_name, e_value in early:
                     # logged before this frame's log time, but not before its capture

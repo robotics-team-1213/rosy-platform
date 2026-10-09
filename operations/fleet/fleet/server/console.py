@@ -37,6 +37,7 @@ from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
     classify_link,
+    link_reason,
 )
 from fleet.swarm.session import (
     FormationSession,
@@ -296,6 +297,9 @@ class FleetConsole(TripAware):
             link = classify_link(exc, scheme=scheme, address_status=statuses.get(robot_id))
             if link is not None:
                 row["link"] = link
+            reason = link_reason(exc, scheme=scheme)
+            if reason is not None:
+                row["link_reason"] = reason
         self._remember(robots)
         shown = await asyncio.gather(*(self._shown_capabilities(r["robot_id"])
                                        for r in robots if r["online"]))
