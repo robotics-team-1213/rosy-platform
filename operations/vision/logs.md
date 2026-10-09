@@ -408,5 +408,5 @@
 
 ## 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
 - 변경: 모든 학습(운영자 재학습·재시작·장면 변화)이 Fleet `occupied` 로봇 자리를 빼고 배운다(`track/robot_mask.py`). 이전 배경(어둡지 않은 곳) 또는 inpainting한 모르는 바닥으로 바꾸고, 모르는 바닥은 연속 3프레임 비고 어두운 픽셀 12 px 밖일 때 채운다(5 s에 한 번). 저장본이 모르는 바닥 지도를 같이 저장한다. 페이로드에 `unknown_floor`.
-- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTempg-relearneplay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
+- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTemp\bg-relearn\replay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
 - gate 변화: SOURCE. 현장 배포·재학습 확인 전

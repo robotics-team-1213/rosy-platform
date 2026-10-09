@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background
 - 2026-10-10 · uncommitted · feat(fleet): D-587 approved_record sighting 수용
 - 2026-10-10 · uncommitted · uiux(fleet): 좁은 지도 패널에서 전체 지도 가독성 확대
 - 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
 - 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
-- 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
