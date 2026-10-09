@@ -11,6 +11,14 @@
 
 직전 원격 `main` 후보 `f89aa643ad05`에는 위 D-581 커밋과 보완 커밋이 없다. 다음 원격 후보 `ae08cac387f4`에는 모두 포함됐다. 로컬 공유 `main`에는 중간 커밋이 순서대로 존재했으므로 이를 원자적 착지라고 부르지 않는다. `ae08` 후보는 CI의 D-430 검사에서 차단돼 현장에 설치되지 않았다.
 
-원격 AI 시험 PC에서 정확한 `ae08` HEAD로 `operations/fleet/test/test_trail_anchor.py`, `operations/fleet/test/test_trail_anchor_e2e.py`, `CORE stream-related tests`를 실행해 **24 passed**를 얻었다. `test/known_failures.py` 비교는 **0 new, 0 known**이었다. 원본 로그는 `X:\DevTemp\d581-independent-review\run-1.txt`에 보관한다(SHA-256 `0e0bbc3cac0934d95d7baa3a804366277eddadd14bc132d353ff5eeb6414003d`).
+원격 AI 시험 PC에서 정확한 `ae08` HEAD로 `operations/fleet/test/test_trail_anchor.py`, `operations/fleet/test/test_trail_anchor_e2e.py`, `middleware/core/services/test/test_swarm_trail_anchor.py`를 실행해 **24 passed**를 얻었다. `test/known_failures.py` 비교는 **0 new, 0 known**이었다. 원본 로그는 `X:\DevTemp\d581-independent-review\run-1.txt`에 보관한다(SHA-256 `0e0bbc3cac0934d95d7baa3a804366277eddadd14bc132d353ff5eeb6414003d`).
 
 D-581은 Proposed다. Gazebo SIM, 두 로봇 DEVICE 시험, 로봇–사이트 시계 차이 0.1초 이하 측정, 마커 크기·관측 신뢰도, 현장 주행 수용은 미완료다. 이 기록은 CI 이력의 사후 검토 근거이며 TRAIL 기능 활성화·주행을 허용하지 않는다.
+
+## 03d530eab 연결 구조 검토
+
+`03d530eab` 작성자가 아닌 통합 담당자가 diff를 독립 검토했다. 앱 조립부가 같은 지도 pose 서비스의 앵커 릴레이 팩토리를 주입하며, 안전 태그가 붙은 콘솔은 판단 계층 import를 제거했다. 제공된 시험용 팩토리 우선순위, pose가 없을 때 기본 릴레이, 앵커 상태의 조회 전용 동작은 유지된다. 원격 모델 PC에서 편대·앵커·CORE·D-430 구조 시험 **55개가 통과**했고 기존 실패는 **0 new, 0 known**이었다(`X:\DevTemp\d581-console-injection-green\run-1.txt`; 원격 실행기 출력의 실행 SHA와 함께 판단). 주행 승인은 계속 HOLD다.
+
+## 74b87f13b 후속 검토
+
+독립 검토자가 `74b87f13b`와 직전 통합 커밋 `2b655f16d`의 diff를 비교했다. 콘솔 변경은 주석 축약, 동일한 `getattr(..., "anchor", None)` 상태 조회의 walrus 표현, 빈 팩토리 사전 검사로 한정된다. 중지·재무장·전송·권한 경로나 D-430 import 경계는 바뀌지 않았다. 원격 실행기에서 `74b87f13b`를 모델 PC에 보낸 후 크기 판정·비밀값 검사·안전 경계·편대 앵커·Safety Review 시험 **16개가 통과**했고 기존 실패 비교는 **0 new, 0 known**이었다(`X:\DevTemp\d581-release-guards\run-1.txt`). 이 사후 이력 예외는 CI의 정확한 커밋 검사에만 적용하며 TRAIL 실구동 승인 범위는 넓히지 않는다.

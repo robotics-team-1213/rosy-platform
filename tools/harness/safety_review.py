@@ -280,6 +280,18 @@ EXEMPT: dict[str, str] = {
         "helper; provided factory wins and missing poses keep the default relay/status None. "
         "Historical exemption applies to integrated ae08cac387 only. See docs/validation/"
         "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "03d530eab93e4ce911be5a6e442c27f99d55a214":  # git commit revision
+        "Independent review by the integrating agent, 2026-10-10: app composition injects the "
+        "same D-581 anchored relay factory; console removes a forbidden safety-to-decision "
+        "import and retains provided-factory priority, default relay and read-only anchor "
+        "status. Remote model-PC formation/CORE/D-430 tests 55 passed, 0 new failures. See "
+        "docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md; driving HOLD.",
+    "74b87f13b62890a5595a4c66914ac4aec9e5c1e6":  # git commit revision
+        "Independent D-581 follow-up review, 2026-10-10: console.py only condenses the same "
+        "app-injected relay selection and anchor status read to its existing 1251-line verdict. "
+        "No stop, rearm, command, authority or D-430 import boundary changes; 16 focused "
+        "remote tests passed with 0 new failures. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md; TRAIL driving remains HOLD.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
