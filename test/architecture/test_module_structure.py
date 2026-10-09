@@ -91,6 +91,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "core/gateway/core/services.py": (
+        603,
+        "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        "D-541 adds only the trip_lease import, field, build_trip_lease call and kwarg; lease logic and "
+        "wiring live in core/trip_lease.py (fleet_loss_wiring pattern). services.py stays CORE composition. "
+        "On next growth, split: move the pure config parsers (_battery/_power/_traffic_policy_config, "
+        "_simulation_docking, _seeded_dock_database) to core/*_wiring.py, re-exporting _battery_config for "
+        "tests. Budget and allowance unchanged",
+    ),
     "fleet/fleet/server/trip_runner.py": (
         686,
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
@@ -106,8 +115,13 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        1242,
-        "split: measured at 1242 on 2026-10-09 after moving the three fleet.traffic YAML parsers "
+        1509,
+        "split: measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
+        "(display-only signal advice) and D-525 rev 3 extends signal_phase.py and "
+        "lane_traffic.py. The named lane-traffic seam in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
+        "+150 allowance measured from 1509. "
+        "Previously measured at 1242 on 2026-10-09 after moving the three fleet.traffic YAML parsers "
         "from cli.py into traffic/config.py without changing their validation or exits. D-525 S1 signal "
         "phase and lane hold code remains in this traffic owner; the named lane-traffic seam in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split review. "
@@ -171,8 +185,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_701,
-        "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        47_012,
+        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
+        "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
+        "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
+        "from 47012. Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
         "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
@@ -515,15 +533,6 @@ SIZE_VERDICTS = {
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
     ),
-    "fleet/fleet/server/web/shared/styles.css": (
-        809,
-        "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
-        "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "
-        "server-loss state, formation resume). It stays the one token-only stylesheet of the console page "
-        "owner and adds no palette or runtime owner. Re-judge as split, with a dated Fleet item added to "
-        "docs/plans/2026-10-04-ui-release-and-live-refinement.md, before any further growth past 809. "
-        "Web ceiling and growth allowance unchanged",
-    ),
     "ui/face/emotion/info_screen.py": (
         602,
         "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
@@ -581,8 +590,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_340,
-        "accept: independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
+        1_341,
+        "accept: independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        "+1 line, one import of TripLeaseFields from core_common/protocol/trip_lease.py, which holds the "
+        "lease models and the absent-key serializer; StateSnapshot is defined here, so the base-class swap "
+        "is the only hook. Additive, no envelope version change. Zero-growth allowance remains. "
+        "Previously independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
         "+2 lines, one re-export import and the optional LineFollowStatus.arc field (default None). The "
         "arc record models live in core_common/protocol/line_arc.py and the field cannot move because "
         "LineFollowStatus is defined here. Additive, no envelope version change. Zero-growth allowance "
@@ -670,8 +683,14 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1229,
-        "accept: re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
+        1248,
+        "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
+        "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
+        "alarm_sources hook so the tether watch can raise TETHER_STOP_FAILED; neither changes a goal, stop "
+        "or admission path. Previously 1243 (degraded link) and 1234 (D-526). D-526 adds an alarm_sources hook so the "
+        "tether watch can raise TETHER_STOP_FAILED beside the held-robot alarm; five lines, "
+        "no goal, stop, or admission path changed. The zero growth allowance remains. "
+        "Previously re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
         "existing link class on a gathered robot row. No goal, stop, or admission path "
         "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
         "2026-10-07: D-499 adds a read-only link class "
@@ -1045,8 +1064,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1230,
-        "accept: re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        1239,
+        "accept: re-judged at 1239 on 2026-10-09 for D-548: the DEV prefix on the face strip and the status "
+        "line belongs to the process that draws them; zero growth allowance remains. "
+        "Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
         "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
         "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
         "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "

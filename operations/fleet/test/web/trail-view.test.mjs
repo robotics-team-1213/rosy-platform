@@ -40,11 +40,37 @@ test('trail and tether draw through the caller projection, so they turn with the
   const turn = quarterTurn(90, 100, 50);
   const toPx = (x, y) => turn.point(x, y);
   const now = Date.now();
-  const view = {robots: at(30, 0), colors: ['robot-colour'], trails: new Map([['a', [{x: 10, y: 0, t: now}]]]),
+  const view = {robots: at(30, 0), colors: ['robot-colour'], trails: new Map([['a', [{x: 10, y: 0, t: now}]]]), watchAge: 0.5,
     tethers: [{robot_id: 'a', anchor_xy: [10, 20], radius_m: 5}]};
   drawTrails(ctx, view, toPx, 1);
   assert.deepEqual(lines.slice(0, 2), [toPx(10, 0), toPx(30, 0)].map(p => [p.x, p.y]));
   assert.deepEqual(arcs, [[toPx(10, 20).x, toPx(10, 20).y]]);
   assert.deepEqual(strokes, ['robot-colour', '--status-warn']); // robot 30 m from anchor: outside
-  assert.deepEqual(window.__trailOverlay, {segments: 1, tethers: 1});
+  assert.deepEqual(window.__trailOverlay, {segments: 1, tethers: 1, tripped: [], watchRunning: true});
+});
+
+test('a D-526 watch trip draws the tether in the danger colour', () => {
+  globalThis.window = {RosyPalette: {cssColor: name => name}};
+  const strokes = [];
+  const ctx = {save() {}, restore() {}, beginPath() {}, setLineDash() {}, fill() {}, moveTo() {}, lineTo() {},
+    arc() {}, stroke() { strokes.push(this.strokeStyle); }};
+  const view = {robots: at(10, 20), colors: ['robot-colour'], trails: new Map(), watchAge: 0.5,
+    tethers: [{robot_id: 'a', anchor_xy: [10, 20], radius_m: 5, watch: {state: 'tripped', trip: 'tether_turn'}}]};
+  drawTrails(ctx, view, (x, y) => ({x, y}), 1);
+  assert.deepEqual(strokes, ['--status-crit']); // inside the circle, but the watch stopped it
+  assert.deepEqual(window.__trailOverlay.tripped, ['a']);
+});
+
+test('a stopped or dead D-526 watch loop draws the tether in the danger colour', () => {
+  globalThis.window = {RosyPalette: {cssColor: name => name}};
+  for (const watchAge of [null, undefined, 7]) {
+    const strokes = [];
+    const ctx = {save() {}, restore() {}, beginPath() {}, setLineDash() {}, fill() {}, moveTo() {}, lineTo() {},
+      arc() {}, stroke() { strokes.push(this.strokeStyle); }};
+    const view = {robots: at(10, 20), colors: ['robot-colour'], trails: new Map(), watchAge,
+      tethers: [{robot_id: 'a', anchor_xy: [10, 20], radius_m: 5, watch: {state: 'watching'}}]};
+    drawTrails(ctx, view, (x, y) => ({x, y}), 1);
+    assert.deepEqual(strokes, ['--status-crit']);
+    assert.equal(window.__trailOverlay.watchRunning, false);
+  }
 });

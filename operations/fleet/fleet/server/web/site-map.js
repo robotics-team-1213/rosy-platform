@@ -4,6 +4,7 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
@@ -18,8 +19,10 @@ const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
 const W = 800, H = 480;
 
-$('credential').value = sessionStorage.getItem('rosy-console-token') || '';
-const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
+// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const stored = sessionStorage.getItem('rosy-console-token') || '';
+$('console-token').value = stored;
+const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null, open: []};
 const TRIP_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
@@ -165,7 +168,6 @@ function syncButtons() {
   const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
   gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
-  gate('estop', reason);
   gate('trip-start', inspecting || tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
   gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
   const starts = (state.active?.map.places || []).filter(place => place.kind === 'start');
@@ -257,11 +259,11 @@ async function guarded(work) {
   syncButtons();
 }
 
-$('connect').addEventListener('click', async () => {
+$('token-save').addEventListener('click', async () => {
   planeEpoch += 1; plane = null; calibrations = [];
   $('plane-pick').checked = false;
   $('plane-source').replaceChildren();
-  gate('connect', '접속 중');
+  gate('token-save', '접속 중');
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
@@ -272,7 +274,6 @@ $('connect').addEventListener('click', async () => {
   state.open = [];
   $('trip-start-place').replaceChildren();
   state.dirty = false;
-  $('session').textContent = '접속 전';
   $('trip-place').replaceChildren();
   $('trip-robot').replaceChildren();
   $('trip-actions').replaceChildren();
@@ -282,9 +283,9 @@ $('connect').addEventListener('click', async () => {
   notice('접속 중 · 0초 경과');
   try {
     const session = await request('/api/fleet/session');
-    sessionStorage.setItem('rosy-console-token', $('credential').value);
+    sessionStorage.setItem('rosy-console-token', $('console-token').value);
     state.role = session.role;
-    $('session').textContent = `${session.principal_id} · ${session.role}`;
+    showSession(session);
     loginForm.refresh(false);
     syncButtons();
     await load();
@@ -295,7 +296,7 @@ $('connect').addEventListener('click', async () => {
     state.loadState = error.status === 401 ? 'idle' : 'error';
     if (error.status === 401 || error.status === 403) {
       state.role = null;
-      $('session').textContent = '접속 전';
+      showSignedOut();
     }
     if (error.status === 401) loginForm.refresh(true);
     render();
@@ -303,7 +304,7 @@ $('connect').addEventListener('click', async () => {
     notice(siteMapErrorText(error));
   } finally {
     clearInterval(ticker);
-    gate('connect', '');
+    gate('token-save', '');
   }
 });
 
@@ -562,24 +563,22 @@ $('trip-cancel').addEventListener('click', async () => {
   if (allowed) tripAction(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel`, '운행을 취소했습니다.');
 });
 
-$('estop').addEventListener('click', async () => {
-  const feedback = $('estop-feedback');
-  feedback.hidden = false;
-  try {
-    const result = await request('/api/fleet/estop', {method: 'POST'});
-    feedback.textContent = `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`;
-    feedback.setAttribute('state', 'warning');
-  } catch (error) {
-    feedback.textContent = `비상 정지 결과 확인 불가 — ${error.message}`;
-    feedback.setAttribute('state', 'error');
-  }
-});
+bindEstop(request);
+bindTopbarToggle();
+tickClock();
+setInterval(tickClock, 1000);
+watchFleet(request);
+$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 
-developmentToken($('credential').value).then(token => {
-  if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
-  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
+developmentToken($('console-token').value).then(token => {
+  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
+  else loginForm.refresh(true).then(cookie => {
+    if (cookie || stored) $('token-save').click();
+    else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
+  });
 }).catch(() => {});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('credential').value = ''; $('connect').click();
+  $('console-token').value = ''; $('token-save').click();
 }});

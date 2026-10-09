@@ -34,6 +34,10 @@ def browser_tests_enabled() -> bool:
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
     page.wait_for_load_state("networkidle")
+    # D-540 2: below 90rem the token sits in the header fold behind 설정.
+    toggle = page.locator("#topbar-more")
+    if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
+        toggle.click()
     details = page.locator("#token-access")
     if details.get_attribute("open") is None:
         details.locator("summary").click()
