@@ -41,6 +41,14 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "a402c42935e27170be57e5240b807be6f88d38fc":  # git commit revision
+        "Independent code-reviewer agent (read-only), 2026-10-09: APPROVE WITH NOTES. console.py adds "
+        "LINK_DEGRADED_S (10 s) and a console-clock (time.monotonic) _last_ok; a failed state read within "
+        "the grace gets link 'degraded' plus link_degraded_s, display only. The row keeps online=False, so "
+        "traffic, dead-leader hand-off, swarm speed, capabilities, tracking and line-stuck readers are "
+        "unchanged; only link 'unreachable' is rewritten (moved, tls-refused, protocol are not). A degraded "
+        "robot still disarms the selected goal (review MEDIUM applied in the follow-up commit) and the "
+        "server goal path is untouched. test_link_on_snapshot.py passes; no device acceptance.",
     "cd7464f3241145b28c1d2fa21aa734e7ccb6940f":  # git commit revision
         "Independent Codex review, 2026-10-09: D-535 adds a read-only link_reason field "
         "to failed Fleet robot rows and renders it in the roster. The field has no "

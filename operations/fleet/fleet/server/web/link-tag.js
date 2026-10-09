@@ -3,6 +3,7 @@
 const TAGS = {
   unreachable: { word: "닿지 않음", kind: "crit", text: null, next: "다음: 주소 확인", focus: null },
   moved: { word: "주소 이동", kind: "warn", text: null, next: null, focus: null },
+  degraded: { word: "응답 지연", kind: "warn", text: "로봇이 잠시 답하지 않습니다. 10초 넘게 이어지면 닿지 않음으로 바뀝니다.", next: null, focus: null },
   "tls-refused": {
     word: "인증 거부", kind: "warn",
     text: "포트는 응답하고 토큰이 거절됐습니다. 망 수리가 아닙니다.",
