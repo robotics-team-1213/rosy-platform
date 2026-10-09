@@ -254,6 +254,7 @@ def test_union_holds_out_a_contiguous_val_block(tmp_path, monkeypatch):
     monkeypatch.setattr(ldd, "MIN_CANARIES", 1)
     parts = []
     for name in ("a", "b"):
+        (tmp_path / name).mkdir()
         out = _derived(tmp_path / name, n=10)
         review(tmp_path / name, out, canaries=0.5)
         ldd.finalize(out)
