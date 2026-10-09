@@ -47,6 +47,20 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NO_REPLAN: '확인할 바뀐 경로가 없습니다',
   TRIP_REPLAN_FAILED: '다시 계산한 경로가 없습니다 · 운행을 취소하세요',
   TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
+  // D-541 7 trip lease: CORE가 운행 중 로봇을 쥐게 한다
+  TRIP_LEASE_UNSUPPORTED: '이 로봇 CORE는 운행 점유(trip lease)를 모릅니다 · 현장이 점유를 요구합니다 · 새 이미지가 필요합니다',
+  TRIP_ROBOT_LEASED: '다른 운행이 이 로봇을 쥐고 있습니다 · 그 운행이 끝난 뒤 다시 하세요',
+  TRIP_LEASED: '다른 운행이 이 로봇을 쥐고 있습니다',  // CORE's code (D-541 2), as Fleet's TRIP_ROBOT_LEASED
+  TRIP_ROBOT_MANUAL: '로봇이 수동(MANUAL) 모드입니다 · 로봇을 멈춤(IDLE)으로 둔 뒤 다시 출발하세요',
+  CALIBRATION_ACTIVE: '로봇이 보정 중입니다 · 보정이 끝난 뒤 다시 출발하세요',
+  TRIP_LEASE_REFUSED: '로봇 CORE가 운행 점유를 거절했습니다(비상 정지·도킹 등) · 로봇 상태를 확인하세요',
+  TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
+};
+/** D-541 5/7: why CORE ended the trip lease (``detail.lease_reason``). */
+const LEASE_END_LABEL = {
+  taken_over: '로봇 화면·Pilot에서 넘겨받음', expired: '점유가 만료됨(관제 연결이 끊겼던 듯)',
+  mode_left: '로봇이 운행 모드를 떠남(멈춤·수동·도킹·막힘 중단)', estop: '비상 정지', released: '점유를 놓음',
+  core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
 export const TRIP_STATE_LABEL = {
   started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
@@ -67,6 +81,7 @@ export const TRIP_REASON_LABEL = {
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
   TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
+  lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
@@ -275,6 +290,10 @@ export function tripStatusText(trip, map) {
   } else if (trip.reason) {
     parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
   }
+  if (trip.reason === 'lease_lost') {  // D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)"
+    const why = LEASE_END_LABEL[trip.detail?.lease_reason] || trip.detail?.lease_reason || '점유를 잃음';
+    parts.push(trip.detail?.lease_by ? `${why}(${trip.detail.lease_by})` : why);
+  } else if (trip.lease?.state === 'held') parts.push('CORE 점유 중');
   if (trip.detail?.junction_retry) parts.push(TRIP_REASON_LABEL[trip.detail.junction_retry] || trip.detail.junction_retry);
   if (trip.detail?.junction_fields_dropped) parts.push('활성 지도가 바뀌어 교차로 기대 값을 보내지 않았습니다');
   if (trip.reason === 'lane_arc' && trip.detail?.arc_reason) parts.push(`사유 ${trip.detail.arc_reason}`);  // D-520 2

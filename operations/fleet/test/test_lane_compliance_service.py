@@ -172,9 +172,9 @@ def test_led_track_feeds_the_monitor_when_the_map_pose_is_not_localized():
     asyncio.run(monitor.tick())
     view = monitor.view("led")
     assert (view["heading_source"], view["level"], view["edge_id"]) == ("track_motion", ACT, "ab")
-    identity.tracks["led"] = track(1.0, 0.15)     # moved -x: no one-way arc that way
+    identity.tracks["led"] = track(1.0, 0.15)     # moved -x: reverse still occupies the same lane
     asyncio.run(monitor.tick())
-    assert monitor.view("led")["level"] == UNKNOWN
+    assert (monitor.view("led")["level"], monitor.view("led")["edge_id"]) == (ACT, "ab")
 
 
 def test_a_skipped_camera_frame_keeps_the_motion_heading_and_odom_must_say_moving():

@@ -99,6 +99,30 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
                     assert page.locator(action).get_attribute('aria-label')
 
 
+def test_object_workspace_purpose_and_eval_export_guard(tmp_path):
+    store = open_store(tmp_path)
+    with serve(store) as (page, _, expect):
+        expect(page.locator('#object-workspace-mode')).to_contain_text('학습 후보')
+        expect(page.locator('#view-status')).to_contain_text('학습 후보')
+        expect(page.locator('#prepare')).to_be_visible()
+    with store.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata (key,value) VALUES ('workspace_kind','evaluation')")
+    with serve(store) as (page, _, expect):
+        expect(page.locator('#object-workspace-mode')).to_contain_text('고정 평가')
+        expect(page.locator('#view-status')).to_contain_text('학습 제외')
+        expect(page.locator('#prepare')).to_be_hidden()
+        page.locator('#next-frame').click()
+        expect(page.locator('#view-status')).to_contain_text('학습 제외')
+
+
+def test_short_desktop_object_photo_is_fully_visible(browser_workspace):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': 1262, 'height': 632})
+    page.reload(wait_until='networkidle')
+    canvas = page.locator('#canvas').bounding_box()
+    assert canvas and canvas['y'] + canvas['height'] <= 632
+
+
 def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
     page, store, expect = browser_workspace
     expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')
