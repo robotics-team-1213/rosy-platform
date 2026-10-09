@@ -24,6 +24,10 @@ sources:
     corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
     robot_markers: {}
     heading_edge: [1, 2]
+    # D-587: sticker top edge direction from the robot front (deg, CCW +), per robot. A robot
+    # without a measured value sends no approved_record sighting (no ceiling map pose).
+    # Measure it with tools/calibration/ceiling_marker_yaw.py (one straight forward drive).
+    # marker_yaw_offset_deg: {rosy_40: 0}
     # D-564: floor place markers Fleet may teach draft places from (34 start-south,
     # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
     # edge forward as the robot stickers (heading_edge). Omit to send none.
@@ -48,3 +52,14 @@ sources:
   #   robot_markers:
   #     rosy_40: 40
   #   heading_edge: [1, 2]
+
+# D-472/D-596 LED identity (Fleet reads this top-level block; every field optional). Defaults:
+# Fleet asks by itself (auto_request: true) when a robot's marker has been missing for 3 s near an
+# anonymous blob, after two blobs split, or after an odom reset; at most once per robot per 30 s,
+# never during an E-stop. Each request blinks the robot's rear lamp 3 s and chirps twice.
+# identity:
+#   auto_request: false          # operator "LED로 찾기" only
+#   auto_min_interval_s: 30.0
+#   auto_marker_missing_s: 3.0
+#   auto_near_m: 0.5
+#   identity_ttl_s: 60.0

@@ -80,8 +80,12 @@ class SightingService:
         clock: Callable[[], float] = time.time,
         lease_s: float = SIGHTING_LEASE_S,
         store: SightingStore | None = None,
+        approved_revision: Callable[[SightingSource], str | None] | None = None,
     ) -> None:
         self._clock = clock
+        #: D-587 2: the source's approved D-457 record revision on its map, or None (the app
+        #: wires TrackingService.approved_revision). Without it no approved_record sighting passes.
+        self.approved_revision = approved_revision
         if not math.isfinite(lease_s) or lease_s <= 0:
             raise ValueError("sighting lease must be positive and finite")
         self.lease_s = lease_s
@@ -161,9 +165,14 @@ class SightingService:
         if payload.map_id != source.map_id:
             raise SightingError(409, "MAP_MISMATCH", "sighting map does not match source configuration")
         payload_source = payload.calibration_source or "corner_markers"
-        if (payload.calibration_revision != source.calibration_revision
-                or payload.corner_marker_ids != source.corner_marker_ids
-                or payload_source != source.calibration_source):
+        if payload_source == "approved_record":
+            approved = self.approved_revision(source) if self.approved_revision is not None else None
+            mismatch = approved is None or payload.calibration_revision != approved
+        else:
+            mismatch = (payload.calibration_revision != source.calibration_revision
+                        or payload.corner_marker_ids != source.corner_marker_ids
+                        or payload_source != source.calibration_source)
+        if mismatch:
             raise SightingError(409, "CALIBRATION_MISMATCH",
                                 "sighting calibration does not match source configuration")
 

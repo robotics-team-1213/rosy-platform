@@ -98,3 +98,13 @@ def test_apply_refuses_a_profile_that_is_not_an_existing_file(tmp_path, capsys):
     missing = "/opt/rosy/current/install/share/pinky_pro/config/missing.yaml"
     assert main(["--path", str(target), "apply", "--profile", missing, "--no-restart"]) == 1
     assert not target.exists() and "not an existing file" in capsys.readouterr().err
+
+
+def test_apply_learned_drivable_paint_target_writes_a_loadable_overlay(tmp_path):
+    target = tmp_path / "drivable.yaml"
+    calls, run = _run_log()
+    assert main(["--path", str(target), "apply", "--profile", PROFILE, "--paint-source", "learned",
+                 "--model-pointer", "/var/lib/rosy/models/shadow", "--paint-target", "drivable"], run=run) == 0
+    params = yaml.safe_load(target.read_text())[NODE_KEY]["ros__parameters"]
+    assert params["learned_paint_target"] == "drivable"
+    assert usable_operator_overlay(str(target))[0] == str(target)

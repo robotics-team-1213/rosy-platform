@@ -109,6 +109,7 @@ class TrackingService:
                   "robot_markers": dict(source.robot_markers)}
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
+            config["identity_challenges"] = self.identity.challenges_for(source.source_id)  # D-596
         return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:
@@ -301,6 +302,13 @@ class TrackingService:
         if entry is None or not 0.0 <= self._clock() - entry[1] <= self.state_fresh_s:
             return None
         return entry[0]
+
+    def approved_revision(self, source: SightingSource) -> Optional[str]:
+        """D-587 2: the approved record's revision for this source's map, else None."""
+        record = self.calibrations.get(source.source_id)
+        if record is None or record.map_id != source.map_id:
+            return None
+        return record.calibration_revision
 
     def revisions(self, source: SightingSource) -> set[str]:
         return self._revisions(source)

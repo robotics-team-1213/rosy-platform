@@ -6,9 +6,11 @@ import pytest
 
 from fleet.routing.graph import build_graph
 from fleet.traffic.blocks import Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, step, wait_cycle
-from fleet.traffic.signal_phase import SignalPlan, SignalState, advance, alert, check, command, green
+from fleet.traffic.signal_phase import (SignalPlan, SignalState, advance, alert, check, command, forecast, green,
+                                        occupancy_lamps, zone_occupancy)
 
 from fleet.site_map import SiteMap, from_lane_graph
+from fleet.traffic.handover import CYCLE_PERIODS
 from fleet.traffic.signal_phase import entering_arcs
 from test_blocks import BODY, DEMO, LANE_GRAPH, U_DEMO, _demo_map
 
@@ -57,9 +59,16 @@ def _drive(state, plan, times, busy=lambda t: False):
     return seen
 
 
-def test_a_fresh_signal_is_all_red_until_an_operator_cycles_it():
+def test_a_fresh_signal_is_occupancy_and_an_all_red_holds_until_an_operator_cycles_it():
+    """D-525 rev 6: a fresh (restarted) signal is in ``occupancy``: no phase, every approach may ask the
+    D-517 table and the zone's capacity decides. ``all_red`` still closes it until a verb reopens it."""
     state = SignalState()
+    assert state.mode == "occupancy" and green(PLAN, state) == {"in_a", "in_b"}
+    assert {a for _t, a, _g in _drive(state, PLAN, range(5))} == {"all_red"}   # the phase machine idles
+    assert alert(PLAN, state, 1000.0) is None
+    command(PLAN, state, "all_red", 0.0)
     assert {a for _t, a, _g in _drive(state, PLAN, range(30))} == {"all_red"}
+    assert green(PLAN, state) == frozenset()
     command(PLAN, state, "cycle", 30.0)
     seen = dict((t, (a, g)) for t, a, g in _drive(state, PLAN, [30.0 + i * 0.5 for i in range(80)]))
     assert seen[30.0] == ("green", ["in_a"])      # all red already ran its 1 s
@@ -143,11 +152,13 @@ def _spans(cycle, start, laps):
     return tuple(spans)
 
 
-def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, body=0.12, ticks=2400):
+def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, body=0.12, ticks=2400,
+              mode="cycle", cycle_run=0):
     """Robots on a one-way loop of ``cycle`` ``(unit, length, entry)`` with ``plan`` gating its zone.
     Estimates are true ± u, at the ±u edge with ``edge_rate`` (the worst case D-517 allows); CORE drives to ``authority − estimate`` past the true
     position (odom-anchored, D-517 4). Checks every tick: no zone grant on red, no real body in the
-    zone without a grant, no green while busy, no circular wait; at the end every robot did a lap."""
+    zone without a grant, no green while busy, no circular wait (``cycle_run``: a reported cycle
+    may last that many ticks in a row, below the resolver's ``CYCLE_PERIODS``); at the end every robot did a lap."""
     zone = plan.zone
     rng = random.Random(seed)
     assert n <= loop_capacity(_spans(cycle, 0, 1), layout, 3)
@@ -159,8 +170,9 @@ def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, 
         robots.append(Robot(f"r{i}", spans, None, 0.3, u, body))
         true_d[f"r{i}"] = spans[0].d1 - 0.02
     state, signal, busy = TableState(), SignalState(), True
-    command(plan, signal, "cycle", 0.0)
+    command(plan, signal, mode, 0.0)
     progress = dict.fromkeys(true_d, 0.0)
+    run = 0
     for tick in range(ticks):
         now = tick * 0.5
         was = signal.aspect
@@ -198,7 +210,8 @@ def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, 
             for i, s in enumerate(r.spans):
                 if s.unit == zone and s.d1 > true_d[r.id] - body and s.d0 < true_d[r.id]:
                     assert (r.id, i) in granted_on, f"tick {tick}: {r.id} in the zone without a grant"
-        assert wait_cycle(result.waiting_for) is None, f"tick {tick}: circular wait"
+        run = run + 1 if wait_cycle(result.waiting_for) else 0
+        assert run <= cycle_run, f"tick {tick}: circular wait for {run} ticks"
     loop_m = sum(length for _u, length, _e in cycle)
     assert min(progress.values()) > loop_m, f"a robot starved: {progress}"
 
@@ -226,9 +239,103 @@ def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_ra
     _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, u=U_DEMO, body=BODY, ticks=3200)
 
 
+@pytest.mark.parametrize("n,seed,edge_rate,unknown_rate", [(2, 21, 0.0, 0.0), (3, 22, 0.0, 0.0),
+                                                           (3, 23, 0.3, 0.1), (2, 24, 0.5, 0.15)])
+def test_occupancy_mode_loops_never_put_two_robots_in_the_zone_and_never_deadlock(n, seed, edge_rate, unknown_rate):
+    """D-525 rev 6: with every approach allowed, capacity 1 alone keeps one robot in the zone (no conflict,
+    no body inside without its own grant) and the signal adds no wait of its own, on the test loop and on
+    the live site loop. It is then a plain D-517 zone: on the live loop (the zone passed twice a lap) three
+    robots may report a wait cycle for a tick or two while a holder is about to leave (``wait_cycle``
+    counts any holder); none lasts the resolver's ``CYCLE_PERIODS`` and every robot keeps lapping."""
+    layout, cycle = _loop_with_two_entries(5, 2, 0.65)
+    _simulate(layout, cycle, PLAN, n, seed, edge_rate, unknown_rate, mode="occupancy",
+              cycle_run=CYCLE_PERIODS - 1)
+    graph, real = _demo()
+    plan = SignalPlan("sig_ring", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0)))
+    lap = real.route(graph, ["east:fwd", "ring_n:fwd", "west:fwd", "ring_s:fwd"])
+    _simulate(real, [(s.unit, s.d1 - s.d0, s.entry) for s in lap], plan, n, seed, edge_rate, unknown_rate,
+              u=U_DEMO, body=BODY, ticks=3200, mode="occupancy", cycle_run=CYCLE_PERIODS - 1)
+
+
+def _two_approaches():
+    layout = Layout({"a0": Unit("a0"), "b0": Unit("b0"), "zone": Unit("zone", 1, zone=True),
+                     "xa": Unit("xa"), "xb": Unit("xb")}, {})
+    a = Robot("a", (Span("a0", 0, 0.65), Span("zone", 0.65, 1.3, entry="in_a"), Span("xa", 1.3, 2.6)),
+              0.0, 0.3, 0.05, 0.12)
+    b = Robot("b", (Span("b0", 0, 0.65), Span("zone", 0.65, 1.3, entry="in_b"), Span("xb", 1.3, 2.6)),
+              0.0, 0.3, 0.05, 0.12)
+    return layout, a, b
+
+
+def _occupancy_tick(layout, robots, table, signal, now):
+    advance(PLAN, signal, now, False)
+    result = step(layout, robots, table, now, green={"zone": green(PLAN, signal)})
+    assert result.conflicts == ()
+    occupancy = zone_occupancy(table, robots, "zone", result.unplaced)
+    return result, occupancy, occupancy_lamps(PLAN, occupancy)
+
+
+def _zone_holders(table):
+    return sorted(r for r, held in table.held.items() if any(unit == "zone" for unit, _f in held.values()))
+
+
+def test_occupancy_two_robots_at_two_approaches_get_one_grant_the_other_sees_orange_then_red():
+    """The user's rule (D-525 rev 6): free -> green; granted but not in -> its approach green, the others
+    orange; in -> red; and only the D-517 zone grant lets a robot in: two at once get exactly one grant."""
+    layout, a, b = _two_approaches()
+    signal, table = SignalState(), TableState()
+    _result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 0.0)
+    assert occupancy == ("free", None, None) and lamps == {"in_a": "green", "in_b": "green"}
+    a.d = b.d = 0.5                                     # both reach for the zone in the same period
+    a.lookahead_m = b.lookahead_m = 0.6
+    result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 0.5)
+    assert _zone_holders(table) == ["a"], "capacity 1: exactly one grant"
+    assert occupancy == ("reserved", "a", "in_a") and lamps == {"in_a": "green", "in_b": "yellow"}
+    assert result.waiting_for["b"] == ("a",) and result.authority_end["b"] <= 0.65
+    a.d = 0.9                                           # a is in
+    result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 1.0)
+    assert _zone_holders(table) == ["a"] and occupancy == ("occupied", "a", "in_a")
+    assert lamps == {"in_a": "red", "in_b": "red"} and result.authority_end["b"] <= 0.65
+    a.d = 1.9                                           # a is out: b's turn in the same period
+    result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 1.5)
+    assert _zone_holders(table) == ["b"] and occupancy == ("reserved", "b", "in_b")
+    assert lamps == {"in_a": "yellow", "in_b": "green"}
+    b.d = 1.9                                           # b is out too: free again, every approach green
+    _result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 2.0)
+    assert _zone_holders(table) == [] and occupancy == ("free", None, None)
+    assert lamps == {"in_a": "green", "in_b": "green"}
+
+
+def test_occupancy_lamps_are_red_while_the_zone_state_is_unknown():
+    layout, a, b = _two_approaches()
+    signal, table = SignalState(), TableState()
+    a.d, a.lookahead_m = 0.9, 0.3
+    _occupancy_tick(layout, [a, b], table, signal, 0.0)
+    a.d = None                                          # a's pose is lost inside the zone
+    _result, occupancy, lamps = _occupancy_tick(layout, [a, b], table, signal, 0.5)
+    assert occupancy == ("unknown", None, None) and set(lamps.values()) == {"red"}
+    b.d = None                                          # never placed: it could be anywhere
+    result, occupancy, lamps = _occupancy_tick(layout, [b], TableState(), signal, 1.0)
+    assert result.unplaced == ("b",) and occupancy[0] == "unknown" and set(lamps.values()) == {"red"}
+
+
+def test_occupancy_verb_returns_from_cycle_and_its_forecast_is_open_ended():
+    state = SignalState()
+    command(PLAN, state, "cycle", 0.0)
+    _drive(state, PLAN, [1.0])
+    assert green(PLAN, state) == {"in_a"}
+    command(PLAN, state, "occupancy", 2.0)
+    assert state.mode == "occupancy" and state.aspect == "all_red" and green(PLAN, state) == {"in_a", "in_b"}
+    f = forecast(PLAN, state, 3.0, False, ("reserved", "r1", "in_b"))
+    assert f["in_b"] == {"lamp": "green", "left_s": None, "green_in_s": 0.0, "exact": False}
+    assert f["in_a"] == {"lamp": "yellow", "left_s": None, "green_in_s": None, "exact": False}
+    assert {r["lamp"] for r in forecast(PLAN, state, 3.0, True).values()} == {"red"}   # default: unknown
+    with pytest.raises(ValueError):
+        command(PLAN, state, "occupied", 4.0)
+
+
 def test_forecast_counts_down_like_a_traffic_light():
     """D-525 rev 3: T-map style seconds; a future green is a lower bound (the zone must be free)."""
-    from fleet.traffic.signal_phase import forecast
     state = SignalState()
     command(PLAN, state, "cycle", 0.0)
     advance(PLAN, state, 1.0, False)               # 1 s all red, then in_a green at 1 for 8 s
@@ -345,11 +452,10 @@ def test_estop_all_red_is_immediate_in_demand_and_a_restart_refuses_demands():
         demand(PLAN, state, "in_a", 1.3, 2.0)
     assert _drive(state, PLAN, [2.0, 10.0])[-1][1] == "all_red"
     with pytest.raises(PermissionError):
-        demand(PLAN, SignalState(), "in_a", 0.0, 2.0)                         # restart: all_red mode
+        demand(PLAN, SignalState(), "in_a", 0.0, 2.0)                         # restart: occupancy mode (rev 6)
 
 
 def test_demand_forecast_is_open_ended_green_and_a_queue_lower_bound():
-    from fleet.traffic.signal_phase import forecast
     state = SignalState()
     command(PLAN, state, "demand", 0.0)
     _ask(state, 1.0, ["in_a"])

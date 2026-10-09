@@ -52,6 +52,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
+        lost_auto_resume=_flag(raw, "lost_auto_resume", defaults.lost_auto_resume),
+        lost_resume_frames=_whole(raw, "lost_resume_frames", defaults.lost_resume_frames),
+        lost_resume_s=float(raw.get("lost_resume_s", defaults.lost_resume_s)),
         ir_calibration_revision=raw.get("ir_calibration_revision") or None,
         # D-422: unset = derived (path + URDF body) or the pre-D-422 LiDAR-origin defaults.
         obstacle_stop_m=_optional_float(raw.get("obstacle_stop_m")),
@@ -81,6 +84,16 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "crosswalk_odom_error_fraction", defaults.crosswalk_odom_error_fraction)),
         crosswalk_range_error_fraction=float(raw.get(
             "crosswalk_range_error_fraction", defaults.crosswalk_range_error_fraction)),
+        crosswalk_gate_enabled=_flag(raw, "crosswalk_gate_enabled", defaults.crosswalk_gate_enabled),
+        crosswalk_look_s=float(raw.get("crosswalk_look_s", defaults.crosswalk_look_s)),
+        crosswalk_look_min_scans=_whole(raw, "crosswalk_look_min_scans", defaults.crosswalk_look_min_scans),
+        crosswalk_report_s=float(raw.get("crosswalk_report_s", defaults.crosswalk_report_s)),
+        crosswalk_cross_speed=float(raw.get("crosswalk_cross_speed", defaults.crosswalk_cross_speed)),
+        crosswalk_approach_default_m=float(raw.get(
+            "crosswalk_approach_default_m", defaults.crosswalk_approach_default_m)),
+        crosswalk_range_sigma_m=float(raw.get("crosswalk_range_sigma_m", defaults.crosswalk_range_sigma_m)),
+        crosswalk_persist_k=_whole(raw, "crosswalk_persist_k", defaults.crosswalk_persist_k),
+        crosswalk_persist_n=_whole(raw, "crosswalk_persist_n", defaults.crosswalk_persist_n),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),

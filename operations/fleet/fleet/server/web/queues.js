@@ -76,7 +76,7 @@ export function endedTripText(view, robotId) {
 // keeps holding; nothing moves on silence. Console only — no phone or messenger alert (user, 2026-10-09).
 const HUMAN_DEADLINE_S = 30;
 
-function stuckOverdue(stuck) {
+export function stuckOverdue(stuck) {
   const note = stuck && stuck.resolver;
   return Boolean(note && note.escalated && note.escalated !== "human_claimed"
     && typeof note.age_s === "number" && note.age_s >= HUMAN_DEADLINE_S);

@@ -80,10 +80,12 @@ OPERATOR_GROUND_SOURCES = ("PINKY", "NOMINAL")
 #: D-397 operator layer, same physical range as calibration_store.check_values camera_profile.
 OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
                    "camera_height_m_override": (0.02, 0.2)}
+#: Same values as paint_worker.TARGETS (kept literal: this module must import without numpy/cv2).
+LEARNED_PAINT_TARGETS = ("lane_marking", "drivable")
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
                            "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
-                           "learned_paint_motion_compensation")
+                           "learned_paint_motion_compensation", "learned_paint_target")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -124,6 +126,10 @@ def operator_overlay_problem(data) -> Optional[str]:
             return "paint_source must be threshold, denoise or learned"
         if params["paint_source"] != "threshold" and params.get("camera_lane_mode") != "keep":
             return "denoise/learned paint requires camera_lane_mode: keep"
+    # D-597: inert unless paint_source is learned, so a later switch back to threshold
+    # (Host Agent lane_perception.set keeps the other keys) still leaves a valid file.
+    if "learned_paint_target" in params and params["learned_paint_target"] not in LEARNED_PAINT_TARGETS:
+        return f"learned_paint_target must be one of {list(LEARNED_PAINT_TARGETS)}"
     if "learned_lane_pointer" in params:
         value = params["learned_lane_pointer"]
         if not isinstance(value, str) or not value.startswith("/"):

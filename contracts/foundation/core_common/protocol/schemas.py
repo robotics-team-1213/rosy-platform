@@ -21,11 +21,12 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
+from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
@@ -1019,7 +1020,7 @@ class LineStuckStatus(BaseModel):
     """D-407 open lane stuck: the console answers it by ``stuck_id``."""
 
     stuck_id: str
-    cause: str                            # obstacle_ahead | lane_lost
+    cause: str                            # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4)
     phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
     held_s: float = 0.0
     attempts: int = 0
@@ -1028,6 +1029,8 @@ class LineStuckStatus(BaseModel):
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
+    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost
+    detail: Optional[str] = None
 
 
 class LineJunctionStatus(BaseModel):
@@ -1068,6 +1071,16 @@ class LineFollowStatus(BaseModel):
     arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
     route_context: Optional[RouteContext] = None
     route_context_published_at_s: Optional[float] = None
+    # D-573 6: key only while the gate is on (null outside a zone); absent = not watched (D-577 R3).
+    crosswalk: Optional[LineCrosswalkStatus] = None
+    crosswalk_reported: bool = Field(default=False, exclude=True)
+
+    @model_serializer(mode="wrap")
+    def _omit_unreported_crosswalk(self, handler):
+        data = handler(self)
+        if not self.crosswalk_reported:
+            data.pop("crosswalk", None)
+        return data
 
 
 class TrafficPolicyStatus(BaseModel):

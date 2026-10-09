@@ -528,6 +528,8 @@ def run_console(args: argparse.Namespace) -> None:
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+        # D-587 2: identified ceiling markers projected through the approved record are sightings.
+        sighting_service.approved_revision = tracking_service.approved_revision
     hub_link = _hub_link(args)
     # D-555: enrolled robots pair at runtime, so the route is up whenever that can happen.
     enrolled_hub = (enrollment_store is not None and event_store is not None and bool(console_token)

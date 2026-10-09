@@ -8,10 +8,11 @@ import threading
 import time
 from typing import Callable, Optional
 
-from core_common.protocol.schemas import LineFollowStatus
+from core_common.protocol.schemas import LineCrosswalkStatus, LineFollowStatus
 from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
+from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
@@ -30,7 +31,7 @@ from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recover
 
 
 class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
-                        ArcMixin):
+                        ArcMixin, CrosswalkGateMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -50,6 +51,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._ir_received_at: Optional[float] = None
         self._loss_started_at: Optional[float] = None
         self._lost_latched = False
+        self._resume_streak: tuple[int, Optional[float]] = (0, None)  # D-407 개정 2026-10-10
         self._invalid_observation = False
         self._status = LineFollowStatus()
         self._route_context_current = None
@@ -74,6 +76,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._init_junction()  # D-494 decision 4 (junction.py)
         self._init_arc()  # D-520 (arc/lane_arc.py)
         self._init_authority()  # D-517 4 (authority.py)
+        self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -125,6 +128,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._reset_junction()
             self._reset_arc(reason or default)
             self._init_authority()
+            self._xwalk.reset()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -139,6 +143,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._escalated = False
             self._received_at = None
             self._lost_latched = False
+            self._resume_streak = (0, None)
             self._invalid_observation = False
             self._loss_started_at = None if selected is LineFollowMode.OFF else self._clock()
             self._status = LineFollowStatus(
@@ -184,10 +189,14 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._received_at = effective_received_at
             self._evidence_revision += 1
             if observation.visible and observation.confidence >= self._config.min_confidence:
+                count, since = self._resume_streak
+                self._resume_streak = (count + 1, effective_received_at if count == 0 else since)
                 if not self._lost_latched:
                     self._loss_started_at = None
-            elif self._loss_started_at is None:
-                self._loss_started_at = float(now)
+            else:
+                self._resume_streak = (0, None)
+                if self._loss_started_at is None:
+                    self._loss_started_at = float(now)
             return True
 
     def ir_fallback_readiness(self, *, now: Optional[float] = None) -> tuple[bool, tuple[str, ...]]:
@@ -234,6 +243,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._invalid_observation = True
             self._return_evidence.invalidate_lane()
             self._confident_frames = 0  # D-476: an invalid frame breaks the arming streak
+            self._resume_streak = (0, None)
             self._evidence_revision += 1
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)
@@ -253,7 +263,10 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
 
     def status(self) -> LineFollowStatus:
         with self._lock:
-            return self._status.model_copy(update={'junction': self._junction_status(),
+            zone = self._xwalk.status(self._clock())  # D-573 6: absent while the gate is off
+            crosswalk = ({'crosswalk': None if zone is None else LineCrosswalkStatus(**zone),
+                          'crosswalk_reported': True} if self._config.crosswalk_gate_enabled else {})
+            return self._status.model_copy(update={**crosswalk, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'route_context': self._route_context_current,
                                                    'route_context_published_at_s':
@@ -453,16 +466,18 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
                 self._feed_return_trail(current)
                 if decision is self._arc_out:  # D-520: the arc owns this tick (no D-468/D-476/D-407,
-                    return self._authority_gate(current, decision)  # no junction gate); D-517 4 stops it
+                    # no junction gate); D-517 4 and D-573 only ever lower it
+                    return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
                     # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
-                    return self._authority_gate(current, self._junction_gate(current, decision))
+                    return self._crosswalk_gate(current, self._authority_gate(
+                        current, self._junction_gate(current, decision)))
                 local = self._apply_lane_return(current, decision)
-                return self._authority_gate(current, self._junction_gate(current, local if local is not None
-                                            else self._apply_recovery(current, decision)))
+                return self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
+                    current, local if local is not None else self._apply_recovery(current, decision))))
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.
@@ -535,7 +550,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 return self._stop_decision("HOLD", "lane_guard_stale")
             if guard == "centre":
                 return self._stop_decision("HOLD", "lane_departure")
-        if self._lost_latched:
+        if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
                       if self._mode is LineFollowMode.CAMERA_LINE
                       else "reselection_required")
@@ -658,6 +673,30 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         if observation.error >= self._config.ir_guard_edge_error:
             return "right"
         return "centre"
+
+    def _lost_resumed(self, now: float, guard: Optional[str]) -> bool:
+        """D-407 개정 2026-10-10: a CAMERA_LINE LOST unlatches in the same mode once the lane is back.
+
+        Reached only after the obstacle hold, a stale IR guard and an IR centre departure have
+        already returned. Needs lost_resume_frames consecutive fresh confident camera frames
+        spanning lost_resume_s and the IR guard clear (or off); E-stop, OFF and driver-hold loss
+        still go through set_mode(OFF). The normal FOLLOW path below decides the twist.
+        """
+        config = self._config
+        count, since = self._resume_streak
+        if (self._mode is not LineFollowMode.CAMERA_LINE or not config.lost_auto_resume
+                or guard not in (None, "clear") or self._invalid_observation
+                or count < config.lost_resume_frames or since is None or self._received_at is None
+                or now - since < config.lost_resume_s
+                or not 0.0 <= now - self._received_at <= config.stale_after_s):
+            return False
+        self._lost_latched = False
+        self._loss_started_at = None
+        self._events.publish(
+            "nav.lane_reacquired", source="line_follow_manager",
+            data={"mode": self._mode.value, "frames": count, "since_s": round(now - since, 3)},
+        )
+        return True
 
     def _loss_or_stop(self, now: float, state: str, reason: str,
                       age: Optional[float]) -> LineFollowDecision:
