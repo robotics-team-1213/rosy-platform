@@ -345,6 +345,18 @@ class HttpRobotClient:
             body["yield_turn_rad"] = yield_turn_rad
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
+    async def front_frame(self) -> tuple[bytes, dict]:
+        """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
+        status = await self._get("/api/v1/vision/front/status")
+        if not status.get("available") or not status.get("sequence"):
+            raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
+                                "front camera preview is missing or stale")
+        resp = await self._http.get("/api/v1/vision/front/frame", params={"sequence": status["sequence"]},
+                                    headers=self._headers())
+        if resp.status_code >= 400:
+            self._check(resp)
+        return resp.content, status
+
     async def fleet_link_put(self, body: dict) -> dict:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
         return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))

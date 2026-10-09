@@ -6,8 +6,8 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
-  CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, confirmText, decisionButtons, needsConfirm, outcomeText,
-  pendingStucks, rearText, refusalText, resolverText, stuckFacts,
+  CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, alertsDue, confirmText, decisionButtons, evidenceCaption,
+  needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
 } = await import("../../fleet/server/web/line-stuck.js");
 
 const STUCK = {
@@ -154,4 +154,25 @@ test("D-577 8: the AI chip says whether AI judgment exists, and each live fact s
   assert.deepEqual(aiLines({ ai: { state: "present", owner_mode: "shared" }, ai_facts: [
     { kind: "stalled", confidence: 0.82, source: "analyzer:stalled@0.1", evidence: { events: [12] } }] }),
   ["AI 판단 있음", 'AI 사실 stalled · 신뢰도 82% · analyzer:stalled@0.1 · 근거 {"events":[12]}']);
+});
+
+test("D-577 8: the evidence picture says which camera, which frame and how old", () => {
+  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 0), "앞 카메라 #812 · 0초 전 촬영");
+  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 3), "앞 카메라 #812 · 3초 전 촬영");
+  assert.equal(evidenceCaption(null), "카메라 그림 없음");
+  assert.equal(evidenceCaption({ state: "loading" }), "카메라 그림 받는 중");
+});
+
+test("D-577 8: one alert when a stuck row appears, one more when it goes 30 s unanswered", () => {
+  const seen = new Map();
+  const row = (resolver) => [{ robot_id: "rosy_01", line_stuck: { stuck_id: "s1", resolver } }];
+  assert.deepEqual(alertsDue(seen, row(null)), [{ robotId: "rosy_01", stuckId: "s1", kind: "new" }]);
+  assert.deepEqual(alertsDue(seen, row(null)), []);
+  const late = { escalated: "no_rule", age_s: 31 };
+  assert.deepEqual(alertsDue(seen, row(late)), [{ robotId: "rosy_01", stuckId: "s1", kind: "overdue" }]);
+  assert.deepEqual(alertsDue(seen, row(late)), []);
+  assert.deepEqual(alertsDue(seen, row({ escalated: "human_claimed", age_s: 90 })), []);
+  assert.deepEqual(alertsDue(seen, []), []);
+  assert.equal(seen.size, 0);                       // a closed stuck forgets its alerts
+  assert.deepEqual(alertsDue(seen, row(null)).map((a) => a.kind), ["new"]);
 });
