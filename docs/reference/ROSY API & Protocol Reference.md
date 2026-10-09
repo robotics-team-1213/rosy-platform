@@ -1676,8 +1676,10 @@ Fleet `GET /api/fleet/state` robot rows also carry optional D-509 display fields
 `power_health` and `power_health_age_s`. `power_health` is the existing shared
 `core_common.protocol.power_health.PowerHealthResponse` (the authenticated
 Viewer `GET /api/v1/power/health` readback), or `null` if the robot is offline,
-the read fails, the body violates that schema, or the five-second Fleet cache
-expires before a refresh completes. `power_health_age_s` is the nonnegative
+the robot answers an error, or the body violates that schema. Fleet refreshes it
+about once a second off the request path; a refresh that gets no answer (timeout,
+refused) keeps the last good body, which is shown up to five seconds old and is `null`
+after that. `power_health_age_s` is the nonnegative
 Fleet monotonic-clock age in seconds, or `null` whenever `power_health` is null.
 The browser adds its own elapsed time after receiving the Fleet response and
 checks CORE `battery.sample_age_s` against `stale_after_s` before showing a

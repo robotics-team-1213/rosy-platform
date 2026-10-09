@@ -35,12 +35,23 @@ class TripAware:
 
 
 class CapabilityDisplay:
-    """Keep presentation readback bounded without changing dispatch admission."""
+    """Keep presentation readback bounded without changing dispatch admission.
 
-    def __init__(self, clients, clock, *, read_method="capabilities", schema=None):
+    Stale-while-revalidate (field check 2026-10-10: a 0.05/0.2 s wait turned every slow read
+    into "unknown", so the console flickered). A read older than ``refresh_s`` starts one
+    background refresh and answers the last good value with its age at once; only a first read
+    (or a kept value past ``max_age_s``) waits up to ``wait_s``. A transport failure (timeout,
+    refused, no route) keeps the last good value; a robot answer replaces it (an error answer
+    or a body that breaks ``schema`` clears it). ``max_age_s`` bounds how old a kept value may
+    still be shown (None: until a refresh succeeds or the client is replaced or removed).
+    """
+
+    def __init__(self, clients, clock, *, read_method="capabilities", schema=None,
+                 refresh_s=5.0, max_age_s=None):
         self.clients, self.clock = clients, clock
         self.read_method = read_method
         self.schema = schema
+        self.refresh_s, self.max_age_s = refresh_s, max_age_s
         self.cache = {}
         self.identities = {}
         self.pending = {}
@@ -57,28 +68,34 @@ class CapabilityDisplay:
         if self.identities.get(robot_id) is not client:
             self.invalidate(robot_id)
             self.identities[robot_id] = client
-        cached = self.cache.get(robot_id)
-        if cached is not None and self.clock() - cached[0] < 5.0:
-            return copy.deepcopy(cached[1])
         if client is None:
             return None
-        task = self.pending.get(robot_id)
-        if task is None:
-            task = asyncio.create_task(self._refresh(robot_id, client))
-            self.pending[robot_id] = task
-        await asyncio.wait({task}, timeout=wait_s)
         cached = self.cache.get(robot_id)
-        if self.clients.get(robot_id) is not client or cached is None:
+        if cached is None or self.clock() - cached[0] >= self.refresh_s:
+            task = self.pending.get(robot_id)
+            if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
+                task = asyncio.create_task(self._refresh(robot_id, client))
+                self.pending[robot_id] = task
+            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
+            # the request answers the kept value now.
+            expired = (cached is None or cached[1] is not None and self.max_age_s is not None
+                       and self.clock() - cached[0] > self.max_age_s)
+            await asyncio.wait({task}, timeout=wait_s if expired else 0)
+        return self._kept(robot_id, client)
+
+    def _kept(self, robot_id, client):
+        cached = self.cache.get(robot_id)
+        if self.clients.get(robot_id) is not client or cached is None or cached[1] is None:
             return None
-        return copy.deepcopy(cached[1]) if self.clock() - cached[0] < 5.0 else None
+        if self.max_age_s is not None and self.clock() - cached[0] > self.max_age_s:
+            return None
+        return copy.deepcopy(cached[1])
 
     def age(self, robot_id):
-        if self.identities.get(robot_id) is not self.clients.get(robot_id):
+        client = self.clients.get(robot_id)
+        if self.identities.get(robot_id) is not client or self._kept(robot_id, client) is None:
             return None
-        cached = self.cache.get(robot_id)
-        if cached is None or cached[1] is None or self.clock() - cached[0] >= 5.0:
-            return None
-        return round(max(0.0, self.clock() - cached[0]), 3)
+        return round(max(0.0, self.clock() - self.cache[robot_id][0]), 3)
 
     async def _refresh(self, robot_id, client):
         try:
@@ -86,6 +103,8 @@ class CapabilityDisplay:
                 caps = await getattr(client, self.read_method)()
                 if self.schema is not None:
                     caps = self.schema.model_validate(caps).model_dump(mode="json")
+            except (httpx.TransportError, OSError, asyncio.TimeoutError):
+                return   # no answer: keep the last good value; its age keeps growing
             except Exception:
                 caps = None
             if self.clients.get(robot_id) is client:

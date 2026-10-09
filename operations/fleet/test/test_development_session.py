@@ -86,6 +86,19 @@ def test_ninth_session_evicts_the_oldest():
     assert all(sessions.principal(token) is not None for token in tokens[1:])
 
 
+def test_a_session_in_use_outlives_newer_idle_ones():
+    # Field check 2026-10-10: a console polling every second lost its token to eight newer
+    # page loads; eviction follows last use, not issue time.
+    sessions = DevelopmentSessions(clock=Clock())
+    tokens = [sessions.issue()[0] for _ in range(8)]
+    assert sessions.principal(tokens[0]) is not None
+    newer = sessions.issue()[0]
+
+    assert sessions.principal(tokens[0]) is not None
+    assert sessions.principal(tokens[1]) is None
+    assert sessions.principal(newer) is not None
+
+
 def test_six_requests_per_address_per_minute():
     clock = Clock()
     sessions = DevelopmentSessions(clock=clock)
