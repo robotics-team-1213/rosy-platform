@@ -1045,11 +1045,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1229,
-        "accept: re-judged at 1229 on 2026-10-09 for D-546: the 1.5 s recovery hold and the e-stop clear sit in the same hand-over reader; "
-        "previously at 1200 on 2026-10-09 for D-546: the reversing beep, the recovery lamp input and the "
-        "identify refusal stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
-        "Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
+        1230,
+        "accept: re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
+        "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
+        "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
         "the first 16 digits of the validated TLS CA fingerprint for tablet comparison; "
         "zero growth allowance remains. Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
         "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
