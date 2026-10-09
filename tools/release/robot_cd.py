@@ -216,8 +216,8 @@ class Coordinator:
             self.save(phase="building")
             return self.audit("build_dispatched")
         release_id = self.state["release_id"]
-        if ci == "failed":
-            # The speculative build is discarded; its reserved ID stays a gap.
+        if ci == "failed" and self.state["phase"] in ("dispatching", "building", "preparing"):
+            # Signed rollouts are past this gate. The speculative build is discarded; its reserved ID stays a gap.
             self.save(phase="failed", reason="CI failed for this source; unsigned build discarded")
             return self.audit("ci_failed")
         if self.state["phase"] in ("dispatching", "building"):
@@ -247,11 +247,11 @@ class Coordinator:
                 self.save(phase="failed", reason="a newer payload release exists")
                 return self.audit("superseded")
             import prepare_payload_release as prepare
-            work = preparation_folder(self.folder / release_id, self.state, release_id)
-            self.save(work_dir=str(work), attempt=int(work.name.removeprefix("attempt-")))
-            signed = work / f"{release_id}.tar.gz"
-            if not signed.exists():
-                try:
+            try:
+                work = preparation_folder(self.folder / release_id, self.state, release_id)
+                self.save(work_dir=str(work), attempt=int(work.name.removeprefix("attempt-")))
+                signed = work / f"{release_id}.tar.gz"
+                if not signed.exists():
                     _, unsigned = prepare.download_unsigned(self.state["build_run"], release_id, work, self.repo, 8)
                     verify_source(unsigned, sha)
                     args = ["--artifact-dir", str(work), "--out-dir", str(work), "--release-id", release_id,
@@ -260,15 +260,15 @@ class Coordinator:
                         args += ["--robot", robot]
                     if prepare.main(args, ssh_runner=self.ssh):
                         raise RuntimeError("payload preparation refused; preserve work folder for review")
-                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-                    # D-553 3: a refusal used to retry every tick forever, unlogged.
-                    failures = self.state.get("prepare_failures", 0) + 1
-                    self.save(prepare_failures=failures, last_error=f"{type(error).__name__}: {error}")
-                    if failures >= 3:
-                        self.save(phase="failed", reason="preparation failed three times; review the work folder")
-                        return self.audit("prepare_failed")
-                    return self.audit("prepare_retry")
-            verify_source(signed, sha)
+                verify_source(signed, sha)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, tarfile.TarError) as error:
+                # D-553 3: a refusal used to retry every tick forever, unlogged.
+                failures = self.state.get("prepare_failures", 0) + 1
+                self.save(prepare_failures=failures, last_error=f"{type(error).__name__}: {error}")
+                if failures >= 3:
+                    self.save(phase="failed", reason="preparation failed three times; review the work folder")
+                    return self.audit("prepare_failed")
+                return self.audit("prepare_retry")
             self.save(phase="publishing", tarball_sha256=hashlib.sha256(signed.read_bytes()).hexdigest())
         if self.state["phase"] == "publishing":
             import publish_payload_release as publish

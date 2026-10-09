@@ -249,9 +249,23 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         return run_on(hosts[0], invocations, logs, sha, repo, label)
     # D-553 4: invocation k runs on hosts[k % n]; each host ships and builds its venv once.
     n = len(hosts)
+
+    def attempt(i):
+        try:
+            return run_on(hosts[i], invocations[i::n], logs[i::n], sha, repo, label)
+        except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
+            print(f"[remote-pytest] {hosts[i]} failed ({error}); another host takes its share",
+                  file=sys.stderr, flush=True)
+            return None
+
     with ThreadPoolExecutor(n) as pool:
-        parts = list(pool.map(lambda i: run_on(hosts[i], invocations[i::n], logs[i::n], sha, repo, label),
-                              range(n)))
+        parts = list(pool.map(attempt, range(n)))
+    working = [h for h, part in zip(hosts, parts) if part is not None]
+    if not working:
+        raise SystemExit("[remote-pytest] every test host failed to set up")
+    for i, part in enumerate(parts):
+        if part is None:
+            parts[i] = run_on(working[0], invocations[i::n], logs[i::n], sha, repo, label)
     return [parts[k % n][k // n] for k in range(len(invocations))]
 
 

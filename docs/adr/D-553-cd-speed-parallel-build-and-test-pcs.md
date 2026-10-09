@@ -25,7 +25,7 @@
    - 서명 전에 번호가 더 큰 `payload-<date>-NNN` 태그가 있으면 `superseded`로 끝낸다. 오래된 릴리스로 로봇을 되돌리지 않는다.
    - 내려받기·준비 실패는 `prepare_failures`와 `last_error`에 남기고, 세 번째에 `failed`로 끝낸다.
    - tick이 예외로 멈추면 `stopped: <종류>: <내용>`을 감사 기록에 남긴 뒤 멈춘다.
-4. **로컬 게이트는 시험 PC 둘을 같이 쓴다.** `tools/remote/remote_pytest.py`는 invocation이 둘 이상이면 닿는 호스트(`ROSY_TEST_HOSTS`, 기본 모델 PC·AI PC)에 `k % n`으로 나눠 동시에 돌린다. 호스트마다 커밋을 한 번 보내고 venv를 한 번 만든다. 결과 코드는 invocation 순서로 돌려준다. invocation이 하나면 예전처럼 처음 닿는 호스트 하나만 쓴다. pre-push와 `tools/land.py`가 그대로 혜택을 본다.
+4. **로컬 게이트는 시험 PC 둘을 같이 쓴다.** `tools/remote/remote_pytest.py`는 invocation이 둘 이상이면 닿는 호스트(`ROSY_TEST_HOSTS`, 기본 모델 PC·AI PC)에 `k % n`으로 나눠 동시에 돌린다. 호스트마다 커밋을 한 번 보내고 venv를 한 번 만든다. 결과 코드는 invocation 순서로 돌려준다. 한 호스트가 커밋 전송이나 venv에서 실패하면 그 몫은 성공한 호스트가 이어 돌린다. 둘 다 실패해야 게이트가 실패한다. invocation이 하나면 예전처럼 처음 닿는 호스트 하나만 쓴다. pre-push와 `tools/land.py`가 그대로 혜택을 본다.
 5. **쓰지 않는 것.**
    - 우리 PC를 GitHub self-hosted 러너로 붙이지 않는다. 저장소가 공개라 포크 PR이 러너에서 코드를 돌릴 수 있고, 페이로드는 ARM64 빌드라 x86 PC로는 줄지 않는다.
    - 현장 PC(robttt)는 시험 호스트에 넣지 않는다. 라이브 Fleet 스택이 돈다.
@@ -33,7 +33,7 @@
 ### Consequences
 
 - push → 서명 롤아웃이 약 18–20분에서 약 7–8분(+카나리)이 된다.
-- CI가 실패한 sha마다 ARM64 빌드 한 번과 번호 하나가 버려진다(공개 저장소 러너라 비용 없음).
+- CI가 실패한 sha마다 ARM64 빌드 한 번과 번호 하나가 버려진다(공개 저장소 러너라 비용 없음). CI 실패는 그 sha에 대해 끝이다. 같은 sha의 CI를 다시 돌려 초록이 되어도 그 sha로는 다시 릴리스하지 않고, 다음 main 커밋을 기다린다. 서명이 끝난 `publishing` 단계는 CI 재실행 결과로 끝내지 않는다(카나리 감시를 버리지 않는다).
 - 설치된 서명 스냅샷은 고정이라, 이 변경은 착지 뒤 `install_robot_cd.ps1`로 새 스냅샷을 설치해야 동작한다. 새 스냅샷의 첫 tick이 멈춘 045를 `superseded`로 끝낸다.
 - 시험 PC 둘을 동시에 쓰면 AI PC가 다른 일로 바쁠 때 그쪽 invocation이 느려질 수 있다. `ROSY_TEST_HOSTS`로 한 호스트만 줄 수 있다.
 - 시험: `test/test_affected_tests.py`(샤드), `test/test_robot_cd.py`(CI와 나란한 빌드, CI 실패·superseded·세 번 실패 종료), `test/test_remote_pytest.py`(호스트 분배·순서).

@@ -343,3 +343,32 @@ def test_preparation_refusal_ends_after_three_ticks(tmp_path, monkeypatch):
     state = json.loads((tmp_path / "state.json").read_text())
     assert state["phase"] == "failed" and "ABI mismatch" in state["last_error"]
     assert "prepare_failed" in (tmp_path / "audit.jsonl").read_text()
+
+
+def test_failed_ci_rerun_does_not_abandon_a_signed_rollout(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "publishing", "release_id": "2026.10.06-046",
+                                             "work_dir": str(tmp_path / "missing"), "tarball_sha256": "ab" * 32})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run(conclusion="failure")]))
+    with pytest.raises(OSError):  # reaches the publishing phase (missing tarball), not ci_failed
+        coordinator.tick()
+    assert json.loads((tmp_path / "state.json").read_text())["phase"] == "publishing"
+
+
+def test_source_mismatch_also_counts_toward_the_preparation_limit(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import prepare_payload_release as prepare
+
+    def other_source(run_id, release_id, work, repo, retries):
+        work.mkdir(parents=True, exist_ok=True)
+        artifact(work / "u.tar.gz", sha="cd" * 20)
+        return None, work / "u.tar.gz"
+    monkeypatch.setattr(prepare, "download_unsigned", other_source)
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.06-046",
+                                             "build_run": 5})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run()]))
+    assert coordinator.tick() == "prepare_retry"
+    assert "ValueError" in json.loads((tmp_path / "state.json").read_text())["last_error"]
