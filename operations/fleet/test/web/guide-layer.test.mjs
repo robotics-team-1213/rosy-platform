@@ -44,3 +44,14 @@ test('chip text names the robot and its uncertainty', () => {
   assert.equal(poseLabel(GUIDE.robots[1]), 'rosy_02 · 위치 모름');
   assert.equal(poseLabel(GUIDE.robots[2]), 'rosy_03 · ±0.20 m · 추정');
 });
+
+test('fitView keeps robot rings inside the view at every turn', () => {
+  const discs = [{x: -0.5, y: 0.6, r: 0.3}, {x: 2.4, y: 1.5, r: 0.2}];
+  for (const turn of [0, 90, 180, 270]) {
+    const view = fitView(MAP, 800, 480, 24, turn, discs);
+    for (const {x, y, r} of discs) {
+      const [px, py] = view.toPx(x, y), rpx = r * view.scale;
+      assert.ok(px - rpx >= 23.9 && px + rpx <= 776.1 && py - rpx >= 23.9 && py + rpx <= 456.1, `${turn} ${x},${y}`);
+    }
+  }
+});

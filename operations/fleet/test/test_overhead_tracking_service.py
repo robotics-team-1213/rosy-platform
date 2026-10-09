@@ -281,6 +281,21 @@ def test_shared_gather_hands_each_rows_read_time_to_tracking():
     assert service.robot_state("rosy_01") is not None   # read 0.1 s before the gather ended
 
 
+
+def test_an_unassigned_marker_is_an_unknown_with_its_id_and_absorbs_its_blob():
+    # D-575: site 2026-10-09, 9dfk's sticker 41 had no robot_markers row; it must show.
+    clock = _Clock()
+    service = TrackingService([_source(robot_markers=(("rosy_01", 40),))],
+                              calibrations=TrackingCalibrationStore(), clock=clock)
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", detections=[
+        {"x": 1, "y": 1, "footprint_m": .165, "score": 1, "marker_id": 40},
+        {"x": 2, "y": 1, "footprint_m": .165, "score": 1, "marker_id": 41},
+        {"x": 2.05, "y": 1, "footprint_m": .165, "score": .35},
+        {"x": 3, "y": 1, "footprint_m": .165, "score": .5}]))
+    snap = service.snapshot()
+    assert {row["robot_id"]: row["status"] for row in snap["robots"]}["rosy_01"] == "MARKER"
+    assert [(row["x"], row["marker_id"]) for row in snap["unknown"]] == [(3, None), (2, 41)]
+
 def test_payload_expires_after_the_lease_and_nothing_old_is_shown():
     service, clock = _service()
     service.observe_states(_robots(rosy_01=_state(1.2, 0.4)))

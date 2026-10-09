@@ -30,3 +30,7 @@ D-574 reserved by another session (refs/adr/D-574, collection drive stalls), not
 D-575 reserved by another session (refs/adr/D-575, ceiling marker misses), not yet on main when D-578 was written; remove when it lands
 D-576 reserved by another session (refs/adr/D-576, drivable beyond a boundary line), not yet on main when D-578 was written; remove when it lands
 D-577 reserved by another session (refs/adr/D-577, stuck fleet AI PC realtime situation service), not yet on main when D-578 was written; remove when it lands
+D-574 reserved in another active branch (feat/v13-map-projected-labels); remove when it lands
+D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet on main; remove when it lands
+D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
+D-578 reserved in another active branch (lane failure analysis loop); remove when it lands

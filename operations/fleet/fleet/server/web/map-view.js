@@ -340,6 +340,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      if (item.markerId !== undefined) drawChip(ctx, null, p.x, p.y - size * 1.8, `ArUco ${item.markerId} · 미등록`);
     }
     ctx.restore();
   }
@@ -540,8 +541,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   };
 
   function describeSightings() {
-    const fresh = view.sightings.filter((s) => s.state === "fresh").length;
-    return `카메라 관측 ${fresh}/${view.sightings.length}대`;
+    const observed = new Set(view.sightings.filter((s) => s.state === "fresh").map((s) => s.robot_id));
+    for (const row of view.cameraTracking?.robots || []) observed.add(row.robotId);
+    return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
   function activeCall(robotId) {
@@ -661,6 +663,19 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
   }
 
+  function showSiteMap() {
+    const canvas = el("map-canvas");
+    canvas.removeAttribute("aria-hidden");
+    canvas.setAttribute("role", "img");
+    canvas.tabIndex = -1;
+    canvas.classList.add("idle");
+    el("map-stage").dataset.mapState = "site";
+    el("map-empty").hidden = true;
+    syncLegend("site");
+    draw();
+    onMapUnavailable();
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     life.check();
@@ -669,6 +684,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       life.check();
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
+      // Show the read-only site layer while a robot map request is still pending.
+      if (!view.map && !auth.locked) showSiteMap();
       if (Date.now() - calibrationsAt > 30000) {
         try {
           const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
@@ -799,16 +816,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
-        const canvas = el("map-canvas");
-        canvas.removeAttribute("aria-hidden");
-        canvas.setAttribute("role", "img"); // 관측 전용 — 누를 수 있는 버튼이 아니다
-        canvas.tabIndex = -1;
-        canvas.classList.add("idle");
-        el("map-stage").dataset.mapState = "site";
-        el("map-empty").hidden = true;
-        syncLegend("site");
-        draw();
-        onMapUnavailable();
+        showSiteMap();
         return;
       }
       const canvas = el("map-canvas");

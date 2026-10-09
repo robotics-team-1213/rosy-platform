@@ -233,14 +233,23 @@ class TrackingService:
             poses = {rid: self._pose(rid, source.map_id, now) for rid in source.robot_ids}
             assignments = {marker: rid for rid, marker in source.robot_markers}
             measured = {}
+            # D-575: a marker no robot is assigned to is still a robot on the floor: unknown, with its id.
+            unassigned: dict[int, Seen] = {}
             if fresh and status == "OK":
                 for detection in payload.detections:
+                    if detection.marker_id is None:
+                        continue
                     rid = assignments.get(detection.marker_id)
+                    item = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
                     if rid is not None and rid in source.robot_ids:
-                        measured[rid] = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
-            if measured and seen is not None:
-                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), rid, index)
-                               for rid, m in measured.items() for index, d in enumerate(seen)
+                        measured[rid] = item
+                    else:
+                        unassigned[detection.marker_id] = item
+            marked = {**measured, **unassigned}
+            if marked and seen is not None:
+                # One anonymous blob per marker is that marker's robot, not another one.
+                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), str(rid), index)
+                               for rid, m in marked.items() for index, d in enumerate(seen)
                                if math.hypot(d.x - m.x, d.y - m.y) <= max(d.footprint_m, m.footprint_m))
                 used_markers, duplicates = set(), set()
                 for _, rid, index in pairs:
@@ -260,7 +269,11 @@ class TrackingService:
                     track_source[row.robot_id] = source.source_id
                 tracks[row.robot_id] = chosen
             unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
-                            "footprint_m": item.footprint_m, "score": item.score} for item in extra)
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": None}
+                           for item in extra)
+            unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": marker_id}
+                           for marker_id, item in sorted(unassigned.items()))
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
                 "sources": sources_out, "robots": robots, "unknown": unknown}

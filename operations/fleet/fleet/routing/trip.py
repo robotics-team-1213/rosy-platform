@@ -82,7 +82,7 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     def arc_speed(arc: Arc) -> float:
         return speed(arc.speed_cap_mps, request.max_speed_mps, request.speed_cap)
 
-    at = snap_start(graph, *request.start_pose, config)
+    at = snap_start(graph, *request.start_pose, config, allowed)
     eta, segments, done = 0.0, [], 0
     legs = _legs(graph, request)
     for index, (via, target) in enumerate(legs):
