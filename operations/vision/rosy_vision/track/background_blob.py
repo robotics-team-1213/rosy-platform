@@ -240,9 +240,13 @@ class BackgroundBlobDetector:
         if np.count_nonzero(foreground) > self._scene_change_fraction * track_px:
             self.reset()
             return DetectorResult((), "SCENE_CHANGED")
-        found = self._check_suspects(image, foreground) if self._suspects else []
-        count, _labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, connectivity=8)
+        found, ghosts = self._check_suspects(image, foreground) if self._suspects else ([], [])
+        count, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, connectivity=8)
+        # A ghost's foreground can reach past its zone (MOG2 edge, closing): drop whole blobs.
+        skip = {int(label) for (y0, y1, x0, x1), zone in ghosts for label in labels[y0:y1, x0:x1][zone]}
         for label in range(1, count):
+            if label in skip:
+                continue
             detection = self._measure(int(stats[label, cv2.CC_STAT_AREA]), centroids[label],
                                       work_to_map, camera)
             if detection is not None:
@@ -305,12 +309,13 @@ class BackgroundBlobDetector:
         if not self._suspects:
             self._frames = None  # nothing to heal later
 
-    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray) -> list[Detection]:
-        """Guesses for suspects whose spot still shows the background; ghosts are cleared and healed."""
-        guesses, kept, heals = [], [], []
+    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray) -> tuple[list, list]:
+        """Guesses for suspects whose spot still shows the background, and ghost (box, zone)s,
+        which are healed here and not reported this frame."""
+        guesses, kept, heals, ghosts = [], [], [], []
         for suspect in self._suspects:
             (y0, y1, x0, x1), blob, zone, guess = suspect
-            patch = foreground[y0:y1, x0:x1]  # a view: clearing it clears the frame's foreground
+            patch = foreground[y0:y1, x0:x1]
             total = int(np.count_nonzero(blob))
             if np.count_nonzero(patch[blob]) < BAKED_MATCH_MAX_FOREGROUND * total:
                 guesses.append(guess)
@@ -318,14 +323,14 @@ class BackgroundBlobDetector:
                 continue
             floor = image[y0:y1, x0:x1].max(axis=2) >= self._dark_level
             if np.count_nonzero(floor[blob]) >= GHOST_FLOOR_FRACTION * total:
-                patch[zone] = 0
+                ghosts.append(((y0, y1, x0, x1), zone))
                 heals.append(((y0, y1, x0, x1), zone & floor))
             else:
                 kept.append(suspect)  # something dark is there now: the live path decides
         self._suspects = kept
         if heals:
             self._heal(image, heals)
-        return guesses
+        return guesses, ghosts
 
     def _heal(self, image: np.ndarray, heals: list) -> None:
         """Relearn MOG2 from the learning frames with live floor pixels in each ghost zone."""
