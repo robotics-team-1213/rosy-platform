@@ -1,0 +1,25 @@
+{
+  "arcs": {
+    "ring_e": {
+      "min_proxy_clearance_m": -0.0229,
+      "negative_proxy_ticks": 51,
+      "ticks": 57
+    },
+    "ring_n": {
+      "min_proxy_clearance_m": -0.0097,
+      "negative_proxy_ticks": 11,
+      "ticks": 36
+    },
+    "ring_s": {
+      "min_proxy_clearance_m": -0.0164,
+      "negative_proxy_ticks": 18,
+      "ticks": 39
+    }
+  },
+  "line_centres_m": [
+    0.155,
+    0.345
+  ],
+  "nominal_radius_m": 0.076,
+  "trip_result": "arrived"
+}

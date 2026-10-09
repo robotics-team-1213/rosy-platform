@@ -7544,7 +7544,7 @@ osy-d395-s1d\`.
 ## 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
 
 - 변경: Fleet 호를 유지한 채 지도 자세·승인 바닥 경계의 제한 보정 후보, STOP·시간 출처, D-557 우선 SIM과 두 로봇 DEVICE 단계를 Proposed ADR과 실행 계획에 기록했다.
-- 증거: D-520·D-557 계약, NE 4회 진입 +15.497…+16.273°와 blind 25 mm 0.1104–0.1281 m 기존 원시 로그 분석; 새 Gazebo 실행은 모델 PC SSH 시간 초과로 미착수.
+- 증거: D-520·D-557 계약, NE 4회 진입 +15.497…+16.273°와 blind 25 mm 0.1104–0.1281 m 기존 원시 로그 분석; 모델 PC 재접속 성공 후 기존 작업공간의 `lane_arc.py`가 현 코드와 다른 것을 확인해 새 Gazebo 기준 주행은 미착수.
 - gate 변화: 설계 제안만. 새 SIM·실물 주행·보정 활성화는 HOLD.
 
 ## 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
@@ -7552,3 +7552,9 @@ osy-d395-s1d\`.
 - 변경: 기존 NE 4회 GT 진입 오차를 입력으로 이상적인 같은 반지름 호의 횡방향 이탈을 계산하고, 가정한 잔여 각도 ±3/5/10°와 비교했다.
 - 증거: `docs/validation/lane-parallel-correction-surrogate-2026-10-09/result.md`; 기준 +15.497…+16.273°에서는 첫 25 mm가 0.0889–0.0934 m, 최대 반지름 오차가 0.0678–0.0712 m다.
 - gate 변화: 대체 계산은 실제 센서·제어·Gazebo·실물 검증이 아니다. D-557 새 모델 PC 한 바퀴와 두 로봇 DEVICE 검증은 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
+
+- 변경: 격리 모델 PC 작업공간에 현행 D-520 코드를 설치·빌드해 Gazebo 한 바퀴를 실행하고, D-567의 합격 목표를 경계 내 차체 sweep·필요시 사전 STOP·완주 순서로 정리했다.
+- 증거: `docs/validation/lane-parallel-correction-baseline-2026-10-09/result.md`; trip `arrived`, 호 최대 반지름 오차 34/41/30 mm, 명목 원형 차체의 도색선 중심 여유 최소 −22.9 mm.
+- gate 변화: ROS-SIM 완주만 관측. 실제 차체 형상·도색선 허용 범위와 오차·정지 여유, 후보 병렬 보정, 두 로봇 DEVICE는 미판정/HOLD.
