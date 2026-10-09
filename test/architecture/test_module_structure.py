@@ -205,13 +205,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_280,
-        "split: re-judged at 49280 on 2026-10-09 after merging fix/trip-lap-hold-outside-zone (author's record; "
-        "+139 over main 49141): D-517 3 no stop inside a zone (AI PC signal "
-        "SIM): lap-end and one-way destination moves and the onward search in server/trip_laps.py, the allowed-arc "
-        "start in routing/snap.py, the stop_moved line in web/shared/site-map-model.js. Existing owners, no new "
-        "route or command path; the hold distance itself is in the traffic unit (traffic/zone_hold.py). +150 "
-        "allowance measured from 49280. Previously "
+        49_303,
+        "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
+        "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
+        "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
         "split: re-judged at 49125 on 2026-10-09: power, dock, and charge tags stay with the "
         "existing card and attention-queue owners (roster.js +20, queues.js +7, "
         "power-health-view.js +1). A battery level other than ok and DOCK_FAILED join the "
