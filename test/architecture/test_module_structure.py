@@ -1179,6 +1179,14 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
+    "learning/training/perception/model/deliver.py": (
+        626,
+        "accept: the lane_seg paint slot (2026-10-10) parametrises the existing pointer scripts "
+        "(push, rollback, release-hold, status) instead of copying them; the remote shell text, "
+        "argument checks and journal stay in one file so the default shadow scripts stay "
+        "byte-identical (golden test in learning/training/perception/test/test_model_deliver.py). "
+        "Split the remote_script builders out if it grows again",
+    ),
     "learning/training/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
