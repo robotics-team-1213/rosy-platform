@@ -86,6 +86,14 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_probe_parser_reads_only_the_rosyprobe_line():
+    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6"
+    p = rp.parse_probe(f"Welcome to Ubuntu\nlast login: today\n{line}\nbye\n")
+    assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6
+    assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6\n") is None
+    assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
+
+
 def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     if not shutil.which("bash") or sys.platform == "win32":
         pytest.skip("POSIX bash with /proc is required")
@@ -101,7 +109,8 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    assert len(fields) == 9 and fields[-2:] == ["2", "6"]
+    assert len(fields) == 10 and fields[-2:] == ["2", "6"]
+    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 6
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()
 

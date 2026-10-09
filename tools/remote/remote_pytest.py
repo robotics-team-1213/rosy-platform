@@ -126,7 +126,7 @@ exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
 """
 
-# One line: nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb. Dead-pid locks go.
+# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb. Dead-pid locks go.
 PROBE = r"""J=~/rosy-jobs; c=0; m=0
 for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
@@ -137,7 +137,7 @@ py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
   "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
 b=0; [ -e "$J/busy" ] && b=1
-echo "$(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
+echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
   "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m"
 """
 
@@ -172,11 +172,20 @@ def probe(host: str) -> dict | None:
     try:
         out = subprocess.run([*SSH, host, "bash -c " + shlex.quote(PROBE)], stdin=subprocess.DEVNULL,
                              capture_output=True, text=True, timeout=15).stdout
-        n, load, avail, total, py, sim, busy, cores, gb = out.split()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return parse_probe(out)
+
+
+def parse_probe(out: str) -> dict | None:
+    """The ROSYPROBE line of PROBE output (login-shell chatter around it is ignored), or None."""
+    try:
+        line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
+        n, load, avail, total, py, sim, busy, cores, gb = line.split()[1:]
         return {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
                 "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
                 "lock_cores": int(cores), "lock_gb": int(gb)}
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+    except (IndexError, ValueError):
         return None
 
 
