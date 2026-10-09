@@ -2885,3 +2885,7 @@
 - 변경: `MAX_ANSWERS` 3 뒤 `needs_human`(lane_return이 놓을 때까지 고정). `--localization-overhead-cue` 기본 켜짐, 끄기 `--no-localization-overhead-cue`(사용자 결정, D-257 5 개정 제안은 D-546에 기록).
 - 증거: `test_localization_pose_request.py`.
 - gate 변화: SOURCE.
+## 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
+- 변경: `--pose-request-overhead/--no-pose-request-overhead`(기본 켜짐)는 위치 요청 답만, `--localization-overhead-cue`는 기본 꺼짐으로 복원. 답 횟수는 요청이 닫혔다 열려도 lane_return이 놓거나 `lane_return_corridor_verified`까지 유지하고 중재기 답도 센다.
+- 증거: `test_localization_pose_request.py`, `test_cli.py`.
+- gate 변화: SOURCE.

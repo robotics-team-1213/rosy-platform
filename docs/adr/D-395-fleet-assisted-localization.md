@@ -319,6 +319,6 @@ S2(4대, `docs/plans/2026-10-02-d395-s2-bench-results.md`)는 끝내지 못했�
 
 - CORE가 "위치를 모르겠다"는 나가는 요청 `GET /localization/request`를 더한다. lane_return이 `pose_stale`·`fleet_required`일 때 열린다. 이전 문장 "lane_return에는 연결되어 있지 않다"는 "D-546 5로 연결된다"로 바뀐다.
 - Fleet 답은 기존 `POST /localization/decision`이다. 새 `source`는 이 조각에 없다(`vlm`은 D-546 8). 로봇의 3 s 스캔 확인은 그대로다.
-- 천장 카메라 자세로 답하는 길은 D-257 5 개정과 같은 조건이라 `--localization-overhead-cue`가 켜져 있을 때만 쓴다. 장치 기본값 꺼짐은 그대로다.
+- 천장 카메라 자세로 위치 요청에 답하는 길은 `--pose-request-overhead`(기본 켜짐)로 끄고 켠다. `--localization-overhead-cue`(중재기·감시 단서)는 기본 꺼짐 그대로다. 장치 기본값 꺼짐은 그대로다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

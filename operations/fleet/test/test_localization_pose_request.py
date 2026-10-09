@@ -35,7 +35,7 @@ def robot(loc="LOCALIZED", frame="map", lf_reason="lane_return_pose_stale"):
 
 def rig(r, pose, *, overhead=True):
     clock = FakeClock()
-    svc = LocalizationService(lambda: {"r1": r}, clock=clock, wall=clock, overhead_cue=overhead)
+    svc = LocalizationService(lambda: {"r1": r}, clock=clock, wall=clock, pose_request_overhead=overhead)
     svc.set_overhead_pose(lambda rid: pose)
     return svc, clock
 
@@ -78,9 +78,9 @@ def test_untrusted_overhead_or_none_is_never_used_and_the_operator_is_told():
         assert view["needs_human"] and view["pose_request"]["state"] == "needs_human"
 
 
-def test_the_overhead_answer_needs_the_overhead_flag():
+def test_the_overhead_answer_needs_the_pose_request_flag_not_the_arbiter_cue():
     r = robot()
-    svc, clock = rig(r, trusted(), overhead=False)       # D-257 amendment not accepted
+    svc, clock = rig(r, trusted(), overhead=False)       # --no-pose-request-overhead
     ticks(svc, clock, 2.0)
     assert r.decisions == [] and svc.view("r1")["needs_human"]
 
@@ -155,14 +155,63 @@ def test_a_request_closed_after_the_answer_is_not_a_failure():
     assert len(r.decisions) == 2 and not svc.view("r1")["needs_human"]
 
 
-def test_the_overhead_cue_is_on_by_default_and_can_be_turned_off(tmp_path):
+def test_pose_request_overhead_is_on_by_default_apart_from_the_arbiter_cue(tmp_path):
     from fleet import cli
     from fleet.server.localization_service import build_localization_service
     robots = tmp_path / "robots.yaml"
     robots.write_text("robots: []" + chr(10), encoding="utf-8")
-    assert cli.parse_args(["console", "--robots", str(robots)]).localization_overhead_cue is True
-    assert cli.parse_args(["console", "--robots", str(robots),
-                           "--no-localization-overhead-cue"]).localization_overhead_cue is False
+    base = ["console", "--robots", str(robots)]
+    args = cli.parse_args(base)
+    assert args.pose_request_overhead is True and args.localization_overhead_cue is False
+    args = cli.parse_args(base + ["--no-pose-request-overhead"])
+    assert args.pose_request_overhead is False and args.localization_overhead_cue is False
     console = type("C", (), {"clients": staticmethod(lambda: {})})()
-    assert build_localization_service(console, None).overhead_cue is True
-    assert build_localization_service(console, None, overhead_cue=False).overhead_cue is False
+    svc = build_localization_service(console, None)
+    assert svc.pose_request_overhead is True and svc.overhead_cue is False
+    assert build_localization_service(console, None, pose_request_overhead=False
+                                      ).pose_request_overhead is False
+
+
+def test_three_reopen_cycles_end_in_needs_human():
+    """Overhead answer, accepted, RESUME, the fleet phase asks again: the count survives."""
+    r = robot()
+    svc, clock = rig(r, trusted())
+    for n in range(1, pose_request.MAX_ANSWERS + 1):
+        r.pose_request = request(request_id=f"pose-{n}")
+        ticks(svc, clock, 1.0)
+        r.pose_request = None                            # accepted: closed, lane_return resumes
+        ticks(svc, clock, 1.0)
+    assert len(r.decisions) == pose_request.MAX_ANSWERS and not svc.view("r1")["needs_human"]
+    r.pose_request = request(request_id="pose-4")
+    ticks(svc, clock, 1.0)
+    assert len(r.decisions) == pose_request.MAX_ANSWERS
+    assert svc.view("r1")["needs_human"] and svc.view("r1")["pose_request"]["failed"]
+
+
+def test_a_verified_lane_return_resets_the_count():
+    r = robot()
+    svc, clock = rig(r, trusted())
+    for n in (1, 2):
+        r.pose_request = request(request_id=f"pose-{n}")
+        ticks(svc, clock, 1.0)
+        r.pose_request = None
+        ticks(svc, clock, 1.0)
+    r._state["line_follow"]["reason"] = "lane_return_corridor_verified"
+    ticks(svc, clock, 0.5)
+    r._state["line_follow"]["reason"] = "lane_return_pose_stale"
+    for n in (3, 4, 5):
+        r.pose_request = request(request_id=f"pose-{n}")
+        ticks(svc, clock, 1.0)
+        r.pose_request = None
+        ticks(svc, clock, 1.0)
+    assert len(r.decisions) == 5 and not svc.view("r1")["needs_human"]
+
+
+def test_an_arbiter_answer_counts_toward_the_limit():
+    r = robot(loc="CANDIDATES")
+    svc, clock = rig(r, None)
+    svc._arbiter.pending = lambda rid, request_id: True
+    ticks(svc, clock, 40.0)                              # the request never closes
+    view = svc.view("r1")
+    assert view["needs_human"] and view["pose_request"]["failed"]
+    assert view["pose_request"]["tries"] == pose_request.MAX_ANSWERS

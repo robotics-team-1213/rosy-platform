@@ -26,7 +26,7 @@ asks (D-2, D-369).
 
 Pose requests (D-546 5-6, proposed): a robot whose line follow holds in `lane_return_*` may have
 an open request at `GET /localization/request`. Fleet answers in order: the overhead map pose
-(`MapPoseService`, LOCALIZED and anchored by a fresh sighting; same flag as the overhead cue),
+(`MapPoseService`, LOCALIZED and anchored by a fresh sighting; `pose_request_overhead`, default on),
 the D-395 arbiter when the robot has candidates, `resolve_pose_with_model` (not built), then
 `needs_human` (console badge). An answer is the existing decision POST; it is repeated after
 `pose_request.RETRY_S` while the request stays open, and an expired request is ignored.
@@ -91,15 +91,16 @@ def default_lane_rules() -> Optional[Path]:
 
 
 def build_localization_service(console, sightings, *, enabled: bool = True,
-                               overhead_cue: bool = True,
+                               overhead_cue: bool = False, pose_request_overhead: bool = True,
                                lane_rules: Optional[Path] = None) -> Optional["LocalizationService"]:
-    """CLI wiring: on unless disabled; the overhead cue is on unless turned off (D-546)."""
+    """CLI wiring: on unless disabled; the overhead cue stays off unless asked for; pose requests may use the overhead pose (D-546)."""
     if not enabled:
         return None
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
                                sightings=sightings, overhead_cue=bool(overhead_cue),
+                               pose_request_overhead=bool(pose_request_overhead),
                                traffic_hold=getattr(console, "hold_for_localization", None))
 
 
@@ -114,7 +115,8 @@ def _pose(state: Mapping) -> Optional[cues.Pose]:
 class LocalizationService:
     def __init__(self, clients: Callable[[], Mapping[str, RobotClient]], *,
                  slots: Sequence[cues.Slot] = (), squares: Sequence[tuple[float, float]] = (),
-                 sightings=None, overhead_cue: bool = False, arbiter: Optional[Arbiter] = None,
+                 sightings=None, overhead_cue: bool = False, pose_request_overhead: bool = True,
+                 arbiter: Optional[Arbiter] = None,
                  clock: Callable[[], float] = time.monotonic,
                  wall: Callable[[], float] = time.time, poll_s: float = POLL_S,
                  call_timeout_s: float = CALL_TIMEOUT_S,
@@ -124,6 +126,8 @@ class LocalizationService:
         self._squares = tuple(squares)
         self._sightings = sightings
         self.overhead_cue = overhead_cue
+        #: D-546 6 (a): the pose-request handler may answer from the overhead map pose.
+        self.pose_request_overhead = pose_request_overhead
         self._arbiter = arbiter or Arbiter()
         self._clock = clock
         self._wall = wall          # sighting captured_at is site wall time
@@ -160,6 +164,8 @@ class LocalizationService:
         self._known: set[str] = set()
         #: D-546 6: robot_id -> {request_id, state: answered|needs_human, by, at} of its open request.
         self._pose_req: dict[str, dict] = {}
+        #: robot_id -> answers sent in this lane_return episode (survives the request closing).
+        self._pose_tries: dict[str, int] = {}
         #: robot_id -> the overhead map pose (`MapPoseService.arbitrated_pose`), set by app.py.
         self._overhead_pose: Optional[Callable[[str], object]] = None
 
@@ -184,8 +190,8 @@ class LocalizationService:
     async def run(self) -> None:
         logger.info("localization service: polling every %.1f s, %d squares, overhead sighting cue %s",
                     self._poll_s, len(self._squares),
-                    "ON (D-546 amends D-257 5, proposed)" if self.overhead_cue
-                    else "OFF (--no-localization-overhead-cue)")
+                    "ON (D-257 amendment not accepted: bench use only)" if self.overhead_cue
+                    else "OFF (D-257 amendment not accepted)")
         while True:
             try:
                 await self.tick()
@@ -245,8 +251,9 @@ class LocalizationService:
     async def _pose_request(self, rid: str, client: RobotClient, state: Mapping, now: float) -> None:
         """D-546 6: answer the robot's open pose request: overhead, arbiter, model, then a human."""
         reason = str(((state.get("line_follow") or {}).get("reason")) or "")
-        if not reason.startswith("lane_return_"):       # only a held lane_return can have asked
-            self._pose_req.pop(rid, None)               # lane_return let go: a new episode
+        if not reason.startswith("lane_return_") or reason == "lane_return_corridor_verified":
+            self._pose_req.pop(rid, None)               # lane_return let go or verified: new episode
+            self._pose_tries.pop(rid, None)
             return
         try:
             request = await self._bounded(client.localization_request())
@@ -267,14 +274,14 @@ class LocalizationService:
             if asked["request_id"] == request.get("request_id"):
                 if asked["state"] == "needs_human" or now - asked["at"] < pose_request.RETRY_S:
                     return
-        tries = asked["tries"] if asked is not None else 0
+        tries = self._pose_tries.get(rid, 0)           # kept across close/reopen until the episode ends
         if tries >= pose_request.MAX_ANSWERS:           # answered and still open: it keeps failing
             logger.warning("localization: %s pose request still open after %d answers: needs_human",
                            rid, tries)
             self._pose_req[rid] = {"request_id": request.get("request_id"), "at": now, "by": None,
                                    "state": "needs_human", "tries": tries, "failed": True}
             return
-        pose = self._overhead_pose(rid) if self._overhead_pose is not None and self.overhead_cue else None
+        pose = self._overhead_pose(rid) if self._overhead_pose is not None and self.pose_request_overhead else None
         decision = pose_request.overhead_decision(request, pose)
         if decision is not None:
             by = "overhead"
@@ -289,9 +296,11 @@ class LocalizationService:
         if decision is not None:
             await self._post_decision(rid, client, decision,
                                       (decision.pose.x, decision.pose.y, decision.pose.yaw), now)
+        if by is not None:
+            tries += 1                                   # the arbiter's answer counts as well
+            self._pose_tries[rid] = tries
         record = {"request_id": request.get("request_id"), "at": now, "by": by,
-                  "state": "answered" if by else "needs_human",
-                  "tries": tries + (1 if decision is not None else 0)}
+                  "state": "answered" if by else "needs_human", "tries": tries}
         if by is None and (asked is None or asked["state"] != "needs_human"):
             logger.warning("localization: %s pose request %s (%s) has no Fleet answer: needs_human",
                            rid, request.get("request_id"), request.get("reason"))
@@ -574,4 +583,5 @@ class LocalizationService:
             self._unconfirmed.pop(rid, None)
             self._localized_at.pop(rid, None)
             self._pose_req.pop(rid, None)
+            self._pose_tries.pop(rid, None)
         self._known = current
