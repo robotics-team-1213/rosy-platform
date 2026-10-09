@@ -105,13 +105,9 @@ def test_check_fixes_only_the_safe_lines_and_reports_the_rest(tmp_path):
 
 
 def test_only_awaiting_approval_items_do_not_fail_the_check(tmp_path):
-    _lib(tmp_path, "approval file /etc/ssh/sshd_config.d/10-rosy.conf common/s.conf
-safe wifi-allow
-", "",
-         {"common/s.conf": "x
-"})
-    fake, bin_dir = _fakes(tmp_path, wifi="site-net:802-11-wireless:yes
-")
+    _lib(tmp_path, "approval file /etc/ssh/sshd_config.d/10-rosy.conf common/s.conf\nsafe wifi-allow\n", "",
+         {"common/s.conf": "x\n"})
+    fake, bin_dir = _fakes(tmp_path, wifi="site-net:802-11-wireless:yes\n")
     result = _run(tmp_path, bin_dir, fake, "check")
     assert result.returncode == 0, result.stdout
     status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
