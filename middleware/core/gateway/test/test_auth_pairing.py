@@ -440,20 +440,34 @@ def test_device_dev_mode_marker_opens_only_the_shared_dev_tokens(robot, monkeypa
     monkeypatch.setattr(core_config, "DEV_MODE_MARKER", marker)
     monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
     monkeypatch.delenv("ROSY_DEV_AUTH", raising=False)
-    overrides = _card_config([{"token": "plain-" + "operator-value", "role": "operator"}])
+    # A real device overlay lists its card token; that list must not hide the dev tokens.
+    overlay = _card_config([{"token": "plain-" + "operator-value", "role": "operator"}])
+    (tmp_path / "rosy.yaml").write_text(yaml.safe_dump(overlay), encoding="utf-8")
 
     # D-548: no marker is D-193 7 unchanged.
-    tc, _svc, _state, _events = robot(config_overrides=overrides, dev_auth=True)
+    loaded = core_config.load_config()
+    assert [item.get("id") for item in loaded["auth"]["tokens"]] == ["card01", None]
+    tc, _svc, _state, _events = robot(config_overrides={"auth": loaded["auth"]}, dev_auth=False)
     assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 401
 
     marker.write_text("", encoding="ascii")
-    assert [item["role"] for item in core_config.load_config()["auth"]["tokens"]] == [
-        "administrator", "operator", "viewer"]
-    tc, _svc, _state, events = robot(config_overrides=overrides, dev_auth=True)
+    loaded = core_config.load_config()
+    assert [item["role"] for item in loaded["auth"]["tokens"]] == [
+        "administrator", "operator", "administrator", "operator", "viewer"]
+    tc, _svc, _state, _events = robot(config_overrides={"auth": loaded["auth"]}, dev_auth=False)
     assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 200
     assert tc.get("/api/v1/robot/state", headers=DEV_VIEWER).status_code == 200
     assert tc.get("/api/v1/robot/state", headers=bearer("plain-" + "operator-value")).status_code == 401
     assert tc.get("/api/v1/robot/state", headers=CARD).status_code == 200
+
+    # A dev digest an earlier write stored is not listed twice; removing the marker closes it at once.
+    hashed = {"id": "devstored", "role": "administrator", "source": "legacy",
+              "sha256": hashlib.sha256(("rosy-dev-" + "admin").encode()).hexdigest()}
+    (tmp_path / "rosy.yaml").write_text(yaml.safe_dump(_card_config([hashed])), encoding="utf-8")
+    assert [item.get("id") for item in core_config.load_config()["auth"]["tokens"]] == [
+        "card01", "devstored", None, None]
+    marker.unlink()
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 401
 
 
 def test_device_dev_mode_publishes_a_warning(core_client, monkeypatch, tmp_path):

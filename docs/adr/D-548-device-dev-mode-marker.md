@@ -12,7 +12,7 @@ Fleet 쪽 `--mission-api`는 `--users-file`이 없으면 시작하지 않았다.
 
 ### Decision
 
-1. **표식 파일.** `ROSY_DEPLOYMENT=device`인 CORE는 `/etc/rosy/dev-mode` 파일이 있을 때만 `config/rosy_dev_auth.yaml`의 세 토큰(`rosy-dev-admin`/`operator`/`viewer`)을 병합하고 받아들인다. 파일 내용은 보지 않는다. `ROSY_DEPLOYMENT`와 `ROSY_DEV_AUTH`는 바꾸지 않는다. 그 밖의 평문 레거시 항목은 지금처럼 거부한다.
+1. **표식 파일.** `ROSY_DEPLOYMENT=device`인 CORE는 `/etc/rosy/dev-mode` 파일이 있을 때만 `config/rosy_dev_auth.yaml`의 세 토큰(`rosy-dev-admin`/`operator`/`viewer`)을 받아들인다. 장치 오버레이에는 늘 카드·페어링 토큰 목록이 있고 목록은 아래 층을 통째로 덮으므로, 세 토큰은 오버레이 병합 뒤 목록 끝에 덧붙인다(이미 같은 다이제스트가 있으면 넣지 않는다). 파일 내용은 보지 않는다. `ROSY_DEPLOYMENT`와 `ROSY_DEV_AUTH`는 바꾸지 않는다. 그 밖의 평문 레거시 항목은 지금처럼 거부한다.
 2. **닫힌 실패는 그대로다.** 파일이 없으면 D-193 7과 똑같다. 이미지·카드·OTA는 이 파일을 만들지 않는다. `/etc/rosy`는 root 소유이므로 SSH로 root 권한을 가진 사람만 켤 수 있다. 켤 때는 `sudo touch /etc/rosy/dev-mode && sudo systemctl restart rosy-core`를 쓴다. 끌 때는 `sudo rm /etc/rosy/dev-mode` 하나면 된다. 요청마다 파일을 보므로 지운 즉시 401이다.
 3. **셸은 열지 않는다.** 공용 개발 토큰은 장치에서 `/api/v1/host/ssh/*`의 키 등록·회수·목록과 임시 비밀번호를 쓸 수 없다(403 `FORBIDDEN`). 피어 페어링 발급자도 될 수 없다(기존 규칙 그대로). 개발 모드 로봇은 같은 망의 누구에게나 API를 주지만 OS 셸까지 주지는 않는다.
 4. **보이게 한다.** CORE는 기동할 때 경고 로그와 이벤트 `auth.development_mode` `{marker}`(warning)를 낸다. `rosy-face`는 표식이 있으면 얼굴 띠 앞에 `DEV `를 붙이고(띠가 없으면 `DEV MODE`), 상태 카드 줄 앞에도 `DEV `를 붙인다.
