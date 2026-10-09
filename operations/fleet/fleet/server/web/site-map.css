@@ -12,7 +12,7 @@ ui-section { display: grid; gap: var(--space-3); }
 .form[hidden] { display: none; }
 label { display: grid; gap: var(--space-2); }
 label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
-input[type="checkbox"] { width: auto; }
+.ui-field:not([type="checkbox"]) { width: 100%; }  /* components.css caps fields at 100% but leaves width to the page */
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
