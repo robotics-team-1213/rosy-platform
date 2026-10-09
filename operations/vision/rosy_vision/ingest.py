@@ -19,6 +19,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import ssl
 import time
 from collections import deque
@@ -89,6 +90,8 @@ _MAP_REGISTER_INTERVAL_S = 1.0
 # D-341 11: an upgrade refused because the paired-credential state is unknown asks the phone
 # to come back after one sync interval.
 _PAIRING_RETRY_AFTER_S = 2
+# D-560: a calibration revision travels in X-Frame-Calibration; anything else is no record.
+_REVISION = re.compile(r"[A-Za-z0-9._:-]{1,96}")
 
 
 @dataclass
@@ -281,7 +284,8 @@ class IngestServer:
 
     def report_calibration(self, source: str, record: Mapping | None, map_id: str) -> None:
         """Record the approved tracking calibration the track worker read from Fleet (D-560)."""
-        if isinstance(record, Mapping):
+        revision = record.get("calibration_revision") if isinstance(record, Mapping) else None
+        if isinstance(revision, str) and _REVISION.fullmatch(revision):
             self._plane_records[source] = (record, map_id)
         else:
             self._plane_records.pop(source, None)
@@ -425,6 +429,8 @@ class IngestServer:
             task = asyncio.ensure_future(asyncio.to_thread(
                 map_plane_jpeg, frame.jpeg, record, source_id=source, map_id=map_id,
                 lens=self.source_lens(source)))
+            # Retrieve a failure even when no reader is left to await it (no "never retrieved" log).
+            task.add_done_callback(lambda t: t.cancelled() or t.exception())
             cached = (frame, revision, task)
             self._plane_cache[source] = cached
         plane: MapPlane | None = await asyncio.shield(cached[2])

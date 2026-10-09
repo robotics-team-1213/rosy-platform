@@ -69,11 +69,28 @@ def test_a_map_point_lands_at_the_plane_pixel_of_the_header_formula():
     assert us.mean() > 460 and vs.mean() < 260
 
 
+def test_the_warp_homography_matches_the_header_formula_exactly():
+    """A half-pixel slip in the plane transform fails here (1e-9 m, not one frame pixel)."""
+    plane = map_plane_jpeg(_frame_jpeg(), RECORD, source_id=SOURCE, map_id=MAP, lens=LENS)
+    min_x, _, _, max_y = plane.bounds_m
+    # Frame pixel index of POINT: record index rescaled to half size by pixel centres.
+    u, v = 400 + 200 * POINT[0], 360 - 200 * POINT[1]
+    frame_point = np.array([0.5 * (u + 0.5) - 0.5, 0.5 * (v + 0.5) - 0.5, 1.0])
+    i, j, w = np.asarray(plane.image_to_plane).reshape(3, 3) @ frame_point
+    i, j = i / w, j / w  # OpenCV plane pixel index; canvas coordinate = index + 0.5
+    assert min_x + (i + 0.5) / plane.px_per_m == pytest.approx(POINT[0], abs=1e-9)
+    assert max_y - (j + 0.5) / plane.px_per_m == pytest.approx(POINT[1], abs=1e-9)
+
+
 def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():
     record = {**RECORD, "track_bounds_m": {"min_x": -3.0, "min_y": -0.5, "max_x": 3.0, "max_y": 0.5}}
     plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
     assert plane.px_per_m == pytest.approx(1920 / 6.3, abs=1e-4) and plane.px_per_m < 400
     assert max(plane.size) <= 1920
+    # The header rectangle is the image size at this scale, after rounding the pixel size.
+    min_x, min_y, max_x, max_y = plane.bounds_m
+    assert (max_x - min_x) * plane.px_per_m == pytest.approx(plane.size[0], abs=1e-9)
+    assert (max_y - min_y) * plane.px_per_m == pytest.approx(plane.size[1], abs=1e-9)
     image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
     # The plane's left edge (x = -3.15 m) is outside the frame: constant dark fill there,
     # the frame itself in the middle.
@@ -121,6 +138,37 @@ def test_a_cleared_record_makes_the_plane_unavailable_again():
     server.report_calibration(SOURCE, RECORD, MAP)
     server.report_calibration(SOURCE, None, MAP)
     assert _get(server).status_code == 409
+
+
+@pytest.mark.parametrize("revision", [None, "", "bad revision", "x" * 97, "a\r\nX-Evil: 1"])
+def test_a_record_with_a_malformed_revision_is_no_record(revision):
+    server = _server()
+    server.report_calibration(SOURCE, {**RECORD, "calibration_revision": revision}, MAP)
+    assert _get(server).status_code == 409
+
+
+def test_an_undecodable_frame_under_map_mode_is_422_never_raw():
+    server = _server(jpeg=b"not-a-jpeg")
+    server.report_calibration(SOURCE, RECORD, MAP)
+    response = _get(server)
+    assert response.status_code == 422
+    assert response.headers["X-Frame-State"] == "rectification-error"
+    assert response.body != b"not-a-jpeg"
+
+
+def test_a_new_frame_with_the_same_revision_is_warped_again():
+    server = _server()
+    server.report_calibration(SOURCE, RECORD, MAP)
+    assert _get(server).headers["X-Frame-Seq"] == "42"
+    task = server._plane_cache[SOURCE][2]
+    now = time.time()
+    server._sources[SOURCE].latest = LatestFrame(
+        header=FrameHeader(seq=43, age_ms=0, width=640, height=360, rotation_deg=0),
+        jpeg=_frame_jpeg(), captured_at=now, received_at=now)
+    server._preview_last_sent.clear()
+    response = _get(server)
+    assert response.status_code == 200 and response.headers["X-Frame-Seq"] == "43"
+    assert server._plane_cache[SOURCE][2] is not task
 
 
 def test_one_warp_per_frame_and_revision_for_all_readers():

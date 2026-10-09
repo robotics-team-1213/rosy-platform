@@ -184,6 +184,13 @@ def test_the_read_record_is_handed_to_the_ingest_for_the_map_plane(make_worker):
     assert worker.ingest.calibration == ("ceiling_north", CONFIG["calibration"], "map_v2_fleet")
 
 
+def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "calibration": None}])
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
+
+
 def test_corner_markers_win_over_the_record(make_worker):
     detector = _Detector()
     worker, _ = make_worker(configs=[CONFIG], detector=detector)

@@ -32,6 +32,8 @@ class MapPlane:
     px_per_m: float
     size: tuple[int, int]
     revision: str
+    #: Frame pixel index to plane pixel index (row-major 3x3), the matrix the warp used.
+    image_to_plane: tuple[float, ...]
 
 
 def _decode(jpeg: bytes) -> np.ndarray:
@@ -73,6 +75,8 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
     ppm = min(PLANE_PX_PER_M, math.floor(PLANE_MAX_SIDE_PX / max(span_x, span_y) * 1e4) / 1e4)
     out_w = max(2, min(PLANE_MAX_SIDE_PX, round(span_x * ppm)))
     out_h = max(2, min(PLANE_MAX_SIDE_PX, round(span_y * ppm)))
+    # The header rectangle is exactly the image at this scale (rounding moves max_x, min_y).
+    max_x, min_y = min_x + out_w / ppm, max_y - out_h / ppm
     # Map metres to plane pixel index; OpenCV puts pixel centres on integers, the header
     # formula uses pixel edges, hence the half pixel.
     map_to_plane = np.array([[ppm, 0.0, -min_x * ppm - 0.5],
@@ -84,7 +88,8 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
     plane = cv2.warpPerspective(image, image_to_plane, (out_w, out_h), flags=cv2.INTER_LINEAR,
                                 borderMode=cv2.BORDER_CONSTANT, borderValue=PLANE_FILL_BGR)
     return MapPlane(jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
-                    size=(out_w, out_h), revision=calibration.revision)
+                    size=(out_w, out_h), revision=calibration.revision,
+                    image_to_plane=tuple(float(v) for v in image_to_plane.reshape(-1)))
 
 
 def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
