@@ -205,7 +205,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_303,
+        49_606,
+        "split: re-judged at 49606 on 2026-10-10 after merging D-580 over main 49461 (+145; the enrolled "
+        "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
+        "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Main's "
+        "49461 was D-577 (a) over the 49303 verdict without a re-judge: stuck resolver default-on rules in "
+        "the existing stuck_resolver owners. Previously "
         "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
         "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
@@ -758,6 +763,12 @@ SIZE_VERDICTS = {
         "that lifecycle; transport and assignment policy stay separate. Capability and ARMING "
         "regressions are host-testable. Retain the normal +150 allowance and every threshold; "
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
+    ),
+    "fleet/fleet/server/stuck_resolver.py": (
+        608,
+        "accept: judged at 608 on 2026-10-10 after D-577 (a) (resolver default on, lane_lost R3 "
+        "fail-closed, R5 WAIT + human). It stays the pure, I/O-free rule core of the D-438 resolver; "
+        "stuck_resolver_loop.py keeps the async loop. Split the rule table per R-number if it passes 700",
     ),
     "fleet/fleet/server/console.py": (
         1248,
