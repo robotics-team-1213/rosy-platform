@@ -11,6 +11,7 @@ from typing import Mapping
 import yaml
 
 from core_common.protocol.place_markers import check_place_marker_ids
+from core_common.protocol.sightings import check_marker_yaw_offsets
 from fleet.server.sightings import SightingSource
 
 _REQUIRED = {
@@ -20,7 +21,7 @@ _REQUIRED = {
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
     "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
-    "calibration_source", "place_markers",
+    "calibration_source", "place_markers", "marker_yaw_offset_deg",
     "auto_tune",  # D-589: Vision only; Fleet reads the same file and ignores it
 }
 CREDENTIAL_KINDS = ("static", "paired")
@@ -117,6 +118,10 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         try:  # D-564
             place_markers = check_place_marker_ids(row.get("place_markers", []), corner_ids=corner_ids,
                                                    robot_marker_ids=markers.values())
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
+        try:  # D-587 4: Vision applies the offsets; Fleet only refuses a bad file the same way.
+            check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"), None if follow else robot_ids)
         except ValueError as exc:
             raise ValueError(f"sources[{index}].{exc}") from exc
         sources.append(SightingSource(

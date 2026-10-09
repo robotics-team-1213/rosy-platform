@@ -401,6 +401,11 @@
 - 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
 - gate 변화: 없음(SOURCE).
 
+## 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
+- 변경: 추적 단계가 승인 보정(D-457)을 쓴 프레임에서 `robot_markers`의 마커를 네 모서리 투영 → 윗면 높이 0.125 m 시차 보정 → 모서리 기하 문턱 → URDF 부착(−0.017, 0)과 로봇별 `marker_yaw_offset_deg`로 로봇 자세를 만들어 `calibration_source: approved_record` sighting으로 보낸다(`track/marker_sightings.py`). `project_frame`도 같은 부착·오프셋을 쓴다. 같은 프레임에 이미 sighting이 나간 로봇은 다시 보내지 않는다. 렌즈 FOV가 없으면 보내지 않는다.
+- 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
+- gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
+
 ## 2026-10-10 · uncommitted · feat(vision): D-589 S1 인식 점수·EV 언덕 오르기·camera/camera_state·배경 재학습 연동
 - 변경: `track/tuning.py` — 인식 점수(승인 보정 트랙 사각형 안, 작업 해상도 640). `paint_contrast`는 사이트 차선 페인트(`--map-paint` `road_lines.stl`)를 보정으로 영상에 옮겨 2 px 넓힌 띠의 밝은 절반 중앙값과 카펫(페인트를 4 px 넓힌 밖) 중앙값 차를 카펫 강건 표준편차(1.4826·MAD)로 나눈다. 승인 맞춤이 실제 선에서 1–3 px 어긋나서 띠를 쓴다. 페인트가 없으면 트랙 안 가장 밝은 3 %와 트랙 전체로 대신한다. `clip`(≥247)·`crush`(≤16), `marker_rate`(최근 10분에 본 로봇 마커 중 이 프레임에 보인 비율, 없으면 빠짐), `score` 한 식(`contrast/(contrast+1.5)`, 마커 0.3 가중, clip·crush 0.05 초과 시 크게 깎음). `Tuner`는 순수 상태 기계: 실제 EV −2.0…+1.0을 1/3 EV 단계로, `supported.ev_step`으로 보정 지수로 바꿔 보낸다. 폰이 seq를 mode `vision`으로 되돌린 뒤 4 s(처음 1 s는 AE 안정) 점수를 재고, 더 나은 쪽으로만 한 단계씩, 가장 좋은 단계에서 AE·AWB 잠금. 잠근 뒤 25 % 넘는 하락 60 s(재맞춤 최소 5분)·clip/crush 0.15 초과(즉시)·30분 탐침(±1단계). 열 ≥3 또는 `thermal_hold`면 멈추고 마지막 잠금 유지. `disabled`면 보내지 않음. 현재 설정을 20 s마다 다시 보낸다(폰은 60 s만 신선). 노출 상한 요청 33333 µs. source별 기록 `<track-state>/<source>.tuning.json`, 다음 맞춤은 마지막 잠금 EV에서 시작
 - 변경: `protocol.py` `make_camera`·`parse_camera`·`parse_camera_state`(S2 계약, 엄격 검사, 추가 키 무시). `ingest.py`가 hello 뒤 텍스트에서 유효한 `camera_state`만 연결별로 보관하고(나쁜 것·다른 type 무시, 프레임 경로 영향 없음) `send_camera`로 하향 전송. 공유 벡터는 S2 파일 그대로(`camera_example.max_exposure_us` 33333)

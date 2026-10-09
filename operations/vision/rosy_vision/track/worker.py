@@ -21,6 +21,10 @@ FAILURE_LOG_INTERVAL_S while it keeps failing.
 ``seq`` is this worker's own counter, not the phone header seq (a phone reconnect restarts
 that); Fleet orders detections by ``captured_at``.
 
+D-587: with a ``sightings`` publisher, identified robot markers projected through the approved
+record are also sent as sightings (marker_sightings.py), after the detections, except for the
+robots VisionWorker already sighted from this frame's measured calibration.
+
 D-589: each step also measures the frame (tuning.Scorer, on the detection thread) and drives
 the per-source Tuner on the event loop; its ``camera`` messages go to the phone over the
 ingest connection (never awaited inline) and its status rides on the detections payload as
@@ -50,8 +54,10 @@ import numpy as np
 from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload
 from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
-from rosy_vision.track.calibration import choose
+from rosy_vision.track.calibration import from_markers, from_record
+from rosy_vision.publish import SightingPublishError
 from rosy_vision.track.fleet_client import TrackPublishError
+from rosy_vision.track.marker_sightings import robot_sightings
 from rosy_vision.track import led_identity
 from rosy_vision.track import tuning
 from rosy_vision.track.model import (
@@ -117,9 +123,11 @@ class _FailureLog:
 class TrackWorker:
     def __init__(self, *, camera: CameraMap, ingest, client, detector: RobotDetector | None = None,
                  decode: Callable[[bytes], np.ndarray | None] = decode_jpeg,
-                 clock: Callable[[], float] = time.monotonic, auto_tune: bool = True,
-                 tuner: tuning.Tuner | None = None) -> None:
+                 clock: Callable[[], float] = time.monotonic, sightings=None,
+                 auto_tune: bool = True, tuner: tuning.Tuner | None = None) -> None:
         self.camera = camera
+        #: D-587: SightingPublisher for identified robot markers, or None (display only).
+        self.sightings = sightings
         self.ingest = ingest
         self.client = client
         self.detector = detector if detector is not None else BackgroundBlobDetector()
@@ -131,6 +139,9 @@ class TrackWorker:
         self._executor: ThreadPoolExecutor | None = None
         self._publish_log = _FailureLog("detections not accepted", camera.source_id, clock)
         self._config_log = _FailureLog("tracking config read failed", camera.source_id, clock)
+        self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
+        #: D-587: the approved record's Calibration when the last _detect used it (single flight).
+        self._approved: Calibration | None = None
         # D-472: the one open identity challenge Fleet named, its ring samples, and the last reported.
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
@@ -186,18 +197,23 @@ class TrackWorker:
             except asyncio.TimeoutError:
                 pass
 
-    async def process(self, frame, markers: Mapping[int, Sequence[Point]]
-                      ) -> OverheadDetectionsPayload | None:
-        """Track one frame and publish the result; None when skipped (undecodable, or busy)."""
+    async def process(self, frame, markers: Mapping[int, Sequence[Point]],
+                      sighted: frozenset[str] = frozenset(),
+                      camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
+        """Track one frame and publish the result; None when skipped (undecodable, or busy).
+
+        D-587 1: ``sighted`` are robots this frame already produced a sighting for; ``camera``
+        is VisionWorker's CameraMap for this frame (D-580 roster markers), default ours."""
         if self._busy:
             return None
         self._busy = True
         try:
-            return await self._process(frame, markers)
+            return await self._process(frame, markers, sighted, camera or self.camera)
         finally:
             self._busy = False
 
-    async def _process(self, frame, markers) -> OverheadDetectionsPayload | None:
+    async def _process(self, frame, markers, sighted=frozenset(),
+                       camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
         config = self._config or {}
         relearn = config.get("relearn_seq")
         if type(relearn) is not int:
@@ -228,6 +244,8 @@ class TrackWorker:
             return None
         calibration, result = step
         status = self._tune(link, camera_state, self._measurement)
+        if self.sightings is not None:
+            await self._publish_sightings(camera or self.camera, self._approved, frame, markers, sighted)
         payload = build_payload(
             source_id=self.camera.source_id, map_id=self.camera.map_id,
             calibration_revision=None if calibration is None else calibration.revision,
@@ -288,6 +306,24 @@ class TrackWorker:
             self._camera_seen, self._camera_link = fingerprint, link
         self._was_vision = vision
         return event
+
+    async def _publish_sightings(self, camera: CameraMap, approved, frame, markers, sighted) -> None:
+        """D-587: identified robot markers as sightings; a failure is logged, never raised."""
+        try:
+            sightings = robot_sightings(camera, approved, markers, captured_at=frame.captured_at,
+                                        seq=frame.header.seq, skip=sighted)
+        except (TypeError, ValueError, ArithmeticError, np.linalg.LinAlgError) as exc:
+            self._sighting_log.failed((("error_type", type(exc).__name__),))
+            return
+        for sighting in sightings:
+            try:
+                await self.sightings.publish(sighting)
+            except SightingPublishError as exc:
+                self._sighting_log.failed((("status", exc.status_code), ("code", exc.code)))
+            except (httpx.HTTPError, ValueError) as exc:  # ValueError: a non-JSON error body
+                self._sighting_log.failed((("error_type", type(exc).__name__),))
+            else:
+                self._sighting_log.ok()
 
     async def _report_identity(self, challenge: dict, now: float) -> None:
         """D-472: once the window has passed, send Fleet the verdict (never an image)."""
@@ -360,7 +396,14 @@ class TrackWorker:
         if image is None:
             return None
         size = (int(image.shape[1]), int(image.shape[0]))
-        calibration = choose(self.camera, markers, record, frame_size=size, lens=lens)
+        # D-457 2 order (calibration.choose): corner markers win, else the approved record.
+        # D-587: which branch was taken decides whether marker sightings may use it.
+        calibration = from_markers(self.camera, markers, frame_size=size, lens=lens)
+        self._approved = None
+        if calibration is None and record is not None:
+            calibration = self._approved = from_record(
+                record, source_id=self.camera.source_id, map_id=self.camera.map_id,
+                frame_size=size, lens=lens)
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
         robot_ids = set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)

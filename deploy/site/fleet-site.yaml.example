@@ -7,13 +7,13 @@
 fleet:
   traffic:
     zones:
-      roundabout:            # map_v2_fleet v4, 일방통행 순환로
-        edges: [ring_n, ring_s, ring_e, ring_w]
+      roundabout:            # map_v2_fleet v5(deploy/site/site-maps), 반시계 일방 순환로 + 빗금까지 잇는 차로 넷
+        edges: [ring_n, ring_s, ring_e, ring_w, ring_in_ne, ring_in_sw, ring_out_nw, ring_out_se]
         capacity: 1
     signals:
       sig_ring:
         zone: roundabout
-        phases:
+        phases:              # 실제 입구 둘(북동·남서 빗금). 북서·남동 빗금은 일방 고리의 출구다
           - {approach: "east:fwd", green_s: 8}
           - {approach: "west:fwd", green_s: 8}
         yellow_s: 2

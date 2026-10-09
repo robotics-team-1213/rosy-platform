@@ -1429,6 +1429,15 @@ D-484(v1.109)부터 `corner_marker_ids`는 선택 필드가 되고, 대신 `cali
 `corner_marker_ids` 없이 `calibration_source: "field_boundary"`만 싣고, 서버 설정의
 `calibration_source`까지 일치해야 한다. 과거 페이로드(마커 id만)는 그대로 유효하다.
 
+D-587(v1.177)부터 `calibration_source`에 `approved_record`가 더해진다. Vision 추적 단계가
+그 source의 승인 추적 보정(D-457, `GET /api/fleet/detections/config`의 `calibration`)으로
+투영한 로봇 마커(`robot_markers`에 있는 것만)의 sighting이다. `corner_marker_ids`는 `null`,
+`calibration_revision`은 그 승인 기록의 revision이다. Fleet은 그 revision이 지금 그 source의
+승인 기록(같은 `map_id`)일 때만 받고, 다르거나 기록이 없으면 409 `CALIBRATION_MISMATCH`다.
+이 경로는 서버 설정의 `calibration_source`와 고정 `calibration_revision`을 보지 않는다.
+`x, y, yaw`는 마커 아래의 로봇 자세다(마커 높이 시차 보정, URDF 부착 위치, 로봇별
+`marker_yaw_offset_deg`). D-494 지도 자세의 앵커가 된다.
+
 ```json
 {
   "robot_id": "rosy_01",
@@ -2631,7 +2640,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.178 | 2026-10-10 | Additive (D-589 S1, feat/rosy-cam-recognition-tuning): `OverheadDetectionsPayload` 선택 필드 `tuning` `{state off/waiting/tuning/locked/paused/unsupported, score 0–1 또는 null, ev 실제 EV 또는 null, locked}`, `GET /api/fleet/tracking` `sources[].tuning`(lease 안, 아니면 null). `rosy-overhead/1` hello 뒤 텍스트 메시지 두 가지(공유 벡터 `overhead-ingest.v1.json` `messages.camera_example`·`camera_state_example`): 하향 `camera {seq, ev(보정 지수), ae_lock, awb_lock, max_exposure_us, antibanding}`, 상향 `camera_state {seq, applied{…, mode vision/local/disabled/thermal_hold}, supported{ev_min, ev_max, ev_step, …}, exposure_us, iso, thermal}`. `site-cameras.yaml` source 키 `auto_tune`(기본 true; Fleet은 읽고 무시). v1.177은 다른 진행 중 브랜치가 쓴다. 표시 전용, 로봇 명령·envelope 1.0 변화 없음 |
+| v1.178 | 2026-10-10 | Additive (D-589 S1, feat/rosy-cam-recognition-tuning): `OverheadDetectionsPayload` 선택 필드 `tuning` `{state off/waiting/tuning/locked/paused/unsupported, score 0–1 또는 null, ev 실제 EV 또는 null, locked}`, `GET /api/fleet/tracking` `sources[].tuning`(lease 안, 아니면 null). `rosy-overhead/1` hello 뒤 텍스트 메시지 두 가지(공유 벡터 `overhead-ingest.v1.json` `messages.camera_example`·`camera_state_example`): 하향 `camera {seq, ev(보정 지수), ae_lock, awb_lock, max_exposure_us, antibanding}`, 상향 `camera_state {seq, applied{…, mode vision/local/disabled/thermal_hold}, supported{ev_min, ev_max, ev_step, …}, exposure_us, iso, thermal}`. `site-cameras.yaml` source 키 `auto_tune`(기본 true; Fleet은 읽고 무시). 표시 전용, 로봇 명령·envelope 1.0 변화 없음 |
+| v1.177 | 2026-10-10 | Additive (D-587, feat/ceiling-marker-sightings): `SiteSightingPayload.calibration_source` 값 `approved_record`(승인 추적 보정으로 투영한 이름 있는 천장 로봇 마커, `corner_marker_ids: null`, revision = 그 source의 지금 승인 기록, 아니면 409 `CALIBRATION_MISMATCH`). `site-cameras.yaml` source 선택 키 `marker_yaw_offset_deg: {robot_id: deg}`(스티커 윗변 방향 − 로봇 앞, 반시계 +, 유한, 절댓값 360 이하; 그 source의 로봇만, `robot_ids: enrolled`이면 아무 로봇). 옛 Vision·Fleet은 이 키를 모른다며 시작을 거절하므로 릴리스 뒤에 설치한다 |
 | v1.176 | 2026-10-10 | Additive (D-581, feat/trail-fleet-anchored-frame): §7.8 `anchor: fleet`·`for_robot_id`·`anchor_age_s`·`anchor_hold`(기준이 없을 때 침묵 대신 정지 표본, `swarm.hold` `anchor_withheld`, `stream_evidence[*].anchor_hold`) — TRAIL 대형에서 리더가 `frame: odom` 이면 Fleet 이 천장 카메라 기준(D-494 3)으로 팔로워마다 그 팔로워 odom 좌표의 표본을 만들어 보낸다(D-31 개정, `map` 프레임은 바이트 그대로). trail 팔로워는 자기 id 표본만 받아 자기 `odom_pose` 로 달린다. `swarm.hold` 사유 `reference_anchor_invalid`·`reference_frame_changed`, `swarm/state` `trail.anchor`, Fleet formation 상태 `anchor`. 안전 경로(D-422·SAF-004·D-400·스트림 단절) 변화 없음 |
 | v1.175 | 2026-10-09 | Additive (D-580, feat/fleet-managed-site-roster): `GET /api/fleet/detections/config` `robot_markers`. `site-cameras.yaml` source `robot_ids: enrolled`(Fleet 명단을 따른다; `GET /api/fleet/site-map` 등의 `robot_ids`·`robot_markers`는 등록·해제 때 바뀐다). `POST /api/fleet/enrollment/robots`: 등록되었다 해제된 TLS binding은 다른 `robot_id`를 받는다(새 오류 코드 없음, 다른 binding의 ID면 `code_consumed` reason `robot_id_conflict`); 감사 동작 `tls_renumber`. `autoupdate.conf` `/api/fleet/state` 검사 `required_ids: "enrolled"` |
 | v1.174 | 2026-10-09 | Additive (D-573 1, feat/crosswalk-fleet-map-zones): `rosy.site_map/1` 선택 필드 `crosswalks[] {id, polygon, approach[], lanes[], revision}`(lane_graph 다각형, 차로는 유도, 대기 띠는 편집기에서 그림; 차로에 닿지 않거나 D-507 9 바닥 밖이면 `SITE_MAP_INVALID`), `GET /api/fleet/site-map/lane-graph-crosswalks`(`SITE_MAP_NO_LANE_GRAPH`). 지도 자료와 표시만, CORE·교통·통행권 변경 없음 |

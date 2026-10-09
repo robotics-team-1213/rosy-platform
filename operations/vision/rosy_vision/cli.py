@@ -338,7 +338,8 @@ async def _run_vision(args: argparse.Namespace) -> int:
                 tuner = Tuner(log=TuningLog(
                     None if state is None else state / f"{config.camera.source_id}.tuning.json"))
                 tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client,
-                                      detector=detector, auto_tune=config.auto_tune, tuner=tuner)
+                                      detector=detector, sightings=publisher,
+                                      auto_tune=config.auto_tune, tuner=tuner)
                 trackers.append(tracker)
             calibrator = None
             if config.camera.calibration_source == "field_boundary":
