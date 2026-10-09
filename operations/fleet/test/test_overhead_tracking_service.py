@@ -244,6 +244,43 @@ def test_state_observed_with_an_earlier_stamp_ages_from_that_stamp():
     assert _rows(service)["rosy_01"]["status"] == "NO_POSE"
 
 
+def test_a_robots_own_read_time_beats_a_slow_gathers_start():
+    # Site 2026-10-09: a 3.4 s gather stamped every state at its start, so all were stale on arrival.
+    service, _ = _service()
+    service.observe_states(_robots(rosy_01=_state(1.2, 0.4)), now=NOW - 3.4,
+                           observed={"rosy_01": NOW - 0.1})
+    assert service.robot_state("rosy_01") is not None
+    service.observe_states(_robots(rosy_01=_state(1.2, 0.4)), now=NOW - 3.4, observed={})
+    assert service.robot_state("rosy_01") is None
+
+
+def test_shared_gather_hands_each_rows_read_time_to_tracking():
+    import asyncio
+    from fleet.server.console_routes import SharedGather
+
+    service, clock = _service()
+
+    class _Console:
+        _clock = staticmethod(lambda: 500.0)   # console monotonic clock at the end of the gather
+
+        async def snapshot(self):
+            clock.now = NOW + 3.4              # the gather itself took 3.4 s
+            return {"robots": [{"robot_id": "rosy_01", "online": True, "state": _state(1.2, 0.4),
+                                "_state_mono": 499.9}]}
+
+    class _Board:
+        def observe(self, *_):
+            pass
+
+        def flush(self):
+            pass
+
+    gather = SharedGather(_Console(), _Board(), tracking=service)
+    gather._console.hub = type("H", (), {"registry": type("R", (), {"events_since": None})()})()
+    asyncio.run(gather())
+    assert service.robot_state("rosy_01") is not None   # read 0.1 s before the gather ended
+
+
 def test_payload_expires_after_the_lease_and_nothing_old_is_shown():
     service, clock = _service()
     service.observe_states(_robots(rosy_01=_state(1.2, 0.4)))
