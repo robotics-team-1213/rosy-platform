@@ -2943,3 +2943,7 @@
 - 열림: 장소를 마커로 옮기면 그 장소에 닿는 차로는 끝점만 옮기고 안쪽 점은 그대로다. 크게 옮기면 차로 끝 접선이 꺾일 수 있다(활성화 전 지도에서 확인).
 - 증거: 모델 PC `remote_pytest.py` 관련 묶음, `known_failures.py` (X:/DevTemp/place-markers/run-1.txt).
 - gate 변화: 없음(SOURCE).
+
+## 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
+- 변경: `rosy.site_map/1` `crosswalks[] {id, polygon, approach[], lanes[], revision}`. 다각형은 `lane_graph.yaml`에서 그대로(`cw1`.., `lane_graph:<sha12>`), `lanes`는 검증 때마다 차로 교차로 유도, 대기 띠는 현장 지도 편집기에서 그리고 지운다(초안, 이름 있는 운영자 저장). 띠가 차로에 닿지 않거나 D-507 9 바닥(차로 + 0.30 m) 밖이면 `SITE_MAP_INVALID`. `GET /site-map/lane-graph-crosswalks`로 이미 활성 지도가 있는 현장도 가져온다. 관제 지도에 읽기 전용 윤곽. `PlaceKind` 그대로. CORE·교통·통행권 변경 없음. API v1.169.
+- 열림: 바닥 검사는 띠 꼭짓점만 본다(오목한 바닥에서 변이 밖으로 나가는 띠는 통과). 상태색·카드 줄은 (f), CORE 전달은 (d).

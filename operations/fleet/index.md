@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
 - 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
 - 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
 - 2026-10-09 · uncommitted · feat(fleet): site map robot positions, trip panel removed (D-540 (e))
 - 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영
-- 2026-10-09 · uncommitted · feat(fleet): Rosy Cam 지도 평면 영상을 받아 그대로 그린다 (D-560 S2)

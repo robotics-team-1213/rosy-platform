@@ -92,6 +92,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
+  SITE_MAP_NO_LANE_GRAPH: '가져올 lane_graph가 설정되지 않았거나 읽을 수 없습니다',
   // D-494 6 teach
   TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
   TEACH_NOT_RECORDING: '기록 중이 아닙니다',
