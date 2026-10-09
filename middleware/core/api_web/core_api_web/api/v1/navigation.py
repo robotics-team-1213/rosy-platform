@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from core_api_web.api.v1.common import (
     enter_navigation_mode,
@@ -21,6 +21,7 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
 from core_common.domain.tasks import TaskKind
+from core_features.navigation.manager import GOAL_LEASE_MAX_S
 
 
 navigation_router = APIRouter(prefix="/api/v1", tags=["navigation"])
@@ -32,13 +33,19 @@ class GoalRequest(BaseModel):
     yaw: float | None = 0.0
     waypoint: str | None = None
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
-    #: D-550 10: optional goal lease (0 < s <= 5, checked by the manager); needs correlation_id.
-    lease_ttl_s: float | None = None
+    #: D-550 10: optional goal lease; needs correlation_id. Checked here, before the mode changes.
+    lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _lease_needs_correlation(self) -> "GoalRequest":
+        if self.lease_ttl_s is not None and self.correlation_id is None:
+            raise ValueError("lease_ttl_s needs a correlation_id")
+        return self
 
 
 class GoalLeaseRequest(BaseModel):
     correlation_id: str = Field(min_length=1, max_length=128)
-    ttl_s: float
+    ttl_s: float = Field(gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
 
 
 @navigation_router.post("/navigation/goal")

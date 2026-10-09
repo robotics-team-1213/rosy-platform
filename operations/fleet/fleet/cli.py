@@ -580,7 +580,9 @@ def run_console(args: argparse.Namespace) -> None:
 
 def _goal_lease_ttl_s(args) -> float:
     """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
-    Otherwise 1.5..5 s: CORE takes at most 5 s, and the 0.5 s trip loop renews at least 3 times."""
+    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
+    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
+    on its renewal still renews before the lease runs out."""
     import yaml
 
     try:
@@ -590,9 +592,11 @@ def _goal_lease_ttl_s(args) -> float:
         value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"goal lease config: {exc}")
+    trip = _trip_config(args)
+    floor = 2 * trip.port_timeout_s + trip.period_s
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
-            value == 0 or 1.5 <= value <= 5):
-        sys.exit("goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or 1.5..5")
+            value == 0 or floor <= value <= 5):
+        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
 
 

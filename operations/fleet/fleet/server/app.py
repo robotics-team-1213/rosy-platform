@@ -53,7 +53,7 @@ from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
-from fleet.server.background_workers import goal_lease_renew_loop
+from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -618,6 +618,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
+        console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
+
+    @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
+    def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-550 10: a named operator's console is open; operator goals are renewed while it keeps coming."""
+        console.goal_leases.operator_present()
+        return {"present": True}
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy

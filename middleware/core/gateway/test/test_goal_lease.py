@@ -139,19 +139,73 @@ def test_goal_without_lease_is_unchanged(robot):
     assert _renew(tc, "a-1").status_code == 409            # renewal never leases a goal
 
 
-@pytest.mark.parametrize("ttl", [0, -1, 5.01, 60])
-def test_bad_ttl_is_400(robot, ttl):
+@pytest.mark.parametrize("ttl", [0, -1, 5.01, 60, "nan", "inf"])
+def test_bad_ttl_is_400_and_leaves_the_mode(robot, ttl):
     tc, svc, executor, _clock = robot
-    reply = _goal(tc, correlation_id="a-1", lease_ttl_s=ttl)
-    assert reply.status_code == 400 and executor.sent == []
+    mode = svc.modes.mode
+    reply = tc.post("/api/v1/navigation/goal", headers=OPERATOR, content=(
+        '{"x": 1.0, "y": 0.5, "correlation_id": "a-1", "lease_ttl_s": %s}' % (
+            {"nan": "NaN", "inf": "Infinity"}.get(ttl, ttl))).encode())
+    assert reply.status_code == 400 and executor.sent == [] and svc.modes.mode is mode
     _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
     svc.nav.on_goal_accepted()
-    assert _renew(tc, "a-1", ttl).status_code == 400
+    if isinstance(ttl, (int, float)):
+        assert _renew(tc, "a-1", ttl).status_code == 400
 
 
-def test_lease_needs_a_correlation_id(robot):
-    tc, _svc, executor, _clock = robot
-    assert _goal(tc, lease_ttl_s=2.0).status_code == 400 and executor.sent == []
+def test_lease_needs_a_correlation_id_and_leaves_the_mode(robot):
+    tc, svc, executor, _clock = robot
+    mode = svc.modes.mode
+    assert _goal(tc, lease_ttl_s=2.0).status_code == 400
+    assert executor.sent == [] and svc.modes.mode is mode
+
+
+def test_renewal_racing_expiry_is_refused_and_the_goal_still_stops(robot, monkeypatch):
+    """A renewal landing between the expiry dropping the lease and its cancel never revives it."""
+    from core_features.navigation.manager import NavigationError
+    tc, svc, executor, clock = robot
+    _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
+    svc.nav.on_goal_accepted()
+    cancel, raced = svc.nav.cancel, []
+
+    def cancel_after_a_racing_renewal(**kwargs):
+        with pytest.raises(NavigationError) as err:
+            svc.nav.renew_goal_lease("a-1", 2.0)
+        raced.append(err.value.code)
+        return cancel(**kwargs)
+
+    monkeypatch.setattr(svc.nav, "cancel", cancel_after_a_racing_renewal)
+    clock.now += 2.1
+    assert svc.nav.expire_goal_lease() is True
+    assert raced == ["GOAL_LEASE_NOT_ACTIVE"] and executor.cancelled == 1
+    assert svc.nav.fleet_goal() is None
+
+
+def test_lease_expiry_precedes_a_pending_saf003_return_home(core_client, monkeypatch):
+    """D-550 J1 precedence: a lease shorter than fleet_loss_timeout_s stops the goal first (STOP,
+    whatever the policy); SAF-003 then has no goal to act on: no home drive, no safety.fleet_lost."""
+    fleet = {"hub_url": "ws://127.0.0.1:1/ws/robots", "pairing_token": "pair-token"}
+    tc, svc = core_client(config_overrides={"fleet": fleet})
+    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
+    executor, clock = Executor(), Clock()
+    svc.nav.executor, svc.nav.lease_clock, svc.fleet_loss.clock = executor, clock, clock
+    svc.safety.fleet_loss_policy = "RETURN_HOME"
+    homes = []
+    monkeypatch.setattr(svc.nav, "home", lambda **kwargs: homes.append(kwargs))
+    svc.fleet_agent.connected, svc.fleet_agent.last_rx = True, clock.now
+    svc.fleet_loss.tick()
+    assert _goal(tc, correlation_id="a-1", lease_ttl_s=2.0).status_code == 200
+    svc.nav.on_goal_accepted()
+    svc.fleet_agent.connected = False        # Fleet gone: no renewal, link lost
+    svc.fleet_loss.tick()
+    clock.now += 2.1
+    svc.fleet_loss.tick()
+    assert svc.nav.expire_goal_lease() is True
+    clock.now += 3.0                         # past the 5 s SAF-003 timeout
+    svc.fleet_loss.tick()
+    assert executor.cancelled == 1 and homes == []
+    assert _canceled(svc) == [{"source": "goal_lease", "correlation_id": "a-1"}]
+    assert [ev for ev in svc.events.history() if ev.type == "safety.fleet_lost"] == []
 
 
 def test_power_timer_expires_leases_inside_a_guard():
@@ -169,3 +223,9 @@ def test_power_timer_expires_leases_inside_a_guard():
                 for stmt in node.body for call in ast.walk(stmt))
     ]
     assert len(guarded) == 1
+    # Safety-Review: both motion stops run before the unguarded power/calibration/trip-lease calls.
+    calls = {ast.unparse(call.func): call.lineno for call in ast.walk(func) if isinstance(call, ast.Call)}
+    first_other = min(calls["power.tick"], calls["self._svc.calibration.expire_due"],
+                      calls["self._svc.trip_lease.expire_due"])
+    assert calls["self._svc.nav.expire_goal_lease"] < first_other
+    assert calls["self._svc.fleet_loss.tick"] < first_other
