@@ -222,8 +222,10 @@ class Http:
 
 # -- helpers ----------------------------------------------------------------------
 
-def functional_reason(config: dict, http: Http) -> str:
+def functional_inventory(config: dict, http: Http) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     origin = urlsplit(config['health_url'])
+    observed = {}
+    missing = {}
     for check in config.get('functional_checks', []):
         try:
             payload = http.functional(f'{origin.scheme}://{origin.netloc}{check["path"]}',
@@ -231,13 +233,23 @@ def functional_reason(config: dict, http: Http) -> str:
             collection, field = _FUNCTIONAL_PATHS[check['path']]
             rows = payload[collection]
             if not isinstance(rows, list):
-                return 'functional API collection has invalid structure'
+                raise Rejected('functional API collection has invalid structure')
             ids = {row[field] if field else row for row in rows}
-            if not set(check['required_ids']) <= ids:
-                return 'functional API is missing configured IDs'
+            if not ids or any(not isinstance(item, str) or not item for item in ids):
+                raise Rejected('functional API collection is empty or invalid')
         except (Transient, OSError, ValueError, KeyError, TypeError):
-            return 'functional API validation failed'
-    return ''
+            raise Rejected('functional API validation failed') from None
+        observed[check['path']] = sorted(ids)
+        missing[check['path']] = sorted(set(check['required_ids']) - ids)
+    return observed, missing
+
+
+def functional_reason(config: dict, http: Http) -> str:
+    try:
+        _, missing = functional_inventory(config, http)
+    except Rejected as error:
+        return str(error)
+    return 'functional API is missing configured IDs' if any(missing.values()) else ''
 
 
 def _check_length(expected, received: int) -> None:

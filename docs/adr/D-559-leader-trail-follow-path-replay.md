@@ -28,7 +28,7 @@
 5. **Fleet은 역할과 릴레이만.** 대형 `TRAIL` = COLUMN 슬롯, 팔로워마다 `mode: trail`, `distance = 슬롯 × spacing`. 모든 팔로워가 리더 스트림만 받는다(사슬 아님). 옛 CORE는 모르는 `mode`를 버리고 offset으로 따라가므로, follow 답의 `mode`가 `trail`이 아니면 그 로봇을 풀고 `TRAIL_NOT_SUPPORTED`로 시작을 거절한다. 관제 대형 설정에 선택지 하나를 더한다.
 6. **차로 대열(D-517 M3)과 섞지 않는다.** M3 대열은 두 로봇이 각자 계획 경로를 차선 추종으로 달리고 Fleet 통행권으로 간격을 지킨다. trail은 경로 재생이고 v1에서는 차로 trip 안에서 쓰지 않는다: trip이 열린 로봇의 `formation/start`는 이미 `TRIP_ROBOT_BUSY`(D-494 5)이고, trail 팔로워가 차선 추종을 시작하면 moving 세션이 닫혀 trail이 끝난다.
 7. **규칙 M(D-550).** trail 움직임의 한도는 로봇이 보는 링크 신호인 참조 스트림 `stream_timeout_ms`(기본 1 s)다. offset과 같다.
-8. **API v1.167**(추가): follow `mode`, state `mode`·`trail {leader_s, progress, hold_reason}`, §7.8 `frame`, `swarm.hold` trail 사유, `swarm.aborted` `trail_join_too_far`, Fleet `formation: TRAIL`.
+8. **API v1.168**(추가): follow `mode`, state `mode`·`trail {leader_s, progress, hold_reason}`, §7.8 `frame`, `swarm.hold` trail 사유, `swarm.aborted` `trail_join_too_far`, Fleet `formation: TRAIL`.
 
 ### Consequences
 

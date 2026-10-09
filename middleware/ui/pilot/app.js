@@ -16,16 +16,30 @@ registerDriver(omxSim.kind, omxSim);
 const connectRoot = document.querySelector('[data-screen="connect"]');
 const driveRoot = document.querySelector('[data-screen="drive"]');
 const armRoot = document.querySelector('[data-screen="arm"]');
+const brandHome = document.querySelector("[data-pilot-home]");
 let simTarget = null;
 let leaveDrive = null;
 
 function showConnect() {
+  brandHome.removeAttribute("aria-disabled");
   leaveDrive = null;
   document.body.dataset.pilotScreen = "connect";
   driveRoot.hidden = true;
   connectRoot.hidden = false;
   mountConnect(connectRoot, {onEnter: showDrive});
 }
+
+brandHome.addEventListener("click", (event) => {
+  if (simTarget) {
+    event.preventDefault();
+    document.querySelector("#pilot-notice").textContent = "Gazebo 연습에서 진행 중 명령을 취소한 뒤 화면을 종료하세요.";
+    return;
+  }
+  if (!leaveDrive) return;
+  event.preventDefault();
+  document.querySelector("#pilot-notice").textContent = "조종을 종료하고 접속 화면으로 돌아가는 중입니다.";
+  leaveDrive(() => location.assign("/pilot"));
+});
 
 // D-411 B: the device's rosy.controls/1 decides the drive profile. No `controls` field = an
 // old CORE → the legacy Pinky profile; an empty list = no drive control right now.
@@ -110,6 +124,7 @@ async function start() {
     if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = "";
     if (target === null) { showConnect(); return; }
     simTarget = target;
+    brandHome.setAttribute("aria-disabled", "true");
     document.body.dataset.pilotScreen = "arm";
     connectRoot.hidden = true;
     driveRoot.hidden = true;

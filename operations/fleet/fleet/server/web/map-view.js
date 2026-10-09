@@ -16,7 +16,7 @@ import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
-import { drawGuide } from "./guide-layer.js";
+import { drawGuide } from "/console/assets/guide-layer.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -560,7 +560,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           + (camera.calibration()
             ? (view.trackingDrift
               ? " · 카메라 교정 어긋남 — 맞춤 재수락 필요"
-              : ` · Rosy Cam 실영상 · ${camera.calibration().calibration_revision}`) : "")
+              : ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`) : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
           `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`
@@ -732,8 +732,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const traffic = await call("/api/fleet/traffic", { signals: [life.signal] });
       life.check();
       trafficGate.ok();
-      view.trafficTrips = traffic.robots.length
-        ? ((await call("/api/fleet/trips", { signals: [life.signal] })).open || []) : [];
+      // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
+      const trips = traffic.robots.length || view.trafficTrips?.length
+        ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      view.trafficTrips = trips.open || [];
+      view.endedTrips = trips.trips || [];
       life.check();
       if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
         view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });

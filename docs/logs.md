@@ -7522,3 +7522,45 @@ osy-d395-s1d\`.
 - 변경: 기존 SIM 9회에서 첫 링 호의 지도 접선 대비 실제 방향과 오돔·참값 차이를 원시 로그로 다시 계산했다. 해시와 재현 스크립트를 새 validation 기록에 둔다.
 - 증거: NE 기본 4회 +15.497…+16.273°, 참값 기반 비교 4회 +2.905…+3.357°; 같은 시점 오돔·참값 차이 최대 1.657 mm·0.096°.
 - gate 변화: ROS-SIM 기록의 오프라인 분석. 지도 자세의 실물 오차·카메라 바닥선 정체·DEVICE·FIELD는 여전히 미검증.
+
+## 2026-10-09 · uncommitted · docs(lane): NE 호 blind 거리와 반지름 오차 교차점
+
+- 변경: 기본·참값 기반 비교 각 4회에서 링 호의 참값 반지름 오차가 25 mm·50 mm에 처음 닿는 로그상 주행 거리를 재계산했다.
+- 증거: 기본 첫 25 mm 0.1104–0.1281 m, 첫 50 mm 0.2927–0.3124 m; 비교는 둘 다 미도달. 원시 로그 해시 8개 일치.
+- gate 변화: ROS-SIM 기록의 사후 분석. 현재 `arc_blind_max_m: 1.0`의 실물 허용 근거는 아니다.
+
+## 2026-10-09 · uncommitted · docs(lane): Fleet pivot 기록 공백 확인
+
+- 변경: Fleet map-pose 조회와 trip 요약, CORE Pilot 녹화의 시각 결합 공백을 차선 보정 설계에 명시했다.
+- 증거: `MapPose.odom_stamp`와 지도 조회 응답, `trip_ports.pose_view`의 요약 필드, D-379 녹화·학습 경로를 소스에서 대조했다.
+- gate 변화: 원본 동기화·실물 오차 상한은 미확보. Fleet 계획은 prior로 유지하고 주행 보정 승격은 보류한다.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 레이아웃 적용 경로
+
+- 변경: D-501 탭을 보존하며 제품 홈·문서 이동·문서 내부 단계·선택 맥락을 분리하는 구현 경로 추가.
+- 근거: 실제 Fleet HTML/CSS와 D-493/D-501/D-543.
+- gate: 구현 방법 기록. Fleet 홈 링크 외 화면 적용과 G1/G2/G3는 별도.
+
+## 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프
+
+- 변경: 16화면의 로컬 Chromium 캡처·가로 넘침·홈·탭·정지·오류를 검증 기록으로 남겼다. 설계의 Games 보드 경로를 실제 PreviewServer `/`로 정정하고 적용 상태를 일부 코드 적용으로 갱신했다.
+- 증거: `docs/validation/active-web-visual-loop-2026-10-09/result.md`, `captures.sha256`, 원본 PNG는 `X:/DevTemp/rosy-web-visual-loop/`.
+- gate 변화: 없음. 일부 G2 셀만 확인했으며 전체 G2·G3·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
+
+- 변경: Fleet 호를 유지한 채 지도 자세·승인 바닥 경계의 제한 보정 후보, STOP·시간 출처, D-557 우선 SIM과 두 로봇 DEVICE 단계를 Proposed ADR과 실행 계획에 기록했다.
+- 증거: D-520·D-557 계약, NE 4회 진입 +15.497…+16.273°와 blind 25 mm 0.1104–0.1281 m 기존 원시 로그 분석; 모델 PC 재접속 성공 후 기존 작업공간의 `lane_arc.py`가 현 코드와 다른 것을 확인해 새 Gazebo 기준 주행은 미착수.
+- gate 변화: 설계 제안만. 새 SIM·실물 주행·보정 활성화는 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
+
+- 변경: 기존 NE 4회 GT 진입 오차를 입력으로 이상적인 같은 반지름 호의 횡방향 이탈을 계산하고, 가정한 잔여 각도 ±3/5/10°와 비교했다.
+- 증거: `docs/validation/lane-parallel-correction-surrogate-2026-10-09/result.md`; 기준 +15.497…+16.273°에서는 첫 25 mm가 0.0889–0.0934 m, 최대 반지름 오차가 0.0678–0.0712 m다.
+- gate 변화: 대체 계산은 실제 센서·제어·Gazebo·실물 검증이 아니다. D-557 새 모델 PC 한 바퀴와 두 로봇 DEVICE 검증은 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
+
+- 변경: 격리 모델 PC 작업공간에 현행 D-520 코드를 설치·빌드해 Gazebo 한 바퀴를 실행하고, D-567의 합격 목표를 경계 내 차체 sweep·필요시 사전 STOP·완주 순서로 정리했다.
+- 증거: `docs/validation/lane-parallel-correction-baseline-2026-10-09/result.md`; trip `arrived`, 호 최대 반지름 오차 34/41/30 mm. SIM 충돌 상자 외접 원의 도색선 중심 여유 최소 −35.1 mm로 재계산했고, 두 실물 로봇의 측정·적용 보정과 차체 범위를 분리했다.
+- gate 변화: ROS-SIM 완주만 관측. 실제 차체 형상·도색선 허용 범위와 오차·정지 여유, 후보 병렬 보정, 두 로봇 DEVICE는 미판정/HOLD.

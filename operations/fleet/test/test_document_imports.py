@@ -25,6 +25,7 @@ SHARED = {
     "map-fit.js",
     "vision-view.js",
     "field-warp.js",
+    "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
 }
 
@@ -34,6 +35,8 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
+        "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
@@ -48,7 +51,6 @@ OWN = {
         "camera-warp.js",
         "camera-backdrop.js",
         "traffic-view.js",
-        "guide-layer.js",
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",

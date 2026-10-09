@@ -95,6 +95,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "deploy/site/rosy_site_autoupdate.py": (
+        616,
+        "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
+        "site update state machine. HTTP, filesystem and functional inventory parsing live in "
+        "site_update_io.py; candidate verification lives in verify_candidate.py. The updater "
+        "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
+        "Re-judge on further growth",
+    ),
     "core/gateway/core/services.py": (
         603,
         "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
@@ -189,7 +197,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_118,
+        48_711,
+        "split: re-judged at 48711 on 2026-10-09 merging D-560 S2 (+230 over main 48481; Fleet draws Rosy Cam's "
+        "map plane, display only): web/shared/vision-view.js plane header, lease, freshness rule and feed, "
+        "web/camera-backdrop.js plane draw, web/site-map.js plane view, web/field-view.js plane check and "
+        "map-metre grid. Existing owners, no command or stop path, no new owner; the D-515 warp stays as the "
+        "fallback. +150 allowance unchanged. Previously "
+        "split: re-judged at 48481 on 2026-10-09 (independent re-judge, critic agent): D-540 (d) robot card trips: "
+        "web/card-trip.js 230 (card 운행 form, convoy block), shared/site-map-model.js +40 (one plan/start/cancel "
+        "path, site-map.js uses it, −4), queues.js split from roster.js done (roster.js −117). No new route or "
+        "package owner. site-map.js trip/repeat/convoy controls are removed in D-540 step (e), which must "
+        "net-shrink. +150 allowance unchanged, measured from 48481. Previously "
         "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
         " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
         "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "

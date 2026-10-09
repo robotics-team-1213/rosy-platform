@@ -47,6 +47,8 @@ def overlay_for(args) -> dict:
         params["paint_source"] = args.paint_source
     if args.model_pointer is not None:
         params["learned_lane_pointer"] = args.model_pointer
+    if args.paint_every_n is not None:
+        params["learned_paint_every_n"] = args.paint_every_n
     return {NODE_KEY: {"ros__parameters": params}}
 
 
@@ -97,6 +99,8 @@ def main(argv=None, run=subprocess.run) -> int:
     apply.add_argument("--paint-source", choices=("threshold", "denoise", "learned"),
                        help="keep-mode paint input; learned falls back to denoise per frame")
     apply.add_argument("--model-pointer", help="absolute model pointer, required for learned paint")
+    apply.add_argument("--paint-every-n", type=int, choices=range(1, 5), metavar="1..4",
+                       help="learned paint: submit inference every Nth keep frame (node default 2)")
     apply.add_argument("--no-debug-overlay", action="store_true")
     clear = sub.add_parser("clear", help="remove the overlay, then restart rosy-camera")
     for command in (apply, clear):

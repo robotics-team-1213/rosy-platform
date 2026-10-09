@@ -173,9 +173,14 @@ export function rectangularView(record, mapId, width, height, turn = 0) {
   if (Math.abs(determinant) < 1e-12 || ![b.min_x, b.max_x].every(x =>
     [b.min_y, b.max_y].every(y => h[6] * x + h[7] * y + h[8] > 1e-9)))
     throw new Error('카메라 보정의 평면 범위를 확인하세요.');
+  return planeView(b, width, height, turn);
+}
+
+// A map-aligned picture of bounds ``b`` (m): the view, and its rectangle drawn unturned around its
+// centre, then turned (D-513 7).
+export function planeView(b, width, height, turn = 0) {
   const places = [{x: b.min_x, y: b.min_y}, {x: b.max_x, y: b.max_y}];
   const view = fitView({places, edges: []}, width, height, 24, turn);
-  // The rectified picture is map-aligned: draw it unturned around its centre, then turn it.
   const [cx, cy] = view.toPx((b.min_x + b.max_x) / 2, (b.min_y + b.max_y) / 2);
   const fw = (b.max_x - b.min_x) * view.scale, fh = (b.max_y - b.min_y) * view.scale;
   return {view, field: {x: cx - fw / 2, y: cy - fh / 2, width: fw, height: fh,
@@ -276,6 +281,19 @@ export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_m
   return next;
 }
 
+/** D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)". */
+function leaseEndText(trip) {
+  const why = LEASE_END_LABEL[trip.detail?.lease_reason] || trip.detail?.lease_reason || '점유를 잃음';
+  return trip.detail?.lease_by ? `${why}(${trip.detail.lease_by})` : why;
+}
+
+/** D-540 (d): why a trip stopped or failed, for the card line and the queue; '' for any other state. */
+export function tripEndText(trip) {
+  if (trip?.state !== 'stopped' && trip?.state !== 'failed') return '';
+  const why = trip.reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[trip.reason] || trip.reason;
+  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
+}
+
 /** One line for the trip panel: state, current lane, next place and action, pose source. */
 export function tripStatusText(trip, map) {
   if (!trip) return '진행 중인 운행 없음';
@@ -290,10 +308,8 @@ export function tripStatusText(trip, map) {
   } else if (trip.reason) {
     parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
   }
-  if (trip.reason === 'lease_lost') {  // D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)"
-    const why = LEASE_END_LABEL[trip.detail?.lease_reason] || trip.detail?.lease_reason || '점유를 잃음';
-    parts.push(trip.detail?.lease_by ? `${why}(${trip.detail.lease_by})` : why);
-  } else if (trip.lease?.state === 'held') parts.push('CORE 점유 중');
+  if (trip.reason === 'lease_lost') parts.push(leaseEndText(trip));
+  else if (trip.lease?.state === 'held') parts.push('CORE 점유 중');
   if (trip.detail?.junction_retry) parts.push(TRIP_REASON_LABEL[trip.detail.junction_retry] || trip.detail.junction_retry);
   if (trip.detail?.junction_fields_dropped) parts.push('활성 지도가 바뀌어 교차로 기대 값을 보내지 않았습니다');
   if (trip.reason === 'lane_arc' && trip.detail?.arc_reason) parts.push(`사유 ${trip.detail.arc_reason}`);  // D-520 2
@@ -319,6 +335,32 @@ export function repeatTripBody(map, start, leader = '') {
     ...(leader ? {convoy: {leader}} : {})};
 }
 
+// D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
+// the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
+const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
+export function planTrip(request, robotId, body) {
+  return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)});
+}
+export function startTrip(request, planId) {
+  return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'});
+}
+/** Why a trip request was refused, in operator words. */
+export function tripRefusalText(error) {
+  return error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error);
+}
+/** "3개 차로 · 2.10 m · 약 14 s · 지도 v4" for a computed plan. */
+export function planSummaryText(plan) {
+  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`;
+}
+/** '' when a repeat trip may start from ``start``; otherwise why not (role and robot checks are the caller's). */
+export function repeatTripReason({active, running, start}) {
+  if (!active) return '활성 지도가 없습니다';
+  if (running) return '이 로봇은 이미 운행 중입니다';
+  if ((active.map?.places || []).filter(place => place.kind === 'start').length < 2)
+    return '반복 운행에는 출발 자리가 두 곳 이상 필요합니다';
+  return start ? '' : '출발 자리를 고르세요';
+}
+
 /** D-517 9 M3: robots ``robotId`` may follow — open repeat trips that follow nobody. */
 export function convoyLeaders(open, robotId) {
   return (open || []).filter(trip => trip.repeat && !trip.convoy && trip.robot_id !== robotId)
@@ -333,11 +375,6 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
   return '';
-}
-
-export function tripCancelReason({role, running}) {
-  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
-  return running ? '' : '진행 중인 운행이 없습니다';
 }
 
 /** One line for the teach panel from `GET /api/fleet/teach`. */
@@ -367,7 +404,7 @@ export function newestPending(view) {
 }
 
 // ---- D-517 10 교통 층 — GET /api/fleet/traffic 을 그릴 것·카드 한 줄·예외 큐 행으로 바꾼다 ----
-// 관제 화면(map-view.js·roster.js)과 이 페이지의 운행 칸이 같이 쓴다.
+// 관제 화면(map-view.js·roster.js·card-trip.js)이 쓴다.
 // 표가 말하는 것만 옮긴다. M1 에서 Fleet 은 블록 표를 계산해 보이기만 하고 로봇에 보내지 않는다.
 // 좌표는 활성 지도 미터다. 화면 방향(D-513 7)과 위에서 본 보기(D-515)는 그리는 쪽의 toPx 가 맡는다.
 

@@ -116,6 +116,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="site YAML; its fleet.routing section sets the D-490 planner costs, "
                               "fleet.map_pose the D-494 trip map pose limits, "
                               "fleet.lane_compliance the D-511 lane watch thresholds")
+    console.add_argument("--site-config-optional", default=None, type=Path, metavar="PATH",
+                         help="like --site-config, but a missing file is only logged and defaults apply")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -343,6 +345,19 @@ async def run_formation(args: argparse.Namespace) -> None:
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
+def _resolve_optional_site_config(args) -> None:
+    """``--site-config-optional PATH``: becomes ``--site-config`` when the file exists, else defaults apply."""
+    optional = getattr(args, "site_config_optional", None)
+    if optional is None:
+        return
+    if getattr(args, "site_config", None) is not None:
+        sys.exit("--site-config and --site-config-optional cannot be combined")
+    if Path(optional).is_file():
+        args.site_config = optional
+    else:
+        print(f"site config {optional} not found; using defaults", file=sys.stderr)
+
+
 def _hub_link(args) -> dict | None:
     """D-555: what robots receive with a hub credential, or None when not configured."""
     hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
@@ -370,6 +385,7 @@ def run_console(args: argparse.Namespace) -> None:
     from fleet.server.console import FleetConsole
     from fleet.server.sightings import SightingService
 
+    _resolve_optional_site_config(args)
     tls_cert = getattr(args, "tls_cert", None)
     tls_key = getattr(args, "tls_key", None)
     if bool(tls_cert) != bool(tls_key):
