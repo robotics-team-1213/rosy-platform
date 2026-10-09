@@ -48,6 +48,8 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                         // only the code alphabet whatever the keyboard sends.
                         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                         filters = arrayOf(InputFilter.AllCaps(), LinkStatus.codeFilter, InputFilter.LengthFilter(6))
+                        // Set before show(): an IME that is already attached keeps the old options (2026-10-09 walk).
+                        isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                     }
                     val note = TextView(activity)
                     val form = LinearLayout(activity).apply {
@@ -62,8 +64,8 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                     val send = dialog!!.getButton(AlertDialog.BUTTON_POSITIVE)
                     // D-483: the dialog stays open; the status poll closes it once the request is approved.
                     // The keyboard covers the button on the tablet; its Done key sends the code too.
-                    code.isSingleLine = true; code.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
-                    code.setOnEditorActionListener { _, action, _ -> (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE).also { if (it) send.performClick() } }
+                    // A hardware or IME Enter arrives as IME_NULL with a KEYCODE_ENTER down event, not as IME_ACTION_DONE.
+                    code.setOnEditorActionListener { _, action, event -> LinkStatus.sendsCode(action, event?.keyCode, event?.action).also { if (it) send.performClick() } }
                     send.setOnClickListener {
                         val typed = code.text.toString().trim().uppercase()
                         if (!PeerClient.APPROVAL_CODE.matches(typed)) { note.text = "승인 코드는 로봇 화면의 6자입니다."; return@setOnClickListener }
