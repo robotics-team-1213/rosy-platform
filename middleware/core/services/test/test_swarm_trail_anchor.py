@@ -21,6 +21,10 @@ class AnchorRig(Rig):
             pose_provider=lambda: self.pose, twist_sink=self.sent.append,
             obstacle_gap=lambda v, w, now: self.gap(v, w, now), odom_provider=lambda: self.odom)
 
+    def held(self, reason):
+        """The trail state shows no reason before it is seeded; the hold event does."""
+        return ("swarm.hold", {"reason": reason, "formation": "follow:rosy_02@0.50/0.00"})             in self.events.published
+
     def anchored(self, x, y=0.0, yaw=0.0, for_robot_id="rosy_01", anchor="fleet", map_id="site"):
         self.swarm.on_reference_pose(ReferencePose(
             "rosy_02", x, y, yaw, frame="odom", map_id=map_id, anchor=anchor,
@@ -43,7 +47,7 @@ def test_an_anchored_sample_for_another_robot_holds():
     rig.follow()
     rig.anchored(1.0, for_robot_id="rosy_03")
     assert rig.step() is None
-    assert rig.hold_reason() == "reference_anchor_invalid"
+    assert rig.held("reference_anchor_invalid")
     assert rig.swarm.state_payload()["trail"] is None    # never seeded from it
 
 
@@ -52,7 +56,7 @@ def test_a_plain_leader_odom_sample_is_still_refused():
     rig.follow()
     rig.leader(1.0, frame="odom")
     assert rig.step() is None
-    assert rig.hold_reason() == "reference_frame_not_map"
+    assert rig.held("reference_frame_not_map")
 
 
 def test_the_own_odom_must_be_fresh():
