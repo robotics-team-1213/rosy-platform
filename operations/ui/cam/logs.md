@@ -283,3 +283,9 @@
 - 변경: 하향 `camera`를 엄격히 읽고(틀린 메시지는 기록만 하고 무시), 순수 정책 `RecognitionTuning`이 열 SEVERE(3) 유지 > 설정 스위치 꺼짐 > 60 s 안의 Vision 요청 > D-544 로컬 순으로 정한다. 허용 목록은 EV 지수(실제 −2.0…+1.0 EV를 기기 단계로 환산한 ceil/floor ∩ 기기 범위; 선로의 `ev`는 지수), AE·AWB 잠금, 노출 상한(AE 목표 fps 하한, 30 fps 이하 범위만), 60 Hz 안티밴딩이다. EV는 CameraX, 나머지는 Camera2 interop 캡처 옵션으로 재바인딩 없이 쓴다. EV를 바꾸면 잠금은 1 s 뒤에 건다. 카메라가 확인한 값과 지원 범위, 노출 시간·ISO·열 상태를 상향 `camera_state`로 알리고 hello 뒤에 다시 보낸다. 설정 화면에 "인식 자동 노출 (Vision)"(기본 켜짐), 스트림 화면에 한 줄 상태를 더했다. 기하(렌즈·배율·초점·해상도)는 바꾸지 않는다. 공유 벡터에 `camera_example`·`camera_state_example`을 더했다.
 - 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 399 passed(새 `RecognitionTuningTest` 17, `CameraProtocolTest` 5, `OverheadLinkTest` +1). 로그 X: `DevTemp/cam-auto-tune-s2/`.
 - gate 변화: SOURCE 부분 근거. Python 쪽 벡터 시험(S1), S21 설치·현장(S4)은 대기다. 폰에 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · fix(cam): D-589 S2 독립 리뷰 반영
+
+- 변경: 쓴 값·확인된 값·진행 중 호출을 순수 클래스 `TuningWriter`로 옮겼다. 바인드마다 세대를 바꿔 이전 바인드의 응답을 버리고, CameraX가 카메라 id별로 남겨 두는 Camera2 interop 옵션을 지운다. 잠금은 노출 변화(EV·상한·안티밴딩)가 확인되고 1 s 지난 뒤, 확인이 없으면 3 s 뒤에 건다. 바인드 시각부터 잰다. 손전등이 켜지면 Vision 아래에서도 AE를 잠그지 않는다. 설정 스위치가 열 유지보다 먼저다(꺼짐이면 뜨거워도 `disabled`로 기본값). 노출 상한은 보고한 값을 그대로 돌려받으면 같은 범위를 고른다. 500 ms 안의 연속 요청은 버리되 seq는 돌려준다. 화면은 실제 EV(예: EV −1.0)를 보이고, Vision 중에는 D-544 줄을 숨긴다. 설정 줄 전체가 체크박스다. onOpen과 `publishCameraState`는 같은 잠금 안에서 STREAMING과 캐시 전송을 처리한다. 공유 벡터 `camera_example.max_exposure_us`를 33333으로 바꿨다(S1과 같은 변경).
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 409 passed(`RecognitionTuningTest` 22, 새 `TuningWriterTest` 5). 로그 X: `DevTemp/cam-auto-tune-s2/build-3.txt`.
+- gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
