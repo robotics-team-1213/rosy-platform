@@ -8,7 +8,7 @@ import { MODE_LABEL, NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL,
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
-import { localizationTag, untrustedQueuedReason } from "./localization-badge.js";
+import { localizationTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
@@ -240,7 +240,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
       ? `${power.battery} · ${power.voltage.toFixed(2)} V` : power.battery;
     const rows = [
-      ["pose", "위치", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
+      ["pose", "위치", robotPoseText(state, robot.localization)],
       ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
       ["battery", "배터리", battery],
       ["safety", "안전", safetyLabel],
@@ -267,6 +267,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
           valueEl.title = `${power.observedAgeS}초 전`;
       }
       cellEl.append(labelEl, valueEl);
+      const sitePose = key === "pose" && !view.stateUnavailable
+        ? sitePoseText((view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id)) : null;
+      if (sitePose) cellEl.append(nodeWithText("small", "fact-detail", sitePose));
       facts.appendChild(cellEl);
     });
     node.appendChild(facts);
