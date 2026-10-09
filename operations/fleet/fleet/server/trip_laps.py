@@ -1,5 +1,6 @@
 """D-517 2/3: repeat-trip lap bookkeeping, pure on ``LiveTrip`` and plans (no robot calls)."""
-from fleet.routing.execute import arc_id, ends_at_place, plan_again, route_key
+from fleet.routing.execute import arc_id, ends_at_place, plan_again, plan_body, route_key
+from fleet.routing.trip import _assemble
 from fleet.server.trip_ports import LiveTrip
 
 #: D-517 2/5: a failed lap check is retried this often, this many times (D-438), then it is the operator's.
@@ -20,7 +21,8 @@ def convoy_refusal(lives: dict, robot_id: str, leader: str, *, cycle=None, arcs=
     if live.convoy is not None:
         return "TRIP_CONVOY_LEADER_IS_FOLLOWER", {"leader": leader, "follows": live.convoy}
     edges = lambda ids: frozenset(arc.rsplit(":", 1)[0] for arc in ids)  # noqa: E731
-    if (cycle is not None and cycle != frozenset([live.request["to"], *live.request.get("via", ())])) or (
+    own = live.request.get("cycle") or [live.request["to"], *live.request.get("via", ())]
+    if (cycle is not None and cycle != frozenset(own)) or (
             arcs is not None and edges(arcs) != edges(live.lap_arcs)):
         return "TRIP_CONVOY_OTHER_LOOP", {"leader": leader}
     if segments is not None and not _behind(live, segments, edges(live.lap_arcs)):
@@ -48,6 +50,42 @@ def lap_arcs(active, segments: list, request: dict, caps: dict, blocked, routing
     end = active[2].arcs[arc_id(segments[-1])].point_at(segments[-1]["s_to"])
     body, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
     return tuple(arc_id(seg) for seg in (body or {"segments": segments})["segments"])
+
+
+def tail(graph, segments: list):
+    """The last segment that ends at a place (where a lap holds), or None."""
+    return next((seg for seg in reversed(segments) if ends_at_place(graph, seg)), None)
+
+
+def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked, routing, max_turn_deg,
+                         hold_back) -> tuple[dict, dict, list] | None:
+    """D-517 3 (2026-10-09 signal SIM): a lap holds at its last place, so that place must be one a robot
+    can stand at outside every zone (``hold_back(segment)`` is not None). Else the lap end moves on along
+    the next lap to the first place that is; the old end becomes the cycle's last via. ``(plan, request,
+    lap route)``, unchanged when nothing moves; None when no place of the next lap will do."""
+    graph = active[2]
+    last = tail(graph, plan["segments"])
+    if last is None or hold_back(last) is not None:
+        return plan, request, route_key(plan["segments"])
+    to, via = request["to"], list(request.get("via", ()))
+    if not isinstance(to, str):
+        return None
+    end = graph.arcs[arc_id(plan["segments"][-1])].point_at(plan["segments"][-1]["s_to"])
+    lap, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
+    k = next((k for k, seg in enumerate((lap or {}).get("segments", ()))
+              if ends_at_place(graph, seg) and hold_back(seg) is not None), None)
+    if k is None:
+        return None
+    joined = _joined(plan["segments"], [seg for seg in lap["segments"][:k + 1] if seg["s_to"] - seg["s_from"] > 1e-6])
+    body = plan_body(_assemble(graph, [(arc_id(s), s["s_from"], s["s_to"]) for s in joined], 0.0, routing))
+    plan = {**plan, **{key: body[key] for key in ("segments", "places", "actions")}}
+    moved = {**request, "to": ends_at_place(graph, lap["segments"][k]), "via": [*via, to],
+             "cycle": request.get("cycle") or [to, *via]}  # the operator's cycle (convoy check)
+    # Lap 1 runs start -> moved end; the next laps run moved end -> moved end over the same edges.
+    nxt, _hold = plan_again(active, graph.arcs[arc_id(joined[-1])].point_at(joined[-1]["s_to"]), moved, caps,
+                            blocked, set(), routing, max_turn_deg)
+    same = nxt is not None and {s["edge_id"] for s in nxt["segments"]} == {s["edge_id"] for s in joined}
+    return plan, moved, route_key(nxt["segments"] if same else joined)
 
 
 def lap_due(live: LiveTrip, index: int, remaining: float, config) -> bool:

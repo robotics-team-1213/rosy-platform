@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+from typing import Callable
 
 from fleet.routing.cost import RoutingConfig, wrap
-from fleet.routing.graph import Graph
+from fleet.routing.graph import Arc, Graph
 
 
 class PlanError(Exception):
@@ -21,20 +22,28 @@ def heading_ok(yaw: float, tangent: float, config: RoutingConfig) -> bool:
     return abs(math.degrees(wrap(yaw - tangent))) <= config.heading_tol_deg
 
 
-def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConfig) -> tuple[str, float]:
-    """Closest arc within half its lane width whose direction matches ``yaw``: ``(arc id, s)``."""
-    best: tuple[float, str, float] | None = None
+def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConfig,
+               allowed: Callable[[Arc], bool] | None = None) -> tuple[str, float]:
+    """Closest arc within half its lane width whose direction matches ``yaw``: ``(arc id, s)``.
+
+    An ``allowed`` arc wins over a closer excluded one (blocked, wrong kind or mode): at a place
+    every arc out of it is as close, and a closed one must not become the plan's first arc
+    (2026-10-09 signal SIM: a lap from SE began on blocked ``ring_e``). A robot standing part-way
+    along an excluded arc still starts on it.
+    """
+    best: tuple[bool, float, str, float] | None = None
     near = False
     for arc in graph.arcs.values():
         dist, s_m, tangent = arc.project(x, y)
         if dist > arc.width_m / 2:
             continue
         near = True
-        if heading_ok(yaw, tangent, config) and (best is None or (dist, arc.id) < best[:2]):
-            best = (dist, arc.id, s_m)
+        key = (allowed is not None and not allowed(arc), dist, arc.id)
+        if heading_ok(yaw, tangent, config) and (best is None or key < best[:3]):
+            best = (*key, s_m)
     if best is None:
         raise PlanError("TRIP_HEADING_CONFLICT" if near else "TRIP_START_OFF_MAP")
-    return best[1], best[2]
+    return best[2], best[3]
 
 
 def snap_goal(graph: Graph, x: float, y: float, yaw: float | None,
