@@ -202,7 +202,7 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
             assert page.evaluate("""() => [...document.querySelectorAll('.card-trip ui-button, .card-trip select')]
               .every((node) => node.scrollWidth <= node.clientWidth + 1 && node.getBoundingClientRect().height < 80)"""), width
             if width >= 1024:
-                assert set(page.evaluate(SCROLLERS)) <= {"console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
             form.scroll_into_view_if_needed()

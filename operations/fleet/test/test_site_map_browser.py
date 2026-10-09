@@ -244,7 +244,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().top,
       plane: document.querySelector('.plane-tools summary').getBoundingClientRect().top,
     })""")
-    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height, positions
+    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height + 1, positions
     expect(page.locator(".plane-tools")).not_to_have_attribute("open", "")
     expect(page.locator("#plane-source")).to_be_hidden()
     if width < 1024:

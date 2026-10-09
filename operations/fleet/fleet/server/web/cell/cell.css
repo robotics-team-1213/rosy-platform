@@ -26,7 +26,7 @@ a { color: var(--ink); }
 #layout { width: 100%; height: 20rem; color: var(--ink); }
 #layout rect { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; }
 #layout text { fill: var(--ink); font: var(--text-micro) var(--mono); }
-#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
+#estop-feedback { margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 30rem) {
   .documents, .scope { grid-template-columns: 1fr; }
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
