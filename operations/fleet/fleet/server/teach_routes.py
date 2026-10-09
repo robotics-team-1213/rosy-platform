@@ -51,6 +51,16 @@ class PlaceRequest(NewPlace):
     expected_revision: Revision = None
 
 
+class MarkerPlaceRequest(BaseModel):
+    """D-564: a draft place at a fresh floor place marker; ``place_id`` moves an existing place."""
+    model_config = ConfigDict(extra="forbid")
+    marker_id: int = Field(ge=0, le=49, strict=True)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    kind: Optional[PlaceKind] = None
+    place_id: Optional[PlaceId] = None
+    expected_revision: Revision = None
+
+
 def _ref(value):
     return value.model_dump() if isinstance(value, NewPlace) else value
 
@@ -92,3 +102,10 @@ def install_teach_routes(app, *, service: TeachService, read_guard, require_name
         return await guarded(lambda: service.place(body.robot_id, name=body.name, kind=body.kind,
                                                    expected_revision=body.expected_revision,
                                                    principal_id=principal.principal_id))
+
+    @app.post("/api/fleet/teach/place-from-marker", tags=["site-map"])
+    async def teach_place_from_marker(body: MarkerPlaceRequest,
+                                      principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        return await guarded(lambda: service.place_from_marker(
+            body.marker_id, name=body.name, kind=body.kind, place_id=body.place_id,
+            expected_revision=body.expected_revision, principal_id=principal.principal_id))

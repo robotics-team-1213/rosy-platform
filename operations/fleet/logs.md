@@ -2933,3 +2933,13 @@
 - gate 변화: 없음. fleet 크기 48481 → 48440(−41), 판정 문구 그대로. Safety-Review 불필요(읽기 표시와 버튼 제거, 명령 경로 안 건드림).
 - 결정: D-540 Proposed 그대로.
 - 교훈: 전역 `input, select` 재칠을 지우면 `width: 100%`도 같이 빠져 320 px에서 61 px 넘친다 — `components.css`는 최대폭만 준다.
+
+## 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
+- 변경: `POST /api/fleet/place-markers`(source 토큰, 2 s, source·marker별 순서)·`GET` 보기, `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자; 새 초안 장소 또는 `place_id` 이동, 이동한 장소에 닿는 차로 끝도 옮김), `sightings_config.py` `place_markers` 검증, 지도 가르치기 패널 "마커로 등록". 로봇에 보내는 것 없음. API v1.167.
+- 증거: 모델 PC `remote_pytest.py` 관련 묶음(fleet 13 파일·vision·foundation·version alignment·architecture) exit 0, `known_failures.py` 신규 0 (X:/DevTemp/place-markers/run-1.txt).
+- gate 변화: 없음(SOURCE). 현장 스티커·천장 카메라 확인은 열림.
+## 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
+- 변경: 마커 지도와 초안(활성·초안 없으면 빈 `site`)의 `map_id`가 다르면 409 `PLACE_MARKER_MAP_MISMATCH`. Vision 장소 마커 전송은 한 번에 하나인 백그라운드 작업이라 Fleet이 늦어도 프레임 루프·로봇 sighting을 막지 않는다. 콘솔 마커 목록은 반올림한 자세가 바뀌면 다시 그린다. 시험: ±90° yaw 부호, 목록에 없는 id 403, bend 이동 거절.
+- 열림: 장소를 마커로 옮기면 그 장소에 닿는 차로는 끝점만 옮기고 안쪽 점은 그대로다. 크게 옮기면 차로 끝 접선이 꺾일 수 있다(활성화 전 지도에서 확인).
+- 증거: 모델 PC `remote_pytest.py` 관련 묶음, `known_failures.py` (X:/DevTemp/place-markers/run-1.txt).
+- gate 변화: 없음(SOURCE).
