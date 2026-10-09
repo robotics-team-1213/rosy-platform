@@ -1,7 +1,7 @@
 """Ceiling robot sticker yaw offset from one straight forward drive (D-587 5).
 
-    python3 ceiling_marker_yaw.py --robot rosy_41 [--fleet https://127.0.0.1:8443]
-        [--seconds 10] [--current-offset-deg 0] [--dev-session] [--insecure]
+    python3 ceiling_marker_yaw.py --robot rosy_41 --current-offset-deg 0
+        [--fleet https://127.0.0.1:8443] [--seconds 10] [--dev-session] [--insecure]
 
 Drive the robot straight forward for 0.3 m or more while this runs (Fleet manual drive or
 the CORE dashboard). It reads ``GET /api/fleet/sightings`` for that robot, takes the travel
@@ -10,6 +10,8 @@ with it. While driving forward the travel direction is the robot front, so the d
 is what the sticker offset is missing. The odom heading is not used: it is in the odom
 frame, whose turn against the map is unknown.
 
+``--current-offset-deg`` is required and must be the value installed now (0 when the robot
+has none): the sighting yaw already has it removed, so a wrong value gives a wrong result.
 Prints the new ``marker_yaw_offset_deg`` value for site-cameras.yaml (current + difference)
 and the nearest multiple of 90. It never writes any file or config; the operator installs
 the line. Refuses (exit 2) with fewer than 5 samples, under 0.25 m of travel, more than
@@ -108,7 +110,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--robot", required=True)
     parser.add_argument("--fleet", default="https://127.0.0.1:8443")
     parser.add_argument("--seconds", type=float, default=10.0)
-    parser.add_argument("--current-offset-deg", type=float, default=0.0)
+    parser.add_argument("--current-offset-deg", type=float, required=True,
+                        help="the marker_yaw_offset_deg installed now for this robot (0 when none)")
     parser.add_argument("--dev-session", action="store_true", help="ask a development-mode site for a session")
     parser.add_argument("--insecure", action="store_true", help="skip TLS verification (site self-signed cert)")
     args = parser.parse_args(argv)

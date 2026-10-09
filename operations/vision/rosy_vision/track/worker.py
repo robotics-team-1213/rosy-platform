@@ -199,10 +199,6 @@ class TrackWorker:
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
                 lens, relearn))
-        sightings = ()
-        if step is not None and self.sightings is not None:
-            sightings = robot_sightings(camera or self.camera, step[0], markers, captured_at=frame.captured_at,
-                                        seq=frame.header.seq, skip=sighted)
         if challenge is not None:
             await self._report_identity(challenge, frame.captured_at)
         if step is None:
@@ -222,16 +218,27 @@ class TrackWorker:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:
             self._publish_log.ok()
+        if self.sightings is not None:
+            await self._publish_sightings(camera or self.camera, calibration, frame, markers, sighted)
+        return payload
+
+    async def _publish_sightings(self, camera: CameraMap, calibration, frame, markers, sighted) -> None:
+        """D-587: identified robot markers as sightings; a failure is logged, never raised."""
+        try:
+            sightings = robot_sightings(camera, calibration, markers, captured_at=frame.captured_at,
+                                        seq=frame.header.seq, skip=sighted)
+        except (TypeError, ValueError, ArithmeticError, np.linalg.LinAlgError) as exc:
+            self._sighting_log.failed((("error_type", type(exc).__name__),))
+            return
         for sighting in sightings:
             try:
                 await self.sightings.publish(sighting)
             except SightingPublishError as exc:
                 self._sighting_log.failed((("status", exc.status_code), ("code", exc.code)))
-            except httpx.HTTPError as exc:
+            except (httpx.HTTPError, ValueError) as exc:  # ValueError: a non-JSON error body
                 self._sighting_log.failed((("error_type", type(exc).__name__),))
             else:
                 self._sighting_log.ok()
-        return payload
 
     async def _report_identity(self, challenge: dict, now: float) -> None:
         """D-472: once the window has passed, send Fleet the verdict (never an image)."""

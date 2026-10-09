@@ -192,6 +192,59 @@ def test_track_worker_sends_the_sighting_after_the_detections():
     assert (sighting.robot_id, sighting.seq, sighting.captured_at) == ("rosy_40", 12022, 1_790_000_000.25)
 
 
+def test_a_sighting_failure_costs_neither_the_detections_nor_the_frame(monkeypatch, caplog):
+    """Review 5: robot_sightings runs after the detections are published and never raises."""
+    import rosy_vision.track.worker as track_worker
+
+    def broken(*_args, **_kwargs):
+        raise ValueError("bad quad")
+
+    monkeypatch.setattr(track_worker, "robot_sightings", broken)
+    publisher = _Publisher()
+    with caplog.at_level(logging.WARNING, logger="rosy_vision.track"):
+        payload, client = _run(publisher)
+    assert client.published == [payload] and publisher.sent == []
+    assert "error_type=ValueError" in caplog.text and "bad quad" not in caplog.text
+
+
+def test_vision_worker_tells_the_tracker_only_the_sightings_fleet_received():
+    """Review 3: a project_frame sighting that failed to send is not 'already sighted'."""
+    from rosy_vision.worker import VisionWorker
+    seen = []
+
+    class _Tracker:
+        config = None
+
+        async def process(self, frame, markers, sighted, camera):
+            seen.append(sighted)
+
+    class _Failing:
+        async def publish(self, sighting):
+            raise SightingPublishError(409, "SIGHTING_STALE", "late")
+
+    class _Ingest:
+        def latest_frame(self, source_id):
+            return SimpleNamespace(header=SimpleNamespace(seq=3), jpeg=b"j", captured_at=99.9, received_at=99.95)
+
+        def report_markers(self, *args):
+            pass
+
+    corners = {30: _q(100, 100), 31: _q(500, 100), 32: _q(500, 300), 33: _q(100, 300), 7: _q(300, 200, 10)}
+    camera = CameraMap(source_id="ceiling_north", map_id="m", calibration_revision="cal-v3",
+                       processor_revision="aruco-v1", corner_marker_ids=(30, 31, 32, 33),
+                       corner_world_m=((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)),
+                       robot_markers={"rosy_01": 7})
+    worker = VisionWorker(source_id="ceiling_north", ingest=_Ingest(), camera=camera, publisher=_Failing(),
+                          detector=lambda _jpeg: corners, clock=lambda: 100.0, tracker=_Tracker())
+    with pytest.raises(SightingPublishError):
+        asyncio.run(worker.process_latest())
+    assert seen == [frozenset()]
+
+
+def _q(cx, cy, half=2):
+    return ((cx - half, cy - half), (cx + half, cy - half), (cx + half, cy + half), (cx - half, cy + half))
+
+
 def test_track_worker_skips_robots_already_sighted_and_only_logs_a_rejection(caplog):
     publisher = _Publisher()
     _run(publisher, sighted=frozenset({"rosy_40"}))
