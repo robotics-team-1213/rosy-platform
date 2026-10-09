@@ -144,8 +144,7 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
         extra = [n for n in wifi_autoconnect() if n not in allowed]
         return f"wifi autoconnect outside the allow list: {', '.join(extra)}" if extra else None
     if kind == "apt":
-        out = sh("dpkg-query", "-W", "-f=${Package} ${Status}
-", *args).stdout
+        out = sh("dpkg-query", "-W", "-f=${Package} ${Status}\n", *args).stdout
         have = {line.split()[0] for line in out.splitlines() if line.endswith(" install ok installed")}
         missing = [name for name in args if name not in have]
         return f"apt packages missing: {' '.join(missing)}" if missing else None
