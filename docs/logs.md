@@ -7400,3 +7400,9 @@ osy-d395-s1d\`.
 - 변경: 격리 ROS-SIM에서 `route_a`를 주행시키고, 새 카메라 프레임을 받는 경로 위→80 mm 이탈→복귀를 관찰했다.
 - 증거: `validation/lane-route-live-offmap-2026-10-09/result.md`. 이탈 전 가시 후보, 이탈과 복귀 뒤 비가시 후보. 정적 경로 주행은 장애물 HOLD에서 끝나 B9 경계 공백에 닿지 않았다.
 - gate 변화: 없음. 60 mm는 실험값이며 사람 GT·운영 keep·실물 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix: D-535 연결 사유 안전 검토 기록
+
+- 변경: `cd7464f32`의 Fleet 안전 태그 경로를 작성 세션과 별도로 검토하고, 빠진 `Safety-Review:` trailer의 사후 검토 예외를 해당 커밋 하나에 한정했다.
+- 증거: [독립 안전 리뷰](validation/d535-link-reason-safety-review-2026-10-09/result.md). 표시용 필드의 호출자 확인, 모델 PC 연결 사유·정지 래치·전체 취소 시험 48 passed.
+- gate 변화: D-430 CI trailer 검사에서 이 커밋만 검토 완료로 판정한다. 장치·주행 수용에는 변화 없음.
