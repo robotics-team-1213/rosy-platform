@@ -116,6 +116,9 @@ services:
       - vision
       # D-457 marker priority and anonymous fallback, display-only.
       - --track
+      # D-539: the operator-relearned empty-track background survives restarts.
+      - --track-state
+      - /var/lib/rosy-vision/track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host
@@ -134,6 +137,7 @@ services:
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
+      - vision_state:/var/lib/rosy-vision
     secrets:
       - phone_ingress_token
       - fleet_sighting_token
@@ -208,6 +212,7 @@ services:
 
 volumes:
   sighting_data:
+  vision_state:
 
 networks:
   site_backend:
