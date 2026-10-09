@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.livsbittt.rosy.cam.R
+import io.github.livsbittt.rosy.cam.camera.ExposureVerdict
 import io.github.livsbittt.rosy.cam.link.LinkState
 import io.github.livsbittt.rosy.cam.service.CameraSessionPlan
 import io.github.livsbittt.rosy.cam.service.StreamService
@@ -115,6 +116,19 @@ fun StreamScreen(
                     light.dark -> R.string.light_dark
                     else -> R.string.light_ready
                 }), style = MaterialTheme.typography.bodySmall)
+                val exposure = state.exposure
+                if (exposure.supported) {
+                    Text(stringResource(when {
+                        !exposure.enabled -> R.string.exposure_off
+                        exposure.verdict == ExposureVerdict.OVER -> R.string.exposure_over
+                        exposure.verdict == ExposureVerdict.UNDER -> R.string.exposure_under
+                        else -> R.string.exposure_ok
+                    }) + if (exposure.enabled && exposure.index != 0) " · EV ${exposure.index}" else "",
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { StreamService.setExposureAssist(!exposure.enabled) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(if (exposure.enabled) R.string.exposure_disable else R.string.exposure_enable))
+                    }
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))

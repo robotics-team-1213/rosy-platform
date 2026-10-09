@@ -104,6 +104,15 @@ class SettingsStore internal constructor(private val store: DataStore<Preference
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { prefs -> LensChoice.fromWire(prefs[LENS]) }
 
+    /** D-544: AE exposure assist; off until the operator turns it on. */
+    val autoExposure: Flow<Boolean> = store.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs[AUTO_EXPOSURE] == true }
+
+    suspend fun saveAutoExposure(enabled: Boolean) {
+        store.edit { prefs -> prefs[AUTO_EXPOSURE] = enabled }
+    }
+
     suspend fun saveLens(choice: LensChoice) {
         store.edit { prefs -> prefs[LENS] = choice.wire }
     }
@@ -191,6 +200,7 @@ class SettingsStore internal constructor(private val store: DataStore<Preference
 
     private companion object {
         val LENS = stringPreferencesKey("lens")
+        val AUTO_EXPOSURE = booleanPreferencesKey("auto_exposure_assist")
         val DEVELOPMENT_POLICY = stringPreferencesKey("development_link_policy")
         val LINK_REVISION = stringPreferencesKey("site_link_revision")
         val PEER_RELATIONSHIP = stringPreferencesKey("camera_peer_relationship")
