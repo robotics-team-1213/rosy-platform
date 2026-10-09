@@ -123,6 +123,9 @@ def load_config(path: Path) -> dict:
                 or not Path(token).is_file() or Path(token).is_symlink()):
             raise ConfigError('functional token_file must be an absolute regular file')
         ids = check['required_ids']
+        # D-580: "enrolled" = Fleet's own roster, so a renumber needs no edit here.
+        if ids == 'enrolled' and check['path'] == '/api/fleet/state':
+            continue
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or not i for i in ids):
             raise ConfigError('functional required_ids must contain configured IDs')
     return {"repo": raw["repo"], "key_id": raw["key_id"], "public_key": Path(raw["public_key"]),
@@ -240,7 +243,8 @@ def functional_inventory(config: dict, http: Http) -> tuple[dict[str, list[str]]
         except (Transient, OSError, ValueError, KeyError, TypeError):
             raise Rejected('functional API validation failed') from None
         observed[check['path']] = sorted(ids)
-        missing[check['path']] = sorted(set(check['required_ids']) - ids)
+        required = ids if check['required_ids'] == 'enrolled' else set(check['required_ids'])
+        missing[check['path']] = sorted(required - ids)
     return observed, missing
 
 

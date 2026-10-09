@@ -66,7 +66,7 @@ def _settle(page, posts, path, count=1):
 def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
     """`운행…` opens the form on the card: destination → `경로 보기` (a preview) → `운행 시작` starts that
     plan; `반복 운행 시작` plans the lap over the start places and starts it. Both use the D-494 routes."""
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
 
     posts = []
     answers = {"/api/fleet/robots/rosy_02/trip": (200, {"plan_id": "p2", **PLAN}),
@@ -81,7 +81,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         form.locator("ui-button", has_text="경로 보기").click()
         _settle(page, posts, "/api/fleet/robots/rosy_02/trip")
         assert ("/api/fleet/robots/rosy_02/trip", json.dumps({"to": "B"}, separators=(",", ":"))) in posts
-        assert "1개 차로 · 2.10 m · 약 14 s · 지도 v4 · 실행하지 않음" in form.inner_text()
+        expect(form).to_contain_text("1개 차로 · 2.10 m · 약 14 s · 지도 v4 · 실행하지 않음")
         _shot(page, "card-trip-preview-1440x900.png")
         go.click()
         _settle(page, posts, "/api/fleet/trips/p2/start")

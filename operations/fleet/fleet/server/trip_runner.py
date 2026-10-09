@@ -507,6 +507,16 @@ class TripRunner:
     async def _step_lane(self, live: LiveTrip, index: int, remaining: float) -> None:
         if (live.view["caps"] or {}).get("lane_arc") and "arc" not in live.junction:
             return  # D-520 2: no arc baseline read yet; an old CORE arc would pass as this trip's (bends too)
+        arc, sent = live.junction.get("arc") or {}, live.sent
+        if (live.view["hold"] is None and arc.get("state") == "running" and sent is not None
+                and arc.get("end_place_id") == sent["place"]
+                and sent["place"] != live.place(index)
+                and live.junction.get("state") == "armed"
+                and live.junction.get("place_id") == sent["place"]
+                and live.junction.get("seq") == sent["seq"]):
+            # Map pose can cross the segment boundary before CORE odom finishes its arc.
+            # Keep the armed end-place instruction until CORE consumes it at that arc end.
+            return
         if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining):
             return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
