@@ -45,6 +45,8 @@ from fleet.swarm.session import (
     SessionError,
     SessionState,
 )
+from fleet.swarm.anchor import TrailAnchor
+from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
 
@@ -143,6 +145,9 @@ class FleetConsole(TripAware):
         self._formation_leader = None
         #: 시험이 가짜 릴레이를 끼우는 자리. 운용에서는 None 이라 세션의 기본값을 쓴다.
         self._relay_factory = relay_factory
+        #: D-581: the D-494 3 map pose service (set by app.py). With it a TRAIL formation re-expresses
+        #: an odom-only leader in each follower's odom frame from the ceiling camera.
+        self.formation_poses = None
         self.fleet_name = fleet_name
         # e-stop 은 hub 의 scatter 를 그대로 쓴다 — 흩뿌림의 규칙을 두 군데 두지 않는다.
         self._hub = SiteHub(list(endpoints), dict(self._clients), fleet_name=fleet_name,
@@ -1104,6 +1109,9 @@ class FleetConsole(TripAware):
             "reason": list(session.reason) if session.reason else None,
             "pending_triggers": [list(t) for t in session.pending_triggers],
             "stream_evidence": stream_evidence,
+            # D-581: why a follower gets no ceiling-anchored samples (null when not anchoring).
+            "anchor": (session.relay.anchor.status()
+                       if session.relay is not None and session.relay.anchor is not None else None),
             "relay": None if stats is None else {
                 "paused": stats.paused,
                 "leader_rx_hz": round(stats.leader_rx_hz, 2),
@@ -1164,6 +1172,13 @@ class FleetConsole(TripAware):
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}
+        poses = self.formation_poses
+        if self._relay_factory is None and poses is not None:
+            anchor = TrailAnchor(
+                poses, leader_id, follower_ids,
+                enabled=lambda: session.spec.formation is Formation.TRAIL,
+                refresh=lambda rid: poses.refresh(rid, force_rest=True))
+            kwargs["relay_factory"] = lambda lead, follow: Relay(lead, follow, anchor=anchor)
         member_order = [rid for rid in self._order if rid == leader_id or rid in follower_ids]
         session = FormationSession(leader, followers,
                                    self._spec(formation, spacing, max_speed),

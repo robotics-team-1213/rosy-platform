@@ -23,7 +23,8 @@ class AnchorRig(Rig):
 
     def held(self, reason):
         """The trail state shows no reason before it is seeded; the hold event does."""
-        return ("swarm.hold", {"reason": reason, "formation": "follow:rosy_02@0.50/0.00"})             in self.events.published
+        hold = ("swarm.hold", {"reason": reason, "formation": "follow:rosy_02@0.50/0.00"})
+        return hold in self.events.published
 
     def anchored(self, x, y=0.0, yaw=0.0, for_robot_id="rosy_01", anchor="fleet", map_id="site"):
         self.swarm.on_reference_pose(ReferencePose(

@@ -249,6 +249,14 @@ class MapPoseTracker:
                    or abs(_wrap(o.pose[2] - base.pose[2])) > min_rad
                    for o in self._odom if o.stamp >= since)
 
+    def odom_to_map(self) -> Optional[tuple[Pose, Pose]]:
+        """D-581: (map <- odom transform of the current anchor, newest odom pose); None unanchored.
+        Read beside `pose()`, which says whether the anchor may be used."""
+        if self._anchor is None or not self._odom:
+            return None
+        anchor = self._anchor
+        return compose(anchor.map_pose, relative(anchor.odom.pose, (0.0, 0.0, 0.0))), self._odom[-1].pose
+
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
         self._refused += 1

@@ -8,6 +8,10 @@
 - 느린 팔로워에 밀리지 않는다. 소켓별 큐는 깊이 1, 최신이 이전을 덮는다.
 - `pause()` 중에는 리더를 계속 읽되 팔로워에 쓰지 않는다. FOR-004 의 "전체 HOLD"
   가 이것이다 (설계 §6.4, D-35 후보).
+- D-581 예외 하나: `anchor`(TRAIL 대형, `fleet.swarm.anchor`)가 있으면 리더가 `frame: odom`
+  으로 보낸 프레임은 팔로워마다 그 팔로워의 odom 좌표로 다시 쓴다. 천장 카메라 기준이
+  없거나 낡았으면 그 팔로워에게는 보내지 않는다 — 합성은 하되 반복은 하지 않는다.
+  `map` 프레임은 지금처럼 바이트 그대로다.
 """
 
 from __future__ import annotations
@@ -97,7 +101,8 @@ class Relay:
                  clock: Callable[[], float] = time.monotonic,
                  reconnect_max_s: float = 2.0,
                  send_timeout_s: float = _SEND_TIMEOUT_S,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 anchor=None) -> None:
         follower_ids = [f.robot_id for f in followers]
         if len(set(follower_ids)) != len(follower_ids):
             raise ValueError(f"duplicate robot_id among followers: {follower_ids}")
@@ -118,6 +123,8 @@ class Relay:
         self._leader_last_error: Optional[str] = None
         self._running = False
         self._leader_connected = False
+        #: D-581 `TrailAnchor` or None (every frame byte for byte).
+        self.anchor = anchor
 
     # --- 수명 --------------------------------------------------------------------
 
@@ -160,6 +167,8 @@ class Relay:
             lane.latest = None   # 멈추기 전 프레임이 resume 뒤에 나가면 안 된다
 
     def resume(self) -> None:
+        if self.anchor is not None:
+            self.anchor.reset()   # a robot whose anchor jumped starts over after the reform
         self._paused = False
 
     @property
@@ -247,8 +256,12 @@ class Relay:
             self._last_seq = seq
         if self._paused:
             return
-        for lane in self._lanes.values():
-            lane.latest = frame        # 깊이 1: 덮는다
+        routed = self.anchor.route(frame) if self.anchor is not None else None
+        for robot_id, lane in self._lanes.items():
+            out = frame if routed is None else routed.get(robot_id)
+            if out is None:
+                continue               # D-581: no anchor for this follower; it holds on silence
+            lane.latest = out          # 깊이 1: 덮는다
             lane.wake.set()
 
     # --- 팔로워 ------------------------------------------------------------------
