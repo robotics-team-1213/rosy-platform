@@ -558,6 +558,8 @@ class RosBridge:
         # D-321 addendum: a lapsed calibration lease emits its expiry even when
         # no screen is reading /robot/state. Rides this timer; commands nothing.
         self._svc.calibration.expire_due()
+        # D-541 6: a trip lease not renewed within ttl_s ends and halts the robot to IDLE.
+        self._svc.trip_lease.expire_due()
         if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
             try:
                 self._svc.fleet_loss.tick()

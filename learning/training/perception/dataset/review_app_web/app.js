@@ -290,6 +290,7 @@ function quickClasses() {
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
     icon.setAttribute('aria-hidden','true');
     actionIcon(icon,icons[cls.name]||'box');
+    if(cls.color) icon.style.color=`#${cls.color.map(v=>v.toString(16).padStart(2,'0')).join('')}`;
     label.textContent=cls.display; key.textContent=cls.hotkey?.toUpperCase()||'·';
     button.append(icon,label,key);
     button.onclick=()=>{if(button.disabled||selected===null)return;

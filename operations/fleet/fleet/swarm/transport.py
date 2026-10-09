@@ -319,6 +319,10 @@ class HttpRobotClient:
         """D-517 4: one movement authority ``{authority_id, leg_id, pose_stamp, until_m, ttl_s}``."""
         return await self._post("/api/v1/line-follow/authority", body)
 
+    async def line_follow_advice(self, body: dict) -> dict:
+        """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
+        return await self._post("/api/v1/line-follow/advice", body)
+
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None) -> dict:

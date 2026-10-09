@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
+    owns_trip_lease,
     require_calibration_owner,
     require_manual_released,
     require_kept,
     localized_start,
+    stop_ends_trip_lease,
     viewer,
 )
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
@@ -44,8 +46,12 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
     require_manual_released(svc)
     if svc.line_follow.active:
-        raise ApiError("LINE_FOLLOW_ACTIVE", 409,
-                       "stop the selected line-follow mode before accepting a navigation goal")
+        # D-541 5: the trip lease owner switches lane -> free with the goal itself
+        # (enter_navigation_mode turns line-follow off); a line-follow OFF first would go IDLE.
+        require_calibration_owner(svc, auth, "navigation")
+        if not owns_trip_lease(svc, auth):
+            raise ApiError("LINE_FOLLOW_ACTIVE", 409,
+                           "stop the selected line-follow mode before accepting a navigation goal")
     TaskKind.NAVIGATE.require(svc.capability)
     require_kept(svc, "navigation.goal_navigation")
     with localized_start(svc):
@@ -72,6 +78,7 @@ def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(op
 def navigation_cancel(auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     svc.nav.cancel(source=f"api:{auth.role}")
+    stop_ends_trip_lease(svc, auth)
     return {"navigation": svc.nav.nav_state.value}
 
 

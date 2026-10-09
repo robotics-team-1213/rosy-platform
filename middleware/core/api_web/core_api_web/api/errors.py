@@ -58,6 +58,9 @@ _HTTP_BY_CODE = {
     "CAPABILITY_WITHHELD": 409,
     # D-321 addendum: another token holds the calibration session lease.
     "CALIBRATION_ACTIVE": 409,
+    # D-541: a Fleet trip lease holds the robot; opening a trip lease on a MANUAL robot.
+    "TRIP_LEASED": 409,
+    "MANUAL_MODE": 409,
     # D-407: a stuck answer for another (or no) stuck, or one the robot refuses now.
     "STUCK_ID_MISMATCH": 409,
     "STUCK_DECISION_REFUSED": 409,
