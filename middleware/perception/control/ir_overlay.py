@@ -126,7 +126,7 @@ def operator_overlay_problem(data) -> Optional[str]:
             return "paint_source must be threshold, denoise or learned"
         if params["paint_source"] != "threshold" and params.get("camera_lane_mode") != "keep":
             return "denoise/learned paint requires camera_lane_mode: keep"
-    # D-NNN: inert unless paint_source is learned, so a later switch back to threshold
+    # D-597: inert unless paint_source is learned, so a later switch back to threshold
     # (Host Agent lane_perception.set keeps the other keys) still leaves a valid file.
     if "learned_paint_target" in params and params["learned_paint_target"] not in LEARNED_PAINT_TARGETS:
         return f"learned_paint_target must be one of {list(LEARNED_PAINT_TARGETS)}"

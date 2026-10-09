@@ -97,7 +97,7 @@ class LineObserverNode(Node):
         # D-408: keep-mode paint source: threshold (default) | denoise | learned (+ denoise fallback).
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
-        # D-NNN: what of the learned model's output becomes paint: its lane_marking classes (default), or
+        # D-597: what of the learned model's output becomes paint: its lane_marking classes (default), or
         # the boundaries of the drivable way through its drivable class (lane_marking when it has none).
         self.declare_parameter('learned_paint_target', 'lane_marking', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)

@@ -20,7 +20,7 @@ import numpy as np
 
 #: D-570: a warped mask is also bounded by the worker clock (a stalled stamp clock is no licence).
 WARP_CLOCK_MARGIN_S = 0.1
-#: learned_paint_target values: the model's lane_marking classes, or its drivable class (D-NNN).
+#: learned_paint_target values: the model's lane_marking classes, or its drivable class (D-597).
 TARGETS = ("lane_marking", "drivable")
 
 

@@ -6,7 +6,7 @@ import math
 import threading
 
 _SOURCES = frozenset({"threshold", "denoise", "learned", "learned_drivable", "denoise_fallback"})
-#: D-NNN: the keeper's drivable-way paint is the learned model too; the API reports it as learned.
+#: D-597: the keeper's drivable-way paint is the learned model too; the API reports it as learned.
 _LEARNED = frozenset({"learned", "learned_drivable"})
 _EMPTY = dict(applied_paint_source=None, applied_model_revision=None, applied_source_age_s=None)
 

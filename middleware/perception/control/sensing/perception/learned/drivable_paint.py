@@ -1,4 +1,4 @@
-"""Subject: the learned drivable region as the lane keeper's paint (keep mode, learned_paint_target drivable).
+"""Subject: the learned drivable region as the lane keeper's paint (D-597; keep mode, learned_paint_target drivable).
 
 The model finds the drivable region; this module finds the way through it and hands the
 keeper the boundaries of that way. Pure numpy, no ROS: the same functions can run where the
@@ -6,9 +6,11 @@ inference runs (robot today, Fleet as a later fallback).
 
 drivable_target   logits -> the robot's own drivable way on the model grid, or None and why.
                   The region is lane_bounded_drivable (D-566 item 4, D-576 boundary rule) from
-                  the model's drivable class. Where it splits into branches (the model labels
-                  every reachable junction branch drivable), the rightmost branch is followed:
-                  D-384 decision 2, keep right when no route says otherwise. Too little of it in
+                  the model's drivable class, without its row-growth clamp: the clamp keeps the
+                  run nearest the middle of the row below (a tie goes left), which would choose
+                  a junction branch against D-384. Where the region splits into branches (the
+                  model labels every reachable junction branch drivable), the rightmost branch
+                  is followed: D-384 decision 2, keep right when no route says otherwise. Too little of it in
                   the near band (DRIVABLE_MIN_FRACTION, the shadow evidence rule) is no target.
 boundary_paint    that way at frame size -> synthetic boundary paint: per row, a strip one painted
                   line wide just outside each side of the way, so the keeper's paint centre lies
@@ -72,10 +74,13 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
     if "drivable" not in roles:
         return None, dict(reason="no_drivable_class", branches=0, near_fraction=0.0)
     labels = logits[0].argmax(axis=0)
+    # `ignore` paint inside the road (crosswalk, speed bump) is road for the way: as a pass-through
+    # only (lane_bounded_drivable through_idxs) it would leave holes that cut the way's rows apart.
+    labels = np.where(np.isin(labels, roles.get("ignore", [])), roles["drivable"][0], labels)
     names = {c.name: c.index for c in classes}
     region = lane_bounded_drivable(
         labels, roles["drivable"][0], roles.get("lane_marking", ()), ignore_top=ignore_top,
-        through_idxs=roles.get("ignore", ()),
+        max_row_growth=math.inf,
         boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
     way, branches = right_branch(region)
     band = way[int(way.shape[0] * (1 - NEAR_FIELD_FRACTION)):]

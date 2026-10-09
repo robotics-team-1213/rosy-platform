@@ -108,7 +108,7 @@ def main(argv=None, run=subprocess.run) -> int:
     apply.add_argument("--paint-motion-compensation", action="store_true",
                        help="learned paint: warp older masks by odometry (D-570)")
     apply.add_argument("--paint-target", choices=LEARNED_PAINT_TARGETS,
-                       help="learned paint: lane_marking classes (default) or the drivable way's boundaries (D-NNN)")
+                       help="learned paint: lane_marking classes (default) or the drivable way's boundaries (D-597)")
     apply.add_argument("--no-debug-overlay", action="store_true")
     clear = sub.add_parser("clear", help="remove the overlay, then restart rosy-camera")
     for command in (apply, clear):
