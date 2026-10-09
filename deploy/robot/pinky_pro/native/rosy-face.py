@@ -715,7 +715,8 @@ class FaceDisplay:
         kind = str(view["stage"]).split(":", 1)[0]
         return {"CORE_READY": "ready", "FAILED": "failed"}.get(kind, "booting")
 
-    def _present(self, view: dict, state: str, core: dict | None, screen: dict | None):
+    @staticmethod
+    def _present(view: dict, state: str, core: dict | None, screen: dict | None):
         """The one record for lamp, bar, expression and sound (core_common.presentation); None on a
         release without it, where the stage-only lamp mapping stands."""
         if presentation is None or robot_state is None:
@@ -724,8 +725,9 @@ class FaceDisplay:
                                     nav_state=view.get("nav_state"), core=core, screen=screen,
                                     battery_percent=view.get("battery_percent"))
 
-    def lamp_pattern_for(self, view: dict, state: str, core: dict | None = None) -> str | None:
-        pres = self._present(view, state, core, None)
+    @staticmethod
+    def lamp_pattern_for(view: dict, state: str, core: dict | None = None) -> str | None:
+        pres = FaceDisplay._present(view, state, core, None)
         return pres.lamp if pres else LAMP_PATTERNS.get(state)
 
     def _announce(self, state: str, pattern: str | None, now: float) -> None:

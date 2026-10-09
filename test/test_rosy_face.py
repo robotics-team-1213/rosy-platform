@@ -1774,7 +1774,7 @@ def _face_loop(module, root, *, gifs=None, logs=None):
     display = module.FaceDisplay(root, lcd=lcd, render=render, battery=battery,
                                  buzzer=module.Buzzer(None, 4, False, lambda _s: None), clock=clock,
                                  wall=lambda: WALL, faces=faces,
-                                 strip=lambda frame, text, tone: (frame, text, tone))
+                                 strip=lambda frame, *bar: (frame, *bar))
     return display, lcd, clock, rendered, opened, lines
 
 
@@ -1824,7 +1824,7 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     display, lcd, _clock, rendered, opened, _lines = _face_loop(module, tmp_path)
 
     assert display.step() is False and rendered == []
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
     for _ in range(5):
         assert display.tick() is True
     # The panel-sized loop keeps every authored frame, then replays.
@@ -1904,7 +1904,7 @@ def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
     clock.now += 1
     _face_inputs(tmp_path)
     display.step()
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
@@ -1957,7 +1957,7 @@ def test_an_expired_or_malformed_peer_approval_is_ignored(tmp_path, change):
 
     display.step()
 
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def test_an_oversized_peer_approval_is_ignored(tmp_path):
@@ -1969,7 +1969,7 @@ def test_an_oversized_peer_approval_is_ignored(tmp_path):
 
     display.step()
 
-    assert display.animating == ("basic", "Waiting", "info")
+    assert display.animating == ("basic", "Waiting", "ok", 80.0, False)
 
 
 def test_the_ap_card_stays_after_core_ready(tmp_path):
@@ -2046,7 +2046,7 @@ def test_the_drive_card_passes_over_the_face_on_the_cadence(tmp_path):
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
     display.step()
-    assert display.animating == ("happy", "Going", "info")
+    assert display.animating == ("happy", "Going", "ok", 80.0, False)
     clock.now += 15  # 21 s after the mode began
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
@@ -2064,7 +2064,7 @@ def test_caution_is_a_strip_on_every_face_frame(tmp_path):
     display.step()
     display.tick()
 
-    assert display.animating == ("basic", "Check the camera cable", "caution")
+    assert display.animating[:3] == ("basic", "Check the camera cable", "caution")
     assert lcd.panels[-1][1:] == ("Check the camera cable", "caution")
 
 
@@ -2077,7 +2077,7 @@ def test_a_handed_over_test_shows_its_strip(tmp_path):
 
     display.step()
 
-    assert display.animating == ("basic", "Testing lamp", "info")
+    assert display.animating[:3] == ("basic", "Testing lamp", "ok")
 
 
 def test_a_missing_gif_is_logged_once_and_never_drawn(tmp_path):
@@ -2178,20 +2178,20 @@ def test_the_peer_request_card_draws_the_ca_digest_the_tablet_asks_for(monkeypat
     assert drawn == [["K7QM  ABC234", "CA 0123 4567 89ab cdef"], ["K7QM  ABC234"]]
 
 
-def test_the_strip_paints_only_its_band():
+def test_the_status_bar_paints_only_its_band():
     import numpy as np
 
     module = _display()
     info_screen = _info_screen()
-    paint = module.strip_painter(info_screen)
+    paint = module.bar_painter(info_screen)
     frame = np.zeros((320, 240, 2), dtype=np.uint8)
 
-    painted = paint(frame, "Charge the battery", "caution")
+    painted = paint(frame, "Charge the battery", "caution", 64.0, True)
 
     changed = np.argwhere((painted != frame).any(axis=2))
     assert changed.size and frame.sum() == 0  # the cached frame is never written
-    band = info_screen.STRIP_HEIGHT
-    # Landscape bottom band -> after the panel's flip and rotation, a band of panel columns.
+    band = info_screen.BAR_HEIGHT
+    # Landscape top band -> after the panel's flip and rotation, a band of panel columns.
     assert changed[:, 1].max() - changed[:, 1].min() < band
 
 
@@ -2377,17 +2377,12 @@ def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
     assert _starts(gpio) == [] and lamp.pattern == "recovering"
 
 
-def test_a_core_common_from_before_d546_still_gets_a_lamp_pattern(tmp_path, monkeypatch):
+def test_a_core_common_without_the_presentation_record_still_gets_a_lamp_pattern(monkeypatch):
     module = _display()
-    seen = []
-
-    def old(state, robot_mode=None, nav_state=None):
-        seen.append((state, robot_mode, nav_state))
-        return "ready"
-    monkeypatch.setattr(module.robot_state, "lamp_pattern", old)
+    monkeypatch.setattr(module, "presentation", None)
     view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
-    assert seen == [("ready", "NAVIGATION", "IDLE")]
+    assert module.FaceDisplay.lamp_pattern_for(view, "caution") == "caution"
 
 
 def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():
