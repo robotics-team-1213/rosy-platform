@@ -185,8 +185,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_012,
-        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        47_327,
+        "split: re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
+        "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
+        "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
+        "presence route and wiring, +13 transport, +10 trip_runner, +4 signals.js presence; console.py "
+        "net -1. No new package owner; the only new robot call is the lease renewal of a goal Fleet "
+        "already sent. The site-map web/server split in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance unchanged, "
+        "measured from 47327. "
+        "Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
         "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
         "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
         "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
