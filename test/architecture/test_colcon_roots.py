@@ -41,6 +41,9 @@ CONSUMERS = {
     "tools/sync_api_restart.sh": r"--base-paths \$COLCON_ROOTS\b",
     "tools/sync_rosy.sh": r"--base-paths \$COLCON_ROOTS\b",
     "tools/sync_rosy_fast.sh": r"--base-paths \$COLCON_ROOTS\b",
+    # D-571 headless Gazebo bench: the runner and its image build gz_sim over the roots.
+    "tools/remote/remote_sim.py": r"--base-paths \$COLCON_ROOTS\b",
+    "deploy/sim/Dockerfile": r"--base-paths \$COLCON_ROOTS\b",
     "deploy/robot/pinky_pro/image/build-native-payload.sh":
         r'(--base-paths "\$\{COLCON_ROOTS\[@\]\}"|--from-paths "\$\{ROSDEP_ROOTS\[@\]\}")',
     # The roots arrive from build-image.sh (--colcon-roots); rosdep runs over the resolver's

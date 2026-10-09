@@ -25,9 +25,9 @@ ENV PYTHONPATH=/opt/rosy-pydeps \
 FROM deps
 WORKDIR /opt/rosy/src
 COPY . .
-RUN . /opt/ros/jazzy/setup.sh \
-    && colcon --log-base /opt/rosy/log build --packages-up-to gz_sim --build-base /opt/rosy/build \
-         --install-base /opt/rosy/install \
+RUN . /opt/ros/jazzy/setup.sh && COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)" \
+    && colcon --log-base /opt/rosy/log build --base-paths $COLCON_ROOTS --packages-up-to gz_sim \
+         --build-base /opt/rosy/build --install-base /opt/rosy/install \
     && rm -rf /opt/rosy/build /opt/rosy/log
 WORKDIR /
 CMD ["bash", "-c", ". /opt/rosy/install/setup.bash && ros2 launch gz_sim gz_multi.launch.py robots:=1 headless:=true"]
