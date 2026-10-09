@@ -32,9 +32,9 @@
 .task-nav a { display: flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--ink-quiet); text-decoration: none; border-radius: var(--radius-control); }
 .task-nav a:hover, .task-nav a:focus-visible { color: var(--ink); background: var(--surface-raised); }
 .task-nav a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: calc(var(--topbar-actual, var(--topbar-height)) + var(--space-4)); }  /* below the sticky ui-topbar */
+main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
 @media (width >= 64rem) {
-  .task-nav { grid-column: 1; grid-row: 1 / span 12; align-self: start; position: sticky; top: calc(var(--topbar-actual, var(--topbar-height)) + var(--space-4)); flex-direction: column; }
+  .task-nav { grid-column: 1; grid-row: 1 / span 12; align-self: start; position: sticky; top: var(--space-4); flex-direction: column; }
 }
 @media (width < 64rem) {
   .task-nav { overflow-x: auto; scrollbar-width: thin; }

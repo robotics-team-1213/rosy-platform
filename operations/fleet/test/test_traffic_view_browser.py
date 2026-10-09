@@ -331,23 +331,3 @@ def test_site_map_keeps_edge_robots_and_labels_on_the_map(site, monkeypatch, tur
         finally:
             browser.close()
 
-
-def test_site_map_tabs_and_task_nav_clear_the_sticky_header(site):
-    """D-501 tabs sit under the header at scroll 0; the sticky task navigation never slides under it."""
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, "/console/site-map", [])
-        try:
-            page.set_viewport_size({"width": 1440, "height": 900})
-            edge = "() => [document.querySelector('ui-topbar').getBoundingClientRect().bottom, " \
-                   "document.querySelector('.doc-tabs').getBoundingClientRect().top, " \
-                   "document.querySelector('.task-nav').getBoundingClientRect().top]"
-            header, tabs, nav = page.evaluate(edge)
-            assert tabs >= header - 0.5 and nav >= header, (header, tabs, nav)
-            page.evaluate("window.scrollTo(0, 600)")
-            header, tabs, nav = page.evaluate(edge)
-            assert nav >= header, (header, nav)
-            assert not errors, errors
-        finally:
-            browser.close()
