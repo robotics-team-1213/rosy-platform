@@ -10,7 +10,7 @@ if str(ROOT / "learning" / "training" / "perception" / "model") not in sys.path:
 import watch  # noqa: E402
 
 CONFIG = "/etc/rosy/model-watch.yaml"
-TOKEN = "/etc/rosy/site/secrets/hf_token"
+TOKEN = "/etc/rosy/site-secrets/hf_token"
 
 
 def _unit(name: str) -> dict[str, list[str]]:
