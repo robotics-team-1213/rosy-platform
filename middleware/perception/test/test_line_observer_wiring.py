@@ -263,7 +263,7 @@ def test_route_prototype_latches_invisible_after_simulation_context_changes():
     tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
                   and n.name == '_on_camera')
-    target, calls, publications, warnings = object(), [], [], []
+    target, calls, publications, qualities, warnings = object(), [], [], [], []
     params = {'require_camera_controls_stable': False, 'camera_lane_mode': 'route_a',
               'camera_ground_source': 'GAZEBO', 'allow_simulation_ground': True,
               'use_sim_time': True, 'camera_bright_threshold': 180,
@@ -273,12 +273,13 @@ def test_route_prototype_latches_invisible_after_simulation_context_changes():
         if params['camera_ground_source'] == 'NOMINAL':
             raise ValueError('missing physical calibration')
         return object()
-    follower = SimpleNamespace(update=lambda *a, **kw: calls.append(a) or target)
+    follower = SimpleNamespace(update=lambda *a, **kw: calls.append(a) or target, last={})
     node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
                            get_logger=lambda: SimpleNamespace(warning=lambda *a, **kw: warnings.append(a)),
                            _camera_controls_stable=True, _paint_worker=None, _route_follower=follower,
                            _ground=ground, _odom_pose=(0., 0., 0.), _odom_stamp=1.,
-                           _publish=lambda _source, value, **kw: publications.append(value),
+                           _publish=lambda _source, value, **kw: (publications.append(value),
+                                                                  qualities.append(kw.get('quality'))),
                            _publish_debug=lambda *a: None)
     namespace = {'Image': object, 'image_msg_to_frame': lambda _: np.zeros((8, 8, 3), np.uint8),
                  'visibility_reason': lambda _: 'usable', 'pose_if_fresh': lambda *a: (0., 0., 0.),
@@ -288,10 +289,14 @@ def test_route_prototype_latches_invisible_after_simulation_context_changes():
     msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=1, nanosec=0)))
     namespace['_on_camera'](node, msg)
     assert publications == [target] and len(calls) == 1
+    follower.last['reason'] = 'washed'
+    namespace['_on_camera'](node, msg)
+    assert publications[-1] is None and qualities[-1] == dict(valid=False, reason='overexposed')
+    follower.last.clear()
     params['camera_ground_source'] = 'NOMINAL'
     namespace['_on_camera'](node, msg)
-    assert publications == [target, None] and len(calls) == 1
+    assert publications == [target, None, None] and len(calls) == 2
     assert node._route_follower is None and warnings
     params['camera_ground_source'] = 'GAZEBO'
     namespace['_on_camera'](node, msg)
-    assert publications == [target, None, None] and len(calls) == 1
+    assert publications == [target, None, None, None] and len(calls) == 2

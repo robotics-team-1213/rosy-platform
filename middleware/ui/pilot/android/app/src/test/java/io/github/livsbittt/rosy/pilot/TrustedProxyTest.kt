@@ -214,7 +214,7 @@ class TrustedProxyTest {
                     .build()).execute().use { it.code } }
                 assertEquals(502, call())   // 일시 실패 — 배너에 오류 문구
                 assertEquals(200, call())   // 회복 — 배너가 정상 문구로 돌아감
-                assertEquals(listOf("TLS 또는 연결을 확인하세요"), failures)
+                assertEquals(listOf(LINK_LOST), failures)
                 assertEquals(1, recoveries.get())
                 call()                      // 이후 성공은 회복을 중복 알리지 않는다
                 assertEquals(1, recoveries.get())

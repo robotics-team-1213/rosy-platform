@@ -33,13 +33,15 @@ export function createPasswordLogin(host, {onChange = () => {}} = {}) {
   let locked = true, firstRefresh = true;
 
   async function refresh(nowLocked = locked) {
+    const wasLocked = locked;
     locked = nowLocked;
+    if (wasLocked && !locked) document.getElementById("token-access")?.removeAttribute("open");
     let connection = null, session = null;
     try { connection = await request("/api/fleet/auth/connection"); } catch (_err) { /* older Fleet */ }
     try { session = await request("/api/fleet/auth/session"); } catch (_err) { /* 401: no cookie session */ }
     const cookie = session?.via === "cookie";
     const offered = connection?.mode !== "development" && connection?.password_login === true;
-    // The token section starts open (sites without login accounts); a login site folds it once.
+    // Keep the token input out of the map after connection; its summary remains available for reconnect.
     if (firstRefresh && offered) document.getElementById("token-access")?.removeAttribute("open");
     firstRefresh = false;
     host.hidden = !cookie && (!offered || !locked);

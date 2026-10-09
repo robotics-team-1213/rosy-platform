@@ -6,9 +6,31 @@
 #   and the secret-scan/scorecard/robot-literal classes followed (36743819104)
 #   because this tier never read those files. Measured cost: ~3 min on Windows.
 # 2026-10-03 (D-436): + affected tier after the fast suites.
+# 2026-10-08: pytest runs on the model PC, then the AI PC (tools/remote/remote_pytest.py),
+#   on the commit being pushed; an unavailable test host stops the push.
 # Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+# Git passes `<remote> <url>` and `<local ref> <local sha> <remote ref> <remote sha>`
+# lines on stdin. The gate tests that one pushed commit (deletions skipped); a push of
+# several different commits is refused. Without the two arguments (a manual
+# `git show ...:pre-push | bash`) stdin is the script, and HEAD is tested.
+PUSH_SHA=""
+if [ $# -ge 2 ]; then
+  while read -r _ local_sha _ _; do
+    case "$local_sha" in
+      *[!0]*)
+        # An annotated tag pushes a tag object; compare the commit it names.
+        local_sha=$(git rev-parse --verify -q "$local_sha^{commit}" 2>/dev/null || echo "$local_sha")
+        if [ -n "$PUSH_SHA" ] && [ "$PUSH_SHA" != "$local_sha" ]; then
+          echo "[pre-push] this push carries several commits ($PUSH_SHA, $local_sha); the gate tests one. Push one ref at a time." >&2
+          exit 1
+        fi
+        PUSH_SHA="$local_sha" ;;
+    esac
+  done
+fi
+PUSH_SHA="${PUSH_SHA:-$(git rev-parse HEAD)}"
 # Git exports repository-local variables to hooks. Clear them after locating
 # this checkout: gate tests create foreign repositories, where inherited
 # GIT_DIR/GIT_COMMON_DIR override git -C and can mutate this repository.
@@ -67,9 +89,9 @@ if out:
     sys.exit(1)
 EOF
 
-# D-430 §5: opt-in early warning only. It never blocks the push; CI enforces it.
-echo "[pre-push] Safety-Review trailers (warning only)"
-"$PY" tools/harness/safety_review.py "$(git merge-base HEAD origin/main 2>/dev/null || true)" HEAD --warn-only
+# D-430 §5: local early warning for this tip; CI checks the complete pushed range.
+echo "[pre-push] Safety-Review trailer on pushed tip (warning only)"
+"$PY" tools/harness/safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only
 
 FAST_SUITES=(
   test/test_harness_contracts.py
@@ -88,21 +110,22 @@ FAST_SUITES=(
   middleware/core/gateway/test/test_triage_contract.py
   middleware/core/gateway/test/test_host_status_summary.py
 )
-echo "[pre-push] fast contract suites"
-"$PY" -m pytest "${FAST_SUITES[@]}" -q
-
-# D-436: affected tier on top of the fast gate above (whose contents stay as
-# they are). Tests of the modules this branch touches, their direct reverse
+# D-436: affected tier on top of the fast suites (whose contents stay as they
+# are). Tests of the modules this branch touches, their direct reverse
 # dependents, the tests naming the changed paths and the guard set. When the
 # selector escalates to FULL (shared foundation, CI/test config, unmapped file)
-# `--run` still runs only the guards and the suites mapped from the changed
-# files (owning module, direct reverse dependents, referencing tests): the
-# full suite runs on GitHub Actions runners (ci.yml), never on this machine.
-AFFECTED_BASE="$(git merge-base HEAD origin/main 2>/dev/null || echo main)"
-echo "[pre-push] affected tier (D-436, base ${AFFECTED_BASE})"
-# --skip: the fast suites above (most of the guard set) already ran; do not run them twice.
+# only the guards and the suites mapped from the changed files (owning module,
+# direct reverse dependents, referencing tests) run: the full suite runs on
+# GitHub Actions runners (ci.yml), never here.
+AFFECTED_BASE="$(git merge-base "$PUSH_SHA" origin/main 2>/dev/null || echo main)"
+# --skip: the fast suites (most of the guard set) run first; do not run them twice.
 AFFECTED_SKIP=()
 for suite in "${FAST_SUITES[@]}"; do AFFECTED_SKIP+=(--skip "$suite"); done
-"$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --run "${AFFECTED_SKIP[@]}"
+echo "[pre-push] fast contract suites, then affected tier (D-436, base ${AFFECTED_BASE}), commit ${PUSH_SHA:0:10}"
+# --require-host: a local run would test this working tree, not the pushed commit, so no
+# reachable test host fails the push unless ROSY_TEST_LOCAL=1 is set on purpose.
+"$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --head "$PUSH_SHA" --json \
+  | "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" --require-host --affected-json - \
+      "${AFFECTED_SKIP[@]}" -- "${FAST_SUITES[@]}"
 
 echo "[pre-push] fast gate green"

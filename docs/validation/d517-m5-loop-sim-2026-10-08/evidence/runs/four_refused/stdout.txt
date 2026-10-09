@@ -1,0 +1,18 @@
+start a started None
+start b started None
+start c started None
+Traceback (most recent call last):
+  File "/home/rosy/rosy-test/src/d517-m5/docs/validation/d517-m5-loop-sim-2026-10-08/evidence/m5_loop.py", line 385, in <module>
+    main()
+  File "/home/rosy/rosy-test/src/d517-m5/docs/validation/d517-m5-loop-sim-2026-10-08/evidence/m5_loop.py", line 274, in main
+    view = start(runner, store, fleet, rid, (where, None))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rosy/rosy-test/src/d517-m5/docs/validation/d517-m5-loop-sim-2026-10-08/evidence/m5_loop.py", line 231, in start
+    return asyncio.get_event_loop().run_until_complete(runner.start(plan_id, "m5"))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/rosy/rosy-test/src/d517-m5/operations/fleet/fleet/server/trip_runner.py", line 167, in start
+    raise TripError(422, "TRIP_CONVOY_LOOP_FULL" if leader else "TRIP_LOOP_FULL", full)
+fleet.server.trip_ports.TripError: TRIP_LOOP_FULL

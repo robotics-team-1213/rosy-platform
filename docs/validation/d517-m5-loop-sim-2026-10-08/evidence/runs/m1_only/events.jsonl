@@ -1,0 +1,2 @@
+{"t": 20.5, "kind": "end", "robot": "a", "state": "stopped", "reason": "stall"}
+{"t": 20.5, "kind": "end", "robot": "b", "state": "stopped", "reason": "stall"}

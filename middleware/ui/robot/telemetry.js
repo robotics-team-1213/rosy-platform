@@ -98,14 +98,21 @@ let triageSeen = {};
 // 라인 추종 버튼 상태 — 대기 중 플래그는 셸의 클릭 핸들러가 바꾼다.
 export const lineFollow = { pending: false };
 
+export function lineFollowStartReady() {
+  return ["operator", "administrator"].includes(session.role)
+    && session.capabilities?.teleop === true
+    && session.capabilities?.runtime?.drive === "ready"
+    && session.robotState?.safety?.estop === false;
+}
+
 export function updateLineFollowButtons() {
-  const navigationAvailable = session.capabilities?.navigation?.goal_navigation === true;
-  const emergency = session.robotState?.safety?.estop === true;
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
     const enabling = button.dataset.lineMode !== "OFF";
     // 요청 중(lineFollow.pending)은 짧은 잠금이라 사유 없이 끈다.
-    setOff(button, lineFollow.pending || (enabling && (!navigationAvailable || emergency)),
-      !enabling || lineFollow.pending ? "" : emergency ? "비상정지 중" : "내비게이션을 쓸 수 없음");
+    setOff(button, lineFollow.pending || (enabling && !lineFollowStartReady()),
+      !enabling || lineFollow.pending ? "" : !["operator", "administrator"].includes(session.role) ? "운용자 권한 필요"
+        : session.robotState?.safety?.estop === true ? "비상정지 중"
+          : session.robotState?.safety?.estop !== false ? "비상정지 상태 확인 필요" : "구동 준비 확인 필요");
   });
 }
 

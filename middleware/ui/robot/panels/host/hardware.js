@@ -1,7 +1,6 @@
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
-// D-204 device surface: read-only view of the board probe. Refresh asks CORE
-// to signal the root probe; the browser never inspects device nodes itself.
+// D-204 device surface: CORE owns the board probe and short hardware test.
 
 const REFRESH_MS = 10_000;
 
@@ -71,13 +70,23 @@ export function mount(el, ctx) {
   setOff(refresh, ctx.role !== "administrator", "관리자 권한 필요");
   refresh.setAttribute("aria-label", "보드 장치 점검 요청");
   refresh.setAttribute("aria-describedby", actionNote.id);
+  const lampTest = node("ui-button", "hardware-lamp-test", "후면 램프 자가 시험");
+  lampTest.setAttribute("kind", "quiet");
+  lampTest.type = "button";
+  lampTest.setAttribute("aria-describedby", actionNote.id);
+  setOff(lampTest, true, "램프 상태 확인 중");
   actionNote.hidden = true;
 
-  el.append(head, facts, note, list, refresh, actionNote);
+  el.append(head, facts, note, list, refresh, lampTest, actionNote);
+
+  let lampAvailable = false;
+  let requestedLamp = null;
 
   function render(payload) {
     const dd = facts.querySelector("dd");
     if (payload?.available !== true) {
+      lampAvailable = false;
+      setOff(lampTest, true, "램프 상태 확인 필요");
       facts.dataset.available = "false";
       facts.dataset.stale = "false";
       dd.textContent = "측정 결과 없음";
@@ -90,6 +99,18 @@ export function mount(el, ctx) {
     facts.dataset.stale = payload.stale === true ? "true" : "false";
     dd.textContent = measuredText(payload);
     list.replaceChildren(...(payload.devices || []).map(deviceRow));
+    const lamp = (payload.devices || []).find((device) => device.id === "lamp");
+    lampAvailable = Boolean(lamp && lamp.state !== "driver_missing");
+    setOff(lampTest, ctx.role !== "administrator" || !lampAvailable,
+      ctx.role !== "administrator" ? "관리자 권한 필요" : "램프 시험 불가");
+    if (requestedLamp && payload.test?.request_id === requestedLamp) {
+      actionNote.hidden = false;
+      actionNote.textContent = payload.test.state === "done"
+        ? `장치 시험 완료 (${requestedLamp}). Rosy Cam 영상에서 몸체를 확인하세요.`
+        : payload.test.state === "failed"
+          ? `램프 시험 실패 (${requestedLamp}): ${payload.test.detail || "장치 결과를 확인하세요."}`
+          : `램프 시험 진행 중 (${requestedLamp}).`;
+    }
     if (payload.stale === true) {
       note.textContent = "오래된 측정 결과입니다. 관리자가 다시 점검을 요청할 수 있습니다.";
     } else if (!(payload.devices || []).length) {
@@ -100,6 +121,8 @@ export function mount(el, ctx) {
   }
 
   function fail(error) {
+    lampAvailable = false;
+    setOff(lampTest, true, "램프 상태 확인 실패");
     facts.dataset.available = "false";
     // Keep the last readout visible, but never let an old response look current.
     facts.dataset.stale = "true";
@@ -133,10 +156,34 @@ export function mount(el, ctx) {
   };
   refresh.addEventListener("click", onRefresh);
 
+  const onLampTest = async () => {
+    if (disposed || !lampAvailable || ctx.role !== "administrator" || lampTest.disabled) return;
+    setOff(lampTest, true, "시험 요청 중");
+    actionNote.hidden = false;
+    actionNote.textContent = "램프 자가 시험을 요청하고 있습니다.";
+    try {
+      const reply = await ctx.api("/api/v1/host/hardware/test", {
+        method: "POST", body: JSON.stringify({device: "lamp"}),
+      });
+      if (disposed) return;
+      requestedLamp = reply.accepted === true ? reply.request_id : null;
+      actionNote.textContent = requestedLamp
+        ? `램프 시험 요청 ${requestedLamp} 접수. 장치 완료와 Rosy Cam 영상을 확인하세요.`
+        : (reply.detail || "램프 시험 요청이 접수되지 않았습니다.");
+    } catch (error) {
+      if (!disposed) actionNote.textContent = `램프 시험 요청 실패: ${error.message}`;
+    } finally {
+      if (!disposed) setOff(lampTest, ctx.role !== "administrator" || !lampAvailable,
+        ctx.role !== "administrator" ? "관리자 권한 필요" : "램프 시험 불가");
+    }
+  };
+  lampTest.addEventListener("click", onLampTest);
+
   const stop = ctx.store.poll("/api/v1/host/hardware", REFRESH_MS, render, fail);
   return () => {
     disposed = true;
     stop();
     refresh.removeEventListener("click", onRefresh);
+    lampTest.removeEventListener("click", onLampTest);
   };
 }

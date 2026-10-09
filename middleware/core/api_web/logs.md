@@ -703,6 +703,21 @@
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
 
+## 2026-10-08 · uncommitted · fix(api): 지도 ID를 수신 격자와 함께 응답
+- 변경: `GET /api/v1/map`의 기존 `map_id` 필드는 스냅숏에 저장된 ID를 우선한다. 지도 수신 뒤 로봇 상태 ID만 바뀌면 이전 격자에 새 ID를 덧씌우지 않는다. 응답 스키마는 그대로다.
+- 증거: gateway `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL API 의미 근거 추가. 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(api): 마지막 계획 경로 수신 근거 추가
+- 변경: `GET /api/v1/navigation/path`가 마지막 경로의 점과 선택 map ID·frame ID·서버 수신 나이를 응답한다. 최초 수신 전 `{poses: []}`은 그대로이며 현재 목표와의 동일성은 주장하지 않는다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 응답 근거 추가. 현재 목표 식별과 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(api): SLAM 맵핑 세션 읽기
+
+- 변경: `GET /api/v1/navigation/state`에 CORE가 보유한 `mapping_active`를 읽기 전용으로 추가한다. 이는 수락된 세션 플래그이지 slam_toolbox 실행 증명이 아니다.
+- 증거: gateway readiness/API 시험과 로봇 브라우저 시험 12 passed, 계약·패키지 24 passed, [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 세션 readback 근거 추가. 실제 SLAM 지도 갱신과 계약 착지 합의는 HOLD.
 ## 2026-10-08 · uncommitted · feat(api): `POST /line-follow/junction` action `bend`와 능력 `lane_bend` (v1.137)
 - 변경: `LineJunctionRequest` action `bend`, 선택 필드 `bend_in_m`(0, 2]·`bend_tol_m`(0, 0.30]·`bend_radius_m`(0, 0.5]. `bend`는 `turn_deg`(0 < |θ| ≤ 90)·`map_id`·세 필드가 필수이고 창·pivot·advance와 함께 둘 수 없으며, 세 필드는 다른 action에 둘 수 없다(400). `system.py` 능력 `lane_bend`(line-follow 매니저의 `supports_lane_bend`). API Ref v1.137, `app.py` 버전.
 - 증거: `test_line_junction_api.py::test_d507_bend_fields_validation`, `test_capabilities_controls.py` `lane_bend` 참·line-follow 없으면 거짓. gateway 2266 passed.
@@ -735,3 +750,55 @@
 - 변경: main 병합으로 v1.142가 D-507 보충(굽이 지시)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.143으로 옮겼다. 앞 두 항목의 v1.142는 그 때의 번호다. `base_velocity` 능력은 `lane_bend`와 `line_follow_authority`·`line_follow_authority_required`를 함께 낸다.
 - 증거: `test/test_line_follow_contract_docs.py`, fleet 버전 핀 시험, `test_capabilities_controls.py`.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(api): API v1.150 표기 정렬
+
+- 변경: API 팩토리 설명과 Fleet·계약 테스트의 버전 핀을 v1.150으로 맞췄다.
+- 증거: 관련 테스트 94개 통과, known_failures 0 NEW.
+- gate 변화: 없음.
+
+
+## 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
+- 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 브라우저 근거 추가. DEVICE/FIELD 수용 근거는 아님.
+## 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
+- 변경: `straight` + 기대 창일 때만 받는 `lane_turn_deg`(−360…360, 왼쪽 +). 아니면 400 `VALIDATION_ERROR`. `_expect` 로 CORE에 넘긴다
+- 증거: `test_line_junction_api.py::test_lane_turn_deg_belongs_to_a_straight_with_a_window` (모델 PC)
+- gate 변화: 없음(SOURCE)
+- 결정: 옛 CORE는 pydantic 기본 `extra=ignore` 로 필드를 버리고 v1.148 정지를 유지한다(능력 플래그 없이 하위 호환)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존
+
+- 변경: 실제 CORE 브라우저 테스트의 요청 중계가 비용 지도 `scope=global` 쿼리를 보존하고, 지도 미수신 상태가 안정된 뒤 화면을 촬영한다. 제품 API 동작은 변경하지 않았다.
+- 증거: [Console 지도 미수신 상태 검증](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 캡처 정합성. DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회
+- 변경: CORE의 장치 결과 조회가 identify_blue/identify_amber를 유효한 시험 동작으로 받아 실패·거절 결과도 표시한다. 사람 확인 대상은 기존 buzzer/lamp로 유지한다.
+- 증거: test_host_hardware.py 68 passed, 1 skipped; known_failures 0 NEW (Windows 보조 증거).
+- gate 변화: 없음. 장치 배포·영상상 점멸 확인은 별도.
+- 결정: D-247, D-472.
+- 교훈: 요청 수락과 실제 점멸·결과 조회는 서로 다른 판정이다.
+
+## 2026-10-09 · uncommitted · fix(api): Fleet 공개 신원 조회 예산 분리
+- 변경: identity는 출처별 300회/분, 승인 challenge/session은 기존 30회/분으로 분리한다. 매 요청의 TLS·신원 검사는 유지한다.
+- 증거: 현장 Fleet 컨테이너에서 8회 조회 중 429 재현; 35회 연속 identity 회귀 테스트를 먼저 실패시킨 뒤 통과.
+- gate 변화: SOURCE 계약 보강. 설치·현장 연속 연결·이동은 별도.
+- 결정: D-533.
+- 교훈: 공개 신원 확인 빈도를 승인 증명 한도로 묶으면 안전한 재확인이 관제 연결을 끊는다.
+## 2026-10-09 · uncommitted · fix(core): LCD hand-over에 CA 확인 값 (D-483 보완)
+- 변경: `approval.json`에 검증된 `tls_ca_sha256`을 함께 쓴다(첫 검증 성공 뒤 캐시). 처음 연결하는 요청 기기는 승인 뒤 이 값을 대조해야 CA를 고정하는데, 화면 코드 경로에는 대조할 화면이 없었다. 코드 행 형식·0640·로그 금지는 그대로다.
+- 증거: `test_peer_pairing.py` 44 passed(새 시험: hand-over에 CA 값).
+- gate 변화: SOURCE. 로봇 반영은 서명 릴리스 필요.
+
+## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)
+- 원인: `confirm`이 `approved_at`과 `expires_at`을 시계 두 번으로 만들어 차이가 168 h를 몇 µs 넘었고, `Relationship` 모델이 모든 화면 코드 행을 거부했다(`RepositoryDenied` → `Refused` → 409). 시험은 고정 시계라 보지 못했다. 8kcn(055)의 overlay 사본으로 같은 오류를 재현했다.
+- 변경: 시계 한 번(`now`)으로 두 값을 만든다. 움직이는 시계 시험 추가(되돌리면 실패 확인).
+- 증거: `test_peer_pairing.py` 46 passed. 실기 반영은 서명 릴리스 필요.
+
+## 2026-10-09 · uncommitted · docs(core): 화면 코드 승인 409 수정의 gate 기록 보완 (D-483)
+- 변경: 823847295의 "화면 코드 승인이 실기에서 항상 409였다" 기록에 빠진 gate 항목을 보완한다. `PeerReceiver.confirm`이 승인 시각과 만료 시각을 한 번의 시계 읽기로 정해 168 h 모양 검사를 통과한다.
+- 증거: test_peer_pairing.py의 움직이는 시계 시험(수정 전 실패), 8kcn 055 코드와 그 오버레이 사본으로 같은 traceback 재현.
+- gate 변화: SOURCE. 실기 확인은 릴리스 056 이후 DEVICE(9dfk·8kcn 화면 코드 승인).

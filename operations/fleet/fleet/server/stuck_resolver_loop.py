@@ -29,7 +29,7 @@ class StuckResolverLoop:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
-        #: D-494 5: a robot on a running trip gets no automatic answer (app.py sets it).
+        #: D-517 5 (M4): a robot on a running trip gets stopping answers only (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         self.wake = asyncio.Event()
 
@@ -40,7 +40,8 @@ class StuckResolverLoop:
                                   escalated=previous.get("escalated") or "human_claimed")
 
     async def run_once(self) -> None:
-        robots = [row for row in (await self._snapshot())["robots"] if not self.trip_busy(row["robot_id"])]
+        robots = [{**row, "trip": True} if self.trip_busy(row["robot_id"]) else row
+                  for row in (await self._snapshot())["robots"]]
         now = self._clock()
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         for action in self._resolver.step(now, robots):

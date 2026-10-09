@@ -1,0 +1,3 @@
+# D-530 + D-524: the login user (the guard forced command) may run only the Service Control helper.
+# The helper owns the closed action and unit sets; it reads its role from /etc/rosy/host-control/role.
+@LOGIN@ ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control

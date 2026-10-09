@@ -1,8 +1,12 @@
 """Stored dataset -> GPU train -> ONNX -> strict intake -> canonical READY.
 
+The owner-injected drivable_head recipe exports a candidate only; it never
+calls intake, READY publication, or device delivery.
+
 Usage: train_job.py config.json --out <new-or-resumable-job-dir>
 Config: store, dataset ('name@sha'), gate, replay_root, intake_out, camera_profile (provenance JSON),
-training {seed, epochs, lr, batch_size, base, recipe: baseline|enhanced}.
+training {seed, epochs, lr, batch_size, base, recipe: baseline|enhanced}, or
+owner-only drivable_head with parent_model, parent_torchscript and ignore_top.
 No device command or watcher invocation. Upstream harvest/curation remains separate.
 """
 import argparse
@@ -34,6 +38,48 @@ def check_coverage(classes, train_counts, val_counts):
     if missing:
         raise JobError(f"validation classes missing in training: {missing}")
     return [c["name"] for c, t, v in zip(classes, train_counts, val_counts) if t == v == 0]
+
+
+def validate_drivable_parent(folder, torchscript, dataset_classes):
+    """Bind real parent bytes and output order before a drivable candidate can train."""
+    from control.sensing.perception.learned.manifest import ManifestError, load_manifest
+    from review_provenance import _stable_bytes
+
+    folder, torchscript = Path(folder).absolute(), Path(torchscript).absolute()
+    try:
+        manifest_path = folder / "model_manifest.json"
+        manifest_raw = _stable_bytes(manifest_path)
+        model = load_manifest(manifest_path)
+        if (model.task != "lane_seg" or model.backend != "onnx"
+                or not model.model_revision.startswith("lane-seg-")
+                or model.input.shape != (1, 3, 240, 320)):
+            raise JobError("parent must be a fixed-size lane-seg ONNX model")
+        onnx = model.onnx_file("fp32")
+        files = [manifest_path, *(folder / item.name for item in model.files), torchscript]
+        contents = {path: _stable_bytes(path) for path in files}
+        for item in model.files:
+            if hashlib.sha256(contents[folder / item.name]).hexdigest() != item.sha256:
+                raise JobError(f"parent {item.name} sha256 differs from manifest")
+        if contents[manifest_path] != manifest_path.read_bytes():
+            raise JobError("parent manifest changed during validation")
+    except (ManifestError, OSError, ValueError) as exc:
+        raise JobError(f"drivable parent invalid: {exc}") from exc
+    expected = [(c.index, c.name, c.role) for c in model.classes]
+    actual = [(c["index"], c["name"], c["role"]) for c in dataset_classes]
+    if (not expected or expected[0][2] != "background"
+            or any(role == "drivable" for _, _, role in expected)
+            or len(actual) != len(expected) + 1
+            or actual[:-1] != expected
+            or actual[-1][0] != len(expected) or actual[-1][2] != "drivable"):
+        raise JobError("drivable dataset class order must match parent plus one final drivable class")
+    return {"lineage": {"model_revision": model.model_revision,
+                        "onnx_sha256": hashlib.sha256(contents[onnx]).hexdigest(),
+                        "torchscript_sha256": hashlib.sha256(contents[torchscript]).hexdigest()},
+            "onnx": onnx, "torchscript": torchscript,
+            "files": files, "hashes": {path: hashlib.sha256(raw).hexdigest()
+                                       for path, raw in contents.items()},
+            "input": {"color": model.input.color, "scale": model.input.scale,
+                      "mean": model.input.mean, "std": model.input.std}}
 
 
 def snapshot_intake(artifact, report):
@@ -149,12 +195,25 @@ def _run(config, out, indexed_review, admission_stack):
     if set(config) != required:
         raise JobError(f"config must contain exactly {sorted(required)}")
     training = config["training"]
-    if set(training) != {"seed", "epochs", "lr", "batch_size", "base", "recipe"}:
-        raise JobError("training needs seed/epochs/lr/batch_size/base/recipe")
-    for name in ("seed", "epochs", "batch_size", "base"):
+    drivable_head = training.get("recipe") == "drivable_head"
+    keys = ({"seed", "epochs", "lr", "batch_size", "recipe", "parent_model",
+             "parent_torchscript", "ignore_top"} if drivable_head else
+            {"seed", "epochs", "lr", "batch_size", "base", "recipe"})
+    if set(training) != keys:
+        raise JobError(f"training needs exactly {sorted(keys)}")
+    for name in (("seed", "epochs", "batch_size") if drivable_head else
+                 ("seed", "epochs", "batch_size", "base")):
         if type(training[name]) is not int or training[name] < (0 if name == "seed" else 1):
             raise JobError(f"invalid training {name}")
-    if training["recipe"] not in ("baseline", "enhanced") or training["base"] not in (8, 16):
+    if drivable_head:
+        if (type(training["ignore_top"]) is not int or not 0 <= training["ignore_top"] < 240
+                or any(not isinstance(training[name], str) or not training[name].strip()
+                       for name in ("parent_model", "parent_torchscript"))):
+            raise JobError("drivable_head needs parent paths and ignore_top in [0,239]")
+        from review_admission import IndexedReview
+        if type(indexed_review) is not IndexedReview:
+            raise JobError("independent indexed review training admission required")
+    elif training["recipe"] not in ("baseline", "enhanced") or training["base"] not in (8, 16):
         raise JobError("recipe baseline/enhanced, base 8/16 required")
     if type(training["lr"]) not in (int, float) or not 0 < training["lr"] < 1:
         raise JobError("learning rate must be finite in (0,1)")
@@ -176,6 +235,8 @@ def _run(config, out, indexed_review, admission_stack):
     indexed = (dataset_doc.get("builder") == "review_dataset.py (D-464)"
                or any(isinstance(source, dict)
                       and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources))
+    if drivable_head and not indexed:
+        raise JobError("drivable_head requires an indexed dataset")
     if indexed:
         from review_admission import IndexedReview
         if type(indexed_review) is not IndexedReview:
@@ -191,6 +252,10 @@ def _run(config, out, indexed_review, admission_stack):
     camera = json.loads(camera_raw)
     if not isinstance(camera.get("accepted"), bool):
         raise JobError("camera provenance must state accepted boolean explicitly")
+    if drivable_head and camera["accepted"] is not True:
+        raise JobError("drivable_head requires accepted camera provenance")
+    parent = (validate_drivable_parent(training["parent_model"], training["parent_torchscript"],
+                                      dataset_doc["classes"]) if drivable_head else None)
     source_files = [HERE / name for name in
                     ("train_job.py", "job_state.py", "rosy_lane_model.py", "recipes.py", "export_cell.py")]
     source_files += [PERCEPTION / "model" / name for name in ("intake.py", "intake_eval_gate.py")]
@@ -200,15 +265,22 @@ def _run(config, out, indexed_review, admission_stack):
                                                   "review_provenance.py", "review_authority.py",
                                                   "review_eval_companion.py")]
         source_files += [PERCEPTION / "dataset" / "build.py"]
+    if drivable_head:
+        source_files += [HERE / "drivable_head.py"]
     inputs = {"config": config, "dataset_sha": dataset.name, "eval_sha": evalset.name,
               "gate_sha": hashlib.sha256(gate_raw).hexdigest(), "camera_sha": hashlib.sha256(camera_raw).hexdigest(),
               "source_files": {p.relative_to(ROOT).as_posix(): sha(p) for p in source_files}}
+    if parent is not None:
+        inputs["parent_lane_model"] = parent["lineage"]
+        inputs["parent_files"] = {str(path): digest for path, digest in parent["hashes"].items()}
     admitted = None
     if indexed:
         expected_files = {gate_path: inputs["gate_sha"], profile: inputs["camera_sha"],
-                          **{ROOT / relative: digest for relative, digest in inputs["source_files"].items()}}
+                          **{ROOT / relative: digest for relative, digest in inputs["source_files"].items()},
+                          **({} if parent is None else parent["hashes"])}
         admitted = admission_stack.enter_context(indexed_review.open(
-            config, dataset, evalset, source_files, expected_file_hashes=expected_files))
+            config, dataset, evalset, source_files + ([] if parent is None else parent["files"]),
+            expected_file_hashes=expected_files))
         inputs["indexed_review"] = admitted.evidence
         dataset, gate_path = admitted.dataset, admitted.gate_path
     def check_indexed():
@@ -216,6 +288,9 @@ def _run(config, out, indexed_review, admission_stack):
             admitted.check()
     out = Path(out).resolve()
     check_indexed()
+    if drivable_head:
+        return _run_drivable_candidate(config, out, dataset, profile, training, parent,
+                                       inputs, check_indexed)
     with Job(out, inputs) as job:
         def train_stage(attempt):
             check_indexed()
@@ -314,6 +389,113 @@ def _run(config, out, indexed_review, admission_stack):
         result["location"] = str(publish_ready(qualified["artifact"], store.root, out.name, before_ready=check_indexed))
         job.finish()
         return result
+
+
+def _run_drivable_candidate(config, out, dataset, profile, training, parent, inputs, check_indexed):
+    """Train an admitted frozen head; leave intake, READY, and device delivery closed."""
+    job = Job(out, inputs)
+    import numpy as np
+    import torch
+    from store import parse_dataset_ref
+    from rosy_lane_model import RosyLaneDataset
+    from drivable_head import (LaneWithDrivable, drivable_target, load_frozen_lane,
+                               train_head, verify_candidate_lane_parity, verify_parent_parity)
+    from export_cell import export
+    from run_log import RunLog
+
+    seed = training["seed"]
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.set_num_threads(4)
+    datasets = [RosyLaneDataset(dataset, split, **parent["input"])
+                for split in ("train", "val")]
+    train_ds, val_ds = datasets
+    if not len(train_ds) or not len(val_ds):
+        raise JobError("both session-level train and val splits required")
+    index = len(train_ds.classes) - 1
+    coverage = {}
+    for split, ds in zip(("train", "val"), datasets):
+        positive = negative = 0
+        for frame in range(len(ds)):
+            _, mask = ds[frame]
+            target, keep = drivable_target(mask, index, ds.ignore_index, training["ignore_top"])
+            positive += int((target.bool() & keep).sum())
+            negative += int((~target.bool() & keep).sum())
+        coverage[split] = {"positive": positive, "negative": negative}
+        if not positive or not negative:
+            raise JobError(f"{split} needs positive and negative drivable pixels below ignore_top")
+    frames = [ds[0][0].unsqueeze(0) for ds in datasets]
+    lane, _ = load_frozen_lane(parent["torchscript"], classes=train_ds.classes[:-1])
+    parent_parity = verify_parent_parity(lane, parent["torchscript"], parent["onnx"],
+                                         frames, ignore_top=training["ignore_top"])
+    check_indexed()
+
+    with job:
+        def train_stage(attempt):
+            check_indexed()
+            attempt_dir = out / f"train-{attempt}"
+            attempt_dir.mkdir(exist_ok=False)
+            with gpu_lease():
+                check_indexed()
+                if not torch.cuda.is_available():
+                    raise JobError("CUDA required")
+                torch.cuda.manual_seed_all(seed)
+                tracker = RunLog(attempt_dir, tensorboard=False)
+                tracker.write_config({**inputs, "training": training,
+                                      "gpu": torch.cuda.get_device_name(0),
+                                      "coverage": coverage, "parent_parity": parent_parity})
+                model = LaneWithDrivable(lane, ignore_top=training["ignore_top"])
+                try:
+                    result = train_head(model, train_ds, val_ds, epochs=training["epochs"],
+                                        lr=training["lr"], batch_size=training["batch_size"],
+                                        device="cuda:0", log=lambda message: print(message, flush=True))
+                    check_indexed()
+                    if result["best_epoch"] is None:
+                        raise JobError("drivable validation has no scored pixels")
+                    for row in result["history"]:
+                        tracker.on_epoch(row)
+                    checkpoint = attempt_dir / "head.pt"
+                    torch.save(model.drivable.cpu().state_dict(), checkpoint)
+                    metrics = attempt_dir / "metrics.json"
+                    metrics.write_text(json.dumps({**result, "coverage": coverage,
+                                                   "parent_parity": parent_parity}, allow_nan=False),
+                                       encoding="utf-8")
+                    tracker.finish({"status": "candidate_trained", "best_epoch": result["best_epoch"]})
+                    return receipt({"checkpoint": str(checkpoint), "metrics": str(metrics)},
+                                   [checkpoint, metrics, attempt_dir / "config.json"])
+                finally:
+                    tracker.close()
+        trained = job.step("train", train_stage)
+
+        def export_stage(attempt):
+            check_indexed()
+            metrics = json.loads(Path(trained["metrics"]).read_text(encoding="utf-8"))
+            frozen, _ = load_frozen_lane(parent["torchscript"], classes=train_ds.classes[:-1])
+            model = LaneWithDrivable(frozen, ignore_top=training["ignore_top"])
+            model.drivable.load_state_dict(torch.load(trained["checkpoint"], map_location="cpu",
+                                                      weights_only=True))
+            artifact = out / f"export-{attempt}"
+            doc = export(model, artifact, classes=train_ds.classes, **parent["input"],
+                         dataset_repo="store:" + parse_dataset_ref(config["dataset"])[0],
+                         dataset_revision=dataset.name,
+                         camera_profile_revision="training-provenance-" + sha(profile),
+                         trainer="rosy-frozen-drivable-head", revision_prefix="v13-drivable",
+                         parent_lane_model=parent["lineage"],
+                         val_iou={"drivable": metrics["val_drivable_iou_all"]},
+                         experiment={"tracker": "local", "run_id": out.name,
+                                     "path": "jobs/" + out.name})
+            candidate_parity = verify_candidate_lane_parity(parent["onnx"],
+                artifact / "model.onnx", frames, ignore_top=training["ignore_top"])
+            proof = artifact / "candidate_parity.json"
+            proof.write_text(json.dumps(candidate_parity, sort_keys=True) + "\n", encoding="utf-8")
+            check_indexed()
+            return receipt({"artifact": str(artifact), "revision": doc["model_revision"]},
+                           [artifact / "model.onnx", artifact / "model_manifest.json", proof])
+        exported = job.step("export", export_stage)
+        check_indexed()
+        job.finish("candidate")
+        return {**exported, "status": "candidate"}
 
 
 def main():

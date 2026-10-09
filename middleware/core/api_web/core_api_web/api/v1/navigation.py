@@ -79,6 +79,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
     readiness = svc.readiness.snapshot()
     return {
         "navigation": svc.nav.nav_state.value,
+        "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
         "readiness": {
             "required": readiness.required,
@@ -91,7 +92,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
 
 @navigation_router.get("/navigation/path")
 def navigation_path(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return {"poses": svc.maps.get_path()}
+    return svc.maps.get_path_snapshot()
 
 
 class InitialPoseRequest(BaseModel):

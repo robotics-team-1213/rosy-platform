@@ -32,3 +32,11 @@ Named at the trip_runner.py re-judge (847 lines, ceiling 600) after D-517 M1a.
 - `server/trip_laps.py`: `_lap_arcs`, `_lap_due`, `_lap_retry_due`, the join/trim/hold part of `_next_lap`, `_from`, `_dropped`, `_joined`; pure on `LiveTrip` and plans, no robot calls.
 - `server/trip_halts.py`: `_halt_robot`, `_restart_halts`, `_halt_restarted` and the restart list, through the junction/cancel ports only.
 - `_traffic_holds` and the tick's pinned/step block move into `lane_traffic.TrafficService`. trip_runner keeps start, cancel, tick, `_step*` and replan, about 670 lines. Re-judge after the move.
+
+## Lane traffic seam (2026-10-08)
+
+- New subpackage `fleet/traffic/`: `routing/blocks.py`, `server/lane_traffic.py`, `server/trip_authority.py` (about 836 lines). trip_runner is the only code that imports them.
+- Register `fleet/fleet/traffic` in `SIZE_UNITS`. Later D-517 convoy and grant code goes there, not into server/ or routing/.
+- Allowed imports out of the subpackage: `routing.graph`, `routing.execute.arc_id`, `server.trip_ports`, `localization.map_pose`. Nothing in traffic/ may import trip_runner.
+- The move does not change behaviour. Do it before D-517 M4, then re-judge. Decide then whether `server/traffic_reservations.py` (no production importer) moves in or retires.
+- Status 2026-10-08: applied as a pure move (`git mv`, no shim). Names kept: `fleet/traffic/blocks.py`, `lane_traffic.py`, `trip_authority.py`. `fleet/fleet/traffic` is in `SIZE_UNITS` at 867; the fleet package base dropped by the 863 moved lines. `server/traffic_reservations.py` stays in server/ until the M4 re-judge.

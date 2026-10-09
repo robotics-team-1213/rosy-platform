@@ -1,0 +1,50 @@
+{
+ "results": [
+  {
+   "case": "NE",
+   "index": 0,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 2,
+    "state": "armed"
+   },
+   "result": "stopped",
+   "final_state": "HOLD",
+   "final_reason": "lane_arc_edge",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 2,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 1,
+    "from_place_id": "NE",
+    "end_place_id": "NW",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3722,
+    "travelled_m": 0.3733,
+    "state": "stopped",
+    "reason": "lane_arc_edge",
+    "ir_correction": {
+     "side": "right",
+     "phase": "level",
+     "away_m": 0.1215,
+     "level_m": 0.0558,
+     "used": true
+    }
+   },
+   "start_dr": -0.02051277512023661,
+   "end_dr": 0.0560107089340624,
+   "max_abs_dr": 0.06456819381700873,
+   "flow": 0.07652348405429901,
+   "n": 122,
+   "elapsed": 19.423
+  }
+ ],
+ "capability_at_end": true
+}

@@ -18,13 +18,11 @@ from fleet.routing.trip import PlanRequest, plan_trip
 MAX_TURN_DEG = 150.0
 #: D-495 1: CORE's default straight run after a junction turn; Fleet sends it with every turn.
 ADVANCE_M = 0.10
-#: D-507 4 (SIM 4c, 54 runs): onto a bending lane CORE turns this much past the tangent.
-# ponytail: interim from SIM 4c (-6 and -9 tied, the chord was worst); re-sweep after ring
-# following is fixed; calibration candidate.
-TURN_OVERTURN_DEG = 6.0
-#: Chord-to-``advance_m`` angle against the turn above which the outgoing lane bends back
-#: (1 deg of chord is about 2 deg of heading change on an arc).
-BEND_MIN_DEG = 1.0
+#: D-507 4 (lap SIM 3): the incoming lane's end heading from its last two chords of this length,
+#: the last one plus half their difference (a circle's tangent; a straight lane's chord). The
+#: 5 cm lead tangent catches paint noise at a mouth (260919 SW 72.6 deg, this 62.7, the robot
+#: 59-60); on the ring this equals the circle's tangent within 0.1 deg.
+INCOMING_HEADING_M = 0.10
 
 
 def plan_body(plan) -> dict:
@@ -54,19 +52,21 @@ def advance_m(graph: Graph, segments: list, index: int) -> float:
 
 
 def turn_target(graph: Graph, segments: list, index: int) -> float:
-    """D-507 4 (2026-10-08 SIM 4c): the ``turn_deg`` sent with a left/right at the end of segment ``index``.
-
-    The tangent turn ``theta``, plus ``TURN_OVERTURN_DEG`` more in the turn's direction when the
-    outgoing lane bends back against the turn within ``advance_m`` (the 260919 ring entries: a right
-    onto a ring that bends left). The bend is the chord to the ``advance_m`` point against the lane's
-    start tangent (polyline segment headings are too noisy); any other lane gets the tangent.
+    """D-507 4 (lap SIM 3): the ``turn_deg`` sent with a left/right at the end of segment ``index``:
+    from the incoming lane's end heading (``INCOMING_HEADING_M``) to the outgoing lane's map
+    tangent. CORE adds it to the heading it entered the junction with, so the turn ends on the
+    outgoing tangent (lap SIM 2: the 72.6 deg lead tangent and the former 6 deg over-turn left SW
+    12-20 deg outward of the ring).
     """
-    tangent = theta(graph, segments, index)
-    nxt = graph.arcs[arc_id(segments[index + 1])]
-    (px, py), (x, y, _) = nxt.polyline[0], nxt.point_at(advance_m(graph, segments, index))
-    bend = turn_deg(nxt.start_tangent, math.atan2(y - py, x - px))
-    against = -bend * math.copysign(1.0, tangent)
-    return tangent + math.copysign(TURN_OVERTURN_DEG, tangent) if against > BEND_MIN_DEG else tangent
+    lane, step = graph.arcs[arc_id(segments[index])], INCOMING_HEADING_M
+    if lane.length_m < 2 * step:  # review: two chords need 0.20 m of lane
+        return theta(graph, segments, index)
+    x0, y0, _ = lane.point_at(lane.length_m - 2 * step)
+    x1, y1, _ = lane.point_at(lane.length_m - step)
+    x2, y2, _ = lane.point_at(lane.length_m)
+    last = math.degrees(math.atan2(y2 - y1, x2 - x1))
+    heading = last + turn_deg(math.atan2(y1 - y0, x1 - x0), math.atan2(y2 - y1, x2 - x1)) / 2
+    return turn_deg(math.radians(heading), graph.arcs[arc_id(segments[index + 1])].start_tangent)
 
 
 #: D-520 1: CORE takes ``exit_segment`` with 0.5 <= |curvature| <= 5.0 1/m and length in (0, 1.0] m.

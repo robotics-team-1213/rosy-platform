@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.traffic.config import _traffic_authority, _traffic_signals, _traffic_zones
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -564,6 +565,7 @@ def run_console(args: argparse.Namespace) -> None:
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
                      traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
+                     traffic_signals=_traffic_signals(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
@@ -589,42 +591,6 @@ def _trip_config(args):
         return TripConfig.from_mapping(trip)
     except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
         sys.exit(f"trip config: {exc}")
-
-
-def _traffic_zones(args) -> dict:
-    """D-517 3: ``fleet.traffic.zones`` of ``--site-config``: ``{zone id: {edges: [...], capacity: 1}}``."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        raw = ((site_config.get("fleet") or {}).get("traffic") or {}).get("zones") or {}
-        zones = {}
-        for zone, spec in raw.items():
-            edges, capacity = [str(edge) for edge in spec["edges"]], int(spec.get("capacity", 1))
-            if not edges or capacity < 1:
-                raise ValueError(f"zone {zone} needs edges and a capacity of at least 1")
-            zones[str(zone)] = (edges, capacity)
-        return zones
-    except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"traffic config: {exc}")
-
-
-def _traffic_authority(args) -> bool:
-    """D-517 4 (M2): ``fleet.traffic.authority`` (YAML true/false, default false) of ``--site-config``."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = ((site_config.get("fleet") or {}).get("traffic") or {}).get("authority", False)
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"traffic config: {exc}")
-    if not isinstance(value, bool):
-        sys.exit("traffic config: fleet.traffic.authority must be true or false")
-    return value
 
 
 def _build_site_map(args, tasks_db):

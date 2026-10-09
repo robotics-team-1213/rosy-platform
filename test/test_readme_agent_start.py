@@ -40,7 +40,8 @@ def test_readme_publishes_the_shared_checkout_start_before_the_product_contract(
     assert "git add -A" in section
     assert "list.txt" in section
     assert "python test/known_failures.py" in section
-    assert "X:\\DevTemp\\<이름>\\run.txt" in section
+    assert "X:\\DevTemp\\<이름>\\run-1.txt" in section
+    assert "pytest는 이 노트북에서 돌리지 않는다" in section
     assert "git merge --ff-only <브랜치>" in section
     assert "force-push는 하지 않는다" in section
     assert "rosy-land-on-main/SKILL.md" in section
@@ -64,7 +65,8 @@ def test_agents_md_records_the_shared_checkout_commands():
     assert "CRLF" in section
     assert "python tools/harness/rosy_harness.py lint" in section
     assert "python test/known_failures.py" in section
-    assert "X:/DevTemp/<name>/run.txt" in section
+    assert "X:/DevTemp/<name>/run-1.txt" in section
+    assert "tools/remote/remote_pytest.py" in section
     assert "git merge --ff-only <브랜치>" in section
     assert "python tools/harness/rosy_harness.py generate" in section
     assert "force-push는 하지 않는다" in section

@@ -186,7 +186,8 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
 def test_side_topics_share_the_recording_constants():
     from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
     assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
-    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom"} == set(SIDE_TOPICS)
+    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom",
+            "camera/calibration/status", "line/keep_debug"} == set(SIDE_TOPICS)
 
 
 def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
@@ -233,7 +234,8 @@ def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
     assert len(rows) == 1
     assert rows[0]["side"] == {SHADOW_TOPIC: {"stamp": 8e-7, "error_delta": 0.1},
-                                   "line/observation": None, "line/keep_debug": None}
+                                   "line/observation": None, "line/keep_debug": None,
+                                   "camera/telemetry": None}
 
 
 COMPRESSED_DEF = """std_msgs/Header header
@@ -257,7 +259,7 @@ def _frame_px(t):
 
 
 def _write_stamped(tmp_path, events):
-    """events: (log_s, kind, stamp_s[, extra]) with kind raw|jpeg|shadow|line|cmd."""
+    """events: (log_s, kind, stamp_s) for camera and side evidence."""
     from mcap_ros2.writer import Writer
 
     from control.recording import SHADOW_TOPIC
@@ -292,6 +294,13 @@ def _write_stamped(tmp_path, events):
                 w.write_message('/line/keep_debug', str_s, {'data': json.dumps(
                     {'stamp': stamp, 'target_m': [0.22, -0.04],
                      'strategy': 'right_only', 'paint_source_used': 'threshold'})}, ns, ns)
+            elif kind == 'telemetry':
+                w.write_message('/camera/telemetry', str_s, {'data': json.dumps(
+                    {'stamp': stamp, 'profile_revision': f'cam-{stamp}'})}, ns, ns)
+            elif kind == 'calibration':
+                w.write_message('/camera/calibration/status', str_s, {'data': json.dumps(
+                    {'mode': 'homography', 'active': True,
+                     'source_sha256': 'a' * 64})}, ns, ns)
             elif kind in ("line", "irline"):
                 source = "CAMERA_LINE" if kind == "line" else "IR_LINE"
                 w.write_message("/line/observation", str_s, {"data": json.dumps(
@@ -323,6 +332,31 @@ def test_keep_debug_mcap_conversion_and_extraction_have_the_same_source_frame(tm
         assert rows[0]['side']['line/keep_debug']['target_m'] == [0.22, -0.04]
         assert rows[1]['side']['line/keep_debug'] is None
         assert rows[2]['side']['line/keep_debug']['strategy'] == 'right_only'
+
+
+def test_pilot_camera_telemetry_matches_source_frame_in_both_extractors(tmp_path):
+    pytest.importorskip('mcap_ros2')
+    import bag_to_video as b2v
+    session = _write_stamped(tmp_path, [
+        (1.0, 'raw', 1.0), (1.04, 'telemetry', 1.0),
+        (1.1, 'raw', 1.1), (1.14, 'telemetry', 1.1)])
+    frames, side, _, _, _ = b2v.first_pass(extract._mcap_files(session))
+    converted = list(b2v.sidecar_rows(frames, side, 0.5))
+    direct = [{'side': row[2]} for row in extract._mcap_frames(extract._mcap_files(session))]
+    for rows in (converted, direct):
+        assert [row['side']['camera/telemetry']['profile_revision'] for row in rows] == [
+            'cam-1.0', 'cam-1.1']
+
+
+def test_mcap_camera_ground_status_is_past_only_and_expires(tmp_path):
+    pytest.importorskip('mcap_ros2')
+    session = _write_stamped(tmp_path, [
+        (1.0, 'raw', 1.0), (1.1, 'calibration', 1.1),
+        (1.6, 'raw', 1.6), (3.5, 'raw', 3.5), (3.7, 'raw', 3.7)])
+    rows = list(extract._mcap_frames(extract._mcap_files(session)))
+    name = 'camera/calibration/status'
+    assert [row[2].get(name, {}).get('active') if row[2].get(name) else None
+            for row in rows] == [None, True, True, None]
 
 
 SCAN_DEF = """std_msgs/Header header

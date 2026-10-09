@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -23,6 +24,54 @@ TOKENS = {
     "administrator": "rosy-dev-admin",
     "operator": "rosy-dev-operator",
 }
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1366, 768)])
+def test_pilot_map_link_opens_real_console_with_same_tab_session(tmp_path, width, height):
+    client = _core_client(tmp_path)
+    token = TOKENS["operator"]
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        console_auth = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        def serve(route):
+            request = route.request
+            parsed = urlsplit(request.url)
+            path = parsed.path
+            authorization = request.headers.get("authorization", "")
+            if path == "/api/v1/ui/surfaces/console":
+                console_auth.append(authorization)
+            response = client.get(path + (f"?{parsed.query}" if parsed.query else ""),
+                                  headers={"Authorization": authorization})
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content)
+
+        page.route("**/*", serve)
+        page.add_init_script(f"if (location.pathname === '/pilot') {{ "
+                             f"sessionStorage.setItem('rosy.pilot.token', {token!r}); "
+                             "sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token'); }")
+        page.goto("http://rosy.test/pilot")
+        page.locator("ui-topbar [data-goto='/console']").click()
+        page.wait_for_url("**/console")
+        page.locator('[data-panel="console.map"] .surface-map-stage').wait_for(state="attached", timeout=20_000)
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+        assert "지도 데이터가 아직 없습니다" in page.locator('[data-panel="console.map"] ui-empty').inner_text()
+        assert "연결을 확인" not in page.locator('[data-panel="console.map"] ui-empty').inner_text()
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == token
+        assert f"Bearer {token}" in console_auth
+        assert page.locator("#shell-role").inner_text() == "운용자"
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        if output := os.environ.get("ROSY_SHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"pilot-to-real-console-{width}x{height}.png"), full_page=True)
+        assert errors == [], errors
+        browser.close()
 
 
 def _core_client(tmp_path):

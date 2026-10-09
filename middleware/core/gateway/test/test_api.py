@@ -177,6 +177,7 @@ def test_system_info_and_capabilities(client):
     assert "ros_namespace" in r.json()
     assert "ros_domain_id" in r.json()
     assert "robot_number" in r.json()
+    assert "device_uid" in r.json()
     # The default fixture is `core` mode: until odometry proves a base is
     # attached, CAP-001 withholds the hardware flags (D-32, D-161).
     r = tc.get("/api/v1/system/capabilities", headers=VIEWER)

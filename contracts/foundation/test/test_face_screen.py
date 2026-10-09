@@ -151,6 +151,18 @@ def test_peer_approval_reader_is_strict(tmp_path):
         assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
 
+def test_peer_approval_reader_passes_only_a_well_formed_ca_digest(tmp_path):
+    # The LCD draws the CA digest a first-contact requester compares; anything else is dropped.
+    path = tmp_path / "approval.json"
+    for ca, kept in (("ab" * 32, True), ("AB" * 32, False), ("ab" * 31, False), (7, False)):
+        path.write_text(json.dumps({"requests": [_row()], "tls_ca_sha256": ca}), encoding="utf-8")
+        expected = dict(PEER, tls_ca_sha256=ca) if kept else PEER
+        assert fs.read_peer_approval(str(path), NOW) == expected, ca
+    # A digest alone shows no card.
+    path.write_text(json.dumps({"requests": [], "tls_ca_sha256": "ab" * 32}), encoding="utf-8")
+    assert fs.read_peer_approval(str(path), NOW) is None
+
+
 def test_burned_login_goes_to_the_face():
     assert fs.screen_for(**READY, core=core(), login="burned")["kind"] == fs.FACE
 

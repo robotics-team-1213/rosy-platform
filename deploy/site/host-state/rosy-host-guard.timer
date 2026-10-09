@@ -1,0 +1,9 @@
+[Unit]
+Description=Rosy host guard every 10 minutes (D-530)
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

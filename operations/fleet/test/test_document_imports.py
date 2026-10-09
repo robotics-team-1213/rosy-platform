@@ -46,6 +46,7 @@ OWN = {
         "camera-warp.js",
         "camera-backdrop.js",
         "traffic-view.js",
+        "guide-layer.js",
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",

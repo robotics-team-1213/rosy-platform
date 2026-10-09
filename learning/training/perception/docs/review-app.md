@@ -25,6 +25,19 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 
 `자동·초안 라벨`은 원본의 기존 LiDAR `objects` 또는 모델/시각 `boxes` 후보를 다시 가져온다. 현재 수동 수정을 대체하므로 브라우저 확인을 받는다. 이 동작은 새 모델 추론·자동 기하 job 실행이 아니며 미승인 상태를 만든다. 미분류 후보의 클래스는 사람이 지정해야 한다. 기존 자동 생성은 `autolabel.py`, `prelabel.py` 경로에서 준비한다. 벽·차선·횡단보도 등은 `/pixels`에서 별도로 검수하거나 기존 CVAT와 `edge_review_return.py` 경로를 사용한다.
 
+기존 사진과 동일한 영상 해시·프레임·원본 해시의 모델 객체 카탈로그를 `자료 등록`으로 다시 가져오면 박스는 별도 모델 초안으로 보관된다. 객체 검수의 `모델 박스 초안`에서 출처와 개수를 확인하고 명시적으로 가져올 때만 현재 박스를 바꾸며, 결정은 검수 대기로 돌아간다. 픽셀 초안은 별도 후보로 비교·적용한다. 모델 초안 등록과 적용은 승인이나 학습 반영이 아니다.
+
+픽셀 검수의 `255만 초안 보완`은 현재 사람이 저장한 0~254 라벨을 보존하고,
+선택한 초안에 실제 클래스가 있는 255 픽셀만 채운다. 미리보기는 합친 결과를 보여 준다.
+초안에도 255인 곳은 미검수로 남으며 적용 후 상태는 대기다. `전체 교체`는 현재
+마스크를 버리는 별도 동작이다. AI 의견 패널은 픽셀을 채우지 않는다. 승인 전에는
+남은 255와 경계를 사람이 확인한다.
+사람이 표시한 좌·우 차선 바깥의 새 `drivable` 제안은 255로 남기며,
+사람의 주행 라벨과 충돌하는 새 차선 제안도 255로 남긴다.
+남은 충돌이나 기존 사람 라벨의 경계 오류는 사람이 확인한다.
+
+SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져오기가 거절된다. 모델 PC에서 `clip_lane_draft.py --catalog <SAM verified-inputs.jsonl> --classes <v13 classes.yaml> --out <새 폴더>`로 차선 밖 `drivable` 픽셀만 255로 되돌린 새 후보와 receipt를 만든 뒤, 그 폴더를 등록할 수 있다. 이 처리는 차선이 보이는 행에서만 작동하며 255를 배경이나 주행 가능 정답으로 바꾸지 않는다. 사람의 경계 확인과 승인은 여전히 필요하다.
+
 `승인 자료 준비`는 서버에서 기존 `review_return.receive_review`를 호출한다. 수동 다운로드/JSONL 이동 없이 `<state>/exports/<id>`에 원본 크기별 YOLO 객체 라벨, 동결된 source/human 입력, hash manifest와 COMPLETE가 기록된다. 앱 안의 전달 정보에서 경로·승인 장수·제외 index·frame version·HOLD를 확인할 수 있다. 학습 세션은 이 export를 읽어 검증하고 session mapping, session-disjoint 분할, 고정 평가 세트 전체 `build.py --exclude-eval`을 확인한다. export는 학습 dataset 수용·학습 실행·모델 활성화가 아니다.
 
 운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 서비스 배포는 지원 범위 밖이다. 원격 접근은 아래 `--host`로만 연다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
@@ -168,6 +181,35 @@ thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 �
 흰색으로 포화된 원본 정보는 복원되지 않는다. 경계를 여전히 판단할 수 없으면 검수 대기로
 두고 노출을 조절해 새로 촬영한 원본을 별도 자료로 등록한다.
 
+과노출 후보는 원본 사진의 하단 절반에서 회색조 245 이상인 픽셀 비율로 확인한다.
+`review_quality.py`는 결정 기록을 바꾸지 않고 후보만 보고한다. 과노출이어도 원본에서
+정답을 판단할 수 있으면 검수 대기로 남긴다. 일부 영역만 판단하기 어려우면 그 픽셀을
+255(미검수)로 두고, 사진 전체의 정답을 판단할 수 없을 때만 검수 화면에서 사람이 제외한다.
+255가 남은 마스크는 학습용 픽셀 승인을 할 수 없다(D-464).
+0.15는 2026-10-08 v13 촬영분에서 측정한 분리값이므로 다른 촬영분에 그대로 적용하지 않는다.
+정규분포 가정이나 흐림 필터는 쓰지 않는다.
+
+```powershell
+python learning/training/perception/dataset/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
+```
+
+모델 PC에서 로컬 Qwen 영상 모델의 **참고 의견**을 만들려면 다음을 실행한다.
+원본 사진·현재 indexed mask의 SHA를 검증하고 255 픽셀 수와 프레임별 시각 의견을
+새 보고서 폴더에 기록한다. 전체 실행이 끝나고 검수 결정 세대가 유지됐을 때만
+`<state>/vlm-feedback.json`을 갱신한다. `/pixels`는 해당 사진의 원본·마스크 SHA가
+보고서와 같을 때만 최신 의견으로 표시한다. 다른 사진의 변경은 이미 검사한 사진의
+의견을 숨기지 않으며, 해당 마스크가 바뀌면 오래된 의견으로 표시한다.
+
+```bash
+python learning/training/perception/dataset/vlm_mask_feedback.py \
+  --state <review-state> --out <new-report-directory>
+```
+
+Ollama `qwen3-vl:8b-instruct`는 모델 PC의 `127.0.0.1:11434`에서만 사용한다.
+`--limit N`은 시험용 부분 보고서이며 앱에 게시하지 않는다. AI는 승인·제외·학습 자격을
+바꾸지 않는다. `no_obvious_concern`도 검수 완료가 아니다. 255가 남으면 사람 픽셀
+승인이 거절되며, VLM이 판단을 보류하거나 잘못 읽을 수 있으므로 원본을 직접 확인한다.
+
 ### 클래스셋 (D-485)
 
 객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.
@@ -177,6 +219,8 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/<na
 ```
 
 픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/training/perception/classes/lane_lr5.yaml`이다. 카탈로그 가져오기(`/api/import`) 요청 본문의 `classes`에 이 파일 경로를 넣는다. 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 찾는다.
+
+주행 가능 영역을 검수할 때는 `learning/training/perception/classes/lane_lr6_drivable.yaml`을 **새 `--state` 작업 공간**의 `/api/import` `classes`로 지정한다. 기존 0~4번은 그대로이고 5번 `drivable`이 추가된다. v12 작업 공간에 이 파일을 다시 바인딩하면 마스크의 뜻을 바꾸게 되므로 서버가 거절한다. 새 작업 공간에는 원본 검증 카탈로그를 다시 가져오고, 기존 픽셀 승인이나 초안을 승인 상태로 복사하지 않는다. 새 마스크는 검수 대기에서 시작하며 저장·전체 확인·픽셀 승인을 거쳐야 학습 입력으로 내보낼 수 있다. `drivable`은 D-475의 화면에 보이는 흰 경계선 안쪽 도로 바닥 전체이며, 차선 칠·도로 밖 바닥·장애물에 가린 화소와 구분한다. 기존 5채널 모델의 클래스 순서를 그대로 둔 채 6클래스 정답으로 학습하거나 승격하지 않는다.
 
 모델 PC에서 `.pt`의 클래스 이름을 `data.yaml`로 뽑는다. 검수 앱은 모델을 열지 않는다.
 

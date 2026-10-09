@@ -27,6 +27,8 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
+from fleet.server import trip_runner
+from core_features.line_follow.recovery.junction.gate import MANEUVER as CORE_MANEUVER
 from fleet.server.trip_runner import TripError, TripRunner
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint
@@ -39,7 +41,7 @@ VIEWER = {"Authorization": "Bearer viewer-token"}
 # D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
 LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
-MANOEUVRE = ("turning", "advancing", "reacquiring", "bending")
+MANOEUVRE = CORE_MANEUVER  # the fake CORE is busy exactly when CORE is
 
 
 class FakeCore:
@@ -473,6 +475,33 @@ def test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on():
     ports.at(bc, 0.5)
     _ticks(runner, ports)
     assert ports.sent[-1] == ("stop", "C", 0.5)
+
+
+def test_fleet_counts_every_core_manoeuvre_state_as_busy():
+    """Lap SIM B (3/20): Fleet's list lacked CORE's D-507 4 ``approaching``; one list, checked."""
+    assert set(trip_runner.MANOEUVRE) == set(CORE_MANEUVER)
+
+
+def test_no_instruction_goes_out_while_core_approaches_the_pivot_past_the_place():
+    """Lap SIM B: mid-approach the map pose is already on the next lane; the next place's
+    instruction would abort the turn (CORE answers ``aborted``, Fleet stops the trip)."""
+    runner, store, ports = _setup(_map(("A", 0, 0), ("B", 1, 0), ("C", 1, 0.5), edges=[
+        ("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", [[1, 0], [1, 0.5]], "lane")]))
+    ab, bc = _arc(store, "ab:fwd"), _arc(store, "bc:fwd")
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    assert ports.sent == [("left", "B", None)]
+    ports.at(ab, ab.length_m - 0.05)
+    ports.core.see_junction()
+    ports.core.phase("approaching")
+    _ticks(runner, ports)
+    ports.at(bc, 0.05)  # the approach drives past the place point onto the next lane
+    _ticks(runner, ports, 10)
+    assert ports.sent == [("left", "B", None)] and runner.running()["state"] == "running"
+    ports.core.done()  # the turn ends: the next place's instruction goes out
+    _ticks(runner, ports)
+    assert ports.sent[-1] == ("stop", "C", pytest.approx(0.45, abs=0.01))
 
 
 def test_a_turn_over_90_degrees_moves_on_by_core_or_by_the_pose():
@@ -1205,6 +1234,29 @@ def test_a_carried_out_instruction_is_never_sent_again():
     assert len(ports.sent) == 1
 
 
+def test_a_carried_out_place_short_of_the_next_lane_keeps_the_pose_on_this_lane():
+    """lap SIM 2 lap_12: CORE went idle on our straight while the robot backed off 0.26 m before
+    SE; the pose is judged against ring_s, not ring_e (0.276 m away), so no false 'pose' stop."""
+    runner, store, ports = _setup()
+    ring_s = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.05, "NW")
+    run(runner.start("p1", "bob"))
+    ports.at(ring_s, ring_s.length_m - 0.2)
+    _ticks(runner, ports)
+    ports.core.see_junction()  # CORE executes our straight through SE
+    _ticks(runner, ports)
+    assert runner._live["rosy_60"].sent["carried"]
+    ports.core.j = None  # CORE closed it (the keeper lost the junction while backing off)
+    ports.at(ring_s, ring_s.length_m - 0.26)
+    sent = len(ports.sent)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "running" and runner.view("p1")["segment_index"] == 0
+    assert len(ports.sent) == sent                         # the carried-out straight is not sent again
+    ports.at(_arc(store, "ring_e:fwd"), 0.03)               # on the next lane: it moves on
+    _ticks(runner, ports)
+    assert runner.view("p1")["segment_index"] == 1
+
+
 def test_already_done_from_core_counts_as_carried_out():
     runner, store, ports = _setup()
     ring_s = _arc(store, "ring_s:fwd")
@@ -1386,14 +1438,15 @@ def test_formation_reform_and_resume_refuse_a_trip_robot():
         assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
-def test_the_fleet_stuck_resolver_skips_a_trip_robot():
+def test_the_fleet_stuck_resolver_marks_a_trip_robot():
+    """D-517 5 (M4): no longer skipped; the resolver gives a marked trip robot stopping answers only."""
     from fleet.server.stuck_resolver_loop import StuckResolverLoop
 
     seen = []
 
     class Resolver:
         def step(self, now, rows):
-            seen.extend(row["robot_id"] for row in rows)
+            seen.extend((row["robot_id"], row.get("trip", False)) for row in rows)
             return []
 
     async def snapshot():
@@ -1402,7 +1455,7 @@ def test_the_fleet_stuck_resolver_skips_a_trip_robot():
     loop = StuckResolverLoop(snapshot, board=None, resolver=Resolver(), clients=dict)
     loop.trip_busy = lambda robot_id: robot_id == "b"
     run(loop.run_once())
-    assert seen == ["a"]
+    assert seen == [("a", False), ("b", True)]
 
 
 @pytest.mark.parametrize(("decision", "status", "ends"), [

@@ -1,4 +1,4 @@
-﻿import json, math, sys
+import json, math, sys
 from pathlib import Path
 import lane_scenarios as s
 from lane_sim import CAM_X

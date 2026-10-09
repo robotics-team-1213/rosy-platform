@@ -90,7 +90,7 @@ def _main(base, tmp_path, convert, *extra):
 
 def _leftovers(tmp_path):
     raw = tmp_path / "raw"
-    return sorted(p.name for p in raw.iterdir()) if raw.exists() else []
+    return sorted(p.name for p in raw.iterdir() if p.name != ".paired") if raw.exists() else []
 
 
 def _paired_convert(folder, out, codec):
@@ -99,6 +99,7 @@ def _paired_convert(folder, out, codec):
             {"side": {"cmd_vel": None, "teleop/intent": None}}]
     path = out / f"{folder.name}.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    path.with_suffix(".mp4").write_bytes(b"video")
     return 0, path
 
 
@@ -129,15 +130,50 @@ def test_leftover_part_and_staging_are_replaced(server, tmp_path):
 
 def test_already_fetched_recording_is_skipped(server, tmp_path):
     base, state = server
-    (tmp_path / "raw" / RID).mkdir(parents=True)
+    assert _main(base, tmp_path, _paired_convert) == 0
+    state["paths"].clear()
     assert _main(base, tmp_path, lambda *a: pytest.fail("must not convert")) == 0
     assert state["paths"] == ["/api/v1/recordings"]
+
+
+def test_verified_raw_retries_failed_conversion_without_redownload(server, tmp_path):
+    base, state = server
+    assert _main(base, tmp_path, lambda *a: (1, None)) == 1
+    assert (tmp_path / "raw" / RID / "manifest.json").is_file()
+    state["paths"].clear()
+    assert _main(base, tmp_path, _paired_convert) == 0
+    assert state["paths"] == ["/api/v1/recordings"]
+    assert (tmp_path / "raw" / ".paired" / f"{RID}.json").is_file()
+
+
+def test_preexisting_paired_video_is_adopted_without_overwrite(server, tmp_path):
+    base, state = server
+    assert _main(base, tmp_path, _paired_convert) == 0
+    receipt = tmp_path / "raw" / ".paired" / f"{RID}.json"
+    receipt.unlink()
+    video_dir = tmp_path / "video"
+    stem = "teleop_rosy_01_20261002T101500Z"
+    (video_dir / f"{RID}.jsonl").rename(video_dir / f"{stem}.jsonl")
+    (video_dir / f"{RID}.mp4").rename(video_dir / f"{stem}.mp4")
+    state["paths"].clear()
+    assert _main(base, tmp_path, lambda *a: pytest.fail("must not overwrite")) == 0
+    assert state["paths"] == ["/api/v1/recordings"]
+    assert receipt.is_file()
 
 
 def test_only_without_a_match_fails(server, tmp_path, capsys):
     base, _ = server
     assert _main(base, tmp_path, _paired_convert, "--only", RID2) == 1
     assert "no complete recording" in capsys.readouterr().err
+
+
+def test_since_id_skips_older_recordings_without_downloading(server, tmp_path):
+    base, state = server
+    assert _main(base, tmp_path, lambda *a: pytest.fail("must not convert"), "--since-id", RID2) == 0
+    assert state["paths"] == ["/api/v1/recordings"]
+    assert _leftovers(tmp_path) == []
+    assert _main(base, tmp_path, lambda *a: pytest.fail("must not convert"),
+                 "--since-id", "not-an-id") == 2
 
 
 def test_a_tampered_member_fails_and_leaves_nothing(server, tmp_path):

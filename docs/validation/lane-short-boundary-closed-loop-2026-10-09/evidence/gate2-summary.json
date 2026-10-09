@@ -1,0 +1,54 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "left:60"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": null,
+   "result": "LOST_between_junctions",
+   "at_done": {
+    "gt": [
+     -1.018,
+     -0.489,
+     -0.049
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "j": "armed",
+    "jr": null,
+    "lane_offset_m": 0.021,
+    "heading_vs_lane_deg": -2.8
+   },
+   "seq": [],
+   "sent": []
+  }
+ ],
+ "gt_path_m": 1.0796,
+ "final": {
+  "t": 41.401,
+  "sim_t": 101.492,
+  "gt": [
+   -1.018264256736041,
+   -0.48856306273764805,
+   -0.04885592060255693
+  ],
+  "odom": [
+   -1.018264256736041,
+   -0.48856306273764805,
+   -0.04885592060255693,
+   0.0,
+   0.0
+  ],
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "keep": null,
+  "body_gap_m": null,
+  "j": "armed",
+  "jr": null
+ },
+ "capability_at_end": true
+}

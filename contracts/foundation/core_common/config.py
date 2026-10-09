@@ -190,6 +190,9 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     device_name = os.environ.get("ROSY_DEVICE_NAME", "").strip()
     if device_name:
         robot["device_name"] = device_name
+    device_uid = os.environ.get("ROSY_DEVICE_UID", "").strip()
+    if device_uid:
+        robot["device_uid"] = device_uid
     # The package default name ("Rosy 01") is a placeholder, not an identity: a
     # provisioned robot #18 must not introduce itself as robot 01. An operator
     # rename lives in the overlay and is kept as is.

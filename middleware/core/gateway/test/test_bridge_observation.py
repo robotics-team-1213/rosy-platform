@@ -390,6 +390,17 @@ def test_a_plan_becomes_a_point_list():
         [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}],)
 
 
+def test_plan_keeps_map_and_frame_from_receive_time():
+    svc, calls = _services()
+    svc.state.map_id = "lab-map"
+    msg = _path([(1.0, 2.0)])
+    msg.header = SimpleNamespace(frame_id="odom")
+
+    obs.nav_path(svc, msg, warn=_warn(calls))
+
+    assert _calls(calls, "maps.set_path")[0][2] == {"map_id": "lab-map", "frame_id": "odom"}
+
+
 def test_an_unreadable_plan_is_ignored_not_fatal():
     svc, calls = _services()
 

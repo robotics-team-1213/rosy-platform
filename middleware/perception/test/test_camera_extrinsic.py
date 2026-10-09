@@ -227,6 +227,7 @@ class Node(CalibrationCamera):
     def __init__(self, tmp, yaw_deg=182.0, phase='ready'):
         self.phase = phase
         self.camera_capture = self.camera_extrinsic = None
+        self.camera_controls = 'exposure=19999us gain=2.500 colour_gains=1.800,1.600'
         self.params = {'result_path': str(Path(tmp) / 'calibration.json'),
                        'lidar_yaw_offset': math.radians(yaw_deg),
                        'camera_extrinsic_profile_path': str(PROFILE_PATH),
@@ -312,6 +313,10 @@ class StepTest(unittest.TestCase):
             self.assertEqual(records[0]['status'], 'candidate')
             # The robot runs the robot grid, never the PC one, and the record says so.
             self.assertEqual(saved['fit_step'], ce.FINE_STEPS)
+            self.assertEqual(saved['image_controls'], {
+                'Sharpness': 0.0, 'NoiseReductionMode': 1,
+                'capture_controls': node.camera_controls})
+            self.assertEqual(records[0]['extra']['image_controls'], saved['image_controls'])
             self.assertEqual(records[0]['intervals']['fit_step'], ce.FINE_STEPS)
             self.assertIsNone(store.current(default_robot(), 'camera_profile'))
             shutil.rmtree(node.params['calibration_store_root'])
@@ -325,6 +330,21 @@ class StepTest(unittest.TestCase):
             node = Node(tmp, phase='validating_rotation')
             self.assertFalse(node.start_camera_extrinsic(0.0, self.ODOM))
             self.assertEqual(node.zeros, 0)
+
+    def test_refuses_until_the_exposure_lock_and_ignores_a_later_relock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            node = Node(tmp)
+            node.camera_controls = ''
+            self.assertFalse(node.start_camera_extrinsic(0.0, self.ODOM))
+            self.assertEqual(node.camera_extrinsic['state'], 'refused')
+            self.assertIn('not locked', node.camera_extrinsic['message'])
+            node.note_camera_controls('settling')
+            self.assertFalse(node.start_camera_extrinsic(0.0, self.ODOM))
+            node.note_camera_controls('exposure=54258us gain=2.000 colour_gains=1.200,1.400')
+            self.assertTrue(node.start_camera_extrinsic(0.0, self.ODOM))
+            node.note_camera_controls('exposure=20000us gain=1.000 colour_gains=1.000,1.000')
+            self.assertEqual(node.camera_capture['controls'],
+                             'exposure=54258us gain=2.000 colour_gains=1.200,1.400')
 
     def test_motion_during_capture_fails_the_step(self):
         with tempfile.TemporaryDirectory() as tmp:

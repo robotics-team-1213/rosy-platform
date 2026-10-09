@@ -139,7 +139,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False,
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
@@ -609,10 +609,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
-                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority)
+                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
+                             traffic_signals=traffic_signals)
     install_trip_guard(console, trip_runner)
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
-    if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
@@ -627,6 +628,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
+    from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
+    app.state.guide = GuideService(gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
+                                   tracking=tracking if tracking is not None and tracking.enabled else None,
+                                   zones=trip_runner.traffic.zone_edges)
+    install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
@@ -676,6 +682,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return {"source_id": body.source_id, "lease": token,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
+
+    from fleet.host_control import UnavailableHostHelper, helper_from_config
+    from fleet.server.host_control_routes import install_host_control_routes
+    # D-524: without site-users or logins every caller is `site-console`, so no host control.
+    install_host_control_routes(
+        app, require_operator=require_operator, require_named_operator=require_named_operator,
+        helper=(helper_from_config() if principals or password_sessions is not None
+                else UnavailableHostHelper()))
 
     install_static_routes(app)
 

@@ -66,7 +66,7 @@ store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 �
 
 | 필드 | 뜻 |
 |---|---|
-| `model_revision` | `lane-seg-YYYYMMDD-<sha8>`, 전역 유일 (`export_cell`이 만든다) |
+| `model_revision` | 기본 `lane-seg-YYYYMMDD-<sha8>`; 주행 가능 영역 추가 계열은 `v13-drivable-YYYYMMDD-<sha8>` (D-532). 불변 판 식별자 (`export_cell`이 만든다) |
 | `task` | `lane_seg` |
 | `files[]` | `name`, `sha256`, `precision` (`fp32`/`int8`) |
 | `input` | `shape`, `layout: nchw`, `color` (`rgb`/`bgr`), `scale`, `mean[3]`, `std[3]` |
@@ -75,6 +75,12 @@ store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 �
 | `camera_profile_revision` | 학습 영상의 CameraProfile |
 | `metrics` | 검증 split의 클래스별 IoU |
 | `trainer` | 코드 저장소·commit 또는 노트북 식별자 |
+
+`v13-drivable` manifest에는 `parent_lane_model`의 `model_revision`, `onnx_sha256`,
+`torchscript_sha256`와 64자리 store dataset 내용 SHA가 필요하다. `drivable`은 출력의
+마지막 채널이다. manifest 파서는 이 값의 형식만 확인한다. 실제 부모 파일과 사람 승인
+데이터의 해시 일치, 부모 출력과 최종 ONNX의 화소 일치는 별도 학습 admission 및
+평가 증거로 검증해야 한다. 이 필드만으로 접수나 주행 권한이 생기지 않는다.
 
 `role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`, `wall`.
 `wall`(D-373 결정 9)은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고,
@@ -342,6 +348,16 @@ authority·TTL·recipe/소스·실제 eval inventory·사본 bytes를 다시 검
 실제 마스크 승인0, 평가 frame/group UNKNOWN과 부족한 source proof는 구현 뒤에도 HOLD다.
 격리 synthetic 시험은 실제 사람 정답·GPU 학습·서비스 전환 수용이 아니다. 이 owner 경로를
 기존 서비스에 연결하거나 실제 학습을 실행하는 작업은 별도 실행 범위다.
+
+`drivable_head` recipe는 내부 `IndexedReview` owner가 반드시 필요하다. 공통 seed/epochs/lr/
+batch_size 외에 `parent_model`(lane-seg manifest 폴더), `parent_torchscript`(부모 TorchScript
+파일), `ignore_top`(0–239)을 입력한다. 승인된 카메라 provenance, 부모 파일 SHA·클래스
+순서와 데이터셋의 마지막 `drivable` 클래스를 확인하고 부모 파일도 재검사에 묶는다.
+실제 승인 프레임에서 부모 TorchScript·ONNX 추론 일치와 클래스 보존을 확인한 뒤
+헤드만 GPU에서 학습한다. train/val 모두 `ignore_top` 아래에 주행 가능/불가능
+화소가 있어야 한다. 출력 ONNX는 부모 차선 화소 보존을 재확인하고 `candidate`로만
+기록한다. 기존 intake·READY·장치 전달은 v13을 계속 거부하며, 후보 생성은 주행
+수용 증거가 아니다.
 # Indexed review producer composition
 
 The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an

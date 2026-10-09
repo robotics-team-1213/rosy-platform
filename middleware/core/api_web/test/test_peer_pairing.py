@@ -157,6 +157,22 @@ class BoundedPeer(unittest.TestCase):
         self.assertEqual(413, secure.post("/api/v1/auth/peer-pairing/requests", content=b"x"*5000).status_code)
         self.assertEqual(1, len(deps.auth_entries(self.svc.config)))
 
+    def test_fleet_identity_poll_does_not_spend_session_proof_budget(self):
+        app = FastAPI()
+        app.state.peer_receiver = self.receiver
+        app.include_router(router)
+        with TestClient(app, base_url="https://receiver.test", client=('192.168.10.20', 40000)) as client:
+            for _ in range(35):
+                self.assertEqual(200, client.get("/api/v1/auth/peer-pairing/identity").status_code)
+            for _ in range(30):
+                self.receiver.admit_proof('192.168.10.20')
+            with self.assertRaises(Refused):
+                self.receiver.admit_proof('192.168.10.20')
+            for _ in range(300 - 35):
+                self.receiver.admit_proof('192.168.10.20', identity=True)
+            with self.assertRaises(Refused):
+                self.receiver.admit_proof('192.168.10.20', identity=True)
+
     def test_final_repository_rechecks_grant_after_successful_key_proof(self):
         _, grant = self.grant()
         fields = self.receiver.challenge(grant)["fields"]
@@ -579,6 +595,26 @@ class ScreenCodeApproval(unittest.TestCase):
         PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
                      clock=lambda: self.now, display_dir=str(self.display))
         self.assertFalse(self.file.exists())
+
+    def test_screen_code_approves_with_a_clock_that_moves(self):
+        # Every real clock read differs; a fixed test clock hid the 409 that 8kcn returned (2026-10-09).
+        ticks = iter(range(1, 10_000))
+        base = self.now
+        self.receiver.clock = self.repo.clock = lambda: base + timedelta(microseconds=next(ticks))
+        request = self.request()
+        approved = self.receiver.confirm(request["request_id"], request["request_secret"], self.code(), "fixture")
+        self.assertEqual("approved", approved["state"])
+        self.assertIn(request["request_id"], self.repo.grants())
+
+    def test_hand_over_carries_the_ca_digest_the_requester_compares(self):
+        # First contact asks the requester to compare the CA digest; the LCD must be able to show it.
+        digest = "c0" * 32
+        self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
+                                     clock=lambda: self.now, display_dir=str(self.display),
+                                     anchor=lambda: {"tls_ca_sha256": digest})
+        self.request()
+        self.assertEqual(digest, json.loads(self.file.read_text(encoding="utf-8"))["tls_ca_sha256"])
+        self.assertEqual({"display_code", "approval_code", "expires_at"}, set(self.shown()[0]))
 
     def test_unwritable_display_never_breaks_the_request(self):
         self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,

@@ -617,6 +617,8 @@ export function actionIcon(button, name) {
     right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
     check: "M4 12l5 5L20 6",
     plus: "M12 4v16M4 12h16",
+    minus: "M4 12h16",
+    hand: "M8 12V6a1.5 1.5 0 0 1 3 0v4-1V4a1.5 1.5 0 0 1 3 0v6-1V6a1.5 1.5 0 0 1 3 0v5l.5-1a1.5 1.5 0 0 1 2.5 1.5L17 20H9l-5-7a1.5 1.5 0 0 1 2.5-1.5z",
     trash: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6",
     undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2",
     pencil: "M4 20l4-.8L20 7l-3-3L4.8 16zM15 6l3 3",

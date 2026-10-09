@@ -553,3 +553,9 @@
 - 증거: 모델 PC `test_capabilities_controls.py` 통과.
 - gate 변화: SOURCE.
 - 결정: D-517 4항 독립 리뷰 3. API v1.142.
+
+## 2026-10-08 · uncommitted · fix(device identity): 프로비저닝 UID와 Pi 시리얼을 CORE 신원으로 전달
+
+- 변경: `ROSY_DEVICE_UID`를 로봇 설정에 반영하고, 프로비저닝된 Pi에서 설정 시리얼이 없으면 `/proc/cpuinfo`의 Serial을 읽는다. 둘 다 없는 경우 값을 만들어내지 않는다.
+- 증거: 관련 CORE/계약 테스트 97 passed; `known_failures.py` 신규 실패 0. 장치 배포·기존 Fleet 등록 행 보강은 별도 확인.
+- gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.

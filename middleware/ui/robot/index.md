@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
-- 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
-- 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
-- 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
-- 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+- 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
+- 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+- 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
+- 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
+- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이

@@ -25,6 +25,23 @@ def test_scan_text():
     assert "wifi-psk" in kinds
 
 
+def test_markdown_sha256_table_exempts_only_its_digest_cell():
+    digest = "ab" * 32
+    other = "cd" * 32
+    header = "| File | SHA-256 | Note |\n|---|---|---|\n"
+    row = f"| image.png | `{digest}` | checked |\n"
+    assert secret_scan.scan_text("evidence.md", header + row) == []
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header.replace("SHA-256", "Value") + row))
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header + f"| `{other}` | `{digest}` | checked |\n"))
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header + f"| image.png | `{digest}` extra | checked |\n"))
+    credential = 'api_' + 'token="' + 'live' + '9182aeb27c4d"'
+    assert any(f.kind == "credential" for f in secret_scan.scan_text(
+        "evidence.md", header + row.replace("checked", credential)))
+
+
 def test_psk_field_can_forward_a_form_value_without_a_literal_finding():
     assert secret_scan.scan_text(
         "operations.js", 'postHost(connect, {ssid: name, psk: passwordField.value}, "confirm");',

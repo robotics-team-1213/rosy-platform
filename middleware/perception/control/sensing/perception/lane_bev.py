@@ -119,6 +119,8 @@ MEMORY_CONFIDENCE = 0.6
 #: Equal to CORE line_follow stale_after_s: evidence older than that already
 #: stops CORE, and a pose that old cannot place the paint in the image.
 ODOM_MAX_SKEW_S = 0.30
+# ponytail: Conservative 0.5 s camera gap at 0.08 m/s plus margin; calibrate on robot odom.
+ODOM_MAX_STEP_M = 0.06
 
 # CORE line_follow law (core_features/line_follow/manager.py, tick()),
 # mirrored so a curvature can be expressed as the error CORE turns into it;
@@ -346,6 +348,7 @@ class LaneEdgeFollower:
         self._right = _LineMemory()
         self._odometer = 0.0
         self._last_pose = None
+        self._pose_fault = False
         self._fresh_at = None
         self.last = {}
 
@@ -392,8 +395,23 @@ class LaneEdgeFollower:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
                 pose = None
+        if self._pose_fault:
+            self.last = {"reason": "odom_discontinuity"}
+            return None
+        if pose is not None and self._last_pose is not None:
+            dx, dy = pose[0] - self._last_pose[0], pose[1] - self._last_pose[1]
+            dyaw = math.remainder(pose[2] - self._last_pose[2], 2.0 * math.pi)
+            if max(math.hypot(dx, dy), float(lane_half_width_m) * abs(dyaw)) > ODOM_MAX_STEP_M:
+                self._forget()
+                self._pose_fault = True
+                self.last = {"reason": "odom_discontinuity"}
+                return None
         if ground is None or pose is None:
             self._forget()
+            self.last = {}
+            if ground is not None:
+                self._follow(float(now_s), None, bgr, ground, float(lane_half_width_m),
+                             bright_threshold, float(washed_fraction))
             if self._corner is not None:
                 self._corner.update(now_s, None, bgr, ground,
                                     lane_half_width_m=lane_half_width_m,
@@ -425,7 +443,13 @@ class LaneEdgeFollower:
         paint = view.sample(gray > bright_threshold)
         self.last = {"paint": paint}
         observable = int(view.observable.sum())
-        if observable == 0 or paint.sum() > washed_fraction * observable:
+        if observable == 0:
+            return None
+        if paint.sum() > washed_fraction * observable:
+            self.last["reason"] = "washed"
+            return None
+        if pose is None:
+            self.last = {}
             return None
 
         if self._last_pose is not None:
