@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -72,16 +73,33 @@ class Live:
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
 
+    _lease = None  # (frame_path, token, reuse-until) of the current Viewer lease
+
     def overhead(self):
-        """One fresh Rosy Cam JPEG through a 60 s Viewer lease (D-318), None on any failure."""
+        """One fresh Rosy Cam JPEG through a 60 s Viewer lease (D-318), None on any failure.
+
+        The lease is reused while it is valid and a 429 is retried twice: the identify
+        check grabs a frame every 0.2 s, and one lease per frame tripped Vision's rate
+        limit, refusing the whole check (2026-10-09)."""
         if not self.site_url:
             return None
-        try:
-            source = self.overhead_source()
-            lease = json.loads(self._site("/api/fleet/vision/lease", {"source_id": source}))
-            return self._site(lease["frame_path"], token=lease["lease"])
-        except (OSError, ValueError, KeyError, IndexError):
-            return None
+        for attempt in range(3):
+            try:
+                if self._lease is None or self.now() >= self._lease[2]:
+                    source = self.overhead_source()
+                    body = json.loads(self._site("/api/fleet/vision/lease", {"source_id": source}))
+                    ttl = float(body.get("expires_in_s", 60))
+                    self._lease = (body["frame_path"], body["lease"], self.now() + max(0.0, ttl - 10))
+                return self._site(self._lease[0], token=self._lease[1])
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401 or exc.code == 403:
+                    self._lease = None  # an expired or revoked lease: take a new one
+                elif exc.code != 429:
+                    return None
+                self.sleep(0.3 * (attempt + 1))
+            except (OSError, ValueError, KeyError, IndexError, TypeError):
+                return None
+        return None
 
     now = staticmethod(time.time)
     sleep = staticmethod(time.sleep)
