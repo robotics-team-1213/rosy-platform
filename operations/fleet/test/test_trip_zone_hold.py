@@ -11,6 +11,7 @@ from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
+from fleet.traffic.blocks import ZONE_STOP_CLEARANCE_M
 from fleet.traffic.zone_hold import hold_back_m
 from test_blocks import _demo_map
 from test_lane_traffic import START_N, Fleet, _s_of, _ticks
@@ -96,6 +97,21 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
     fleet.at("a", live.arc(tail), live.segments[tail]["s_to"] - back)
     _ticks(runner, fleet, 2)
     assert _unit(runner, "roundabout")["state"] == "FREE" and runner.view("a")["state"] == "running"
+
+
+@pytest.mark.parametrize("jitter", [-1e-6, 0.0, 1e-6])
+def test_a_hold_stops_a_clearance_short_of_the_zone(jitter):
+    """D-517 3 zone stop clearance: a body standing at the hold point, or up to ZONE_STOP_CLEARANCE_M past
+    it (± float jitter), never touches the zone."""
+    runner, store, fleet = _setup()
+    _trip(runner, store, fleet)
+    live = runner._live["a"]
+    tail = len(live.segments) - 1
+    seg, arc = live.segments[tail], live.arc(tail)
+    back = hold_back_m(runner.traffic, seg)
+    assert back > 0
+    for past in (jitter, ZONE_STOP_CLEARANCE_M - 1e-6 + jitter):
+        assert not _zone_units(runner, store, arc.point_at(seg["s_to"] - back + past)), past
 
 
 def test_the_next_lap_holds_where_it_can_stand_outside_the_zone():
