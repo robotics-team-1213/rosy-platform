@@ -886,3 +886,9 @@
 - 변경: `StateManager.set_trip_lease_provider` — 스냅숏의 `trip_lease`·`trip_lease_ended`를 live로 읽는다. lease 자체는 `core/trip_lease.py`(gateway)에 둔다: core_features 크기 판정이 증가를 막는다. lease 동작: Fleet trip lease 한 개(로봇당). 같은 토큰·같은 `lease_id`만 renew, 그 밖은 `TRIP_LEASED`. TTL 1–10 s(기본 5) CORE 단조 시계. 만료·넘겨받기는 lease를 지운 뒤 락 밖에서 `halt`(CORE 배선: line-follow 끔, 내비게이션 취소, NAVIGATION→IDLE). 읽기는 만료시키지 않는다(5 Hz 타이머만) — 지난 lease는 처리될 때까지 계속 막는다. `trip_lease_ended`는 끝난 뒤 10 s 보인다. `trip_lease.renewed`는 lease당 30 s에 한 번. 주인 토큰의 teleop·다른 출발지 `/ws/state`는 `trip_lease.shared_token` 한 번.
 - 증거: `middleware/core/gateway/test/test_trip_lease.py`(모델 PC).
 - gate 변화: SOURCE. Safety-Review·SIM(Fleet kill → IDLE)·DEVICE 열림.
+
+## 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
+
+- 변경: 현재 지시·호 주행의 원래 seq·odom 진행 거리·만료를 묶어 junction/bend/ring 경로 문맥을 계산한다. 신선한 odom과 CAMERA_LINE 모드가 없으면 만들지 않는다. 발행 중인 문맥과 시각을 상태에서 읽는다.
+- 증거: services 1500 passed, `known_failures.py` 신규 실패 0. ROS-SIM·DEVICE 미확인.
+- gate 변화: D-531 P1 SOURCE 후보. 차선 선택 규칙은 그대로다.

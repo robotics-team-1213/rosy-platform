@@ -7455,3 +7455,9 @@ osy-d395-s1d\`.
 - 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
 - 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
 - gate 변화: 없음(제안).
+
+## 2026-10-09 · uncommitted · docs(api): D-531 CORE 경로 문맥 P1
+
+- 변경: API reference v1.163에 `line/route_context`, 상태·능력·seq 역검증을 문서화했다. D-531 P2/P3의 인식 보조 및 경계 거부는 아직 계약만 있다.
+- 증거: services 1500 passed, contracts 856 passed/5 skipped, API 149 passed/15 skipped. gateway 전체 2421 passed/17 skipped, 문서 버전 문자열 1건 수정 뒤 집중 34 passed. harness lint 0 errors/24 기존 검증 SHA 경고. ROS-SIM·DEVICE·FIELD 수용 없음.
+- gate 변화: D-531 P1 SOURCE 후보.

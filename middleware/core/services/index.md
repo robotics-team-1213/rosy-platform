@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
 - 2026-10-09 · uncommitted · feat(core): D-541 trip lease 상태 제공자 (`state/manager.py`)
 - 2026-10-09 · uncommitted · test(sim): Fleet 한 바퀴 SIM 3차, 회전교차로 둘레 (모델 PC, main b23055884)
 - 2026-10-08 · uncommitted · fix(core): 모서리 정지는 지시와 어긋나는 모서리만 (lap SIM 2 원인 1)
 - 2026-10-08 · uncommitted · test(sim): Fleet 한 바퀴 SIM 2차 (모델 PC, main 47fa82b1a)
-- 2026-10-08 · 8fa0df8f6 · fix(core): 기대 교차로 앞 keeper 모서리 회전은 HOLD junction_corner_hold

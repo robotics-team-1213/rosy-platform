@@ -99,6 +99,9 @@ def test_d491_trip_fields_are_optional_and_bounded():
     (turn,) = c.pinky_controls(provides={"drive"}, max_linear=0.15, max_angular=0.6,
                                junction_turn=True)["items"]
     assert turn["junction_turn"] is True
+    (route,) = c.pinky_controls(provides={"drive"}, max_linear=0.15, max_angular=0.6,
+                                route_context=True)["items"]
+    assert route["route_context"] is True
     # An older image sends none of them; a consumer reads the same descriptor.
     old = c.ControlsDescriptor.model_validate({"schema": "rosy.controls/1", "items": [
         {"id": "base", "kind": "base_velocity", "label": "주행", "max_linear": 0.1, "max_angular": 0.5,

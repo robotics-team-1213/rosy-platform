@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.162
+**Version:** v1.163
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,30 @@
 ---
 
 # 1. 버저닝 및 폐기 정책
+
+### D-531 경로 문맥 발행 (v1.163, 기본 꺼짐)
+
+`line_follow.route_context_enabled: true`인 CORE는 `line/route_context`에
+`std_msgs/String` JSON을 RELIABLE, KEEP_LAST 1, VOLATILE로 발행한다.
+활성 문맥은 5 Hz로 갱신하며 지시 변경 시 바로 발행한다. 지시 완료·만료,
+모드 변경, odom 소실·epoch 변경, E-Stop 시 `{ "v": 1, "seq": null }`로 비운다.
+활성 메시지는 `{v: 1, seq, place_id, map_id, kind, stamp_s, valid_until_s}`와
+선택 필드 `ahead_m: [lo, hi]`, `lane_turn_deg`, `curvature_1pm`을 갖는다.
+`kind`는 `junction|bend|ring`; 시각은 ROS clock 기준이고 유효 기간은 최대 1초다.
+`ahead_m`의 각 값은 −0.5~2.0 m, `|lane_turn_deg|`는 360° 이하,
+ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 증거이며
+주행 명령이 아니다. CORE만 최종 `cmd_vel`을 발행한다.
+
+켜진 경우 `GET /api/v1/line-follow`와 상태 스냅숏의 `line_follow`에는
+`route_context`(현재 발행 중인 문맥 또는 null)와 `route_context_published_at_s`
+(마지막 발행 ROS 시각 또는 null)가 추가된다. `rosy.controls/1`의
+`base_velocity.route_context: true`는 설정이 켜졌음을 뜻하며 주행 가능성이나
+현장 수용을 뜻하지 않는다. 인식의 `line/observation`과 `line/keep_debug`가
+선택 필드 `route_context_seq`를 실으면 CORE는 현재 발행 문맥의 `seq`와
+다른 프레임을 거절한다. 필드가 없거나 null이면 기존 인식 경로와 같다.
+
+기본값은 false이며 이때 토픽과 능력 필드는 없다. 인식 소비자와 경계 판정은
+별도 단계로 검증한다(D-531 P2/P3).
 
 ### D-468 추가 차선 경계 증거 (v1.106)
 
@@ -2539,6 +2563,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.163 | 2026-10-09 | Additive (D-531 P1, 기본 꺼짐): CORE `line/route_context` 경로 증거, `line_follow.route_context`·`route_context_published_at_s` 상태, `base_velocity.route_context` 능력, 인식 `route_context_seq` 역검증. 기존 주행 판단 불변; P2/P3와 SIM·DEVICE 별도 검증 |
 | v1.162 | 2026-10-09 | Additive (D-541 7 Fleet side, feat/fleet-trip-lease-holder, Safety-Review 대상): 사이트 설정 `fleet.trip_lease_required`(기본 false)·`fleet.trip_lease_ttl_s`(기본 5, 1–10). 참이면 `POST /api/fleet/trips/{plan_id}/start` 가 CORE trip lease 를 열고(trip 마다 새 uuid `lease_id`), 주기마다 renew, 끝에서 정지 뒤 DELETE. 새 시작 거절 422 `TRIP_LEASE_UNSUPPORTED`, 409 `TRIP_ROBOT_LEASED`·`TRIP_ROBOT_MANUAL`·`CALIBRATION_ACTIVE`·`TRIP_LEASE_REFUSED`. 새 끝 `stopped`/`lease_lost`(`detail.lease_reason` `taken_over`·`expired`·`mode_left`·`estop`·`leased`·`core_restarted`·`renew_timeout`, `lease_by`), 다시 열지 않음. trip 보기 `lease`. 거짓이면 이전과 같다. Wi-Fi 끊김이 `ttl_s` 를 넘으면 trip 이 끝난다(현장별 10 s까지) |
 | v1.161 | 2026-10-09 | 권한 변경 (D-540 9, fix/fleet-named-operator-motion-routes, Safety-Review 대상): 로봇을 움직이는 Fleet 경로는 이름 있는 운영자만. 공유 콘솔 토큰과 자격 없는 루프백(`site-console`)은 403 `OPERATOR_IDENTITY_REQUIRED`(자격 없음·틀림은 그대로 401). 대상: `POST /api/fleet/robots/{robot_id}/goal`, `/line-follow`(`OFF` 제외), `/route`, `/identify`, `/line-stuck/decision`(`RESUME`·`BACK_AND_RETRY`·`MANUAL`), `POST /api/fleet/dispatch/rearm`(발행 재개가 대기 작업을 움직인다), `POST /api/fleet/formation/{start,reform,resume}`, `POST /api/fleet/signals/{signal_id}/command`(`all_red`·`flash_red` 제외), `PUT`·`DELETE /api/fleet/start-points/{source_id}`, `POST /api/fleet/do`(`estop`·`cancel`·`stop`·`formation_stop`·`follow_cancel` 만인 요청 제외). 멈춤은 어느 운영자에게나 열림: `/api/fleet/estop`, `/cancel-all`, `/robots/{robot_id}/cancel`, `/tasks/{task_id}/cancel`, `/formation/stop`, 막힘 `WAIT`·`ABORT`와 `/line-stuck/claim`(콘솔이 `ABORT` 확인 전에 맡는다), 그리고 `POST /api/fleet/trips/{trip_id}/cancel`(v1.116–v1.160 은 이름 있는 운영자였다). 이미 이름이 필요했던 `POST /api/fleet/cell-jobs/{mission_id}/cancel`(HOLD 작업만 끝내고 점유를 푼다, 움직임을 세우지 않음)과 `POST /api/fleet/teach/stop`(녹화만 끝낸다, 로봇에 명령 없음)은 멈춤이 아니라 그대로 둔다. 이름 있는 운영자 = `site-users.yaml` 자격·D-519 로그인 쿠키·D-473 개발 세션. 현장 이행은 D-540 9 운영 메모(배포 전 `site-users.yaml` 로그인 줄). 스키마·envelope 1.0 변경 없음 |
 | v1.160 | 2026-10-09 | Additive (D-550 10 목표 임대, feat/navigation-goal-lease, Safety-Review 대상): `POST /api/v1/navigation/goal` 선택 필드 `lease_ttl_s`(0 < s ≤ 5, `correlation_id` 필요), `POST /api/v1/navigation/goal/lease` 구현, 오류 `GOAL_LEASE_NOT_ACTIVE`(409), 능력 `controls` `base_velocity.goal_lease`. 임대 만료는 `nav.canceled` source `goal_lease`(사건 모양 변화 없음). `lease_ttl_s`가 없는 목표는 v1.159 와 같다. Fleet 쪽: 설정 `fleet.goal_lease_ttl_s`(기본 0 = 끔), `POST /api/fleet/goal-lease/presence`(이름 있는 운영자). envelope 1.0 변화 없음 |
