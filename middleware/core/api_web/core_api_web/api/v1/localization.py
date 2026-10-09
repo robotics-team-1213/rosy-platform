@@ -69,6 +69,16 @@ def candidates(_: AuthContext = Depends(assist), svc: CoreServicesLike = Depends
     return report.model_dump(mode="json")
 
 
+@localization_router.get("/request")
+def pose_request(_: AuthContext = Depends(assist), svc: CoreServicesLike = Depends(get_services)):
+    """D-546 5: the open "where am I" request (lane_return cannot go on without a pose)."""
+    loc = getattr(svc, "localization", None)
+    request = loc.pose_requests.current() if loc is not None else None
+    if request is None:
+        raise ApiError("NO_REQUEST", 404, "the robot has no open pose request")
+    return request
+
+
 @localization_router.post("/decision", status_code=202)
 def decision(body: Any = Body(...), auth: AuthContext = Depends(assist),
              svc: CoreServicesLike = Depends(get_services)):

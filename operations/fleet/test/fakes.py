@@ -122,6 +122,8 @@ class FakeRobot:
         self.sink_error_sticky = False
         #: D-395: what `localization_candidates` returns (None = not in CANDIDATES).
         self.candidates = None
+        #: D-546 5: what `localization_request` returns (None = no open request).
+        self.pose_request = None
         self.decisions: list = []
         self.suspects: list[str] = []
         #: Raised by `localization_decision` (e.g. RobotApiError 409 STALE_REQUEST).
@@ -223,6 +225,10 @@ class FakeRobot:
     async def localization_candidates(self):
         self._record("localization_candidates")
         return self.candidates
+
+    async def localization_request(self):
+        self._record("localization_request")
+        return self.pose_request
 
     async def localization_decision(self, decision) -> dict:
         self._record("localization_decision", decision.request_id)
