@@ -46,6 +46,10 @@ def test_judge_collects_every_reason():
     assert verdict == "fail" and len(reasons) == 3
 
 
+PASSING_D566 = {"val_outside_band_fp": 0.1, "val_beyond_line_fp": 0.1,
+                "val_near_centre_drivable": {"pred": 0.8, "label": 0.8}}
+
+
 def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
     import export_cell
 
@@ -81,8 +85,11 @@ def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
         parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
                            "torchscript_sha256": "c" * 64},
         dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
-        camera_provenance="provisional", model_version="v13.1.00")
-    rc, report = intake.run(str(derived), out=tmp_path / "accepted", root=tmp_path)
+        camera_provenance="provisional", model_version="v13.1.00", metrics=PASSING_D566)
+    import drivable_versions
+    empty = tmp_path / "ledger.yaml"  # the real ledger holds v13.1.00 since 2026-10-09
+    drivable_versions.save([], empty)
+    rc, report = intake.run(str(derived), out=tmp_path / "accepted", root=tmp_path, ledger=empty)
     assert rc != 0 and "D-55" not in " ".join(report["reasons"])
     assert report["model_version"] == "v13.1.00"
 
@@ -102,7 +109,7 @@ def test_v13_drivable_intake_checks_the_d558_version(tmp_path):
               parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
                                  "torchscript_sha256": "c" * 64},
               dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
-              camera_provenance="provisional")
+              camera_provenance="provisional", metrics=PASSING_D566)
     ledger = tmp_path / "ledger.yaml"
     drivable_versions.save([{"version": "v13.1.00", "revision": "v13-drivable-20261010-ffffffff",
                              "onnx_sha256": "f" * 64, "dataset": "d", "dataset_sha256": "e" * 64, "rules": ["D-554 1-9"],
@@ -121,6 +128,21 @@ def test_v13_drivable_intake_checks_the_d558_version(tmp_path):
     assert "major 12" in reasons(tmp_path / "major", "v12.1.00")
     assert "one version, one revision" in reasons(tmp_path / "taken", "v13.1.00")
     assert "D-558" not in reasons(tmp_path / "free", "v13.2.00")  # fails later on the fake ONNX
+
+
+def test_v13_quality_gate_d566():
+    from intake_eval_gate import v13_quality_error
+
+    def doc(fp, pred=0.7, label=0.8, beyond=0.1):
+        return {"metrics": {"val_outside_band_fp": fp, "val_beyond_line_fp": beyond,
+                            "val_near_centre_drivable": {"pred": pred, "label": label}}}
+    assert v13_quality_error(doc(0.15)) is None
+    assert "needs metrics" in v13_quality_error({"metrics": {"val_iou": {"drivable": 0.9}}})
+    assert "0.496 > 0.15" in v13_quality_error(doc(0.496))
+    assert "near-centre" in v13_quality_error(doc(0.1, pred=0.63))  # < 0.8 x 0.8
+    assert "val_beyond_line_fp 0.200" in v13_quality_error(doc(0.1, beyond=0.2))
+    assert "val_beyond_line_fp" in v13_quality_error({"metrics": {"val_outside_band_fp": 0.1,
+                                                                 "val_near_centre_drivable": {"pred": 1, "label": 1}}})
 
 
 @pytest.mark.parametrize("src", ["hf:org/repo@main", "hf:org/repo@v1.0", "hf:org/repo",
@@ -547,3 +569,15 @@ def test_a_missing_package_is_a_config_error_not_transient(tmp_path, monkeypatch
     assert rc == intake.CONFIG_EXIT == 4
     assert report["config_error"] is True and report["transient"] is False
     assert "onnx" in report["reasons"][0]
+
+
+def test_v13_lineage_accepts_d554_and_d563_annotations_only():
+    from intake_eval_gate import v13_lineage_error
+    def doc(origin, adr):
+        return {"task": "lane_seg", "camera_provenance": "provisional",
+                "parent_lane_model": {"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64},
+                "dataset": {"revision": "a" * 64, "annotation_origin": origin, "adr": adr}}
+    assert v13_lineage_error(doc("derived_from_reviewed_lanes", "D-554")) is None
+    assert v13_lineage_error(doc("map_projected", "D-563")) is None
+    assert v13_lineage_error(doc("map_projected", "D-554")) is not None
+    assert v13_lineage_error(doc("human_reviewed", "D-563")) is not None

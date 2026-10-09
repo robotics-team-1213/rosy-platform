@@ -512,9 +512,12 @@ export function trafficDrawing(traffic, active, trips = []) {
   for (const signal of traffic.signals || []) {
     for (const row of signal.approaches || []) {
       if (!row.stop_line) continue;
+      const count = countdownText(row);
+      const occupancy = occupancyLampText(signal, row);  // D-525 rev 6: the zone state in words
       signals.push({ x: row.stop_line.x, y: row.stop_line.y, angle: row.stop_line.yaw, lamp: row.lamp,
         label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id,
-        count: countdownText(row), approach: row.approach });
+        count, approach: row.approach,
+        text: occupancy || (count ? `${signalLampText(row.lamp)} ${count}` : signalLampText(row.lamp)) });
     }
   }
   const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
@@ -526,6 +529,27 @@ export function trafficDrawing(traffic, active, trips = []) {
 const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
 export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
 
+/** D-525 rev 6 the occupancy-mode zone state: "비어 있음", "점유 예정 · rosy_01", "점유 중 · rosy_01". */
+function occupancyStateText(occupancy) {
+  const who = occupancy?.holder ? ` · ${occupancy.holder}` : "";
+  return { free: "비어 있음", reserved: `점유 예정${who}`, occupied: `점유 중${who}` }[occupancy?.state]
+    || "상태 모름 · 적색";
+}
+
+/** D-525 rev 6: one approach's lamp in words in occupancy mode (never colour alone): "초록 · 비어 있음",
+ * "주황 · 점유 예정 · rosy_01", "적 · 점유 중 · rosy_01"; the holder's own approach while reserved is
+ * "초록 · 진입 차례 · rosy_01". null outside occupancy mode or with a config error. */
+export function occupancyLampText(signal, row) {
+  if (signal?.mode !== "occupancy" || signal.errors?.length) return null;
+  const occupancy = signal.occupancy || {};
+  if (row?.lamp === "green") {
+    return occupancy.state === "reserved" ? `초록 · 진입 차례${occupancy.holder ? ` · ${occupancy.holder}` : ""}`
+      : "초록 · 비어 있음";
+  }
+  if (row?.lamp === "yellow") return `주황 · ${occupancyStateText(occupancy)}`;
+  return `적 · ${occupancyStateText(occupancy)}`;
+}
+
 /** D-525 rev 3 T-map style seconds for one approach: "7" (exact), "≥7" (a lower bound), "" (unknown). */
 export function countdownText(row) {
   const s = row?.lamp === "red" ? row?.green_in_s ?? row?.left_s : row?.left_s;
@@ -536,7 +560,8 @@ export function countdownText(row) {
 /** Robot card text for the next signal on its route: "신호 sig 적 · 녹색까지 ≥7 s · 정지선 0.40 m". */
 export function signalAheadText(ahead) {
   if (!ahead) return "";
-  const lamp = signalLampText(ahead.lamp);
+  const lamp = ahead.mode === "occupancy"
+    ? occupancyLampText(ahead, { lamp: ahead.lamp }) : signalLampText(ahead.lamp);
   const wait = ahead.lamp !== "green" && typeof ahead.green_in_s === "number"
     ? ` · 녹색까지 ${ahead.exact ? "" : "≥"}${Math.ceil(ahead.green_in_s)} s` : "";
   const where = ahead.distance_m >= 0 ? ` · 정지선 ${ahead.distance_m.toFixed(2)} m` : " · 교차로 안";
@@ -554,6 +579,7 @@ export function signalWait(traffic, robotId) {
 /** "가상 신호 · 녹 5 s" for one signal row of /traffic. */
 export function signalText(signal) {
   if (signal.errors?.length) return `${signal.signal_id} · 설정 오류 · 늘 적색`;
+  if (signal.mode === "occupancy") return `가상 신호 ${signal.signal_id} · 점유 기반(기본) · ${occupancyStateText(signal.occupancy)}`;
   const word = { green: "녹", yellow: "황", all_red: "전체 적색" }[signal.aspect] || signal.aspect;
   const left = typeof signal.left_s === "number" ? ` ${Math.ceil(signal.left_s)} s` : "";
   const mode = { hold: " · 유지", all_red: " · 운영자 전체 적색" }[signal.mode] || "";

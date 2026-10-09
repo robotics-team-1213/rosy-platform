@@ -20,7 +20,9 @@ export function guideAttention(guide, robotId) {
 /** "rosy_26 · LOCALIZED · ±0.12 m" for the chip next to the body circle. */
 export function poseLabel(row) {
   if (!row.pose) return `${row.robot_id} · 위치 모름`;
-  return `${row.robot_id} · ±${row.pose.u_m.toFixed(2)} m${row.pose.state === "DEGRADED" ? " · 추정" : ""}`;
+  const pin = row.pose.anchor_source === "operator_pin"   // D-593: 운영자 핀과 그 나이
+    ? ` · 운영자 핀${typeof row.pose.anchor_age_s === "number" ? ` ${Math.round(row.pose.anchor_age_s)} s` : ""}` : "";
+  return `${row.robot_id} · ±${row.pose.u_m.toFixed(2)} m${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}`;
 }
 
 /** D-540 4: screen geometry of each placed robot, so the 관제 canvas and the site-map SVG draw the same marks.

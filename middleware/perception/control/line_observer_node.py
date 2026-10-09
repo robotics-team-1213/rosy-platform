@@ -10,6 +10,7 @@ import math
 import os
 
 import cv2
+import numpy as np
 import rclpy
 import yaml
 from rclpy.node import Node
@@ -35,6 +36,7 @@ from .sensing.perception.lane import (
     LaneCornerTracker,
     detect_ir_line,
     detect_lane_centre,
+    LaneObservation,
     detect_lane_error,
     line_observation_payload,
 )
@@ -42,6 +44,8 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
+from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
+from .sensing.perception.learned.drivable_steer import DrivableSteer
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -95,6 +99,9 @@ class LineObserverNode(Node):
         # D-408: keep-mode paint source: threshold (default) | denoise | learned (+ denoise fallback).
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
+        # D-597: what of the learned model's output becomes paint: its lane_marking classes (default), or
+        # the boundaries of the drivable way through its drivable class (lane_marking when it has none).
+        self.declare_parameter('learned_paint_target', 'lane_marking', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
         # D-408 CPU: infer on every Nth keep frame (the mask is reused in between), on 1 thread.
         self.declare_parameter('learned_paint_every_n', 2, _READ_ONLY)
@@ -165,6 +172,9 @@ class LineObserverNode(Node):
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
         self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
+        # D-597 amendment 2: with the drivable target, keep steers from the way itself.
+        self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
+                                and self._paint_worker.target == 'drivable' else None)
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -389,7 +399,10 @@ class LineObserverNode(Node):
             raise ValueError(f"paint_source must be threshold, denoise or learned, got {source!r}")
         if source != 'learned':
             return None
-        from .sensing.perception.learned.paint_worker import LearnedPaintWorker
+        from .sensing.perception.learned.paint_worker import TARGETS, LearnedPaintWorker
+        target = str(self.get_parameter('learned_paint_target').value)
+        if target not in TARGETS:
+            raise ValueError(f"learned_paint_target must be one of {TARGETS}, got {target!r}")
         from .sensing.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
         add_learned_site()
         pointer = str(self.get_parameter('learned_lane_pointer').value)
@@ -403,7 +416,7 @@ class LineObserverNode(Node):
             folder, threads=threads, allow_spinning=False)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
-                                  warn=self.get_logger().warning)
+                                  warn=self.get_logger().warning, target=target)
 
     def _paint_for(self, frame, ground, stamp=None):
         """(paint mask or None, source actually used) for one keep frame (D-408)."""
@@ -425,12 +438,16 @@ class LineObserverNode(Node):
                 frame, every_n if motion is not None else reuse_n, stamp,
                 clean=lambda m: clean_learned_mask(m, ground.horizon_row),
                 motion=motion, max_age_s=float(self.get_parameter('learned_paint_max_age_s').value),
-                reuse_n=reuse_n)
+                reuse_n=reuse_n, clean_drivable=lambda way: clean_learned_mask(boundary_paint(
+                    way > 0, lateral_px_per_m(np.arange(way.shape[0]), focal_px=ground.focal_px,
+                                              principal_y=ground.principal_y, pitch_rad=ground.pitch_rad,
+                                              height_m=ground.height_m),
+                    self._paint_half_width_m), ground.horizon_row))
             reuse = self._paint_worker.reuse
             if compensate and motion is None and reuse and reuse['paint_warp_skipped'] == 'off':
                 reuse['paint_warp_skipped'] = 'no_odom'
             if mask is not None:
-                return mask, 'learned'
+                return mask, 'learned_drivable' if self._paint_worker.used_paint_kind == 'drivable' else 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
 
@@ -520,22 +537,48 @@ class LineObserverNode(Node):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
-                    if self._paint_worker is not None:
+                    # D-597 amendment 2: the drivable way is steered from directly (odometry moves its target,
+                    # latest_way drops it after stale_s), so a gap or a pivot keeps the mask and the pivot latch.
+                    if self._paint_worker is not None and self._drivable_steer is None:
                         self._paint_worker.reset()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
+                    crosswalk_mask=(self._paint_worker.used_crosswalk  # D-597 amendment: D-491 extent
+                                    if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
+                latest = self._paint_worker.latest_way() if self._drivable_steer is not None else None
+                if latest is not None:
+                    way, way_stamp = latest
+                    error, confidence, steer = self._drivable_steer.update(
+                        way, way_stamp, ground, self._lane_keeper._x_offset,
+                        float(self.get_parameter('lane_half_width_m').value),
+                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp))
+                    observation = None if error is None else LaneObservation(error=error, confidence=confidence)
+                    self._lane_keeper.last.update(
+                        strategy=steer['strategy'], drivable_steer=steer,
+                        error=None if error is None else round(error, 3), confidence=confidence,
+                        target_m=list(steer.get('target_now_m') or steer['target_m'] or []) or None,
+                        reason=steer.get('reason'))
+                    # the way chose the branch already: the tape keeper's junction HOLD does not apply
+                    self._lane_keeper.last.pop('junction_ahead_m', None)
+                    paint_used = 'learned_drivable'
+                elif self._drivable_steer is not None:
+                    self._drivable_steer.lost(image_stamp)
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,
                               paint_source_requested=str(self.get_parameter('paint_source').value),
                               paint_model_revision=(self._paint_worker.used_model_revision
-                                                    if paint_used == 'learned' and self._paint_worker is not None
-                                                    else None),
+                                                    if paint_used in ('learned', 'learned_drivable')
+                                                    and self._paint_worker is not None else None),
+                              paint_target_requested=(self._paint_worker.target
+                                                      if self._paint_worker is not None else None),
+                              paint_drivable=(self._paint_worker.used_drivable
+                                              if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),

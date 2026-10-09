@@ -4,7 +4,7 @@
 // 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
 
-import { primaryButton, quietButton, setReason } from "./queues.js";
+import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js";
 
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
@@ -76,6 +76,19 @@ export function resolverText(note) {
   return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision}`;
 }
 
+const AI_STATE_TEXT = Object.freeze({ present: "AI 판단 있음", absent: "AI 판단 없음" });
+
+/** D-577 5·8: the AI chip and one line per live fact (kind, confidence, source, evidence ids); shadow only. */
+export function aiLines(stuck) {
+  const ai = stuck.ai;
+  if (!ai) return [];
+  const chip = ai.state === "present" && ai.owner_mode === "owner_busy" ? "AI 판단 없음 (소유자 사용 중)"
+    : AI_STATE_TEXT[ai.state] || "AI 판단 없음";
+  const facts = (stuck.ai_facts || []).map((fact) => `AI 사실 ${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`
+    + ` · ${fact.source} · 근거 ${JSON.stringify(fact.evidence)}`);
+  return [chip, ...facts];
+}
+
 const OUTCOME_TEXT = Object.freeze({
   hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
   back: "후진 후 재시도를 시작했습니다",
@@ -144,6 +157,47 @@ export function decisionButtons(stuck, { operator, namedReason = "", busy = fals
   });
 }
 
+const CAMERA_LABEL = Object.freeze({ front: "앞 카메라" });
+
+/** D-577 8: caption of the stuck's evidence picture; `elapsedS` = seconds since Fleet answered. */
+export function evidenceCaption(preview, elapsedS = 0) {
+  if (!preview) return "카메라 그림 없음";
+  if (preview.state === "loading") return "카메라 그림 받는 중";
+  const age = Math.round((preview.age_s ?? 0) + elapsedS);
+  return `${CAMERA_LABEL[preview.source] || preview.source || "카메라"} #${preview.sequence} · ${age}초 전 촬영`;
+}
+
+/** D-577 8: alerts to raise now — once when a stuck row appears, once more when it goes overdue.
+ * `seen` (robot|stuck -> "new"|"overdue") is updated in place; a closed stuck is forgotten. */
+export function alertsDue(seen, robots) {
+  const due = [];
+  const live = new Set();
+  for (const robot of pendingStucks(robots)) {
+    const key = `${robot.robot_id}|${robot.line_stuck.stuck_id}`;
+    live.add(key);
+    const kind = stuckOverdue(robot.line_stuck) ? "overdue" : "new";
+    if (seen.get(key) === kind || seen.get(key) === "overdue") continue;
+    seen.set(key, kind);
+    due.push({ robotId: robot.robot_id, stuckId: robot.line_stuck.stuck_id, kind });
+  }
+  for (const key of [...seen.keys()]) if (!live.has(key)) seen.delete(key);
+  return due;
+}
+
+/** Console-only alert (user 2026-10-09: no phone or messenger): a short tone and a browser notice. */
+function browserAlert(text) {
+  try {
+    const audio = new AudioContext();
+    const tone = audio.createOscillator();
+    tone.connect(audio.destination);
+    tone.start();
+    tone.stop(audio.currentTime + 0.2);
+    tone.onended = () => audio.close();
+  } catch { /* no audio device: the queue row still shows */ }
+  if (globalThis.Notification?.permission === "granted") new Notification("ROSY 판단 요청", { body: text });
+  else if (globalThis.Notification?.permission === "default") Notification.requestPermission().catch(() => {});
+}
+
 export function confirmText(robotId, decision) {
   if (decision === "RESUME") {
     return `${robotId} 재개 — 앞이 비었는지 직접 확인했습니까? `
@@ -183,13 +237,18 @@ export function refusalText(robotId, decision, err) {
   return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
 }
 
-export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {
+export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "",
+  notify = browserAlert }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
+  const alerted = new Map();
+  // D-577 8: robot_id -> { stuck_id, state: loading|ok|none, preview, at } — one picture per stuck.
+  const previews = new Map();
   const results = new Map();
   const busy = new Set();
   const signatures = new Map();
   scope.onDispose(() => {
+    previews.clear();
     confirming.clear();
     busy.clear();
     signatures.clear();
@@ -241,6 +300,39 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
   function cancelConfirm(robotId, decision) {
     confirming.delete(robotId);
     render(`decision-${decision}`, robotId);
+  }
+
+  async function loadPreview(robotId, stuckId) {
+    previews.set(robotId, { stuck_id: stuckId, state: "loading" });
+    let entry;
+    try {
+      const preview = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/evidence`
+        + `?stuck_id=${encodeURIComponent(stuckId)}`);
+      entry = { stuck_id: stuckId, state: "ok", preview, at: Date.now() };
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      entry = { stuck_id: stuckId, state: "none" };
+    }
+    if (previews.get(robotId)?.stuck_id !== stuckId) return;   // the stuck changed meanwhile
+    previews.set(robotId, entry);
+    render();
+  }
+
+  function evidence(robotId) {
+    const entry = previews.get(robotId);
+    const figure = document.createElement("figure");
+    figure.className = "stuck-evidence";
+    const caption = document.createElement("figcaption");
+    if (entry?.state === "ok") {
+      const img = document.createElement("img");
+      img.src = `data:${entry.preview.media_type};base64,${entry.preview.jpeg_base64}`;
+      img.alt = `${robotId} 막힘 순간의 카메라 그림`;
+      figure.append(img);
+    }
+    caption.textContent = evidenceCaption(entry?.state === "ok" ? entry.preview
+      : entry?.state === "loading" ? { state: "loading" } : null, entry?.at ? (Date.now() - entry.at) / 1000 : 0);
+    figure.append(caption);
+    return figure;
   }
 
   function item(robotId, stuck) {
@@ -310,7 +402,13 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       line.textContent = note;
       li.append(line);
     }
-    li.append(actions);
+    for (const text of aiLines(stuck)) {
+      const line = document.createElement("p");
+      line.className = "stuck-resolver";
+      line.textContent = text;
+      li.append(line);
+    }
+    li.append(actions, evidence(robotId));
 
     if (pending) {
       const box = document.createElement("div");
@@ -362,6 +460,11 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       if (live.get(key) !== entry.stuck_id) confirming.delete(key);
     }
     for (const key of [...signatures.keys()]) if (!live.has(key)) signatures.delete(key);
+    for (const key of [...previews.keys()]) if (live.get(key) !== previews.get(key).stuck_id) previews.delete(key);
+    for (const due of alertsDue(alerted, stucks)) {
+      notify(due.kind === "overdue" ? `${due.robotId}: 30초 넘게 답 없음 — 로봇은 멈춰 기다립니다`
+        : `${due.robotId}: 판단 요청 — 차선 추종이 막혔습니다`);
+    }
 
     const active = document.activeElement;
     const activeItem = active?.closest?.(".stuck-item");
@@ -375,7 +478,9 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       const stuck = robot.line_stuck;
       // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
       const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
+      if (!previews.has(robot.robot_id)) loadPreview(robot.robot_id, stuck.stuck_id);
       const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
+        previews.get(robot.robot_id)?.state || null,
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
@@ -385,6 +490,9 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
         // 멈춘 시간만 바뀌었다 — 항목을 다시 만들지 않는다(포커스·확인 단계 유지).
         const held = node.querySelector('[data-fact="held"] dd');
         if (held) held.textContent = stuckFacts(stuck).find(([key]) => key === "held")[2];
+        const entry = previews.get(robot.robot_id);
+        const caption = node.querySelector(".stuck-evidence figcaption");
+        if (caption && entry?.state === "ok") caption.textContent = evidenceCaption(entry.preview, (Date.now() - entry.at) / 1000);
       }
     }
 

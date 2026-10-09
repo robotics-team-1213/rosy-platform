@@ -18,6 +18,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `clearance.py` | ROS-free LiDAR geometry: front sector minimum, swept-corridor path clearance, D-407 body clearances, D-422 swept-body gap, rotation gap, ultrasonic cone points |
 | `body_stop.py` | D-422 manager mixin: body gap along the intended path, derived/override stop gaps, LiDAR blind floor, ultrasonic echo freshness |
 | `authority.py` | D-517 4 (M2) manager mixin: Fleet movement authority (`POST /line-follow/authority`), wall-stamped odom path log for `pose_stamp`, stop at remaining ≤ D-424 stop gap, non-shrinking, `ttl_s` expiry; only ever zeroes the tick's final decision |
+| `crosswalk_gate.py` | D-573 crosswalk gate (default off, `concern: safety` path): stop before a D-491 camera zone at max(g(v), range_min - (front - lidar) + margin), look with LiDAR rays only (no return / shadow / blind = unknown), cross after `crosswalk_look_s` of empty scans, no timeout, `crosswalk_blocked` D-407 stuck after `crosswalk_report_s`; manager mixin applies its cap with `min` after the authority gate |
 | `model.py` | Modes, observations, config (incl. D-407 `recovery_*`, URDF `body_*`), decisions |
 | `recovery/stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
 | `recovery/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
@@ -45,7 +46,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 ### Testing Requirements
 
-`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`
+`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_lost_resume.py` (D-407 개정 2026-10-10), `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`, `middleware/core/services/test/test_crosswalk_gate.py`, `middleware/core/gateway/test/test_crosswalk_gate_wiring.py`
 
 ## Dependencies
 

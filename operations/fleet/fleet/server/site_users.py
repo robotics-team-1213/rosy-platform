@@ -18,7 +18,7 @@ from typing import Mapping
 
 import yaml
 
-_ROLES = {"viewer", "operator", "policy-admin", "service"}
+_ROLES = {"viewer", "operator", "policy-admin", "service", "ai_observer"}  # D-577 4: ai_observer posts facts only
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _LOGIN = re.compile(r"[a-z0-9._-]{1,32}\Z")
 _FIELDS = {"principal_id", "role", "token_sha256", "login", "password_scrypt"}
@@ -111,8 +111,8 @@ def load_site_accounts(path: Path | str) -> tuple[dict[str, dict[str, str]], dic
             users[token_digest] = {"principal_id": principal_id, "role": role}
         if "login" in keys:
             login = entry["login"]
-            if role == "service":
-                raise ValueError("service principals cannot have a console login")
+            if role in ("service", "ai_observer"):
+                raise ValueError(f"{role} principals cannot have a console login")
             if not isinstance(login, str) or not _LOGIN.fullmatch(login):
                 raise ValueError("site user login must match ^[a-z0-9._-]{1,32}$")
             if login in logins:

@@ -204,9 +204,18 @@ def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
     assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
 
 
-def test_corner_markers_win_over_the_record(make_worker):
+def test_the_approved_record_wins_over_corner_markers(make_worker):
+    # D-595: the accepted record is frozen; four corner markers in the frame never re-fit it.
     detector = _Detector()
     worker, _ = make_worker(configs=[CONFIG], detector=detector)
+    asyncio.run(worker.refresh_config())
+    payload = asyncio.run(worker.process(_frame(), MARKERS))
+    assert payload.calibration_revision == CONFIG["calibration"]["calibration_revision"]
+
+
+def test_corner_markers_calibrate_only_without_a_record(make_worker):
+    detector = _Detector()
+    worker, _ = make_worker(configs=[{**CONFIG, "calibration": None}], detector=detector)
     asyncio.run(worker.refresh_config())
     payload = asyncio.run(worker.process(_frame(), MARKERS))
     assert payload.calibration_revision == "cal-v3"
@@ -495,3 +504,27 @@ def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
         asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
     (body,) = client.identity
     assert body["reason"] != "frames_missing" and body["evidence"]["frames"] == 14
+
+
+class _HoldingDetector(_Detector):
+    def __init__(self):
+        super().__init__()
+        self.holds = []
+
+    def hold(self, until):
+        self.holds.append(until)
+
+
+def test_two_parallel_challenges_are_each_answered_and_hold_the_background(make_worker):
+    # D-596: identity_challenges carries one open request per colour; the detector is held through both.
+    blue = {"request_id": "req-b", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    amber = {"request_id": "req-a", "color": "amber", "not_before": 101.0, "not_after": 105.0}
+    detector = _HoldingDetector()
+    worker, client = make_worker(configs=[{**CONFIG, "identity_challenge": blue,
+                                           "identity_challenges": [blue, amber, blue]}], detector=detector)
+    asyncio.run(worker.refresh_config())
+    for i in range(20):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    assert sorted(body["request_id"] for body in client.identity) == ["req-a", "req-b"]
+    assert set(detector.holds) == {105.0}
+    assert all(body["processor_revision"] == "led-identity/2" for body in client.identity)

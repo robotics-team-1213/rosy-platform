@@ -82,10 +82,12 @@ def _finding(code: str, severity: str, text: str, *, target: Optional[dict] = No
 
 def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mapping],
               camera_ok: Optional[str], graph, zone_of: Mapping[str, str], body_radius_m: float,
-              body_half_width_m: float, stopped_s: float = 0.0,
+              body_half_width_m: float, stopped_s: float = 0.0, anonymous_seen: bool = False,
               config: GuideConfig = GuideConfig()) -> dict:
     """One robot's record. ``pose`` is a ``MapPose`` (or None); ``camera_ok`` the id of a Rosy Cam
-    source reporting OK, or None; ``stopped_s`` how long it has not moved (the service keeps it)."""
+    source reporting OK, or None; ``stopped_s`` how long it has not moved (the service keeps it);
+    ``anonymous_seen`` whether Rosy Cam shows a blob no robot is matched to (D-596: then the LED
+    identify names it, standing or not; without one the robot is likely learned into the background)."""
     placed = pose is not None and pose.state in ("LOCALIZED", "DEGRADED") and pose.x is not None
     record = {"robot_id": robot_id, "online": online, "body_radius_m": body_radius_m,
               "pose": None, "lane": None, "findings": []}
@@ -94,15 +96,24 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         record["pose"] = {"x": round(pose.x, 3), "y": round(pose.y, 3),
                           "yaw": None if pose.yaw is None else round(pose.yaw, 4), "state": pose.state,
                           "source": pose.source, "u_m": round(uncertainty_m(pose.dead_reckon_m, config), 3),
-                          "age_s": pose.age_s}
+                          "age_s": pose.age_s,
+                          # D-593: who set the anchor and how old it is ("운영자 핀 · 4 s")
+                          "anchor_source": getattr(pose, "anchor_source", None),
+                          "anchor_age_s": getattr(pose, "anchor_age_s", None)}
     if not online:
         return record          # the roster already says "연결 끊김"; a stale pose stays drawn faded
     status = (tracking_row or {}).get("status")
-    if camera_ok and status in NOT_SEEN:
+    if camera_ok and status in NOT_SEEN and anonymous_seen:
+        findings.append(_finding(
+            "CAMERA_NOT_SEEING", "warn",
+            f"Rosy Cam이 {robot_id}를 찾지 못합니다 · 이름 없는 로봇이 보입니다. "
+            "LED로 찾기(멈춘 채로 됩니다)",
+            action={"kind": "identify", "robot_id": robot_id}))
+    elif camera_ok and status in NOT_SEEN:
         findings.append(_finding(
             "CAMERA_NOT_SEEING", "warn",
             f"Rosy Cam이 {robot_id}를 찾지 못합니다 · 로봇이 매트 위에 있을 때 배경을 배웠다면 로봇이 배경이 됩니다. "
-            "로봇을 매트 밖으로 옮긴 뒤 배경 다시 학습, 또는 LED로 찾기",
+            "로봇을 매트 밖으로 옮긴 뒤 배경 다시 학습",
             action={"kind": "relearn", "source_id": camera_ok}))
     if pose is not None and pose.odom_refused_reason == "future":
         findings.append(_finding(

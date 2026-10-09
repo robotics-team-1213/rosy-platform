@@ -1,7 +1,8 @@
-"""Which calibration a frame uses for tracking (D-457 2).
+"""Which calibration a frame uses for tracking (D-457 2, D-595).
 
-Corner markers are a measurement and win when all four are in this frame; the approved
-lane-paint fit from Fleet is an estimate and is used otherwise. A record for another
+D-595: once Fleet holds an approved record for this source, every frame uses that frozen
+record; the four corner markers of a frame are used only when there is no usable record
+(they never re-fit an accepted calibration per frame). A record for another
 source or map, another lens (the lens was changed: the record is void), or another frame
 aspect ratio is not used — the frame is then CALIBRATION_REQUIRED.
 
@@ -95,11 +96,10 @@ def from_markers(camera: CameraMap, markers: Mapping[int, Sequence[Point]], *,
 
 def choose(camera: CameraMap, markers: Mapping[int, Sequence[Point]], record, *,
            frame_size: Sequence[int], lens) -> Calibration | None:
-    """Corner markers (a measurement) win; else the approved paint fit (an estimate)."""
-    marker = from_markers(camera, markers, frame_size=frame_size, lens=lens)
-    if marker is not None:
-        return marker
-    if record is None:
-        return None
-    return from_record(record, source_id=camera.source_id, map_id=camera.map_id,
-                       frame_size=frame_size, lens=lens)
+    """D-595: the approved (frozen) record wins; this frame's corner markers only without one."""
+    if record is not None:
+        approved = from_record(record, source_id=camera.source_id, map_id=camera.map_id,
+                               frame_size=frame_size, lens=lens)
+        if approved is not None:
+            return approved
+    return from_markers(camera, markers, frame_size=frame_size, lens=lens)

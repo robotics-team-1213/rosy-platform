@@ -140,7 +140,7 @@ class RobotClient(Protocol):
                                   yield_turn_rad: float | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
+    async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_request(self) -> Optional[dict]: ...
@@ -345,6 +345,18 @@ class HttpRobotClient:
             body["yield_turn_rad"] = yield_turn_rad
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
+    async def front_frame(self) -> tuple[bytes, dict]:
+        """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
+        status = await self._get("/api/v1/vision/front/status")
+        if not status.get("available") or not status.get("sequence"):
+            raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
+                                "front camera preview is missing or stale")
+        resp = await self._http.get("/api/v1/vision/front/frame", params={"sequence": status["sequence"]},
+                                    headers=self._headers())
+        if resp.status_code >= 400:
+            self._check(resp)
+        return resp.content, status
+
     async def fleet_link_put(self, body: dict) -> dict:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
         return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
@@ -358,11 +370,13 @@ class HttpRobotClient:
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
-    async def identify_lamp(self, color: Optional[str] = None) -> dict:
-        """D-472: None asks for the robot's configured colour; the answer names the one used."""
+    async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict:
+        """D-472: None asks for the robot's configured colour; the answer names the one used.
+        D-596: ``quiet`` asks for no call chirp (a query flag: an older CORE ignores it and chirps)."""
         if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        return await self._post("/api/v1/host/lamp/identify", {} if color is None else {"color": color})
+        return await self._post("/api/v1/host/lamp/identify" + ("?quiet=true" if quiet else ""),
+                                {} if color is None else {"color": color})
 
     # --- D-395 localization (contract §2) -------------------------------------------
 
