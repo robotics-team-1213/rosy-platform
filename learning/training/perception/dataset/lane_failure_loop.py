@@ -43,7 +43,7 @@ import lane_failure as lf
 from lane_derived_drivable import _git_commit
 
 OVERLAY = {"background": (60, 60, 60), "lane_marking": (255, 255, 255), "wall": (0, 0, 255),
-           "drivable": (0, 200, 0), "stop_line": (255, 0, 255)}
+           "drivable": (0, 200, 0), "stop_line": (255, 0, 255)}  # BGR: grey, white, red, green, magenta
 CAL_TOPIC, KEEP_TOPIC = "camera/calibration/status", "line/keep_debug"
 
 
@@ -333,7 +333,8 @@ def _facts_text(tile, vote):
              f"  transverse {s['transverse']}, rejected {','.join(keep.get('rejected') or []) or '-'}",
              f"  failing share {s['keep_failing']}",
              f"model: lane near {s['lane_near']}, dir {s['lane_direction']}",
-             "  " + ", ".join(f"{k} {v}" for k, v in fr.items() if v >= 0.01),
+             *["  " + ", ".join(f"{k} {v}" for k, v in list(fr.items())[i:i + 2] if v >= 0.01)
+               for i in range(0, len(fr), 2)],
              f"image: mean {f0['image']['mean_gray']}, sat {f0['image']['saturated']}, dark {f0['image']['dark']}",
              f"calibration active: {s['calibration_active']}"]
     if vote:
@@ -351,14 +352,14 @@ def _tile_image(run, tile, vote):
         cmap = cv2.imread(str(run / frame["class_png"]), cv2.IMREAD_UNCHANGED)
         paint = np.zeros_like(raw)
         for index, _, role in tile["model"]["classes"]:
-            paint[cmap == index] = OVERLAY.get(role, (0, 255, 255))[::-1]
+            paint[cmap == index] = OVERLAY.get(role, (0, 255, 255))
         cols.append(np.vstack([raw, cv2.addWeighted(raw, 0.5, paint, 0.5, 0)]))
     while len(cols) < 3:
         cols.append(np.full_like(cols[0], 255))
     body = np.hstack(cols)
-    panel = np.full((body.shape[0], 470, 3), 255, np.uint8)
+    panel = np.full((body.shape[0], 520, 3), 255, np.uint8)
     for i, text in enumerate(_facts_text(tile, vote)):
-        cv2.putText(panel, text, (8, 26 + i * 30), cv2.FONT_HERSHEY_SIMPLEX, 0.62 if i else 0.9,
+        cv2.putText(panel, text, (8, 26 + i * 28), cv2.FONT_HERSHEY_SIMPLEX, 0.62 if i else 0.9,
                     (0, 0, 0), 2 if i == 0 else 1, cv2.LINE_AA)
     out = np.hstack([body, panel])
     return np.vstack([out, np.full((12, out.shape[1], 3), 180, np.uint8)])
