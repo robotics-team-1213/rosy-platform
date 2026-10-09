@@ -2902,3 +2902,10 @@
 - gate 변화: 없음. fleet 크기 판정 독립 재심 수락, main 병합 뒤 48481로 기록. 리뷰 반영: trip 취소가 실패하면 차선 주행 OFF도 보냄(trip guard가 서버에서 trip을 끝냄), 취소 범위는 누를 때 계산, 레일 행 높이 `max-content`(관제 카메라 칸 겹침), queues↔card-trip import 순환 제거. 가벼운 Safety-Review 필요(카드 운행 시작 경로, 운행 취소 의미 합치기). 착지·푸시 안 함.
 - 결정: D-540 Proposed 그대로, D-517 10항 개정 줄은 수락 때 확정(이 단계에서 문구 안 바꿈).
 - 교훈: 1 s 폴링이 카드를 다시 만들면 `<select>` 목록이 닫힌다 — 고르는 중인 카드는 `roster.place`가 그대로 둔다.
+
+## 2026-10-09 · uncommitted · feat(fleet): site map robot positions, trip panel removed (D-540 (e))
+- 변경: 현장 지도 SVG에 `/api/fleet/guide` 로봇(몸체 원·방향·불확실성 고리·자세 이름표)과 열린 trip의 경로·다음 장소를 그린다. 지도 프레임·`view_turn_deg` 그대로, 읽기 전용, 1 s 폴링에 따로 그리는 층(`#robot-layer`, 클릭 통과). `guide-layer.js`를 `web/shared/`로 옮기고 순수 좌표 함수 `guideMarks()`를 나눠 관제 canvas와 현장 지도가 같이 쓴다(`test_document_imports.py` SHARED). 운행 칸(출발 자리·대열 리더·고리 정원·`운행 시작`·`반복 운행 시작`·`바뀐 경로로 계속`·`운행 취소`)을 없애고 "이 지도로 운행 중" 읽기 줄과 "운행은 관제의 로봇 카드에서" 링크를 둔다. 쓰는 곳이 없어진 `cancelTrip`·`tripCancelReason` 삭제. `site-map.css` 전역 input/select 재칠 제거(`ui-field`). 경로 미리보기는 그대로.
+- 증거: 모델 PC `operations/fleet/test/` 3066 passed, 141 skipped, `known_failures` NEW 0. 브라우저(ai PC, OMEN 재부팅 중) 사이트 지도·교통·대열·카드 운행·import 울타리 65 passed — 새 `test_site_map_draws_robots_read_only_and_sends_trips_to_the_console`(위치·trip 선, 90° 돌리면 위치·방향이 시계 방향으로, 운행 버튼 없음, 관제 링크, POST 없음). node `guide-layer.test.mjs` 포함 226 passed. 캡처 `X:/DevTemp/site-map-pos/`.
+- gate 변화: 없음. fleet 크기 48481 → 48440(−41), 판정 문구 그대로. Safety-Review 불필요(읽기 표시와 버튼 제거, 명령 경로 안 건드림).
+- 결정: D-540 Proposed 그대로.
+- 교훈: 전역 `input, select` 재칠을 지우면 `width: 100%`도 같이 빠져 320 px에서 61 px 넘친다 — `components.css`는 최대폭만 준다.
