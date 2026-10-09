@@ -37,7 +37,9 @@ def build_plan(users, config, robots, sources, digest, token_file):
     for path, ids in [('/api/fleet/state', robots), ('/api/fleet/vision/sources', sources)]:
         if not ids or any(not isinstance(value, str) or not value.strip() for value in ids):
             raise ValueError('functional verification requires explicit nonempty IDs')
-        checks.append({'path': path, 'token_file': token_file, 'required_ids': sorted(set(ids))})
+        # D-580: robots follow Fleet's enrolled roster; camera sources stay an explicit list.
+        required = 'enrolled' if path == '/api/fleet/state' else sorted(set(ids))
+        checks.append({'path': path, 'token_file': token_file, 'required_ids': required})
     if config.get('functional_checks') and config['functional_checks'] != checks:
         raise ValueError('existing functional verification policy differs')
     next_config['functional_checks'] = checks

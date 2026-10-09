@@ -46,6 +46,8 @@ class SiteMapStore:
         #: The site's ``fleet.routing``: activation warms the successor table the planner uses.
         self.routing_config = routing_config or RoutingConfig()
         self.clock = clock
+        #: D-573 1: the configured ``--site-map-import`` lane graph; the editor reads its crosswalks.
+        self.import_source: Optional[Path] = None
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path) if self.path else ":memory:", check_same_thread=False)
         configure_connection(self._db)

@@ -315,6 +315,33 @@ def test_candidate_cannot_replace_observed_robot_with_another_id(host):
     assert fake.running == OLD
 
 
+
+def test_enrolled_roster_check_needs_no_id_list_and_still_rolls_back_a_loss(host, tmp_path):
+    """D-580: `required_ids: "enrolled"` reports no stale-id drift; the D-569 baseline still guards."""
+    public, token = tmp_path / 'public', tmp_path / 'token'
+    public.write_text('public')
+    token.write_text('viewer')
+    config = tmp_path / 'autoupdate.json'
+    for path, ok in (('/api/fleet/state', True), ('/api/fleet/vision/sources', False)):
+        config.write_text(json.dumps({'repo': REPO, 'key_id': 'test', 'public_key': str(public),
+            'health_url': 'https://site.example.invalid/healthz', 'functional_checks': [
+                {'path': path, 'token_file': str(token), 'required_ids': 'enrolled'}]}))
+        if ok:
+            assert upd.load_config(config)['functional_checks'][0]['required_ids'] == 'enrolled'
+        else:
+            with pytest.raises(upd.ConfigError, match='configured IDs'):
+                upd.load_config(config)
+    rows, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
+    http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
+    host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': 'unused',
+                                        'required_ids': 'enrolled'}]
+    http.functional = lambda *args: {'robots': [{'robot_id':
+        'replacement' if fake.running == NEW else 'rosy_40'}]}
+    from deploy.site import site_update_io as io
+    assert io.functional_inventory(host.config, http)[1] == {'/api/fleet/state': []}
+    assert _updater(host, http, fake).run() == upd.EXIT_FAILED
+    assert fake.running == OLD
+
 def test_functional_http_failure_never_discloses_token(tmp_path, monkeypatch, capsys):
     from deploy.site import site_update_io as io
     token = tmp_path / 'viewer-token'
