@@ -1,12 +1,13 @@
 """Stored dataset -> GPU train -> ONNX -> strict intake -> canonical READY.
 
-The owner-injected drivable_head recipe exports a candidate only; it never
+The drivable_head recipe (owner-injected IndexedReview, or a D-554 lane-derived dataset
+whose hashes are re-verified at every boundary) exports a candidate only; it never
 calls intake, READY publication, or device delivery.
 
 Usage: train_job.py config.json --out <new-or-resumable-job-dir>
 Config: store, dataset ('name@sha'), gate, replay_root, intake_out, camera_profile (provenance JSON),
 training {seed, epochs, lr, batch_size, base, recipe: baseline|enhanced}, or
-owner-only drivable_head with parent_model, parent_torchscript and ignore_top.
+drivable_head with parent_model, parent_torchscript and ignore_top.
 No device command or watcher invocation. Upstream harvest/curation remains separate.
 """
 import argparse
@@ -25,7 +26,7 @@ from job_state import Job, JobError, Rejected, receipt, sha
 HERE = Path(__file__).resolve().parent
 PERCEPTION = HERE.parent
 ROOT = HERE.parents[3]
-for path in (PERCEPTION, PERCEPTION / "model", ROOT / "middleware/perception",
+for path in (PERCEPTION, PERCEPTION / "model", PERCEPTION / "dataset", ROOT / "middleware/perception",
              ROOT / "contracts/foundation"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -210,9 +211,6 @@ def _run(config, out, indexed_review, admission_stack):
                 or any(not isinstance(training[name], str) or not training[name].strip()
                        for name in ("parent_model", "parent_torchscript"))):
             raise JobError("drivable_head needs parent paths and ignore_top in [0,239]")
-        from review_admission import IndexedReview
-        if type(indexed_review) is not IndexedReview:
-            raise JobError("independent indexed review training admission required")
     elif training["recipe"] not in ("baseline", "enhanced") or training["base"] not in (8, 16):
         raise JobError("recipe baseline/enhanced, base 8/16 required")
     if type(training["lr"]) not in (int, float) or not 0 < training["lr"] < 1:
@@ -235,8 +233,18 @@ def _run(config, out, indexed_review, admission_stack):
     indexed = (dataset_doc.get("builder") == "review_dataset.py (D-464)"
                or any(isinstance(source, dict)
                       and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources))
-    if drivable_head and not indexed:
-        raise JobError("drivable_head requires an indexed dataset")
+    # D-554: labels derived from reviewed lane masks admit only a drivable_head candidate.
+    derived = dataset_doc.get("schema") == "rosy.lane-derived-drivable/1"
+    if derived and not drivable_head:
+        raise JobError("D-554 lane-derived datasets train only the drivable_head recipe")
+    if drivable_head and not (indexed or derived):
+        raise JobError("drivable_head requires an indexed dataset or a D-554 lane-derived dataset")
+    if derived:
+        from lane_derived_drivable import verify_dataset
+        try:
+            derived_doc = verify_dataset(dataset)
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            raise JobError(f"D-554 lane-derived admission denied: {exc}") from exc
     if indexed:
         from review_admission import IndexedReview
         if type(indexed_review) is not IndexedReview:
@@ -267,12 +275,18 @@ def _run(config, out, indexed_review, admission_stack):
         source_files += [PERCEPTION / "dataset" / "build.py"]
     if drivable_head:
         source_files += [HERE / "drivable_head.py"]
+    if derived:
+        source_files += [PERCEPTION / "dataset" / "lane_derived_drivable.py"]
     inputs = {"config": config, "dataset_sha": dataset.name, "eval_sha": evalset.name,
               "gate_sha": hashlib.sha256(gate_raw).hexdigest(), "camera_sha": hashlib.sha256(camera_raw).hexdigest(),
               "source_files": {p.relative_to(ROOT).as_posix(): sha(p) for p in source_files}}
     if parent is not None:
         inputs["parent_lane_model"] = parent["lineage"]
         inputs["parent_files"] = {str(path): digest for path, digest in parent["hashes"].items()}
+    if derived:
+        inputs["lane_derived"] = {"annotation_origin": derived_doc["annotation_origin"],
+                                  "adr": derived_doc["adr"], "source": derived_doc["source"],
+                                  "tool": derived_doc["tool"], "params": derived_doc["params"]}
     admitted = None
     if indexed:
         expected_files = {gate_path: inputs["gate_sha"], profile: inputs["camera_sha"],
@@ -283,9 +297,19 @@ def _run(config, out, indexed_review, admission_stack):
             expected_file_hashes=expected_files))
         inputs["indexed_review"] = admitted.evidence
         dataset, gate_path = admitted.dataset, admitted.gate_path
+    bound = ({ROOT / relative: digest for relative, digest in inputs["source_files"].items()}
+             | parent["hashes"]) if derived else {}
     def check_indexed():
         if admitted is not None:
             admitted.check()
+        if derived:  # D-554 re-check at every boundary, as IndexedReview does
+            try:
+                verify_dataset(dataset)
+                changed = [str(path) for path, digest in bound.items() if sha(path) != digest]
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                raise JobError(f"D-554 lane-derived dataset changed after admission: {exc}") from exc
+            if changed:
+                raise JobError(f"D-554 parent/trainer source changed after admission: {changed}")
     out = Path(out).resolve()
     check_indexed()
     if drivable_head:

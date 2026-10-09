@@ -358,6 +358,34 @@ batch_size 외에 `parent_model`(lane-seg manifest 폴더), `parent_torchscript`
 화소가 있어야 한다. 출력 ONNX는 부모 차선 화소 보존을 재확인하고 `candidate`로만
 기록한다. 기존 intake·READY·장치 전달은 v13을 계속 거부하며, 후보 생성은 주행
 수용 증거가 아니다.
+
+### D-554 차선 파생 drivable 데이터셋
+
+`drivable_head`는 `IndexedReview` 대신 D-554 파생 데이터셋도 받는다. 사람이 검수한 5클래스
+차선 마스크(`pinky-lane-dataset-v1`)에서 drivable(5)과 벽 음성(0)을 규칙으로 만든 것이다.
+manifest `schema`가 `rosy.lane-derived-drivable/1`, `annotation_origin`이
+`derived_from_reviewed_lanes`, `adr`가 `D-554`이고, 모든 이미지·마스크 sha256이 실행 시작과
+학습·export 경계마다 다시 맞아야 한다. 부모 파일과 trainer 소스 해시도 같은 경계에서 다시 본다.
+부모 결합(`validate_drivable_parent`, parity)은 그대로이고 출력은 `v13-drivable` `candidate`뿐이다.
+이 라벨은 `evaluation_use: training_val_only`라서 D-475 평가 정답으로 쓰지 않는다. 이 데이터셋으로
+baseline/enhanced recipe는 돌리지 않는다.
+
+모델 PC에서 실행한다(`learning/training/perception`에서):
+
+```bash
+python dataset/lane_derived_drivable.py derive --src ~/rosy-ml/data/v13-lane-ai/data-v13 \
+    --out ~/rosy-ml/data/v13-lane-derived/out [--min-both-rows 20] [--ignore-top 110]
+python dataset/lane_derived_drivable.py judge --out ~/rosy-ml/data/v13-lane-derived/out \
+    [--endpoint http://127.0.0.1:11434] [--model qwen3-vl:8b-instruct] [--limit N]
+python dataset/lane_derived_drivable.py finalize --out ~/rosy-ml/data/v13-lane-derived/out
+python dataset/publish.py ~/rosy-ml/data/v13-lane-derived/out --store <store> --name v13-lane-derived
+python training/train_job.py config.json --out <store>/jobs/<new-job>
+```
+
+`judge`는 조언용이다. `concern` 프레임만 `finalize`가 빼고 manifest의 `judge.dropped`에 남긴다.
+`config.json`은 위 `drivable_head` 형식 그대로이고 `dataset`에 publish가 찍은
+`v13-lane-derived@<content_sha>`를 넣는다. 벽 판정 값(`WALL`: 밝기 125, 7x7 표준편차 12, 면적 200)은
+아레나 프레임으로 맞춘 기본값이며 manifest `params.wall`에 남는다.
 # Indexed review producer composition
 
 The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an

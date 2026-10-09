@@ -107,7 +107,7 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL):
     if source.get("schema_version") != SOURCE_SCHEMA or source.get("classes") != [
             c["name"] for c in CLASSES[:-1]]:
         raise ValueError(f"source must be {SOURCE_SCHEMA} with v11 class order")
-    by_hash = {(i["image_sha256"], i["mask_sha256"]): i for i in source["items"]}
+    by_hash = {(i["split"], i["image_sha256"], i["mask_sha256"]): i for i in source["items"]}
     frames, skipped = [], 0
     (out / "images").mkdir(parents=True)
     (out / "masks").mkdir()
@@ -115,8 +115,8 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL):
         for image_path in sorted((src / split / "images").glob("*")):
             mask_path = src / split / "masks" / (image_path.stem + ".png")
             image_raw, mask_raw = image_path.read_bytes(), mask_path.read_bytes()
-            item = by_hash.get((_sha(image_raw), _sha(mask_raw)))
-            if item is None or item["split"] != split:
+            item = by_hash.get((split, _sha(image_raw), _sha(mask_raw)))
+            if item is None:
                 raise ValueError(f"{split}/{image_path.name}: not a reviewed source manifest item")
             image = cv2.imdecode(np.frombuffer(image_raw, np.uint8), cv2.IMREAD_COLOR)
             source_mask = cv2.imdecode(np.frombuffer(mask_raw, np.uint8), cv2.IMREAD_UNCHANGED)
