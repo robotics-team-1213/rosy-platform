@@ -101,6 +101,10 @@ try:  # D-433: the screen's situation table and CORE's hand-over reader
     from core_common import face_screen
 except ImportError:
     face_screen = None
+try:  # the lamp, bar, expression and sound from one record (D-433 amendment 2026-10-09)
+    from core_common import presentation
+except ImportError:
+    presentation = None
 
 STATUS_DIR = "run/rosy-boot"
 LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
@@ -711,19 +715,18 @@ class FaceDisplay:
         kind = str(view["stage"]).split(":", 1)[0]
         return {"CORE_READY": "ready", "FAILED": "failed"}.get(kind, "booting")
 
-    @staticmethod
-    def lamp_pattern_for(view: dict, state: str, core: dict | None = None) -> str | None:
-        """D-380/D-381: the table's pattern for the state, CORE's mode and its
-        navigation; D-546: and its lane-recovery phase from the face hand-over.
-        The stage-only mapping only on a release too old to carry
-        core_common.robot_state."""
-        if robot_state is None:
-            return LAMP_PATTERNS.get(state)
-        try:
-            return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"),
-                                            core.get("recovery") if core else None)
-        except TypeError:  # a core_common from before D-546 takes three arguments
-            return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"))
+    def _present(self, view: dict, state: str, core: dict | None, screen: dict | None):
+        """The one record for lamp, bar, expression and sound (core_common.presentation); None on a
+        release without it, where the stage-only lamp mapping stands."""
+        if presentation is None or robot_state is None:
+            return None
+        return presentation.present(state=state, robot_mode=view.get("robot_mode"),
+                                    nav_state=view.get("nav_state"), core=core, screen=screen,
+                                    battery_percent=view.get("battery_percent"))
+
+    def lamp_pattern_for(self, view: dict, state: str, core: dict | None = None) -> str | None:
+        pres = self._present(view, state, core, None)
+        return pres.lamp if pres else LAMP_PATTERNS.get(state)
 
     def _announce(self, state: str, pattern: str | None, now: float) -> None:
         sound = SOUNDS.get(state)
@@ -903,10 +906,10 @@ class FaceDisplay:
         if state != self._state:
             self._state = state
         core = self._core()
-        pattern = self.lamp_pattern_for(view, state, core)
         screen = self.screen = self.screen_of(view, now)
-        if screen and screen["kind"] == "light":
-            pattern = "illumination"
+        pres = self._present(view, state, core, screen)
+        pattern = pres.lamp if pres else LAMP_PATTERNS.get(state)
+        state = pres.state if pres else state
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
@@ -919,7 +922,7 @@ class FaceDisplay:
         redrawn = False
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); a strip rides every frame.
-            self.animating = (screen["face"], screen["strip"], screen["strip_tone"])
+            self.animating = self._bar(screen, pres)
             self._drawn = None
         else:
             self.animating = None
@@ -929,6 +932,8 @@ class FaceDisplay:
                 card = dict(view)
                 if screen is not None:
                     card["screen"] = screen
+                    if kind == "face":
+                        card["bar"] = self._bar(screen, pres)[1:]
                     if screen.get("line"):
                         card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
                     if kind == "update":
@@ -949,6 +954,15 @@ class FaceDisplay:
         self._announce(state, pattern, now)
         self._reverse_alarm(core, pattern, now)
         return redrawn
+
+    @staticmethod
+    def _bar(screen: dict, pres) -> tuple:
+        """(face, text, level, battery percent, charging): what the expression and the status bar show."""
+        if pres is None:  # a release without the record: the table's own strip, no battery
+            return (screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok",
+                    None, None)
+        return (pres.expression or screen["face"], pres.status_text, pres.status_level,
+                pres.battery_percent, pres.battery_charging)
 
     def _reverse_alarm(self, core: dict | None, pattern: str | None, now: float) -> None:
         """D-546: one reversing beep per BUZZER_REVERSE_S while CORE says ``retrace``; silent
@@ -981,12 +995,12 @@ class FaceDisplay:
         self._ticks += 1
         if self._backlight < 100 and self._ticks % 2:
             return False  # D-185: the dimmed (idle) face plays at half rate
-        face, strip, tone = self.animating
+        face, *bar = self.animating
         frame = self._faces.next(face)
         if frame is None:
             return False
-        if strip and self._strip is not None:
-            frame = self._strip(frame, strip, tone)
+        if self._strip is not None:
+            frame = self._strip(frame, *bar)
         self.lcd.show_panel(frame)
         self.frames += 1
         return True
@@ -1080,8 +1094,8 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         elif kind == "shutdown":
             image = info_screen.render_notice(str(card.get("shutdown_title") or "Shutting down"),
                                               [str(card.get("device_name") or "")])
-        elif kind == "face" and screen.get("overlay"):
-            image = info_screen.render_card(screen["overlay"]["payload"])
+        elif kind == "face" and screen.get("overlay"):  # a card takes the expression area, under the bar
+            image = info_screen.render_overlay(screen["overlay"]["payload"])
         elif screen.get("row") == "peer_request":
             # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
             # One "XXXX  CODE" line per live request, so each requester reads its own code.
@@ -1094,8 +1108,8 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
             image = info_screen.render_notice("Pair request", lines)
         else:
             image = info_screen.render_boot(card, frame=frame)
-        if kind == "face" and screen.get("strip"):
-            band, mask = info_screen.render_strip(screen["strip"], screen.get("strip_tone") or "info")
+        if kind == "face" and card.get("bar"):
+            band, mask = info_screen.render_bar(*card["bar"][:4])
             image.paste(band, (0, 0), mask)
         return image
 
@@ -1108,24 +1122,25 @@ def face_converter(info_screen) -> Callable[[object], object]:
 
     def convert(frame):
         landscape = frame.convert("RGB").resize(FACE_SIZE, Image.LANCZOS, reducing_gap=3.0)
-        return info_screen.to_panel(landscape)
+        return info_screen.to_panel(info_screen.compose_face(landscape))
 
     return convert
 
 
-def strip_painter(info_screen) -> Callable[[object, str, str], object]:
-    """Lay the strip over a panel frame; the band and its mask are made once per text."""
+def bar_painter(info_screen) -> Callable[..., object]:
+    """Lay the status bar over a panel frame; the bar and its mask are made once per content."""
     from PIL import Image
 
-    cache: dict[tuple[str, str], tuple] = {}
+    cache: dict[tuple, tuple] = {}
 
-    def paint(frame, text: str, tone: str):
-        if (text, tone) not in cache:
-            band, mask = info_screen.render_strip(text, tone)
-            cache.clear()  # one strip at a time
-            cache[(text, tone)] = (info_screen.to_panel(band),
-                                   info_screen.to_panel(Image.merge("RGB", (mask, mask, mask)))[..., 0] != 0)
-        panel, where = cache[(text, tone)]
+    def paint(frame, text: str, level: str, percent=None, charging=None):
+        key = (text, level, percent, charging)
+        if key not in cache:
+            band, mask = info_screen.render_bar(text, level, percent, charging)
+            cache.clear()  # one bar at a time
+            cache[key] = (info_screen.to_panel(band),
+                          info_screen.to_panel(Image.merge("RGB", (mask, mask, mask)))[..., 0] != 0)
+        panel, where = cache[key]
         out = frame.copy()
         out[where] = panel[where]
         return out
@@ -1197,7 +1212,7 @@ def main(argv: list[str] | None = None) -> int:
     faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen), log=log)
     display = FaceDisplay(args.root, lcd=lcd, render=card_renderer(info_screen), battery=battery,
                           buzzer=buzzer, clock=time.monotonic, lamp=lamp, faces=faces,
-                          strip=strip_painter(info_screen), core_owner=core_owner(log),
+                          strip=bar_painter(info_screen), core_owner=core_owner(log),
                           low_light_assist=rosy_display_env.flag(dict(os.environ), rosy_display_env.LOW_LIGHT_KEY)[0])
     polls_per_step = max(1, round(POLL_S / TICK_S))
     tick = 0

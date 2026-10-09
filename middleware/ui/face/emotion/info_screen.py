@@ -524,10 +524,6 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
 # when core_common.face_screen.screen_for says so. Landscape like every card;
 # ``to_panel`` turns any of them, or a GIF frame, into the panel's RGB565 bytes.
 
-#: The strip under the face (D-433 rows 9-11): a band at the bottom.
-STRIP_HEIGHT = 34
-
-
 def render_stopped(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     """Q1: the e-stop card. The whole ground is the alarm colour; ink on it.
 
@@ -564,22 +560,86 @@ def render_notice(title: str, lines: list[str], size: tuple[int, int] = DEFAULT_
     return image
 
 
-def render_strip(text: str, tone: str, size: tuple[int, int] = DEFAULT_SIZE) -> tuple[Image.Image, Image.Image]:
-    """(image, mask): a band at the bottom to lay over every face frame.
+#: The panes of a face screen (the D-433 amendment of 2026-10-09): a status bar on top,
+#: the expression below it. The GIFs are authored 320x240 with the face inside rows
+#: 41..217, so the expression area is the GIF cut to rows FACE_CROP_TOP..+208, unscaled.
+BAR_HEIGHT = 32
+FACE_CROP_TOP = 16
+_BAR_LEVEL = {"caution": (_WARN, _BG), "danger": (_CRIT, _FG)}  # level -> (fill, ink)
 
-    Caution is the warn fill with ground ink (Q3, the same chip vocabulary as
-    ``_draw_caution``); anything else is a quiet ground band with ink.
+
+def expression_box(size: tuple[int, int] = DEFAULT_SIZE) -> tuple[int, int, int, int]:
+    """(left, top, right, bottom) of the expression area under the status bar."""
+    return 0, BAR_HEIGHT, size[0], size[1]
+
+
+def compose_face(frame: Image.Image, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """A GIF frame placed in the expression area of an otherwise empty ground."""
+    left, top, right, bottom = expression_box(size)
+    image = Image.new("RGB", size, _BG)
+    face = frame.convert("RGB")
+    if face.size != size:
+        face = face.resize(size, Image.LANCZOS)
+    image.paste(face.crop((left, FACE_CROP_TOP, right, FACE_CROP_TOP + bottom - top)), (left, top))
+    return image
+
+
+def render_overlay(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """A drive or wake card drawn into the expression area, the rest left ground for the bar."""
+    left, top, right, bottom = expression_box(size)
+    image = Image.new("RGB", size, _BG)
+    image.paste(render_card(payload, (right - left, bottom - top)), (left, top))
+    return image
+
+
+def _draw_battery(draw: ImageDraw.ImageDraw, right: int, middle: int, percent, charging, ink, fill, ground) -> int:
+    """Icon (24x12 body, 2 px nub) and ``NN%`` ending at ``right``; the left edge of the group.
+
+    Unknown is ``--`` and an empty outline, never 0 % (Law 0). Charging lays a bolt on the body.
     """
-    width, height = size
+    body = (right - 26, middle - 6, right - 2, middle + 6)
+    draw.rounded_rectangle(body, radius=2, outline=ink, width=2)
+    draw.rectangle((right - 2, middle - 3, right, middle + 3), fill=ink)
+    value = battery_measurement(percent, percent=True)
+    if value is not None:
+        width = int((body[2] - body[0] - 6) * value / 100.0)
+        if width > 0:
+            draw.rectangle((body[0] + 3, body[1] + 3, body[0] + 3 + width, body[3] - 3), fill=fill)
+    if charging:
+        x, y = (body[0] + body[2]) // 2, middle
+        draw.polygon([(x + 2, y - 5), (x - 4, y + 1), (x, y + 1), (x - 2, y + 5), (x + 4, y - 1), (x, y - 1)],
+                     fill=ground, outline=ink)
+    font = _font(16)
+    label = "--" if value is None else f"{value:.0f}%"
+    draw.text((body[0] - 6, middle), label, font=font, fill=ink, anchor="rm")
+    return int(body[0] - 6 - draw.textlength(label, font=font))
+
+
+def render_bar(text: str, level: str, battery_percent=None, charging=None,
+               size: tuple[int, int] = DEFAULT_SIZE) -> tuple[Image.Image, Image.Image]:
+    """(image, mask): the status bar to lay over the top of every screen.
+
+    The level is the whole bar: quiet ground with ink while ok, the warn fill with ground
+    ink for caution, the crit fill with ink for danger (the chip vocabulary of
+    ``_draw_alarm``/``_draw_caution``). The battery sits at the right; its fill takes
+    ``battery_color`` only on the quiet ground, otherwise the bar's ink.
+    """
+    width, _height = size
     image = Image.new("RGB", size, _BG)
     mask = Image.new("L", size, 0)
-    top = height - STRIP_HEIGHT
-    fill, ink = (_WARN, _BG) if tone == "caution" else (_BG, _FG)
+    fill, ink = _BAR_LEVEL.get(level, (_BG, _FG))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, top, width, height), fill=fill)
-    font, text = _fit(draw, text, 18, width - 24)
-    draw.text((12, top + STRIP_HEIGHT // 2), text, font=font, fill=ink, anchor="lm")
-    ImageDraw.Draw(mask).rectangle((0, top, width, height), fill=255)
+    draw.rectangle((0, 0, width, BAR_HEIGHT - 1), fill=fill)
+    middle = BAR_HEIGHT // 2
+    if fill == _BG:
+        draw.line((0, BAR_HEIGHT - 1, width, BAR_HEIGHT - 1), fill=_MUTED)
+    value = battery_measurement(battery_percent, percent=True)
+    bar_fill = battery_color(value) if fill == _BG and value is not None and battery_color(value) != _CRIT else ink
+    left = _draw_battery(draw, width - 8, middle, battery_percent, charging,
+                         _MUTED if fill == _BG and value is None else ink, bar_fill, fill)
+    font, text = _fit(draw, text, 18, left - 8 - 12)
+    draw.text((12, middle), text, font=font, fill=ink, anchor="lm")
+    ImageDraw.Draw(mask).rectangle((0, 0, width, BAR_HEIGHT - 1), fill=255)
     return image, mask
 
 
