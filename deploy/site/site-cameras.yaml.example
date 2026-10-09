@@ -24,7 +24,8 @@ sources:
     corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
     robot_markers: {}
     heading_edge: [1, 2]
-    # D-587: sticker top edge direction from the robot front (deg, CCW +), per robot; omit = 0.
+    # D-587: sticker top edge direction from the robot front (deg, CCW +), per robot. A robot
+    # without a measured value sends no approved_record sighting (no ceiling map pose).
     # Measure it with tools/calibration/ceiling_marker_yaw.py (one straight forward drive).
     # marker_yaw_offset_deg: {rosy_40: 0}
     # D-564: floor place markers Fleet may teach draft places from (34 start-south,

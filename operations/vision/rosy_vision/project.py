@@ -16,6 +16,10 @@ MarkerQuad = tuple[Point, Point, Point, Point]
 #: LiDAR, the robot top D-457 3 uses (geometry.yaml lidar x_m / y_m; drift-tested in
 #: test_marker_sightings.py). Per-robot yaw offsets come from the site config.
 MARKER_MOUNT_XY_M = (-0.017, 0.0)
+#: D-587 3: sticker height above the floor for the parallax step. Nominal = the LiDAR
+#: height_m (drift-tested); kept apart from the blob silhouette's ROBOT_TOP_HEIGHT_M so a
+#: measured sticker height can refine it alone.
+MARKER_HEIGHT_M = 0.125
 #: D-562: the black square of the 40 mm robot sticker (one white cell border).
 MARKER_SIDE_M = 0.030
 #: D-587 6: corner geometry a robot marker must have to become a sighting.

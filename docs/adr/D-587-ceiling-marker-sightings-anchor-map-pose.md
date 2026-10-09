@@ -30,24 +30,29 @@
 
 ### Decision
 
-1. **이름을 아는 로봇 마커만 sighting이 된다.** Vision 추적 단계가 승인 보정(D-457 1)으로 프레임을 투영했으면, 그 프레임에서 읽힌 마커 가운데 `robot_markers`에 있는 마커마다 `SiteSightingPayload`를 하나 만든다. 기존 sighting 경로(`POST /api/fleet/sightings`, source 토큰, map·revision 검사, 1 s lease, 순서)를 그대로 쓴다. 새 자세 채널은 만들지 않는다.
+1. **이름을 아는 로봇 마커만 sighting이 된다.** Vision 추적 단계가 승인 보정(D-457 1)으로 프레임을 투영했으면, 그 프레임에서 읽힌 마커 가운데 `robot_markers`에 있고 `marker_yaw_offset_deg`가 설치된 로봇의 마커마다 `SiteSightingPayload`를 하나 만든다(4항). 기존 sighting 경로(`POST /api/fleet/sightings`, source 토큰, map·revision 검사, 1 s lease, 순서)를 그대로 쓴다. 새 자세 채널은 만들지 않는다.
    - 배정 안 된 마커(D-575 40–49 미배정), 익명 덩어리, 장소·모서리 마커는 sighting이 되지 않는다. 로봇 이름은 여전히 `robot_markers` 대응으로만 정한다(D-457 2).
-   - 같은 프레임에서 `project_frame`이 이미 그 로봇의 sighting을 냈으면(모서리 마커·경계 사각형 측정) 추적 단계는 그 로봇을 다시 보내지 않는다.
+   - 같은 프레임에서 `project_frame`이 이미 그 로봇의 sighting을 Fleet에 보냈으면(모서리 마커·경계 사각형 측정) 추적 단계는 그 로봇을 다시 보내지 않는다. 보내기에 실패한 것은 추적 단계가 보낸다.
+   - 어느 보정을 썼는지는 추적 단계가 고른 갈래로 정한다. 모서리 마커 측정이면 보내지 않는다(`project_frame` 몫). revision 문자열 비교로 정하지 않는다.
+   - sighting은 추적 검출 전송보다 먼저 보낸다. 검출 전송이 늦어도 sighting이 Fleet의 1 s lease 안에 닿게 하기 위해서다. sighting 실패는 로그만 남기고 검출 전송을 막지 않는다.
 2. **새 `calibration_source: "approved_record"`.** 이 sighting은 `corner_marker_ids: null`, `calibration_source: "approved_record"`, `calibration_revision`에 승인 기록의 revision을 싣는다. Fleet은 그 revision이 지금 그 source의 승인 기록(같은 `map_id`)과 같을 때만 받는다. 다르거나 기록이 없으면 409 `CALIBRATION_MISMATCH`다. 다른 `calibration_source` 값의 검사는 그대로다. D-457 1과 `tracking_calibration.py`의 "기록은 sighting 보정이 아니다"는 이 항목만큼 고친다. 익명 검출은 여전히 sighting이 아니다.
 3. **마커 자세.**
    - 마커의 네 모서리를 승인 보정으로 지도에 투영한다. 그다음 마커 높이만큼 카메라 바로 아래 점 쪽으로 당긴다(D-457 3의 시차 보정, `geometry.parallax_correct`).
+   - 마커 높이는 따로 둔 상수 `MARKER_HEIGHT_M`(`rosy_vision/project.py`)이다. 명목은 `geometry.yaml` `lidar.height_m`이고 드리프트 시험이 묶는다. 덩어리 실루엣용 `ROBOT_TOP_HEIGHT_M`(`track/model.py`)과 나누어, 잰 스티커 높이로 이것만 다듬을 수 있다.
    - 위치는 네 점의 평균이다. 방향은 중심에서 `heading_edge` 중점으로 가는 방향이다(D-564와 같은 식, D-562 스티커 윗변 = 로봇 앞).
    - 렌즈 hfov가 없거나 카메라 자세를 풀 수 없으면 시차를 보정할 수 없다. 그 프레임은 sighting을 내지 않는다. 표시용 추적 검출은 지금처럼 나간다.
 4. **로봇 자세 = 마커 자세 ∘ 부착 오프셋.**
-   - 명목 부착은 URDF다(D-397). 스티커 중심은 로봇 윗면의 LiDAR 위(`geometry.yaml` `lidar.x_m` −0.017, `y_m` 0), 높이는 D-457 3의 윗면 높이 `lidar.height_m` 0.125 m다. 명목 방향 오프셋은 0°다.
-   - 로봇마다 `site-cameras.yaml` source의 `marker_yaw_offset_deg: {rosy_41: 180}`으로 방향 오프셋을 다듬는다. 값은 로봇 앞 기준으로 잰 스티커 윗변 방향이다(반시계 +, 도). 키는 그 source `robot_markers`의 로봇이어야 하고, 값은 유한하며 절댓값 360 이하다. Vision과 Fleet이 같은 검사(`core_common.protocol.sightings.check_marker_yaw_offsets`)를 쓴다.
+   - 명목 부착은 URDF다(D-397). 스티커 중심은 로봇 윗면의 LiDAR 위(`geometry.yaml` `lidar.x_m` −0.017, `y_m` 0), 높이는 3항의 `MARKER_HEIGHT_M` 0.125 m다.
+   - 방향 오프셋은 로봇마다 `site-cameras.yaml` source의 `marker_yaw_offset_deg: {rosy_41: 180}`으로 설치한다. 값은 로봇 앞 기준으로 잰 스티커 윗변 방향이다(반시계 +, 도). 키는 그 source `robot_ids`의 로봇이어야 하고(D-580 `robot_ids: enrolled`이면 아무 로봇 id), 값은 유한하며 절댓값 360 이하다. Vision과 Fleet이 같은 검사(`core_common.protocol.sightings.check_marker_yaw_offsets`)를 쓴다.
+   - **오프셋이 설치되지 않은 로봇은 `approved_record` sighting을 내지 않는다.** 재지 않은 스티커는 90°나 180° 틀려도 매 프레임 똑같이 틀리므로 D-494의 20° 점프 문턱이 잡지 못한다. 0°도 잰 값으로 설치해야 한다. `project_frame` 경로는 지금처럼 0°를 기본으로 쓴다.
    - 로봇 방향 = 마커 방향 − 오프셋이다. 로봇 위치 = 마커 위치 − R(로봇 방향)·(−0.017, 0)이다.
    - 위치 오프셋은 로봇별로 받지 않는다. 명목에서 어긋나도 스티커가 윗면(반지름 약 0.03 m) 안에 있으니 오차는 그 크기다. 필요하면 별도 ADR에서 제자리 회전 원 맞추기로 다룬다.
    - 같은 오프셋과 부착은 `project_frame` 경로(모서리 마커·경계 사각형)에도 적용한다. 로봇 자세의 정의를 하나로 두기 위해서다. 그 경로는 렌즈를 몰라 시차 보정이 없고, 6항 품질 문턱도 걸지 않는다. 이것은 지금 그대로다.
-5. **보정 단계(방향 오프셋).** `tools/calibration/ceiling_marker_yaw.py`를 쓴다.
+5. **보정 단계(방향 오프셋).** `tools/calibration/ceiling_marker_yaw.py`를 쓴다. sighting 없이 시작할 수 있어야 하므로(4항) 원본 프레임에서 직접 잰다.
    - 운영자는 로봇을 앞으로 곧게 0.3 m 이상 몬다(관제 수동 주행 또는 CORE 대시보드).
-   - 도구는 그동안 `GET /api/fleet/sightings`에서 그 로봇의 sighting을 모은다. 위치들의 주축과 시간 순서로 진행 방향을 정하고, sighting 방향과의 원형 평균 차이를 낸다.
-   - 출력은 `marker_yaw_offset_deg`에 넣을 새 값(지금 값 + 차이, 0.1°)과 가장 가까운 90° 배수다.
+   - 도구는 그동안 viewer lease로 원본 프레임을 읽고, 그 로봇 마커를 검출해 승인 기록과 sighting과 같은 시차·품질 문턱(`track.marker_sightings.marker_pose`)으로 마커 자세를 낸다. 마커 위치들의 주축과 시간 순서로 진행 방향을 정하고, 마커 방향과의 원형 평균 차이를 낸다. 그 차이가 곧 오프셋이다.
+   - Vision 컨테이너 안(`docker exec -i … python3 - … < ceiling_marker_yaw.py`)이나 저장소의 Vision 경로를 `PYTHONPATH`에 둔 PC에서 돈다. 토큰은 `ROSY_FLEET_TOKEN`이다.
+   - 출력은 `marker_yaw_offset_deg`에 넣을 값(0.1°)과 가장 가까운 90° 배수다.
    - 거절 조건: 이동이 0.25 m 미만, 직선에서 벗어남 0.02 m 초과, 방향 흩어짐 5° 초과, 표본 5개 미만.
    - 기준은 odom 방향이 아니라 진행 방향이다. odom 방향은 odom 좌표계 기준이라 지도 방향과의 차이를 모른다. 앞으로 곧게 가는 동안 진행 방향이 곧 로봇 앞이다.
    - 결과는 사이트 설정에 저장한다. 로봇의 D-47 보정 저장소는 로봇에 달린 센서의 기록이고, 스티커는 사이트 카메라가 읽으므로 사이트 설정이 그 주인이다.
@@ -65,6 +70,7 @@
 - **승인 보정.** 위치 정확도는 승인 추론 보정(D-457 1, `fit_score` 0.827)의 정확도를 넘지 못한다. 보정이 바뀌면 revision이 바뀌고, 옛 revision의 sighting은 409다.
 - **렌즈 왜곡.** D-515와 같이 모델로 다루지 않는다.
 - D-494 `max_jump_m` 0.15 m, `max_jump_deg` 20°는 위 오차와 실측 흩어짐보다 크다.
+- **불확실도.** D-494는 sighting마다의 시그마를 받지 않는다. `quality`는 `null`이다. 최악 위치 오차는 스티커 높이 약 4 cm에 승인 보정의 페인트 맞춤 잔차(중앙값 0, p90 18 mm, rosy-dd 측정)를 더한 약 6 cm다. 이것은 `max_jump_m` 0.15 m보다 작다. 시그마를 계약에 싣는 일은 소비자(D-494 추적기)가 그것을 쓸 때 별도 ADR로 한다.
 
 ### Alternatives
 

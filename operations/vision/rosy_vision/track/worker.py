@@ -43,7 +43,7 @@ import numpy as np
 from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload
 from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
-from rosy_vision.track.calibration import choose
+from rosy_vision.track.calibration import from_markers, from_record
 from rosy_vision.publish import SightingPublishError
 from rosy_vision.track.fleet_client import TrackPublishError
 from rosy_vision.track.marker_sightings import robot_sightings
@@ -127,6 +127,8 @@ class TrackWorker:
         self._publish_log = _FailureLog("detections not accepted", camera.source_id, clock)
         self._config_log = _FailureLog("tracking config read failed", camera.source_id, clock)
         self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
+        #: D-587: the approved record's Calibration when the last _detect used it (single flight).
+        self._approved: Calibration | None = None
         # D-472: the one open identity challenge Fleet named, its ring samples, and the last reported.
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
@@ -204,6 +206,8 @@ class TrackWorker:
         if step is None:
             return None
         calibration, result = step
+        if self.sightings is not None:
+            await self._publish_sightings(camera or self.camera, self._approved, frame, markers, sighted)
         payload = build_payload(
             source_id=self.camera.source_id, map_id=self.camera.map_id,
             calibration_revision=None if calibration is None else calibration.revision,
@@ -218,14 +222,12 @@ class TrackWorker:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:
             self._publish_log.ok()
-        if self.sightings is not None:
-            await self._publish_sightings(camera or self.camera, calibration, frame, markers, sighted)
         return payload
 
-    async def _publish_sightings(self, camera: CameraMap, calibration, frame, markers, sighted) -> None:
+    async def _publish_sightings(self, camera: CameraMap, approved, frame, markers, sighted) -> None:
         """D-587: identified robot markers as sightings; a failure is logged, never raised."""
         try:
-            sightings = robot_sightings(camera, calibration, markers, captured_at=frame.captured_at,
+            sightings = robot_sightings(camera, approved, markers, captured_at=frame.captured_at,
                                         seq=frame.header.seq, skip=sighted)
         except (TypeError, ValueError, ArithmeticError, np.linalg.LinAlgError) as exc:
             self._sighting_log.failed((("error_type", type(exc).__name__),))
@@ -301,7 +303,14 @@ class TrackWorker:
         if image is None:
             return None
         size = (int(image.shape[1]), int(image.shape[0]))
-        calibration = choose(self.camera, markers, record, frame_size=size, lens=lens)
+        # D-457 2 order (calibration.choose): corner markers win, else the approved record.
+        # D-587: which branch was taken decides whether marker sightings may use it.
+        calibration = from_markers(self.camera, markers, frame_size=size, lens=lens)
+        self._approved = None
+        if calibration is None and record is not None:
+            calibration = self._approved = from_record(
+                record, source_id=self.camera.source_id, map_id=self.camera.map_id,
+                frame_size=size, lens=lens)
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
         result = self.detector.detect(Frame(image, captured_at), calibration)
