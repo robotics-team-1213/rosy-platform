@@ -763,8 +763,7 @@ def _lens_header(lens: dict | None) -> dict[str, str]:
 
 
 def _plane_unavailable() -> Response:
-    return _http_response(409, b"map plane unavailable
-", extra={"X-Frame-State": "plane-unavailable"})
+    return _http_response(409, b"map plane unavailable\n", extra={"X-Frame-State": "plane-unavailable"})
 
 
 def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:
