@@ -2627,3 +2627,9 @@
 - 변경: 세 PC의 새벽 재부팅 유닛(관제 06:08, 모델 06:03, AI 05:58)과 관제 PC Docker 갱신 유닛·스크립트를 실제 파일 그대로 `deploy/{site,model_pc,ai_pc}/host-state/`에 옮겼다. `deploy/hosts/common/rosy-host-state`(역할별 설치, `--dry-run` diff, 30분 드리프트 점검은 safe만 수정). `rosy-model-guard-check`를 `deploy/site/rosy-host-guard`로 일반화(모델 PC·AI PC·로봇, N → 유닛 재시작 → 2N → 재부팅, 새벽 창 제외, 실행은 D-524 도우미).
 - 증거: 모델 PC `test/test_host_state.py`·`test/test_host_guard.py` 25 passed. 모델 PC에서 읽기 전용 `install model --dry-run`: 새벽 재부팅 파일 일치, 워치독·panic 설정 없음을 보고.
 - gate 변화: 없음. 실제 PC 설치·활성화 없음(sudo·승인 필요). D-524 착지 뒤 도우미 줄이 채워진다.
+
+## 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
+
+- 변경: D-545에 따라 모델 PC 검수 앱에 불변 코드 릴리스, current 링크, DB 외부 경로, 서비스 재시작 후 HTTP 확인과 실패 복구 절차를 추가했다.
+- 증거: 모델 PC Linux 설치기 시험 2 passed; 실제 기존 코드에서 state/를 제외해 studio-d538-20261009 릴리스로 전환; rosy-review-v13.service active, ExecStart는 current 경유, /api/workspace와 /pixels 응답. 실제 브라우저에서 객체 43장 목록과 픽셀 검수·제외 상태를 읽었다. 사람 승인 동작은 실행하지 않았다.
+- gate 변화: 없음. 새 코드의 자동 전송과 검수 승인·학습 반영은 별도 검증이다.

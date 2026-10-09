@@ -44,17 +44,27 @@ def _traffic_signals(args) -> list:
         sys.exit(f"traffic config: signals: {exc}")
 
 
-def _traffic_authority(args) -> bool:
-    """D-517 4 (M2): ``fleet.traffic.authority`` (YAML true/false, default false) of ``--site-config``."""
+def _traffic_flag(args, key: str) -> bool:
+    """``fleet.traffic.<key>`` (YAML true/false, default false) of ``--site-config``."""
     import yaml
 
     try:
         site_config = {}
         if getattr(args, "site_config", None) is not None:
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = ((site_config.get("fleet") or {}).get("traffic") or {}).get("authority", False)
+        value = ((site_config.get("fleet") or {}).get("traffic") or {}).get(key, False)
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"traffic config: {exc}")
     if not isinstance(value, bool):
-        sys.exit("traffic config: fleet.traffic.authority must be true or false")
+        sys.exit(f"traffic config: fleet.traffic.{key} must be true or false")
     return value
+
+
+def _traffic_authority(args) -> bool:
+    """D-517 4 (M2): ``fleet.traffic.authority``."""
+    return _traffic_flag(args, "authority")
+
+
+def _traffic_signal_advice(args) -> bool:
+    """D-551 6: ``fleet.traffic.signal_advice`` (display-only signal advice to CORE)."""
+    return _traffic_flag(args, "signal_advice")
