@@ -1228,6 +1228,14 @@ SIZE_VERDICTS = {
         "byte-identical (golden test in learning/training/perception/test/test_model_deliver.py). "
         "Split the remote_script builders out if it grows again",
     ),
+    "learning/training/perception/dataset/lane_derived_drivable.py": (
+        678,
+        "accept: recorded at 678 on 2026-10-10 (author's record; NEEDS the independent re-judge) after "
+        "D-554/D-563/D-576 landed together: one label-derivation pipeline (lane-bounded fill, own-road "
+        "walls, per-row both-line rule, canaries) covered by "
+        "learning/training/perception/test/test_lane_derived_drivable.py. Split the wall/fill helpers "
+        "out if it grows again",
+    ),
     "learning/training/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
