@@ -18,7 +18,8 @@ import intake  # noqa: E402
 
 SHA = "c" * 64
 H, W = 4, 8  # model input; eval frames are 8x16, so the masks are resized (nearest)
-SPEC = SimpleNamespace(height=H, width=W, color="rgb", scale=1 / 255, mean=(0, 0, 0), std=(1, 1, 1))
+SPEC = SimpleNamespace(height=H, width=W, color="rgb", scale=1 / 255, mean=(0, 0, 0), std=(1, 1, 1),
+                       crop=None)
 MODEL_CLASSES = (SimpleNamespace(index=0, name="floor", role="background"),
                  SimpleNamespace(index=1, name="lane", role="lane_marking"),
                  SimpleNamespace(index=2, name="extra", role="drivable"))
