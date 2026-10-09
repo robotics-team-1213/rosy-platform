@@ -369,3 +369,8 @@
 - 변경: 링이 요청과 상관없이 표본을 모으므로 `_detect`·`_identity_sample`의 `challenge` 인자를 지웠다. `MAX_SAMPLES`가 약 5.8 fps 위에서 링 범위를 정한다는 한계를 주석으로 남겼다(독립 검증 지적).
 - 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
 - gate 변화: 없음(동작 같음).
+
+## 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
+- 변경: lease `rectification`에 `{"mode": "map"}`(다른 필드 거절). 트래커가 Fleet에서 읽은 승인 보정 기록을 `IngestServer.report_calibration`으로 ingest에 넘기고(두 번째 Fleet 클라이언트 없음), `/frame`이 `rectify.map_plane_jpeg`로 최신 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px, 화면 밖 어두운 고정색)에 편다. 헤더 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`, 기록 없음·source·map·렌즈·비율 불일치는 409 `plane-unavailable`(원본 대체 없음). 펴기는 `asyncio.to_thread`로 이벤트 루프 밖에서 (프레임, revision)마다 한 번. API Reference §10.6.1, v1.166
+- 증거: 원격 pytest operations/vision/test 428 passed, operations/fleet/test/test_server_app.py 41 passed, known_failures 0 new. 실프레임(`ceiling_north`, `paint-7b220d432c2a`) 평면 1244×624에 활성 지도 차선 6개를 D-560 식으로 그려 도로 가운데 놓임을 눈으로 확인(X:\DevTemp\cam-map-plane-s1\plane-lanes.png)
+- gate 변화: SOURCE/LOCAL. Fleet 세 화면(S2)과 현장 확인(S4) 전

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.165
+**Version:** v1.166
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1441,7 +1441,7 @@ credential. No browser or Fleet process connects to ROS/DDS.
 |---|---|---|---|
 | GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN address | Configured preview source IDs |
 | POST | `/api/fleet/vision/lease` | Viewer Bearer token, or tokenless through the site Caddy proxy from a private LAN address | 60 s source-scoped lease and direct Vision frame path |
-| GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`; `X-Frame-Seq`, `X-Frame-Age-Ms`, `X-Frame-Captured-At`, `X-Frame-Width`, `X-Frame-Height`, `X-Frame-Rotation-Deg`, and `X-Frame-Rectified` (`true` manual, `auto` D-484 field calibration, `false` raw) describe that exact frame; `mode: "auto"` requests additionally report `X-Field-Calib` (calibration state) and, while no accepted quad exists, answer the raw JPEG with `X-Frame-State: field-unavailable` |
+| GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`; `X-Frame-Seq`, `X-Frame-Age-Ms`, `X-Frame-Captured-At`, `X-Frame-Width`, `X-Frame-Height`, `X-Frame-Rotation-Deg`, and `X-Frame-Rectified` (`true` manual, `auto` D-484 field calibration, `map` D-560 map plane, `false` raw) describe that exact frame; `mode: "map"` requests add `X-Frame-Plane` and `X-Frame-Calibration` or answer 409 `X-Frame-State: plane-unavailable` (never the raw JPEG); `mode: "auto"` requests additionally report `X-Field-Calib` (calibration state) and, while no accepted quad exists, answer the raw JPEG with `X-Frame-State: field-unavailable` |
 | GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-360 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket per lease subject; detection runs at most once per source per second, off the event loop (readers in between get the last result, 429 while the first run is busy); `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
 
 The tokenless camera exception applies only to the two Fleet preview endpoints above. Caddy determines the immediate peer's private address and overwrites a private proxy header for those paths; it strips client-supplied copies on all other Fleet paths. Fleet and Vision are not published outside the site backend network. The issued lease is still required at Vision, source scoped, and expires after 60 seconds. Robot state, commands, enrollment, and other Fleet APIs still require their existing credentials.
@@ -1477,6 +1477,26 @@ D-484(v1.109)부터 `rectification`에 `mode: "manual" | "auto"`가 추가됐다
 Vision worker가 수용한 필드 경계 사각형으로 평면 보정한다(렌즈 왜곡값도 함께 안 쓴다).
 수용된 사각형이 없으면 원본 JPEG와 `X-Frame-State: field-unavailable`을 돌려준다.
 자동 보정은 미리보기 전용이며 원본 프레임·sighting 경로를 바꾸지 않는다.
+
+D-560(v1.166)부터 `rectification`에 `{"mode": "map"}`이 추가됐다. `map`은 다른 필드를
+받지 않는다(있으면 lease 생성 422). Vision은 추적이 Fleet `/api/fleet/detections/config`에서
+이미 읽는 승인 보정 기록(D-457 `map_to_image`, `image`, `track_bounds_m`, `lens`,
+`calibration_revision`)으로 최신 원본을 지도 평면에 편다.
+
+- 영역: `track_bounds_m`에 여유 `0.15 m`를 더한 직사각형. 지도 `+x`가 오른쪽, `+y`가 위.
+- 축척: `400 px/m`. 긴 변이 1920 px를 넘으면 그 안으로 줄인다(소수 넷째 자리에서 내림).
+- 화면 밖이었던 부분은 어두운 고정색(BGR 24,24,24)이다. JPEG 품질 88.
+- 응답 헤더: `X-Frame-Rectified: map`, `X-Frame-Plane: <min_x>,<min_y>,<max_x>,<max_y>,<px_per_m>`
+  (미터, 여유 포함, 소수 넷째 자리; `px_per_m`은 줄인 뒤 값), `X-Frame-Calibration: <calibration_revision>`.
+  `X-Frame-Width`·`X-Frame-Height`는 평면 영상 크기이고 `X-Frame-Rotation-Deg`는 `0`이다.
+  `X-Frame-Seq`·`X-Frame-Age-Ms`·`X-Frame-Captured-At`·`X-Source-Lens`는 원본 프레임 그대로다.
+- 픽셀↔지도: 캔버스 좌표(픽셀 모서리 기준) `(u, v)`는 `x = min_x + u / px_per_m`,
+  `y = max_y − v / px_per_m`이다.
+- 못 펼 때: 승인 기록이 없거나 source·map·렌즈(`X-Source-Lens`와 같은 비교)·영상 비율(1 % 초과)이
+  기록과 다르면 `409`, `X-Frame-State: plane-unavailable`, 본문 `map plane unavailable`. 원본으로
+  대신하지 않는다. 오래된 프레임은 다른 모드와 같은 404다.
+- 펴기는 이벤트 루프 밖에서 프레임·revision마다 한 번 하고, 같은 프레임의 다른 읽기는 그 결과를 쓴다.
+  평면 영상은 표시·좌표 확인용 사본이며 원본 프레임·추적·sighting을 바꾸지 않는다(D-560 7).
 
 Fleet stores operator drafts per source in the current browser only. Until the
 camera intrinsics and floor plane have been measured and reviewed, this view is a
@@ -2579,6 +2599,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.166 | 2026-10-09 | Additive (D-560 S1, feat/rosy-cam-map-plane): Vision 미리보기 lease `rectification`에 `{"mode": "map"}`(다른 필드 없음). Vision이 추적용 승인 보정 기록으로 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px)에 펴서 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`과 함께 돌려주고, 기록이 없거나 source·map·렌즈·비율이 다르면 409 `X-Frame-State: plane-unavailable`(원본 대체 없음). `manual`·`auto`와 원본 프레임·추적 불변. 스키마·envelope 1.0 변경 없음 |
 | v1.165 | 2026-10-09 | Additive (D-531 P1, 기본 꺼짐): CORE `line/route_context` 경로 증거, `line_follow.route_context`·`route_context_published_at_s` 상태, `base_velocity.route_context` 능력, 인식 `route_context_seq` 역검증. 기존 주행 판단 불변; P2/P3와 SIM·DEVICE 별도 검증 |
 | v1.164 | 2026-10-09 | Additive (D-546 5–7 첫 조각, feat/d546-pose-request, Safety-Review 대상): `GET /api/v1/localization/request`, 오류 `NO_REQUEST`, 이벤트 `localization.request`·`localization.request_cleared`. lane_return(D-468)이 `pose_stale`(1 s 이상) 또는 `fleet_required` 에서 CORE 의 위치 요청을 열고 닫는다. 기존 필드·경로는 그대로이며 옛 Fleet 은 요청을 읽지 않을 뿐이다. 장치 기본값(`localization` 꺼짐)은 그대로다. |
 | v1.163 | 2026-10-09 | Additive (D-555, feat/enrolled-hub-pairing, 보안 검토·Safety-Review 대상): `GET`/`PUT`/`DELETE /api/v1/fleet/link`(TLS 리스너, 관리자 또는 사이트 등록 토큰), 능력 최상위 `fleet_link_provisioning`, 사건 `fleet.link_provisioned`·`fleet.link_cleared`, 오류 `FLEET_GOAL_ACTIVE`·`FLEET_LINK_CONFIG_INVALID`(409), `GET` `arm_state`·`arm_deadline_s`, Fleet 강제 해제 `?force=true`. SAF-003 `configured` 는 지금 설정을 읽는다(실행 중 페어링·해제를 따른다). Fleet `POST`/`DELETE /api/fleet/robots/{robot_id}/hub-link`, 허브는 등록 로봇 HELLO 를 digest 로 확인. 스키마 변경 없음 — envelope 1.0 유지 |
