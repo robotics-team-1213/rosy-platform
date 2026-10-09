@@ -248,7 +248,12 @@ class StuckRecoveryMixin:
                     and age is not None and 0.0 <= age <= config.stale_after_s)
         # From the latches, not the reported state: a transient HOLD (stale LiDAR, ladder
         # limit) must not read as "cleared" and reset the attempts (review H1).
-        cause = ("obstacle_ahead" if self._escalated
+        crosswalk = self._crosswalk_report()  # D-573 4: before any other cause
+        if crosswalk is None and self._escalated and self._crosswalk_armed():
+            # The gate owns the robot near an armed crosswalk: an obstacle stop there is a person,
+            # never a local back-off and re-approach (Gazebo baseline 2026-10-10).
+            crosswalk = "person_present"
+        cause = ("crosswalk_blocked" if crosswalk is not None else "obstacle_ahead" if self._escalated
                  else "lane_lost" if self._lost_latched else None)
         ceiling = self._provided("linear_ceiling")
         blind = None
@@ -261,7 +266,7 @@ class StuckRecoveryMixin:
         recovered_at = self._recovery.recovered_at
         moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
-            now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
+            now=now, cause=cause, cause_detail=crosswalk, lane_visible=lane, front_clear=front_clear,
             front_band_m=front, front_stop_m=front_stop,
             rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,

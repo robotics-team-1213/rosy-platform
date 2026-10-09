@@ -345,3 +345,61 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("restart-unit a b") == 2
     assert remote("") == 2
     assert remote("reboot *") == 2
+
+
+def _install_copy(tmp_path):
+    """The helper with root paths under tmp_path; runuser/getent/chown stubbed (no root here)."""
+    helper = _helper_copy(tmp_path, "site")  # writes conf/, state stubs; we rewrite one more path
+    del helper
+    stub = tmp_path / "bin"
+    home = tmp_path / "home"
+    (home / ".rosy" / "site-incoming").mkdir(parents=True)
+    (stub / "runuser").write_text('#!/bin/sh\n[ "$1" = -u ] && shift 2; [ "$1" = -- ] && shift; exec "$@"\n')
+    (stub / "getent").write_text(f'#!/bin/sh\necho "op:x:1000:1000::{home}:/bin/sh"\n')
+    (stub / "chown").write_text("#!/bin/sh\nexit 0\n")
+    for name in ("runuser", "getent", "chown"):
+        (stub / name).chmod(0o755)
+    site, backup = tmp_path / "site", tmp_path / "backup"
+    site.mkdir()
+    copy = tmp_path / "helper"
+    text = copy.read_text()
+    for old, new in (("SITE_CONF=/etc/rosy/site", f"SITE_CONF={site}"),
+                     ("BACKUP=/var/lib/rosy-host-control/backup", f"BACKUP={backup}")):
+        assert old in text
+        text = text.replace(old, new)
+    copy.write_text(text)
+
+    def run(name, user="op"):
+        env = {**os.environ, "SUDO_USER": user}
+        return subprocess.run(["bash", str(copy), "install-site-config", name], env=env,
+                              capture_output=True, text=True, timeout=20).returncode
+    return run, home / ".rosy" / "site-incoming", site, backup
+
+
+@posix
+def test_site_config_install_copies_checks_and_backs_up(tmp_path):
+    run, incoming, site, backup = _install_copy(tmp_path)
+    (incoming / "fleet-site.yaml").write_text("fleet: {traffic: {}}\n")
+    assert run("fleet-site.yaml") == 0
+    assert (site / "fleet-site.yaml").read_text() == "fleet: {traffic: {}}\n"
+    assert oct((site / "fleet-site.yaml").stat().st_mode & 0o777) == "0o644"
+    (incoming / "fleet-site.yaml").write_text("fleet: {traffic: {zones: {}}}\n")
+    assert run("fleet-site.yaml") == 0
+    assert [p.read_text() for p in backup.iterdir()] == ["fleet: {traffic: {}}\n"]
+    # Refusals leave the installed file alone and no temp file behind.
+    (incoming / "fleet-site.yaml").write_text("fleet: [unclosed\n")
+    assert run("fleet-site.yaml") == 2
+    (incoming / "fleet-site.yaml").write_text("a: " + "x" * 70000 + "\n")
+    assert run("fleet-site.yaml") == 2
+    assert run("robots.yaml") == 2                 # not allowlisted (holds robot tokens)
+    assert run("../site-cameras.yaml") == 2
+    assert run("site-cameras.yaml") == 2           # nothing staged
+    assert run("fleet-site.yaml", user="root") == 2
+    assert (site / "fleet-site.yaml").read_text() == "fleet: {traffic: {zones: {}}}\n"
+    assert sorted(p.name for p in site.iterdir()) == ["fleet-site.yaml"]
+
+
+@posix
+def test_fleet_key_cannot_install_site_config():
+    env = {**os.environ, "SSH_ORIGINAL_COMMAND": "install-site-config fleet-site.yaml"}
+    assert subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, timeout=10).returncode == 2

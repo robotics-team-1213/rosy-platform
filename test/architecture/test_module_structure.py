@@ -130,6 +130,14 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
         "at 604 (bend diagnostic)",
     ),
+    "fleet/fleet/traffic/lane_traffic.py": (
+        612,
+        "accept: measured at 612 on 2026-10-10 (author's record; NEEDS the independent re-judge). D-525 rev 6 "
+        "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
+        "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. The named "
+        "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
+        "Re-judge on further growth",
+    ),
     "fleet/fleet/traffic": (
         1884,
         "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
@@ -680,7 +688,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_353,
+        1_366,
+        "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "
+        "re-judged at 1360 (independent read-only critic: LineCrosswalkStatus lives in protocol/line_crosswalk.py; "
+        "here one re-export, LineStuckStatus.detail, LineFollowStatus.crosswalk/crosswalk_reported and the "
+        "omit-when-unreported serializer), on top of D-581 at 1353: "
         "accept: re-judged at 1353 on 2026-10-10 for D-581 (self-judged after the independent review): four "
         "optional PoseSample fields (anchor, for_robot_id, anchor_age_s, anchor_hold) and their comment; additive, "
         "envelope 1.0 kept, no new model. Previously: accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
@@ -938,7 +950,10 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "core_features": (
-        11_814,
+        12_392,
+        "accept: re-judged at 12392 on 2026-10-10 for D-573 (c) (independent read-only critic): new "
+        "line_follow/crosswalk_gate.py (509) plus config/wiring; next growth makes line_follow its own size "
+        "unit with a docs/plans split plan. Previously: "
         "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
         "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
         "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "

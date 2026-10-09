@@ -5,7 +5,12 @@ robot never sees a colour; ``green()`` only feeds ``blocks.step(green=...)``.
 
 - Every change of approach goes green → yellow → all red → green, and the next green waits until
   the zone is not busy (no holder, no unknown body), however long that takes (D-525 3).
-- A fresh state is all red with mode ``all_red``: a Fleet restart never relights a phase (D-525 5).
+- D-525 rev 6 ``occupancy`` (the default, a fresh state): no phase machine. Every approach may ask
+  the D-517 table (``green`` is all of them) and capacity 1 alone lets one robot in. The lamps are
+  derived each period from the zone's live table state (``zone_occupancy``, ``occupancy_lamps``):
+  free -> all green; granted, not yet entered -> the holder's approach green, the rest yellow (shown
+  orange, "reserved"); occupied or unknown -> all red. A restart relights nothing stored: the lamps
+  come from live state and are red until the table knows the zone.
 - D-525 rev 4 ``demand``: an outside controller only asks (``demand``) for an approach; this machine
   still decides, through the same green -> yellow -> all red -> (zone free) -> green path. A controller
   silent for ``controller_ttl_s`` drops the signal back to ``cycle`` with alert ``controller_lost``.
@@ -15,10 +20,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 from fleet.routing.graph import Graph
-from fleet.traffic.blocks import Layout
+from fleet.traffic.blocks import Layout, Robot, TableState
 
 ALL_RED_ALERT_S = 30.0   # D-525 3: an all red stretched this long goes to the exception queue
 HOLD_ALERT_S = 120.0     # D-525 4: a hold this long starves the other approaches
@@ -37,8 +42,8 @@ class SignalPlan:
 
 @dataclass
 class SignalState:
-    mode: str = "all_red"                    # cycle | hold | all_red | manual | demand
-    aspect: str = "all_red"                  # green | yellow | all_red
+    mode: str = "occupancy"                  # occupancy (rev 6 default) | cycle | hold | all_red | manual | demand
+    aspect: str = "all_red"                  # green | yellow | all_red (the phase machine; idle in occupancy)
     phase: int = -1                          # the phase green last (or now)
     since: float = 0.0                       # aspect start
     mode_since: float = 0.0
@@ -78,16 +83,22 @@ def check(plan: SignalPlan, graph: Graph, layout: Layout) -> list[str]:
     return errors
 
 
+#: mode verbs besides ``set_aspect`` (D-443 §1.3, rev 4 ``demand``, rev 6 ``occupancy``)
+VERBS = ("occupancy", "cycle", "hold", "all_red", "demand")
+
+
 def command(plan: SignalPlan, state: SignalState, verb: str, now: float, approach: Optional[str] = None) -> None:
     """D-443 §1.3 verbs. ``all_red`` (E-stop, presence lost) is immediate; the rest change mode only.
-    ``demand`` (D-525 rev 4) hands the choice of the next green to the controller's demands."""
+    ``demand`` (D-525 rev 4) hands the choice of the next green to the controller's demands.
+    ``occupancy`` (rev 6) leaves the phase machine at all red, so a later phase verb starts from all
+    red and waits for a free zone, as after a restart."""
     if verb == "set_aspect":
         state.manual = next(i for i, (a, _g) in enumerate(plan.phases) if a == approach)
-    elif verb not in ("cycle", "hold", "all_red", "demand"):
+    elif verb not in VERBS:
         raise ValueError(verb)
     state.mode, state.mode_since, state.lost = ("manual" if verb == "set_aspect" else verb), now, False
     state.demands, state.heard = {}, now   # a fresh controller clock; old demands never carry over
-    if verb == "all_red" and state.aspect != "all_red":
+    if verb in ("all_red", "occupancy") and state.aspect != "all_red":
         state.aspect, state.since = "all_red", now
 
 
@@ -117,6 +128,8 @@ def queue(plan: SignalPlan, state: SignalState, now: float) -> list[str]:
 
 
 def advance(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool) -> None:
+    if state.mode == "occupancy":   # no phases: the table's capacity decides, the lamps follow it
+        return
     if state.mode == "demand":
         state.demands = {a: d for a, d in state.demands.items() if d[1] > now}
         if now - state.heard > plan.controller_ttl_s:   # controller lost: the plain cycle, flagged
@@ -148,10 +161,56 @@ def advance(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool) -
 
 
 def green(plan: SignalPlan, state: SignalState) -> frozenset[str]:
+    """Approaches the D-517 table may grant the zone to. ``occupancy``: all of them, so the signal adds
+    no phase gate (nothing to deadlock on) and the zone's capacity 1 alone picks who goes in."""
+    if state.mode == "occupancy":
+        return frozenset(a for a, _g in plan.phases)
     return frozenset((plan.phases[state.phase][0],)) if state.aspect == "green" else frozenset()
 
 
-def forecast(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool) -> dict[str, dict]:
+#: ``(state, holder, approach)`` of a signalled zone (rev 6): ``free``, ``reserved`` (granted, not yet
+#: entered), ``occupied`` or ``unknown``; ``holder`` the robot holding or inside it, ``approach`` the
+#: arc it was granted from (None when not known).
+UNKNOWN = ("unknown", None, None)
+
+
+def zone_occupancy(table: TableState, robots: Sequence[Robot], zone: str,
+                   unplaced: Sequence[str] = ()) -> tuple[str, Optional[str], Optional[str]]:
+    """The zone's live state from the D-517 table after ``blocks.step`` (``robots``: that tick's robots).
+
+    Unknown when a robot was never placed, or a robot not localized this tick (UNKNOWN, missing, a
+    finished trip's pins) may be in it. Occupied when a localized robot's padded body touches it.
+    Reserved when a robot holds a grant on it but is not in it yet. Free otherwise."""
+    if unplaced:
+        return UNKNOWN
+    localized = {robot.id for robot in robots if robot.d is not None}
+    if any(zone in units for units in table.pinned.values()) or \
+            any(zone in units for rid, units in table.last_occupied.items() if rid not in localized):
+        return UNKNOWN
+    holders = sorted((rid, i) for rid, held in table.held.items() for i, (unit, _f) in held.items() if unit == zone)
+    inside = sorted(rid for rid, units in table.last_occupied.items() if zone in units)
+    if not holders and not inside:
+        return ("free", None, None)
+    holder = next((rid for rid, _i in holders if rid in inside), inside[0] if inside else holders[0][0])
+    index = next((i for rid, i in holders if rid == holder), None)
+    route = next((robot.spans for robot in robots if robot.id == holder), ())
+    approach = (route[index].entry or None) if index is not None and index < len(route) else None
+    return ("occupied" if inside else "reserved", holder, approach)
+
+
+def occupancy_lamps(plan: SignalPlan, occupancy: tuple[str, Optional[str], Optional[str]]) -> dict[str, str]:
+    """Rev 5 lamps: free all green; reserved the holder's approach green and the rest yellow (shown
+    orange); occupied or unknown all red. Display and advice only: the D-517 grant lets a robot in."""
+    state, _holder, approach = occupancy
+    if state == "free":
+        return {a: "green" for a, _g in plan.phases}
+    if state == "reserved":
+        return {a: "green" if a == approach else "yellow" for a, _g in plan.phases}
+    return {a: "red" for a, _g in plan.phases}
+
+
+def forecast(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool,
+             occupancy: tuple[str, Optional[str], Optional[str]] = UNKNOWN) -> dict[str, dict]:
     """D-525 rev 3: per approach ``{lamp, left_s, green_in_s, exact}`` — the T-map style countdown.
 
     ``left_s`` is how long the shown lamp lasts; ``green_in_s`` how long until that approach is green
@@ -160,7 +219,12 @@ def forecast(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool) 
     (``hold``, operator ``all_red``, a manual green, or no next phase). Advisory only: a robot may show
     it or slow down earlier; only the D-517 authority lets it in. ``demand`` (rev 4): a green is
     open-ended (None) and only demanded approaches get a ``green_in_s`` lower bound, in queue order.
+    ``occupancy`` (rev 6): lamps from ``occupancy_lamps``; no time is known (the holder leaves when it
+    leaves), so ``left_s`` is None and ``green_in_s`` is 0 on green, else None.
     """
+    if state.mode == "occupancy":
+        return {a: {"lamp": lamp, "left_s": None, "green_in_s": 0.0 if lamp == "green" else None, "exact": False}
+                for a, lamp in occupancy_lamps(plan, occupancy).items()}
     n = len(plan.phases)
     held = max(0.0, now - state.since)
     lit = green(plan, state)

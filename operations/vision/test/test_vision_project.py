@@ -41,7 +41,8 @@ def test_project_frame_preserves_lineage_and_projects_robot_pose():
     assert len(result) == 1
     sighting = result[0]
     assert sighting.robot_id == "rosy_01"
-    assert math.isclose(sighting.x, 2.0, abs_tol=1e-6)
+    # D-587 4: the robot centre is the marker centre minus the nominal mount (-0.017, 0).
+    assert math.isclose(sighting.x, 2.017, abs_tol=1e-6)
     assert math.isclose(sighting.y, 1.0, abs_tol=1e-6)
     assert math.isclose(sighting.yaw, 0.0, abs_tol=1e-6)
     assert (sighting.seq, sighting.captured_at) == (17, 1_790_000_000.5)
@@ -133,7 +134,7 @@ def test_project_frame_uses_the_field_homography_and_names_the_source():
 
     assert len(result) == 1
     sighting = result[0]
-    assert math.isclose(sighting.x, 2.0, abs_tol=1e-6)
+    assert math.isclose(sighting.x, 2.017, abs_tol=1e-6)  # D-587 4 mount
     assert math.isclose(sighting.y, 1.0, abs_tol=1e-6)
     assert sighting.calibration_source == "field_boundary"
     assert sighting.corner_marker_ids is None
@@ -142,3 +143,14 @@ def test_project_frame_uses_the_field_homography_and_names_the_source():
 def test_project_frame_field_source_without_a_homography_publishes_nothing():
     assert project_frame(_field_camera(), source_id="ceiling_north", seq=22,
                          captured_at=10.0, markers={7: _markers()[7]}) == ()
+
+
+def test_project_frame_applies_the_robot_marker_yaw_offset():
+    """D-587 4: a sticker stuck turned 90 deg left is corrected by the per-robot offset."""
+    camera = CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": 90.0}})
+    sighting = project_frame(camera, source_id="ceiling_north", seq=17,
+                             captured_at=1_790_000_000.5, markers=_markers())[0]
+    assert math.isclose(sighting.yaw, -math.pi / 2, abs_tol=1e-6)
+    assert (sighting.x, sighting.y) == pytest.approx((2.0, 1.0 - 0.017))
+    with pytest.raises(ValueError, match="marker yaw offsets"):
+        CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": float("inf")}})
