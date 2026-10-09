@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
 - 2026-10-09 · uncommitted · fix(fleet): site-map robot rings and labels stay on the map
 - 2026-10-09 · uncommitted · uiux(fleet): 기기 이름과 ArUco 표지를 내부 ID와 구분
 - 2026-10-09 · uncommitted · fix(fleet): TLS 로봇 번호 변경 뒤 재등록 (D-565)
 - 2026-10-09 · uncommitted · fix(fleet): 관제 지도와 로봇 표시 안정화
-- 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영

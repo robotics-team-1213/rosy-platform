@@ -1,6 +1,6 @@
 ## D-577 문제 상황의 로봇은 내버려 두지 않는다 — Fleet 판단기는 기본으로 켜져 차선 상실에도 답하고, AI PC 상황 서비스는 실시간으로 교착·정체·추론 불일치를 찾아 사실만 올리며, 답은 Fleet 규칙이 고르고 CORE가 다시 확인한다
 
-**Status:** Proposed (2026-10-09). 문서만이다. 코드, `--stuck-resolver` 기본값 변경, 등록 로봇 resolver 자격 발급, AI PC 상주 서비스 설치, Qwen 상주, Tailscale 정책 변경, 실기 활성화를 이 기록이 승인하지 않는다. 구현 계획은 [docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md](../plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md)다. 구현 단계 (a)·(g)·(i)는 Safety-Review 대상이다.
+**Status:** Accepted (2026-10-09, 사용자: "D-577을 만들고 진행해"). 사용자 답(2026-10-09): 열린 질문 1 — 비전 정체 사실의 그림자는 지금부터 연다(소유자 동의 조건). 열린 질문 2 — 사람 알림은 지금은 콘솔 안에만 둔다(휴대폰·메신저 없음). 이 수락은 (a) 구현(판단기 기본 켜짐)을 승인한다. 등록 로봇 resolver 자격 발급, `recovery_local_enabled`, `ai_facts_acting`, `ai_vision`, AI PC 상주 서비스 설치, Qwen 상주, Tailscale 정책 변경, 실기 활성화는 여전히 로봇별·단계별 사용자 승인이다. 구현 계획은 [docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md](../plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md)다. 구현 단계 (a)·(g)·(i)는 Safety-Review 대상이다.
 
 사용자 지시(2026-10-09):
 - "문제상황에서 fleet으로 해서 서로 소통하고 ai pc가 상황을 판단해주는 로직이 있어야지, 그냥 두는게 아니라"
@@ -30,6 +30,7 @@
 
 1. **Fleet 판단기 규칙: 차선 상실(`lane_lost`)에도 답한다. 안전한 답만 낸다.** trip 로봇은 D-517 M4 그대로(R1 `WAIT`만, 나머지 사람)다. 아래는 trip이 아닌 로봇이다.
    - **R3 `lane_lost_back_off` = `BACK_AND_RETRY`는 아래가 모두 참일 때만.** 로컬 복구 켜짐, 시도 수가 `recovery_max_attempts` 미만(D-438 그대로), Fleet이 아는 동료 로봇의 몸이 뒤 띠(`resolver_peer_reach_m`, 기본 0.30 m) 안에 없음, 로봇이 횡단보도 구역(D-573) 안이 아님, 그 로봇의 `MapPose`가 `LOCALIZED`이고 `age_s` ≤ 2 s이거나 Fleet이 자세를 전혀 모름(모름이면 뒤 띠 판정은 CORE 재검사에만 맡긴다). 뒤 여유·사각·지나온 길은 CORE가 판정한다(D-407 §4). 판단기는 `rear_state`로 후진을 허락하지 않는다.
+   - **Safety-Review 보완(2026-10-09, 구현 (a)).** R3 조건은 닫힌 쪽으로 읽는다. 자세: Fleet이 그 로봇의 목격 출처를 한 번도 가진 적이 없을 때만 `UNKNOWN`을 "모름"으로 본다. 출처가 있었는데 `UNKNOWN`(odom 낡음·anchor 잃음)이면 R5 `pose`다. 뒤 띠: 자신과 동료 모두 D-395 신뢰 지도 자세(`LOCALIZED`·map 또는 미보고 legacy)로만 잰다. 동료가 온라인인데 어느 한쪽 자세가 없거나 신뢰되지 않으면 R5 `peer_unknown`이다. 횡단보도: CORE가 `line_follow.crosswalk`를 보고하지 않으면(지금의 모든 CORE) R5 `crosswalk_unknown`이다. D-573 구현은 구역 밖에서 `crosswalk: null`, 안에서 객체를 내야 R3가 열린다.
    - **새 R5 `lane_lost_hold` = `WAIT` 후 바로 사람.** R3 조건이 거짓이면(동료가 뒤에 있음, 횡단보도, 시도 소진, 로컬 복구 꺼짐) `WAIT`을 보내고 같은 주기에 `lane_lost_hold:<이유>`로 큐에 올린다. `WAIT`은 CORE를 `console_wait`로 두어 로컬 후진 타이머를 멈춘다. 동료 로봇 쪽으로의 무인 후진을 막는 것이 목적이다. R5는 규칙 예산을 쓰지 않는다(멈추는 답이고 한 막힘에 한 번).
    - **`RESUME`은 `lane_lost`에 어떤 단계도 보내지 않는다(D-438 §3 그대로).** 차선 증거 없이 상실 래치를 풀기 때문이다. `ABORT`·`MANUAL`은 사람만 고른다.
    - 원인 문자열은 CORE 막힘 `cause`(`obstacle_ahead`|`lane_lost`)만 본다. HOLD 사유(`camera_line_not_visible` 등)는 큐 표시와 에피소드 기록에만 쓴다.
@@ -93,5 +94,11 @@
 
 1. 비전 정체 사실의 **그림자**를 D-503 9항 트리거 전에 여는가(이 ADR의 기본) 아니면 9항을 그대로 기다리는가.
 2. 사람 알림을 콘솔 밖(휴대폰·메신저)으로 보낼 채널이 필요한가.
+
+### 남은 항목 (Safety-Review 2026-10-10, 구현 (a))
+
+1. 뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다. D-573이 `crosswalk: null`을 내서 R3가 열리기 전에 닫아야 한다.
+2. R5 전송이 실패한 뒤 다음 주기에 R3 조건이 모두 참이면 R3가 고를 수 있다.
+3. Fleet 정지(작업 취소)로 끊긴 R5 전송은 사람에게 올라가지 않는다.
 
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.
