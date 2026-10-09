@@ -233,6 +233,9 @@ class TrackingService:
                 "fps": round(len(state.arrivals) / FPS_WINDOW_S, 1),
                 "last_error": state.last_error,
                 "relearn_seq": state.relearn_seq,
+                # D-589 8: the camera's recognition tuning as Vision last reported it.
+                "tuning": (payload.tuning.model_dump(mode="json")
+                           if fresh and payload.tuning is not None else None),
             })
             seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
                      if d.marker_id is None]

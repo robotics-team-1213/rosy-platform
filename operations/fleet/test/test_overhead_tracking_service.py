@@ -431,3 +431,14 @@ def test_fps_counts_accepted_payloads_over_three_seconds():
         service.accept(AUTH, _payload(calibration_revision="cal-v3", seq=index,
                                       captured_at=clock.now - 0.05))
     assert service.snapshot()["sources"][0]["fps"] == 2.0
+
+
+def test_source_row_carries_the_camera_tuning_while_fresh():
+    service, clock = _service()
+    service.accept(AUTH, _payload(calibration_revision="cal-v3"))
+    assert service.snapshot()["sources"][0]["tuning"] is None
+    tuning = CASES["ok_with_tuning"]["payload"]["tuning"]
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", captured_at=NOW - 0.05, tuning=tuning))
+    assert service.snapshot()["sources"][0]["tuning"] == tuning
+    clock.now += 1.1
+    assert service.snapshot()["sources"][0]["tuning"] is None

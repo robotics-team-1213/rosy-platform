@@ -495,3 +495,120 @@ def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
         asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
     (body,) = client.identity
     assert body["reason"] != "frames_missing" and body["evidence"]["frames"] == 14
+
+
+# -- D-589 recognition tuning -------------------------------------------------------------------
+
+from rosy_vision import protocol  # noqa: E402
+
+INGEST_VECTORS = json.loads((Path(__file__).resolve().parents[3]
+                             / "test/fixtures/protocol/overhead-ingest.v1.json").read_text(encoding="utf-8"))
+STATE_EXAMPLE = INGEST_VECTORS["messages"]["camera_state_example"]
+
+
+class _TuningIngest(_Ingest):
+    """An ingest with a connected phone that reports ``camera_state``."""
+
+    def __init__(self, state=None):
+        super().__init__()
+        self.link = 1
+        self.state = state
+        self.sent = []
+
+    def camera_link(self, source_id):
+        assert source_id == "ceiling_north"
+        return self.link, self.state
+
+    async def send_camera(self, source_id, message):
+        self.sent.append(message)
+        return True
+
+
+class _Camera(_Detector):
+    def __init__(self):
+        super().__init__()
+        self.cameras = []
+
+    def camera_changed(self, fingerprint):
+        self.threads.add(threading.get_ident())
+        self.cameras.append(fingerprint)
+
+
+def _state(**changes):
+    body = json.loads(json.dumps(STATE_EXAMPLE))
+    for key, value in changes.items():
+        if key in ("ev", "ae_lock", "mode"):
+            body["applied"][key] = value
+        else:
+            body[key] = value
+    return protocol.parse_camera_state(body)
+
+
+def _tuning_worker(state=None, *, auto_tune=True, detector=None):
+    clock = SimpleNamespace(now=0.0)
+    ingest = _TuningIngest(state)
+    worker = TrackWorker(camera=CAMERA, ingest=ingest, client=_Client([CONFIG]), detector=detector or _Camera(),
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8),
+                         clock=lambda: clock.now, auto_tune=auto_tune)
+    asyncio.run(worker.refresh_config())
+    return worker, ingest, clock
+
+
+def test_each_step_scores_the_frame_and_reports_tuning_to_fleet():
+    worker, ingest, _ = _tuning_worker()
+    try:
+        payload = asyncio.run(worker.process(_frame(), {}))
+    finally:
+        worker.close()
+    assert payload.tuning is not None and payload.tuning.state == "waiting"
+    assert payload.tuning.score is not None  # measured even before the phone reports
+    assert ingest.sent == []  # nothing is sent before the phone's first camera_state
+
+
+def test_the_tuner_sends_camera_messages_once_the_phone_reports():
+    worker, ingest, clock = _tuning_worker(_state(seq=0, ev=0, ae_lock=False))
+    try:
+        payload = asyncio.run(worker.process(_frame(), {}))
+    finally:
+        worker.close()
+    assert len(ingest.sent) == 1
+    seq, setting = protocol.parse_camera(ingest.sent[0])
+    assert (seq, setting.ev, setting.ae_lock, setting.max_exposure_us) == (1, 0, False, 33333)
+    assert payload.tuning.state == "tuning" and payload.tuning.ev == 0.0
+
+
+def test_auto_tune_off_sends_nothing_and_reports_state_off():
+    worker, ingest, _ = _tuning_worker(_state(), auto_tune=False)
+    try:
+        payload = asyncio.run(worker.process(_frame(), {}))
+    finally:
+        worker.close()
+    assert ingest.sent == []
+    assert payload.tuning.state == "off" and payload.tuning.ev == -0.1 and payload.tuning.locked is True
+
+
+def test_newly_applied_settings_in_mode_vision_reset_the_detector_once():
+    detector = _Camera()
+    worker, ingest, _ = _tuning_worker(_state(), detector=detector)
+    try:
+        asyncio.run(worker.process(_frame(seq=1, captured_at=99.75), {}))
+        asyncio.run(worker.process(_frame(seq=2, captured_at=99.85), {}))
+        ingest.state = _state(ev=-3, mode="local")  # the phone's own loop: no relearn
+        asyncio.run(worker.process(_frame(seq=3, captured_at=99.95), {}))
+        ingest.state = _state(ev=-3)
+        asyncio.run(worker.process(_frame(seq=4, captured_at=100.05), {}))
+    finally:
+        worker.close()
+    assert detector.cameras == [_state().applied.fingerprint(), _state(ev=-3).applied.fingerprint()]
+    assert detector.resets == 0  # the automatic path, never the operator relearn
+    assert detector.threads and threading.get_ident() not in detector.threads
+
+
+def test_a_detector_without_camera_changed_is_reset():
+    detector = _Detector()
+    worker, ingest, _ = _tuning_worker(_state(), detector=detector)
+    try:
+        asyncio.run(worker.process(_frame(), {}))
+    finally:
+        worker.close()
+    assert detector.resets == 1

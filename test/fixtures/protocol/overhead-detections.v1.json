@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "doc": "D-405 4 overhead detection vectors. Machine source for core_common.protocol.overhead_detections, the Vision publisher (rosy_vision.track) and the Fleet ingest (POST /api/fleet/detections). Anonymous floor positions in map metres from one ceiling camera: no image, no pixel coordinates, no robot id, extra fields forbidden, at most max_detections, detections only when status is OK, calibration_revision null only when status is CALIBRATION_REQUIRED. Display and cross-check only (D-268); not an input to D-395 localization, traffic, bays or missions. config_example is the body of GET /api/fleet/detections/config (Fleet tracking_calibration.CalibrationRecord.to_dict, read by rosy_vision.track.calibration.from_record).",
+  "doc": "D-405 4 overhead detection vectors. Machine source for core_common.protocol.overhead_detections, the Vision publisher (rosy_vision.track) and the Fleet ingest (POST /api/fleet/detections). Anonymous floor positions in map metres from one ceiling camera: no image, no pixel coordinates, no robot id, extra fields forbidden, at most max_detections, detections only when status is OK, calibration_revision null only when status is CALIBRATION_REQUIRED. D-589: optional tuning {state off|waiting|tuning|locked|paused, score 0..1 or null, ev real EV or null, locked boolean}, left out when absent. Display and cross-check only (D-268); not an input to D-395 localization, traffic, bays or missions. config_example is the body of GET /api/fleet/detections/config (Fleet tracking_calibration.CalibrationRecord.to_dict, read by rosy_vision.track.calibration.from_record).",
   "max_detections": 16,
   "statuses": ["OK", "LEARNING", "CALIBRATION_REQUIRED", "SCENE_CHANGED"],
   "config_example": {
@@ -83,6 +83,30 @@
     {"id": "negative_seq", "expect": {"valid": false}, "payload": {
       "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
       "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": -1, "status": "OK",
-      "detections": []}}
+      "detections": []}},
+    {"id": "ok_with_tuning", "expect": {"valid": true}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "locked", "score": 0.82, "ev": -0.7, "locked": true}}},
+    {"id": "tuning_unmeasured", "expect": {"valid": true}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "waiting", "score": null, "ev": null, "locked": false}}},
+    {"id": "tuning_unknown_state", "expect": {"valid": false}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "auto", "score": 0.5, "ev": 0.0, "locked": false}}},
+    {"id": "tuning_extra_field", "expect": {"valid": false}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "locked", "score": 0.5, "ev": 0.0, "locked": true, "iso": 200}}},
+    {"id": "tuning_score_above_one", "expect": {"valid": false}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "locked", "score": 1.5, "ev": 0.0, "locked": true}}},
+    {"id": "tuning_locked_not_boolean", "expect": {"valid": false}, "payload": {
+      "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration_revision": "paint-3f9a1c2b7d40",
+      "processor_revision": "background-blob/1", "captured_at": 1790000000.25, "seq": 41, "status": "OK",
+      "detections": [], "tuning": {"state": "locked", "score": 0.5, "ev": 0.0, "locked": 1}}}
   ]
 }
