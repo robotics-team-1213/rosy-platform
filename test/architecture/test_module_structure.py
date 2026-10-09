@@ -205,8 +205,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_187,
-        "split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
+        50_568,
+        "split: re-judged at 50568 on 2026-10-10 (author's record; NEEDS the independent re-judge) for D-594 robot "
+        "path history (+352 over main 50216): one new display/replay owner fleet/server/path_history.py (recorder, "
+        "site-DB store, viewer read route; reads the existing D-395 trust, D-494 3 map pose and D-457 tracking "
+        "owners, never commands or stops a robot), wired at the app composition root (app.py +9, console.py "
+        "untouched); web/trail-view.js now fetches the record instead of building trails, index.html +9 and "
+        "styles.css +6 for the range/robot control. map-view.js unchanged. +150 allowance measured from 50568. "
+        "Previously split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
         "an independent REQUEST CHANGES review whose fixes are in). One new pure module "
         "fleet/swarm/anchor.py (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
         "stale and jump stops, explicit anchor_hold samples, the anchored relay factory and status), its hook "
