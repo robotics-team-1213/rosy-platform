@@ -1025,8 +1025,11 @@ SIZE_VERDICTS = {
         "backend it serves and does not change the split plan.",
     ),
     "control": (
-        34_446,
-        f"split: P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        34_600,
+        f"split: re-judged at 34600 on 2026-10-10: +154 for the D-588 learned paint floor gate (host tests "
+        "test_learned_paint_floor_gate.py and one overlay case; node parameter and overlay key +10; the gate "
+        "itself sits in the perception unit). No new owner; the P1a split below still applies. "
+        f"P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
