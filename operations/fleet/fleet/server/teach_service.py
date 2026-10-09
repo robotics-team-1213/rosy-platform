@@ -232,7 +232,7 @@ class TeachService:
                 raise TeachError(422, "PLACE_NAME_REQUIRED")
             place_id = teach.add_place(body, name, kind or "junction", row["x"], row["y"], row["yaw"])
         else:
-            body = {**body, "places": [dict(p) for p in body["places"]]}
+            body = {**body, "places": [dict(p) for p in body["places"]], "edges": [dict(e) for e in body["edges"]]}
             place = next((p for p in body["places"] if p["id"] == place_id), None)
             if place is None:
                 raise TeachError(404, "PLACE_UNKNOWN", {"place_id": place_id})
@@ -244,6 +244,12 @@ class TeachService:
                 place["name"] = name
             if kind:
                 place["kind"] = kind
+            for edge in body["edges"]:  # a lane keeps ending on its moved place
+                ends = {0: edge["from"] == place_id, -1: edge["to"] == place_id}
+                if any(ends.values()):
+                    edge["polyline"] = [list(p) for p in edge["polyline"]]
+                    for index in (i for i, hit in ends.items() if hit):
+                        edge["polyline"][index] = [place["x"], place["y"]]
         draft = self._save(body, expected_revision, principal_id)
         self._store.record_event("teach_place", principal_id, {
             "marker_id": marker_id, "source_id": row["source_id"], "place_id": place_id,

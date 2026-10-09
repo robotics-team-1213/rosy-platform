@@ -102,6 +102,7 @@ def test_teach_place_from_marker_adds_or_moves_a_draft_place_and_refuses_stale(t
         assert moved.status_code == 200, moved.text
         b = next(p for p in moved.json()["draft"]["map"]["places"] if p["id"] == "B")
         assert (b["x"], b["y"], b["yaw"], b["name"], b["kind"]) == (2.5, 0.5, -0.5, "충전", "charge")
+        assert moved.json()["draft"]["map"]["edges"][0]["polyline"][-1] == [2.5, 0.5]
         assert teach({"marker_id": 34, "place_id": "nope"}).json()["detail"]["code"] == "PLACE_UNKNOWN"
         assert teach({"marker_id": 34}).json()["detail"]["code"] == "PLACE_NAME_REQUIRED"
         clock.now += 2.5
