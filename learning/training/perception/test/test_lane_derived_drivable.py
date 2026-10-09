@@ -11,7 +11,7 @@ import lane_derived_drivable as ldd
 
 def _frame(wall=True):
     """240x320: rows <110 ignored, lane_left col 40-49, lane_right col 270-279, wall right of it."""
-    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)  # textured carpet
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)  # textured carpet
     mask = np.zeros((240, 320), np.uint8)
     mask[:110] = 255
     mask[110:, 40:50] = 1
@@ -50,8 +50,8 @@ def test_derive_mask_band_lanes_walls_and_ignore():
     assert (out[200:210, 100:120] == 3).all()  # crosswalk kept, not drivable
     assert (out[150, 50:270] == ldd.DRIVABLE).all()
     assert (out[115:155, 290:] == 0).sum() > 0.9 * 40 * 30  # wall negatives
-    assert (out[230, 285:] == 255).all()  # carpet outside lanes stays unknown
-    assert (out[180:200, 0:40] == 255).all()
+    assert (out[230, 280:] == 0).all()  # outside band: W 220 -> 110 px, cut by the image edge
+    assert (out[180:200, 0:40] == 0).all()
     assert (out[182:198, 122:138] == 255).all()  # stripe is not road
 
 
@@ -70,6 +70,131 @@ def test_rows_above_ignore_top_are_unknown_for_every_class():
     src[100:110, 40:50] = 1
     out, _ = ldd.derive_mask(src, image)
     assert (out[:110] == 255).all()
+
+
+def test_outside_band_width_and_stops():
+    """lane_left 100-109, lane_right 200-209: W 90, k 0.5 -> 45 px bands, then 255."""
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[110:, 100:110], src[110:, 200:210] = 1, 2
+    src[150, 80], src[170, 90] = 3, 255  # a lane-class pixel stops the band; source 255 is skipped
+    image[160, 230] = 220  # bright paint stops the band
+    out, _ = ldd.derive_mask(src, image, outside_k=0.5)
+    assert (out[120, 55:100] == 0).all() and (out[120, :55] == 255).all()
+    assert (out[120, 210:255] == 0).all() and (out[120, 255:] == 255).all()
+    assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
+    assert (out[160, 210:230] == 0).all() and (out[160, 230:] == 255).all()
+    assert out[170, 90] == 255 and (out[170, 55:90] == 0).all()
+    out, _ = ldd.derive_mask(src, image, outside_k=0)
+    assert not (out == 0).any()
+    out, _ = ldd.derive_mask(src, image)  # D-576 default k=inf: to the edge or the next stop
+    assert (out[120, :100] == 0).all() and (out[120, 210:] == 0).all()
+    assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
+
+
+def test_outside_is_blocked_only_on_both_line_rows_d576():
+    """Rows 110-159 show only lane_right: their outer sides stay 255 (sheets4 review)."""
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[160:, 100:110], src[110:, 200:210] = 1, 2
+    out, both = ldd.derive_mask(src, image)
+    assert both == 80 and (out[130] == np.where(src[130] == 2, 2, 255)).all()
+    assert (out[200, 110:200] == ldd.DRIVABLE).all() and (out[200, :100] == 0).all()
+    assert (out[200, 210:] == 0).all()
+
+
+def test_coloured_mat_inside_the_band_is_not_drivable():
+    image, src = _frame(wall=False)
+    image[200:220, 150:200] = (40, 40, 200)  # red mat (BGR), saturation ~204
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[202:218, 152:198] == 255).all() and out[230, 150] == ldd.DRIVABLE
+
+
+def _perspective(left_until=200, right_until=200, wobble=0):
+    """Lines widen toward the bottom: right edge of lane_left 100-(y-110)/2, left edge of lane_right
+    220+(y-110)/2, 8 px wide; each drawn only down to its *_until row (then it has left the view)."""
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[:110] = 255
+    for y in range(110, 240):
+        xl, xr = 100 - (y - 110) // 2 + (wobble if y % 2 else -wobble), 220 + (y - 110) // 2
+        if y <= left_until:
+            src[y, max(xl - 7, 0):xl + 1] = 1
+        if y <= right_until:
+            src[y, xr:xr + 8] = 2
+    return image, src
+
+
+def test_near_rows_extend_the_road_from_the_fitted_lines():
+    image, src = _perspective()
+    out, both = ldd.derive_mask(src, image)
+    assert both == 91
+    assert (out[230, 41:280] == ldd.DRIVABLE).all()  # 100-60 .. 220+60, extrapolated
+    assert (out[239, 0:320] != 0).all() and (out[230, :40] == 255).all()  # no band beside a missing line
+    out, _ = ldd.derive_mask(src, image, near=dict(ldd.NEAR, fit_rows=0))
+    assert not (out[201:] == ldd.DRIVABLE).any()
+
+
+def test_near_rows_use_the_visible_line_and_its_outside_band():
+    image, src = _perspective(right_until=239)
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[230, 41:280] == ldd.DRIVABLE).all() and (out[230, 280:288] == 2).all()
+    assert (out[230, 288:] == 255).all()  # near-extension row: outer side stays 255 (D-576)
+    out, _ = ldd.derive_mask(src, image, outside_k=0.5)
+    assert (out[230, 288:] == 0).all()  # a finite k keeps the item 10 band beside a visible line
+    assert (out[230, :40] == 255).all()
+
+
+def test_near_extension_refused_on_a_bad_fit_or_narrow_road():
+    image, src = _perspective(wobble=6)
+    out, _ = ldd.derive_mask(src, image)
+    assert not (out[201:] == ldd.DRIVABLE).any()
+    image, src = _perspective()
+    out, _ = ldd.derive_mask(src, image, near=dict(ldd.NEAR, min_width=250))  # row 201 is ~210 wide
+    assert (out[200] == ldd.DRIVABLE).any() and not (out[201:] == ldd.DRIVABLE).any()
+
+
+def _labelled(road_cols=(60, 260)):
+    """Rows >= 110 labelled: band 0 at 0-49 and 270-319, lanes 50-59 / 260-269, drivable between."""
+    mask = np.full((240, 320), 255, np.uint8)
+    mask[110:] = 0
+    mask[110:, 50:60], mask[110:, 260:270] = 1, 2
+    mask[110:, road_cols[0]:road_cols[1]] = ldd.DRIVABLE
+    mask[110:, 60:road_cols[0]] = 0
+    mask[110:, road_cols[1]:260] = 0
+    return mask
+
+
+def test_canaries_change_at_least_800px_and_15_percent_of_labelled():
+    mask = _labelled()
+    removed = ldd._corrupt(mask, "drivable_removed", 110)
+    assert (removed[mask == ldd.DRIVABLE] == 0).all()  # cyan, not unknown
+    wall = ldd._corrupt(mask, "wall_over_road", 110)
+    assert (wall[mask == ldd.DRIVABLE] == 0).sum() >= 0.5 * (mask == ldd.DRIVABLE).sum()
+    outside = ldd._corrupt(mask, "drivable_outside_lines", 110)
+    assert (outside[110:, :50] == ldd.DRIVABLE).all() and (outside[110:, 270:] == ldd.DRIVABLE).all()
+    assert (outside[110:, 50:60] == 1).all() and (outside[:110] == 255).all()
+    assert ldd._corrupt(mask, "drivable_over_offroad", 110) is None  # no label 0 that is not beyond
+    walled = mask.copy()
+    walled[110:150, 60:260] = 0  # a wall across the top of the road (label 0, not beyond a line)
+    off = ldd._corrupt(walled, "drivable_over_offroad", 110)
+    assert (off[110:150, 60:260] == ldd.DRIVABLE).all() and (off[110:, :50] == 0).all()
+    narrow = _labelled((150, 160))  # 1300 px of road < 15 % of 41600 labelled
+    assert ldd._corrupt(narrow, "drivable_removed", 110) is None
+    assert ldd._corrupt(narrow, "wall_over_road", 110) is None
+    tiny = np.full((240, 320), 255, np.uint8)
+    tiny[200:220, 100:130] = ldd.DRIVABLE  # 600 px: under the 800 px floor
+    assert ldd._corrupt(tiny, "drivable_removed", 110) is None
+
+
+def test_green_canaries_never_paint_over_unknown_pixels():
+    """Near-extension rows: beyond the lines is 255 and may be real green, so it is off limits."""
+    mask = _labelled()
+    mask[200:, :50], mask[200:, 270:] = 255, 255
+    mask[200:, 260:270] = 255  # lane_right gone in the near rows: not both-line rows
+    for kind in ("drivable_outside_lines", "drivable_over_offroad"):
+        bad = ldd._corrupt(mask, kind, 110)
+        assert bad is None or not ((mask == 255) & (bad != 255)).any()
 
 
 def test_derive_needs_left_before_right():

@@ -200,7 +200,7 @@ def _run(config, out, indexed_review, admission_stack):
     keys = ({"seed", "epochs", "lr", "batch_size", "recipe", "parent_model",
              "parent_torchscript", "ignore_top", "model_version"} if drivable_head else
             {"seed", "epochs", "lr", "batch_size", "base", "recipe"})
-    if set(training) != keys:
+    if set(training) - ({"fp_lambda", "head"} if drivable_head else set()) != keys:  # D-566: optional
         raise JobError(f"training needs exactly {sorted(keys)}")
     for name in (("seed", "epochs", "batch_size") if drivable_head else
                  ("seed", "epochs", "batch_size", "base")):
@@ -211,6 +211,10 @@ def _run(config, out, indexed_review, admission_stack):
                 or any(not isinstance(training[name], str) or not training[name].strip()
                        for name in ("parent_model", "parent_torchscript"))):
             raise JobError("drivable_head needs parent paths and ignore_top in [0,239]")
+        if type(training.get("fp_lambda", 1.0)) not in (int, float) or not 0 <= training.get("fp_lambda", 1.0) < 100:
+            raise JobError("fp_lambda must be a number in [0,100)")
+        if training.get("head", "local") not in ("local", "context", "context_lane"):  # D-566 item 5
+            raise JobError("head must be local, context or context_lane")
         from drivable_versions import version_error  # D-558
         if version_error(training["model_version"], "v13-drivable-"):
             raise JobError(version_error(training["model_version"], "v13-drivable-"))
@@ -237,7 +241,9 @@ def _run(config, out, indexed_review, admission_stack):
                or any(isinstance(source, dict)
                       and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources))
     # D-554: labels derived from reviewed lane masks admit only a drivable_head candidate.
-    derived = dataset_doc.get("schema") == "rosy.lane-derived-drivable/1"
+    # D-563: map-projected labels are admitted the same way (verify_dataset + judge/canary finalize).
+    derived = dataset_doc.get("schema") in ("rosy.lane-derived-drivable/1", "rosy.map-projected-drivable/1",
+                                            "rosy.drivable-union/1")
     if derived and not drivable_head:
         raise JobError("D-554 lane-derived datasets train only the drivable_head recipe")
     if drivable_head and not (indexed or derived):
@@ -479,10 +485,14 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                 tracker.write_config({**inputs, "training": training,
                                       "gpu": torch.cuda.get_device_name(0),
                                       "coverage": coverage, "parent_parity": parent_parity})
-                model = LaneWithDrivable(lane, ignore_top=training["ignore_top"])
+                model = LaneWithDrivable(lane, ignore_top=training["ignore_top"],
+                                         head=training.get("head", "local"))
                 try:
+                    # D-566: balance the loss by the train labelled-pixel ratio.
                     result = train_head(model, train_ds, val_ds, epochs=training["epochs"],
                                         lr=training["lr"], batch_size=training["batch_size"],
+                                        pos_weight=coverage["train"]["negative"] / coverage["train"]["positive"],
+                                        fp_lambda=training.get("fp_lambda", 1.0),
                                         device="cuda:0", log=lambda message: print(message, flush=True))
                     check_indexed()
                     if result["best_epoch"] is None:
@@ -506,7 +516,8 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
             check_indexed()
             metrics = json.loads(Path(trained["metrics"]).read_text(encoding="utf-8"))
             frozen, _ = load_frozen_lane(parent["torchscript"], classes=train_ds.classes[:-1])
-            model = LaneWithDrivable(frozen, ignore_top=training["ignore_top"])
+            model = LaneWithDrivable(frozen, ignore_top=training["ignore_top"],
+                                     head=training.get("head", "local"))
             model.drivable.load_state_dict(torch.load(trained["checkpoint"], map_location="cpu",
                                                       weights_only=True))
             artifact = out / f"export-{attempt}"
@@ -521,6 +532,10 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          dataset_annotation=(None if "lane_derived" not in inputs else
                                              {k: inputs["lane_derived"][k] for k in ("annotation_origin", "adr")}),
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},
+                         metrics={k: metrics[k] for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
+                                                          "val_beyond_line_fp", "val_beyond_line_fp_raw",
+                                                          "val_beyond_line_coverage", "val_near_centre_drivable",
+                                                          "val_near_centre_drivable_raw", "selection")},
                          experiment={"tracker": "local", "run_id": out.name,
                                      "path": "jobs/" + out.name})
             candidate_parity = verify_candidate_lane_parity(parent["onnx"],

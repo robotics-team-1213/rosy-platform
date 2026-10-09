@@ -16,9 +16,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 
-from .lane_mask import LaneMaskEvidence, lane_evidence, lane_marking_mask, preprocess
+from .drivable_paint import drivable_target
+from .lane_mask import LaneMaskEvidence, lane_evidence, lane_marking_mask, preprocess, uncrop_logits
 from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, verify_files
 
 
@@ -100,16 +102,21 @@ class LaneSegModel:
         model = cls(manifest, session)
         spec = manifest.input
         out = session.run(np.zeros(spec.shape, np.float32))
-        expected = (1, len(manifest.classes), spec.height, spec.width)
+        expected = (1, len(manifest.classes), spec.height, spec.width)  # crop rows only, if cropped
         if tuple(out.shape) != expected:
             raise ManifestError(f"output shape {tuple(out.shape)} != {expected}")
         if not np.isfinite(out).all():
             raise ManifestError("warm-up produced non-finite logits")
         return model
 
+    def _logits(self, bgr: np.ndarray) -> np.ndarray:
+        """Logits on the full (resized) frame grid; a cropped-input model's are uncropped."""
+        spec = self.manifest.input
+        return uncrop_logits(self._session.run(preprocess(bgr, spec)), spec, self.manifest.classes)
+
     def infer(self, bgr: np.ndarray) -> InferResult:
         t0 = time.perf_counter()
-        logits = self._session.run(preprocess(bgr, self.manifest.input))
+        logits = self._logits(bgr)
         evidence = lane_evidence(logits, self.manifest.classes)
         return InferResult(evidence, (time.perf_counter() - t0) * 1000.0,
                            self.manifest.model_revision)
@@ -118,15 +125,32 @@ class LaneSegModel:
         """Only the lane_marking mask at the frame's size and the latency in ms: the D-408
         paint path, which has no use for lane_evidence (8.7 ms on the Pi)."""
         t0 = time.perf_counter()
-        logits = self._session.run(preprocess(bgr, self.manifest.input))
+        logits = self._logits(bgr)
         mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
         return mask, (time.perf_counter() - t0) * 1000.0
+
+    def infer_drivable(self, bgr: np.ndarray) -> tuple[np.ndarray, str, dict, float]:
+        """(mask at the frame's size, kind, info, latency ms) from one inference for keep mode with
+        learned_paint_target drivable: the drivable way (drivable_paint.drivable_target, kind
+        "drivable"), or the lane_marking mask (kind "lane_marking") when the model has no
+        drivable class or too little of it is near; info says which and why. Rows above a
+        cropped model's input (manifest input.crop) are never drivable."""
+        t0 = time.perf_counter()
+        logits = self._logits(bgr)
+        spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
+        way, info = drivable_target(logits, self.manifest.classes,
+                                    ignore_top=spec.crop[2] if spec.crop is not None else 0)
+        if way is None:
+            mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size), "lane_marking"
+        else:
+            mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
+        return mask, kind, info, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:
         """Shadow evidence plus the lane_marking mask at the frame's size, from one
         inference: the D-408 learned paint input of the lane keeper."""
         t0 = time.perf_counter()
-        logits = self._session.run(preprocess(bgr, self.manifest.input))
+        logits = self._logits(bgr)
         evidence = lane_evidence(logits, self.manifest.classes)
         mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
         return (InferResult(evidence, (time.perf_counter() - t0) * 1000.0, self.manifest.model_revision),

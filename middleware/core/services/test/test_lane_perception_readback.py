@@ -63,3 +63,21 @@ def test_learned_without_served_mask_revision_is_unknown():
     store = VisionFrameStore().lane_perception
     raw = json.dumps(dict(paint_source_used="learned", stamp=10.0))
     assert not store.accept(raw, now=20.0, source_now=10.1)
+
+
+def test_learned_drivable_paint_is_reported_as_learned():
+    store = VisionFrameStore().lane_perception
+    raw = json.dumps(dict(paint_source_used="learned_drivable", stamp=10.0,
+                          paint_source_requested="learned", paint_model_revision="lane-a"))
+    assert store.accept(raw, now=20.0, source_now=10.1)
+    actual = store.snapshot(paint_source="learned", model_revision="lane-a", now=20.1)
+    assert actual["applied_paint_source"] == "learned" and actual["applied_model_revision"] == "lane-a"
+    assert store.snapshot(paint_source="learned", model_revision="lane-b", now=20.1)["applied_paint_source"] is None
+
+
+@pytest.mark.parametrize("extra", [dict(paint_source_requested="learned"),
+                                   dict(paint_source_requested="denoise", paint_model_revision="lane-a")])
+def test_learned_drivable_needs_the_learned_request_and_a_revision(extra):
+    store = VisionFrameStore().lane_perception
+    assert not store.accept(json.dumps(dict(paint_source_used="learned_drivable", stamp=10.0, **extra)),
+                            now=20.0, source_now=10.1)

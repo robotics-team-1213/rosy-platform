@@ -1067,18 +1067,21 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_324,
+        11_737,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
         "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09; "
         "re-judged at 11324 the same day for D-570 (learned/paint_motion.py ground-plane warp and "
         "odom history, plus the reuse gate in learned/paint_worker.py), which lives in the learned "
-        "backend it serves and does not change the split plan.",
+        "backend it serves and does not change the split plan. Re-judged at 11737 on 2026-10-10 "
+        "for D-597 (learned/drivable_paint.py: the drivable way and its boundary paint for keep mode, "
+        "plus input.crop in manifest/lane_mask/runner and the paint worker's drivable kind), which "
+        "also lives in the learned backend it serves; the split plan is unchanged.",
     ),
     "control": (
-        34_446,
-        f"split: P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        34_619,
+        f"split: re-judged at 34619 on 2026-10-10 for D-597 (learned_paint_target parameter and drivable paint wiring in line_observer_node.py, overlay key in ir_overlay.py, --paint-target in line_observer_overrides.py; the decision logic is in the perception unit). P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
@@ -1220,6 +1223,14 @@ SIZE_VERDICTS = {
         "argument checks and journal stay in one file so the default shadow scripts stay "
         "byte-identical (golden test in learning/training/perception/test/test_model_deliver.py). "
         "Split the remote_script builders out if it grows again",
+    ),
+    "learning/training/perception/dataset/lane_derived_drivable.py": (
+        678,
+        "accept: recorded at 678 on 2026-10-10 (author's record; NEEDS the independent re-judge) after "
+        "D-554/D-563/D-576 landed together: one label-derivation pipeline (lane-bounded fill, own-road "
+        "walls, per-row both-line rule, canaries) covered by "
+        "learning/training/perception/test/test_lane_derived_drivable.py. Split the wall/fill helpers "
+        "out if it grows again",
     ),
     "learning/training/perception/rosy_ml.py": (
         615,
