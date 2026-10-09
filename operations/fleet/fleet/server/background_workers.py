@@ -36,10 +36,10 @@ async def lane_compliance_loop(monitor, logger, period_s: float) -> None:
 async def goal_lease_renew_loop(console, logger) -> None:
     """D-550 10: renew the console's leased goals (operator, dispatch, yield bay) every ttl/3.
     Trip goals are renewed by the trip loop. Fleet stopping stops renewal: CORE then cancels."""
-    period_s = console.goal_lease_ttl_s / 3
+    period_s = console.goal_leases.ttl_s / 3
     while True:
         try:
-            await console.renew_goal_leases("console")
+            await console.goal_leases.renew("console")
         except Exception:       # one bad round must not end renewal (CORE would cancel)
             logger.exception("goal lease renewal failed")
         await asyncio.sleep(period_s)
