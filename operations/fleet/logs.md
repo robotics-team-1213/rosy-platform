@@ -2804,3 +2804,9 @@
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
+- 변경: console.js가 `/api/fleet/tracking`을 STATE_MS(1 s) 대신 TRACKING_MS(400 ms)마다 읽는다. 표시 수명(D-457 6: 최대 1 s − 서버 age − 요청 지연)은 그대로
+- 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)
+- 증거: test_overhead_tracking_console.py가 TRACKING_MS ≤ 500 ms와 그 사용을 고정
+- gate 변화: 없음. 현장 반영 뒤 깜박임 재확인 전

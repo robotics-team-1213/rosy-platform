@@ -1,5 +1,7 @@
 """D-457 7: the console ships the overhead tracking layer, its status line and the apply button."""
 
+import re
+
 from fastapi.testclient import TestClient
 
 from fleet.server.app import create_app
@@ -22,6 +24,11 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
     assert '"/api/fleet/tracking"' in view.text and '"/api/fleet/tracking/relearn"' in view.text
     assert 'import { createTrackingView } from "./tracking-view.js";' in shell
     assert "trackingView.refresh()" in shell
+    # The display lifetime is at most 1 s minus age and request time (D-457 6): polling must be
+    # well inside it, or every marker expires before the next answer and blinks.
+    poll = re.search(r"const TRACKING_MS = (\d+);", shell)
+    assert poll and int(poll.group(1)) <= 500
+    assert "trackingView.refresh(), TRACKING_MS)" in shell
     assert 'import { offsetLabel, preferMarkers } from "./tracking-layer.js";' in map_view
     assert 'layerOn("tracking")' in map_view
     assert '"/api/fleet/calibrations"' in fit_view and "calibrationRequest(" in fit_view

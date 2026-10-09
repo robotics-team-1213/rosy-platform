@@ -51,6 +51,9 @@ pageScope.onResume(layoutConsole);
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
+// D-457 6: a tracking position shows for at most 1 s minus its age and the request time, so
+// polling at 1 s always left a gap and the markers blinked; poll well inside the lifetime.
+const TRACKING_MS = 400;
 const MAP_MS = 5000;
 const LOG_MAX = 120;
 
@@ -896,7 +899,7 @@ pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
 pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
-pageScope.interval(() => trackingView.refresh(), STATE_MS);
+pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 
 pageScope.onResume(() => {
