@@ -135,14 +135,16 @@ export function tripErrorText(code, detail = {}) {
 }
 
 /** Map metres <-> SVG pixels; map y goes up, SVG y goes down. ``turn`` (0/90/180/270) turns the
- * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does. */
-export function fitView(map, width, height, pad = 24, turn = 0) {
+ * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does.
+ * ``discs`` ({x, y, r} metres, D-540 4 robot rings) are kept inside the view too. */
+export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
   const rot = (x, y) => [x * c + y * s, -x * s + y * c];
   const xs = [], ys = [];
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+  for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);  // any 90° turn of a box
   if (!xs.length) { xs.push(0); ys.push(0); }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6),

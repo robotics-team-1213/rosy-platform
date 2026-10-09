@@ -607,7 +607,7 @@ roots:
     part: tools
     d427_target: tools/remote
     wave: none
-    note: remote_pytest.py runs pytest on the model PC / AI PC; not shipped.
+    note: remote_pytest.py runs pytest on the model/AI/site PC by headroom (D-568); not shipped.
     concern: other
   - path: tools/release
     part: tools
