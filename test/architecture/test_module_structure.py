@@ -205,7 +205,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_187,
+        50_404,
+        "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
+        "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
+        "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "
+        "toggle in roster.js, the canvas press-drag in console.js and two guide fields; the new lines are "
+        "mostly test_map_pose_pin.py. No new owner and no robot command path. Previously "
         "split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
         "an independent REQUEST CHANGES review whose fixes are in). One new pure module "
         "fleet/swarm/anchor.py (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
