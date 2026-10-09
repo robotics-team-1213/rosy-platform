@@ -122,6 +122,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--localization-overhead-cue", action="store_true", default=False,
                          help="D-395: feed overhead sightings to the localization arbiter and "
                               "monitor. Off by default: the D-257 amendment is not accepted")
+    console.add_argument("--pose-request-overhead", action=argparse.BooleanOptionalAction,
+                         default=True,
+                         help="D-546: answer a robot's pose request from the trusted overhead pose "
+                              "(LOCALIZED, anchor <= 2 s; the robot's 3 s scan check decides). "
+                              "On by default (user decision 2026-10-09); --no-pose-request-overhead "
+                              "turns it off. Does not touch the arbiter/monitor cue")
     console.add_argument("--localization-lane-rules", default=None, type=Path,
                          help="lane_rules.yaml with reference_squares (default: map_v2_fleet)")
     console.add_argument("--sightings-db", default=None, type=Path,
@@ -556,6 +562,7 @@ def run_console(args: argparse.Namespace) -> None:
     localization_service = build_localization_service(
         console, sighting_service, enabled=getattr(args, "localization_service", True),
         overhead_cue=getattr(args, "localization_overhead_cue", False),
+        pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
     if getattr(args, "stuck_resolver", False):

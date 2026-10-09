@@ -148,7 +148,8 @@ class ArcMixin:
         self._junction_done()
         self._arc_seq += 1
         a = self._arc = {
-            'seq': self._arc_seq, 'generation': self._generation, 'from': j.get('place_id'),
+            'seq': self._arc_seq, 'instruction_seq': j.get('seq'),
+            'generation': self._generation, 'from': j.get('place_id'),
             'end': segment['end_place_id'], 'k': float(segment['curvature_1pm']),
             'length': float(segment['length_m']), 'map_id': j.get('map_id'), 'travelled': 0.,
             'offset': float(segment['outer_line_offset_m']),

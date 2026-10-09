@@ -77,8 +77,10 @@ def verify_parent_parity(lane, torchscript_path, onnx_path, frames, *, ignore_to
             if (reference.shape != rebuilt.shape or reference.shape != delivered.shape
                     or not all(np.isfinite(v).all() for v in (reference, rebuilt, delivered))):
                 raise ValueError("parent TorchScript/ONNX shape or finite logits differ")
+            # The delivered v11 ONNX carries the ROI wrapper (rows above ignore_top forced to
+            # background), so only rows at and below ignore_top are compared with it.
             maximum = max(maximum, float(np.max(np.abs(reference - rebuilt))),
-                          float(np.max(np.abs(reference - delivered))))
+                          float(np.max(np.abs(reference[:, :, ignore_top:] - delivered[:, :, ignore_top:]))))
             mismatch = reference.argmax(1)[:, ignore_top:] != delivered.argmax(1)[:, ignore_top:]
             ordered = np.sort(reference[:, :, ignore_top:], axis=1)
             margin = ordered[:, -1] - ordered[:, -2]

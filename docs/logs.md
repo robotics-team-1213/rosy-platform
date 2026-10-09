@@ -7455,3 +7455,40 @@ osy-d395-s1d\`.
 - 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
 - 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
 - gate 변화: 없음(제안).
+
+## 2026-10-09 · uncommitted · docs(api): D-531 CORE 경로 문맥 P1
+
+- 변경: API reference v1.163에 `line/route_context`, 상태·능력·seq 역검증을 문서화했다. D-531 P2/P3의 인식 보조 및 경계 거부는 아직 계약만 있다.
+- 증거: services 1500 passed, contracts 856 passed/5 skipped, API 149 passed/15 skipped. gateway 전체 2421 passed/17 skipped, 문서 버전 문자열 1건 수정 뒤 집중 34 passed. harness lint 0 errors/24 기존 검증 SHA 경고. ROS-SIM·DEVICE·FIELD 수용 없음.
+- gate 변화: D-531 P1 SOURCE 후보.
+
+## 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건
+
+- 변경: D-531에서 인식 seq를 마지막 발행값 대신 현재 지시/실행 중 호와 비교하도록 명확히 했다. 호가 시작되기 전 `exit_segment`는 `junction`이고, 다른 seq의 카메라 프레임은 `invalid_observation` HOLD다. API reference v1.163 설명·문서 버전 pin을 맞췄다.
+- 증거: 독립 안전 검토, 관련 services 6·gateway 46·문서/구조 36 passed. D-168 `schemas.py` 1344줄 재판정 수용.
+- gate 변화: P1 SOURCE 후보. ROS-SIM·DEVICE·FIELD 미확인.
+
+## 2026-10-09 · uncommitted · docs(merge): D-531 v1.164와 CORE 크기 판정
+
+- 변경: D-555가 먼저 쓴 API v1.163을 보존하고 D-531을 v1.164로 옮겼다. 기존 `core_features/localization/` 835줄을 독립 크기 단위로 등록해 이전 `core_features` 증가 전 분리 조건을 이행했다. 런타임 코드 이동은 없다.
+- 증거: 독립 안전 검토, 구조 시험 34 passed, API 149 passed/15 skipped, CORE 집중 52 passed. 원격 착지 시험의 첫 시도에서 발견한 버전 pin·크기 판정 실패를 수정했다.
+- gate 변화: SOURCE 구조 판정 통과. CI 전체·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
+
+- 변경: 막힘 측정은 같은 3 운행일에 증거가 겹치되 자격·로컬 복귀·녹화·정체 검수·분모의 주인이 다르다는 검토를 assessments에 남겼다. 일반 World State와 VLM은 열지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility, 기준 c91b4c9cd. 본문 상대 링크는 파일로 확인했다. 40자 SHA는 비밀 검사가 막아서 짧은 SHA로 적었다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 재구분
+
+- 변경: 막힘 측정 검토에 같은 날의 재구분을 붙였다. 측정 표의 결정은 규칙·운용자·시간초과·스킬·장치 가드·교통 게이트이고, 자세·몸 치수·미션·연결 없음은 입력이다. 안전 한 칸은 두지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility의 D-407, D-422, D-430, D-435, D-438, D-541 본문. 첫 표는 출발로 남겼다. 재구분은 자격 발급·판단기 가동·로컬 복귀 승격·VLM·World 계약을 승인하지 않는다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-557 링 주행의 다음 증거
+- 변경: D-557 Accepted. 다음 주행 증거는 모델 PC `map_v2_fleet_real`에서 `keep`과 D-520 `exit_segment` 호 한 바퀴다. 그 기록이 가리키는 한 곳만 고친다. 바닥 로봇은 지도 프레임 LOCALIZED로 저장 링을 따를 수 있을 때까지 세워 둔다.
+- 증거: D-520이 인용한 D-507 SIM 4c차(재획득 뒤 10 s 유지 0/54). 이 커밋은 시뮬을 돌리지 않았다. `python tools/harness/rosy_harness.py lint` 0 errors, 24 warnings(기존 last_verified 지연). `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 121 passed. `known_failures` 0 new.
+- gate 변화: 없음
+- 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
+- 교훈: 없음

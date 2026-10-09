@@ -250,6 +250,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       lane_arc=getattr(svc.line_follow, "supports_lane_arc",
                                                        False) is True,
                                       lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
+                                      route_context=(True if svc.line_follow is not None and
+                                                     svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
                                           svc.line_follow.config, "site_floor_map_id", None)),
                                       line_follow_authority=callable(getattr(svc.line_follow,

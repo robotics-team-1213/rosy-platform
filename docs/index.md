@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
-- 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
-- 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
-- 2026-10-09 · uncommitted · docs: 화면 목적·인계·공간 평가 기준
-- 2026-10-09 · uncommitted · docs: Fleet 현장 위치·SLAM 실행 상태 재검증
+- 2026-10-09 · uncommitted · docs(adr): D-557 링 주행의 다음 증거
+- 2026-10-09 · uncommitted · docs: 막힘 측정 재구분
+- 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
+- 2026-10-09 · uncommitted · docs(merge): D-531 v1.164와 CORE 크기 판정
+- 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건

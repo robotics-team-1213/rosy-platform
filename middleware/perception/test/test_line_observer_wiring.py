@@ -58,6 +58,67 @@ def test_line_observer_has_both_inputs_and_one_normalized_output():
     assert "create_publisher(Twist" not in source
 
 
+def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "String, 'line/route_context', self._on_route_context" in source
+    assert "route_context_seq=route_context_seq" in source
+    assert "route_context_seq=route_context.seq if route_context is not None else None" in source
+
+
+def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires():
+    import json
+
+    from control.route_context_input import RouteContextInput, bend_expected
+    from control.sensing.perception.lane import LaneObservation, line_observation_payload
+
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    names = ('_on_camera', '_publish')
+    methods = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name in names]
+    observed, debug, bend_inputs = [], [], []
+    keeper = SimpleNamespace(last={}, _x_offset=0.0, reset=lambda: None)
+
+    def update(*_args, **kwargs):
+        bend_inputs.append(kwargs['bend_expected'])
+        keeper.last = {'strategy': 'both', 'target_m': [0.25, 0.0]}
+        return LaneObservation(0.0, 0.9)
+
+    keeper.update = update
+    namespace = dict(
+        Image=object, String=lambda **kw: SimpleNamespace(**kw), json=json,
+        image_msg_to_frame=lambda _: np.ones((16, 16, 3), np.uint8),
+        visibility_reason=lambda _: 'usable', pose_if_fresh=lambda *_: None,
+        _spinning_in_place=lambda _: False, KEEP_MAX_FRAME_GAP_S=0.5,
+        KEEP_CMD_STALE_WARN_FRAMES=30, bend_expected=bend_expected,
+        keep_debug_payload=lambda _last, _ground, _offset, **meta: meta,
+        containment_payload=lambda *_args, **_kwargs: {'v': 1},
+        line_observation_payload=line_observation_payload)
+    exec(compile(ast.Module(body=methods, type_ignores=[]), '<camera-route-callback>', 'exec'), namespace)
+    params = dict(require_camera_controls_stable=False, camera_lane_mode='keep',
+                  lane_half_width_m=0.0925, paint_source='threshold',
+                  camera_ground_source='GAZEBO', lane_corner_turning=True)
+    inbox = RouteContextInput()
+    inbox.receive(json.dumps(dict(v=1, seq=7, place_id='bend-1', map_id='map-1',
+                                  stamp_s=10.0, valid_until_s=10.8, kind='bend',
+                                  ahead_m=[0.1, 0.4])))
+    node = SimpleNamespace(
+        get_parameter=lambda key: SimpleNamespace(value=params[key]),
+        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None,
+        _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
+        _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
+        _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,
+        _camera_mode_uses_ground=lambda: True, _stamp=lambda: 10.1,
+        _publish_debug=lambda *_: None,
+        observation_pub=SimpleNamespace(publish=lambda msg: observed.append(json.loads(msg.data))),
+        _keep_debug_pub=SimpleNamespace(publish=lambda msg: debug.append(json.loads(msg.data))))
+    node._publish = lambda *args, **kw: namespace['_publish'](node, *args, **kw)
+    for stamp in (10.1, 10.6):
+        msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=int((stamp-10)*1e9))))
+        namespace['_on_camera'](node, msg)
+    assert bend_inputs == [True, False]
+    assert [row.get('route_context_seq') for row in observed] == [7, None]
+    assert [row['route_context_seq'] for row in debug] == [7, None]
+
+
 def test_line_observer_detector_settings_are_operator_tunable():
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]

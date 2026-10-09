@@ -236,6 +236,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # site_floor_map_id too: without the declaration nothing changes. A device declaring the site
   # floor sets arc_enabled: false until the D-520 DEVICE checklist passes (addendum 2026-10-09).
   arc_enabled: true
+  route_context_enabled: false      # D-531: CORE route evidence to perception; off until replay/SIM/device review
   arc_curvature_gain: 1.0          # [0.8, 1.25]; per robot from the D-500 measured motion response
   arc_blind_max_m: 1.0             # step 1 SIM: the whole segment (<= 1.0 m) without a camera fit
   # D-517 4 (M2): true = no line-follow motion without a live Fleet movement authority. False:

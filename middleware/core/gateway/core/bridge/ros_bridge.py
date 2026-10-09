@@ -45,6 +45,7 @@ from core.bridge import (
 from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
+from core.bridge.route_context import publication as route_context_publication
 from core_features.maps import occupancy_map_id
 from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
@@ -161,6 +162,14 @@ class RosBridge:
         # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
         self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
+        self.route_context_pub = None
+        if services.line_follow.config.route_context_enabled:
+            route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                   durability=DurabilityPolicy.VOLATILE)
+            self.route_context_pub = node.create_publisher(
+                String, "line/route_context", route_qos)
+        self._route_context_previous = None
+        self._route_context_at = float("-inf")
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -343,12 +352,14 @@ class RosBridge:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
 
     def _on_lane_perception(self, msg: String) -> None:
+        source_now = self._node.get_clock().now().nanoseconds / 1e9
         self._svc.vision.lane_perception.accept(
             msg.data, now=time.monotonic(),
-            source_now=self._node.get_clock().now().nanoseconds / 1e9)
+            source_now=source_now)
         observation.keep_junction(  # D-494/D-495: junction sighting (holds; starts a turn)
-            self._svc, msg.data, source_now=self._node.get_clock().now().nanoseconds * 1e-9,
-            received_at=self._line_clock())
+            self._svc, msg.data, source_now=source_now,
+            received_at=self._line_clock(),
+            expected_context_seq=self._current_route_context_seq(source_now))
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
@@ -369,7 +380,15 @@ class RosBridge:
         # received_at runs on the line clock (sim seconds under use_sim_time).
         observation.line_observation(
             self._svc, msg.data,
-            source_now=source_now, received_at=self._line_clock())
+            source_now=source_now, received_at=self._line_clock(),
+            expected_context_seq=self._current_route_context_seq(source_now))
+
+    def _current_route_context_seq(self, ros_now: float):
+        if self.route_context_pub is None or self._svc.safety.estop:
+            return None
+        context = self._svc.line_follow.route_context(
+            ros_now=ros_now, now=self._line_clock())
+        return None if context is None else context.seq
 
     def _on_road_observation(self, msg: String) -> None:
         """Decode road evidence; invalid data invalidates an enforced lease."""
@@ -410,10 +429,16 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
-        if not self._svc.line_follow.active:
+        if not self._svc.line_follow.active or self._svc.safety.estop:
+            self._publish_route_context(None)
             return
         now = self._line_clock()
         decision = self._svc.line_follow.tick(now)
+        if self.route_context_pub is not None:
+            ros_now = self._node.get_clock().now().nanoseconds / 1e9
+            self._publish_route_context(
+                self._svc.line_follow.route_context(ros_now=ros_now, now=now),
+                ros_now=ros_now)
         # CommandManager.select_output() ages the nav twist on time.monotonic.
         command_now = None if self._line_clock is time.monotonic else time.monotonic()
         traffic_gate.apply_line_candidate(
@@ -431,6 +456,21 @@ class RosBridge:
         self._svc.state.set_traffic_policy(traffic_status)
         self._svc.state.set_sensor(
             "traffic_policy", traffic_status.model_dump())
+
+    def _publish_route_context(self, context, *, ros_now=None) -> None:
+        if self.route_context_pub is None:
+            return
+        if ros_now is None:
+            ros_now = self._node.get_clock().now().nanoseconds / 1e9
+        message, self._route_context_previous, self._route_context_at = (
+            route_context_publication(
+                context, self._route_context_previous, self._route_context_at,
+                now=ros_now))
+        if message is not None:
+            self.route_context_pub.publish(String(data=json.dumps(message)))
+            self._svc.line_follow.set_route_context_publication(
+                context if self._route_context_previous is not None else None,
+                self._route_context_at)
 
     @staticmethod
     def _lifecycle_active(msg: TransitionEvent) -> bool:

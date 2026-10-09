@@ -16,6 +16,7 @@ from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.recovery.lane_return_wiring import LaneReturnMixin
+from core_features.line_follow.route_context import route_context as build_route_context
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
@@ -51,6 +52,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._lost_latched = False
         self._invalid_observation = False
         self._status = LineFollowStatus()
+        self._route_context_current = None
+        self._route_context_published_at_s = None
         # D-344 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
         self._hold_s: Optional[float] = None
         self._hold_until: Optional[float] = None
@@ -251,7 +254,29 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
     def status(self) -> LineFollowStatus:
         with self._lock:
             return self._status.model_copy(update={'junction': self._junction_status(),
-                                                   'arc': self._arc_status()})
+                                                   'arc': self._arc_status(),
+                                                   'route_context': self._route_context_current,
+                                                   'route_context_published_at_s':
+                                                   self._route_context_published_at_s})
+
+    def set_route_context_publication(self, context, stamp_s: float) -> None:
+        with self._lock:
+            self._route_context_current = context
+            self._route_context_published_at_s = stamp_s if context is not None else None
+
+    def route_context(self, *, ros_now: float, now: Optional[float] = None):
+        """The active instruction in image clock coordinates, or no usable context."""
+        if not self._config.route_context_enabled:
+            return None
+        now = self._clock() if now is None else now
+        with self._lock:
+            pose = self._fresh_pose(now)
+            if pose is None:
+                return None
+            return build_route_context(
+                self._junction, self._arc, mono_now=now, ros_now=ros_now,
+                odom_key=(self._return_evidence.epoch, pose.frame),
+                odometer=self._return_evidence.trail.odometer, mode=self._mode.value)
 
     def observe_clearance(self, distance: Optional[float],
                           received_at: Optional[float] = None) -> None:

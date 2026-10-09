@@ -609,15 +609,17 @@ def test_console_refuses_incomplete_d341_pairing(tmp_path, monkeypatch, extra, m
         cli.run_console(cli.parse_args(base + extra))
 
 
-def test_console_starts_the_localization_service_by_default_with_the_overhead_cue_off(
+def test_console_starts_the_localization_service_by_default_with_the_overhead_cue_off_and_pose_request_overhead_on(
         tmp_path, monkeypatch):
-    """D-395 P2-6: the service is on unless switched off; the D-257 sighting cue is off."""
+    """D-395 P2-6: the service is on unless switched off; the D-257 sighting cue stays off;
+    D-546: the pose-request handler may answer from the overhead pose."""
     captured = {}
     monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
     cli.run_console(cli.parse_args(["console", "--robots", str(_write(tmp_path))]))
 
     service = captured["app"].state.localization_service
     assert service is not None and service.overhead_cue is False
+    assert service.pose_request_overhead is True
     assert len(service._squares) == 2          # the repo's map_v2_fleet lane_rules.yaml
 
 
