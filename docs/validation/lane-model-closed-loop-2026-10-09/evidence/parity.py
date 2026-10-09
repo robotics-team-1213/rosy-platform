@@ -1,4 +1,4 @@
-﻿import argparse, hashlib, json
+import argparse, hashlib, json
 from pathlib import Path
 import numpy as np, onnxruntime as ort
 
