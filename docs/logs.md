@@ -7418,3 +7418,9 @@ osy-d395-s1d\`.
 - 변경: 75% 재실행의 85개 카메라 프레임과 GT를 재생하고, `lane_departure`가 지도 차로 이탈 판정이 아닌 중앙 IR 선 검출 사유임을 분리했다.
 - 증거: [재계측](validation/lane-route-wash-gate-2026-10-09/result.md#75-정지-지점-재계측). 정지 GT 경로 가로 오차 약 18.2mm, 원래 로그 IR `[600,2600,600]`; `route_a`에는 D-491 구간 입력이 없고 keeper 후보도 완전한 경계·불확실도 조건을 통과하지 못했다.
 - gate 변화: 없음. IR·LiDAR 정지를 해제하지 않았고 교차부 완주, DEVICE·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: SIM 벽 근처 LiDAR HOLD 원인 범위
+
+- 변경: 75% 격리 주행의 108개 원시 스캔과 CORE 상태를 맞추고, 맵 안쪽·서쪽 출발점 정지 스캔을 비교했다.
+- 증거: [LiDAR 재계측](validation/lane-route-wash-gate-2026-10-09/result.md#독립-lidar-hold). `obstacle_ahead` 시 정면 ±15° 0.381m, 측면 짧은 빔 0.065m, 정적 벽·몸 간격 약 0.053m. 개별 빔의 물체 ID는 미확정.
+- gate 변화: 없음. 몸 쓸림·IR 정지 유지, 실물 수용 HOLD.
