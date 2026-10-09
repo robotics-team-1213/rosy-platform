@@ -60,7 +60,7 @@ a { color: var(--ink); }
   ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
   ui-topbar ui-brand { grid-area: brand; min-width: 0; }
   ui-topbar ui-brand small, ui-topbar [data-spacer], #estop small { display: none; }
-  #session { grid-area: session; min-width: 0; overflow-wrap: anywhere; }
+  #session { grid-area: session; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #estop { grid-area: estop; }
 }
 /* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
