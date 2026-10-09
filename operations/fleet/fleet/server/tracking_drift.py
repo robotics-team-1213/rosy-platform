@@ -27,7 +27,7 @@ from fleet.server.sightings import SightingSource
 from fleet.server.tracking_calibration import CalibrationRecord, TrackingCalibrationStore
 
 #: Worst track-corner displacement between the two fits, map metres. A robot width
-#: (Pinky ~0.26 m) is already a visible misplacement on the bird's-eye; the paint-fit
+#: (차체 폭 약 0.26 m) is already a visible misplacement on the bird's-eye; the paint-fit
 #: refinement repeats well under that on a static camera, so 0.3 m means the fits
 #: genuinely disagree, not measurement noise. Display guidance, not an accuracy claim.
 DRIFT_MOVE_M = 0.3
