@@ -20,9 +20,11 @@ from core_api_web.api.v1.common import (
     require_calibration_owner,
     require_manual_released,
     localized_start,
+    stop_ends_trip_lease,
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.line_advice import LineAdviceRequest
 from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
@@ -107,6 +109,10 @@ def _status(svc: CoreServicesLike) -> dict:
     authority = getattr(svc.line_follow, "authority_status", lambda: None)()
     if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
         data["authority"] = authority
+    store = getattr(svc, "line_advice", None)
+    advice = None if store is None else store.current(time.monotonic())
+    if advice is not None:  # D-525: only while an unexpired advice carries a signal
+        data["advice"] = advice
     return data
 
 
@@ -135,6 +141,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
             if not ok:
                 raise ApiError("MODE_CONFLICT", 409, reason)
             svc.state.set_mode(RobotMode.IDLE)
+        stop_ends_trip_lease(svc, auth)
         return _status(svc)
 
     # Turning line-follow OFF above only stops motion, so it stays open to all.
@@ -303,6 +310,15 @@ def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(o
     except AuthorityRefused as exc:
         raise ApiError(exc.code, 409, exc.args[1]) from exc
     return result
+
+
+@line_follow_router.post("/advice")
+def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """D-525: Fleet's signal advice for the trip leg, display only. The /authority seat
+    (operator) without the manual-release or calibration-lease checks: it moves nothing."""
+    accepted, reason = svc.line_advice.accept(body, time.monotonic())
+    return {"accepted": accepted, "reason": reason}
 
 
 @line_follow_router.post("/stuck/decision")

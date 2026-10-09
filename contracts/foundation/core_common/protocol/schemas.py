@@ -34,6 +34,7 @@ from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
 from core_common.protocol.line_arc import LineArcIrCorrection, LineArcStatus  # noqa: F401
+from core_common.protocol.trip_lease import TripLeaseFields  # D-541 1: trip_lease, trip_lease_ended
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
@@ -1165,7 +1166,7 @@ class SafetyPolicyStatus(BaseModel):
     shadow: Optional[SafetyShadowStatus] = None
 
 
-class StateSnapshot(BaseModel):
+class StateSnapshot(TripLeaseFields):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
     robot_id: str

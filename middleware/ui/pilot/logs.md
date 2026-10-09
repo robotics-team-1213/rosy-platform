@@ -8,6 +8,7 @@
 - 결정: D-323.
 - 교훈: 없음
 
+
 ## 2026-09-29 · 434ceb0b · feat(pilot): stick.js 순수 입력 매핑 (실행 계획 T3)
 - 변경: `stick.js` — `shapeAxis`(데드존·감도 곡선·클램프·원점 대칭), `mapInput`(pad·pedals·keys), `PRESETS`(low/mid/high 클라이언트 상한). 모듈을 `pilot_assets`·CMakeLists 에 등록.
 - 증거: `test_stick.py` 8 passed(Node 서브프로세스, `_run_js` 패턴). 라우트 시험 포함 10 passed.
@@ -755,6 +756,12 @@
 - 결정: D-411.
 - 교훈: 없음
 
+## 2026-10-08 · uncommitted · uiux(pilot): 긴 휴대폰 주행·회전 조작 첫 화면
+- 변경: 30rem 미만 Pilot HUD의 모델·차선·영상 설정을 기존 도구 패널로 옮겼다. 긴 휴대폰은 HUD 세로 여백을 줄이고 조작부 높이를 늘려 좌우 회전을 첫 화면에 둔다. 도구 패널은 휴대폰 폭에서 내부 스크롤한다.
+- 증거: `docs/validation/uiux-pilot-phone-turn-layout-2026-10-08/result.md`. LOCAL Chromium 2000×1200·1333×760·1200×2000·390×844·320×568 영상/조작 5건, 수동/자동 회전 2건, 도구 전환·스크롤 1건 통과. G1 관련 80 passed/1 failed(`pinky-review` 원시 색상, 공유 `main`에서도 재현).
+- gate 변화: Pilot 표면과 제품 전체 HOLD. G1 실패, 전체 G2·실기·G3 미수용.
+- 결정: D-153, D-363의 영상 비율·조작 접근 계약을 유지한다.
+
 ## 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
 - 변경: 상단 `운용 지도`에서 `/console`로 이동한다. Pilot의 가짜 `지도 목표` 운전 모드를 제거하고, 주행 중 이동에는 0 속도와 소유한 MANUAL의 IDLE 요청을 기다리도록 했다. 대기 중 모드 진입·중복 클릭을 처리하고 모드 요청을 3초로 제한한다.
 - 증거: `docs/validation/uiux-pilot-map-handoff-2026-10-08/result.md`의 390×844·2000×1200 전후 PNG, 브라우저 회귀 12 passed, 셸 자산 4 passed, known_failures 0 NEW. 합성 CORE의 LOCAL 증거다.
@@ -783,6 +790,12 @@
 - 변경: Pilot 주행→0 속도·IDLE 요청→실제 CORE Console 지도 문서의 인증 인계를 한 브라우저 탭에서 검증한다. 쿼리와 지도 없음 상태를 보존한다.
 - 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 2000·390px 전환 전후 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리
+
+- 변경: 운전 화면 시험은 dev_server의 토큰을, 실제 CORE 연계 시험은 `rosy_dev_auth.yaml`의 operator 토큰을 직접 사용한다. 시험 코드에 같은 값을 다시 적지 않는다.
+- 증거: 공개 저장소 비밀값 검사와 Pilot 시험 수집·관련 실행으로 확인한다.
+- gate 변화: 없음. 실제 장치 인증이나 주행 수용의 증거가 아니다.
 ## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
 - 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
 

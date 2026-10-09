@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.156."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.158."""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ from core_api_web.api.v1.routes import (
     swarm_router,
     system_router,
     traffic_router,
+    trip_lease_router,
     vision_router,
     waypoints_router,
     diagnostics_router,
@@ -112,7 +113,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.156)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.158)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -186,6 +187,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(robot_router)
     app.include_router(control_router)
     app.include_router(calibration_router)
+    app.include_router(trip_lease_router)
     app.include_router(line_follow_router)
     app.include_router(traffic_router)
     app.include_router(vision_router)

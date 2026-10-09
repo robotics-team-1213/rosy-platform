@@ -52,6 +52,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   function attentionItems(robot) {
     const state = robot.state;
     // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 큐는 비어 있었다. 가장 흔한 예외부터 말한다.
+    if (!robot.online && robot.link === "degraded") return [{ severity: "warn", text: ": 응답 지연" }];
     if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }];
     if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
     const items = [];
@@ -134,7 +135,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
     node.className = `robot s${index % view.colors.length}`;
     node.dataset.robotId = robot.robot_id;
-    if (!view.stateUnavailable && !robot.online) node.classList.add("offline");
+    // A late answer (link "degraded", server grace) is not shown as offline; decisions still see online=false.
+    const lagging = !robot.online && robot.link === "degraded";
+    if (!view.stateUnavailable && !robot.online && !lagging) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
     // D-224 — ↑/↓ 순회의 착지점. tabindex -1 은 프로그램 포커스만 허용한다
     // (탭 순서를 더럽히지 않는다).
