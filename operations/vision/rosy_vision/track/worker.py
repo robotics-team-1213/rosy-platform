@@ -129,13 +129,12 @@ class TrackWorker:
         self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
         #: D-587: the approved record's Calibration when the last _detect used it (single flight).
         self._approved: Calibration | None = None
-        # D-472: the one open identity challenge Fleet named, its ring samples, and the last reported.
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
         # config read, up to 2 s after the window opened; sampling only from then left the
         # window's head empty, so every site verdict was frames_missing (2026-10-09).
         self._identity_ring: list[tuple[float, dict[str, led_identity.Sample]]] = []
-        self._identity_done: str | None = None
+        self._identity_done: list[str] = []  # D-596: request ids answered (several may be open)
         self.led_config = led_identity.LedConfig()
 
     @property
@@ -196,12 +195,14 @@ class TrackWorker:
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix=f"rosy-vision-track-{self.camera.source_id}")
-        challenge = _challenge(config.get("identity_challenge"), self.led_config)
+        challenges = _challenges(config, self.led_config)
+        # D-596 1: the background stays frozen through every open window (a standing robot blinks).
+        hold = max((c["not_after"] for c in challenges), default=None)
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn))
-        if challenge is not None:
+                lens, relearn, hold))
+        for challenge in challenges:
             await self._report_identity(challenge, frame.captured_at)
         if step is None:
             return None
@@ -245,9 +246,9 @@ class TrackWorker:
     async def _report_identity(self, challenge: dict, now: float) -> None:
         """D-472: once the window has passed, send Fleet the verdict (never an image)."""
         request_id = challenge["request_id"]
-        if now <= challenge["not_after"] or self._identity_done == request_id:
+        if now <= challenge["not_after"] or request_id in self._identity_done:
             return
-        self._identity_done = request_id
+        self._identity_done = self._identity_done[-15:] + [request_id]
         samples = [by_color[challenge["color"]] for at, by_color in self._identity_ring
                    if challenge["not_before"] <= at <= challenge["not_after"] and challenge["color"] in by_color]
         verdict = led_identity.decide(samples, not_before=challenge["not_before"],
@@ -292,13 +293,15 @@ class TrackWorker:
             for color in self.led_config.hues}))
 
     def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
-                relearn: int | None) -> tuple[Calibration | None, DetectorResult] | None:
-        """Detection-thread half of a step: relearn, decode, choose the calibration, detect."""
+                relearn: int | None, hold: float | None = None) -> tuple[Calibration | None, DetectorResult] | None:
+        """Detection-thread half of a step: relearn, hold, decode, choose the calibration, detect."""
         if relearn is not None:
             if self._relearn_seen is not None and relearn > self._relearn_seen:
                 # D-539: an operator relearn may be kept for restarts; other detectors just reset.
                 getattr(self.detector, "relearn", self.detector.reset)()  # if this raises, tried again
             self._relearn_seen = relearn
+        if hold is not None and hasattr(self.detector, "hold"):
+            self.detector.hold(hold)
         image = self.decode(jpeg)
         if image is None:
             return None
@@ -342,6 +345,19 @@ class TrackWorker:
             anonymous = list(result.detections) if result.status == "OK" else []
             result = DetectorResult(tuple((measured + anonymous)[:MAX_DETECTIONS]), "OK")
         return calibration, result
+
+
+def _challenges(config: Mapping, led: led_identity.LedConfig) -> list[dict]:
+    """D-596: Fleet's ``identity_challenges`` (else the single v1.130 ``identity_challenge``), checked."""
+    raw = config.get("identity_challenges")
+    if not isinstance(raw, list):
+        raw = [config.get("identity_challenge")]
+    found = {}
+    for item in raw[:len(led.hues)]:  # at most one per colour
+        challenge = _challenge(item, led)
+        if challenge is not None:
+            found.setdefault(challenge["request_id"], challenge)
+    return list(found.values())
 
 
 def _challenge(raw, config: led_identity.LedConfig) -> dict | None:
