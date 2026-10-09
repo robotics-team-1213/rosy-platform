@@ -38,9 +38,9 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.route("**/api/fleet/vision/lease", lambda route: route.fulfill(json={"lease": "preview-test", "frame_path": "/test-camera-frame"}))
     headers = {"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "false"}
     page.route("**/test-camera-frame", lambda route: route.fulfill(body=encoded, content_type="image/png", headers=headers))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("bob")
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("bob")
     plane_tools = page.locator(".plane-tools")
     expect(plane_tools).not_to_have_attribute("open", "")
     plane_tools.locator("summary").focus()
@@ -84,9 +84,9 @@ def test_import_camera_map_draft_never_activates(page_site):
     from test_site_map_trip import _line
 
     page, store, robot = page_site
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("bob")
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("bob")
     previous = store.active_view()
     camera_fixture = os.environ.get("ROSY_CAMERA_MAP_FIXTURE")
     draft = json.loads(Path(camera_fixture).read_text(encoding="utf-8")) if camera_fixture \
@@ -151,9 +151,9 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.set_viewport_size({"width": width, "height": height})
     expect(page).to_have_title("Rosy Fleet · 현장 지도")
     expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("bob")
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("bob")
     expect(page.locator("#token-access")).not_to_have_attribute("open", "")
     expect(page.locator("#token-access summary")).to_be_visible()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -218,8 +218,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
 def test_site_map_fits_declared_widths(page_site, width, height):
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     from playwright.sync_api import expect
 
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -229,9 +229,7 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       label: document.querySelector('#site-map-svg .label').getBoundingClientRect().height,
       mapWindow: document.querySelector('.map-viewport').clientWidth,
       mapContent: document.querySelector('.map-viewport').scrollWidth,
-      sessionRight: document.querySelector('#session').getBoundingClientRect().right,
-      sessionOverflow: getComputedStyle(document.querySelector('#session')).overflowX,
-      stopLeft: document.querySelector('#estop').getBoundingClientRect().left,
+      header: document.querySelector('ui-topbar').getBoundingClientRect().height,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
       stop: document.querySelector('#estop').getBoundingClientRect().right
@@ -241,7 +239,7 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
     if width < 480:
-        assert sizes["sessionRight"] <= sizes["stopLeft"] and sizes["sessionOverflow"] == "hidden", sizes
+        assert sizes["header"] <= height * 0.2, sizes  # D-540 2: identity folds behind 설정
     assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
     assert sizes["stop"] <= width, sizes
 
@@ -272,8 +270,8 @@ def test_robot_safety_is_named_during_plan_only_preview(page_site, width, height
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_60","online":true,"state":{"safety":'
              + ('{"estop":true}' if safety else 'null') + '}}]}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#trip-robot option")).to_contain_text(label)
     expect(page.locator("#trip-summary")).to_contain_text("실행은 하지 않습니다")
@@ -287,8 +285,8 @@ def test_changing_trip_target_clears_old_plan_evidence(page_site):
     from playwright.sync_api import expect
 
     page, _, _ = page_site
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
@@ -304,8 +302,8 @@ def test_late_trip_response_cannot_restore_old_target(page_site):
     from playwright.sync_api import expect
 
     page, _, _ = page_site
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     pending = []
     page.route("**/api/fleet/robots/rosy_60/trip", lambda route: pending.append(route))
@@ -327,9 +325,9 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
 
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("viewer-token")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("vic · viewer")
+    page.locator("#console-token").fill("viewer-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("vic · 보기 전용")
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
@@ -349,13 +347,13 @@ def test_failed_reconnect_clears_old_map_and_actions(page_site, width, height):
 
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     open_token_access(page)
-    page.locator("#credential input").fill("invalid-token")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_have_text("접속 전")
+    page.locator("#console-token").fill("invalid-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_have_text("인증 필요")
     expect(page.locator("#notice")).to_contain_text("토큰을 확인하고 다시 접속")
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요")
     expect(page.locator("#map-viewport")).to_be_hidden()
@@ -381,8 +379,8 @@ def test_site_map_server_error_has_recovery_and_no_stale_controls(page_site, wid
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(
         status=503, content_type="application/json", body='{"detail":{"code":"SITE_MAP_UNAVAILABLE"}}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("잠시 뒤 다시 접속")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
     expect(page.locator("#map-viewport")).to_be_hidden()
@@ -403,18 +401,18 @@ def test_slow_site_map_load_shows_elapsed_wait(page_site, width, height):
 
     pending = []
     page.route("**/api/fleet/site-map/active", lambda route: pending.append(route))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("접속 중")
     expect(page.locator("#notice")).to_contain_text(re.compile(r"[1-9]초 경과"), timeout=4000)
-    expect(page.locator("#connect")).to_be_disabled()
+    expect(page.locator("#token-save")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
     assert pending
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-delayed-{width}x{height}.png"), full_page=True)
     pending[0].continue_()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1", timeout=8000)
-    expect(page.locator("#connect")).to_be_enabled()
+    expect(page.locator("#token-save")).to_be_enabled()
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -425,13 +423,13 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     page.set_viewport_size({"width": width, "height": height})
     pending = []
     page.route("**/api/fleet/site-map/active", lambda route: pending.append(route))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("지도 조회 중")
     expect(page.locator("#map-viewport")).to_be_hidden()
     expect(page.locator("#draft-status")).to_contain_text("초안 조회 중")
     expect(page.locator("#notice")).to_contain_text(re.compile(r"[1-9]초 경과"), timeout=4000)
-    expect(page.locator("#connect")).to_be_disabled()
+    expect(page.locator("#token-save")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
     assert pending
     pending[0].abort()
@@ -451,8 +449,8 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
         status=404, content_type="application/json", body='{"detail":{"code":"SITE_MAP_NOT_ACTIVE"}}'))
     page.route("**/api/fleet/site-map/draft", lambda route: route.fulfill(
         status=200, content_type="application/json", body='{"map":null,"revision":null}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
     expect(page.locator("#notice")).to_contain_text("관리자에게 현장 지도 가져오기를 요청")
     expect(page.locator("#map-viewport")).to_be_hidden()
@@ -474,8 +472,8 @@ def test_offline_robot_cannot_be_offered_for_trip_preview(page_site, width, heig
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_60","online":false}]}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#trip-robot option")).to_have_text("rosy_60 · 연결 끊김")
     expect(page.locator("#trip-robot")).to_have_value("rosy_60")
@@ -496,8 +494,8 @@ def test_connected_robot_can_be_selected_after_offline_robot(page_site):
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true}]}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#trip-plan")).to_have_attribute("reason", "선택한 로봇의 연결을 확인하세요")
     page.select_option("#trip-robot", "rosy_60")
@@ -512,8 +510,8 @@ def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, hei
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json", body='{"robots":[]}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#trip-summary")).to_contain_text("등록된 로봇이 없습니다")
     expect(page.locator("#trip-plan")).to_be_disabled()
@@ -531,8 +529,8 @@ def test_robot_state_failure_keeps_loaded_map_and_names_missing_evidence(page_si
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=503, content_type="application/json", body='{"detail":"state unavailable"}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     expect(page.locator("#trip-summary")).to_contain_text("로봇 상태 확인 불가")
@@ -550,8 +548,8 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
     page, _, _ = page_site
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=status, content_type="application/json", body='{"detail":"unauthorized"}'))
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요" if status == 401 else "지도 조회 실패")
     expect(page.locator("#estop")).to_be_disabled()
     expect(page.locator("#trip-plan")).to_be_disabled()
@@ -564,8 +562,8 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
 
     page, store, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.locator('#site-map-svg [data-place="NW"]').click()
     page.locator("#place-name").fill("북서 정차")
@@ -579,7 +577,7 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
     open_token_access(page)
-    page.locator("#connect").click()
+    page.locator("#token-save").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
 
 
@@ -589,8 +587,8 @@ def test_trip_start_is_gated_and_names_the_d491_refusal(page_site, width, height
 
     page, _, robot = page_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("operator-token")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#trip-start")).to_have_attribute("reason", "먼저 경로를 계산하세요")
     expect(page.locator("#trip-cancel")).to_have_attribute("reason", "진행 중인 운행이 없습니다")

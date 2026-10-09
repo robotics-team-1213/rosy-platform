@@ -64,7 +64,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 expect(page.locator("#user-role")).to_contain_text("alice", timeout=15000)
                 tab = context.new_page()
                 tab.goto(origin + "/console/site-map")
-                expect(tab.locator("#session")).to_contain_text("alice", timeout=15000)
+                expect(tab.locator("#user-role")).to_contain_text("alice", timeout=15000)
                 tab.close()
 
                 logout = page.locator("#password-login [data-login=logout]")
