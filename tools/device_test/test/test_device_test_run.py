@@ -1245,7 +1245,7 @@ class _ZeroingRestart(FakeRobot):
 
 
 def test_a_core_restart_that_zeroes_odometry_keeps_the_checked_tether(tmp_path):
-    robot = _ZeroingRestart()
+    robot = _ZeroingRestart(blink_at=[(355, 219)])                   # the lamp where the capture pose projects
     robot.x, robot.y, robot.yaw = 0.35, 0.21, 1.21                   # left by an earlier drive
     code, s = tgo(tmp_path, robot, [-1.5, 0.0], pose_at_capture={"x": 0.35, "y": 0.21, "yaw": 1.21})
     assert "first driving pose" not in s["outcome"] and "moved" not in s["outcome"], s["outcome"]
