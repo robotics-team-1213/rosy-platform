@@ -34,7 +34,7 @@ Python package of feature managers behind CORE's `CoreServices`, one subpackage 
 | `line_follow/` | Line-follow manager, clearance; lane recovery mixins in `line_follow/recovery/` (see `line_follow/AGENTS.md`) |
 | `fleet_agent/` | Fleet enrolment and discovery (see `fleet_agent/AGENTS.md`) |
 | `decision/` | Shared allowed-action judgment, D-228 (see `decision/AGENTS.md`) |
-| `localization/` | D-395 CORE side: `assist.py` relays localization state/candidates/decisions, `halt.py` stops autonomy when a robot leaves LOCALIZED, `mission.py` very slow check and homing manoeuvres written to the nav slot |
+| `localization/` | D-395 CORE side: `assist.py` relays localization state/candidates/decisions, `halt.py` stops autonomy when a robot leaves LOCALIZED, `mission.py` very slow check and homing manoeuvres written to the nav slot, `pose_request.py` bounded Fleet pose request lifecycle |
 | `recovery/` | `camera_fault.py`: operator-selectable camera-fault actions; reports eligibility only, no motion |
 | `road_behaviour/` | D-384 `machine.py` (speed cap, keep-right branch choice), `model.py`, `table.py` (transition table rendered into the plan doc); outputs a cap, never a command |
 | `traffic_policy/` | `manager.py` fail-closed policy between perception and arbitration; `observer_source.py` polls the read-only signal observer, silence on anything unconfirmed |

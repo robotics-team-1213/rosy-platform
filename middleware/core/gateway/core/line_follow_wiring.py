@@ -135,6 +135,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
         site_floor_map_id=raw.get("site_floor_map_id", defaults.site_floor_map_id),
         arc_enabled=_flag(raw, "arc_enabled", defaults.arc_enabled),
+        route_context_enabled=_flag(raw, "route_context_enabled", defaults.route_context_enabled),
         arc_curvature_gain=float(raw.get("arc_curvature_gain", defaults.arc_curvature_gain)),
         arc_blind_max_m=float(raw.get("arc_blind_max_m", defaults.arc_blind_max_m)),
         authority_required=_flag(raw, "authority_required", defaults.authority_required),

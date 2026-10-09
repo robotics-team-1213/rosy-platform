@@ -1,4 +1,5 @@
 """D-423 §3.2: per-task delivery, promote (shadow -> active) and active rollback."""
+import json
 import subprocess
 
 import pytest
@@ -166,3 +167,18 @@ def test_promote_when_shadow_is_already_active_changes_nothing(bash_root):
     assert r.returncode == 0, r.stderr
     assert "already active" in r.stdout
     assert not (root / "previous").exists() and not (root / "hold").exists()
+
+
+def test_status_shows_the_d558_model_version_beside_the_pointer(bash_root):
+    root, run = bash_root
+    to_posix = _bash_env()[1]
+    for name, doc in (("v13-drivable-20261010-aaaaaaaa", {"model_version": "v13.1.00"}),
+                      ("lane-seg-20261001-bbbbbbbb", {})):
+        (root / name).mkdir()
+        (root / name / "model_manifest.json").write_text(
+            json.dumps({"model_revision": name, **doc}, indent=2), encoding="utf-8")
+    (root / "shadow").write_text(to_posix(root / "v13-drivable-20261010-aaaaaaaa"))
+    (root / "active").write_text(to_posix(root / "lane-seg-20261001-bbbbbbbb"))
+    out = run("status").stdout.splitlines()
+    assert out[0] == f"shadow: {to_posix(root / 'v13-drivable-20261010-aaaaaaaa')} (v13.1.00)"
+    assert out[2] == f"active: {to_posix(root / 'lane-seg-20261001-bbbbbbbb')}"

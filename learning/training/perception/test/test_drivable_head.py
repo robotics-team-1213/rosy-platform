@@ -235,7 +235,7 @@ def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypat
                           'torchscript_sha256': hashlib.sha256(script.read_bytes()).hexdigest()}}
     config = {'dataset': 'synthetic@' + dataset.name}
     training = {'seed': 7, 'epochs': 1, 'lr': 0.001, 'batch_size': 2,
-                'ignore_top': 110}
+                'ignore_top': 110, 'model_version': 'v13.1.00'}
     monkeypatch.setattr(train_job, 'gpu_lease', nullcontext)
     out = tmp_path / 'candidate-job'
     result = train_job._run_drivable_candidate(config, out, dataset, profile, training,

@@ -255,3 +255,12 @@ def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_pa
     assert len(saved) == 1 and saved[0].read_text() == "hand edited\n"
     status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
     assert "old content saved to" in status["fixed"][0] and "a.conf" in status["fixed"][0]
+
+
+def test_hang_settings_wait_for_approval_on_every_pc():
+    """D-530 decision: the hardware watchdog and kernel panic settings are installed only after approval."""
+    for role in ROLES.values():
+        manifest = ROOT / "deploy" / role / "host-state" / "manifest"
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
+                assert line.startswith("approval"), (role, line)

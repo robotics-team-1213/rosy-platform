@@ -886,6 +886,18 @@
 - 변경: `StateManager.set_trip_lease_provider` — 스냅숏의 `trip_lease`·`trip_lease_ended`를 live로 읽는다. lease 자체는 `core/trip_lease.py`(gateway)에 둔다: core_features 크기 판정이 증가를 막는다. lease 동작: Fleet trip lease 한 개(로봇당). 같은 토큰·같은 `lease_id`만 renew, 그 밖은 `TRIP_LEASED`. TTL 1–10 s(기본 5) CORE 단조 시계. 만료·넘겨받기는 lease를 지운 뒤 락 밖에서 `halt`(CORE 배선: line-follow 끔, 내비게이션 취소, NAVIGATION→IDLE). 읽기는 만료시키지 않는다(5 Hz 타이머만) — 지난 lease는 처리될 때까지 계속 막는다. `trip_lease_ended`는 끝난 뒤 10 s 보인다. `trip_lease.renewed`는 lease당 30 s에 한 번. 주인 토큰의 teleop·다른 출발지 `/ws/state`는 `trip_lease.shared_token` 한 번.
 - 증거: `middleware/core/gateway/test/test_trip_lease.py`(모델 PC).
 - gate 변화: SOURCE. Safety-Review·SIM(Fleet kill → IDLE)·DEVICE 열림.
+
+## 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
+
+- 변경: 현재 지시·호 주행의 원래 seq·odom 진행 거리·만료를 묶어 junction/bend/ring 경로 문맥을 계산한다. 신선한 odom과 CAMERA_LINE 모드가 없으면 만들지 않는다. 발행 중인 문맥과 시각을 상태에서 읽는다.
+- 증거: services 1500 passed, `known_failures.py` 신규 실패 0. ROS-SIM·DEVICE 미확인.
+- gate 변화: D-531 P1 SOURCE 후보. 차선 선택 규칙은 그대로다.
+
+## 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
+
+- 변경: `exit_segment`가 있는 접근 지시를 `junction`으로 내고 실제 호가 running일 때만 `ring` 곡률을 낸다. 독립 검토에서 발견한 접근 차로 오거부 위험을 막는다.
+- 증거: `test_route_context.py` 6 passed(호 시작 전 사례 포함).
+- gate 변화: P1 SOURCE 후보.
 ## 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
 - 변경: `localization/pose_request.py`(`PoseRequests`: 사유당 하나, `ttl_s` 30 s, 같은 사유는 id 유지), `recovery/lane_return_pose_request.py`(`fleet` 단계 또는 1 s 넘은 `pose_stale`에서 열고 그 밖의 틱·리셋에서 닫음, `resume_after_pose`는 수락된 결정 뒤 D-407 RESUME). `LocalizationAssist.on_result accepted`가 요청을 닫는다.
 - 증거: `middleware/core/services/test/test_lane_return_pose_request.py`.

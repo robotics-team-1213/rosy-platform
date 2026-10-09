@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7456,6 +7456,23 @@ osy-d395-s1d\`.
 - 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
 - gate 변화: 없음(제안).
 
+## 2026-10-09 · uncommitted · docs(api): D-531 CORE 경로 문맥 P1
+
+- 변경: API reference v1.163에 `line/route_context`, 상태·능력·seq 역검증을 문서화했다. D-531 P2/P3의 인식 보조 및 경계 거부는 아직 계약만 있다.
+- 증거: services 1500 passed, contracts 856 passed/5 skipped, API 149 passed/15 skipped. gateway 전체 2421 passed/17 skipped, 문서 버전 문자열 1건 수정 뒤 집중 34 passed. harness lint 0 errors/24 기존 검증 SHA 경고. ROS-SIM·DEVICE·FIELD 수용 없음.
+- gate 변화: D-531 P1 SOURCE 후보.
+
+## 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건
+
+- 변경: D-531에서 인식 seq를 마지막 발행값 대신 현재 지시/실행 중 호와 비교하도록 명확히 했다. 호가 시작되기 전 `exit_segment`는 `junction`이고, 다른 seq의 카메라 프레임은 `invalid_observation` HOLD다. API reference v1.163 설명·문서 버전 pin을 맞췄다.
+- 증거: 독립 안전 검토, 관련 services 6·gateway 46·문서/구조 36 passed. D-168 `schemas.py` 1344줄 재판정 수용.
+- gate 변화: P1 SOURCE 후보. ROS-SIM·DEVICE·FIELD 미확인.
+
+## 2026-10-09 · uncommitted · docs(merge): D-531 v1.164와 CORE 크기 판정
+
+- 변경: D-555가 먼저 쓴 API v1.163을 보존하고 D-531을 v1.164로 옮겼다. 기존 `core_features/localization/` 835줄을 독립 크기 단위로 등록해 이전 `core_features` 증가 전 분리 조건을 이행했다. 런타임 코드 이동은 없다.
+- 증거: 독립 안전 검토, 구조 시험 34 passed, API 149 passed/15 skipped, CORE 집중 52 passed. 원격 착지 시험의 첫 시도에서 발견한 버전 pin·크기 판정 실패를 수정했다.
+- gate 변화: SOURCE 구조 판정 통과. CI 전체·ROS-SIM·DEVICE·FIELD는 별도.
 
 ## 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
 
@@ -7475,3 +7492,15 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
 - 교훈: 없음
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 레이아웃 와이어프레임
+
+- 변경: Fleet, Robot, Pilot, Games, Learning의 16개 화면/상태에 대한 목적·역할·이동·좌우 영역·모바일 와이어프레임과 디자인 문서 작성.
+- 근거: surfaces.yaml, 화면 HTML, D-425/D-501/D-543/D-153. Fleet 좌측 레일은 D-501 개정 전 제안으로 표시.
+- gate: 설계 산출물만 작성. 런타임 적용, G1/G2/G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가
+
+- 변경: Fleet 관제 그림의 지도:개입 3:2 구도를 복원하고 활성 웹 설계 문서에 계약·모바일·상태·접근성 재평가를 추가.
+- 근거: D-493, D-501, D-543, D-153; impeccable Operate와 web interface guidelines.
+- gate: 설계 검토. 런타임 UI, 320px G2, G3, 장치·현장 수용은 별도.

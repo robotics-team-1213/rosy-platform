@@ -217,6 +217,7 @@ class LineFollowConfig:
     # motion response, [0.8, 1.25]); arc_blind_max_m: travel without a camera fit before
     # lane_arc_blind (step 1 SIM default: the whole segment, 1.0 m).
     arc_enabled: bool = True
+    route_context_enabled: bool = False
     arc_curvature_gain: float = 1.0
     arc_blind_max_m: float = 1.0
     authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
@@ -348,6 +349,8 @@ class LineFollowConfig:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
         if type(self.arc_enabled) is not bool:
             raise ValueError("arc_enabled must be a boolean")
+        if type(self.route_context_enabled) is not bool:
+            raise ValueError("route_context_enabled must be a boolean")
         if not (_finite(self.arc_curvature_gain) and 0.8 <= self.arc_curvature_gain <= 1.25
                 and _finite(self.arc_blind_max_m) and 0.0 < self.arc_blind_max_m <= 1.0):
             raise ValueError("arc_curvature_gain must be in [0.8, 1.25] and arc_blind_max_m in (0, 1]")
