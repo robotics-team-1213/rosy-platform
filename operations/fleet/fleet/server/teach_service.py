@@ -226,6 +226,9 @@ class TeachService:
             raise TeachError(409, "PLACE_MARKER_MAP_MISMATCH",
                              {"marker_map_id": row["map_id"], "active_map_id": active[1].map_id})
         body = self._base()
+        if body.get("map_id", "site") != row["map_id"]:  # the draft (or empty base) is another map frame
+            raise TeachError(409, "PLACE_MARKER_MAP_MISMATCH",
+                             {"marker_map_id": row["map_id"], "draft_map_id": body.get("map_id", "site")})
         updated = place_id is not None
         if not updated:
             if not name:

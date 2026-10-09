@@ -31,11 +31,12 @@ class _Clock:
         return self.now
 
 
-def _app(tmp_path, *, place_markers=(34, 35, 36, 37, 38), map_id="site"):
+def _app(tmp_path, *, place_markers=(34, 35, 36, 37, 38), map_id="site", active=True):
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [FakeRobot("rosy_60")])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     store = SiteMapStore(tmp_path / "tasks.sqlite")
-    store.import_if_empty(SiteMap.model_validate(MAP), source="test")
+    if active:
+        store.import_if_empty(SiteMap.model_validate(MAP), source="test")
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
     clock = _Clock()
@@ -120,6 +121,14 @@ def test_teach_from_marker_refuses_another_map_and_a_site_without_place_markers(
         answer = client.post("/api/fleet/teach/place-from-marker", json={"marker_id": 34, "name": "x"},
                              headers=OPERATOR)
         assert answer.status_code == 409 and answer.json()["detail"]["code"] == "PLACE_MARKER_MAP_MISMATCH"
+    client, _clock, _store = _app(tmp_path / "draft", map_id="map_v2_fleet", active=False)
+    with client:  # no active map: the empty draft base is map "site", the marker is on map_v2_fleet
+        assert client.post("/api/fleet/place-markers", json=_payload(map_id="map_v2_fleet"),
+                           headers=SOURCE).status_code == 200
+        answer = client.post("/api/fleet/teach/place-from-marker", json={"marker_id": 34, "name": "x"},
+                             headers=OPERATOR)
+        assert answer.status_code == 409 and answer.json()["detail"]["detail"] == {
+            "marker_map_id": "map_v2_fleet", "draft_map_id": "site"}
     client, _clock, _store = _app(tmp_path / "off", place_markers=())
     with client:
         answer = client.post("/api/fleet/teach/place-from-marker", json={"marker_id": 34, "name": "x"},
