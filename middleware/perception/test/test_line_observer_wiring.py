@@ -58,6 +58,13 @@ def test_line_observer_has_both_inputs_and_one_normalized_output():
     assert "create_publisher(Twist" not in source
 
 
+def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "String, 'line/route_context', self._on_route_context" in source
+    assert "route_context_seq=route_context_seq" in source
+    assert "route_context_seq=route_context.seq if route_context is not None else None" in source
+
+
 def test_line_observer_detector_settings_are_operator_tunable():
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
