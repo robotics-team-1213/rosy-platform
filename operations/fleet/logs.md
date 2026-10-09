@@ -2889,3 +2889,9 @@
 - 변경: `--pose-request-overhead/--no-pose-request-overhead`(기본 켜짐)는 위치 요청 답만, `--localization-overhead-cue`는 기본 꺼짐으로 복원. 답 횟수는 요청이 닫혔다 열려도 lane_return이 놓거나 `lane_return_corridor_verified`까지 유지하고 중재기 답도 센다.
 - 증거: `test_localization_pose_request.py`, `test_cli.py`.
 - gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
+
+- 변경: D-531 굽이 단계 선택 필드로 기준서가 v1.166이 되면서 Fleet 문서 계약 테스트의 버전 기대값을 함께 갱신한다. Fleet 실행 코드는 바뀌지 않는다.
+- 증거: 문서 계약 집중 테스트와 `known_failures.py`.
+- gate 변화: SOURCE 계약 일치. Fleet 계획·현장 주행 수용은 별도.
