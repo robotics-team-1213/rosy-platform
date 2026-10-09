@@ -137,7 +137,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
-        power = await asyncio.gather(*(power_display.shown(row["robot_id"])
+        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.2)
                                        for row in rows if row["online"]))
         power_values = iter(power)
         for row in rows:
