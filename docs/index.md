@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs(lane): 링 진입 자세 오차 원시 로그 재계산
 - 2026-10-09 · uncommitted · docs(lane): Fleet 계획과 한쪽선 주행 증거 설계
 - 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가
 - 2026-10-09 · uncommitted · docs: 활성 웹 화면 레이아웃 와이어프레임
 - 2026-10-09 · uncommitted · fix(route context): 굽이 진행·재획득 단계 표시
-- 2026-10-09 · uncommitted · docs(adr): D-557 링 주행의 다음 증거
