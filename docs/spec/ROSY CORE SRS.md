@@ -575,12 +575,14 @@ Navigation 중 다음 조건이 지속되면 자동으로 Goal을 취소하고 �
 
 Swarm 추종은 별도 cmd_vel 소스가 아니라 **Navigation Manager의 이동 목표 스트림**(moving goal)으로 투입된다(Nav2 장애물 회피 그대로 활용). 모드는 `NAVIGATION`을 유지하고 상태로 군집 역할을 노출한다(SWM-006). v2에서 로컬 추종 컨트롤러(pure-pursuit) 소스로 대체 가능하도록 CMD-001 소스 등록 인터페이스를 예약한다.
 
+D-559 가 그 v2 훅을 `mode: trail` 로 구현한다: 리더가 지나간 자취를 팔로워 CORE 가 pure pursuit 로 조향해 `swarm` 소스(NAVIGATION 등급)로 NAVIGATION 슬롯에 넣는다. SAF-004 클리핑·D-400 정책·D-422 몸체 정지를 지나고, 그 동안 Nav2 twist 는 버린다. 기본(`offset`)은 위 moving goal 그대로다.
+
 ### SWM-002 Follow 프리미티브
 
 다음 원자 명령을 지원한다.
 
 ```text
-POST /api/v1/swarm/follow    # {target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source}
+POST /api/v1/swarm/follow    # {target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members, mode}
 POST /api/v1/swarm/cancel
 GET  /api/v1/swarm/state
 ```
@@ -588,6 +590,7 @@ GET  /api/v1/swarm/state
 - v1 구현: 목표 갱신 ≤2 Hz moving-goal Nav2 (속도 ≤0.2 m/s 군집 운용에 충분)
 - 종료 조건: cancel / 스트림 단결(`stream_timeout_ms`, 기본 1000 ms) → HOLD
 - SAF-004 속도 상한·NAV-006 stuck 감지가 그대로 적용된다
+- `mode: trail`(D-559): `distance` 는 자취 위 경로 거리, `lateral` 은 0. 자취에서 0.30 m 벗어나거나 리더·자기 pose 가 map 프레임이 아니거나 D-422 몸체 정지가 걸리면 HOLD, 스트림 단절은 위와 같이 HOLD 다
 
 ### SWM-007 참조 소스 추상화 (분산 진화 훅, D-21)
 

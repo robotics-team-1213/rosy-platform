@@ -84,7 +84,7 @@ test('invalid draft errors list the fields', async () => {
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStatusText, tripStartReason, tripCancelReason} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {tripStatusText, tripStartReason} = await import('../../fleet/server/web/shared/site-map-model.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
@@ -93,6 +93,9 @@ test('D-494 trip panel text and button reasons', async () => {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
+  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
+  assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
+  assert.match(tripStatusText({...trip, stop_moved: {from: null, to: 'B'}}, MAP), /목적지 좌표 → /);
   const plan = {map_version: 1, expires_at: 100};
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
@@ -101,8 +104,6 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
-  assert.equal(tripCancelReason({role: 'operator', running: trip}), '');
-  assert.match(tripCancelReason({role: 'operator', running: null}), /없습니다/);
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {

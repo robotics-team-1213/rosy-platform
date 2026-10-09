@@ -1,0 +1,103 @@
+{
+  "sim_footprint_radius_m": 0.08826,
+  "runs": {
+    "threshold": {
+      "sim_footprint_vertices": 10,
+      "maximum_sampled_vertex_step_m": 0.013518,
+      "continuous_lane_containment_proof": false,
+      "sectors": {
+        "ring_s": {
+          "samples": 38,
+          "minimum_inner_paint_centre_gap_m": 0.037878,
+          "minimum_outer_paint_centre_gap_m": 0.011462,
+          "samples_crossing_either_paint_centre": 0,
+          "worst_sample": [
+            85.258,
+            [
+              -0.16848264563742274,
+              -0.21738475068564583,
+              0.6230494525266039
+            ]
+          ]
+        },
+        "ring_e": {
+          "samples": 52,
+          "minimum_inner_paint_centre_gap_m": 0.04505,
+          "minimum_outer_paint_centre_gap_m": 0.008982,
+          "samples_crossing_either_paint_centre": 0,
+          "worst_sample": [
+            87.644,
+            [
+              -0.06502501855775936,
+              -0.06253045348665656,
+              1.350575365014776
+            ]
+          ]
+        },
+        "ring_n": {
+          "samples": 36,
+          "minimum_inner_paint_centre_gap_m": 0.021079,
+          "minimum_outer_paint_centre_gap_m": 0.028352,
+          "samples_crossing_either_paint_centre": 0,
+          "worst_sample": [
+            95.835,
+            [
+              -0.49566352784488366,
+              0.17028510095942534,
+              -2.3421498471179305
+            ]
+          ]
+        }
+      }
+    },
+    "v11": {
+      "sim_footprint_vertices": 10,
+      "maximum_sampled_vertex_step_m": 0.013488,
+      "continuous_lane_containment_proof": false,
+      "sectors": {
+        "ring_s": {
+          "samples": 39,
+          "minimum_inner_paint_centre_gap_m": 0.042433,
+          "minimum_outer_paint_centre_gap_m": -0.010347,
+          "samples_crossing_either_paint_centre": 17,
+          "worst_sample": [
+            71.248,
+            [
+              -0.16179913399923868,
+              -0.2397250505534795,
+              0.5972383476849481
+            ]
+          ]
+        },
+        "ring_e": {
+          "samples": 55,
+          "minimum_inner_paint_centre_gap_m": 0.033986,
+          "minimum_outer_paint_centre_gap_m": -0.010855,
+          "samples_crossing_either_paint_centre": 31,
+          "worst_sample": [
+            72.548,
+            [
+              -0.08885408608931826,
+              -0.16580217328128138,
+              0.9860072039201018
+            ]
+          ]
+        },
+        "ring_n": {
+          "samples": 34,
+          "minimum_inner_paint_centre_gap_m": -0.000644,
+          "minimum_outer_paint_centre_gap_m": 0.03699,
+          "samples_crossing_either_paint_centre": 3,
+          "worst_sample": [
+            81.841,
+            [
+              -0.47987611383943074,
+              0.15514024688825634,
+              -2.361715428235161
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

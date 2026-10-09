@@ -12,8 +12,8 @@ branch and the rule is inert until then), runs the selected tests, compares them
 ``test/known_failures.py``, and fast-forwards main only if main is still the
 commit that was tested. A failing step stops the tool: landing is never chained
 after a failure. Any other conflict aborts the merge and lists the paths.
-pytest runs through ``tools/remote/remote_pytest.py`` (model PC, then AI PC;
-an unavailable host stops landing). Lint, node and the
+pytest runs through ``tools/remote/remote_pytest.py`` (model PC, AI PC or site PC by
+measured headroom, D-568; an unavailable host stops landing). Lint, node and the
 known_failures comparison stay here. Never pushes, stashes, resets or cleans. Standard library only.
 """
 
@@ -31,7 +31,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
-import remote_pytest  # noqa: E402  (tools/remote: pytest on the model PC / AI PC)
+import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands

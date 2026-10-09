@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 
 
@@ -46,9 +47,16 @@ class SightingPublisher:
         await self._client.aclose()
 
     async def publish(self, sighting: SiteSightingPayload) -> dict[str, Any]:
+        return await self._post("/api/fleet/sightings", sighting)
+
+    async def publish_place_markers(self, payload: PlaceMarkerPayload) -> dict[str, Any]:
+        """D-564: floor place marker poses, same source token."""
+        return await self._post("/api/fleet/place-markers", payload)
+
+    async def _post(self, path: str, body) -> dict[str, Any]:
         response = await self._client.post(
-            "/api/fleet/sightings",
-            json=sighting.model_dump(mode="json"),
+            path,
+            json=body.model_dump(mode="json"),
             headers={"Authorization": self._authorization},
         )
         if not response.is_success:

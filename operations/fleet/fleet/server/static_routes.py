@@ -70,7 +70,7 @@ CONSOLE_ASSETS = {
     "start-point-view.js": ("start-point-view.js", "application/javascript"),
     "trail-view.js": ("trail-view.js", "application/javascript"),
     "traffic-view.js": ("traffic-view.js", "application/javascript"),
-    "guide-layer.js": ("guide-layer.js", "application/javascript"),
+    "guide-layer.js": ("shared/guide-layer.js", "application/javascript"),
     "connection-view.js": ("connection-view.js", "application/javascript"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }

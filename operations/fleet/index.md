@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영
-- 2026-10-09 · uncommitted · feat(fleet): Rosy Cam 지도 평면 영상을 받아 그대로 그린다 (D-560 S2)
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
-- 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
-- 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
+- 2026-10-09 · uncommitted · refactor(fleet): 시작점·배경 다시 학습을 설치·보정으로 (D-540 (f))
+- 2026-10-09 · uncommitted · fix(fleet): site-map robot rings and labels stay on the map
+- 2026-10-09 · uncommitted · uiux(fleet): 기기 이름과 ArUco 표지를 내부 ID와 구분
+- 2026-10-09 · uncommitted · fix(fleet): TLS 로봇 번호 변경 뒤 재등록 (D-565)
+- 2026-10-09 · uncommitted · fix(fleet): 관제 지도와 로봇 표시 안정화

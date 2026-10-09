@@ -15,7 +15,7 @@ import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
-import { drawGuide } from "./guide-layer.js";
+import { drawGuide } from "/console/assets/guide-layer.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -327,7 +327,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
       ctx.stroke();
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, offsetLabel(row), row.warn ? "warn" : undefined);
+      const markers = new Set((view.siteMap?.maps || []).flatMap((map) => map.sources || [])
+        .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
+      const label = row.measured && !row.pose && markers.size === 1
+        ? `ArUco ${[...markers][0]}` : offsetLabel(row);
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
     }
     ctx.fillStyle = css("--ink-quiet");
     for (const item of tracking.unknown) {
@@ -335,6 +339,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      if (item.markerId !== undefined) drawChip(ctx, null, p.x, p.y - size * 1.8, `ArUco ${item.markerId} · 미등록`);
     }
     ctx.restore();
   }
@@ -513,10 +518,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
-    drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
     guide(ctx, toPx);
     if (layerOn("sightings")) {
-      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
     flushChips(ctx);
   }

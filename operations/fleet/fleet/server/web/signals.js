@@ -186,9 +186,12 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     kind.setAttribute("status", "neutral");
     kind.textContent = "가상";
     const tag = document.createElement("ui-tag");
-    tag.setAttribute("status", row.errors?.length ? "crit" : row.mode === "cycle" ? "active" : "warn");
+    tag.setAttribute("status", row.errors?.length ? "crit" : ["cycle", "demand"].includes(row.mode) ? "active" : "warn");
+    // D-525 rev 4: 요청 모드는 AI PC 제어기가 요청만 하고 Fleet이 단계를 정한다.
     tag.textContent = row.errors?.length ? "설정 오류"
-      : row.mode === "manual" ? `수동 · ${row.manual} 녹` : signalIntentLabel(row.mode);
+      : row.mode === "manual" ? `수동 · ${row.manual} 녹`
+      : row.mode === "demand" ? `요청(AI)${row.demands?.length ? ` · ${row.demands[0].approach} 대기` : ""}`
+      : signalIntentLabel(row.mode);
     head.append(name, spacer, kind, tag);
     node.appendChild(head);
     const body = document.createElement("div");
@@ -206,12 +209,12 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     meta.className = "signal-meta";
     const left = typeof row.left_s === "number" ? ` ${Math.ceil(row.left_s)} s` : "";
     meta.textContent = row.errors?.length ? row.errors[0]
-      : `${VIRTUAL_ASPECT[row.aspect] || row.aspect}${left} · 구역 ${row.zone}${row.aspect === "all_red" && row.zone_busy && row.mode !== "all_red" ? " · 비기를 기다림" : ""}`;
+      : `${VIRTUAL_ASPECT[row.aspect] || row.aspect}${left} · 구역 ${row.zone}${row.aspect === "all_red" && row.zone_busy && row.mode !== "all_red" ? " · 비기를 기다림" : ""}${row.alert === "controller_lost" ? " · AI 제어기 끊김, 자동 순환" : ""}`;
     body.appendChild(meta);
     node.appendChild(body);
     const actions = document.createElement("div");
     actions.className = "robot-actions";
-    const verbs = [["자동", "cycle"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
+    const verbs = [["자동", "cycle"], ["AI 요청", "demand"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
       ...(row.approaches || []).map((a) => [`녹 · ${a.approach}`, "set_aspect", "", a.approach])];
     for (const [label, verb, cls, approach] of verbs) {
       const button = document.createElement("ui-button");

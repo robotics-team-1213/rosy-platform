@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from core_common.protocol.place_markers import PlaceMarkerPayload, PlaceMarkerPose
 from core_common.protocol.sightings import SiteSightingPayload
 from games.field.homography import Homography, Point, fit
 
@@ -28,6 +29,8 @@ class CameraMap:
     #: "corner_markers" (default) needs four ArUco corners per frame;
     #: "field_boundary" gets it from the accepted field quad + orientation.
     calibration_source: str = "corner_markers"
+    #: D-564: floor place marker ids (height 0, so no parallax), teach input only.
+    place_markers: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.map_id.strip():
@@ -96,31 +99,16 @@ def project_frame(
 
     if source_id != camera.source_id:
         return ()
-    if camera.calibration_source == "field_boundary":
-        measured = homography
-    else:
-        measured = marker_homography(camera, markers)
+    measured = _measured(camera, markers, homography)
     if measured is None:
         return ()
 
     sightings = []
     for robot_id, marker_id in camera.robot_markers.items():
-        quad = markers.get(marker_id)
-        if quad is None:
+        pose = _pose(camera, measured, markers.get(marker_id))
+        if pose is None:
             continue
-        try:
-            center = _center(quad)
-            edge_a, edge_b = camera.heading_edge
-            heading_tip = (
-                (quad[edge_a][0] + quad[edge_b][0]) / 2,
-                (quad[edge_a][1] + quad[edge_b][1]) / 2,
-            )
-            x, y = measured.apply(*center)
-            yaw = measured.yaw(center, heading_tip)
-        except (TypeError, ValueError, ZeroDivisionError):
-            continue
-        if not all(math.isfinite(value) for value in (x, y, yaw)):
-            continue
+        x, y, yaw = pose
         sightings.append(SiteSightingPayload(
             robot_id=robot_id,
             x=x,
@@ -136,6 +124,56 @@ def project_frame(
             calibration_source=camera.calibration_source,
         ))
     return tuple(sightings)
+
+
+def project_place_markers(
+    camera: CameraMap,
+    *,
+    seq: int,
+    captured_at: float,
+    markers: Mapping[int, Sequence[Point]],
+    homography: Homography | None = None,
+) -> PlaceMarkerPayload | None:
+    """D-564: configured floor place markers in this frame, or None when none is measurable."""
+
+    measured = _measured(camera, markers, homography) if camera.place_markers else None
+    if measured is None:
+        return None
+    poses = []
+    for marker_id in camera.place_markers:
+        pose = _pose(camera, measured, markers.get(marker_id))
+        if pose is not None:
+            poses.append(PlaceMarkerPose(marker_id=marker_id, x=pose[0], y=pose[1], yaw=pose[2]))
+    if not poses:
+        return None
+    return PlaceMarkerPayload(map_id=camera.map_id, calibration_revision=camera.calibration_revision,
+                              captured_at=captured_at, seq=seq, markers=tuple(poses))
+
+
+def _measured(camera: CameraMap, markers, homography):
+    if camera.calibration_source == "field_boundary":
+        return homography
+    return marker_homography(camera, markers)
+
+
+def _pose(camera: CameraMap, measured: Homography, quad) -> tuple[float, float, float] | None:
+    """Marker centre and ``heading_edge`` tip through the homography; None when unusable."""
+    if quad is None:
+        return None
+    try:
+        center = _center(quad)
+        edge_a, edge_b = camera.heading_edge
+        heading_tip = (
+            (quad[edge_a][0] + quad[edge_b][0]) / 2,
+            (quad[edge_a][1] + quad[edge_b][1]) / 2,
+        )
+        x, y = measured.apply(*center)
+        yaw = measured.yaw(center, heading_tip)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    if not all(math.isfinite(value) for value in (x, y, yaw)):
+        return None
+    return x, y, yaw
 
 
 def _center(quad: Sequence[Point]) -> Point:

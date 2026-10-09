@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
 - 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167
 - 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
 - 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
 - 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
-- 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
