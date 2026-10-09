@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.169
+**Version:** v1.170
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1590,6 +1590,7 @@ marker_id는 음이 아닌 strict 정수·프레임 내 유일이며 익명 검�
 Fleet은 인증된 source의 marker 대응으로 `MARKER` 이름을 확정하고 없으면 신선한 같은-map pose와 익명 검출을 대조한다.
 robots 상태는 MARKER/MATCHED/NO_DETECTION/NO_POSE/CAMERA_UNAVAILABLE이고 camera·pose·offset_m은 없으면 null이다.
 마커 관측은 pose 없이도 표시하며 익명 이름은 odom으로 추측하지 않는다. 남은 검출은 unknown이다.
+unknown 행은 `{source_id,x,y,footprint_m,score,marker_id}`이다. 익명 검출은 `marker_id: null`, 배정 로봇이 없는 마커 검출(D-575, Vision은 D-562 로봇 범위 40–49만 보냄)은 그 id를 싣고 발자국 안의 익명 검출 하나를 흡수한다.
 token 오류 401, source 불일치 403, map/revision/future/stale/out-of-order 409, 잘못된 body 422.
 보정과 검출은 CORE pose 주입·자동 작업·주행 명령의 입력이 아니다.
 
@@ -2608,6 +2609,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.170 | 2026-10-09 | Additive (D-575, fix/ceiling-marker-missed-and-unassigned): `GET /api/fleet/tracking` `unknown[].marker_id`(익명은 null, 배정 로봇 없는 마커는 그 id). Vision은 `robot_markers`에 없는 D-562 로봇 범위 마커(40–49)도 검출 payload에 싣는다(스키마 변화 없음). 표시 전용, 로봇 명령·envelope 1.0 변화 없음 |
 | v1.169 | 2026-10-09 | 동작 변경 (D-565, fix/fleet-tls-renumber-enroll, 보안 검토 대상): `POST /api/fleet/enrollment/robots`가 등록 행이 없는 HTTPS 로봇을 아직 등록되지 않은 승인 binding으로 등록한다(CA·호스트 이름·`robot_id` 셋이 맞아야 함). 새 오류 409 `tls_binding_mismatch`. Fleet 기동은 등록되지 않은 binding을 거절하지 않고 경고한다(다른 등록 행의 호스트 이름이면 계속 거절). v1.167·v1.168은 다른 브랜치(D-560·D-564)가 선점 |
 | v1.168 | 2026-10-09 | Additive (D-564, feat/ceiling-place-markers): 바닥 장소 마커 `POST`/`GET /api/fleet/place-markers`(source token, 2 s), `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자, 초안 장소 추가·이동), 공유 스키마 `PlaceMarkerPayload`, 사이트 카메라 설정 `place_markers`. 표시·가르치기만, 로봇 명령 없음. v1.166은 다른 브랜치(feat/route-context-bend-phase)가 쓴다 |
 | v1.167 | 2026-10-09 | Additive (D-560 S1, feat/rosy-cam-map-plane): Vision 미리보기 lease `rectification`에 `{"mode": "map"}`(다른 필드 없음). Vision이 추적용 승인 보정 기록으로 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px)에 펴서 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`과 함께 돌려주고, 기록이 없거나 source·map·렌즈·비율이 다르면 409 `X-Frame-State: plane-unavailable`(원본 대체 없음). `manual`·`auto`와 원본 프레임·추적 불변. 스키마·envelope 1.0 변경 없음 |
