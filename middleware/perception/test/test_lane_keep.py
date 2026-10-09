@@ -554,8 +554,8 @@ def test_new_short_fragment_cannot_become_a_one_side_target():
 
 
 def test_short_fragment_requires_a_boundary_seen_in_the_previous_image():
-    full = _render([(HALF, 0.0)])
-    fragment = full.copy()
+    full = _render([(HALF, 0.0), (-HALF, 0.0)])
+    fragment = _render([(HALF, 0.0)])
     fragment[np.isfinite(X) & ((X < 0.22) | (X > 0.30))] = 100
 
     fresh = _keeper()
