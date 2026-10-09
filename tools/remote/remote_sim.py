@@ -61,6 +61,7 @@ echo "heavy=$(ps -eo pcpu=,args= | awk '$1 >= 50 && $0 !~ /rosy-test\/runs\/sim-
 
 # Runs inside the scope or container, in the shipped checkout. $OUT holds every output.
 INNER = r"""set -eo pipefail
+export PATH=/usr/bin:/bin:$PATH  # ~/.local/bin may hold another python3 (Isaac's 3.11 on the model PC)
 source /opt/ros/jazzy/setup.bash
 [ -n "${PYDEPS:-}" ] && export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
 colcon --log-base "$OUT/colcon-log" build --packages-up-to gz_sim --build-base "$OUT/build" \
