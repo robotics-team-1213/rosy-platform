@@ -2747,6 +2747,11 @@
 - 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
 - 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
 
+## 2026-10-08 · a5c1bb395 · fix(fleet): 개발 세션 인증 뒤 모바일 설정 메뉴 복귀
+- 변경: 잠금 때문에 자동으로 연 Fleet Console 설정 메뉴만 인증 성공 후 접는다. 사용자가 직접 연 설정은 유지한다.
+- 증거: 390×844 회귀 수정 전 실패·수정 후 통과, 1440×900 화면 캡처, `known_failures.py` 0 new. `docs/validation/uiux-fleet-dev-menu-2026-10-08/result.md`.
+- gate 변화: 없음. LOCAL 브라우저 증거만이며 D-153 전체 G1/G2/G3 및 설치 이미지 수용은 HOLD.
+
 ## 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
 - 변경: `web/shared/site-map-model.js` 에 `TRIP_AUTHORITY_SITE_OFF`, `TRIP_AUTHORITY_NOT_REQUIRED`, `TRIP_CONVOY_NOT_BEHIND`, `TRIP_ROBOT_BUSY`, `TRIP_GOAL_REFUSED` 운영자 문구 추가(전에는 원시 코드가 보였다); `test/test_trip_error_labels.py` 가 Fleet 이 내는 모든 `TRIP_*` 코드에 문구가 있는지 지킨다
 - 증거: 모델 PC `operations/fleet/test/` (아래 커밋 메시지)
@@ -2810,6 +2815,13 @@
 - 변경: 일방 차로에서 후진 복구 방향도 같은 물리 차로에 투영한다. 양방향 차로의 진행 방향별 호 선택과 차로 밖 UNKNOWN은 유지한다. Fleet 감시 판정만 바꾸며 로봇 명령은 보내지 않는다.
 - 증거: 모델 PC에서 수정 전 2 failed/9 passed, 수정 후 차로 판정·감시 20 passed, `known_failures.py` 0 NEW (`X:/DevTemp/fleet-reverse-lane-{red,green2}/run-1.txt`).
 - gate 변화: SOURCE/LOCAL 회귀 근거. D-511 M1/M2, 현장 지도 자세·Rosy Cam·실물 주행 수용은 아직 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): Cell 화면 목적과 미구성 복구 안내
+
+- 변경: Cell 첫 화면에 문서 준비→미리보기→작업 제안→현재 5단계 승인·진행의 목적을 드러냈다. Cell 서비스 미구성 응답은 원시 코드 대신 사이트 설치 담당자의 다음 행동으로 설명한다.
+- 증거: `test_cell_app_browser.py`의 목적·503 안내·가로 넘침 검사와 1440/390 캡처, Cell API·운영자 문구 검사. D-540의 큐 승인 이동 전이므로 현행 승인 위치를 정확히 적었다.
+- gate 변화: Cell 입구의 LOCAL/SOURCE 결함 일부 수정. 공통 머리·실제 Fleet 큐 인계·전체 G1/G2/G3·DEVICE/FIELD는 HOLD.
+
 ## 2026-10-09 · uncommitted · fix(fleet): 움직이는 경로는 이름 있는 운영자, 멈춤은 열림 (D-540 9)
 
 - 변경: 목표·차선 주행 선택(`OFF` 제외)·`/route`·LED 찾기·막힘 `RESUME`/`BACK_AND_RETRY`/`MANUAL`과 claim·대형 시작/변경/재개·물리 신호 명령(`all_red`/`flash_red` 제외)·시작점 쓰기·`/do`(멈춤 동사만인 요청 제외)는 `require_named_operator`. 공유 토큰·루프백 `site-console`은 403 `OPERATOR_IDENTITY_REQUIRED`. 비상 정지·전체 취소·로봇 취소·작업 취소·대형 해제·막힘 `WAIT`/`ABORT`·trip 취소(이전엔 이름 필요)는 어느 운영자에게나 열림. 화면은 같은 조작을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. API Ref v1.156.
