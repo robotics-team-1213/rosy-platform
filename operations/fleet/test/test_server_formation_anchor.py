@@ -8,6 +8,7 @@ import json
 from fakes import FakeRobot, run
 from fleet.localization.map_pose import LOCALIZED, MapPose
 from fleet.server.console import FleetConsole
+from fleet.swarm.anchor import anchored_relay_factory
 from fleet.swarm.robots import RobotEndpoint
 
 
@@ -49,7 +50,8 @@ def test_a_trail_formation_anchors_and_a_column_reform_relays_bytes():
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:809{i}", token="t")
                  for i, r in enumerate(robots)]
     console = FleetConsole(endpoints, robots)
-    poses = console.formation_poses = Poses()
+    poses = Poses()
+    console.formation_relay_factory = lambda enabled: anchored_relay_factory(poses, enabled)
     leader, follower = robots
 
     async def scenario():
