@@ -18,6 +18,7 @@ CLIS = [
     "learning/training/perception/dataset/edge_capture.py",
     "learning/training/perception/dataset/edge_capture_session.py",
     "learning/training/perception/dataset/extract.py",
+    "learning/training/perception/dataset/lane_failure_loop.py",
     "learning/training/perception/dataset/object_boxes.py",
     "learning/training/perception/dataset/prelabel.py",
     "learning/training/perception/dataset/qwen_points.py",
