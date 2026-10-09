@@ -1,14 +1,12 @@
 """D-526: stop a tethered robot through CORE's E-Stop past radius_m + RADIUS_SLACK_M, past TURN_LIMIT_DEG of
-turn since the declaration, or after STALE_S without a map pose. Only a TRUSTED pose is a map pose (LOCALIZED, map frame, as Fleet
-tracking and traffic use it): odom, untrusted and legacy (no ``localization``) poses are none, so the watch fails closed.
+turn since the declaration, or after STALE_S without a pose. The injected ``pose`` callable returns a pose only when
+it is trusted, map-frame and fresh (``tether_routes``); anything else is none, so the watch fails closed.
 The trip latches until the tether is set again or cleared; driving back is the operator's (D-526 3).
 """
 import asyncio
 import logging
 import math
 import time
-
-from fleet.localization.trust import TRUSTED, classify
 
 PERIOD_S = 0.5
 STALE_S = 2.0
@@ -22,10 +20,8 @@ _LOG = logging.getLogger("fleet.tether_watch")
 
 
 def map_pose(state) -> tuple[float, float, float] | None:
-    """(x, y, yaw) of a CORE state in the map frame, or None (not TRUSTED, missing or not finite)."""
-    if classify(state) != TRUSTED:
-        return None
-    pose = state.get("pose") or {}
+    """(x, y, yaw) of a CORE state in the map frame, or None (missing or not finite). Trust is the caller's."""
+    pose = (state or {}).get("pose") or {}
     try:
         xyyaw = float(pose["x"]), float(pose["y"]), float(pose["yaw"])
     except (KeyError, TypeError, ValueError):

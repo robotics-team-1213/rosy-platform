@@ -171,8 +171,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_701,
-        "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        47_012,
+        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
+        "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
+        "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
+        "from 47012. Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
         "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
@@ -670,8 +674,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1229,
-        "accept: re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
+        1234,
+        "accept: re-judged at 1234 on 2026-10-09: D-526 adds an alarm_sources hook so the "
+        "tether watch can raise TETHER_STOP_FAILED beside the held-robot alarm; five lines, "
+        "no goal, stop, or admission path changed. The zero growth allowance remains. "
+        "Previously re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
         "existing link class on a gathered robot row. No goal, stop, or admission path "
         "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
         "2026-10-07: D-499 adds a read-only link class "

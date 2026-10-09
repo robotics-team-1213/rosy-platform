@@ -13,7 +13,8 @@ from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
-from fleet.server.tether_watch import RADIUS_SLACK_M, STALE_S, TetherWatch, map_pose
+from fleet.server.tether_routes import trusted_map_pose as map_pose
+from fleet.server.tether_watch import RADIUS_SLACK_M, STALE_S, TetherWatch
 from fleet.swarm.robots import RobotEndpoint
 
 OPERATOR = {"Authorization": "Bearer operator-token"}
@@ -343,3 +344,9 @@ def test_a_stamp_repeating_at_the_1_hz_heartbeat_does_not_trip_on_its_own(tmp_pa
     watch = _run_ticks(client, robot, 12, lambda k: f"t{k // 2}")  # every stamp seen twice
     assert watch.view("rosy_60")["trip"] is None
     assert watch.view("rosy_60")["pose_age_s"] <= 1.0
+
+
+def test_tether_watch_imports_nothing_from_fleet_localization():
+    import fleet.server.tether_watch as module
+    source = open(module.__file__, encoding="utf-8").read()
+    assert "fleet.localization" not in source

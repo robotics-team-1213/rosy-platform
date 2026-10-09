@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from fleet.localization.trust import TRUSTED, classify
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.tether_watch import TetherWatch, map_pose
 
@@ -19,6 +20,12 @@ class TetherRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     anchor_xy: list[Metres] = Field(min_length=2, max_length=2)  # strict: a JSON array, not a tuple
     radius_m: float = Field(gt=0, le=50, allow_inf_nan=False)
+
+
+def trusted_map_pose(state):
+    """(x, y, yaw) only for a TRUSTED pose (LOCALIZED, map frame: as Fleet tracking and traffic use it); legacy
+    (no ``localization``), odom, untrusted and non-finite poses are none."""
+    return map_pose(state) if classify(state) == TRUSTED else None
 
 
 def install_tether_routes(app, *, console, trip_runner, read_guard, require_named_operator) -> None:
@@ -39,7 +46,7 @@ def install_tether_routes(app, *, console, trip_runner, read_guard, require_name
         if stamp is None or stamps.get(robot_id) == stamp:
             return None
         stamps[robot_id] = stamp
-        return map_pose(state)
+        return trusted_map_pose(state)
 
     async def stop(robot_id: str) -> None:  # the existing per-robot CORE E-Stop, then its trip ends
         try:
