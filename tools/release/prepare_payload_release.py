@@ -179,7 +179,7 @@ def read_lists(tarball: Path) -> dict[str, str]:
     with tarfile.open(tarball, "r:gz") as tar:
         for member in tar:
             name = _member_name(member.name)
-            if name in wanted and member.isreg():
+            if (name in wanted or name == "source-ref.txt") and member.isreg():
                 found[name] = tar.extractfile(member).read().decode("utf-8")
     missing = sorted(wanted - set(found))
     if missing:
@@ -367,6 +367,10 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
             raise PrepareError(f"required-ros-packages.txt names packages missing from rosy-packages.txt: {missing}")
         release_ros = parse_release_ros_packages(lists["ros-packages.txt"])
         print(f"release {release_id}: {len(release_ros)} ros-jazzy packages, required ROSY packages all present")
+        # D-553 addendum 3: a branch build is for manual bench pushes; publish refuses it.
+        source_ref = lists.get("source-ref.txt", "").strip() or "unrecorded (built before D-553 addendum 3)"
+        print(f"source ref: {source_ref}" + ("" if source_ref.startswith(("main", "unrecorded"))
+                                             else "  (branch build: manual push only, never the D-412 channel)"))
         if args.skip_abi:
             print("ABI check skipped (--skip-abi)")
         else:

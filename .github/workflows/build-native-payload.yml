@@ -115,6 +115,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$DIST_ROOT"
+          # D-553 addendum 3: the branch this commit was dispatched from, signed with
+          # the payload (manifest + SHA256SUMS). Only main reaches the D-412 channel.
+          [[ "$GITHUB_REF" =~ ^refs/heads/[A-Za-z0-9._/-]+$ ]]
+          printf '%s\n' "${GITHUB_REF#refs/heads/}" > "$PAYLOAD_WORK/root/source-ref.txt"
           python3 deploy/robot/pinky_pro/release/build_payload_release.py build \
             --payload-root "$PAYLOAD_WORK/root" \
             --release-id "$RELEASE_ID" \

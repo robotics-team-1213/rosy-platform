@@ -475,3 +475,16 @@ def test_ssh_never_inherits_stdin(monkeypatch):
     monkeypatch.setattr(tool.subprocess, "run", fake)
     assert tool.run_ssh(["ssh", "host", "true"]) == (0, "ok", "")
     assert seen["stdin"] is subprocess.DEVNULL
+
+
+@pytest.mark.parametrize("ref, note", [("main", False), ("fix/drivable-keep-lap", True)])
+def test_main_prints_the_signed_source_ref_and_flags_branch_builds(tmp_path, monkeypatch, capsys, ref, note):
+    """D-553 addendum 3: branch builds are bench pushes only."""
+    monkeypatch.setenv("LOCALAPPDATA", str(_key(tmp_path)))
+    code = tool.main(["--artifact-dir", str(_artifact_dir(tmp_path, **{"source-ref.txt": ref + "\n"})),
+                      "--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "out"), "--skip-abi"],
+                     ssh_runner=FakeSsh({}), tool_runner=FakeTools())
+    printed = capsys.readouterr().out
+    assert code == 0, printed
+    assert f"source ref: {ref}" in printed
+    assert ("never the D-412 channel" in printed) is note
