@@ -44,11 +44,24 @@ FUSE = {"max_gap_s": 1.0, "max_disagree_m": 0.05, "max_disagree_yaw": math.radia
         "max_reproj_m": 0.008}
 
 
-def load_calibration(rec_dir, frame_size):
+def read_calibration(rec_dir, source_id="ceiling_north"):
+    """(raw bytes, {"record", "frame_lens"}) from calibration.json (ceiling_record.py) or
+    calibrations.json (a saved GET /api/fleet/calibrations response)."""
+    rec_dir = Path(rec_dir)
+    if (rec_dir / "calibration.json").is_file():
+        raw = (rec_dir / "calibration.json").read_bytes()
+        return raw, json.loads(raw)
+    raw = (rec_dir / "calibrations.json").read_bytes()
+    records = [r for r in json.loads(raw).get("calibrations", []) if r.get("source_id") == source_id]
+    return raw, {"source_id": source_id, "record": records[0] if records else None, "frame_lens": None}
+
+
+def load_calibration(rec_dir, frame_size, frame_lens=None):
     """(image_to_map 3x3, camera (x, y, height) or None, record) for frames of frame_size."""
     from rosy_vision.track import geometry
     from rosy_vision.track.calibration import from_record
-    doc = json.loads((Path(rec_dir) / "calibration.json").read_text(encoding="utf-8"))
+    doc = read_calibration(rec_dir)[1]
+    doc["frame_lens"] = doc.get("frame_lens") or frame_lens
     record = doc.get("record")
     if not record:
         raise ValueError("calibration.json has no approved tracking record for this source")
@@ -85,7 +98,7 @@ def detect(rec_dir, marker_id, *, height_m=ROBOT_TOP_HEIGHT_M, size_m=MARKER_BLA
     for row in rows:
         size = (row["width"], row["height"])
         if size not in cache:
-            cache[size] = load_calibration(rec_dir, size)
+            cache[size] = load_calibration(rec_dir, size, row.get("lens"))
         matrix, camera, _ = cache[size]
         quad = detect_markers((rec_dir / row["file"]).read_bytes()).get(marker_id)
         pose = None if quad is None else marker_pose(quad, matrix, camera, height_m=height_m, size_m=size_m,

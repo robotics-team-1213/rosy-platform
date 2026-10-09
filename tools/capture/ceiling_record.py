@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import ssl
 import sys
 import time
@@ -66,6 +67,10 @@ def record(site, out, *, source_id="ceiling_north", duration=None, interval=0.33
     (out / "frames").mkdir(parents=True, exist_ok=True)
     calibration = {"source_id": source_id, "fetched_at": clock(),
                    "record": snapshot_calibration(site, source_id), "frame_lens": None}
+
+    def write():
+        (out / "calibration.json").write_text(json.dumps(calibration, indent=1) + "\n", encoding="utf-8")
+    write()  # at start too: a recorder stopped by systemd still leaves the record
     lease, lease_until, last_seq, saved = None, 0.0, None, 0
     start = monotonic()
     with open(out / "frames.jsonl", "a", encoding="utf-8") as log:
@@ -97,6 +102,7 @@ def record(site, out, *, source_id="ceiling_north", duration=None, interval=0.33
                     lens = parse_lens(headers.get("X-Source-Lens"))
                     if calibration["frame_lens"] is None and lens is not None:
                         calibration["frame_lens"] = lens
+                        write()
                     log.write(json.dumps({
                         "seq": seq, "captured_at": float(headers["X-Frame-Captured-At"]),
                         "saved_at": clock(), "file": name,
@@ -109,7 +115,7 @@ def record(site, out, *, source_id="ceiling_north", duration=None, interval=0.33
                 sleep(max(0.0, interval - (monotonic() - tick)))
         except KeyboardInterrupt:
             pass
-    (out / "calibration.json").write_text(json.dumps(calibration, indent=1) + "\n", encoding="utf-8")
+    write()
     return saved
 
 
@@ -134,6 +140,9 @@ def main(argv=None):
             print("WARNING: --insecure: the site's TLS certificate is not verified", file=sys.stderr)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
+    def stop(*_):
+        raise KeyboardInterrupt  # systemd stop (SIGTERM) ends like Ctrl-C
+    signal.signal(signal.SIGTERM, stop)
     saved = record(Site(args.site, args.token, ctx), args.out, source_id=args.source,
                    duration=args.duration, interval=args.interval)
     print(json.dumps({"frames": saved, "out": str(args.out)}))

@@ -43,7 +43,7 @@ for _p in (HERE, REPO / "contracts" / "foundation"):
         sys.path.insert(0, str(_p))
 
 import lane_derived_drivable as ldd  # noqa: E402
-from ceiling_pose import FUSE, estimate_clock_offset, fuse  # noqa: E402
+from ceiling_pose import FUSE, estimate_clock_offset, fuse, read_calibration  # noqa: E402
 from geometry import PROFILE_PATH, Camera  # noqa: E402
 
 SCHEMA = "rosy.map-projected-drivable/1"
@@ -205,7 +205,7 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
     tool_commit = ldd._git_commit(tool_commit)
     poses_raw = (ceiling / "poses.jsonl").read_bytes()
     detections = [json.loads(line) for line in poses_raw.decode("utf-8").splitlines() if line.strip()]
-    calibration_raw = (ceiling / "calibration.json").read_bytes()
+    calibration_raw, calibration_doc = read_calibration(ceiling)
     estimated = estimate_clock_offset(detections, odom)
     if clock_offset_s == "auto":
         if estimated is None:
@@ -242,7 +242,7 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
                      "line_iou": stats["line_iou"], "drivable_px": int((mask == ldd.DRIVABLE).sum()),
                      "offroad_px": int((mask == 0).sum())})
     anchor = [f["pose"]["anchor_dt"] for f in kept]
-    calibration = json.loads(calibration_raw).get("record") or {}
+    calibration = calibration_doc.get("record") or {}
     doc = {"schema": SCHEMA, "annotation_origin": ORIGIN, "adr": ADR, "evaluation_use": "training_val_only",
            "source": {"session": session, "robot_inputs_sha256": robot_inputs,
                       "ceiling_poses_sha256": _sha(poses_raw), "ceiling_calibration_sha256": _sha(calibration_raw),

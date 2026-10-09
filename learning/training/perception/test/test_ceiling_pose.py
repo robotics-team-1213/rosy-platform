@@ -86,3 +86,10 @@ def test_fuse_carries_detections_by_odometry_and_flags_gaps_and_disagreement():
 def test_clock_offset_from_motion_onset():
     assert cp.estimate_clock_offset(_detections(5.0), _odom()) == pytest.approx(5.0, abs=1.0)
     assert cp.estimate_clock_offset([], _odom()) is None
+
+
+def test_detect_reads_a_saved_calibration_listing(tmp_path):
+    rec = _ceiling(tmp_path, [(700, 300, 0)])
+    (rec / "calibration.json").unlink()
+    (rec / "calibrations.json").write_text(json.dumps({"calibrations": [dict(RECORD, source_id="other"), RECORD]}))
+    assert len(cp.detect(rec, 41)[0]) == 1

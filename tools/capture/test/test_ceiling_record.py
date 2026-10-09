@@ -63,3 +63,13 @@ def test_records_unique_frames_and_the_calibration(tmp_path):
     calibration = json.loads((tmp_path / "calibration.json").read_text())
     assert calibration["record"] == RECORD
     assert calibration["frame_lens"] == {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}
+
+
+def test_calibration_is_written_before_the_first_frame(tmp_path):
+    class Dead:
+        def request(self, path, body=None, bearer=None):
+            if path == "/api/fleet/calibrations":
+                return json.dumps({"calibrations": [RECORD]}).encode(), {}
+            assert json.loads((tmp_path / "calibration.json").read_text())["record"] == RECORD
+            raise KeyboardInterrupt  # killed mid-run
+    assert ceiling_record.record(Dead(), tmp_path) == 0
