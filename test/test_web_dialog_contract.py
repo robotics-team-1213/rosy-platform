@@ -56,8 +56,7 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/console.js": 3,
     "operations/fleet/fleet/server/web/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/fleet/fleet/server/web/roster.js": 1,
-    # Activation and camera-draft replacement (D-497). Trip cancel left this
-    # file for the roster card (D-540 (d), b36c24cc9).
+    # Activation, camera-draft replacement (D-497); trip cancel left with the 운행 panel (D-540 4).
     "operations/fleet/fleet/server/web/site-map.js": 2,
     "operations/fleet/fleet/server/web/tracking-view.js": 1,
 }
