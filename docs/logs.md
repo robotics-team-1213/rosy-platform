@@ -7583,3 +7583,9 @@ osy-d395-s1d\`.
 - 결정(사용자, 2026-10-10, 선택지 A): `d379-auto-lanes-rosy26-v1@54db2400…`의 8개 녹화 세션을 세션마다 한 촬영 묶음 `rec-<session>`으로 단정했다. 근거는 `sources[]`의 장치·시작/끝 시각(예약 평가 세션과 겹치지 않음)이다. 모델 PC 운영 store에 `d379-auto-lanes-rosy26-v1-groups@e643de1cf1f17cde3f8632d11f02717d6a54074676dde816ca6b7bc241ca7029`을 `Store.put_dataset`으로 게시했다. 이미지·마스크·conf 2811개는 원본과 바이트가 같고, manifest에는 `frames[].capture_group`과 `annotation`(annotation_of, 결정자, 날짜, 근거)만 더했다. 그래서 내용 sha는 기록 없는 증명본 58239d9e…와 다르다. int8-hf 번들 lane-seg-20261009-3831b20d만 새 revision을 가리키게 manifest를 다시 썼다(`dataset.annotation_of`). fp32 62db9403 번들은 그대로 두었다.
 - 증거: 실제 intake(`--store /srv/rosy/store`, 평가 집합 rosy26-heldout-wall-role-20261006): **PASS**, mIoU 0.8110(챔피언 62db9403 0.8109), lane_line 0.9007, drivable 0.5608, disjoint True, 예약 겹침 없음. 번들 sha: model.onnx `3831b20d…ab58d`, model_manifest.json `348ae945…f2d4c`, intake_report.json `2e2a474c…8a6a3`. 실제 모델 두 개(62db9403, 28e8454d) 모두 새 Conv 규칙으로 `/enc1/enc1.0/Conv`, `/head/Conv`가 나온다. convert 시험 27 passed(모델 PC).
 - gate 변화: 로봇 전달·READY 게시는 하지 않았다. 전달은 `deliver.py --slot paint`로 사람이 한다.
+
+## 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
+
+- 변경: D-430 safety review 예외에 D-581 과거 커밋 4개를 정확한 SHA로 등록하고 독립 검토 결과를 docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md에 남겼다.
+- 증거: ae08 통합본 기준 AI PC 원격 테스트 24 passed, known_failures 0 new/0 known. 첫 커밋은 단독 거절이며 후속 epoch/hold/stream 보완을 포함한 통합본에만 이력 예외를 적용한다.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 승인과 현장 운행은 HOLD.
