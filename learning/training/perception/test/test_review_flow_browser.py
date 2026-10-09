@@ -116,7 +116,7 @@ def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
 @pytest.fixture
 def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
-    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\n')
+    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\ncolors: {car: [12, 34, 56]}\n')
     record = class_sets.from_data_yaml(data.encode(), 'detect')
     with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
         yield value
@@ -905,8 +905,10 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     if width <= 390:
         navigation = page.locator('.frame-navigation').bounding_box()
         buttons = [page.locator(f'#{name}').bounding_box() for name in ('prev-frame', 'next-frame', 'next-pending')]
-        assert all(abs(button['width'] - navigation['width']) <= 1 for button in buttons)
-        assert buttons[0]['y'] < buttons[1]['y'] < buttons[2]['y']
+        assert abs(buttons[0]['y'] - buttons[1]['y']) <= 1
+        assert buttons[0]['x'] + buttons[0]['width'] <= buttons[1]['x']
+        assert abs(buttons[2]['width'] - navigation['width']) <= 1
+        assert buttons[2]['y'] > buttons[0]['y']
     shot('decision-result')
 
 
@@ -1044,6 +1046,14 @@ def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
     }""")
     # Hundreds of photos must not push the editor below a full-page thumbnail grid.
     assert layout == {'pageWidth': 390, 'rows': 1, 'direction': 'row', 'overflow': 'auto'}
+    toolbar = page.locator('.review-tool-ribbon ui-actions').bounding_box()
+    canvas = page.locator('#canvas').bounding_box()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / 'learning-object-first-view-390x844.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    assert toolbar['height'] < 60 and canvas['y'] < 844, (toolbar, canvas)
 
 
 def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
@@ -1163,6 +1173,8 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
+    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
+    assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
     select.select_option('car')

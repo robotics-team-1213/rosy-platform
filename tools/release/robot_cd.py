@@ -1,4 +1,7 @@
-"""Trusted operator-PC coordinator: successful main CI -> unsigned build -> signed rollout.
+"""Trusted operator-PC coordinator: main push -> unsigned build (beside CI) -> signed rollout.
+
+The unsigned ARM64 build starts as soon as main moves (D-553); signing waits
+for that commit's successful CI and a failed CI ends the transaction.
 
 Install an approved, fixed snapshot before scheduling this program. It never
 checks out or executes incoming main code on the signing PC. Robots retain
@@ -142,10 +145,25 @@ class Coordinator:
         return result
 
     def ci(self, sha):
+        """success, failed or pending for this exact main push."""
         workflow = self.api("actions/workflows/ci.yml")
         runs = self.api(f"actions/workflows/ci.yml/runs?branch=main&event=push&head_sha={sha}&per_page=30")
-        return any(approved_run(r, sha=sha, repo_id=self.config["repo_id"],
-                               workflow_id=workflow["id"], event="push") for r in runs["workflow_runs"])
+        ours = [r for r in runs["workflow_runs"]
+                if approved_run(dict(r, status="completed", conclusion="success"), sha=sha,
+                                repo_id=self.config["repo_id"], workflow_id=workflow["id"], event="push")]
+        if any(approved_run(r, sha=sha, repo_id=self.config["repo_id"], workflow_id=workflow["id"],
+                            event="push") for r in ours):
+            return "success"
+        return "failed" if ours and all(r.get("status") == "completed" for r in ours) else "pending"
+
+    def superseded(self, release_id):
+        """A newer published payload exists; signing this one could only roll robots back."""
+        mine = int(RELEASE.fullmatch(release_id).group(2))
+        for ref in self.api("git/matching-refs/tags/payload-"):
+            match = re.fullmatch(r"payload-\d{4}\.\d{2}\.\d{2}-(\d{3})", ref["ref"].removeprefix("refs/tags/"))
+            if match and int(match.group(1)) > mine:
+                return True
+        return False
 
     def ssh(self, argv):
         import prepare_payload_release as prepare
@@ -159,11 +177,12 @@ class Coordinator:
             raise ValueError("invalid main revision")
         active = self.state.get("phase") not in (None, "done", "failed")
         sha = self.state["sha"] if active else latest
-        if not self.ci(sha):
-            return self.audit("waiting_ci")
+        ci = self.ci(sha)
         if active and self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
             raise ValueError("pending source is no longer on main")
         if not active:
+            if ci == "failed":
+                return self.audit("ci_failed")
             if self.state.get("sha") == sha:
                 return self.audit(self.state["phase"])
             # Completed signed rollouts are not recreated; unfinished ones need
@@ -197,6 +216,10 @@ class Coordinator:
             self.save(phase="building")
             return self.audit("build_dispatched")
         release_id = self.state["release_id"]
+        if ci == "failed" and self.state["phase"] in ("dispatching", "building", "preparing"):
+            # Signed rollouts are past this gate. The speculative build is discarded; its reserved ID stays a gap.
+            self.save(phase="failed", reason="CI failed for this source; unsigned build discarded")
+            return self.audit("ci_failed")
         if self.state["phase"] in ("dispatching", "building"):
             workflow = self.api("actions/workflows/build-native-payload.yml")
             runs = self.api("actions/workflows/build-native-payload.yml/runs?branch=main&event=workflow_dispatch&per_page=100")
@@ -218,20 +241,34 @@ class Coordinator:
                 return self.audit("build_refused")
             self.save(phase="preparing", build_run=run["id"])
         if self.state["phase"] == "preparing":
+            if ci != "success":
+                return self.audit("waiting_ci")
+            if self.superseded(release_id):
+                self.save(phase="failed", reason="a newer payload release exists")
+                return self.audit("superseded")
             import prepare_payload_release as prepare
-            work = preparation_folder(self.folder / release_id, self.state, release_id)
-            self.save(work_dir=str(work), attempt=int(work.name.removeprefix("attempt-")))
-            signed = work / f"{release_id}.tar.gz"
-            if not signed.exists():
-                _, unsigned = prepare.download_unsigned(self.state["build_run"], release_id, work, self.repo, 8)
-                verify_source(unsigned, sha)
-                args = ["--artifact-dir", str(work), "--out-dir", str(work), "--release-id", release_id,
-                        "--repo", self.repo, "--key-name", self.config["key_name"]]
-                for robot in self.config["robots"]:
-                    args += ["--robot", robot]
-                if prepare.main(args, ssh_runner=self.ssh):
-                    raise RuntimeError("payload preparation refused; preserve work folder for review")
-            verify_source(signed, sha)
+            try:
+                work = preparation_folder(self.folder / release_id, self.state, release_id)
+                self.save(work_dir=str(work), attempt=int(work.name.removeprefix("attempt-")))
+                signed = work / f"{release_id}.tar.gz"
+                if not signed.exists():
+                    _, unsigned = prepare.download_unsigned(self.state["build_run"], release_id, work, self.repo, 8)
+                    verify_source(unsigned, sha)
+                    args = ["--artifact-dir", str(work), "--out-dir", str(work), "--release-id", release_id,
+                            "--repo", self.repo, "--key-name", self.config["key_name"]]
+                    for robot in self.config["robots"]:
+                        args += ["--robot", robot]
+                    if prepare.main(args, ssh_runner=self.ssh):
+                        raise RuntimeError("payload preparation refused; preserve work folder for review")
+                verify_source(signed, sha)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, tarfile.TarError) as error:
+                # D-553 3: a refusal used to retry every tick forever, unlogged.
+                failures = self.state.get("prepare_failures", 0) + 1
+                self.save(prepare_failures=failures, last_error=f"{type(error).__name__}: {error}")
+                if failures >= 3:
+                    self.save(phase="failed", reason="preparation failed three times; review the work folder")
+                    return self.audit("prepare_failed")
+                return self.audit("prepare_retry")
             self.save(phase="publishing", tarball_sha256=hashlib.sha256(signed.read_bytes()).hexdigest())
         if self.state["phase"] == "publishing":
             import publish_payload_release as publish
@@ -324,7 +361,11 @@ def main():
             coordinator = Coordinator(config)
             if coordinator.api("")["id"] != config["repo_id"]:
                 raise ValueError("configured repository ID changed")
-            print(coordinator.tick())
+            try:
+                print(coordinator.tick())
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                coordinator.audit(f"stopped: {type(error).__name__}: {error}")
+                raise
         return 0
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"Robot CD stopped: {type(error).__name__}: {error}", file=sys.stderr)

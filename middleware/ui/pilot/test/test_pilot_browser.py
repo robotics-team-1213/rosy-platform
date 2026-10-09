@@ -1312,18 +1312,21 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
     if viewport[0] < 480:
         buttons = action_boxes["buttons"]
-        assert len(buttons) == (2 if viewport[0] == 320 else 4), action_boxes
+        assert len(buttons) == 2, action_boxes
         assert max(button["width"] for button in buttons) - min(button["width"] for button in buttons) <= 1, action_boxes
         assert all(button["height"] >= 44 for button in buttons), action_boxes
         assert abs(buttons[0]["left"] - action_boxes["track"]["left"]) <= 1, action_boxes
         assert abs(buttons[-1]["right"] - action_boxes["track"]["right"]) <= 1, action_boxes
         assert abs(buttons[0]["top"] - buttons[1]["top"]) <= 1, action_boxes
-        if len(buttons) == 4:
-            assert abs(buttons[2]["top"] - buttons[3]["top"]) <= 1, action_boxes
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
-        assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
-        assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
+        if viewport[0] == 390:
+            assert cue is None
+            assert all(box["bottom"] <= controls["viewport"] + 1 for box in controls["boxes"]), controls
+            assert scrolled["page"] == 0, scrolled
+        else:
+            assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
+            assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
     else:
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]), controls
 
@@ -1556,7 +1559,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-auto-{width}x{height}.png"))
     page.click("[data-drive-manual]")
     page.wait_for_selector("[data-drive-pivots]", state="visible")
-    assert page.locator("[data-drive-scroll-cue]").is_visible()
+    assert page.locator("[data-drive-scroll-cue]").is_visible() == (width == 320)
     if output:
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-manual-{width}x{height}.png"))
     page.locator('[data-drive-pivot="left"]').scroll_into_view_if_needed()
@@ -1599,6 +1602,21 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     panel.locator("details.pilot-models summary").first.click()
     assert panel.locator("details.pilot-models").first.get_attribute("open") is not None
     page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
+    assert panel.is_visible()
+    assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "true"
+    assert page.locator("[data-drive-tools-panel] [data-drive-fit]").count() == 1
+    assert page.locator("[data-drive-tools-panel] [data-drive-fill]").count() == 1
+    assert page.locator("[data-drive-tools-panel] details.pilot-models[open]").count() == 1
+    bounds = panel.bounding_box()
+    assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 844
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-390x844.png"))
+    scroll = panel.evaluate("node => { node.scrollTop = node.scrollHeight; return {top: node.scrollTop, height: node.scrollHeight, visible: node.clientHeight}; }")
+    assert scroll["height"] > scroll["visible"] and scroll["top"] > 0, scroll
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-scroll-390x844.png"))
+    page.set_viewport_size({"width": 500, "height": 844})
     page.wait_for_function("document.querySelectorAll('[data-drive-hud] details.pilot-models').length === 2")
     assert panel.is_hidden()
     assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "false"

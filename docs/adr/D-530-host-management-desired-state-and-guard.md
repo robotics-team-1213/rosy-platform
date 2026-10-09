@@ -30,10 +30,15 @@
 | 정책 | 설치 | 타이머 | 대상 |
 | --- | --- | --- | --- |
 | `safe` | 적용 | 바로잡고 기록 | Rosy 소유 유닛·drop-in 파일, Rosy 타이머 enabled, `tailscaled` enabled, linger |
-| `report` | 적용 | 기록만, 점검 실패로 표시 | 사이트 스택·방화벽 enabled, sleep mask, Wi-Fi 자동 연결, 모델 PC 워치독 |
-| `approval` | `--approve <대상>`일 때만 | 기록만(승인 대기로 표시, 실패 아님) | sshd 비밀번호 끄기, 옛 갱신기 끄기, D-524 도우미와 그 sudoers 한 줄과 역할 파일 |
+| `report` | 적용 | 기록만, 점검 실패로 표시 | sleep mask, 모델 PC 워치독 |
+| `approval` | `--approve <대상>`일 때만 | 기록만(승인 대기로 표시, 실패 아님) | 사이트 방화벽·스택 enabled(`firewall`), Wi-Fi 자동 연결 끄기(`wifi`), sshd 비밀번호 끄기, 옛 갱신기 끄기, D-524 도우미와 그 sudoers 한 줄과 역할 파일 |
 
-- 세 PC 공통 바라는 상태에 D-524 도우미(`/usr/local/sbin/rosy-host-control`, 원본 `deploy/site/rosy-host-control`), 로그인 계정이 그 도우미만 root로 실행하는 sudoers 한 줄, 역할 파일(`/etc/rosy/host-control/role`)을 넣는다. 도우미가 이 브랜치에 아직 없으므로 그 줄은 "not in this copy"로 보고된다.
+- 방화벽·네트워크를 건드리는 줄은 설치가 기본으로 적용하지 않고 보고만 한다. 매니페스트의 `approval=<묶음>` 줄은 `--approve firewall,wifi`처럼 묶음 이름이나 경로·유닛 이름으로 승인한다.
+- `--dry-run`은 root 없이 돈다. root만 읽는 파일(예: `0440` sudoers)은 "cannot compare without root"로 표시하고 건너뛴다.
+- 승인된 사본은 옆 디렉터리에 다 만든 뒤 한 번에 바꿔 끼운다. 복사 도중 실패해도 이전 사본이 남는다.
+- 파일을 덮어쓰기 전에 이전 내용을 `/var/lib/rosy-host-state/backup/<시각>/<경로>`에 저장하고, 보고(`fixed`)에 그 경로를 적는다.
+
+- 세 PC 공통 바라는 상태에 D-524 도우미(`/usr/local/sbin/rosy-host-control`, 원본 `deploy/site/rosy-host-control`), 로그인 계정이 그 도우미만 root로 실행하는 sudoers 한 줄, 역할 파일(`/etc/rosy/host-control/role`)을 넣는다.
 - sudoers 파일은 `visudo -c`가 통과해야 설치하고, 실패하면 설치하지 않는다. sshd 파일은 `sshd -t`가 통과해야 reload하고, 통과하지 못하면 이전 내용을 되돌린다. Wi-Fi는 허용 목록이 비었거나 없으면 아무것도 끄지 않는다. 원격 접속을 끊을 수 있는 변경은 `safe`에 두지 않는다.
 - 결과는 `/var/lib/rosy-host-state/status.json`과 journal에 남는다. 고친 것, 남은 드리프트, 승인 대기를 따로 적는다.
 
@@ -41,7 +46,12 @@
 
 - 대상 목록은 호스트의 `/etc/rosy/host-guard/hosts.conf`다(주소가 있으니 저장소에는 `.example`만). PC는 SSH 강제 명령 키로 `health`, `restart <unit>`, `reboot`만 부를 수 있다(`rosy-host-guard-remote`). `health`는 읽기 전용 응답이고, 감시 유닛은 대상 호스트의 `/etc/rosy/host-guard/units`다.
 - **실행은 D-524 도우미 하나뿐이다.** 강제 명령의 `restart`와 `reboot`는 그 호스트의 `sudo -n /usr/local/sbin/rosy-host-control restart-unit <unit>`과 `reboot`를 부른다. 강제 명령은 `systemctl restart`나 재부팅을 직접 하지 않는다. 그래서 다시 시작할 수 있는 유닛과 재부팅 방식(`shutdown -r +10`)은 D-524의 닫힌 집합이 정하고, 운영자 조작(Fleet API)과 자동 회복(가드)이 같은 길과 같은 허용 목록을 쓴다. D-524 5항의 "Fleet은 SSH로 재부팅하지 않는다"는 그대로다. 가드는 Fleet이 아니고, 다른 호스트의 로컬 도우미를 부르는 강제 명령만 쓴다.
-- 회복 사다리: 10분마다 점검한다. 연속 N번(기본 3) 나쁘면, 멈춘 감시 유닛이 있을 때 그 유닛을 다시 시작하고, 없을 때 재부팅한다. 다시 시작한 뒤에도 2N번째까지 나쁘면 재부팅한다. 메모리·부하만 나쁠 때는 다시 시작이 도움이 되지 않으므로 N번째에 재부팅한다.
+- 회복 사다리: 10분마다 점검한다. 연속 N번(기본 3) 나쁘면, 멈춘 감시 유닛이 있을 때 그 유닛을 다시 시작하고, 없을 때 재부팅한다. 다시 시작한 뒤에도 2N번째까지 나쁘면 재부팅한다. 메모리 부족만 나쁠 때는 다시 시작이 도움이 되지 않으므로 N번째에 재부팅한다.
+- **높은 부하는 보고만 한다.** 부하가 코어 수의 4배를 넘는 것만으로는 사다리가 오르지 않는다(모델·AI PC의 학습은 정당하게 무겁다). `status.json`에 `load-high`로 남고, 메모리 부족이나 멈춘 유닛이 함께 있을 때만 나쁨으로 센다.
+- **재부팅 상한.** 호스트마다 건강한 점검이 나올 때까지 최대 2번(`GUARD_MAX_REBOOTS`)만 재부팅하고, 두 재부팅 사이에 최소 1시간(`GUARD_REBOOT_MIN_GAP_S`)을 둔다. 횟수와 마지막 재부팅 시각은 `status.json`에 저장되어 `rosy-ssh-watchdog`의 `MAX_REBOOTS`·`REBOOT_MIN_GAP_S`와 같은 방식으로 지켜진다. 계속 나쁜 호스트가 시간마다 재부팅되지 않는다.
+- **거절은 사실대로 남긴다.** 강제 명령의 다시 시작·재부팅이 0이 아닌 코드로 끝나면(재부팅이 이미 예약됨 3, sudo 없음 등) `actions.jsonl`에 `... refused`와 종료 코드·메시지를 적고, 재부팅 횟수·나쁨 횟수를 성공한 것처럼 바꾸지 않는다. 모든 다시 시작이 거절되면 사다리는 재부팅 단계로 넘어간다.
+- 한 호스트의 오류(잘못된 `health` 응답, 짧은 설정 줄)는 그 호스트를 `error`로 표시할 뿐 나머지 호스트 점검과 `status.json` 기록을 막지 않는다.
+- 감시 유닛 확인은 D-524의 호스트별 유닛 집합을 따른다. `site` 역할(`/etc/rosy/host-control/role`)은 시스템 유닛(`systemctl is-active`), 모델·AI 역할은 사용자 유닛(`--user`)이다.
 - 막지 않는 조건: 그 호스트의 새벽 재부팅 창(설정의 `HH:MM-HH:MM`, 기본은 예약 시각 앞 10분·뒤 20분)에는 점검도 행동도 하지 않는다. 도우미 재부팅은 10분 뒤라서, 10분 뒤가 창 안이면 재부팅을 보내지 않는다. 부팅 1시간 안에는 재부팅하지 않는다. 응답이 없으면 기록만 한다. 커널이 멈춘 경우는 하드웨어 워치독이, 네트워크만 끊긴 경우는 아래 호스트 로컬 층이 맡는다.
 - 로봇은 이 가드에 CORE 포트 연결 확인으로만 들어온다. 로봇 회복은 D-412 자동 갱신과 `rosy-*` 유닛이 맡고, 가드는 로봇을 다시 시작하거나 재부팅하지 않는다. 움직이는 로봇을 밖에서 끄면 안전하지 않다.
 - 감사: 모든 행동은 `/var/lib/rosy-host-guard/actions.jsonl`에 한 줄씩(시각, 호스트, 행동, 이유) 남고 journal에도 남는다. 호스트별 현재 상태는 `status.json`이다.

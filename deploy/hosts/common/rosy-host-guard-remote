@@ -7,6 +7,10 @@
 # Installed by deploy/hosts/common/install-guard-remote.sh as /usr/local/sbin/rosy-host-guard-remote.
 set -euf
 UNITS=${GUARD_UNITS:-/etc/rosy/host-guard/units}
+ROLE_FILE=${GUARD_ROLE_FILE:-/etc/rosy/host-control/role}
+# D-524: the site role's units are system units, the model and AI roles' are user units.
+scope=--user
+[ "$(cat "$ROLE_FILE" 2>/dev/null)" = site ] && scope=--system
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 refuse() { echo "refused: ${SSH_ORIGINAL_COMMAND:-}" >&2; exit 2; }
 # shellcheck disable=SC2086 # split the command into words; set -f stops globbing
@@ -20,7 +24,7 @@ case "$1" in
     down=""
     if [ -f "$UNITS" ]; then
       for unit in $(grep -v '^#' "$UNITS"); do
-        systemctl --user is-active --quiet "$unit" || down="$down,$unit"
+        systemctl "$scope" is-active --quiet "$unit" || down="$down,$unit"
       done
     fi
     down=${down#,}
