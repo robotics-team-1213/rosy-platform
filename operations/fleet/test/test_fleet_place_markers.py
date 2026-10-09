@@ -31,12 +31,12 @@ class _Clock:
         return self.now
 
 
-def _app(tmp_path, *, place_markers=(34, 35, 36, 37, 38), map_id="site", active=True):
+def _app(tmp_path, *, place_markers=(34, 35, 36, 37, 38), map_id="site", active=True, site_map=MAP):
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [FakeRobot("rosy_60")])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     store = SiteMapStore(tmp_path / "tasks.sqlite")
     if active:
-        store.import_if_empty(SiteMap.model_validate(MAP), source="test")
+        store.import_if_empty(SiteMap.model_validate(site_map), source="test")
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
     clock = _Clock()
@@ -143,3 +143,18 @@ def test_site_map_page_offers_the_marker_action_under_the_csp(tmp_path):
     assert 'id="teach-marker"' in page.text and 'id="teach-marker-place"' in page.text
     assert "/api/fleet/teach/place-from-marker" in script and "/api/fleet/place-markers" in script
     assert "innerHTML" not in script
+
+
+def test_a_source_reports_only_its_listed_ids_and_a_bend_is_never_moved_by_a_marker(tmp_path):
+    bend = {"id": "C", "name": "굽이", "x": 1.0, "y": 1.0, "kind": "bend", "yaw": 0.0, "exit_yaw": 1.0,
+            "radius_m": 0.2}
+    client, _clock, _store = _app(tmp_path, place_markers=(34,), site_map={**MAP, "places": [*MAP["places"], bend]})
+    with client:
+        other = client.post("/api/fleet/place-markers", headers=SOURCE,
+                            json=_payload(markers=[{"marker_id": 35, "x": 0, "y": 0, "yaw": 0}]))
+        assert other.status_code == 403 and other.json()["detail"]["code"] == "PLACE_MARKER_FORBIDDEN"
+        assert client.post("/api/fleet/place-markers", json=_payload(), headers=SOURCE).status_code == 200
+        teach = lambda body: client.post("/api/fleet/teach/place-from-marker", json=body, headers=OPERATOR)
+        for body in ({"marker_id": 34, "place_id": "C"}, {"marker_id": 34, "place_id": "A", "kind": "bend"}):
+            answer = teach(body)
+            assert answer.status_code == 422 and answer.json()["detail"]["code"] == "PLACE_MARKER_BEND", body
