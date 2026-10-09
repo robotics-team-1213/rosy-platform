@@ -269,3 +269,25 @@ def test_lane_bounded_growth_clamp_stops_a_leak_through_a_line_gap():
     out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, through_idxs=[3])
     assert out[150, 150] and not out[202, 150]
 
+
+def test_short_boundary_line_is_closed_to_the_edge_d576():
+    """lane_left ends mid-image; the drivable blob beyond it is not the robot's road."""
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    for y in range(160, 240):  # lane_left slants up-right from (40, 239) to (80, 160), 8 px wide
+        x = 40 + (239 - y) // 2
+        labels[y, x:x + 8] = 1
+    labels[110:, 280:288] = 2
+    open_fill = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110)
+    assert open_fill[130, 20]  # without walls the fill goes round the line's top end
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, boundary=(1, 2))
+    assert out[200, 150] and out[130, 150]  # own road kept
+    assert not out[110:, :35].any() and not out[130, 20]  # beyond the closed lane_left: removed
+    tiny = np.full((240, 320), 5, np.int64)
+    tiny[:110] = 0
+    tiny[150:160, 100:108] = 1  # 10-row stub: too short to fit, its rows beyond it are blocked
+    out = lane_bounded_drivable(tiny, 5, [1, 2], ignore_top=110, boundary=(1, 2))
+    assert not out[150:160, :100].any() and out[200, 50]
+

@@ -79,7 +79,7 @@ def test_outside_band_width_and_stops():
     src[110:, 100:110], src[110:, 200:210] = 1, 2
     src[150, 80], src[170, 90] = 3, 255  # a lane-class pixel stops the band; source 255 is skipped
     image[160, 230] = 220  # bright paint stops the band
-    out, _ = ldd.derive_mask(src, image)
+    out, _ = ldd.derive_mask(src, image, outside_k=0.5)
     assert (out[120, 55:100] == 0).all() and (out[120, :55] == 255).all()
     assert (out[120, 210:255] == 0).all() and (out[120, 255:] == 255).all()
     assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
@@ -87,6 +87,19 @@ def test_outside_band_width_and_stops():
     assert out[170, 90] == 255 and (out[170, 55:90] == 0).all()
     out, _ = ldd.derive_mask(src, image, outside_k=0)
     assert not (out == 0).any()
+    out, _ = ldd.derive_mask(src, image)  # D-576 default k=inf: to the edge or the next stop
+    assert (out[120, :100] == 0).all() and (out[120, 210:] == 0).all()
+    assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
+
+
+def test_beyond_a_visible_line_is_blocked_on_one_line_rows_d576():
+    """Rows 110-159 show only lane_right: everything right of it is 0, nothing is drivable."""
+    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[160:, 100:110], src[110:, 200:210] = 1, 2
+    out, both = ldd.derive_mask(src, image)
+    assert both == 80 and (out[130, 210:] == 0).all() and (out[130, :200] == 255).all()
+    assert (out[200, 110:200] == ldd.DRIVABLE).all() and (out[200, :100] == 0).all()
 
 
 def _perspective(left_until=200, right_until=200, wobble=0):

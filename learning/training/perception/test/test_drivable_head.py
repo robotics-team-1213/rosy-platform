@@ -226,6 +226,7 @@ def test_training_moves_only_the_head_and_learns(tmp_path):
     near = result["val_near_centre_drivable"]  # left half drivable: cols 110-159 of 110-210
     assert near["label"] == pytest.approx(50 / 101) and near["pred"] > 0.8 * near["label"]
     assert result["val_outside_band_fp_raw"] is not None and result["val_near_centre_drivable_raw"]
+    assert result["val_beyond_line_fp"] is None  # no lane_left / lane_right classes in this set
     assert result["selection"]["fp_lambda"] == 1.0 and result["selection"]["pos_weight"] == 1.0
     best = next(r for r in result["history"] if r["epoch"] == result["best_epoch"])
     assert best["score"] == max(r["score"] for r in result["history"] if r["score"] is not None)
@@ -283,3 +284,13 @@ def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypat
     assert json.loads((out / 'state.json').read_text())['outcome'] == 'candidate'
     assert (Path(result['artifact']) / 'candidate_parity.json').is_file()
     assert not list(tmp_path.rglob('READY'))
+
+
+def test_beyond_line_is_outside_each_rows_boundary_lines():
+    labels = np.zeros((2, 320), np.int64)
+    labels[0, 50:60], labels[0, 250:260] = 1, 2
+    labels[1, 250:260] = 2  # no lane_left in this row: nothing beyond it on the left
+    beyond = dh.beyond_line(labels, 1, 2)
+    assert beyond[0, :50].all() and not beyond[0, 50:260].any() and beyond[0, 260:].all()
+    assert not beyond[1, :260].any() and beyond[1, 260:].all()
+

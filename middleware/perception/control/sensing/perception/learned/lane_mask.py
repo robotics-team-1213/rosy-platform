@@ -15,7 +15,8 @@ class, the inner half of each lane_left / lane_right run that touches drivable
 in its row is drivable target too (lane_left: centre to right edge,
 lane_right: left edge to centre). Models without drivable are unchanged.
 Before that union, drivable is cut to the region reachable from the robot's
-road ahead without crossing a lane line (D-566 item 4, lane_bounded_drivable).
+road ahead without crossing a lane line (D-566 item 4, lane_bounded_drivable),
+with lane_left / lane_right closed to the frame edge as walls (D-576).
 Target components smaller than MIN_COMPONENT_PX are dropped before any of
 that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
 offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
@@ -46,6 +47,11 @@ MIN_COMPONENT_PX = 40
 #: Perspective narrows the road upward; 1.15 leaves room for curves.
 MAX_ROW_GROWTH = 1.15
 CLAMP_ROWS = 10
+#: D-576 closed walls: each boundary-line component's two ends are extended to the
+#: frame edge along the direction of their last END_PX px (thickness WALL_PX).
+#: Components shorter than END_PX block their rows on the outer side instead;
+#: components under MIN_LINE_PX px are speckle and only block themselves.
+END_PX, WALL_PX, MIN_LINE_PX = 20, 3, 30
 #: Seed search depth: the drivable pixel nearest the centre column within this
 #: many rows of the lowest drivable row.
 SEED_ROWS = 8
@@ -100,8 +106,52 @@ def _row_runs(passable: np.ndarray, touch: np.ndarray) -> np.ndarray:
     return np.isin(run, hit[hit > 0])
 
 
+def _axis(pts: np.ndarray) -> np.ndarray:
+    return np.linalg.svd(pts - pts.mean(axis=0), full_matrices=False)[2][0]
+
+
+def boundary_walls(labels: np.ndarray, left_idx: int, right_idx: int, *, ignore_top: int = 0) -> np.ndarray:
+    """D-576: lane_left / lane_right closed to the frame edge, as a bool wall mask.
+
+    Every component of at least MIN_LINE_PX px is extended from both ends along the direction of
+    its last END_PX px to the frame edge (WALL_PX thick). A component shorter than END_PX blocks
+    its rows beyond it: left of lane_left, right of lane_right."""
+    wall = np.zeros(labels.shape, np.uint8)
+    reach = 2 * max(labels.shape)
+    for idx, outer in ((left_idx, -1), (right_idx, 1)):
+        line = (labels == idx).astype(np.uint8)
+        line[:ignore_top] = 0
+        count, comp, stats, _ = cv2.connectedComponentsWithStats(line, connectivity=8)
+        for k in range(1, count):
+            if stats[k, cv2.CC_STAT_AREA] < MIN_LINE_PX:
+                continue
+            ys, xs = np.nonzero(comp == k)
+            pts = np.stack([xs, ys], axis=1).astype(np.float64)
+            centre, axis = pts.mean(axis=0), _axis(pts)
+            t = (pts - centre) @ axis
+            if t.max() - t.min() < END_PX:
+                for y in np.unique(ys):
+                    row = xs[ys == y]
+                    if outer < 0:
+                        wall[y, :row.min()] = 1
+                    else:
+                        wall[y, row.max() + 1:] = 1
+                continue
+            for end in (t.min(), t.max()):
+                tip = pts[np.abs(t - end) <= END_PX]
+                start = tip.mean(axis=0)
+                direction = _axis(tip) if len(tip) >= 3 and np.ptp(tip, axis=0).max() >= 3 else axis
+                if np.dot(start - centre, direction) < 0:
+                    direction = -direction
+                end_pt = start + direction * reach
+                cv2.line(wall, (int(round(start[0])), int(round(start[1]))),
+                         (int(round(end_pt[0])), int(round(end_pt[1]))), 1, thickness=WALL_PX)
+    return wall.astype(bool)
+
+
 def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, ignore_top: int = 0,
-                          through_idxs=(), max_row_growth: float = MAX_ROW_GROWTH) -> np.ndarray:
+                          through_idxs=(), max_row_growth: float = MAX_ROW_GROWTH,
+                          boundary: tuple[int, int] | None = None) -> np.ndarray:
     """Drivable pixels 4-connected to the road ahead without entering a lane pixel (D-566 item 4).
 
     Seed: the drivable pixel nearest the centre column in the lowest SEED_ROWS rows that hold
@@ -110,9 +160,12 @@ def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, i
     row wider than max_row_growth x the widest unclipped span of the CLAMP_ROWS rows below keeps
     only its run nearest the middle of the row below, clipped around it (the first CLAMP_ROWS
     rows above the seed only build that reference). Below the seed row, runs
-    touching the row above are kept. Returns a bool mask of drivable pixels only."""
+    touching the row above are kept. boundary=(lane_left, lane_right) first closes those lines
+    into walls (boundary_walls, D-576). Returns a bool mask of drivable pixels only."""
     drivable = labels == drivable_idx
     passable = (drivable | np.isin(labels, list(through_idxs))) & ~np.isin(labels, list(lane_idxs))
+    if boundary is not None:
+        passable &= ~boundary_walls(labels, *boundary, ignore_top=ignore_top)
     passable[:ignore_top] = False
     out = np.zeros(labels.shape, bool)
     rows = np.flatnonzero((drivable & passable).any(axis=1))
@@ -201,8 +254,10 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
         roles = {}
         for c in classes:
             roles.setdefault(c.role, []).append(c.index)
-        drivable = lane_bounded_drivable(band_labels, roles["drivable"][0], roles.get("lane_marking", ()),
-                                         through_idxs=roles.get("ignore", ()))
+        names = {c.name: c.index for c in classes}
+        drivable = lane_bounded_drivable(
+            band_labels, roles["drivable"][0], roles.get("lane_marking", ()), through_idxs=roles.get("ignore", ()),
+            boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
     target = _drop_small(_with_inner_line_half(drivable & ~wall, band_labels, classes),
                          min_component_px)
     if target.mean() < DRIVABLE_MIN_FRACTION:
