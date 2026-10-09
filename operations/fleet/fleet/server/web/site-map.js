@@ -19,7 +19,9 @@ const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
 const W = 800, H = 480;
 
-$('console-token').value = sessionStorage.getItem('rosy-console-token') || '';
+// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const stored = sessionStorage.getItem('rosy-console-token') || '';
+$('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null, open: []};
 const TRIP_POLL_MS = 1000;
@@ -572,7 +574,7 @@ developmentToken($('console-token').value).then(token => {
   if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
-    if (cookie || $('console-token').value) $('token-save').click(); else showSignedOut();
+    if (cookie || stored) $('token-save').click(); else showSignedOut();
   });
 }).catch(() => {});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.

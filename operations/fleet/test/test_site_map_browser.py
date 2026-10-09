@@ -155,7 +155,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_contain_text("bob")
     expect(page.locator("#token-access")).not_to_have_attribute("open", "")
-    expect(page.locator("#token-access summary")).to_be_visible()
+    # D-540 2: below 90rem the reconnect summary sits in the header fold behind 설정.
+    expect(page.locator("#token-access summary" if width >= 1440 else "#topbar-more")).to_be_visible()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(4)
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges

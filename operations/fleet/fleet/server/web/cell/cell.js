@@ -25,7 +25,9 @@ function jobStatusLabel(status, reason) {
 function jobReasonLabel(reason) {
   return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
 }
-$('console-token').value = sessionStorage.getItem('rosy-console-token') || '';
+// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const stored = sessionStorage.getItem('rosy-console-token') || '';
+$('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 bindEstop(request);
 bindTopbarToggle();
@@ -450,6 +452,6 @@ developmentToken($('console-token').value).then(token => {
   if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
-    if (cookie || $('console-token').value) $('token-save').click(); else showSignedOut();
+    if (cookie || stored) $('token-save').click(); else showSignedOut();
   });
 }).catch(() => {});

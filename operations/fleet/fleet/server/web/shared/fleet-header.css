@@ -1,6 +1,9 @@
 /* D-540 2 — Rosy Fleet 공통 머리. 관제·설치·보정·현장 지도·Cell 네 문서가 같은 마크업과 이 시트를 쓴다.
    문서 시트(styles.css, site-map.css, cell.css)는 머리를 칠하지 않는다. CSP: 클래스와 id만. */
 
+/* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
+body { margin: 0; }
+
 /* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
 #console-token[hidden], #token-save[hidden] { display: none; }
