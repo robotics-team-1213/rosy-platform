@@ -782,8 +782,8 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/server/console.py": (
         1251,
-        "accept: re-judged at 1251 on 2026-10-10 for D-581 (+4 after review M1): one import, the "
-        "formation_poses attribute, one formation_relay_kwargs call and one anchor_status line; the "
+        "accept: re-judged at 1251 on 2026-10-10 for D-581: the app injects the anchor relay "
+        "factory, while console keeps its existing formation lifecycle and reads relay status; "
         "relay construction and anchoring live in fleet/swarm/anchor.py. "
         "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
