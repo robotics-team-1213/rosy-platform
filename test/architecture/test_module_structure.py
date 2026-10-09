@@ -93,6 +93,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "deploy/site/rosy_site_autoupdate.py": (
+        616,
+        "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
+        "site update state machine. HTTP, filesystem and functional inventory parsing live in "
+        "site_update_io.py; candidate verification lives in verify_candidate.py. The updater "
+        "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
+        "Re-judge on further growth",
+    ),
     "core/gateway/core/services.py": (
         603,
         "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
