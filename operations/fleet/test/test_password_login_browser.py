@@ -62,10 +62,14 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
 
                 page.reload()
                 expect(page.locator("#user-role")).to_contain_text("alice", timeout=15000)
-                tab = context.new_page()
-                tab.goto(origin + "/console/site-map")
-                expect(tab.locator("#user-role")).to_contain_text("alice", timeout=15000)
-                tab.close()
+                # D-540 2: every document reads the same login in the same header (#user-role, Korean role).
+                for path in ("/console/install", "/console/site-map", "/console/cell"):
+                    tab = context.new_page()
+                    tab.goto(origin + path)
+                    expect(tab.locator("#user-role")).to_contain_text("alice", timeout=15000)
+                    expect(tab.locator("#user-role")).to_contain_text("운영자")
+                    expect(tab.locator("#estop")).to_be_enabled()
+                    tab.close()
 
                 logout = page.locator("#password-login [data-login=logout]")
                 if not logout.is_visible():  # compact widths fold principal and 로그아웃 behind 설정
