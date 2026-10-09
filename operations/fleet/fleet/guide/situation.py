@@ -105,7 +105,7 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         findings.append(_finding(
             "CAMERA_NOT_SEEING", "warn",
             f"Rosy Cam이 {robot_id}를 찾지 못합니다 · 로봇이 매트 위에 있을 때 배경을 배웠다면 로봇이 배경이 됩니다. "
-            "로봇을 매트 밖으로 옮긴 뒤 배경 다시 학습, 또는 LED로 찾기",
+            "위치를 모르면 지도에 찍은 뒤 배경 다시 학습(로봇 그대로), 또는 LED로 찾기",
             action={"kind": "relearn", "source_id": camera_ok}))
     if pose is not None and pose.odom_refused_reason == "future":
         findings.append(_finding(

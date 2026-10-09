@@ -333,6 +333,24 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ? `ArUco ${[...markers][0]}` : offsetLabel(row);
       drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
     }
+    // D-600: 배경이 아직 못 본 바닥은 빗금 원 — 로봇이 비키면 Vision 이 채운다.
+    ctx.strokeStyle = css("--ink-quiet");
+    for (const area of tracking.unknownFloor || []) {
+      const c = toPoint(area.x, area.y), edge = toPoint(area.x + area.radiusM, area.y);
+      const r = Math.hypot(edge.x - c.x, edge.y - c.y);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.clip();
+      ctx.beginPath();
+      for (let d = -2 * r; d <= 2 * r; d += Math.max(4, lineWidth * 4)) {
+        ctx.moveTo(c.x + d - r, c.y + r);
+        ctx.lineTo(c.x + d + r, c.y - r);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.fillStyle = css("--ink-quiet");
     for (const item of tracking.unknown) {
       const p = toPoint(item.x, item.y);
