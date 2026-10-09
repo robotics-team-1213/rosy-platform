@@ -129,6 +129,38 @@ def test_the_next_place_goes_out_during_the_arc():
     assert ports.expects[-1]["exit_segment"]["end_place_id"] == "NE"
 
 
+def test_map_pose_must_not_replace_armed_arc_end_place_before_core_finishes_arc():
+    """A map pose can enter ring_e before CORE's odom finishes the ring_s arc."""
+    runner, store, ports, ring = _entered_ring()
+    ports.at(ring, 0.1)
+    _ticks(runner, ports)                                   # SE armed for the running SW -> SE arc
+    assert [s[:2] for s in ports.sent] == [("right", "SW"), ("straight", "SE")]
+
+    ring_e = _arc(store, "ring_e:fwd")
+    ports.at(ring_e, 0.1)                                   # map projection crosses first
+    _ticks(runner, ports)
+    assert runner.view("p1")["current_edge"] == "ring_e"
+    assert [s[:2] for s in ports.sent] == [("right", "SW"), ("straight", "SE")]
+    assert ports.core.status()["state"] == "armed"
+
+    ports.core.done()                                       # CORE consumes SE at the ring_s arc end
+    ports.arc = _arc_rec(2, "SE", "NE")
+    _ticks(runner, ports)
+    assert [s[:2] for s in ports.sent] == [("right", "SW"), ("straight", "SE"), ("stop", "NE")]
+
+
+def test_arc_end_guard_does_not_defer_a_hold_stop():
+    runner, store, ports, ring = _entered_ring()
+    ports.at(ring, 0.1)
+    _ticks(runner, ports)
+    ring_e = _arc(store, "ring_e:fwd")
+    ports.at(ring_e, ring_e.length_m - 0.1)
+    live = runner._live["rosy_60"]
+    live.view["hold"] = {"reason": "operator"}
+    run(runner._step_lane(live, 2, 0.1))
+    assert ports.sent[-1][:2] == ("stop", "NE")
+
+
 def test_a_chained_straight_is_carried_by_the_next_arc_and_the_trip_moves_on():
     runner, store, ports, ring = _entered_ring()
     ports.at(ring, 0.1)
