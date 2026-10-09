@@ -255,6 +255,20 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
     assert [e["name"] for e in matrix].count("build-smoke") == 1
 
 
+def test_ci_full_matrix_shards_slow_suites_by_file(sample):
+    repo = affected.Repo.load(sample)
+    matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
+    for name, n in affected.SUITE_SHARDS.items():
+        suite = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)["invocations"][0][0]
+        files = sorted(t for t in repo.test_files if t.startswith(suite + "/"))
+        shards = [e for e in matrix if e["name"] == name or e["name"].startswith(name + "-")]
+        if len(files) < n:
+            assert [e["invocations"] for e in shards] == [[[suite]]]
+            continue
+        assert len(shards) == n
+        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == files
+
+
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
     owner = {path: entry["name"] for entry in affected.CI_FULL_MATRIX
              for inv in entry["invocations"] for path in inv}
