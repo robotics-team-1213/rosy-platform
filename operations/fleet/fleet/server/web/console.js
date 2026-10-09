@@ -437,6 +437,13 @@ async function refreshDiscovery() {
     const snapshot = await call("/api/fleet/discovery");
     life.check();
     discoveryGate.ok();
+    const pending = snapshot.scanner_online
+      ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
+    const pendingNote = el("discovery-pending");
+    const summary = pending.length
+      ? `발견됐지만 미등록 ${pending.length}대: ${pending.map((device) => device.name).join(", ")}` : "";
+    if (pendingNote.firstElementChild.textContent !== summary) pendingNote.firstElementChild.textContent = summary;
+    pendingNote.hidden = !summary;
     await refreshAddresses();
     life.check();
     // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.

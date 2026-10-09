@@ -518,11 +518,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
-    drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     guide(ctx, toPx);
     if (layerOn("sightings")) {
-      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
     flushChips(ctx);
   }
