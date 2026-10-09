@@ -52,7 +52,13 @@ def _runs(row: np.ndarray) -> list[tuple[int, int]]:
     return list(zip(np.flatnonzero(step == 1), np.flatnonzero(step == -1) - 1))
 
 
-def right_branch(region: np.ndarray) -> tuple[np.ndarray, int]:
+#: Splits this close to the model's first row are its ragged far edge, not branches (replay 2026-10-10:
+#: 86 % of 5,041 multi-branch frames split there and none of 103 sampled was a junction): the way
+#: ends at such a split instead of taking its rightmost fragment.
+FAR_SPLIT_ROWS = 18
+
+
+def right_branch(region: np.ndarray, far_row: int = -1) -> tuple[np.ndarray, int]:
     """(the way, most branches seen in a row). From the region's lowest row (the run nearest the
     centre column: the robot's own road), go up keeping the runs that touch the kept run below;
     where more than one at least MIN_BRANCH_WIDTH_FRACTION of its width does, the road splits and
@@ -72,6 +78,8 @@ def right_branch(region: np.ndarray) -> tuple[np.ndarray, int]:
         if not runs:
             break
         wide = [r for r in runs if r[1] - r[0] + 1 >= MIN_BRANCH_WIDTH_FRACTION * (last - first + 1)]
+        if len(wide) > 1 and row < far_row:
+            break
         branches = max(branches, len(wide))
         first, last = max(wide) if wide else max(runs, key=lambda r: r[1] - r[0])
         out[row, first:last + 1] = True
@@ -152,7 +160,7 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
         labels, roles["drivable"][0], roles.get("lane_marking", ()), ignore_top=ignore_top,
         max_row_growth=math.inf,
         boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
-    way, branches = right_branch(fill_holes(region))
+    way, branches = right_branch(fill_holes(region), ignore_top + FAR_SPLIT_ROWS)
     band = way[int(way.shape[0] * (1 - NEAR_FIELD_FRACTION)):]
     near = float(band.mean())
     if near < DRIVABLE_MIN_FRACTION:
