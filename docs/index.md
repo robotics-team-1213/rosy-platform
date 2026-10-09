@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
+- 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
 - 2026-10-09 · uncommitted · docs: 활성 웹 레이아웃 적용 경로
 - 2026-10-09 · uncommitted · docs(lane): Fleet pivot 기록 공백 확인
 - 2026-10-09 · uncommitted · docs(lane): NE 호 blind 거리와 반지름 오차 교차점
-- 2026-10-09 · uncommitted · docs(lane): 링 진입 자세 오차 원시 로그 재계산
-- 2026-10-09 · uncommitted · docs(lane): Fleet 계획과 한쪽선 주행 증거 설계

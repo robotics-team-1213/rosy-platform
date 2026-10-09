@@ -1,0 +1,88 @@
+{
+  "arc_m": 0.3722,
+  "model": "ideal_equal_radius_no_feedback",
+  "radius_m": 0.2514,
+  "runs": [
+    {
+      "ideal_baseline": {
+        "at_100mm_m": -0.02806894025944795,
+        "first_25mm_m": 0.0889,
+        "max_abs_radial_m": 0.07116223584476822
+      },
+      "measured_gt_heading_error_deg": 16.273,
+      "run": "ne_01"
+    },
+    {
+      "ideal_baseline": {
+        "at_100mm_m": -0.02672687495307166,
+        "first_25mm_m": 0.09340000000000001,
+        "max_abs_radial_m": 0.06779000467977639
+      },
+      "measured_gt_heading_error_deg": 15.497,
+      "run": "ne_02"
+    },
+    {
+      "ideal_baseline": {
+        "at_100mm_m": -0.02766438757426215,
+        "first_25mm_m": 0.0902,
+        "max_abs_radial_m": 0.07014568821962996
+      },
+      "measured_gt_heading_error_deg": 16.039,
+      "run": "ne_03"
+    },
+    {
+      "ideal_baseline": {
+        "at_100mm_m": -0.02707635326793084,
+        "first_25mm_m": 0.0922,
+        "max_abs_radial_m": 0.06866813187470713
+      },
+      "measured_gt_heading_error_deg": 15.699,
+      "run": "ne_04"
+    }
+  ],
+  "source_sha256": "e33166586824fc2e9f84a5a161ec80983afd4aedc7dac2bc7562231e001cabb1",
+  "synthetic_pose_heading_error": [
+    {
+      "at_100mm_m": 0.016656884485316603,
+      "error_deg": -10,
+      "first_25mm_m": 0.157,
+      "max_abs_radial_m": 0.0432346506412748
+    },
+    {
+      "at_100mm_m": 0.00842119799291402,
+      "error_deg": -5,
+      "first_25mm_m": null,
+      "max_abs_radial_m": 0.02175114890520885
+    },
+    {
+      "at_100mm_m": 0.005072398163184444,
+      "error_deg": -3,
+      "first_25mm_m": null,
+      "max_abs_radial_m": 0.013077025852688495
+    },
+    {
+      "at_100mm_m": 0.0,
+      "error_deg": 0,
+      "first_25mm_m": null,
+      "max_abs_radial_m": 5.551115123125783e-17
+    },
+    {
+      "at_100mm_m": -0.005121948221923356,
+      "error_deg": 3,
+      "first_25mm_m": null,
+      "max_abs_radial_m": 0.013133241202759188
+    },
+    {
+      "at_100mm_m": -0.008558543670086766,
+      "error_deg": 5,
+      "first_25mm_m": null,
+      "max_abs_radial_m": 0.02190568463657716
+    },
+    {
+      "at_100mm_m": -0.01720075486960909,
+      "error_deg": 10,
+      "first_25mm_m": 0.1492,
+      "max_abs_radial_m": 0.043821665314891844
+    }
+  ]
+}
