@@ -68,6 +68,10 @@ test('one card line per trip robot', () => {
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_02'), '반복 운행 1바퀴째 · 교차로 대기 · rosy_03 통과 중');
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_05'), '앞 블록 대기 · rosy_01');
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_09'), '');
+  const advice = (row) => ({ robots: [{ robot_id: 'r', trip_state: 'running', advice: row }], units: [] });
+  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 4, accepted: true }), 'r'), '운행 중 · 신호 참고 전송 · seq 4');
+  assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 0, accepted: false, reason: 'stale' }), 'r'), '운행 중 · 신호 참고 전송 · seq 0 · stale');
+  assert.equal(trafficCardLine(advice({ signal: false, sent_seq: 5, accepted: true }), 'r'), '운행 중');  // cleared: no line
   const unknown = {...TRAFFIC, robots: [{robot_id: 'rosy_04', waiting_for: [], lap: null, trip_state: 'running'}]};
   assert.equal(trafficCardLine(unknown, 'rosy_04'), '위치 불명 · 블록 유지');
 });

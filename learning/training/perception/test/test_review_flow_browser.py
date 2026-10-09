@@ -905,8 +905,10 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     if width <= 390:
         navigation = page.locator('.frame-navigation').bounding_box()
         buttons = [page.locator(f'#{name}').bounding_box() for name in ('prev-frame', 'next-frame', 'next-pending')]
-        assert all(abs(button['width'] - navigation['width']) <= 1 for button in buttons)
-        assert buttons[0]['y'] < buttons[1]['y'] < buttons[2]['y']
+        assert abs(buttons[0]['y'] - buttons[1]['y']) <= 1
+        assert buttons[0]['x'] + buttons[0]['width'] <= buttons[1]['x']
+        assert abs(buttons[2]['width'] - navigation['width']) <= 1
+        assert buttons[2]['y'] > buttons[0]['y']
     shot('decision-result')
 
 
@@ -1044,6 +1046,14 @@ def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
     }""")
     # Hundreds of photos must not push the editor below a full-page thumbnail grid.
     assert layout == {'pageWidth': 390, 'rows': 1, 'direction': 'row', 'overflow': 'auto'}
+    toolbar = page.locator('.review-tool-ribbon ui-actions').bounding_box()
+    canvas = page.locator('#canvas').bounding_box()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / 'learning-object-first-view-390x844.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    assert toolbar['height'] < 60 and canvas['y'] < 844, (toolbar, canvas)
 
 
 def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
