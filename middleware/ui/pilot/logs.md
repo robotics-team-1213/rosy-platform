@@ -808,3 +808,10 @@
 - 변경: 키보드 옵션(한 줄·완료)을 대화상자 표시 전에 정하고, Enter는 `IME_NULL`+`KEYCODE_ENTER` 누름으로 와도 보내도록 `LinkStatus.sendsCode` 한 곳에서 판정한다. 키를 뗄 때는 보내지 않는다.
 - 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
 - gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
+
+- 변경: 접속 화면 로비의 맨 앞에 자기 방 운전 상태 라벨(`ui-tag[data-lobby-self]`)을 단다. 판정은 같은 origin의 `GET /api/v1/robot/state`만으로, MANUAL이고 `|linear| > 0.002`이면 "운전 중", 아니면 "대기"다. rooms 라우터는 다른 기기의 CoreServices를 보지 않으므로 다른 방의 운전 상태는 각 기기가 자기 화면에서 표시한다. D-460 결정 2 본문에 그 구현 정정을 적었다.
+- 증거: 브라우저 시험 2건은 `browser_tests_enabled()` 옵트인이다. 이 착지의 Chromium 실행은 하지 않았다.
+- gate 변화: 없음. 호스트 UI. 장치 화면은 릴리스 전이다.
+- 결정: D-460 결정 2.

@@ -96,6 +96,13 @@ async function refreshLobby(host) {
     host.replaceChildren(el("ui-text", seen.size ? "다른 로봇 · 선택하면 그 로봇의 접속 화면으로 이동합니다"
       : "같은 LAN에서 발견한 다른 로봇이 없습니다", {scale: "label"}));
     if (seen.size) host.append(list, el("p", "발견 목록입니다. 선택한 로봇에서 승인·로그인을 확인합니다."));
+    // D-460 결정 2: 자기 방 운전 상태 표시 — rooms 라우터는 CoreServices에 접근하지
+    // 않으므로 여기(같은 origin)에서 mode·velocity 증거를 읽어 라벨만 단다.
+    const self = await api("/api/v1/robot/state").catch(() => null);
+    const driving = self?.ok && self.body?.mode === "MANUAL"
+      && Math.abs(self.body?.velocity?.linear ?? 0) > 0.002;
+    const tag = el("ui-tag", driving ? "운전 중" : "대기", {"data-lobby-self": ""});
+    host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
   } finally {
