@@ -7406,3 +7406,9 @@ osy-d395-s1d\`.
 - 변경: `cd7464f32`의 Fleet 안전 태그 경로를 작성 세션과 별도로 검토하고, 빠진 `Safety-Review:` trailer의 사후 검토 예외를 해당 커밋 하나에 한정했다.
 - 증거: [독립 안전 리뷰](validation/d535-link-reason-safety-review-2026-10-09/result.md). 표시용 필드의 호출자 확인, 모델 PC 연결 사유·정지 래치·전체 취소 시험 48 passed.
 - gate 변화: D-430 CI trailer 검사에서 이 커밋만 검토 완료로 판정한다. 장치·주행 수용에는 변화 없음.
+
+## 2026-10-09 · uncommitted · docs: SIM 카메라 밝기 게이트 반례
+
+- 변경: B9 동일 시작 자세의 새 Gazebo 영상에서 첫 카메라 STOP을 40% BEV 밝기 게이트로 재현하고, 75% 격리 폐루프의 차로 이탈·장애물 HOLD를 함께 기록했다.
+- 증거: [검증 결과](validation/lane-route-wash-gate-2026-10-09/result.md). 기본값은 경계가 보이는 40.6% 프레임을 버리고 LOST; 75%는 477/477 가시 후보여도 0.304m 뒤 lane_departure HOLD.
+- gate 변화: 제품 설정·운영 keep·CORE 구동 권한 변화 없음. 사람 정답 0건, DEVICE·현장 수용 HOLD.
