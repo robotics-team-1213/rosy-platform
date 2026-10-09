@@ -1,0 +1,87 @@
+{
+ "samples": 2620,
+ "leader_path_m": 8.228,
+ "deviation_m": {
+  "max": 0.0405,
+  "rms": 0.0191,
+  "p95": 0.034,
+  "max_while_moving": 0.0405
+ },
+ "min_centre_gap_m": 0.524,
+ "min_path_gap_m": 0.582,
+ "contact_proxy": false,
+ "leader_stop": {
+  "follower_max_speed_mps": 0.0,
+  "path_gap_m": [
+   0.608,
+   0.608
+  ]
+ },
+ "stream_cut": {
+  "holding_after_s": 1.14,
+  "follower_stopped_after_s": 1.0,
+  "moving_again_after_resume_s": 0.16,
+  "max_speed_after_hold_mps": 0.0
+ },
+ "hold_reasons": [
+  [
+   0.0,
+   null
+  ],
+  [
+   65.7,
+   "stream_lost"
+  ],
+  [
+   69.7,
+   null
+  ]
+ ],
+ "worst_deviation_at_s": 70.6,
+ "phases_s": [
+  [
+   "straight_e",
+   0.0
+  ],
+  [
+   "arc_left_r0.4",
+   16.7
+  ],
+  [
+   "straight_n",
+   22.1
+  ],
+  [
+   "s_left_r0.5",
+   28.8
+  ],
+  [
+   "s_right_r0.5",
+   35.4
+  ],
+  [
+   "straight_n2",
+   42.1
+  ],
+  [
+   "stop_10s",
+   47.2
+  ],
+  [
+   "pivot_right",
+   57.2
+  ],
+  [
+   "straight_e2",
+   60.5
+  ],
+  [
+   "stop_end",
+   77.2
+  ],
+  [
+   "done",
+   89.3
+  ]
+ ]
+}

@@ -1116,3 +1116,30 @@ def test_two_followers_that_die_together_are_both_logged_and_the_first_is_raised
         assert not any("rosy_02" in m for m in messages)  # 올라간 것은 다시 적지 않는다
     with caplog.at_level("WARNING", logger="fleet.swarm.session"):
         run(main())
+
+
+def test_a_trail_formation_arms_column_slots_in_trail_mode():
+    """D-559: every follower replays the leader's path, k x spacing behind, no lateral."""
+    async def main():
+        leader, followers, log = _robots(2)
+        s = _session(leader, followers, spec=FormationSpec(Formation.TRAIL, spacing=0.6), log=log)
+        await s.start()
+        params = [_follows(f)[0] for f in followers]
+        assert {p.mode for p in params} == {"trail"}
+        assert sorted(p.distance for p in params) == [0.6, 1.2]
+        assert {p.lateral for p in params} == {0.0}
+        assert {p.target_robot_id for p in params} == {"rosy_01"}
+    run(main())
+
+
+def test_a_robot_that_does_not_report_trail_mode_is_disarmed():
+    """An older CORE drops the unknown field and would follow by offset: refuse, disarm it too."""
+    async def main():
+        leader, followers, log = _robots(2)
+        followers[1].offset_only = True
+        s = _session(leader, followers, spec=FormationSpec(Formation.TRAIL, spacing=0.6), log=log)
+        with pytest.raises(ArmingFailed) as raised:
+            await s.start()
+        assert raised.value.code == "TRAIL_NOT_SUPPORTED"
+        assert all(any(c[0] == "swarm_cancel" for c in f.calls) for f in followers)
+    run(main())

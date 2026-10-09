@@ -77,7 +77,7 @@ export function trackingStatusLine(body) {
 }
 
 export function offsetLabel(row) {
-  if (row.measured && !row.pose) return `${row.robotId} · 마커 관측`;
+  if (row.measured && !row.pose) return row.robotId;
   return `${row.robotId} · 차이 ${Math.round(row.offsetM * 100)} cm`;
 }
 

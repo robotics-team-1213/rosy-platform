@@ -87,7 +87,7 @@ def test_state_is_readable_before_any_follow(client):
 
     assert body == {"role": "none", "formation": None, "active": False, "holding": False,
                     "target_robot_id": None, "source": None, "max_speed": None,
-                    "map_mismatch": None, "stream_age_s": None}
+                    "map_mismatch": None, "mode": None, "trail": None, "stream_age_s": None}
 
 
 def test_follow_and_cancel_need_an_operator_and_state_needs_a_viewer(client):
