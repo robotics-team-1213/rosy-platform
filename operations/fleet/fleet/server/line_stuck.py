@@ -209,7 +209,10 @@ class LineStuckBoard:
                      if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]
                      and a["decision"] != "ESCALATE"), None)
         shown["fleet_answer"] = last
-        shown["resolver"] = self._resolver.get((robot_id, entry["stuck_id"]))
+        note = self._resolver.get((robot_id, entry["stuck_id"]))
+        # D-577 8: the console's human deadline counts from the resolver's note.
+        shown["resolver"] = None if note is None else {
+            **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
         return shown
 
     def pending(self) -> list[dict]:
