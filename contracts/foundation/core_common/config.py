@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -85,11 +86,37 @@ def _find_default_config() -> Path:
     return Path(__file__).resolve().parents[1] / "config" / DEFAULT_CONFIG_NAME
 
 
+#: D-548: root가 한 로봇에 이 파일을 만들면 그 로봇만 공용 개발 토큰을 연다.
+#: 파일이 없으면 D-193 7 그대로 닫힌다.
+DEV_MODE_MARKER = Path("/etc/rosy/dev-mode")
+
+
 def dev_auth_enabled() -> bool:
-    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시한다(D-193 7)."""
+    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시하고(D-193 7)
+    개발 모드 표식 파일만 본다(D-548)."""
     if os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device":
-        return False
+        return DEV_MODE_MARKER.is_file()
     return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
+
+
+def _append_dev_tokens(config: dict[str, Any], dev_layer: dict[str, Any]) -> None:
+    """D-548: a device overlay always lists card or paired tokens, and a list replaces the
+    one below it, so the marker puts the shared tokens on top. A digest already listed
+    (a record stored on an earlier write) is not added twice."""
+    auth = config.setdefault("auth", {})
+    tokens = auth.get("tokens") or []
+    if not isinstance(tokens, list):
+        return
+    def digest(item: Any) -> Optional[str]:
+        if not isinstance(item, dict):
+            return None
+        if item.get("sha256"):
+            return str(item["sha256"]).strip().lower()
+        return hashlib.sha256(str(item["token"]).encode("utf-8")).hexdigest() if item.get("token") else None
+
+    listed = {digest(item) for item in tokens}
+    auth["tokens"] = tokens + [item for item in (dev_layer.get("auth") or {}).get("tokens") or []
+                               if digest(item) is not None and digest(item) not in listed]
 
 
 def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:
@@ -143,13 +170,17 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     with open(base_path, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
+    device = os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
+    dev_layer: dict[str, Any] = {}
     if dev_auth_enabled():
         dev_path = base_path.parent / DEV_AUTH_CONFIG_NAME
         if not dev_path.exists():
             dev_path = _find_default_config().parent / DEV_AUTH_CONFIG_NAME
         if dev_path.exists():
             with open(dev_path, encoding="utf-8") as f:
-                config = _deep_merge(config, yaml.safe_load(f) or {})
+                dev_layer = yaml.safe_load(f) or {}
+    if not device:
+        config = _deep_merge(config, dev_layer)
 
     override_path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
     overlay: dict[str, Any] = {}
@@ -158,6 +189,8 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
             overlay = yaml.safe_load(f) or {}
     config = _deep_merge(config, _robot_package_layer(config, overlay))
     config = _deep_merge(config, overlay)
+    if device and dev_layer:
+        _append_dev_tokens(config, dev_layer)
     overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
     overlay_named = isinstance(overlay_robot, dict) and "name" in overlay_robot
 

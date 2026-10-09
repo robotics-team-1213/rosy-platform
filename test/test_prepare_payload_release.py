@@ -460,3 +460,15 @@ def test_run_refuses_existing_dir_after_naming_but_before_download(tmp_path, mon
     monkeypatch.setattr(tool, "_download_tool", lambda: fake)
     with pytest.raises(tool.PrepareError, match="already exists"):
         tool.download_unsigned(1, None, out, None, 8)
+
+
+def test_ssh_never_inherits_stdin(monkeypatch):
+    """Windows OpenSSH -J hung on an inherited stdin under the scheduled CD task."""
+    seen = {}
+
+    def fake(argv, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(argv, 0, b"ok", b"")
+    monkeypatch.setattr(tool.subprocess, "run", fake)
+    assert tool.run_ssh(["ssh", "host", "true"]) == (0, "ok", "")
+    assert seen["stdin"] is subprocess.DEVNULL
