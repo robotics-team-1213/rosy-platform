@@ -1248,6 +1248,13 @@ SIZE_VERDICTS = {
         "one lock and one audit trail; splitting would spread the root trust boundary over several files "
         "the image layer must install and the twin must cover. Split the password half out if it grows further",
     ),
+    "tools/device_test/run.py": (
+        609,
+        "accept: D-512 agent-run device test driver; preflight, verdict, hold, overlay with its CORE "
+        "restart (and the tether rebase across the odometry reset), drive loop and byte-for-byte undo "
+        "are one ordered sequence whose cleanup must see every step. Move the overlay/restart half "
+        "into its own module when it grows further",
+    ),
     "tools/device_twin/scenarios.py": (
         703,
         "split: device twin scenarios — the D-412 update scenarios and the D-418 ssh/ssh_socket scenarios "
