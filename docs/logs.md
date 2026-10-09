@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7498,3 +7498,15 @@ osy-d395-s1d\`.
 - 변경: D-531의 B9 굽이 단계가 실제 `line/route_context`에 실리도록 `bend_phase`를 추가하고 API reference를 v1.166으로 올렸다. 접근 창이 지난 뒤에는 `ahead_m` 대신 단계로 표시한다.
 - 증거: 공통 스키마·CORE 계산·인식 소비자 집중 테스트. 설정 기본값은 꺼짐.
 - gate 변화: SOURCE만. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용 대기.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 레이아웃 와이어프레임
+
+- 변경: Fleet, Robot, Pilot, Games, Learning의 16개 화면/상태에 대한 목적·역할·이동·좌우 영역·모바일 와이어프레임과 디자인 문서 작성.
+- 근거: surfaces.yaml, 화면 HTML, D-425/D-501/D-543/D-153. Fleet 좌측 레일은 D-501 개정 전 제안으로 표시.
+- gate: 설계 산출물만 작성. 런타임 적용, G1/G2/G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가
+
+- 변경: Fleet 관제 그림의 지도:개입 3:2 구도를 복원하고 활성 웹 설계 문서에 계약·모바일·상태·접근성 재평가를 추가.
+- 근거: D-493, D-501, D-543, D-153; impeccable Operate와 web interface guidelines.
+- gate: 설계 검토. 런타임 UI, 320px G2, G3, 장치·현장 수용은 별도.
