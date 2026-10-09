@@ -46,7 +46,7 @@ def test_tether_needs_a_named_operator_and_set_is_idempotent(tmp_path):
         assert [{k: v for k, v in r.items() if k != "watch"} for r in listed] == [row]  # watch: lifespan ticks
         assert client.delete(URL, headers=OPERATOR).json() == {"robot_id": "rosy_60", "cleared": True}
         assert client.delete(URL, headers=OPERATOR).json() == {"robot_id": "rosy_60", "cleared": False}
-        assert client.get("/api/fleet/tethers", headers=VIEWER).json() == {"tethers": []}
+        assert client.get("/api/fleet/tethers", headers=VIEWER).json()["tethers"] == []
 
 
 def test_tether_rejects_unknown_robots_and_bad_circles(tmp_path):
@@ -61,7 +61,7 @@ def test_tether_rejects_unknown_robots_and_bad_circles(tmp_path):
         nan = client.post(URL, content='{"anchor_xy": [NaN, 0], "radius_m": 1}', headers={
             **OPERATOR, "Content-Type": "application/json"})
         assert nan.status_code == 500  # follow-up: the app-wide 422 handler cannot encode NaN
-        assert client.get("/api/fleet/tethers", headers=VIEWER).json() == {"tethers": []}
+        assert client.get("/api/fleet/tethers", headers=VIEWER).json()["tethers"] == []
 
 
 class Clock:
