@@ -164,6 +164,26 @@
 - **화면.** 입구마다 정지선 0.17 m 앞, 접근 차로 오른쪽 0.13 m(다가오는 로봇이 보는 자리)에 로봇 층 위로 T map 식 알약: 등 하나와 남은 초("적 7", 하한이면 "적 ≥7"), 주황(`--status-warn`) 점선 테두리와 위에 "가상" 글. 녹색 등은 실제 신호처럼 `--status-good`. 로봇 카드: 정지선 1.5 m 안이면 "가상 신호 sig_ring 적 · 녹색까지 ≥7 s · 정지선 0.40 m"(허가를 쥐었으면 "· 진입 허가").
 - **CORE가 묻는 길(다음 단계, 로봇 이미지 변경).** 지금 CORE→Fleet 연결(FleetAgent)은 HELLO·HEARTBEAT(1 s)·EVENT만 있다. (a) CORE가 페어링 토큰으로 위 REST를 부르거나, (b) Fleet이 로봇 heartbeat 답에 `signal_ahead`를 선택 필드로 싣는다. 사용자 결정 뒤 API Reference·공유 schema와 함께 연다.
 
+### rev 4 — 요청(demand) 신호와 AI PC 제어기 (2026-10-09, feat/signal-demand-controller)
+
+사용자 요청: "맵으로 상황을 파악해서 ai pc에서 신호등을 주도록… 로봇이 대기하면 주는걸로".
+
+**원칙은 그대로다.** 로봇은 신호 색에서 허가를 받지 않는다. 들어가도 되는지는 D-517 통행권만 정한다. 제어기는 **요청만** 하고 녹색은 Fleet 단계 기계가 정한다. 제어기가 무엇을 보내도 녹 → 황 → 전체 적색 → (구역 칸 `FREE`) → 녹 순서와 3항 "구역이 비어야 다음 녹색"을 건너뛸 수 없다.
+
+- **모드 `demand`.** 운영자가 `POST /api/fleet/traffic/signals/{id}` `{verb: demand}`로 켠다(이름 있는 운영자, 콘솔 신호 카드 "AI 요청"). 켤 때 이전 요청은 지우고 제어기 시계를 새로 잰다. 요청 모드에서:
+  - 녹색 입구에 살아 있는 요청이 없고 다른 입구에 요청이 있으면 황 → 전체 적색 → (구역 빔) → 요청한 입구 녹색으로 간다. 녹색 입구에도 요청이 남아 있으면 최소 녹색 `min_green_s`(기본 4 s)가 지난 뒤에만 바꾼다.
+  - 다음 녹색은 가장 오래 기다린 요청부터, 같으면 단계 순서다. 녹색에서 물러나는 입구의 요청은 그 순간 줄 뒤로 간다(계속 요청해도 다른 입구를 굶기지 않는다).
+  - 아무도 요청하지 않으면 지금 녹색을 그대로 두고(시간 제한 없음), 아직 녹색이 없었으면 전체 적색에 머문다.
+  - 제어기가 `controller_ttl_s`(기본 5 s) 동안 아무것도 보내지 않으면 그 신호는 `cycle`로 돌아가고 예외 행 `controller_lost`를 올린다. 요청 모드로 저절로 돌아가지 않는다. 운영자가 "AI 요청"을 다시 누른다.
+  - 시간은 모두 Fleet 단조 시계다. 3·4·5항(E-stop은 즉시 전체 적색, 재시작은 `all_red`, 설정 오류 구역은 늘 적색)은 그대로다.
+- **요청.** `POST /api/fleet/traffic/signals/{id}/demand` `{approach?, ttl_s (0 < s ≤ 5), reason? (≤ 200자)}`, 이름 있는 운영자(AI PC는 자기 이름의 토큰을 쓴다). `approach`가 없으면 "살아 있음, 기다리는 로봇 없음"이다. 요청 모드가 아니면 409 `SIGNAL_NOT_DEMAND`, 모르는 신호 404 `SIGNAL_UNKNOWN`, 모르는 입구 422 `SIGNAL_APPROACH`. 답은 신호 행이다. 0.5 s마다 오는 요청은 요청마다 감사 기록하지 않고, 입구의 요청이 새로 생길 때만 감사 행(`fleet_api_audit`)과 로그를 남긴다.
+- **읽기.** `GET /api/fleet/traffic` `signals[]`에 `mode: demand`, `demands: [{approach, age_s, reason}]`(줄 순서), `controller_age_s`(요청 모드가 아니면 null). 요청 모드의 녹색은 `left_s` null(끝을 모름), 요청한 입구만 `green_in_s` 하한(줄 순서, `exact` false). 신호 카드 태그 "요청(AI) · east:fwd 대기", 제어기를 잃으면 "AI 제어기 끊김, 자동 순환".
+- **AI PC 제어기**(`operations/fleet/fleet/traffic/signal_agent.py`, 표준 라이브러리만, 설치는 `deploy/ai_pc/README.md`). 0.5 s마다 `GET /api/fleet/traffic`·`GET /api/fleet/guide`(D-536)를 읽고 요청 모드 신호의 입구마다 기다리는 로봇을 찾는다. 기다림은 (a) 교통 행 `signal_ahead`가 그 입구이고 정지선까지 0.6 m 이하, 등이 녹색이 아니고 구역을 아직 쥐지 않음, 또는 (b) 안내 기록의 차로가 그 입구 호이고 다음 장소(구역 입구)까지 0.6 m 이하, 차로 안, 자세 `LOCALIZED`/`DEGRADED`, 지난 읽기보다 2 cm 미만 움직임. 기다리는 입구마다 ttl 2 s 요청을 매 읽기마다 보내고, 처음 본 순서(FIFO)로 보낸다. 아무도 없으면 살아 있음만 보낸다. 로봇 명령이나 다른 신호 동사는 보내지 않는다. Fleet을 읽지 못하면 아무것도 보내지 않고, 그러면 5 s 뒤 Fleet이 `cycle`로 돌아간다.
+- **안전.** 제어기는 요청만 하고 Fleet이 정한다. 제어기가 틀리거나 끊겨도 생기는 일은 녹색이 늦거나 자동 순환으로 돌아가는 것뿐이다. 반대편 동시 녹색, 바쁜 구역의 녹색, 적색 허가는 단계 기계와 블록 표가 막는다(3항, 시험 그대로). `fleet.traffic.authority: false`(D-550 J2, 지금 현장)이면 신호는 화면 표시일 뿐 로봇을 세우지 못한다. 그래서 요청 모드도 표시일 뿐이다(6항 `TRIP_SIGNAL_NEEDS_AUTHORITY`도 그대로).
+- **시험.** `test_signal_phase.py` 요청 모드(구역이 빌 때만 녹색, 최소 녹색, FIFO와 줄 뒤로, 제어기 끊김 → `cycle`, E-stop 즉시 전체 적색, 재시작 거절, 남은 초), `test_traffic_signals.py`(행 필드, 끊김, 경로 권한·409·ttl 범위·감사 한 번), `test_signal_agent.py`(규칙 a·b, FIFO, 살아 있음, 오류에도 계속), `web/signal-presence.test.mjs`(카드 태그·"AI 요청").
+- **남은 일.** 현장 설정 `min_green_s`·`controller_ttl_s`는 기본값만 쓴다(설정 읽기는 `cli.py`, 다른 세션이 고치는 중이라 뒤로). API Reference에는 D-525 Fleet 신호 경로가 아직 없어 이번에도 넣지 않았다. SIM·현장 확인은 S2·S3과 같이 한다.
+
 ### 개정 이력
 
 - rev 2 (2026-10-08, 독립 critic 검토 반영): 다음 녹색 조건을 점유에서 구역 칸 `FREE`(허가·점유·핀 없음)로 바꿈(허가가 정지선보다 약 5 s 먼저 나감). 신호 구역 수용 1·단계당 접근로 1을 설정 검사로 강제. 접근로를 경로 호로, 정지선을 구역 span `d0`로 정의하고 실제 정지 위치(약 0.3 m 앞)를 적음. 2단계 앞 끝 칸 허가에도 신호 검사. 신호 대기를 기다림 그래프·고리 수용에 넣음. 적색 대기를 `merge_max_wait_s`에서 뺌. `hold` 120 s 주의, `set_aspect` 접근로 인자, `hold_back` 거절 범위와 trip 밖 로봇을 적음.
+- rev 4 (2026-10-09, 사용자 요청 "로봇이 대기하면 주는걸로"): 요청(`demand`) 모드와 AI PC 제어기. 제어기는 요청만, Fleet이 정함. 제어기 5 s 침묵이면 `cycle` + `controller_lost`. 로봇은 여전히 신호 색에서 허가를 받지 않음.

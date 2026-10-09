@@ -128,7 +128,7 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
     result = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "+OnCalendar=*-*-* 06:03:00" in result.stdout
-    assert "[approval] /etc/ssh/sshd_config.d/10-rosy.conf: missing: skip (needs --approve)" in result.stdout
+    assert "[approval] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
     assert not (tmp_path / "host").exists()
     assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "nmcli -t"))] == []
 
@@ -136,14 +136,13 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
 def test_install_applies_approval_lines_only_when_named(tmp_path):
     fake, bin_dir = _fakes(tmp_path)
     assert _run(tmp_path, bin_dir, fake, "install", "ai").returncode == 0
-    sshd = tmp_path / "host/etc/ssh/sshd_config.d/10-rosy.conf"
+    sshd = tmp_path / "host/etc/systemd/system.conf.d/rosy-watchdog.conf"
     assert not sshd.exists()
     assert (tmp_path / "host/etc/systemd/system/rosy-nightly-reboot.timer").read_bytes() == \
         (ROOT / "deploy/ai_pc/host-state/rosy-nightly-reboot.timer").read_bytes()
     assert (tmp_path / "host/usr/local/lib/rosy-host-state/login").read_text() == "op\n"
-    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/ssh/sshd_config.d/10-rosy.conf").returncode == 0
-    assert sshd.read_text().startswith("# D-530")
-    assert "systemctl reload ssh" in _calls(fake)
+    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/systemd/system.conf.d/rosy-watchdog.conf").returncode == 0
+    assert sshd.read_text().startswith("[Manager]")
 
 
 def test_a_broken_sshd_config_is_rolled_back(tmp_path):
@@ -268,12 +267,23 @@ def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_pa
 
 
 def test_hang_settings_wait_for_approval_on_every_pc():
-    """D-530 decision: the hardware watchdog and kernel panic settings are installed only after approval."""
+    """D-530 decision: the hardware watchdog (with its iTCO_wdt load unit) and panic settings need approval."""
+    names = ("system/rosy-watchdog-load.service", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
     for role in ROLES.values():
         manifest = ROOT / "deploy" / role / "host-state" / "manifest"
-        for line in manifest.read_text(encoding="utf-8").splitlines():
-            if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
-                assert line.startswith("approval"), (role, line)
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+        for name in names:
+            found = [ln for ln in lines if name in ln and not ln.startswith("#")]
+            assert found and all(ln.startswith("approval") for ln in found), (role, name)
+    unit = (ROOT / "deploy/hosts/common/host-state/rosy-watchdog-load.service").read_text()
+    assert "ExecStart=/usr/sbin/modprobe iTCO_wdt" in unit and "RemainAfterExit=yes" in unit
+
+
+def test_ssh_password_login_stays_on():
+    """User decision 2026-10-09: no manifest installs the key-only sshd drop-in."""
+    for folder in (ROOT / "deploy/hosts/common/host-state", *(ROOT / "deploy" / r / "host-state" for r in ROLES.values())):
+        text = (folder / "manifest").read_text(encoding="utf-8")
+        assert not any("sshd" in ln for ln in text.splitlines() if not ln.startswith("#")), folder
 
 
 def test_installer_and_host_state_write_the_same_sudoers_file():
@@ -317,3 +327,12 @@ def test_avahi_interfaces_unit_is_in_the_common_manifest():
     assert "safe enabled rosy-avahi-interfaces.service" in manifest
     unit = (ROOT / "deploy/hosts/common/rosy-avahi-interfaces.service").read_text(encoding="utf-8")
     assert "Before=avahi-daemon.service" in unit
+
+
+def test_avahi_restart_never_blocks_its_own_start_job():
+    """rosy-avahi-interfaces runs Before=avahi-daemon; a blocking restart from inside it deadlocks."""
+    script = (ROOT / "deploy" / "hosts" / "common" / "rosy-avahi-interfaces").read_text(encoding="utf-8")
+    for line in script.splitlines():
+        if "try-restart" in line or '"restart"' in line:
+            assert "--no-block" in line, line
+

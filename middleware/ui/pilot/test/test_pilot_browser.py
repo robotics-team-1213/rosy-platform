@@ -802,6 +802,40 @@ def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_v
     assert errors == [], errors
 
 
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
+    """D-460 결정 2: 자기 방 운전 상태 라벨(MANUAL+움직임 → '운전 중', 아니면 '대기')."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "MANUAL",
+                   "velocity": {"linear": 0.08, "angular": 0.0}}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "운전 중"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "대기"
+    assert errors == [], errors
+
+
 def _enter_drive(page, base_url, access_token=None):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")

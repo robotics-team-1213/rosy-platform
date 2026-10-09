@@ -9,7 +9,7 @@
 - 세 PC의 새벽 재부팅(`rosy-nightly-reboot.timer`/`.service`, `/etc/systemd/system`)은 저장소에 없다. 시각은 AI PC 05:58, 모델 PC 06:03, 관제 PC 06:08이고 2분 경고 뒤 재부팅한다. 모델 PC는 디스크의 유닛이 바뀌었는데 `daemon-reload`가 안 된 상태였다.
 - 관제 PC의 `rosy-docker-upgrade.timer`(04:30 + 무작위 45분)와 스크립트도 저장소에 없다. `rosy-site-update.timer`(매시)는 옛 저장소 이름을 쓰는 별도 갱신기이고, 저장소의 D-441 `rosy-site-autoupdate.timer`와 같은 일을 두 번 한다.
 - [모델 PC 멈춤 대비](../../deploy/site/model-pc-guard.md)는 저장소에만 있다. 모델 PC의 `RuntimeWatchdogSec`는 주석이고 `kernel.panic`은 0이다. 관제 PC에는 `rosy-model-guard.timer`가 없다. 문서상 대비가 실제로는 꺼져 있었다.
-- 세 PC 모두 sshd 비밀번호 로그인이 켜져 있다(로봇은 키만). 관제 PC와 AI PC는 오래된 Wi-Fi 여러 개에 자동 연결한다. 관제 PC 로그인 화면은 배터리일 때 절전할 수 있다(`sleep-inactive-battery-type=suspend`).
+- 세 PC 모두 sshd 비밀번호 로그인이 켜져 있다(로봇은 키만). 2026-10-09 사용자 결정으로 계속 켜 둔다(6항). 관제 PC와 AI PC는 오래된 Wi-Fi 여러 개에 자동 연결한다. 관제 PC 로그인 화면은 배터리일 때 절전할 수 있다(`sleep-inactive-battery-type=suspend`).
 - AI PC `pinky-v13-training`은 `Restart=no`, 모델 PC `rosy-tensorboard`는 enabled인데 부팅 직후 다섯 번 실패하고 멈춰 있다.
 - 로봇은 Tailscale이 없고, 관제 Fleet :8443은 LAN에서만 열린다. 9dfk 부하는 약 9.5, 8kcn은 SPI DMA timeout을 낸다.
 - 어떤 유닛도 `WatchdogSec=`를 쓰지 않는다.
@@ -21,7 +21,7 @@
 **1. 역할별 바라는 상태는 기존 배포 폴더의 `host-state/`에 둔다.** 관제 PC는 `deploy/site/host-state/`, 모델 PC는 `deploy/model_pc/host-state/`, AI PC는 `deploy/ai_pc/host-state/`, 세 PC 공통은 `deploy/hosts/common/host-state/`다. 새 `deploy/hosts/<role>/` 트리를 만들지 않는다. 그 역할의 다른 배포 파일이 이미 그 폴더에 있기 때문이다.
 
 - 각 폴더의 `manifest`가 한 줄에 하나씩 `<정책> <종류> <인자>`를 적는다. 종류는 `file`(설치 경로와 저장소 파일, 바이트 비교), `enabled`/`disabled`/`masked`(유닛 상태), `linger`(설치한 로그인 계정), `wifi-allow`(호스트의 `/etc/rosy/host-state/wifi-allow`에 적힌 연결만 자동 연결)다.
-- 첫 내용: 새벽 재부팅 타이머와 서비스(실제 값을 그대로 옮김), 관제 PC Docker 갱신 타이머와 스크립트, 드리프트 점검 유닛, logind(뚜껑·idle 무시), sleep 대상 mask, `tailscaled` enabled, linger, sshd drop-in, 관제 PC 가드 유닛, 모델 PC 워치독과 lockup 재부팅 설정.
+- 첫 내용: 새벽 재부팅 타이머와 서비스(실제 값을 그대로 옮김), 관제 PC Docker 갱신 타이머와 스크립트, 드리프트 점검 유닛, logind(뚜껑·idle 무시), sleep 대상 mask, `tailscaled` enabled, linger, sshd drop-in(2026-10-09 거절로 매니페스트에서 뺌), 관제 PC 가드 유닛, 모델 PC 워치독과 lockup 재부팅 설정.
 - 계정 이름, 주소, SSID는 저장소에 넣지 않는다(D-226). linger 계정은 설치할 때의 `SUDO_USER`를 쓰고, Wi-Fi 허용 목록은 호스트 파일이다.
 - 적용은 역할마다 한 명령이다. `sudo python3 deploy/hosts/common/rosy-host-state install <site|model|ai>`. 같은 명령을 다시 돌려도 결과가 같다. `--dry-run`은 root 없이 차이(파일은 unified diff)만 출력한다. 설치는 승인된 사본을 `/usr/local/lib/rosy-host-state/`에 두고, 그 뒤 점검은 그 사본과 비교한다. 호스트가 root로 저장소를 직접 당겨 오지 않는다. 사본을 바꾸는 길은 사람이 설치를 다시 돌리는 것뿐이다.
 
@@ -71,12 +71,18 @@
 
 **6. 사용자 승인이 있어야 하는 접근 변경(목록만, 적용 안 함).**
 
-- 세 PC의 sshd 비밀번호 로그인 끄기(`approval file /etc/ssh/sshd_config.d/10-rosy.conf`). 먼저 각 PC에 키 로그인이 되는 사람이 둘 이상인지 확인한다.
-- 로봇에 Tailscale 설치(지금 `rosy-tailscale-join`은 아무것도 하지 않는다). D-418 접근 경로와 로봇 이미지가 바뀐다.
+- 세 PC의 sshd 비밀번호 로그인 끄기(`sshd-10-rosy.conf`). **사용자가 2026-10-09에 거절했다.** "ssh password 로그인은 그래도 있어야" 하므로 비밀번호 로그인은 켜 둔다. 매니페스트에서 이 줄을 뺐고(테스트가 어느 매니페스트도 sshd 줄을 두지 않음을 확인한다), 파일은 키 전용 선택지로만 남긴다. 다시 켜려면 사용자의 새 승인이 먼저다.
+- 로봇에 Tailscale 설치. **2026-10-09 승인되어 두 로봇에 적용했다**(공식 설치 스크립트, 대화형 로그인, 호스트 이름 `rosy-pinky-9dfk`·`rosy-pinky-8kcn`, `--ssh` 없음이라 로봇 SSH는 계속 팀 키뿐이다. D-418). 열린 일: 태그가 아직 없고 사용자 계정 소유라 키 만료가 적용된다. 이미지의 `rosy-tailscale-join`은 아직 `/etc/rosy/tailscale-join.json`을 기다리는 경로라 이 수동 설치와 이어지지 않는다. 로봇 이미지는 바꾸지 않았다. [로봇 SSH 접속 안내](../deployment/robot-ssh-access.md) 4절.
 - Fleet을 Tailscale에서 열기(`rosy-site-firewall` 허용 인터페이스 추가). 외부 접근 면이 넓어진다.
 - AI PC 적용 전체. 다른 사람과 같이 쓰는 PC라 그 사람의 동의가 먼저다(새벽 재부팅은 이미 돌고 있지만 linger·logind·가드 키·유닛 재시작은 새로 생긴다).
 - 관제 PC 옛 갱신기 `rosy-site-update.timer` 끄기. D-441 자동 갱신과 겹친다.
 - 가드의 회복 권한: 각 PC의 D-524 도우미, 그 sudoers 한 줄, 강제 명령 키.
+
+**6a. 2026-10-09 승인과 적용 결과.**
+
+- **하드웨어 워치독과 panic.** 사용자가 관제 PC와 AI PC에 승인했고 `--approve`로 적용했다. 모델 PC는 학습 중 오탐 재부팅 위험으로 제외한다(매니페스트에는 `approval`로 남는다). Ubuntu의 `/lib/modprobe.d/blacklist_linux_*.conf`가 `iTCO_wdt`를 막아 두므로 `modules-load.d`로는 올릴 수 없다. 2026-10-09 재확인에서 systemd-modules-load가 "Module 'iTCO_wdt' is deny-listed (by kmod)"라며 건너뛰었다. 명시적 `modprobe iTCO_wdt`는 블랙리스트를 무시하고, 올라온 뒤 systemd PID 1이 핑 간격 안에 `/dev/watchdog0`을 스스로 열었다("Using hardware watchdog /dev/watchdog0: 'iTCO_wdt'", reexec 없음). 그래서 `/etc/systemd/system/rosy-watchdog-load.service`(oneshot, `modprobe iTCO_wdt`)를 켠다. 이 유닛을 `rosy-watchdog.conf`, `90-rosy-hang.conf`와 같이 세 역할 매니페스트의 `approval` 줄(파일과 enabled)로 둔다(AI PC는 이전에 없었다).
+- **관제 PC Wi-Fi 허용 목록.** 적용했다. 호스트의 `/etc/rosy/host-state/wifi-allow`가 허용할 연결 이름을 한 줄에 하나씩 적고, `--approve wifi`로 설치하면 그 목록에 없는 저장된 연결의 자동 연결만 끈다(삭제하지 않는다). 현장에서는 영상과 장치용 두 개만 남기고 나머지 7개는 자동 연결을 껐다. 이름이 네트워크를 드러내므로 목록은 저장소에 넣지 않는다(D-226). 지우려면 연결의 자동 연결을 다시 켜면 된다.
+- **D-524 Fleet 키.** 연결했다. 관제 PC는 docker 풀 `172.16.0.0/12`에서 오는 키를 받는다(스택을 다시 띄우면 docker 서브넷이 바뀐다. 172.20에서 172.18로 바뀐 것을 봤다). 모델 PC와 AI PC는 관제 PC의 LAN 주소에서 오는 키를 받고, 대상은 LAN 주소로 적는다. Tailscale SSH는 `authorized_keys` 강제 명령을 건너뛰기 때문이다. 절차는 `deploy/site/README.md`의 Service Control 절과 `install-host-control.sh` 머리말.
 
 **7. 사람만 할 수 있는 일.** BIOS의 "AC 전원 연결 시 켜기"(세 PC), 8kcn SPI 하드웨어 점검, 모델 PC 유선 연결, 관제 PC sudo 비밀번호를 아는 사람의 첫 설치. 이 체계는 sudo 없이 처음 설치될 수 없고, 그 뒤부터 사람 없이 유지된다.
 

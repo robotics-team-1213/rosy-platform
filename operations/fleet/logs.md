@@ -2926,3 +2926,43 @@
 - 변경: 현장 지도 탭은 평면의 `X-Frame-Calibration`이 고른 보정 revision과 같을 때만 그리고 점을 잡는다(다르면 "보정 revision이 다릅니다 — 다시 불러오세요"). 헤더 사각형 × px_per_m가 영상 크기와 1 px 넘게 다르면 평면 없음으로 보고 브라우저 펴기로 대신한다. 점 잡기는 평면 사각형에 맞춘 view의 `toMap` 하나로 한다. 설치·보정 확인 그림은 관제와 같은 규칙(source, revision, Fleet 차선 지도의 map)으로 평면을 쓰고, 격자를 지도 미터에 맞추며 트랙 크기를 적는다. 관제는 그릴 수 있을 때만 평면을 묻고 사이트 뷰 밖은 자른다. 일시 오류는 신선한 그림을 만료까지 두고 5 s 쉰다. lease 수명은 `expires_in_s`를 따른다.
 - 증거: node 224건(새 `map-plane.test.mjs` revision 불일치·1 px·만료·쉬기). 브라우저·원격 결과는 착지 전 실행에 기록한다.
 - gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · feat(fleet): site map robot positions, trip panel removed (D-540 (e))
+- 변경: 현장 지도 SVG에 `/api/fleet/guide` 로봇(몸체 원·방향·불확실성 고리·자세 이름표)과 열린 trip의 경로·다음 장소를 그린다. 지도 프레임·`view_turn_deg` 그대로, 읽기 전용, 1 s 폴링에 따로 그리는 층(`#robot-layer`, 클릭 통과). `guide-layer.js`를 `web/shared/`로 옮기고 순수 좌표 함수 `guideMarks()`를 나눠 관제 canvas와 현장 지도가 같이 쓴다(`test_document_imports.py` SHARED). 운행 칸(출발 자리·대열 리더·고리 정원·`운행 시작`·`반복 운행 시작`·`바뀐 경로로 계속`·`운행 취소`)을 없애고 "이 지도로 운행 중" 읽기 줄과 "운행은 관제의 로봇 카드에서" 링크를 둔다. 쓰는 곳이 없어진 `cancelTrip`·`tripCancelReason` 삭제. `site-map.css` 전역 input/select 재칠 제거(`ui-field`). 경로 미리보기는 그대로.
+- 증거: 모델 PC `operations/fleet/test/` 3066 passed, 141 skipped, `known_failures` NEW 0. 브라우저(ai PC, OMEN 재부팅 중) 사이트 지도·교통·대열·카드 운행·import 울타리 65 passed — 새 `test_site_map_draws_robots_read_only_and_sends_trips_to_the_console`(위치·trip 선, 90° 돌리면 위치·방향이 시계 방향으로, 운행 버튼 없음, 관제 링크, POST 없음). node `guide-layer.test.mjs` 포함 226 passed. 캡처 `X:/DevTemp/site-map-pos/`.
+- gate 변화: 없음. fleet 크기 48481 → 48440(−41), 판정 문구 그대로. Safety-Review 불필요(읽기 표시와 버튼 제거, 명령 경로 안 건드림).
+- 결정: D-540 Proposed 그대로.
+- 교훈: 전역 `input, select` 재칠을 지우면 `width: 100%`도 같이 빠져 320 px에서 61 px 넘친다 — `components.css`는 최대폭만 준다.
+
+## 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
+- 변경: `POST /api/fleet/place-markers`(source 토큰, 2 s, source·marker별 순서)·`GET` 보기, `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자; 새 초안 장소 또는 `place_id` 이동, 이동한 장소에 닿는 차로 끝도 옮김), `sightings_config.py` `place_markers` 검증, 지도 가르치기 패널 "마커로 등록". 로봇에 보내는 것 없음. API v1.167.
+- 증거: 모델 PC `remote_pytest.py` 관련 묶음(fleet 13 파일·vision·foundation·version alignment·architecture) exit 0, `known_failures.py` 신규 0 (X:/DevTemp/place-markers/run-1.txt).
+- gate 변화: 없음(SOURCE). 현장 스티커·천장 카메라 확인은 열림.
+## 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
+- 변경: 마커 지도와 초안(활성·초안 없으면 빈 `site`)의 `map_id`가 다르면 409 `PLACE_MARKER_MAP_MISMATCH`. Vision 장소 마커 전송은 한 번에 하나인 백그라운드 작업이라 Fleet이 늦어도 프레임 루프·로봇 sighting을 막지 않는다. 콘솔 마커 목록은 반올림한 자세가 바뀌면 다시 그린다. 시험: ±90° yaw 부호, 목록에 없는 id 403, bend 이동 거절.
+- 열림: 장소를 마커로 옮기면 그 장소에 닿는 차로는 끝점만 옮기고 안쪽 점은 그대로다. 크게 옮기면 차로 끝 접선이 꺾일 수 있다(활성화 전 지도에서 확인).
+- 증거: 모델 PC `remote_pytest.py` 관련 묶음, `known_failures.py` (X:/DevTemp/place-markers/run-1.txt).
+- gate 변화: 없음(SOURCE).
+
+## 2026-10-09 · uncommitted · fix(fleet): 관제 지도와 로봇 표시 안정화
+- 변경: 비상 정지의 보조 문구는 낭독기에 남기고 버튼은 한 줄로 줄였다. 현장 지도 캔버스를 넓히고 관측 마커를 키워 겹치던 추적 정보를 지도 아래로 옮겼다. 발견됐지만 미등록인 로봇은 등록 링크와 함께 별도로 표시한다. 배터리 상태 갱신 대기 시간을 200 ms로 늘려 일시적인 조회 지연이 경고 카드를 접었다 펴는 현상을 줄인다.
+- 증거: 현장 API를 읽는 후보 자산 브라우저 캡처에서 1262×632, 320×700 모두 가로 넘침·JavaScript 오류 0; 넓은 화면 지도 높이 344 px, 정지 버튼 높이 58 px. `tracking-layer.test.mjs` 12건 통과. 실서버 설치·두 번째 로봇 등록·현장 화면 재검증은 별개다.
+- gate 변화: SOURCE 후보. 실제 설치와 두 로봇 연결 확인 전 FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(fleet): TLS 로봇 번호 변경 뒤 재등록 (D-565)
+
+- 변경: 등록되지 않은 승인 binding을 대기 binding으로 받아 기동 경고만 남긴다(다른 등록 행의 호스트 이름이면 계속 거절). 행이 없는 HTTPS 대상은 hostname·port가 같은 대기 binding 하나로 TLS 등록하고, identity `receiver_id`와 `system/info` `robot_id`가 binding ID와 같을 때만 저장·downgrade 기록을 남긴다. 다르면 409 `tls_binding_mismatch`, 토큰 로그아웃. runbook 절차, API v1.168.
+- 근거: 2026-10-09 현장 rosy_26 → rosy_41 재등록이 409 `tls_binding_required`; D-562 번호 변경.
+- gate: SOURCE + 원격 호스트 pytest. 현장 Fleet 재시작·재등록·보안 검토는 별도.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 기기 이름과 ArUco 표지를 내부 ID와 구분
+- 변경: 관제 카드의 첫 이름은 등록 기록과 현장 발견이 확인한 mDNS 이름으로 표시하고 Fleet 내부 ID는 함께 남긴다. 지도에서 단일 설정 마커가 실제 관측된 경우 칩에는 ArUco 번호를 표시한다. 제어 요청과 상태 키는 계속 서버의 canonical robot_id를 쓴다.
+- 증거: 현장 API를 읽는 후보 자산 캡처에서 등록 호스트 이름과 Fleet 내부 ID를 함께 표시하고, 현재 설정된 ArUco 번호를 지도에 표시했다. 미등록 기기의 부착 마커 번호는 운영자 답변으로 확인했으나, 현장 설정·Fleet 등록·카메라 연결 검증 전까지 지도에 로봇으로 배정하지 않는다.
+- gate 변화: SOURCE 후보. 현장 등록과 마커 설정은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(fleet): site-map robot rings and labels stay on the map
+- 변경: `fitView`가 로봇 고리(몸체 + 불확실성)를 원으로 받아 화면 방향 어느 쪽에서도 지도 안에 둔다. 고리 위에 자리가 없으면 이름표를 고리 아래로, 좌우는 지도 안으로 당긴다. 폴링에서 고리가 화면을 벗어나면 다시 맞춘다.
+- 증거: 브라우저(ai PC) 새 `test_site_map_keeps_edge_robots_and_labels_on_the_map[0,90]`(네 변 밖 로봇) 통과. 같은 묶음 실패 2건(`test_view_edit_activate_and_preview_a_trip[320-568]`, `test_cell_emergency_stop_…[1440-1000]`)은 깨끗한 main `1d5912651`에서도 실패(문서 안 작업 이동 0ee1d027c 쪽, 다른 세션 담당). node 통과. 캡처 `X:/DevTemp/site-map-pos/robots-*.png`.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 가짜 시계(`page.clock`) 아래에서는 폴링 응답이 진짜 네트워크로 와서, 찍기 전에 로봇 수를 기다려야 한다.

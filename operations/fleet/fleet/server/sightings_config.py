@@ -10,6 +10,7 @@ from typing import Mapping
 
 import yaml
 
+from core_common.protocol.place_markers import check_place_marker_ids
 from fleet.server.sightings import SightingSource
 
 _REQUIRED = {
@@ -19,7 +20,7 @@ _REQUIRED = {
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
     "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
-    "calibration_source",
+    "calibration_source", "place_markers",
 }
 CREDENTIAL_KINDS = ("static", "paired")
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
@@ -109,6 +110,11 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
         if corner_ids is not None and set(markers.values()) & set(corner_ids):
             raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
+        try:  # D-564
+            place_markers = check_place_marker_ids(row.get("place_markers", []), corner_ids=corner_ids,
+                                                   robot_marker_ids=markers.values())
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         sources.append(SightingSource(
             source_id=row["source_id"],
             token=token,
@@ -120,6 +126,7 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             robot_markers=tuple(markers.items()),
             credential=credential,
             calibration_source=calibration_source,
+            place_markers=place_markers,
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")

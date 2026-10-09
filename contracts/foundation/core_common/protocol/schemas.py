@@ -994,6 +994,8 @@ class SwarmFollowParams(BaseModel):
     source: SwarmReferenceSource = SwarmReferenceSource.FLEET  # v1.2 additive
     #: v1 additive. 대형 멤버를 robots.yaml 순서로. 비어 있으면 승계를 하지 않는다.
     members: list[str] = Field(default_factory=list)
+    #: D-559 additive. trail = replay the leader's driven path `distance` behind (lateral 0).
+    mode: Literal["offset", "trail"] = "offset"
 
 
 class PoseSample(BaseModel):
@@ -1004,6 +1006,7 @@ class PoseSample(BaseModel):
     seq: int
     #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
     map_id: Optional[str] = None
+    frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
 
 
 class LineStuckStatus(BaseModel):

@@ -1,0 +1,16 @@
+[Unit]
+Description=ROSY signal demand controller (D-525 rev 4; asks Fleet for greens, never commands robots)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/rosy-platform/operations/fleet
+# FLEET_URL, FLEET_TOKEN_FILE (named operator token), FLEET_CA (Fleet TLS CA file)
+EnvironmentFile=%h/.config/rosy/signal-agent.env
+ExecStart=/usr/bin/python3 -m fleet.traffic.signal_agent
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

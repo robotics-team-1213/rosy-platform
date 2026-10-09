@@ -79,13 +79,15 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
-#: docs/plans/2026-10-09-core-localization-size-unit.md
+#: docs/plans/2026-10-09-core-localization-size-unit.md,
+#: docs/plans/2026-10-09-core-swarm-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
               "core/services/core_features/localization",
+              "core/services/core_features/swarm",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -125,8 +127,12 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        1509,
-        "split: measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
+        1884,
+        "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
+        "AI PC demand controller, stdlib only) and demand mode in signal_phase.py and lane_traffic.py. The named "
+        "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
+        "+150 allowance measured from 1884. "
+        "Previously measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
         "(display-only signal advice) and D-525 rev 3 extends signal_phase.py and "
         "lane_traffic.py. The named lane-traffic seam in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
@@ -195,7 +201,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_711,
+        48_952,
+        "split: re-judged at 48952 on 2026-10-09 after merging D-564 (+241 over main 48711; floor place markers: "
+        "ingest and lease in server/sightings.py, teach-from-marker in teach_service.py and teach_routes.py, "
+        "console list in web/site-map-teach.js; existing owners, no command path, no new owner). Previously "
         "split: re-judged at 48711 on 2026-10-09 merging D-560 S2 (+230 over main 48481; Fleet draws Rosy Cam's "
         "map plane, display only): web/shared/vision-view.js plane header, lease, freshness rule and feed, "
         "web/camera-backdrop.js plane draw, web/site-map.js plane view, web/field-view.js plane check and "
@@ -640,8 +649,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_344,
-        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        1_347,
+        "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
+        "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
+        "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
         "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
         "the zero-growth allowance remains. "
@@ -874,9 +885,19 @@ SIZE_VERDICTS = {
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
         "publisher or command path. Re-judge after +150.",
     ),
+    "core/services/core_features/swarm": (
+        799,
+        "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
+        "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
+        "docs/plans/2026-10-09-core-swarm-size-unit.md registers the follower state machine, follow goal "
+        "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
+        "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
+    ),
     "core_features": (
-        12_270,
-        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        11_814,
+        "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
+        "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
+        "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
         "the cohesive 922-line localization package is now its own size unit under "
         "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
         "13192; moving this domain out fulfills the previous split condition without moving runtime code. "
@@ -982,11 +1003,14 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_035,
+        11_324,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
-        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09.",
+        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09; "
+        "re-judged at 11324 the same day for D-570 (learned/paint_motion.py ground-plane warp and "
+        "odom history, plus the reuse gate in learned/paint_worker.py), which lives in the learned "
+        "backend it serves and does not change the split plan.",
     ),
     "control": (
         34_446,

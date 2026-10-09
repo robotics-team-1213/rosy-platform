@@ -1,7 +1,8 @@
-"""Run pytest for one commit on the model PC (OMEN) or the AI PC, not on this laptop.
+"""Run pytest for one commit on the model PC, AI PC or site PC (D-568), not on this laptop.
 
     python tools/remote/remote_pytest.py [--sha REV] [--log-dir DIR] [--affected-json FILE|-]
                                          [--skip PATH ...] [-- <pytest paths/args>]
+    python tools/remote/remote_pytest.py --pick sim     # print the host a Gazebo run should use
 
 Only the committed ``--sha`` (default HEAD) is tested: uncommitted changes are not
 shipped. The commit travels as a git bundle (so guard tests that run git see a real
@@ -9,11 +10,13 @@ shipped. The commit travels as a git bundle (so guard tests that run git see a r
 as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
 under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
 (``.github/workflows/ci.yml``); different dependency versions can run together.
-Each pytest runs under a 6 GB memory cap.
+Each pytest runs under a 6 GB memory cap, nice 15 and idle I/O.
 
-Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC then AI PC. One
-invocation runs on the first reachable host; several are spread over every
-reachable host at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
+Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
+host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
+and the ones above the class floor are used, most headroom first; the site PC only
+when no other host qualifies (D-568). Several invocations are spread over the chosen
+hosts at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
 is for explicit diagnostics.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
@@ -35,7 +38,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_HOSTS = "rosy@100.98.162.71 ai@100.108.76.123"
+SITE_HOST = "robttt@100.82.51.8"  # live Fleet: last, Fleet reserve, CPU cap (D-568 3)
+# Site hosts: SITE_HOST plus every host whose probe finds ~/rosy-jobs/site (any ssh name).
+SITES = {SITE_HOST}
+DEFAULT_HOSTS = f"rosy@100.98.162.71 ai@100.108.76.123 {SITE_HOST}"
+# D-568 2: (free cores, free GB) a host needs for one job of the class.
+NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
+SITE_RESERVE = (2, 4)
+SITE_CPU_QUOTA = "400%"
+# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
+# pytest waits up to 600 s for the repo lock and 3600 s for a venv build; --pick gives the script 10 min.
+RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
@@ -53,6 +66,7 @@ STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
+mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
 exec 8>"$R/repo.lock"; flock -w 600 8  # concurrent runs fetching into one repo race on ref locks
@@ -80,9 +94,11 @@ exec 9>"$R/venvs/$DEPS.lock"; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
+# The site PC (Ubuntu 26.04) has no system 3.12; `uv python install 3.12` puts one in ~/.local/bin.
+PY=/usr/bin/python3; "$PY" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null || PY=~/.local/bin/python3.12
 UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-if [ -n "$UV" ]; then "$UV" venv -q --seed -p /usr/bin/python3 "$N"
-else /usr/bin/python3 -m venv "$N"; fi
+if [ -n "$UV" ]; then "$UV" venv -q --seed -p "$PY" "$N"
+else "$PY" -m venv "$N"; fi
 P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
@@ -106,14 +122,43 @@ mv "$N" "$V"
 echo "[remote] ready $V"
 """
 
+# $3 = CPUQuota ('' = none). The job lock holds this shell's pid, which exec keeps.
 PYTEST = r"""set -euo pipefail
-R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; cd "$R/runs/$1"; shift 2
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; CPU=$3; cd "$R/runs/$1"
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
+mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; rm -f ~/rosy-jobs/"$1".resv; shift 3
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
-exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
+exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
+  nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
 """
 
+# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid
+# locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget.
+PROBE = r"""J=~/rosy-jobs; c=0; m=0; now=$(date +%s)
+for f in "$J"/*.resv; do
+  [ -e "$f" ] || continue; read -r t _ fc fm < "$f" || true
+  case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
+  if [ "$t" -gt "$now" ]; then c=$((c+fc)); m=$((m+fm)); else rm -f "$f"; fi
+done
+for f in "$J"/*.lock; do
+  [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
+  case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
+  if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); else rm -f "$f"; fi
+done
+py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
+  "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
+s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
+b=0; [ -e "$J/busy" ] && b=1
+st=0; [ -e "$J/site" ] && st=1
+echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
+  "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m $st"
+"""
+
+# --pick: reserve the class budget on the chosen host until the Gazebo script writes its own lock.
+RESERVE = r"""mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) $1 $2 $3" > ~/rosy-jobs/pick-$(date +%s%N).resv"""
+
 CLEANUP = r"""R=~/rosy-test
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
@@ -126,9 +171,16 @@ def git(repo: Path, *args: str) -> str:
                           text=True, encoding="utf-8").stdout.strip()
 
 
+def capped(host: str) -> str:
+    """Command prefix for repo copy, venv build and cleanup: low priority, site hosts also capped (D-568 3-4)."""
+    scope = (f"systemd-run --user --scope -q -p MemoryMax=6G -p CPUQuota={SITE_CPU_QUOTA} -- "
+             if host in SITES else "")
+    return scope + "nice -n 15 ionice -c3 "
+
+
 def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subprocess.CompletedProcess:
-    """Run script on host; a timeout is a failed step (exit 124), never a pass."""
-    command = "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+    """Run script on host under capped(host); a timeout is a failed step (exit 124), never a pass."""
+    command = capped(host) + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
     if "input" not in kw:
         kw["stdin"] = subprocess.DEVNULL
     try:
@@ -138,34 +190,72 @@ def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subproce
         return subprocess.CompletedProcess([], 124, b"", b"")
 
 
-def reachable(host: str) -> bool:
+def probe(host: str) -> dict | None:
+    """Measured headroom inputs of host (PROBE), or None when it does not answer."""
     try:
-        return subprocess.run([*SSH, host, "true"], stdin=subprocess.DEVNULL, capture_output=True,
-                              timeout=15).returncode == 0
+        out = subprocess.run([*SSH, host, "bash -c " + shlex.quote(PROBE)], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=15).stdout
     except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
-def pick_host(hosts: list[str] | None = None, probe=None) -> str | None:
-    """First reachable host, or None (run locally)."""
-    if os.environ.get("ROSY_TEST_LOCAL") == "1":
         return None
-    if hosts is None:
-        hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
-    return next((h for h in hosts if (probe or reachable)(h)), None)
+    return parse_probe(out)
 
 
-def reachable_hosts(hosts: list[str] | None = None, probe=None) -> list[str]:
-    """Every reachable host in listed order; empty when forced local."""
+def parse_probe(out: str) -> dict | None:
+    """The ROSYPROBE line of PROBE output (login-shell chatter around it is ignored), or None."""
+    try:
+        line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
+        n, load, avail, total, py, sim, busy, cores, gb, site = line.split()[1:]
+        return {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
+                "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
+                "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1"}
+    except (IndexError, ValueError):
+        return None
+
+
+def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
+    """(hosts above the cls floor, most headroom first, the site PC only when no other fits; a note per host)."""
+    need_c, need_m = NEEDS[cls]
+    ranked, notes = [], []
+    for i, (host, p) in enumerate(zip(hosts, probes)):
+        if p is None:
+            notes.append(f"{host}: unreachable")
+            continue
+        site = host in SITES or p.get("site", False)
+        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
+        mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+               else f"below {cls} floor {need_c} cores/{need_m} GB" if cores < need_c or mem < need_m else "ok")
+        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{' (site PC)' if site else ''} - {why}")
+        if why == "ok":
+            ranked.append((site, -min(cores / need_c, mem / need_m), i, host))
+    ranked.sort()
+    return [r[3] for r in ranked if not r[0]] or [r[3] for r in ranked], notes
+
+
+def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
+    """Hosts for cls by measured headroom (D-568), printing why; empty when forced local or none fits."""
     if os.environ.get("ROSY_TEST_LOCAL") == "1":
+        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_LOCAL=1 forces this machine", file=sys.stderr, flush=True)
         return []
     if hosts is None:
         hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
     if not hosts:
+        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_HOSTS is empty", file=sys.stderr, flush=True)
         return []
     with ThreadPoolExecutor(len(hosts)) as pool:
-        up = list(pool.map(probe or reachable, hosts))
-    return [h for h, ok in zip(hosts, up) if ok]
+        probes = list(pool.map(probe, hosts))
+    SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
+    chosen, notes = place(cls, hosts, probes)
+    for note in notes:
+        print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
+    if not chosen and cls == "pytest":
+        # D-568 7: busy hosts must not stop the gate; the site PC never takes this fallback.
+        chosen = [h for h, p in zip(hosts, probes) if p and p["pytest"] and not p["busy"] and h not in SITES]
+        if chosen:
+            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
+                  file=sys.stderr, flush=True)
+    print(f"[remote-pytest] {cls} -> {' '.join(chosen) or 'no host'}", file=sys.stderr, flush=True)
+    return chosen
 
 
 def bundle_base(repo: Path, sha: str) -> str | None:
@@ -199,7 +289,7 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True,
+            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data, capture_output=True,
                             timeout=STEP_TIMEOUT["ship"])
             if result.returncode == 0:
                 return
@@ -234,7 +324,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
     if not invocations:
         return []
-    hosts = [] if local else (reachable_hosts() if len(invocations) > 1 else [h for h in [pick_host()] if h])
+    hosts = [] if local else placed_hosts("pytest")
     if not hosts:
         if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
@@ -281,8 +371,9 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         codes = []
         for inv, log in zip(invocations, logs):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
+            cpu = SITE_CPU_QUOTA if host in SITES else ""
             codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
-                                  + " ".join(map(shlex.quote, [name, deps_sha, *inv, *PYTEST_TAIL]))], log))
+                                  + " ".join(map(shlex.quote, [name, deps_sha, cpu, *inv, *PYTEST_TAIL]))], log))
         return codes
     finally:
         remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
@@ -314,8 +405,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--local", action="store_true", help="run here (same as ROSY_TEST_LOCAL=1)")
     parser.add_argument("--require-host", action="store_true",
                         help="fail instead of running locally when no host answers (ROSY_TEST_LOCAL=1 overrides)")
+    parser.add_argument("--pick", choices=sorted(NEEDS),
+                        help="only print the host with the most headroom for this job class (D-568)")
     parser.add_argument("pytest_args", nargs="*", help="one pytest invocation (after --)")
     args = parser.parse_args(argv)
+    if args.pick:
+        chosen = placed_hosts(args.pick)
+        if chosen:
+            remote(chosen[0], RESERVE, args.pick, *map(str, NEEDS[args.pick]), str(RESERVE_S["pick"]),
+                   capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
+            print(chosen[0])
+        return 0 if chosen else 1
     invocations = [args.pytest_args] if args.pytest_args else []
     if args.affected_json:
         text = sys.stdin.read() if args.affected_json == "-" else Path(args.affected_json).read_text("utf-8")

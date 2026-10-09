@@ -118,3 +118,16 @@ def test_field_boundary_refuses_corner_marker_ids_and_default_needs_them(tmp_pat
     unknown = _source(calibration_source="paint_magic")
     with pytest.raises(ValueError, match="calibration_source"):
         load_vision_sources(_write(tmp_path / "c.yaml", [unknown]), environ=ENV)
+
+
+@pytest.mark.parametrize("bad, message", [
+    ([34, 34], "distinct"), ([50], "0-49"), ([30], "corner_marker_ids"), ([7], "robot_markers"),
+])
+def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, bad, message):
+    """D-564: same rule as the Fleet parser (one shared check)."""
+    env = {"ROSY_PHONE_CEILING_NORTH": "phone-secret", "ROSY_FLEET_CEILING_NORTH": "vision-secret"}
+    path = _write(tmp_path / "c.yaml", [_source(place_markers=[34, 35])])
+    assert load_vision_sources(path, environ=env)[0].camera.place_markers == (34, 35)
+    assert load_vision_sources(_write(tmp_path / "c.yaml", [_source()]), environ=env)[0].camera.place_markers == ()
+    with pytest.raises(ValueError, match=message):
+        load_vision_sources(_write(tmp_path / "c.yaml", [_source(place_markers=bad)]), environ=env)

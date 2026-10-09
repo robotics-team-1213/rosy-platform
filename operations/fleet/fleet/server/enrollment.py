@@ -17,11 +17,9 @@ No request is ever retried automatically.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import ipaddress
 import logging
 import re
-import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -29,9 +27,9 @@ from typing import Any, Callable, Optional
 
 import httpx
 
-from core_common.config import FLEET_LINK_ARM_GRACE_S
-
 from fleet.server.discovery import is_rfc1918
+from fleet.server.enrollment_errors import EnrollmentError  # noqa: F401  (re-exported)
+from fleet.server.enrollment_hub import HubLinkMixin
 from fleet.server.enrollment_store import (
     EnrollmentStore,
     SealError,
@@ -56,28 +54,6 @@ _AVAHI_SUFFIX = re.compile(r"^(?P<base>.+)-\d+$")
 #: The console applies the same RFC 1918 rule before sending (web/enrollment.js).
 _RFC1918 = tuple(ipaddress.ip_network(net) for net in
                  ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
-
-
-class EnrollmentError(Exception):
-    """A classified refusal; never carries a code or token."""
-
-    def __init__(self, code: str, status: int, message: str, *, reason: str | None = None,
-                 retry_after: int | None = None, detail: dict | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.status = status
-        self.reason = reason
-        self.retry_after = retry_after
-        self.detail = detail or {}
-
-    def body(self) -> dict:
-        out = {"code": self.code, "message": str(self)}
-        if self.reason is not None:
-            out["reason"] = self.reason
-        if self.retry_after is not None:
-            out["retry_after"] = self.retry_after
-        out.update(self.detail)
-        return out
 
 
 def normalize_code(text: object) -> str:
@@ -216,7 +192,7 @@ class EnrolledRobotClient(HttpRobotClient):
             yield event
 
 
-class EnrollmentService:
+class EnrollmentService(HubLinkMixin):
     def __init__(self, store: EnrollmentStore, roster, *, key: bytes | None,
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
@@ -235,7 +211,9 @@ class EnrollmentService:
         self._transport = transport
         self._tls_bindings = tls_bindings
         if tls_bindings is not None:
-            tls_bindings.validate(store.rows())
+            pending = tls_bindings.validate(store.rows())
+            if pending:
+                _LOG.warning("TLS bindings pending enrollment (D-565): %s", ", ".join(pending))
         self._clock = clock
         self._gates: dict[str, RobotGate] = {}
         self._tokens: dict[str, str] = {}
@@ -262,7 +240,7 @@ class EnrollmentService:
     def _console(self):
         return self._roster._console
 
-    def _http(self, address: str) -> httpx.AsyncClient:
+    def _http(self, address: str, pending=None) -> httpx.AsyncClient:
         kwargs: dict[str, Any] = {}
         base_url = f"http://{address}"
         for row in self._store.rows():
@@ -274,10 +252,11 @@ class EnrollmentService:
             rows = [row for row in self._store.rows() if row["address"] == address]
             if len(rows) > 1:
                 raise EnrollmentError("conflict", 409, "several enrolled robots share that address")
-            if rows and self._tls_bindings.binding(rows[0]["robot_id"]) is not None:
+            if pending is not None or (rows and self._tls_bindings.binding(rows[0]["robot_id"]) is not None):
                 from fleet.server.enrollment_tls import EnrollmentIdentityTransport
                 from fleet.swarm.discovery_transport import DiscoveryTransport
-                endpoint = self._endpoint(rows[0], "anonymous-bootstrap")
+                endpoint = self._endpoint(rows[0] if pending is None else {
+                    "robot_id": pending.robot_id, "address": address}, "anonymous-bootstrap")
                 base_url = endpoint.base_url
                 kwargs["transport"] = DiscoveryTransport(endpoint, inner=EnrollmentIdentityTransport(
                     endpoint, self._tls_bindings, inner=self._transport))
@@ -383,7 +362,25 @@ class EnrollmentService:
 
     # --- enroll ------------------------------------------------------------
 
-    def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None]:
+    def _pending_binding(self, hostnames: set[str], port: int):
+        """D-565: an HTTPS robot with no row enrolls only through an approved pending binding.
+
+        The scan only picks the binding; TLS (its CA and hostname), the identity probe and
+        the robot_id read after pairing must all match it before anything is stored.
+        """
+        binding = (self._tls_bindings.pending(self._store.rows(), next(iter(hostnames)), port)
+                   if self._tls_bindings is not None and len(hostnames) == 1 else None)
+        if binding is None:
+            raise EnrollmentError("tls_binding_required", 409, "HTTPS requires an approved TLS binding")
+        return binding
+
+    def _refuse_http_for_binding(self, hostnames: set[str], address: str) -> None:
+        """D-565: a name or address an approved binding owns never enrolls over plain HTTP."""
+        bound = {row["robot_id"] for row in self._store.rows() if row["address"] == address}
+        if self._tls_bindings is not None and self._tls_bindings.claims(hostnames, bound):
+            raise EnrollmentError("tls_binding_required", 409, "that robot has an approved TLS binding")
+
+    def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None, Any]:
         if (discovery_name is None) == (address is None):
             raise EnrollmentError("bad_request", 400, "choose one discovered robot or one address")
         if address is not None:
@@ -391,10 +388,16 @@ class EnrollmentService:
             secure = [row for row in (self._discovery.rows() if self._discovery else [])
                       if f"{row['address']}:{row['port']}" == target and row.get("transport") == "https"]
             enrolled = [row for row in self._store.rows() if row["address"] == target]
+            if secure and not enrolled:
+                return target, None, self._pending_binding({r["hostname"] for r in secure}, secure[0]["port"])
             if secure and (len(enrolled) != 1 or self._tls_bindings is None
                            or self._tls_bindings.binding(enrolled[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
-            return target, None
+            if not secure:
+                self._refuse_http_for_binding(
+                    {row["hostname"] for row in (self._discovery.rows() if self._discovery else [])
+                     if f"{row['address']}:{row['port']}" == target}, target)
+            return target, None, None
         if self._discovery is None:
             raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
         if any((row.get("discovery_name") or row["hostname"]).lower() == discovery_name.lower()
@@ -411,25 +414,41 @@ class EnrollmentService:
                 row["status"] == "conflict" for row in rows):
             raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
         row = rows[0]
+        pending = None
         if row.get("transport") == "https":
             registered = [r for r in self._store.rows() if r["address"] == f"{row['address']}:{row['port']}"]
-            if (len(registered) != 1 or self._tls_bindings is None
+            if not registered:
+                pending = self._pending_binding({row["hostname"]}, row["port"])
+            elif (len(registered) != 1 or self._tls_bindings is None
                     or self._tls_bindings.binding(registered[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
+        else:
+            self._refuse_http_for_binding({row["hostname"]}, f"{row['address']}:{row['port']}")
         if not row.get("enrollable"):
             raise EnrollmentError("not_enrollable", 409, "that row is not waiting for registration")
-        return f"{row['address']}:{row['port']}", row
+        return f"{row['address']}:{row['port']}", row, pending
 
     async def enroll(self, *, code: object, principal_id: str,
                      discovery_name: str | None = None, address: str | None = None) -> dict:
         self._require_available()
         normalized = normalize_code(code)
-        target, row = self._candidate(discovery_name, address)
-        async with self._http(target) as http:
-            paired = await self._exchange(http, normalized, principal_id, target)
+        target, row, pending = self._candidate(discovery_name, address)
+        async with self._http(target, pending) as http:
+            try:
+                paired = await self._exchange(http, normalized, principal_id, target)
+            except ValueError as exc:
+                # TLS or the identity probe failed before the code left Fleet. Never retried over HTTP.
+                from fleet.server.enrollment_tls import EnrollmentTlsError
+                if pending is None:
+                    raise
+                outcome = "tls_binding_mismatch" if isinstance(exc, EnrollmentTlsError) else "unreachable"
+                self._store.audit(action="enroll", outcome=outcome, principal_id=principal_id, target=target)
+                if outcome == "unreachable":
+                    raise EnrollmentError(outcome, 502, "the approved TLS name is not reachable") from None
+                raise EnrollmentError(outcome, 409, "the robot does not prove its approved TLS binding") from None
             token = paired["token"]
             try:
-                return await self._bind_and_store(http, paired, row, target, principal_id)
+                return await self._bind_and_store(http, paired, row, target, principal_id, pending)
             except EnrollmentError as exc:
                 await self._logout(http, token)
                 self._store.audit(action="enroll", outcome=exc.reason or exc.code,
@@ -497,7 +516,7 @@ class EnrollmentService:
                                reason=reason, detail=detail)
 
     async def _bind_and_store(self, http: httpx.AsyncClient, paired: dict, row: dict | None,
-                              target: str, principal_id: str) -> dict:
+                              target: str, principal_id: str, pending=None) -> dict:
         received_at = self._clock()
         token = paired["token"]
         role = paired.get("role")
@@ -519,8 +538,13 @@ class EnrollmentService:
                     renamed and renamed.group("base") == row["name"].lower()))
         if not isinstance(robot_id, str) or not robot_id:
             raise self._consumed("wrong_robot", avahi_renamed=False)
+        if (http.base_url.scheme != "https" and self._tls_bindings is not None
+                and self._tls_bindings.claims({hostname}, {robot_id})):
+            raise self._consumed("tls_binding_required")  # a bound identity answered over HTTP
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
+        if pending is not None and robot_id != pending.robot_id:
+            raise self._consumed("tls_binding_mismatch")
         token_id = str(paired.get("id") or me.get("id") or "")
         if not token_id:
             raise self._consumed("verify_failed")
@@ -541,6 +565,10 @@ class EnrollmentService:
         self._store.insert(record, seal(self._key, token, slot="rest", robot_id=robot_id,
                                         token_id=token_id))
         try:
+            if pending is not None:
+                # The downgrade fence a bound row gets at load: this id never goes back to HTTP.
+                self._store.remember_tls([dict(robot_id=robot_id, origin=f"https://{pending.hostname}:{pending.port}",
+                                               ca_sha256=pending.tls_ca_sha256)])
             gate = self._gate_for(record)
             endpoint = self._endpoint(record, token)
             self._roster.add(endpoint, self._client(endpoint, gate))
@@ -766,158 +794,6 @@ class EnrollmentService:
                 "expires_at": paired.get("expires_at") or me.get("expires_at"),
                 "fleet_expires_at": fleet_expires_at,
                 "warn_at": fleet_expires_at - warn_before if fleet_expires_at is not None else None}
-
-    # --- hub link (D-555) ------------------------------------------------------
-
-    def _tls_bound(self, robot_id: str) -> bool:
-        return self._tls_bindings is not None and self._tls_bindings.binding(robot_id) is not None
-
-    def _hub_state(self, row: dict) -> str | None:
-        """`online`, `checking` (inside CORE's arm grace) or `failed` (CORE's SAF-003 counts the
-        link as lost), mirroring FLEET_LINK_ARM_GRACE_S without asking the robot."""
-        if not row.get("hub_digest"):
-            return None
-        if self._hub_online(row["robot_id"]):
-            return "online"
-        since = self._hub_linked_at.get(row["robot_id"], self._started_at)
-        return "checking" if self._clock() - since < FLEET_LINK_ARM_GRACE_S else "failed"
-
-    def _hub_online(self, robot_id: str) -> bool:
-        record = self._console().hub.registry.find(robot_id)
-        return record is not None and bool(record.online)
-
-    def _hub_target(self, robot_id: str, principal_id: str, action: str) -> dict:
-        """The enrolled row a hub credential may travel to: TLS-bound only (D-555 2)."""
-        self._require_available()
-        row = self._store.get(robot_id)
-        if row is None or row["state"] == "pending_logout":
-            raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-        self._tls_fence(row)
-        if not self._tls_bound(robot_id):
-            self._store.audit(action=action, outcome="tls_binding_required",
-                              principal_id=principal_id, target=robot_id)
-            raise EnrollmentError("tls_binding_required", 409,
-                                  "hub link needs a TLS-bound enrollment; over plain HTTP the "
-                                  "credential would cross the LAN in clear")
-        return row
-
-    def _hub_lock(self, robot_id: str) -> asyncio.Lock:
-        """One hub-link change per robot at a time (store, PUT and rollback stay together)."""
-        return self._hub_locks.setdefault(robot_id, asyncio.Lock())
-
-    def _tls_client(self, robot_id: str):
-        """The enrolled client when the TLS fence and binding hold, else None (never raises)."""
-        try:
-            row = self._store.get(robot_id)
-            if row is None or not self._tls_bound(robot_id):
-                return None
-            self._tls_fence(row)
-            client = self._console()._client(robot_id)
-        except Exception:  # EnrollmentTlsError (changed binding), HubError (not on the roster)
-            return None
-        return client if client._ep.base_url.startswith("https://") else None
-
-    async def _refuse_during_fleet_goal(self, robot_id: str, client) -> None:
-        """D-555 review: a relink or a dropped hub session during a Fleet goal arms SAF-003."""
-        refused = EnrollmentError("fleet_goal_active", 409,
-                                  "a Fleet goal is running on this robot; change the hub link after it ends")
-        if robot_id in self._console()._goals:
-            raise refused
-        if client is None:
-            return
-        try:
-            link = await client.fleet_link_get()
-        except Exception:  # unreachable or old image: CORE's own 409 FLEET_GOAL_ACTIVE still guards PUT
-            return
-        if isinstance(link, dict) and link.get("fleet_goal_active") is True:
-            raise refused
-
-    async def link_hub(self, robot_id: str, *, principal_id: str) -> dict:
-        """Issue (or rotate) the robot's hub credential and deliver it once over TLS.
-
-        Only the SHA-256 digest is stored. It is stored and applied before delivery so the
-        robot's immediate HELLO is accepted, and rolled back if delivery fails.
-        """
-        async with self._hub_lock(robot_id):
-            row = self._hub_target(robot_id, principal_id, "hub_link")
-            if self._hub_link is None:
-                raise EnrollmentError("hub_link_unavailable", 409,
-                                      "Fleet runs without --hub-link-hostname/--hub-link-ca, "
-                                      "--events-db or a console token")
-            if row["state"] != "active":
-                raise EnrollmentError("not_active", 409, "the robot's enrollment is not active")
-            client = self._console()._client(robot_id)
-            if not client._ep.base_url.startswith("https://"):  # the binding chose TLS; never send otherwise
-                raise EnrollmentError("tls_binding_required", 409, "the robot client is not on TLS")
-            try:
-                caps = await client.capabilities()
-            except (RobotApiError, httpx.HTTPError, ValueError):  # ValueError: EnrollmentTlsError
-                raise EnrollmentError("unreachable", 502, "the robot is not reachable") from None
-            if not (isinstance(caps, dict) and caps.get("fleet_link_provisioning") is True):
-                raise EnrollmentError("robot_unsupported", 409,
-                                      "this robot image cannot take a hub link (fleet_link_provisioning)")
-            await self._refuse_during_fleet_goal(robot_id, client)
-            token = secrets.token_urlsafe(32)
-            digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-            host = self._hub_link["expected_hostname"]
-            old = (row.get("hub_digest"), row.get("hub_host"))
-            hub = self._console().hub
-            self._store.update(robot_id, hub_digest=digest, hub_host=host)
-            hub.set_pairing_digest(robot_id, digest)
-            try:
-                await client.fleet_link_put({"pairing_token": token, "expected_hostname": host,
-                                             "ca_pem": self._hub_link["ca_pem"]})
-            except Exception as exc:
-                self._store.update(robot_id, hub_digest=old[0], hub_host=old[1])
-                hub.set_pairing_digest(robot_id, old[0])
-                code = exc.code if isinstance(exc, RobotApiError) else "unreachable"
-                self._store.audit(action="hub_link", outcome=f"failed:{code}"[:64],
-                                  principal_id=principal_id, target=robot_id)
-                if code == "FLEET_GOAL_ACTIVE":
-                    raise EnrollmentError("fleet_goal_active", 409,
-                                          "a Fleet goal is running on this robot; change the hub link "
-                                          "after it ends") from None
-                # The robot's code only: a message could carry anything the request held.
-                raise EnrollmentError("robot_refused", 502, f"the robot did not take the hub link ({code})",
-                                      detail={"robot_code": code}) from None
-            self._hub_linked_at[robot_id] = self._clock()
-            self._store.audit(action="hub_link", outcome="rotated" if old[0] else "linked",
-                              principal_id=principal_id, target=robot_id)
-            return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
-
-    async def _clear_robot_link(self, robot_id: str) -> bool:
-        """One DELETE /fleet/link attempt behind the TLS fence. True when the robot answered it."""
-        client = self._tls_client(robot_id)
-        if client is None:
-            return False
-        try:
-            await client.fleet_link_delete()
-            return True
-        except Exception:  # unreachable, held address, old image: Fleet's side is cleared anyway
-            return False
-
-    async def unlink_hub(self, robot_id: str, *, principal_id: str, force: bool = False) -> dict:
-        """Revoke: clear the digest here first (no TLS needed for that), then ask the robot.
-
-        ``force`` (named operator, confirmed in the console) revokes during a Fleet goal too:
-        the robot then sees a lost link and SAF-003 STOP/HOLD applies (the safe direction).
-        """
-        async with self._hub_lock(robot_id):
-            self._require_available()
-            row = self._store.get(robot_id)
-            if row is None or row["state"] == "pending_logout":
-                raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-            if not force:
-                await self._refuse_during_fleet_goal(robot_id, self._tls_client(robot_id))
-            self._store.update(robot_id, hub_digest=None, hub_host=None)
-            self._hub_linked_at.pop(robot_id, None)
-            self._console().hub.set_pairing_digest(robot_id, None)
-            cleared = await self._clear_robot_link(robot_id)
-            outcome = "cleared" if cleared else "robot_not_cleared"
-            self._store.audit(action="hub_unlink", outcome=f"forced_{outcome}" if force else outcome,
-                              principal_id=principal_id, target=robot_id)
-            return {**next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id),
-                    "robot_cleared": cleared, "was_linked": bool(row.get("hub_digest"))}
 
     # --- unenroll ------------------------------------------------------------
 
