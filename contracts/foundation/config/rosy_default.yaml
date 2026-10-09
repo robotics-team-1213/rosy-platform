@@ -145,6 +145,20 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   crosswalk_zone_max_m: 0.20       # zone length cap; re-set after measurement
   crosswalk_odom_error_fraction: 0.05  # zone margin per metre travelled since the image
   crosswalk_range_error_fraction: 0.05  # zone margin per metre of camera range (9dfk: ~1.5 cm at 0.3 m)
+  # D-573 crosswalk gate (Safety-Review): stop s_wait before a camera crosswalk zone (URDF body +
+  # LiDAR range_min), look, cross only after crosswalk_look_s of empty LiDAR scans; no timeout;
+  # crosswalk_blocked stuck to a human after crosswalk_report_s. Needs obstacle_mode path. Keep
+  # false until D-577 open item 1 (LEGACY odom pose in the Fleet rear band, stuck_resolver
+  # _map_pose) is closed: line_follow.crosswalk null opens the resolver's R3 back-off.
+  crosswalk_gate_enabled: false
+  crosswalk_look_s: 1.0
+  crosswalk_look_min_scans: 8     # 10 Hz LiDAR x 1 s x 0.8
+  crosswalk_report_s: 10.0
+  crosswalk_cross_speed: 0.04     # lane slow value (cruise 0.08 x 0.5)
+  crosswalk_approach_default_m: 0.0   # strip beside a camera-only zone's lane corridor; 0 = corridor only
+  crosswalk_range_sigma_m: 0.0035  # measured C1 range noise (8kcn 2026-10-10); edge band = 3 sigma
+  crosswalk_persist_k: 2           # an edge-band cell is a person when hit in k of the last n scans
+  crosswalk_persist_n: 3
   # D-407 lane stuck recovery: obstacle_ahead >= obstacle_escalate_s or LOST opens one stuck and
   # asks the console (POST /line-follow/stuck/decision). No answer in recovery_ask_s, or no
   # console link -> local back-off (only when recovery_local_enabled; since D-495 that is the

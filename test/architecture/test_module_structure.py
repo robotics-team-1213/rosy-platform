@@ -674,7 +674,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_347,
+        1_360,
+        "accept: re-judged at 1360 on 2026-10-10 for D-573 (c) (independent read-only critic): LineCrosswalkStatus "
+        "lives in protocol/line_crosswalk.py; here one re-export, LineStuckStatus.detail, "
+        "LineFollowStatus.crosswalk/crosswalk_reported and the omit-when-unreported serializer. Previously: "
         "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
         "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
         "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
@@ -919,7 +922,10 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "core_features": (
-        11_814,
+        12_392,
+        "accept: re-judged at 12392 on 2026-10-10 for D-573 (c) (independent read-only critic): new "
+        "line_follow/crosswalk_gate.py (509) plus config/wiring; next growth makes line_follow its own size "
+        "unit with a docs/plans split plan. Previously: "
         "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
         "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
         "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
