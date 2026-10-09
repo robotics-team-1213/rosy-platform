@@ -570,3 +570,7 @@
 - 변경: 최대 1초 유효한 `RouteContext` 검증, `LineFollowStatus` 문맥·발행 시각, `base_velocity.route_context` 선택 능력을 추가했다. 기존 설정은 꺼짐이다.
 - 증거: foundation 856 passed, 5 skipped, `known_failures.py` 신규 실패 0.
 - gate 변화: D-531 P1 SOURCE 후보. 소비자 P2/P3는 별도.
+## 2026-10-09 · feat/ceiling-place-markers · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
+- 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
+- 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
+- gate 변화: 없음.
