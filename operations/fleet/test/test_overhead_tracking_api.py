@@ -183,14 +183,14 @@ def test_tracking_pairs_the_console_state_with_detections(tmp_path):
     assert [(row["x"], row["y"]) for row in snap["unknown"]] == [(2.5, 1.0)]
 
 
-def test_state_is_aged_from_before_the_robot_reads(tmp_path):
+def test_state_uses_its_own_read_time_after_a_slow_gather(tmp_path):
     clock = _Clock()
     with _client(tmp_path, clock=clock, delay_s=2.5) as client:
         assert client.get("/api/fleet/state", headers=_auth(VIEWER_TOKEN)).status_code == 200
         client.post("/api/fleet/detections", json=_detections(captured_at=clock.now - 0.1),
                     headers=_auth(SOURCE_TOKEN))
         snap = client.get("/api/fleet/tracking", headers=_auth(VIEWER_TOKEN)).json()
-    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "NO_POSE")]
+    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "MATCHED")]
 
 
 def test_relearn_is_an_operator_action(tmp_path, caplog):
