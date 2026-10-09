@@ -25,7 +25,12 @@ if [ -z "$DIR" ]; then
 fi
 
 case "${1:-}" in
-  watch) shift; exec "$VENV/bin/python" "$DIR/model/watch.py" "$@" ;;
+  watch) shift
+    # Host updated before migrate-site-secrets.sh: use the pre-migration token path.
+    if [ -n "${HF_TOKEN_FILE:-}" ] && [ ! -e "$HF_TOKEN_FILE" ] && [ -e /etc/rosy/site/secrets/hf_token ]; then
+      export HF_TOKEN_FILE=/etc/rosy/site/secrets/hf_token
+    fi
+    exec "$VENV/bin/python" "$DIR/model/watch.py" "$@" ;;
   doctor) shift; exec "$VENV/bin/python" "$DIR/rosy_ml.py" doctor "$@" ;;
   locate) printf '%s\n' "$DIR" ;;
   *) echo "usage: rosy-model-watch watch|doctor|locate [args...]" >&2; exit 2 ;;

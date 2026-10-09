@@ -17,6 +17,4 @@ D-428 ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on mai
 D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
-D-526 reserved in another active branch; D-527 lands independently
-D-548 reserved in another active branch; D-550/D-551 land independently; remove when its ADR lands
-D-549 reserved in another active branch; D-550/D-551 land independently; remove when its ADR lands
+D-554 reserved in another active branch (refs/adr/D-554, no ADR body on main); D-555 lands independently; remove when its ADR lands

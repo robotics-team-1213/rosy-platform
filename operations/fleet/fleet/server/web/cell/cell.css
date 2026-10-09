@@ -1,7 +1,6 @@
 main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; }
-.cell-access { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4) 0; max-width: 90rem; margin: 0 auto; }
-.cell-access[hidden] { display: none; }
-#credential { flex: 1; min-width: 0; }
+.cell-intro { display: grid; gap: var(--space-1); }
+.cell-intro h1 { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body); }
 .documents { align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 ui-section { display: grid; gap: var(--space-3); }
 #saved li { overflow-wrap: anywhere; }
@@ -27,10 +26,6 @@ a { color: var(--ink); }
 #layout { width: 100%; height: 20rem; color: var(--ink); }
 #layout rect { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; }
 #layout text { fill: var(--ink); font: var(--text-micro) var(--mono); }
-.estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
-.estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
-.estop span { white-space: nowrap; }
-.estop small { flex-basis: 100%; text-align: center; }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 30rem) {
   .documents, .scope { grid-template-columns: 1fr; }
@@ -38,14 +33,6 @@ a { color: var(--ink); }
   .actions > * { box-sizing: border-box; width: 100%; min-width: 0; }
   ui-head:has(#compile) { flex-direction: column; align-items: stretch; }
   #compile { box-sizing: border-box; width: 100%; }
-  ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
-  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
-  ui-topbar ui-brand small { display: none; }
-  ui-topbar [data-spacer] { display: none; }
-  #session { grid-area: session; display: block; box-sizing: border-box; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-  #estop { grid-area: estop; gap: var(--space-1); padding-inline: var(--space-2); }
-  #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
-  #estop small { display: none; }
 }
 @media (30rem <= width < 64rem) { .documents { grid-template-columns: 1fr; } }
 /* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */

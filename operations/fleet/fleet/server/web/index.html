@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
@@ -18,6 +19,7 @@
 <body>
   <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
   <ui-shell grammar="exception">
+  <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
     <ui-brand><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
@@ -141,27 +143,21 @@
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
+        <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
         <div class="queues-container">
-          <div class="queue warning-queue">
-            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
-            <ul id="warning-list" class="issue-list"></ul>
-          </div>
           <div class="queue critical-queue">
             <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
             <ul id="critical-list" class="issue-list"></ul>
           </div>
+          <div class="queue warning-queue">
+            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
+            <ul id="warning-list" class="issue-list"></ul>
+          </div>
         </div>
-        <!-- D-407 판단 요청: 차선 추종이 막힌 로봇의 질문과 다섯 답. CORE가 판단하고 거부한다. -->
-        <section id="stuck-panel" class="stuck-panel" aria-labelledby="stuck-heading" hidden>
-          <h3 id="stuck-heading">판단 요청 <small id="stuck-count"></small></h3>
-          <p class="hint">차선 추종이 막힌 로봇이 다음 동작을 묻습니다. 답이 없으면 로봇은 정해진 시간 뒤 짧게 물러나 다시 보거나(로컬 복구가 켜진 로봇), 멈춘 채 답을 기다립니다.</p>
-          <ul id="stuck-list" class="stuck-list" aria-labelledby="stuck-heading"></ul>
-        </section>
       </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
           <h2 id="roster-heading">등록 로봇</h2>
-          <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
           <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
           <section id="dispatch-control" class="dispatch-control" role="status"
                    aria-live="polite" aria-labelledby="dispatch-control-title">

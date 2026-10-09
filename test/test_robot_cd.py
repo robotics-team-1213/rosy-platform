@@ -91,7 +91,7 @@ def test_failed_main_does_not_dispatch_or_sign(tmp_path):
 
     config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
               "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key"}
-    assert tool.Coordinator(config, gh=github).tick() == "waiting_ci"
+    assert tool.Coordinator(config, gh=github).tick() == "ci_failed"
     assert all("workflow" != call[0] for call in calls)
 
 
@@ -262,3 +262,123 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
     assert state["sha"] == SHA and state["phase"] == "building"
     assert not {"attempt", "work_dir", "canary_name", "publisher_pid", "tarball_sha256"} & state.keys()
     assert "old-canary" in (tmp_path / "audit.jsonl").read_text()
+
+
+# --- D-553: build beside CI, sign only after it, never retry forever --------------------
+
+CONFIG = {"repo": "team/robots", "repo_id": 7, "robots": ["robot-a"], "canary": "robot-a",
+          "key_name": "release-key"}
+
+
+def github_for(ci_runs, tags=()):
+    def github(*args):
+        if args[0] == "workflow" or "--method" in args:
+            return "{}"
+        path = args[1]
+        if "git/ref/heads/main" in path:
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "identical"})
+        if "ci.yml/runs?" in path:
+            return json.dumps({"workflow_runs": ci_runs})
+        if "matching-refs" in path:
+            return json.dumps([{"ref": f"refs/tags/{t}"} for t in tags])
+        if "releases?" in path:
+            return "[]"
+        return json.dumps({"id": 9})
+    return github
+
+
+def test_build_is_dispatched_while_ci_still_runs(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path},
+                                   gh=github_for([run(status="in_progress", conclusion=None)]))
+    monkeypatch.setattr(coordinator, "ssh", lambda *args: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
+    assert coordinator.tick() == "build_dispatched"
+
+
+@pytest.mark.parametrize("phase", ["building", "preparing"])
+def test_failed_ci_ends_a_speculative_transaction(tmp_path, phase):
+    tool = module()
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": phase, "release_id": "2026.10.06-046"})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run(conclusion="failure")]))
+    assert coordinator.tick() == "ci_failed"
+    assert json.loads((tmp_path / "state.json").read_text())["phase"] == "failed"
+
+
+def test_finished_build_waits_for_ci_before_signing(tmp_path):
+    tool = module()
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.06-046"})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path},
+                                   gh=github_for([run(status="in_progress", conclusion=None)]))
+    assert coordinator.tick() == "waiting_ci"
+    assert json.loads((tmp_path / "state.json").read_text())["phase"] == "preparing"
+
+
+def test_older_release_than_a_published_one_is_never_signed(tmp_path):
+    tool = module()
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.05-045"})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path},
+                                   gh=github_for([run()], tags=["payload-reserved-2026.10.06-050",
+                                                                "payload-2026.10.08-054"]))
+    assert coordinator.tick() == "superseded"
+    assert json.loads((tmp_path / "state.json").read_text())["phase"] == "failed"
+
+
+def test_preparation_refusal_ends_after_three_ticks(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import prepare_payload_release as prepare
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("ABI mismatch")
+    monkeypatch.setattr(prepare, "download_unsigned", refuse)
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.06-046",
+                                             "build_run": 5})
+    results = [tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run()])).tick()
+               for _ in range(3)]
+    assert results == ["prepare_retry", "prepare_retry", "prepare_failed"]
+    state = json.loads((tmp_path / "state.json").read_text())
+    assert state["phase"] == "failed" and "ABI mismatch" in state["last_error"]
+    assert "prepare_failed" in (tmp_path / "audit.jsonl").read_text()
+
+
+def test_failed_ci_rerun_does_not_abandon_a_signed_rollout(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "publishing", "release_id": "2026.10.06-046",
+                                             "work_dir": str(tmp_path / "missing"), "tarball_sha256": "ab" * 32})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run(conclusion="failure")]))
+    with pytest.raises(OSError):  # reaches the publishing phase (missing tarball), not ci_failed
+        coordinator.tick()
+    assert json.loads((tmp_path / "state.json").read_text())["phase"] == "publishing"
+
+
+def test_source_mismatch_also_counts_toward_the_preparation_limit(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import prepare_payload_release as prepare
+
+    def other_source(run_id, release_id, work, repo, retries):
+        work.mkdir(parents=True, exist_ok=True)
+        artifact(work / "u.tar.gz", sha="cd" * 20)
+        return None, work / "u.tar.gz"
+    monkeypatch.setattr(prepare, "download_unsigned", other_source)
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.06-046",
+                                             "build_run": 5})
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run()]))
+    assert coordinator.tick() == "prepare_retry"
+    assert "ValueError" in json.loads((tmp_path / "state.json").read_text())["last_error"]
+
+
+def test_state_dir_too_long_for_payload_paths_is_refused(tmp_path):
+    tool = module()
+    long_dir = tmp_path / ("s" * (tool.MAX_STATE_DIR + 1))
+    config = {**CONFIG, "repo_id": 7, "state_dir": str(long_dir), "trusted_root": str(ROOT)}
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="MAX_PATH"):
+        tool.load_config(path)

@@ -553,16 +553,24 @@ class RosBridge:
             voltage_topic_seen=self._voltage_topic_seen)
 
     def _tick_power(self) -> None:
-        power = self._svc.power
-        power.tick()
-        # D-321 addendum: a lapsed calibration lease emits its expiry even when
-        # no screen is reading /robot/state. Rides this timer; commands nothing.
-        self._svc.calibration.expire_due()
+        # D-550 10 Safety-Review: the SAF-003 and goal-lease stops run first, each guarded, so a
+        # fault in the power/calibration/trip-lease calls below cannot starve them.
         if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
             try:
                 self._svc.fleet_loss.tick()
             except Exception:  # a monitor fault must not stop the power timer
                 self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
+        try:  # D-550 10: a leased Fleet goal whose lease ran out is cancelled (SAF-003 cancel path)
+            self._svc.nav.expire_goal_lease()
+        except Exception:  # a lease fault must not stop the power timer
+            self._node.get_logger().error(f"goal lease tick failed:\n{traceback.format_exc()}")
+        power = self._svc.power
+        power.tick()
+        # D-321 addendum: a lapsed calibration lease emits its expiry even when
+        # no screen is reading /robot/state. Rides this timer; commands nothing.
+        self._svc.calibration.expire_due()
+        # D-541 6: a trip lease not renewed within ttl_s ends and halts the robot to IDLE.
+        self._svc.trip_lease.expire_due()
         status = power.status()
         self._svc.state.set_power(status)
 

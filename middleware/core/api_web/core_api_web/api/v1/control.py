@@ -39,6 +39,10 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 @control_router.post("/teleop")
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
+    # D-541 1: a trip never teleops, so the lease owner's token driving by hand is shared.
+    trip = getattr(svc, "trip_lease", None)
+    if trip is not None:
+        trip.note_use(auth.token_id, None, "teleop")
     try:
         TaskKind.MOVE.require(svc.capability)
         require_calibration_owner(svc, auth, "teleop")

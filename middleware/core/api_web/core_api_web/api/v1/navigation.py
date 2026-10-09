@@ -8,13 +8,15 @@ from pydantic import BaseModel, Field
 from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
+    owns_trip_lease,
     require_calibration_owner,
     require_manual_released,
     require_kept,
     localized_start,
+    stop_ends_trip_lease,
     viewer,
 )
-from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
+from core_api_web.api.deps import GOAL_LEASE_MAX_S, AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
@@ -30,21 +32,35 @@ class GoalRequest(BaseModel):
     yaw: float | None = 0.0
     waypoint: str | None = None
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    #: D-550 10: optional goal lease; needs correlation_id. Checked before the mode changes.
+    lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
+
+
+class GoalLeaseRequest(BaseModel):
+    correlation_id: str = Field(min_length=1, max_length=128)
+    ttl_s: float = Field(gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
 
 
 @navigation_router.post("/navigation/goal")
 def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    if body.lease_ttl_s is not None and body.correlation_id is None:  # D-550 10, before any mode change
+        raise ApiError("VALIDATION_ERROR", 400, "lease_ttl_s needs a correlation_id")
     require_manual_released(svc)
     if svc.line_follow.active:
-        raise ApiError("LINE_FOLLOW_ACTIVE", 409,
-                       "stop the selected line-follow mode before accepting a navigation goal")
+        # D-541 5: the trip lease owner switches lane -> free with the goal itself
+        # (enter_navigation_mode turns line-follow off); a line-follow OFF first would go IDLE.
+        require_calibration_owner(svc, auth, "navigation")
+        if not owns_trip_lease(svc, auth):
+            raise ApiError("LINE_FOLLOW_ACTIVE", 409,
+                           "stop the selected line-follow mode before accepting a navigation goal")
     TaskKind.NAVIGATE.require(svc.capability)
     require_kept(svc, "navigation.goal_navigation")
     with localized_start(svc):
         spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
         enter_navigation_mode(svc, auth)
-        svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id)
+        svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
+                     lease_ttl_s=body.lease_ttl_s)
     return {
         "accepted": True,
         "mode": svc.modes.mode.value,
@@ -52,10 +68,19 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
     }
 
 
+@navigation_router.post("/navigation/goal/lease")
+def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(operator),
+                          svc: CoreServicesLike = Depends(get_services)):
+    """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not the active goal."""
+    svc.nav.renew_goal_lease(body.correlation_id, body.ttl_s)
+    return {"renewed": True, "correlation_id": body.correlation_id, "ttl_s": body.ttl_s}
+
+
 @navigation_router.post("/navigation/cancel")
 def navigation_cancel(auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     svc.nav.cancel(source=f"api:{auth.role}")
+    stop_ends_trip_lease(svc, auth)
     return {"navigation": svc.nav.nav_state.value}
 
 

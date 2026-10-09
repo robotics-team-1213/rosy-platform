@@ -41,12 +41,16 @@ def reporting_assist(svc: CoreServicesLike):
 
 
 def _lease(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:
-    """D-321 addendum, answered 423 on the D-395 routes (contract §2)."""
+    """D-321 addendum / D-541 3, answered 423 on the D-395 routes (contract §2)."""
     session = svc.calibration.blocking(auth.token_id)
     if session is not None:
         raise ApiError("CALIBRATION_ACTIVE", 423,
                        f"{action} refused: calibration '{session['label']}' is in progress",
                        detail={"session": session})
+    lease = svc.trip_lease.blocking(auth.token_id)
+    if lease is not None:  # D-541 3: same 423 convention on the D-395 routes
+        raise ApiError("TRIP_LEASED", 423,
+                       f"{action} refused: Fleet trip '{lease['trip_id']}' holds this robot", detail=lease)
 
 
 def send_decision(loc, decision: LocalizationDecision) -> None:
@@ -110,6 +114,9 @@ def start_mission(body: MissionRequest, auth: AuthContext = Depends(assist),
     mission = _mission(svc)
     if svc.calibration.blocking(auth.token_id) is not None:
         raise ApiError("calibration_lease", 409, "a calibration lease is in progress")
+    lease = svc.trip_lease.blocking(auth.token_id)
+    if lease is not None:  # D-541 3: CORE drives the mission, so a non-owner may not start it
+        raise ApiError("TRIP_LEASED", 409, f"Fleet trip '{lease['trip_id']}' holds this robot", detail=lease)
     TaskKind.MOVE.require(svc.capability)
     try:
         svc.nav.require_ready()

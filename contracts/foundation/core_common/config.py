@@ -14,9 +14,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
+import stat
 import tempfile
 from .config_transaction import transaction
 from pathlib import Path
@@ -46,6 +48,103 @@ def overlay_path() -> Path:
     """Where dashboard/API writes persist: ROSY_CONFIG if set, else ~/.rosy/rosy.yaml."""
     env = os.environ.get("ROSY_CONFIG", "").strip()
     return Path(env) if env else LOCAL_CONFIG_PATH
+
+
+#: D-555: keys the private Fleet link file owns inside `fleet`.
+FLEET_LINK_KEYS = ("pairing_token", "hub_url", "discovery")
+#: D-555: a relinked Fleet link counts for SAF-003 from its first WELCOME, or at the latest this
+#: long after the relink: HELLO 5 s + discovery 25 s (mDNS 3, DNS fallback 12, TLS health
+#: connect 5 + read 5) + 5 s slack. Past it a link that never came up is a lost link, as at boot.
+FLEET_LINK_ARM_GRACE_S = 35.0
+
+
+def fleet_link_arm_state(armed: bool, relinked_at: float | None, now: float) -> str:
+    """`armed` (welcomed, or never relinked), `pending` (inside the grace) or `grace_expired`."""
+    if armed or relinked_at is None:
+        return "armed"
+    return "pending" if now - relinked_at < FLEET_LINK_ARM_GRACE_S else "grace_expired"
+
+
+def fleet_link_path() -> Path:
+    """D-555 private Fleet link file (0600, CORE user): ROSY_FLEET_LINK, else ~/.rosy/fleet-link.yaml."""
+    env = os.environ.get("ROSY_FLEET_LINK", "").strip()
+    return Path(env) if env else Path.home() / ".rosy" / "fleet-link.yaml"
+
+
+def fleet_link_ca_path() -> Path:
+    path = fleet_link_path()
+    return path.with_name(path.stem + "-ca.pem")
+
+
+def fleet_link_layer() -> dict[str, Any] | None:
+    """The provisioned `fleet` link block, or None (D-555). Never breaks boot: a symlink, a file
+    owned by another user or readable by group/others, or an unreadable file is ignored."""
+    path = fleet_link_path()
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        _LOG.warning("%s unreadable (%s); Fleet link ignored", path, exc.strerror)
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        _LOG.warning("%s is not a regular file (symlink?); Fleet link ignored", path)
+        return None
+    if os.name == "posix" and (info.st_mode & 0o077 or info.st_uid != os.geteuid()):
+        _LOG.warning("%s is readable by others or not owned by this user; Fleet link ignored", path)
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        _LOG.warning("%s could not be read as YAML; Fleet link ignored", path)
+        return None
+    fleet = data.get("fleet") if isinstance(data, dict) else None
+    return {key: fleet[key] for key in FLEET_LINK_KEYS if key in fleet} if isinstance(fleet, dict) else None
+
+
+def merge_fleet_link(fleet: dict[str, Any] | None, link: dict[str, Any] | None) -> dict[str, Any]:
+    """`fleet` with its link keys replaced by ``link`` (None = keep the lower layers' link)."""
+    merged = dict(fleet or {})
+    if link is not None:
+        for key in FLEET_LINK_KEYS:
+            merged.pop(key, None)
+        merged.update(link)
+    return merged
+
+
+def _write_private(path: Path, text: str) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # mode applies only when created
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    tmp = Path(temporary)  # mkstemp creates 0600
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def write_fleet_link(pairing_token: str, expected_hostname: str, ca_pem: str) -> dict[str, Any]:
+    """Write the CA and the 0600 link file; return the link block (D-555). Never logs the token."""
+    ca_path = fleet_link_ca_path()
+    _write_private(ca_path, ca_pem)
+    link = {"pairing_token": pairing_token,
+            "discovery": {"expected_hostname": expected_hostname, "ca_file": str(ca_path)}}
+    _write_private(fleet_link_path(), yaml.safe_dump({"fleet": link}, sort_keys=False))
+    return link
+
+
+def clear_fleet_link() -> bool:
+    """Remove the link file and its CA. True when a link file was there."""
+    path = fleet_link_path()
+    existed = path.exists()
+    path.unlink(missing_ok=True)
+    fleet_link_ca_path().unlink(missing_ok=True)
+    return existed
 
 
 def local_overlay() -> dict[str, Any]:
@@ -85,11 +184,37 @@ def _find_default_config() -> Path:
     return Path(__file__).resolve().parents[1] / "config" / DEFAULT_CONFIG_NAME
 
 
+#: D-548: root가 한 로봇에 이 파일을 만들면 그 로봇만 공용 개발 토큰을 연다.
+#: 파일이 없으면 D-193 7 그대로 닫힌다.
+DEV_MODE_MARKER = Path("/etc/rosy/dev-mode")
+
+
 def dev_auth_enabled() -> bool:
-    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시한다(D-193 7)."""
+    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시하고(D-193 7)
+    개발 모드 표식 파일만 본다(D-548)."""
     if os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device":
-        return False
+        return DEV_MODE_MARKER.is_file()
     return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
+
+
+def _append_dev_tokens(config: dict[str, Any], dev_layer: dict[str, Any]) -> None:
+    """D-548: a device overlay always lists card or paired tokens, and a list replaces the
+    one below it, so the marker puts the shared tokens on top. A digest already listed
+    (a record stored on an earlier write) is not added twice."""
+    auth = config.setdefault("auth", {})
+    tokens = auth.get("tokens") or []
+    if not isinstance(tokens, list):
+        return
+    def digest(item: Any) -> Optional[str]:
+        if not isinstance(item, dict):
+            return None
+        if item.get("sha256"):
+            return str(item["sha256"]).strip().lower()
+        return hashlib.sha256(str(item["token"]).encode("utf-8")).hexdigest() if item.get("token") else None
+
+    listed = {digest(item) for item in tokens}
+    auth["tokens"] = tokens + [item for item in (dev_layer.get("auth") or {}).get("tokens") or []
+                               if digest(item) is not None and digest(item) not in listed]
 
 
 def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:
@@ -132,7 +257,7 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
     return layer
 
 
-def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
+def load_config(explicit_path: Optional[str] = None, *, fleet_link: bool = True) -> dict[str, Any]:
     """기본값 → 로봇 패키지 core.yaml → ~/.rosy/rosy.yaml 또는 ROSY_CONFIG 순으로 병합해 반환한다.
 
     ROSY_CONFIG 가 있으면 ~/.rosy/rosy.yaml 대신 그것을 읽는다. 로봇 패키지 층의 오류는 ConfigError.
@@ -143,13 +268,17 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     with open(base_path, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
+    device = os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
+    dev_layer: dict[str, Any] = {}
     if dev_auth_enabled():
         dev_path = base_path.parent / DEV_AUTH_CONFIG_NAME
         if not dev_path.exists():
             dev_path = _find_default_config().parent / DEV_AUTH_CONFIG_NAME
         if dev_path.exists():
             with open(dev_path, encoding="utf-8") as f:
-                config = _deep_merge(config, yaml.safe_load(f) or {})
+                dev_layer = yaml.safe_load(f) or {}
+    if not device:
+        config = _deep_merge(config, dev_layer)
 
     override_path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
     overlay: dict[str, Any] = {}
@@ -158,6 +287,11 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
             overlay = yaml.safe_load(f) or {}
     config = _deep_merge(config, _robot_package_layer(config, overlay))
     config = _deep_merge(config, overlay)
+    link = fleet_link_layer() if fleet_link else None
+    if link is not None:
+        config["fleet"] = merge_fleet_link(config.get("fleet"), link)
+    if device and dev_layer:
+        _append_dev_tokens(config, dev_layer)
     overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
     overlay_named = isinstance(overlay_robot, dict) and "name" in overlay_robot
 

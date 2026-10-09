@@ -96,6 +96,8 @@ class FleetAgent:
         #: time.monotonic() of the last message received from the hub, or None.
         self.last_rx: float | None = None
         fleet_cfg = (config or {}).get("fleet") or {}
+        #: D-555: unarmed from a relink (relinked_at) to WELCOME or grace (SAF-003); boot defaults.
+        self.armed, self.relinked_at, self.config_fallback = True, None, None
         try:
             self.reply_timeout_s = heartbeat_reply_timeout_s(fleet_cfg)
         except ValueError:
@@ -106,6 +108,7 @@ class FleetAgent:
             logger.warning("ignoring invalid fleet.heartbeat_reply_timeout_s on a robot "
                            "without a Fleet link", exc_info=True)
             self.reply_timeout_s = DEFAULT_REPLY_TIMEOUT_S
+            self.config_fallback = "fleet.heartbeat_reply_timeout_s is invalid"
         #: Injectable so tests run the real loop on a scaled clock.
         self.heartbeat_period_s = HEARTBEAT_PERIOD_S
         self.link_slack_s = LINK_SLACK_S
@@ -188,6 +191,14 @@ class FleetAgent:
         self.connected = False
         if self._task:
             self._task.cancel()
+
+    def relink(self, fleet_cfg: dict) -> None:
+        """D-555: swap `config["fleet"]` (SAF-003 reads it) and restart only this task."""
+        self.stop()
+        self._task = self._pending = None
+        self.armed, self.relinked_at = False, self._clock()
+        self.config["fleet"] = fleet_cfg
+        self.start()
 
     def hello_payload(self, pairing_token: str) -> dict:
         """PRT-002 hello 본문. 신원은 RobotIdentity 실값에서 온다 (D-170 인접)."""
@@ -305,6 +316,7 @@ class FleetAgent:
             # that never gets there is still a lost link (and does not stamp last_rx).
             return f"unexpected hello reply {reply.type.value}"
         self.last_rx = self._clock()
+        self.armed = True
         logger.info("Fleet agent welcomed by hub")
         last_event_seq = reply.payload.get("last_event_seq", 0)
         self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]

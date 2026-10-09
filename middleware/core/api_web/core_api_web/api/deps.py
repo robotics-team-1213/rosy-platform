@@ -19,7 +19,7 @@ from typing import Any, Optional
 from fastapi import Depends, Header, Request
 
 from core_api_web.api.errors import ApiError
-from core_common.config import ConfigError, patch_local_config
+from core_common.config import ConfigError, dev_auth_enabled, patch_local_config
 from core_common.protocol.peer_pairing import SCREEN_CODE_ISSUER
 from typing import Protocol
 
@@ -29,6 +29,7 @@ from typing import Protocol
 # runtime/gateway/test/test_v1_import_boundary.py 가 고정한다.
 from core_features.calibration import CalibrationSessionError
 from core_features.command.arbitration import Mode
+from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_TTL_S, TripLeaseError
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_features.line_follow import LineFollowMode
@@ -37,7 +38,7 @@ from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
-from core_features.navigation.manager import NavigationError
+from core_features.navigation.manager import GOAL_LEASE_MAX_S, NavigationError
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
@@ -47,8 +48,11 @@ from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceReco
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
 __all__ = [
     "CalibrationSessionError",
+    "TRIP_LEASE_DEFAULT_TTL_S",
+    "TripLeaseError",
     "Mode",
     "NavigationError",
+    "GOAL_LEASE_MAX_S",
     "DockError",
     "DockInstance",
     "DockType",
@@ -89,6 +93,7 @@ class CoreServicesLike(Protocol):
     control_adapter: Any
     docking: Any
     events: Any
+    fleet_agent: Any
     fleet_loss: Any
     identity: Any
     inventory: Any
@@ -107,6 +112,7 @@ class CoreServicesLike(Protocol):
     state: Any
     swarm: Any
     traffic_policy: Any
+    trip_lease: Any
     vision: Any
     vision_stream: Any
     waypoints: Any
@@ -268,7 +274,10 @@ def _configured_records(config: dict) -> list[dict[str, Any]]:
 
 
 def _refused_in_device_mode(record: dict[str, Any]) -> bool:
-    return record["legacy"] or record["digest"] in DEV_TOKEN_DIGESTS
+    # D-548: the dev-mode marker opens the three shared dev tokens, nothing else plaintext.
+    if record["digest"] in DEV_TOKEN_DIGESTS:
+        return not dev_auth_enabled()
+    return record["legacy"]
 
 
 #: D-407 review L4: a key that lives only for this CORE process. A token record without a
@@ -360,8 +369,10 @@ def new_token_record(token: str, role: str, label: str = "", *, source: str = "m
 def persist_token_records(svc: "CoreServicesLike", records: list[dict[str, Any]]) -> None:
     """토큰 목록을 오버레이와 메모리 설정에 쓴다. 만료된 레코드는 여기서 지운다."""
     stored = stored_token_entries([item for item in records if not is_expired(item)])
+    # D-548: the shared dev tokens come from the marker at each start, never from /etc.
+    on_disk = [entry for entry in stored if not (device_mode() and entry["sha256"] in DEV_TOKEN_DIGESTS)]
     try:
-        patch_local_config({"auth": {"tokens": stored}})
+        patch_local_config({"auth": {"tokens": on_disk}})
     except (ConfigError, OSError) as exc:
         raise ApiError("INTERNAL_ERROR", 500, f"failed to persist tokens: {exc}")
     svc.config.setdefault("auth", {})["tokens"] = stored
@@ -373,8 +384,9 @@ class AuthContext:
     def __init__(self, token_id: str, role: str, *, source: str = "manual",
                  expires_at: Optional[str] = None, label: str = "",
                  created_at: Optional[str] = None,
-                 principal_ref: Optional[str] = None) -> None:
+                 principal_ref: Optional[str] = None, shared_dev: bool = False) -> None:
         self.token_id = token_id
+        self.shared_dev = shared_dev  # D-548: one of the three public rosy-dev-* tokens
         self.principal_ref = principal_ref or token_id
         self.role = role
         self.source = source
@@ -406,13 +418,26 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
             return AuthContext(token_id=item["id"], role=item["role"], source=item["source"],
                                expires_at=item["expires_at"], label=item["label"],
                                created_at=item["created_at"],
-                               principal_ref=principal_ref(item))
+                               principal_ref=principal_ref(item),
+                               shared_dev=item["digest"] in DEV_TOKEN_DIGESTS)
     raise ApiError("UNAUTHORIZED", 401, "missing or invalid token")
+
+
+#: D-548: on a device the shared dev tokens drive the robot but never hand out a shell, a
+#: credential that outlives the marker, or a new network, release or boot.
+SHARED_DEV_REFUSED_PREFIXES = ("/api/v1/host/ssh", "/api/v1/auth/enrollment-codes")
+SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens", "/api/v1/system/dds")
 
 
 def auth_dependency(request: Request,
                     authorization: Optional[str] = Header(default=None)) -> AuthContext:
-    return authenticate(request.app.state.core.config, authorization, None)
+    auth = authenticate(request.app.state.core.config, authorization, None)
+    if auth.shared_dev and device_mode():
+        path = request.url.path
+        if (path.startswith(SHARED_DEV_REFUSED_PREFIXES)
+                or (request.method not in ("GET", "HEAD") and path.startswith(SHARED_DEV_REFUSED_WRITES))):
+            raise ApiError("FORBIDDEN", 403, "공용 개발 토큰으로는 이 작업을 할 수 없습니다 (D-548)")
+    return auth
 
 
 def require_role(min_role: str):

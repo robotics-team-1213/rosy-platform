@@ -34,7 +34,7 @@ _KEY_LINE = re.compile(rb"[A-Za-z0-9+/]{43}=(\r?\n)?")
 _COLUMNS = (
     "robot_id", "hostname", "serial_number", "device_uid", "discovery_name", "address",
     "token_id", "role", "source", "expires_at", "fleet_expires_at", "warn_at",
-    "principal_id", "state",
+    "principal_id", "state", "hub_digest", "hub_host",
 )
 _UPDATABLE = (frozenset(_COLUMNS) - {"robot_id"}) | {"logout_attempted"}
 
@@ -167,7 +167,9 @@ class EnrollmentStore:
                     state TEXT NOT NULL CHECK (state IN {STATES!r}),
                     logout_attempted INTEGER NOT NULL DEFAULT 0,
                     created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL
+                    updated_at REAL NOT NULL,
+                    hub_digest TEXT,
+                    hub_host TEXT
                 );
                 CREATE TABLE IF NOT EXISTS robot_enrollment_tls (
                     robot_id TEXT PRIMARY KEY,
@@ -177,6 +179,11 @@ class EnrollmentStore:
                 """
             )
             ensure_device_pairing_audit(connection)
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(robot_enrollments)")}
+            for column in ("hub_digest", "hub_host"):  # D-555: registers made before it
+                if column not in columns:
+                    with connection:
+                        connection.execute(f"ALTER TABLE robot_enrollments ADD COLUMN {column} TEXT")
         if os.name != "nt":
             for path in (self.path, self.path.with_name(self.path.name + "-wal"),
                          self.path.with_name(self.path.name + "-shm")):
