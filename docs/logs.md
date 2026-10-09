@@ -7575,3 +7575,16 @@ osy-d395-s1d\`.
 - 변경: 지도 서쪽 바깥 모서리를 SIM 전용 `bend` 장소로 넣고 기존 CORE 굽이 지시와 선택적 D-531 경로 문맥을 폐루프에서 비교했다. 제품 지도와 주행 기본 설정은 건드리지 않았다.
 - 증거: `docs/validation/lane-west-bend-candidate-2026-10-09/result.md`; U-Net 문맥 켬 2회 모두 서쪽 모서리를 지나고 1회 `arrived`, 1회 링 `arc_mismatch` 정지. 문맥 끔 2회는 모서리 통과 뒤 연결 실패 1회, 굽이 `odom` 중단 1회. SIM 차체 표본·도색 중심선 대리값은 모두 안전 승격 근거가 아니다.
 - gate 변화: 서쪽 모서리 지도 굽이 후보의 ROS-SIM 유효성만 확인. 반복 완주·승인 경계·연속 sweep·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
+
+- 변경: `convert.py --int8`를 quant_pre_process 뒤 s8 활성·채널별 s8 가중치 QDQ로 바꾸고, `--int8-fp32-nodes`(lane_seg 기본 `first_conv last_conv`, object_det 기본 없음)로 남길 fp32 노드를 고른다. 보정 메모리 상한 `CalibMaxIntermediateOutputs=7`과 그 배수 프레임 수를 하나 줄이는 처리(ORT 1.26)를 넣었다. 새 결정이 아니라 D-423 3항(보정 이미지 int8, 판정은 intake)의 매개변수다.
+- 증거: 모델 PC `~/rosy-ml/scratch/lane-int8-hf-20261009`: 챔피언 62db9403의 int8-hf 사본 lane-seg-20261009-3831b20d가 평가 집합 rosy26-heldout-wall-role-20261006에서 mIoU 0.8110(fp32 0.8109), lane_line 0.9007, drivable 0.5608. 8kcn Pi 5 `infer_mask` 2스레드 스핀 끔 80회 두 번: fp32 p50 329.8/324.9 ms, int8-hf p50 195.5/197.7 ms(p95 220.5/236.8, 부하 8–12). convert 시험 19 passed(모델 PC).
+- gate 변화: 현행 intake는 챔피언 fp32와 int8-hf 둘 다 「training dataset overlaps or cannot exclude reserved eval sources」로 떨어뜨린다(d379-auto-lanes-rosy26-v1 세션에 capture_group 없음). 이 때문에 READY 게시와 로봇 전달은 HOLD.
+
+## 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
+
+- 변경: 리뷰 반영(3e92fc7c4). `convert.py --int8`는 과제별 `INT8_RECIPES`를 쓴다. lane_seg `s8s8-pc-pre`(quant_pre_process, s8 활성, 채널별 가중치, 그래프 입력·출력 Conv fp32, 보정 상한, 상한 배수면 마지막 프레임 제외), object_det `u8s8-pt`(이전 quantize_static 기본값 그대로). 지표 `int8_recipe`, `int8_fp32_nodes`(쉼표 문자열), `int8_calibration_frames`. 2026-10-09 항목(`uncommitted`)의 커밋은 214e3fe32다. 로그는 append-only라 그 제목은 고치지 않는다.
+- 결정(사용자, 2026-10-10, 선택지 A): `d379-auto-lanes-rosy26-v1@54db2400…`의 8개 녹화 세션을 세션마다 한 촬영 묶음 `rec-<session>`으로 단정했다. 근거는 `sources[]`의 장치·시작/끝 시각(예약 평가 세션과 겹치지 않음)이다. 모델 PC 운영 store에 `d379-auto-lanes-rosy26-v1-groups@e643de1cf1f17cde3f8632d11f02717d6a54074676dde816ca6b7bc241ca7029`을 `Store.put_dataset`으로 게시했다. 이미지·마스크·conf 2811개는 원본과 바이트가 같고, manifest에는 `frames[].capture_group`과 `annotation`(annotation_of, 결정자, 날짜, 근거)만 더했다. 그래서 내용 sha는 기록 없는 증명본 58239d9e…와 다르다. int8-hf 번들 lane-seg-20261009-3831b20d만 새 revision을 가리키게 manifest를 다시 썼다(`dataset.annotation_of`). fp32 62db9403 번들은 그대로 두었다.
+- 증거: 실제 intake(`--store /srv/rosy/store`, 평가 집합 rosy26-heldout-wall-role-20261006): **PASS**, mIoU 0.8110(챔피언 62db9403 0.8109), lane_line 0.9007, drivable 0.5608, disjoint True, 예약 겹침 없음. 번들 sha: model.onnx `3831b20d…ab58d`, model_manifest.json `348ae945…f2d4c`, intake_report.json `2e2a474c…8a6a3`. 실제 모델 두 개(62db9403, 28e8454d) 모두 새 Conv 규칙으로 `/enc1/enc1.0/Conv`, `/head/Conv`가 나온다. convert 시험 27 passed(모델 PC).
+- gate 변화: 로봇 전달·READY 게시는 하지 않았다. 전달은 `deliver.py --slot paint`로 사람이 한다.

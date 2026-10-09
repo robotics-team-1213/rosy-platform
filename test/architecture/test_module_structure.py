@@ -95,14 +95,6 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "fleet/fleet/server/stuck_resolver.py": (
-        608,
-        "split: re-judged at 608 on 2026-10-10 after D-577 added bounded lane-lost "
-        "WAIT and escalation rules. This pure decision core still has no transport or robot "
-        "command authority; stuck_resolver_loop.py owns polling and dispatch. Keep chain state "
-        "here, and move the R1-R5 rule predicates into a sibling pure rules module on further "
-        "growth. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md",
-    ),
     "deploy/site/rosy_site_autoupdate.py": (
         616,
         "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
