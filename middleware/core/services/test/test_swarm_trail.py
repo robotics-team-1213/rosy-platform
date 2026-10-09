@@ -56,7 +56,9 @@ def run(path, follower=(-GAP, 0.0, 0.0), extra_s=8.0):
 
 
 def deviation(trace, path):
-    return max(distance_to_path(x, y, path) for x, y, _ in trace)
+    """자취 = 팔로워 출발점에서 리더 출발점까지의 직선 + 리더가 지나간 길."""
+    full = [(-GAP, 0.0, 0.0), *path]
+    return max(distance_to_path(x, y, full) for x, y, _ in trace)
 
 
 def test_straight_line_stays_on_the_line_and_stops_at_the_gap():
@@ -141,4 +143,6 @@ def test_join_and_jump_limits():
 def test_crumbs_far_behind_the_follower_are_pruned():
     path = leader_poses([(60.0, SPEED, 0.0)])
     _, _, trail = run(path)
-    assert trail._s[0] >= trail.progress - 1.0 - 0.05
+    # 자르기는 점을 더할 때만 한다: 리더가 선 뒤 팔로워가 gap 까지 더 간 만큼은 남는다.
+    assert trail.progress - trail._s[0] < 1.0 + GAP + 0.1
+    assert len(trail._s) < 100
