@@ -201,7 +201,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_125,
+        49_303,
+        "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
+        "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
+        "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
         "split: re-judged at 49125 on 2026-10-09: power, dock, and charge tags stay with the "
         "existing card and attention-queue owners (roster.js +20, queues.js +7, "
         "power-health-view.js +1). A battery level other than ok and DOCK_FAILED join the "
