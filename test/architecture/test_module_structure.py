@@ -79,13 +79,15 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
-#: docs/plans/2026-10-09-core-localization-size-unit.md
+#: docs/plans/2026-10-09-core-localization-size-unit.md,
+#: docs/plans/2026-10-09-core-swarm-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
               "core/services/core_features/localization",
+              "core/services/core_features/swarm",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -647,8 +649,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_344,
-        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        1_347,
+        "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
+        "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
+        "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
         "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
         "the zero-growth allowance remains. "
@@ -881,9 +885,19 @@ SIZE_VERDICTS = {
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
         "publisher or command path. Re-judge after +150.",
     ),
+    "core/services/core_features/swarm": (
+        799,
+        "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
+        "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
+        "docs/plans/2026-10-09-core-swarm-size-unit.md registers the follower state machine, follow goal "
+        "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
+        "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
+    ),
     "core_features": (
-        12_270,
-        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        11_814,
+        "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
+        "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
+        "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
         "the cohesive 922-line localization package is now its own size unit under "
         "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
         "13192; moving this domain out fulfills the previous split condition without moving runtime code. "

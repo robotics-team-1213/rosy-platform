@@ -337,7 +337,7 @@ class RosBridge:
         odometry.observe_lane_return(self, msg, sample)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
-            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
+            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
@@ -429,6 +429,7 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
+        self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
         if not self._svc.line_follow.active or self._svc.safety.estop:
             self._publish_route_context(None)
             return
@@ -804,6 +805,12 @@ class RosBridge:
             self._svc.swarm.tick()
         except Exception as exc:  # 추종 실패가 브리지 루프를 멈추면 안 된다
             self._node.get_logger().warning(f"swarm tick failed: {exc}")
+
+    def _tick_trail(self) -> None:
+        try:
+            self._svc.swarm.trail_tick(self._line_clock())
+        except Exception as exc:  # a failed tick holds (the nav twist ages out in 0.5 s)
+            self._node.get_logger().warning(f"trail tick failed: {exc}")
 
     def _tick_docking(self) -> None:
         docking = self._svc.docking

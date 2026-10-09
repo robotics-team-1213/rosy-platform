@@ -4,6 +4,8 @@
 (additive). hub 경로의 상태는 heartbeat(PRT-003, 1 Hz)가 실어 온 것과 바이트가 같다.
 """
 
+import asyncio
+
 from fakes import FakeClock, FakeRobot, run
 from test_hub import _ep, _hello
 from fastapi.testclient import TestClient
@@ -72,6 +74,22 @@ def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
     row = _state_rows(client)[0]
     assert row["power_health"] is None and row["power_health_age_s"] is None
     assert replacement.calls.count(("power_health",)) == 1
+
+
+def test_power_health_refresh_waits_for_a_normal_lan_read():
+    clock = FakeClock()
+    robot = FakeRobot("rosy_01")
+
+    async def delayed_health():
+        await asyncio.sleep(0.08)
+        return _health(clock)
+
+    robot.power_health = delayed_health
+    client = TestClient(create_app(_console(robot, clock=clock), console_token="viewer",
+                                   start_task_dispatcher=False))
+    assert _state_rows(client)[0]["power_health"] is not None
+    clock.advance(6)
+    assert _state_rows(client)[0]["power_health"] is not None
 
 
 def test_fresh_hub_snapshot_answers_and_rest_get_is_skipped():

@@ -1,4 +1,4 @@
-﻿import argparse, hashlib, json
+import argparse, hashlib, json
 from pathlib import Path
 import cv2, numpy as np, torch
 
