@@ -18,3 +18,6 @@ D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; imp
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-526 reserved in another active branch; D-527 lands independently
+D-544 reserved in another active branch; D-547 lands independently
+D-545 reserved in another active branch; D-547 lands independently
+D-546 reserved in another active branch; D-547 lands independently
