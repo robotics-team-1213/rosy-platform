@@ -531,3 +531,22 @@ def test_a_halt_arriving_between_the_check_and_the_start_cancels_the_start(core)
     assert halt_thread["finished_before_start"] is False   # the halt waited for the start
     assert services.nav.nav_state.value == "CANCELED"       # and then folded it
     assert services.modes.mode.value == "IDLE"
+
+
+# --- D-546 5: pose request -------------------------------------------------------
+
+
+def test_pose_request_404_until_lane_return_asks_then_200_with_the_evidence(core):
+    client, services = core
+    missing = client.get("/api/v1/localization/request", headers=OPERATOR)
+    assert missing.status_code == 404 and missing.json()["error"]["code"] == "NO_REQUEST"
+    services.localization.pose_requests.open("pose_stale", {"odom_pose": {"x": 1.0, "y": 2.0}})
+    body = client.get("/api/v1/localization/request", headers=OPERATOR).json()
+    assert body["reason"] == "pose_stale" and body["ttl_s"] > 0 and body["age_s"] >= 0
+    assert body["evidence"]["odom_pose"] == {"x": 1.0, "y": 2.0}
+    assert body["request_id"] and body["robot_id"] and body["created_at"] > 0
+    assert client.get("/api/v1/localization/request", headers=VIEWER).status_code == 403
+    services.localization.on_result(json.dumps(
+        {"request_id": body["request_id"], "accepted": True, "state": "LOCALIZED"}))
+    assert client.get("/api/v1/localization/request", headers=OPERATOR).status_code == 404
+    assert [e.type for e in _types(services)].count("localization.request_cleared") == 1

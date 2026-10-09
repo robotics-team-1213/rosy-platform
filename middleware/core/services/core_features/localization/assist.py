@@ -40,6 +40,7 @@ from core_common.protocol.localization import (
     PoseFrame,
     _request_id,
 )
+from core_features.localization.pose_request import PoseRequests
 
 #: 2 Hz state from the robot; this many seconds of silence reads as UNKNOWN.
 STATE_STALE_S = 3.0
@@ -100,6 +101,10 @@ class LocalizationAssist:
         self.on_localized = on_localized
         #: CORE's stop paths, run when the state leaves LOCALIZED (D-395 §2: autonomy only there).
         self.on_lost = on_lost
+        #: D-546 5: the open "where am I" request Fleet reads (`GET /localization/request`).
+        self.pose_requests = PoseRequests(events, robot_id)
+        #: Run when an accepted result closes an open pose request (line follow resumes).
+        self.on_pose_answered: Optional[Callable[[], None]] = None
         self._lock = threading.Lock()
         #: Orders the leave-LOCALIZED halt against every motion start: a start holds
         #: it from its LOCALIZED check to its dispatch; a state change holds it while
@@ -260,6 +265,8 @@ class LocalizationAssist:
         })
         if accepted:
             self._cancel_navigation()
+            if self.pose_requests.clear("answered"):
+                self._run(self.on_pose_answered, "line follow resume on pose answer")
 
     def _cancel_navigation(self) -> None:
         self._run(self.on_localized, "navigation cancel on localization")

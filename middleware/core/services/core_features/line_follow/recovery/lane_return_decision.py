@@ -156,6 +156,7 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             turn_clear=(self.motion_admitted(now,0.,turn,'return')
                         and self.motion_admitted(now,0.,-turn,'return')),
             linear_limit=linear,angular_limit=angular))
+        self._note_pose_request(now,action,view)  # D-546 5
         if bridge is not None:
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
         if action.phase=='tracking' and not action.recovered:
