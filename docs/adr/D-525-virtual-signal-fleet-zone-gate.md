@@ -155,6 +155,15 @@
 - 현장 지도에는 D-513 출발 자리와 화면 방향(`view_turn_deg`)도 아직 없다.
 - 시험: `test_the_live_two_way_map_has_four_roundabout_entrances`.
 
+### rev 3 — 남은 초와 로봇 조회(2026-10-09, 사용자 요청: "core 가 이를 묻게 되면 … 진입여부나 … 몇초이따가 되는지 … tmap 등에서 신호등 표기 … 몇초남았다가 … 화면에서도 주황색")
+
+원칙 6항("로봇은 신호 색을 받지 않는다")을 이렇게 고친다: **로봇은 신호 색과 남은 초를 참고로 읽을 수 있다. 들어가도 되는지는 여전히 D-517 통행권만 정한다.** 참고 정보로 일찍 감속하거나 로봇 화면에 띄울 수는 있지만, 이것을 근거로 통행권 밖으로 움직이면 안 된다(D-337의 "주장을 허가로 쓰지 않는다"와 같은 이유).
+
+- **남은 초(`signal_phase.forecast`).** 입구마다 `{lamp, left_s, green_in_s, exact}`. `left_s`는 지금 등이 남은 시간, `green_in_s`는 그 입구가 녹색이 될 때까지. 지금 등의 끝(`cycle`)만 정확(`exact`)하고, 다음 녹색은 구역이 비어야 켜지므로 늘 하한이다(화면 `≥7`). `hold`, 운영자 `all_red`는 시간을 모른다(None). 수동 녹색은 그 입구의 녹색까지만.
+- **로봇마다 다음 신호.** trip 로봇의 경로에서 다음 신호 구역: `{signal_id, approach, distance_m(앞 끝 → 정지선, 음수면 이미 안), may_enter(그 구역을 이미 허가로 쥠), lamp, left_s, green_in_s, exact, advisory: true, virtual: true}`. `GET /api/fleet/traffic/signals/ahead/{robot_id}`(viewer; 없으면 404 `SIGNAL_NONE_AHEAD`)와 `/api/fleet/traffic` 로봇 행의 `signal_ahead`.
+- **화면.** 정지선마다 T map 식 알약: 등 하나와 남은 초("적 7", 하한이면 "적 ≥7"), 주황(`--status-warn`) 점선 테두리와 위에 "가상" 글. 녹색 등은 실제 신호처럼 `--status-good`. 로봇 카드: 정지선 1.5 m 안이면 "가상 신호 sig_ring 적 · 녹색까지 ≥7 s · 정지선 0.40 m"(허가를 쥐었으면 "· 진입 허가").
+- **CORE가 묻는 길(다음 단계, 로봇 이미지 변경).** 지금 CORE→Fleet 연결(FleetAgent)은 HELLO·HEARTBEAT(1 s)·EVENT만 있다. (a) CORE가 페어링 토큰으로 위 REST를 부르거나, (b) Fleet이 로봇 heartbeat 답에 `signal_ahead`를 선택 필드로 싣는다. 사용자 결정 뒤 API Reference·공유 schema와 함께 연다.
+
 ### 개정 이력
 
 - rev 2 (2026-10-08, 독립 critic 검토 반영): 다음 녹색 조건을 점유에서 구역 칸 `FREE`(허가·점유·핀 없음)로 바꿈(허가가 정지선보다 약 5 s 먼저 나감). 신호 구역 수용 1·단계당 접근로 1을 설정 검사로 강제. 접근로를 경로 호로, 정지선을 구역 span `d0`로 정의하고 실제 정지 위치(약 0.3 m 앞)를 적음. 2단계 앞 끝 칸 허가에도 신호 검사. 신호 대기를 기다림 그래프·고리 수용에 넣음. 적색 대기를 `merge_max_wait_s`에서 뺌. `hold` 120 s 주의, `set_aspect` 접근로 인자, `hold_back` 거절 범위와 trip 밖 로봇을 적음.

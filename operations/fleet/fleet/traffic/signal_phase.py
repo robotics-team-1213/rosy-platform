@@ -98,6 +98,57 @@ def green(plan: SignalPlan, state: SignalState) -> frozenset[str]:
     return frozenset((plan.phases[state.phase][0],)) if state.aspect == "green" else frozenset()
 
 
+def forecast(plan: SignalPlan, state: SignalState, now: float, zone_busy: bool) -> dict[str, dict]:
+    """D-525 rev 3: per approach ``{lamp, left_s, green_in_s, exact}`` — the T-map style countdown.
+
+    ``left_s`` is how long the shown lamp lasts; ``green_in_s`` how long until that approach is green
+    (0 while green). A green waits for the zone to be free (D-525 3), so every future green is a lower
+    bound (``exact`` false) except the current lamp's own end in ``cycle``. None: no time is known
+    (``hold``, operator ``all_red``, a manual green, or no next phase). Advisory only: a robot may show
+    it or slow down earlier; only the D-517 authority lets it in.
+    """
+    n = len(plan.phases)
+    held = max(0.0, now - state.since)
+    lit = green(plan, state)
+    last = plan.phases[state.phase][0] if state.phase >= 0 else None
+    out = {}
+    for approach, _green_s in plan.phases:
+        lamp = "green" if approach in lit else "yellow" if state.aspect == "yellow" and approach == last else "red"
+        out[approach] = {"lamp": lamp, "left_s": None, "green_in_s": 0.0 if lamp == "green" else None, "exact": False}
+    if state.mode in ("hold", "all_red") or n == 0:
+        return out
+    if state.mode == "manual":
+        if state.aspect != "green" and state.manual is not None:
+            rest = (plan.yellow_s - held + plan.all_red_s) if state.aspect == "yellow" else max(0.0, plan.all_red_s - held)
+            row = out[plan.phases[state.manual][0]]
+            row["green_in_s"] = round(rest, 1)
+        return out
+    # cycle: walk the phase order from now
+    if state.aspect == "green":
+        end = max(0.0, plan.phases[state.phase][1] - held)
+        out[last].update(left_s=round(end, 1), exact=True)
+        t, start = end + plan.yellow_s + plan.all_red_s, state.phase + 1
+    elif state.aspect == "yellow":
+        end = max(0.0, plan.yellow_s - held)
+        out[last].update(left_s=round(end, 1), exact=True)
+        t, start = end + plan.all_red_s, state.phase + 1
+    else:
+        t, start = max(0.0, plan.all_red_s - held), state.phase + 1
+    for k in range(n):
+        q = (start + k) % n
+        approach, green_s = plan.phases[q]
+        row = out[approach]
+        if row["green_in_s"] is None:              # red or yellow: when it is green next
+            row["green_in_s"] = round(t, 1)
+            if row["lamp"] == "red":
+                row["left_s"] = round(t, 1)           # a red lasts until its green
+        t += green_s + plan.yellow_s + plan.all_red_s
+    if zone_busy and state.aspect == "all_red":
+        for row in out.values():
+            row["exact"] = False
+    return out
+
+
 def alert(plan: SignalPlan, state: SignalState, now: float) -> Optional[str]:
     """The exception-queue row (D-525 8), or None."""
     if state.aspect == "all_red" and state.mode in ("cycle", "manual") \
