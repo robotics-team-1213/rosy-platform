@@ -31,6 +31,7 @@ from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, Tri
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
 from fleet.traffic.lane_traffic import TrafficService
+from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
@@ -77,7 +78,7 @@ class TripRunner:
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
                  traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
-                 traffic_signals=()) -> None:
+                 traffic_signals=(), signal_advice: bool = False) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -96,6 +97,7 @@ class TripRunner:
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
+        self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -155,6 +157,7 @@ class TripRunner:
                          "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                          "lane_arc": caps.lane_arc,
                          "line_follow_authority": getattr(caps, "line_follow_authority", False),
+                         "line_follow_advice": getattr(caps, "line_follow_advice", False),
                          "lane_bend": caps.lane_bend}
             arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
                             frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
@@ -348,7 +351,10 @@ class TripRunner:
             await asyncio.wait(pending, timeout=self.config.period_s)
         self._inflight = {robot_id: task for robot_id, task in self._inflight.items() if not task.done()}
         self.traffic.period(self._live.values())
-        self.authority.period(live for r, live in self._live.items() if r not in self._inflight)  # mid-step: none
+        slow = self.authority.busy()  # an authority still out from an earlier period: no advice beside it
+        settled = [live for r, live in self._live.items() if r not in self._inflight]  # mid-step: none
+        self.authority.period(settled)
+        self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""

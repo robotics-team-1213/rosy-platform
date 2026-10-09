@@ -16,6 +16,8 @@ test("only a problem link produces a tag", () => {
   assert.equal(linkTag("protocol").word, "프로토콜");
   assert.match(linkTag("protocol").text, /등록된 base URL/);
   assert.equal(linkTag("protocol").focus, null);
+  assert.equal(linkTag("degraded").word, "응답 지연");
+  assert.equal(linkTag("degraded").kind, "warn");
 });
 
 test("new link files do not name transport exceptions", () => {

@@ -186,3 +186,31 @@ def test_timeout_is_a_failed_step(monkeypatch):
         raise subprocess.TimeoutExpired("ssh", 1)
     monkeypatch.setattr(rp.subprocess, "run", hang)
     assert rp.remote("h", "true", timeout=1).returncode == 124
+
+
+def test_several_invocations_spread_over_every_reachable_host(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
+    monkeypatch.setattr(rp, "reachable", lambda host: host != "down@3")
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2 down@3")
+    monkeypatch.setattr(rp, "run_on", lambda host, invs, logs, *rest: [seen.append((host, inv)) or len(inv[0])
+                                                                       for inv in invs])
+    invocations = [["x"], ["yy"], ["zzz"]]
+    codes = rp.run(invocations, [tmp_path / f"{i}.txt" for i in range(3)], repo=tmp_path)
+    assert codes == [1, 2, 3], "codes come back in invocation order"
+    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["zzz"]), ("b@2", ["yy"])]
+
+
+def test_a_host_that_fails_setup_hands_its_share_to_a_working_host(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
+    monkeypatch.setattr(rp, "reachable", lambda host: True)
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2")
+
+    def run_on(host, invs, logs, *rest):
+        if host == "b@2":
+            raise SystemExit("venv setup failed")
+        return [seen.append((host, inv)) or 0 for inv in invs]
+    monkeypatch.setattr(rp, "run_on", run_on)
+    assert rp.run([["x"], ["y"]], [tmp_path / "1.txt", tmp_path / "2.txt"], repo=tmp_path) == [0, 0]
+    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["y"])]

@@ -31,6 +31,10 @@ class AuthoritySender:
     def mode(self, caps) -> str:
         return CORE if self.enabled and getattr(caps, "line_follow_authority", False) is True else HOLD_BACK
 
+    def busy(self) -> set:
+        """Robots whose authority send is still in flight."""
+        return {robot_id for robot_id, task in self._inflight.items() if not task.done()}
+
     def body(self, live) -> dict | None:
         """The authority for this period, or None (no end, pose or stamp: nothing goes out)."""
         end, front, stamp = map((live.traffic or {}).get, ("authority_end_m", "front_d_m", "pose_stamp"))
