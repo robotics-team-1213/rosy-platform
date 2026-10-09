@@ -250,7 +250,8 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
 
 
 def test_map_draws_the_travelled_trail_and_a_tether(browser_site):
-    """Trail from the 1 s state poll and a D-512 tether circle on the metre site view."""
+    """D-594 trail from Fleet's recorded path (survives a reload) and a D-512 tether circle on the metre site view.
+    The robot reports LOCALIZED in the map frame: a robot without localization (motor mode) may report odom."""
     page, robot, tracking = browser_site
     errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
     from playwright.sync_api import expect
@@ -263,9 +264,13 @@ def test_map_draws_the_travelled_trail_and_a_tether(browser_site):
             page.wait_for_timeout(200)
         return page.evaluate(f'window.__trailOverlay?.{key} || 0')
     robot._state['pose'] = {'x': 1.0, 'y': 1.0, 'yaw': 0.0}
+    robot._state['localization'] = {'state': 'LOCALIZED', 'pose_frame': 'map'}
     for x, y in ((1.6, 1.2), (2.4, 1.8), (3.2, 2.0)):
         page.wait_for_timeout(1300)
         robot._state['pose'] = {'x': x, 'y': y, 'yaw': 0.0}
+    assert overlay('segments', 2) >= 2
+    page.reload()  # the path is Fleet's record, not the page's
+    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site', timeout=15000)
     assert overlay('segments', 2) >= 2
     page.fleet_app.state.tethers['robot-a'] = {'anchor_xy': [2.0, 1.5], 'radius_m': 1.0, 'set_by': 'op'}
     assert overlay('tethers', 1) == 1

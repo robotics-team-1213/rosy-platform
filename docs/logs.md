@@ -7605,3 +7605,8 @@ osy-d395-s1d\`.
 - 변경: 03d530eab의 D-430 정확한 커밋 예외와 사후 독립 검토 근거를 추가했다.
 - 증거: 작성자와 다른 통합 담당자가 앱 주입·기본 릴레이·팩토리 우선순위·조회 전용 상태를 검토했다. 모델 PC 원격 시험 55 passed, known_failures 0 new/0 known.
 - gate 변화: CI 이력 검토만 해소하며 TRAIL SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시
+
+- 변경: Fleet이 1 s마다 로봇의 지도 좌표(로봇 LOCALIZED·map 보고, 아니면 Fleet map pose LOCALIZED/DEGRADED, 아니면 천장 카메라 CAMERA_ONLY)를 사이트 DB `fleet_robot_path`에 2 cm/30 s로 줄여 24 h 남기고 `GET /api/fleet/robots/{robot_id}/path`(API v1.177)로 준다. 콘솔 궤적은 이 기록을 그린다(최근 2분·10분·이번 운행, 로봇별, 실선/파선/점선). `localization: null` pose(odom일 수 있음)를 지도에 그리던 결함을 없앴다.
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new/0 known), 가드·버전 고정 시험 통과, 브라우저 시험 9 passed(궤적은 새로 고침 뒤에도 남음), node web 242 passed.
+- gate 변화: SOURCE만. 현장 1일 저장량·실제 로봇 표시 확인은 별도. 지도 위 로봇 아이콘의 odom 표시는 남은 일.

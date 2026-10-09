@@ -76,6 +76,21 @@ def test_a_region_still_occupied_or_a_dark_pixel_is_never_filled():
     assert len(detector.unknown_floor) == 1 and len(_live(result)) == 1
 
 
+def test_an_identify_window_holds_the_unknown_floor_fill():
+    # D-596 1 with D-600: inside an LED identify window the unknown floor is not filled.
+    detector = BackgroundBlobDetector()
+    at = _learn(detector, [PARKED])
+    detector.set_occupied([MOVED])
+    detector.hold(at + FILL_CONFIRM_FRAMES + 1)
+    for index in range(FILL_CONFIRM_FRAMES + 1):
+        detector.detect(Frame(_frame(450), at + index), CAL)
+    assert len(detector.unknown_floor) == 1
+    after = at + FILL_CONFIRM_FRAMES + 2
+    for index in range(FILL_CONFIRM_FRAMES):
+        detector.detect(Frame(_frame(450), after + index / 3), CAL)
+    assert detector.unknown_floor == ()
+
+
 def test_a_robot_moving_during_the_learn_is_left_out_along_its_whole_path():
     detector = BackgroundBlobDetector()
     for index in range(31):

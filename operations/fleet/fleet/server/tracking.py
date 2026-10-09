@@ -126,6 +126,7 @@ class TrackingService:
                   "occupied": self.occupied(source)[0]}
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
+            config["identity_challenges"] = self.identity.challenges_for(source.source_id)  # D-596
         return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:

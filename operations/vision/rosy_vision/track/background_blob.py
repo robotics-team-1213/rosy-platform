@@ -45,6 +45,12 @@ suspect ghost and logged with its map position. A dark robot or an occluder such
 not floor coloured live, so it is never healed. The learning frames are kept for the whole process so
 any ghost can be healed: at most LEARNING_FRAMES frames at WORK_LONG_SIDE.
 
+D-596 1: ``hold(until)`` freezes the background for an LED identify window (frames captured up to
+``until``), so a standing, blinking robot is never learned or healed away: no learning frame is
+taken (a learn waits), a scene change drops the frame without starting a learn, no ghost is
+confirmed or healed, and a baked suspect whose spot turned foreground but not floor coloured (its
+lamp is blinking) is still reported as its guess. After the window everything runs as before.
+
 D-600: every learn leaves out the regions Fleet says robots stand on (``set_occupied``, the
 union over the learn's frames) and fills unknown floor later (robot_mask.py). The kept frames
 carry their unknown-floor mask, so a restart keeps filling; ``unknown_floor`` reports it.
@@ -214,6 +220,7 @@ class BackgroundBlobDetector:
         self._restore_pending = store is not None  # D-539: once per process, at the first learn
         self._occupied: tuple = ()  # D-600: Fleet's robot regions, map (x, y, radius_m)
         self._previous = None  # D-600: (background, dark map) of the last ready learn
+        self._hold_until = -math.inf  # D-596 1: capture time up to which the background is frozen
         self.reset()
 
     def reset(self) -> None:
@@ -244,6 +251,10 @@ class BackgroundBlobDetector:
     def set_occupied(self, regions) -> None:
         """D-600: Fleet's ``occupied`` rows; read on the detection thread at the next frame."""
         self._occupied = robot_mask.parse_regions(regions)
+
+    def hold(self, until: float) -> None:
+        """D-596 1: freeze learning and healing for frames captured up to ``until``."""
+        self._hold_until = max(self._hold_until, until)
 
     def relearn(self) -> None:
         """Operator relearn: the track is empty, so these frames are kept for restarts (D-539)."""
@@ -278,6 +289,9 @@ class BackgroundBlobDetector:
                 self._ready = self._kept = True
                 self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
+        held = frame.captured_at <= self._hold_until
+        if not self._ready and held:
+            return DetectorResult((), "LEARNING")  # D-596 1: a blinking robot must not be learned
         if not self._ready:
             self._model.apply(image, learningRate=-1)
             self._frames.append(cv2.bitwise_and(image, image, mask=self._keep_mask(mask)))
@@ -308,9 +322,10 @@ class BackgroundBlobDetector:
         foreground = cv2.morphologyEx(cv2.bitwise_and(foreground, mask), cv2.MORPH_OPEN, _OPEN_KERNEL)
         foreground = cv2.bitwise_and(cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
         if np.count_nonzero(foreground) > self._scene_change_fraction * track_px:
-            self.reset()
+            if not held:
+                self.reset()
             return DetectorResult((), "SCENE_CHANGED")
-        found, ghosts = self._check_suspects(image, foreground) if self._suspects else ([], [])
+        found, ghosts = self._check_suspects(image, foreground, held) if self._suspects else ([], [])
         count, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, connectivity=8)
         # A ghost's foreground can reach past its zone (MOG2 edge, closing): drop whole blobs.
         skip, heals = set(), []
@@ -339,7 +354,7 @@ class BackgroundBlobDetector:
                 start = next((old for old in self._pending
                               if abs(old[0] - u) <= GHOST_TRACK_PX and abs(old[1] - v) <= GHOST_TRACK_PX), None)
                 u0, v0, streak = (u, v, 1) if start is None else (start[0], start[1], start[2] + 1)
-                if streak >= GHOST_CONFIRM_FRAMES:
+                if streak >= GHOST_CONFIRM_FRAMES and not held:
                     heals.append(ghost[:2])
                     logger.info("ghost healed x=%.2f y=%.2f footprint_m=%.3f", *ghost[2])
                     continue
@@ -351,7 +366,8 @@ class BackgroundBlobDetector:
                 found.append(detection)
         self._pending = pending
         filled = None
-        if self._unknown is not None:  # D-600: unknown floor no robot stands on any more
+        # D-600 fill; D-596 1: never inside an identify window (a blinking robot is not floor).
+        if self._unknown is not None and not held:
             ready = robot_mask.fill_ready(image, self._unknown, self._occupied_mask(work_to_map, mask, camera),
                                           self._dark_level, self._fill_streak)
             if ready.any() and frame.captured_at - self._fill_at >= robot_mask.FILL_EVERY_S:
@@ -475,9 +491,11 @@ class BackgroundBlobDetector:
             return None  # a robot or an occluder is there now
         return (y0, y1, x0, x1), zone & live, (measured.x, measured.y, measured.footprint_m)
 
-    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray) -> tuple[list, list]:
+    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray, held: bool = False) -> tuple[list, list]:
         """Guesses for suspects whose spot still shows the background, and (suspect, confirmed)
-        ghosts; confirmed ghosts leave the suspect list and are healed by the caller."""
+        ghosts; confirmed ghosts leave the suspect list and are healed by the caller. ``held``
+        (D-596 1): nothing is confirmed, and a spot that is not floor coloured stays a guess
+        (its blobs are skipped like a ghost's, so the lamp's own blob is not a second robot)."""
         guesses, kept, ghosts = [], [], []
         for suspect in self._suspects:
             (y0, y1, x0, x1), blob, _zone, guess, refs, streak = suspect
@@ -490,10 +508,13 @@ class BackgroundBlobDetector:
             floor = _floor_like(image[y0:y1, x0:x1], refs)
             if np.count_nonzero(floor[blob]) >= GHOST_FLOOR_FRACTION * total:
                 suspect[5] = streak + 1
-                confirmed = suspect[5] >= GHOST_CONFIRM_FRAMES
+                confirmed = suspect[5] >= GHOST_CONFIRM_FRAMES and not held
                 ghosts.append((suspect, confirmed))
                 if confirmed:
                     continue
+            elif held:
+                guesses.append(guess)
+                ghosts.append((suspect, False))
             else:
                 suspect[5] = 0  # something not floor is there now: the live path decides
             kept.append(suspect)
