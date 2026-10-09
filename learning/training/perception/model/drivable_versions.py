@@ -1,7 +1,7 @@
 """D-558 drivable model version ledger (drivable_versions.yaml).
 
 drivable_versions.py show [<version>]
-drivable_versions.py add <version> <revision> --onnx-sha256 <hex> --dataset <name@sha>
+drivable_versions.py add <version> <revision> --onnx-sha256 <hex> --dataset <name>@<sha256>
                      --rule "D-554 1-8" [--rule ...] --status candidate --note "<one line>"
 drivable_versions.py set-status <version> <candidate|shadow|rejected|retired>
 
@@ -23,7 +23,8 @@ LEDGER = Path(__file__).resolve().parent / "drivable_versions.yaml"
 VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d{2})$")
 LINEAGE_RE = re.compile(r"^v(\d+)-drivable-")
 STATUSES = ("candidate", "shadow", "rejected", "retired")
-FIELDS = ("version", "revision", "onnx_sha256", "dataset", "rules", "status", "note")
+FIELDS = ("version", "revision", "onnx_sha256", "dataset", "dataset_sha256", "rules", "status", "note")
+# Hashes stay under *_sha256 keys: the secret scanner flags a bare 64-hex token (name@sha).
 
 
 def version_error(version, revision: str) -> str | None:
@@ -46,8 +47,8 @@ def _validate(doc) -> list[dict]:
             raise ValueError(f"ledger entry needs exactly {FIELDS}: {e!r}")
         error = version_error(e["version"], str(e["revision"]))
         if (error or not isinstance(e["revision"], str) or not LINEAGE_RE.match(e["revision"])
-                or not re.fullmatch(r"[0-9a-f]{64}", str(e["onnx_sha256"]))
-                or not isinstance(e["dataset"], str) or not isinstance(e["note"], str)
+                or not all(re.fullmatch(r"[0-9a-f]{64}", str(e[k])) for k in ("onnx_sha256", "dataset_sha256"))
+                or not isinstance(e["dataset"], str) or "@" in e["dataset"] or not isinstance(e["note"], str)
                 or not isinstance(e["rules"], list) or not all(isinstance(r, str) for r in e["rules"])
                 or e["status"] not in STATUSES):
             raise ValueError(f"ledger entry {e.get('version')!r} invalid: {error or 'field types/status'}")
@@ -97,7 +98,7 @@ def main(argv=None) -> int:
     add.add_argument("version")
     add.add_argument("revision")
     add.add_argument("--onnx-sha256", required=True)
-    add.add_argument("--dataset", required=True)
+    add.add_argument("--dataset", required=True, help="<name>@<content sha256>")
     add.add_argument("--rule", action="append", required=True, dest="rules")
     add.add_argument("--status", choices=STATUSES, default="candidate")
     add.add_argument("--note", required=True)
@@ -115,8 +116,9 @@ def main(argv=None) -> int:
                 print(f"{e['version']}  {e['revision']}  {e['status']}  {e['note']}")
             return 0
         if args.action == "add":
+            name, _, dataset_sha = args.dataset.partition("@")
             entries.append({"version": args.version, "revision": args.revision,
-                            "onnx_sha256": args.onnx_sha256, "dataset": args.dataset,
+                            "onnx_sha256": args.onnx_sha256, "dataset": name, "dataset_sha256": dataset_sha,
                             "rules": args.rules, "status": args.status, "note": args.note})
         else:
             match = [e for e in entries if e["version"] == args.version]

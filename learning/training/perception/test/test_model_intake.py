@@ -105,7 +105,7 @@ def test_v13_drivable_intake_checks_the_d558_version(tmp_path):
               camera_provenance="provisional")
     ledger = tmp_path / "ledger.yaml"
     drivable_versions.save([{"version": "v13.1.00", "revision": "v13-drivable-20261010-ffffffff",
-                             "onnx_sha256": "f" * 64, "dataset": "d", "rules": ["D-554 1-9"],
+                             "onnx_sha256": "f" * 64, "dataset": "d", "dataset_sha256": "e" * 64, "rules": ["D-554 1-9"],
                              "status": "candidate", "note": "taken"}], ledger)
 
     def reasons(folder, version):

@@ -365,7 +365,7 @@ D-558: `drivable_head`의 `training`에는 `model_version`(`v13.<minor>.<두 자
 intake는 `v13-drivable-*`에 `model_version`이 없거나 형식·major가 틀리거나, 원장
 `model/drivable_versions.yaml`에 같은 버전이 다른 revision으로(또는 같은 revision이 다른 버전으로) 있으면
 거부하고, 통과하면 `PASS <revision> (<version>)`을 찍는다. `deliver.py status`와 로봇의 `shadow model` 로그도
-revision 옆에 버전을 보여 준다. 거절·폐기한 후보도 버전을 차지하므로 intake·전달 뒤 원장에 적는다:
+revision 옆에 버전을 보여 준다. 거절·폐기한 후보도 버전을 차지하므로 intake·전달 뒤 원장에 적는다(`--dataset <이름>@<sha256>`은 `dataset`과 `dataset_sha256`으로 나눠 저장한다):
 
 ```bash
 python model/drivable_versions.py show [v13.1.00]
