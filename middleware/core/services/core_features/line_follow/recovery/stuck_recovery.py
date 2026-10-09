@@ -36,6 +36,9 @@ TURNING = "TURNING"
 CRAWLING = "CRAWLING"
 YIELDED = "YIELDED"
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD")
+#: D-573 4: a person may be on the crosswalk; only a stopping answer or the operator's own end.
+CROSSWALK = "crosswalk_blocked"
+CROSSWALK_DECISIONS = ("WAIT", "MANUAL", "ABORT")
 _TURN_RATE = 0.3          # rad/s. One yield segment turns, then creeps forward.
 _TURN_SKIP = 0.15         # rad. Smaller than this and the crawl starts at once.
 _TURN_CLEAR_M = 0.02      # clearance outside the rotation radius a turn requires
@@ -49,7 +52,8 @@ class StuckInput:
     """Everything one tick knows. Distances in metres; None = nothing seen / unknown."""
 
     now: float
-    cause: Optional[str] = None          # "obstacle_ahead" | "lane_lost" | None (not stuck)
+    cause: Optional[str] = None          # "obstacle_ahead" | "lane_lost" | "crosswalk_blocked" | None
+    cause_detail: Optional[str] = None   # D-573 4 crosswalk_blocked reason
     lane_visible: bool = False           # fresh, confident lane evidence (re-judge)
     front_clear: bool = True             # no path-band return within obstacle_resume_m
     front_band_m: Optional[float] = None
@@ -178,6 +182,7 @@ class StuckRecovery:
         self._yield_m = 0.0
         self._last_answer: Optional[str] = None
         self._operator_required = False
+        self._detail: Optional[str] = None
 
     @property
     def stuck_id(self) -> Optional[str]:
@@ -194,10 +199,17 @@ class StuckRecovery:
     # ---- tick -----------------------------------------------------------------
     def step(self, inp: StuckInput) -> StuckAction:
         self._last = inp
+        if self._id is not None and (inp.cause == CROSSWALK) != (self._cause == CROSSWALK):
+            # D-573 4: the crosswalk gate's stuck never shares an id with another cause; a back-off
+            # or yield in progress ends here (the gate holds the robot anyway).
+            self._close("crosswalk_blocked" if inp.cause == CROSSWALK else "cleared", inp.now)
         if self._id is None:
             if inp.cause is None or inp.calibration_active:
                 return StuckAction()
             self._open(inp)
+        if self._cause == CROSSWALK:
+            self._detail = inp.cause_detail
+            return StuckAction("hold")
         if self._phase == BACKING:
             return self._backing(inp)
         if self._phase in (TURNING, CRAWLING, YIELDED):
@@ -271,6 +283,8 @@ class StuckRecovery:
     def _answer_refusal(self, decision: str, now: float, yield_m: Optional[float] = None,
                         yield_turn_rad: Optional[float] = None) -> Optional[str]:
         last = self._last_or(now)
+        if self._cause == CROSSWALK and decision not in CROSSWALK_DECISIONS:
+            return "crosswalk_gate"           # D-573 4: no moving answer while a person may be there
         if self._operator_required and decision == "BACK_AND_RETRY":  # YIELD stays: operator-owned
             return "lane_return_fleet_required"
         if decision == "YIELD":
@@ -468,6 +482,7 @@ class StuckRecovery:
         self._clear()
         self._id = self._new_id()
         self._cause = inp.cause
+        self._detail = inp.cause_detail
         self._opened_at = inp.now
         self._restuck_of = None
         if self._recovered is not None:
@@ -486,9 +501,13 @@ class StuckRecovery:
                   "front_clearance_m": inp.front_band_m, "rear_clearance_m": inp.rear_m,
                   "turn_clearance_m": inp.turn_m, "rear_blind_m": inp.rear_blind_m,
                   "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
-                  "restuck_of": self._restuck_of, "attempts": self._attempts},
+                  "restuck_of": self._restuck_of, "attempts": self._attempts,
+                  **({"detail": inp.cause_detail} if inp.cause == CROSSWALK else {})},
         )
         if not ask:
+            return
+        if inp.cause == CROSSWALK:
+            self._console_only("crosswalk_gate", inp.now)  # no local back-off, no ASKING fallback
             return
         if self._attempts >= self._config.recovery_max_attempts:
             self._console_only("attempts_exhausted", inp.now)
@@ -512,7 +531,7 @@ class StuckRecovery:
             data={"stuck_id": self._id, "cause": self._cause, "console_linked": linked,
                   "local_fallback_s": fallback_s, "attempts": self._attempts,
                   "reason": reason,
-                  "decisions": list(DECISIONS)},
+                  "decisions": list(self._decisions())},
         )
 
     def _answered(self, stuck_id: str, decision: str, by: str, principal_ref: Optional[str],
@@ -569,5 +588,9 @@ class StuckRecovery:
             "attempts": self._attempts, "max_attempts": self._config.recovery_max_attempts,
             "local_enabled": self._config.recovery_local_enabled,
             "ask_remaining_s": remaining, "last_answer": self._last_answer,
-            "decisions": list(DECISIONS),
+            "decisions": list(self._decisions()),
+            **({"detail": self._detail} if self._cause == CROSSWALK else {}),
         }
+
+    def _decisions(self) -> tuple:
+        return CROSSWALK_DECISIONS if self._cause == CROSSWALK else DECISIONS
