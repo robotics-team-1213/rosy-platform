@@ -904,7 +904,8 @@ def test_paint_slot_scripts_never_name_shadow_or_the_watcher_hold():
     assert f"mv {ROOT_M}/paint.previous {ROOT_M}/paint" in scripts[1]
     assert '"push-paint"' in scripts[0] and '"rollback-paint"' in scripts[1]
     status = deliver.remote_script("status", None, slot="paint")
-    assert "paint: " in status and "paint previous:" in status and "paint.hold:" in status
+    assert status.endswith(deliver.remote_script("status", None))           # shadow status unchanged after
+    assert status.index('echo "paint: ') < status.index("paint previous:") < status.index("paint.hold:")         < status.index('echo "shadow: ')
     with pytest.raises(ValueError):
         deliver.remote_script("rollback", None, slot="active")
 
@@ -946,3 +947,55 @@ def test_cli_paint_push_and_rollback_reach_the_paint_pointer(tmp_path):
     assert f"mv {ROOT_M}/paint.previous {ROOT_M}/paint" in runner.calls[3][-1]
     assert deliver.main(["release-hold", "robot", "--slot", "paint", *SSH], runner=runner) == 0
     assert f"rm -f {ROOT_M}/paint.hold" in runner.calls[4][-1]
+
+
+def _default_scripts():
+    """The default (shadow) scripts, as captured from main eb9943953 into deliver_shadow_golden.json."""
+    rev, stage = "lane-seg-20260930-abcd1234", "/tmp/rosy-model.AbC12345"
+    audit = {"operator": "ana", "host_of_operator": "op-pc", "tool_commit": "c" * 40}
+    push = dict(checks=[("f" * 64, "model.onnx"), ("d" * 64, "model_manifest.json")],
+                report=("e" * 64, "intake_report.json"), stage=f"{stage}/{rev}", audit=audit)
+    od = "/var/lib/rosy/models/object_det"
+    return {
+        "push": deliver.remote_script("push", rev, **push),
+        "push_unless_held": deliver.remote_script("push", rev, unless_held=True, **push),
+        "push_object_det": deliver.remote_script("push", rev, od, **push),
+        "rollback": deliver.remote_script("rollback", None, audit=audit),
+        "rollback-active": deliver.remote_script("rollback-active", None, od, audit=audit),
+        "promote": deliver.remote_script("promote", None, od, audit=audit),
+        "release-hold": deliver.remote_script("release-hold", None, audit=audit),
+        "observe": deliver.remote_script("observe", None),
+        "status": deliver.remote_script("status", None, history=7),
+        "prepare": deliver.remote_script("prepare", rev),
+    }
+
+
+def test_default_scripts_match_the_golden_capture_from_main():
+    golden = json.loads((Path(__file__).parent / "deliver_shadow_golden.json").read_text(encoding="utf-8"))
+    assert _default_scripts() == golden
+
+
+def _remote_run(bash, to_posix, root, action, slot="paint"):
+    script = deliver.remote_script(action, None, to_posix(root), slot=slot, privileged=False,
+                                   audit={"operator": "o", "host_of_operator": "pc", "tool_commit": None})
+    return subprocess.run([bash, "-c", FLOCK_SHIM + script], capture_output=True, text=True)
+
+
+def test_remote_paint_rollback_without_previous_fails_and_touches_nothing(remote, tmp_path):
+    root, to_posix, run, stage, good, _ = remote
+    bash = _bash_env()[0]
+    (root / "paint").write_text("/m/p")
+    (root / "shadow").write_text("/m/s")
+    before = {p.name: p.read_bytes() for p in root.iterdir()}
+    r = _remote_run(bash, to_posix, root, "rollback")
+    assert r.returncode == 1 and "no paint.previous" in r.stderr
+    assert {p.name: p.read_bytes() for p in root.iterdir() if p.name != ".lock"} == before
+
+
+def test_remote_first_paint_push_creates_paint_without_previous(remote):
+    root, to_posix, run, stage, good, _ = remote
+    stage(good)
+    r = run(slot="paint")
+    assert r.returncode == 0, r.stderr
+    assert (root / "paint").read_text() == f"{to_posix(root)}/{REV}"
+    assert not (root / "paint.previous").exists() and not (root / "shadow").exists()

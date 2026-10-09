@@ -9,7 +9,14 @@ deliver.py release-hold <host>   (removes the hold file; the pointer is not chan
 deliver.py status <host>
 push/rollback/release-hold/status: [--slot shadow|paint]  (lane_seg; paint is the D-408
         learned paint pointer <root>/paint with paint.previous and paint.hold, moved only by
-        hand; shadow, shadow.previous, hold and the site watcher never touch it)
+        hand; shadow, shadow.previous, hold and the site watcher never touch it.
+        Nothing reads paint by default: line_observer uses it only when
+        /etc/rosy/line_observer_overrides.yaml sets learned_lane_pointer:
+        /var/lib/rosy/models/paint, and host_lane_perception.py still reads shadow.
+        paint.hold is a record of the manual change only: the watcher never pushes paint,
+        so there is nothing for it to stop. status --slot paint prints the paint lines,
+        then the usual shadow status. The first paint push leaves no paint.previous, so
+        rollback --slot paint refuses until a second push.)
 common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hosts FILE]
         [--journal-dir DIR] (private local attempt files, fsynced before each network step)
         [--root /var/lib/rosy/models]  (the task's pointers live under learned/slots.task_root:
@@ -367,12 +374,20 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             return [f"cur=$({s}cat {pointer} 2>/dev/null)",
                     f"ver=$({s}{sed} \"$cur/{MANIFEST_NAME}\" 2>/dev/null)",
                     f'echo "{label}: $cur${{ver:+ ($ver)}}"']
+        shadow = remote_script("status", None, root, history=history, privileged=privileged)
+        if slot != "shadow":  # the slot's lines first, then the unchanged shadow status
+            return "\n".join([
+                *versioned(slot, ptr),
+                f"echo \"{slot} previous: $({s}cat {prev} 2>/dev/null)\"",
+                f"echo \"{hold_name}: $({s}cat {hold} 2>/dev/null || echo none)\"",
+                shadow,
+            ])
         return "\n".join([
-            *versioned(slot, ptr),
-            f"echo \"{'' if slot == 'shadow' else slot + ' '}previous: $({s}cat {prev} 2>/dev/null)\"",
+            *versioned("shadow", ptr),
+            f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
             *versioned("active", act),
             f"echo \"active previous: $({s}cat {act_prev} 2>/dev/null)\"",
-            f"echo \"{hold_name}: $({s}cat {hold} 2>/dev/null || echo none)\"",
+            f"echo \"hold: $({s}cat {hold} 2>/dev/null || echo none)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
             f"echo 'history (last {int(history)}):'",
             f"{s}tail -n {int(history)} {hist} 2>/dev/null || true",
@@ -536,6 +551,8 @@ def main(argv=None, runner=subprocess.run) -> int:
         p = sub.add_parser(name)
         p.add_argument("host")
         p.add_argument("--task", choices=TASKS, default="lane_seg")
+        # rollback alone takes active: it is the only command that moves the D-423 active
+        # pointer back; promote has no --slot because it always copies shadow to active.
         if name == "rollback":
             p.add_argument("--slot", choices=(*POINTER_SLOTS, "active"), default="shadow",
                            help="active: back to the model before the last promote (D-423); "
