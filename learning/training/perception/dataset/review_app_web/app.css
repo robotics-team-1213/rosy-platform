@@ -255,7 +255,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 #pixel-view-status { margin-bottom: 0; }
 .pixel-editor-column .pixel-vlm-feedback { margin-top: var(--space-3); }
 #pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
-@media (max-height: 700px) and (min-width: 64rem) {
+@media (height <= 700px) and (width >= 64rem) {
   #canvas { width: auto; height: clamp(12rem, calc(100dvh - 20rem), 24rem); max-width: 100%; }
   #pixel-flow ol { display: none; }
   #pixel-main > .ui-workspace-bar { margin-block: var(--space-2); }

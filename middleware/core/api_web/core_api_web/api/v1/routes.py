@@ -13,6 +13,7 @@ from core_api_web.api.v1.calibration import calibration_router
 from core_api_web.api.v1.common import admin, enter_navigation_mode, operator, viewer
 from core_api_web.api.v1.control import control_router
 from core_api_web.api.v1.docking import docking_router
+from core_api_web.api.v1.fleet_link import fleet_link_router
 from core_api_web.api.v1.host import host_router
 from core_api_web.api.v1.intent import intent_router
 from core_api_web.api.v1.map import map_router
@@ -46,6 +47,7 @@ __all__ = [
     "docking_router",
     "enter_navigation_mode",
     "events_router",
+    "fleet_link_router",
     "host_router",
     "intent_router",
     "logs_router",

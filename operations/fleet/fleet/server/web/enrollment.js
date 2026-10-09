@@ -140,8 +140,22 @@ export function rowText(row) {
     lines.push("발급한 관리자 세션의 만료에 묶였습니다 — 카드 관리자 토큰으로 발급한 코드면 90일");
   }
   if (row.expiry_warning && row.state === "active") lines.push(`곧 만료(${row.expires_at}) — 새 코드 준비`);
+  // D-555: where this robot's state comes from.
+  if (row.hub_linked) lines.push(HUB_STATE_TEXT[row.hub_state || (row.hub_online ? "online" : "checking")](row.hub_host || "?"));
+  else if (row.state === "active") lines.push("수집: REST");
   return lines;
 }
+
+// D-555: checking = CORE waits for the first WELCOME (≤ 35 s); failed = CORE counts the link lost.
+const HUB_STATE_TEXT = {
+  online: (host) => `허브 연결(${host}) · 수집: 허브`,
+  checking: (host) => `허브 연결(${host}) · 확인 중 · 수집: REST`,
+  failed: (host) => `허브 연결 실패(${host}) · SAF-003 적용 · 수집: REST`,
+};
+
+const ACTION_LABELS = {
+  move: "새 주소로 옮기기…", unenroll: "등록 해제…", "hub-link": "허브 연결", "hub-unlink": "허브 연결 해제",
+};
 
 export function canManage(identity) {
   return identity?.role === "operator" && Boolean(identity.principal_id)
@@ -154,6 +168,8 @@ export function rowActions(row, manage) {
   if (row.state === "pending_logout") return [];
   const actions = [];
   if (row.state === "address_changed") actions.push("move");
+  if (row.hub_linked) actions.push("hub-unlink");
+  else if (row.hub_linkable && row.state === "active") actions.push("hub-link");
   actions.push("unenroll");
   return actions;
 }
@@ -330,6 +346,46 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
       openMove(row.robot_id, address);
       return;
     }
+    if (action === "hub-link" || action === "hub-unlink") {
+      // D-555: Fleet makes and delivers the credential; the browser never sees it.
+      cancelCandidate();
+      try {
+        const result = await call(`/api/fleet/robots/${encodeURIComponent(row.robot_id)}/hub-link`,
+          { method: action === "hub-link" ? "POST" : "DELETE" });
+        life.check();
+        showResult([action === "hub-link" ? `${row.robot_id} 허브 연결됨`
+          : result.robot_cleared ? `${row.robot_id} 허브 연결 해제됨`
+            : `${row.robot_id} 허브 연결 해제됨 — 로봇에 닿지 않아 로봇 쪽 토큰은 허브가 거절합니다.`], false);
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (action === "hub-unlink" && err?.detail?.code === "fleet_goal_active") {
+          // D-555: forced revoke during a goal; the robot then loses the link and SAF-003 stops it.
+          const forced = await dialogs.confirmIrreversible({
+            message: `"${row.robot_id}" 에 Fleet 목표가 진행 중입니다. 강제로 허브 연결을 해제하면 로봇은 링크를 잃고 SAF-003 정지(STOP/HOLD)가 걸립니다.`,
+            action: "강제 해제",
+            opener: () => el("enrolled-list")?.querySelector(`li[data-robot-id="${CSS.escape(row.robot_id)}"] ui-button[data-action="hub-unlink"]`),
+          });
+          life.check();
+          if (forced) {
+            try {
+              await call(`/api/fleet/robots/${encodeURIComponent(row.robot_id)}/hub-link?force=true`, { method: "DELETE" });
+              life.check();
+              showResult([`${row.robot_id} 허브 연결 강제 해제됨 — 로봇에 SAF-003 정지가 걸립니다.`], false);
+            } catch (again) {
+              if (again.name === "AbortError") return;
+              showResult([again?.detail?.message || "허브 연결 해제 실패"], true);
+            }
+          }
+        } else {
+          showResult([err?.detail?.code === "fleet_goal_active"
+            ? "Fleet 목표가 진행 중입니다 — 목표가 끝난 뒤 다시 하세요."
+            : err?.detail?.message || "허브 연결 실패"], true);
+        }
+      }
+      await refresh();
+      life.check();
+      return;
+    }
     {
       cancelCandidate();
       // D-371 — 등록 해제는 사이트 토큰 회수라 되돌리려면 다시 등록해야 한다. 대상을 이름으로 묻는다.
@@ -383,7 +439,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
         item.append(small);
       }
       for (const action of rowActions(row, manage)) {
-        const node = button(action === "move" ? "새 주소로 옮기기…" : "등록 해제…", () => act(action, row));
+        const node = button(ACTION_LABELS[action], () => act(action, row));
         node.dataset.action = action;
         item.append(node);
       }
