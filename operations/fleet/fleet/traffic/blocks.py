@@ -25,6 +25,13 @@ from typing import Callable, Collection, Iterable, Mapping, Optional, Sequence
 
 from fleet.routing.graph import Graph
 
+#: D-517 3 (2026-10-10 zone stop clearance): an authority that ends where a zone the robot does not hold begins
+#: ends this much earlier still, past the u already taken off. A robot standing there pads (front + u)
+#: to this short of the zone, so a waiter never counts as occupying or holding it; without it the pad
+#: met the zone edge exactly and a 1e-6 m float or a sub-mm stop overshoot (AI PC signal SIM) put it
+#: inside. 2 cm: the step Fleet already reads as map-pose noise (CORE authority shrink tolerance).
+ZONE_STOP_CLEARANCE_M = 0.02
+
 
 @dataclass(frozen=True)
 class BlockRules:
@@ -165,7 +172,8 @@ class TableState:
 @dataclass(frozen=True)
 class TickResult:
     #: robot id -> route metres its front may reach: the end of its contiguous grants minus u,
-    #: so a front that is really u ahead of its estimate still stays inside them, and never
+    #: so a front that is really u ahead of its estimate still stays inside them (and
+    #: ``ZONE_STOP_CLEARANCE_M`` more where an ungranted zone begins there), and never
     #: below an earlier value. It may be behind the estimate: the robot stands. A robot
     #: without a localized pose gets no entry: no new authority, it stops on expiry (D-517 4).
     authority_end: dict[str, float]
@@ -177,7 +185,8 @@ class TickResult:
     unplaced: tuple[str, ...] = ()
     #: D-525: units someone holds, or a robot not localized this tick (UNKNOWN or missing) last
     #: covered or pinned. A signal turns the next approach green only while its zone is not here.
-    #: A localized robot's padding is left out: one waiting at the line pads into the zone.
+    #: A localized robot's padding is left out; one waiting at the line stops ``ZONE_STOP_CLEARANCE_M``
+    #: clear of it anyway.
     busy: frozenset[str] = frozenset()
 
 
@@ -327,19 +336,21 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         shared = state.shared.get(robot.id, {})
         # Coverage starts where the unit under the front starts, not at the estimate: a robot
         # whose own unit is not granted has no authority past that unit's start.
-        end, blockers = None, ()
+        end, blockers, ahead = None, (), None  # ahead: the first span past ``end`` it does not hold
         for index, span in enumerate(robot.spans):
             if span.d1 <= robot.d:
                 continue
             if end is None:
                 end = span.d0
             if index not in held:
+                ahead = span
                 if end >= want:
                     break
                 ok, others, via = free_for(robot, span, blocking)
                 if not ok:
                     blockers = others
                     break
+                ahead = None
                 grant(robot, index, via)
             elif index in shared and shared[index] != robot.follows and shared[index] in blocking.get(span.unit, ()):
                 blockers = (shared[index],)  # shared with a member it no longer follows: fixed blocks end here
@@ -349,7 +360,9 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             end = robot.spans[-1].d1
         # Grant-backed only: an estimate already past its grants never becomes authority (the
         # robot then stands), and an earlier value stays because its grants are still held.
-        issued, last = min(end - robot.uncertainty_m, robot.follow_end), state.authority.get(robot.id, -math.inf)
+        clearance = ZONE_STOP_CLEARANCE_M if ahead is not None and layout.units[ahead.unit].zone else 0.0
+        issued = min(end - robot.uncertainty_m - clearance, robot.follow_end)
+        last = state.authority.get(robot.id, -math.inf)
         if end >= want or end >= robot.spans[-1].d1:
             state.waiting_since.pop(robot.id, None)
             if want < full_want:  # standing back behind the member it follows
