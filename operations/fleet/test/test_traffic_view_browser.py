@@ -275,7 +275,8 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
             turned = json.loads(json.dumps(ACTIVE))
             turned["map"]["view_turn_deg"] = 90
             monkeypatch.setitem(API, "/api/fleet/site-map/active", turned)
-            page.locator("#token-save").click()
+            page.set_viewport_size({"width": 1440, "height": 900})
+            page.locator("#token-save").dispatch_event("click")  # reconnect; the button sits in the folded header
             expect(page.locator("#map-view-turn")).to_have_value("90")
             page.clock.run_for(1500)
             expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
