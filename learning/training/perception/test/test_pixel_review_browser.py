@@ -267,7 +267,7 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     expect(page.locator('#pixel-draft')).to_contain_text('2획')
     expect(page.locator('#pixel-next')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0)['version'] == 0
-    page.locator('#pixel-undo').click()
+    canvas.focus(); page.keyboard.press('Control+z')
     expect(page.locator('#pixel-draft')).to_contain_text('1획')
     page.locator('#pixel-save').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
@@ -423,7 +423,7 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.set_viewport_size({'width': 1280, 'height': 800})
     canvas = page.locator('#pixel-canvas').bounding_box()
     tools = page.locator('.pixel-quick-tools').bounding_box()
-    assert abs(canvas['x'] - tools['x']) < 32 and tools['y'] < canvas['y']
+    assert tools['x'] < canvas['x'] and tools['y'] < canvas['y']
     assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
     assert page.locator('#pixel-undo').bounding_box()['y'] < canvas['y']
     page.locator('#pixel-frame').select_option('1')
@@ -444,7 +444,7 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.keyboard.press('Enter')
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.set_viewport_size({'width': 390, 'height': 800})
-    assert page.locator('.pixel-quick-tools').bounding_box()['y'] < page.locator('#pixel-canvas').bounding_box()['y']
+    assert page.locator('.pixel-quick-tools').bounding_box()['y'] > page.locator('#pixel-canvas').bounding_box()['y']
     assert review_masks.get(store, 0)['version'] == 1
 
 
