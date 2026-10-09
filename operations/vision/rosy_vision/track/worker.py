@@ -397,14 +397,15 @@ class TrackWorker:
         if image is None:
             return None
         size = (int(image.shape[1]), int(image.shape[0]))
-        # D-457 2 order (calibration.choose): corner markers win, else the approved record.
-        # D-587: which branch was taken decides whether marker sightings may use it.
-        calibration = from_markers(self.camera, markers, frame_size=size, lens=lens)
-        self._approved = None
-        if calibration is None and record is not None:
-            calibration = self._approved = from_record(
-                record, source_id=self.camera.source_id, map_id=self.camera.map_id,
-                frame_size=size, lens=lens)
+        # D-595 order (calibration.choose): the approved (frozen) record wins; this frame's corner
+        # markers only without one.
+        approved = None if record is None else from_record(
+            record, source_id=self.camera.source_id, map_id=self.camera.map_id,
+            frame_size=size, lens=lens)
+        by_markers = from_markers(self.camera, markers, frame_size=size, lens=lens)
+        calibration = approved or by_markers
+        # D-587: a frame with all four corner markers has its sightings from project_frame.
+        self._approved = approved if by_markers is None else None
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
         robot_ids = set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)

@@ -406,6 +406,11 @@
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
 
+## 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
+- 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
+- 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.
+- gate 변화: 없음(SOURCE).
+
 ## 2026-10-10 · uncommitted · feat(vision): D-589 S1 인식 점수·EV 언덕 오르기·camera/camera_state·배경 재학습 연동
 - 변경: `track/tuning.py` — 인식 점수(승인 보정 트랙 사각형 안, 작업 해상도 640). `paint_contrast`는 사이트 차선 페인트(`--map-paint` `road_lines.stl`)를 보정으로 영상에 옮겨 2 px 넓힌 띠의 밝은 절반 중앙값과 카펫(페인트를 4 px 넓힌 밖) 중앙값 차를 카펫 강건 표준편차(1.4826·MAD)로 나눈다. 승인 맞춤이 실제 선에서 1–3 px 어긋나서 띠를 쓴다. 페인트가 없으면 트랙 안 가장 밝은 3 %와 트랙 전체로 대신한다. `clip`(≥247)·`crush`(≤16), `marker_rate`(최근 10분에 본 로봇 마커 중 이 프레임에 보인 비율, 없으면 빠짐), `score` 한 식(`contrast/(contrast+1.5)`, 마커 0.3 가중, clip·crush 0.05 초과 시 크게 깎음). `Tuner`는 순수 상태 기계: 실제 EV −2.0…+1.0을 1/3 EV 단계로, `supported.ev_step`으로 보정 지수로 바꿔 보낸다. 폰이 seq를 mode `vision`으로 되돌린 뒤 4 s(처음 1 s는 AE 안정) 점수를 재고, 더 나은 쪽으로만 한 단계씩, 가장 좋은 단계에서 AE·AWB 잠금. 잠근 뒤 25 % 넘는 하락 60 s(재맞춤 최소 5분)·clip/crush 0.15 초과(즉시)·30분 탐침(±1단계). 열 ≥3 또는 `thermal_hold`면 멈추고 마지막 잠금 유지. `disabled`면 보내지 않음. 현재 설정을 20 s마다 다시 보낸다(폰은 60 s만 신선). 노출 상한 요청 33333 µs. source별 기록 `<track-state>/<source>.tuning.json`, 다음 맞춤은 마지막 잠금 EV에서 시작
 - 변경: `protocol.py` `make_camera`·`parse_camera`·`parse_camera_state`(S2 계약, 엄격 검사, 추가 키 무시). `ingest.py`가 hello 뒤 텍스트에서 유효한 `camera_state`만 연결별로 보관하고(나쁜 것·다른 type 무시, 프레임 경로 영향 없음) `send_camera`로 하향 전송. 공유 벡터는 S2 파일 그대로(`camera_example.max_exposure_us` 33333)

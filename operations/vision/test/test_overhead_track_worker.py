@@ -204,9 +204,18 @@ def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
     assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
 
 
-def test_corner_markers_win_over_the_record(make_worker):
+def test_the_approved_record_wins_over_corner_markers(make_worker):
+    # D-595: the accepted record is frozen; four corner markers in the frame never re-fit it.
     detector = _Detector()
     worker, _ = make_worker(configs=[CONFIG], detector=detector)
+    asyncio.run(worker.refresh_config())
+    payload = asyncio.run(worker.process(_frame(), MARKERS))
+    assert payload.calibration_revision == CONFIG["calibration"]["calibration_revision"]
+
+
+def test_corner_markers_calibrate_only_without_a_record(make_worker):
+    detector = _Detector()
+    worker, _ = make_worker(configs=[{**CONFIG, "calibration": None}], detector=detector)
     asyncio.run(worker.refresh_config())
     payload = asyncio.run(worker.process(_frame(), MARKERS))
     assert payload.calibration_revision == "cal-v3"
