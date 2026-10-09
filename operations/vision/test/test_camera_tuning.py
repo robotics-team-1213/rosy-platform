@@ -92,40 +92,43 @@ def test_scorer_counts_clip_and_crush_inside_the_track_only():
 
 # -- tuner ---------------------------------------------------------------------------------
 
+STEP_EV = 0.1  # S21-class: one compensation index is 0.1 EV
+LEVELS = [-20, -17, -13, -10, -7, -3, 0, 3, 7, 10]  # -2.0 .. +1.0 EV in thirds, as indices
+
 
 class Phone:
-    """Applies each camera message on the next frame and echoes its seq (like the S2 app)."""
+    """Applies each camera message at once and echoes its seq (like the S2 app)."""
 
-    def __init__(self, ev_range=None, enabled=True):
-        self.applied = CameraSetting(0, False, False, None, "auto")
+    def __init__(self, ev_min=-20, ev_max=20, ev_step=STEP_EV, mode="vision"):
+        self.applied = CameraSetting(0, False, False, 33333, "60hz")
         self.seq = 0
-        self.ev_range = ev_range
-        self.enabled = enabled
-        self.thermal = None
+        self.ev_min, self.ev_max, self.ev_step = ev_min, ev_max, ev_step
+        self.mode = mode
+        self.thermal = 0
         self.sent: list[tuple[float, dict]] = []
 
     def receive(self, now, message):
         self.sent.append((now, message))
-        protocol.parse_camera(message)
-        if not self.enabled:
-            return
         seq, setting = protocol.parse_camera(message)
-        if self.ev_range is not None:
-            setting = CameraSetting(min(self.ev_range[1], max(self.ev_range[0], setting.ev)),
-                                    setting.ae_lock, setting.awb_lock, setting.max_exposure_us,
-                                    setting.antibanding)
-        self.applied, self.seq = setting, seq
+        self.seq = seq
+        if self.mode != "vision":
+            return
+        index = min(self.ev_max, max(self.ev_min, setting.ev))
+        self.applied = CameraSetting(index, setting.ae_lock, setting.awb_lock, 33333, setting.antibanding)
 
     def state(self):
-        return CameraState(self.seq, self.applied, self.enabled,
-                           None if self.ev_range is None else tuple(self.ev_range), thermal=self.thermal)
+        return CameraState(self.seq, self.applied, self.mode, self.ev_min, self.ev_max, self.ev_step,
+                           16000, 200, self.thermal)
+
+    def real_ev(self):
+        return round(self.applied.ev * self.ev_step, 3)
 
 
 def _run(tuner, phone, start, seconds, quality, link=1):
-    """Drive at 3 fps; ``quality(ev, locked, t) -> Measurement``. Returns the end time."""
+    """Drive at 3 fps; ``quality(real_ev, locked, t) -> Measurement``. Returns the end time."""
     now = start
     while now < start + seconds:
-        sample = quality(phone.applied.ev, phone.applied.ae_lock, now)
+        sample = quality(phone.real_ev(), phone.applied.ae_lock, now)
         message = tuner.update(now, link=link, state=phone.state(), sample=sample)
         if message is not None:
             phone.receive(now, message)
@@ -134,66 +137,94 @@ def _run(tuner, phone, start, seconds, quality, link=1):
 
 
 def _peak(best_ev):
-    return lambda ev, locked, now: _measure(max(0.05, 0.8 - 0.1 * abs(ev - best_ev)))
+    return lambda ev, locked, now: _measure(max(0.05, 0.8 - 0.3 * abs(ev - best_ev)))
 
 
-def _evs(phone):
-    return [(m["ev"], m["ae_lock"]) for _, m in phone.sent]
+def _requests(phone, start=0):
+    """Distinct requests (new seq) as (index, ae_lock), keep-alive resends left out."""
+    out, last = [], None
+    for _, message in phone.sent[start:]:
+        if message["seq"] != last:
+            out.append((message["ev"], message["ae_lock"]))
+            last = message["seq"]
+    return out
 
 
-def test_climb_steps_one_ev_dwells_and_locks_at_the_best():
+def test_ev_levels_are_thirds_of_an_ev_as_device_indices():
+    phone = Phone()
+    assert tuning.ev_levels(phone.state()) == LEVELS
+    assert tuning.ev_levels(Phone(ev_min=-6, ev_max=6, ev_step=1 / 3).state()) == list(range(-6, 4))
+    assert tuning.ev_levels(Phone(ev_min=-4, ev_max=4, ev_step=0.5).state()) == [-4, -3, -2, -1, 0, 1, 2]
+    assert tuning.ev_levels(Phone(ev_min=0, ev_max=0, ev_step=0.0).state()) == [0]
+
+
+def test_climb_steps_one_level_dwells_and_locks_at_the_best():
     tuner, phone = Tuner(), Phone()
-    _run(tuner, phone, 0.0, 120.0, _peak(-2))
-    assert _evs(phone) == [(0, False), (1, False), (-1, False), (-2, False), (-3, False),
-                           (-2, False), (-2, True)]
-    times = [t for t, _ in phone.sent]
-    assert all(b - a >= tuning.DWELL_S for a, b in zip(times, times[1:]))
+    _run(tuner, phone, 0.0, 120.0, _peak(-2 / 3))
+    assert _requests(phone) == [(0, False), (3, False), (-3, False), (-7, False), (-10, False),
+                                (-7, False), (-7, True)]
+    firsts = [t for t, m in phone.sent if m["seq"] != 0]
+    seqs = [m["seq"] for _, m in phone.sent]
+    changes = [firsts[i] for i in range(len(seqs)) if i == 0 or seqs[i] != seqs[i - 1]]
+    assert all(b - a >= tuning.DWELL_S for a, b in zip(changes, changes[1:]))
     sent = phone.sent[-1][1]
-    assert sent["awb_lock"] is True and sent["max_exposure_us"] == tuning.MAX_EXPOSURE_US
-    assert sent["antibanding"] == "60hz"
+    assert sent["awb_lock"] is True and sent["max_exposure_us"] == 33333 and sent["antibanding"] == "60hz"
     status = tuner.status()
-    assert status["state"] == "locked" and status["ev"] == -2 and status["locked"] is True
-    assert status["score"] == pytest.approx(0.8, abs=0.01)
-    assert tuner.history[-1]["kind"] == "lock" and tuner.history[-1]["setting"]["ev"] == -2
+    assert status == {"state": "locked", "score": pytest.approx(0.8, abs=0.02), "ev": -0.7, "locked": True}
+    assert tuner.history[-1]["kind"] == "lock" and tuner.history[-1]["ev"] == pytest.approx(-0.7)
 
 
-def test_climb_stays_inside_the_device_ev_range_and_the_allow_list():
-    tuner, phone = Tuner(), Phone(ev_range=[-2, 2])
-    _run(tuner, phone, 0.0, 120.0, _peak(-6))
-    assert min(ev for ev, _ in _evs(phone)) == -2
-    assert tuner.status()["ev"] == -2
+def test_current_setting_is_resent_well_inside_the_phone_freshness():
     tuner, phone = Tuner(), Phone()
-    _run(tuner, phone, 0.0, 200.0, _peak(5))
-    assert max(ev for ev, _ in _evs(phone)) == protocol.CAMERA_EV_RANGE[1]
+    _run(tuner, phone, 0.0, 300.0, _peak(0.0))
+    times = [t for t, _ in phone.sent]
+    assert max(b - a for a, b in zip(times, times[1:])) <= tuning.RESEND_S + STEP_S
+    assert tuning.RESEND_S < protocol.CAMERA_FRESH_S / 2
 
 
-def test_waits_for_a_score_before_sending_anything():
+def test_climb_stays_inside_the_device_range_and_minus_2_plus_1_ev():
+    tuner, phone = Tuner(), Phone(ev_min=-5, ev_max=20)
+    _run(tuner, phone, 0.0, 120.0, _peak(-2.0))
+    assert min(index for index, _ in _requests(phone)) == -5
+    tuner, phone = Tuner(), Phone()
+    _run(tuner, phone, 0.0, 200.0, _peak(1.5))
+    assert max(index for index, _ in _requests(phone)) == 10  # +1.0 EV
+
+
+def test_nothing_is_sent_before_the_phone_reports_or_before_a_score():
     tuner, phone = Tuner(), Phone()
     for step in range(30):
+        assert tuner.update(step * STEP_S, link=1, state=None, sample=_measure(0.7)) is None
         assert tuner.update(step * STEP_S, link=1, state=phone.state(), sample=None) is None
     assert tuner.status()["state"] == "waiting"
 
 
-def test_unechoed_setting_is_resent_and_a_new_link_sends_at_once():
-    tuner = Tuner()
-    old_app = CameraState(0, CameraSetting(0, False, False, None, "auto"))  # never echoes
-    first = tuner.update(0.0, link=1, state=old_app, sample=_measure(0.7))
-    assert first is not None and first["type"] == "camera"
-    assert tuner.update(5.0, link=1, state=old_app, sample=_measure(0.7)) is None
-    again = tuner.update(tuning.RESEND_S + 0.1, link=1, state=old_app, sample=_measure(0.7))
-    assert again == first
-    assert tuner.update(tuning.RESEND_S + 0.5, link=2, state=None, sample=_measure(0.7)) == first
+def test_a_new_link_sends_at_once():
+    tuner, phone = Tuner(), Phone()
+    first = tuner.update(0.0, link=1, state=phone.state(), sample=_measure(0.7))
+    assert first is not None and first["type"] == "camera" and first["seq"] >= 1
+    assert tuner.update(5.0, link=1, state=phone.state(), sample=_measure(0.7)) is None
+    assert tuner.update(5.5, link=2, state=phone.state(), sample=_measure(0.7)) == first
+
+
+def test_local_mode_is_not_an_echo():
+    tuner, phone = Tuner(), Phone()
+    _run(tuner, phone, 0.0, 2.0, _peak(0.0))
+    phone.mode = "local"  # the phone fell back: requests are not applied, no dwell is scored
+    _run(tuner, phone, 2.0, 60.0, _peak(-2.0))
+    assert _requests(phone) == [(0, False)]
 
 
 def test_starts_from_the_best_last_setting(tmp_path):
     path = tmp_path / "cam.tuning.json"
     tuner, phone = Tuner(log=TuningLog(path)), Phone()
-    _run(tuner, phone, 0.0, 120.0, _peak(-2))
+    _run(tuner, phone, 0.0, 120.0, _peak(-2 / 3))
     records = json.loads(path.read_text(encoding="utf-8"))
-    assert records[-1]["kind"] == "lock" and records[-1]["setting"]["ev"] == -2
+    assert records[-1]["kind"] == "lock" and records[-1]["ev"] == pytest.approx(-0.7)
     assert {"setting", "score", "at"} <= set(records[-1])
-    again, phone = Tuner(log=TuningLog(path)), Phone()
-    _run(again, phone, 0.0, 2.0, _peak(-2))
+    # Another device (1/3 EV per index) starts at the nearest level to -0.7 EV.
+    again, phone = Tuner(log=TuningLog(path)), Phone(ev_min=-6, ev_max=6, ev_step=1 / 3)
+    _run(again, phone, 0.0, 2.0, _peak(0.0))
     assert phone.sent[0][1]["ev"] == -2
 
 
@@ -201,15 +232,15 @@ def test_unreadable_record_file_starts_at_zero(tmp_path):
     path = tmp_path / "cam.tuning.json"
     path.write_text("{not json", encoding="utf-8")
     tuner, phone = Tuner(log=TuningLog(path)), Phone()
-    _run(tuner, phone, 0.0, 1.0, _peak(0))
+    _run(tuner, phone, 0.0, 1.0, _peak(0.0))
     assert phone.sent[0][1]["ev"] == 0
 
 
-def _locked(best=-1):
+def _locked(best=-1 / 3):
     tuner, phone = Tuner(), Phone()
     end = _run(tuner, phone, 0.0, 120.0, _peak(best))
     assert tuner.status()["state"] == "locked"
-    return tuner, phone, end, len(phone.sent)
+    return tuner, phone, end, len(_requests(phone))
 
 
 def test_sustained_drop_tunes_again_only_after_hold_and_minimum_interval():
@@ -217,57 +248,60 @@ def test_sustained_drop_tunes_again_only_after_hold_and_minimum_interval():
     dropped = lambda ev, locked, now: _measure(0.4)  # more than 25 % below 0.8
     # Tuning started at 0: the 5-minute minimum holds the retune until t = 300 s.
     end = _run(tuner, phone, end, 300.0 - end - 1.0, dropped)
-    assert len(phone.sent) == count
+    assert len(_requests(phone)) == count
     _run(tuner, phone, end, 3.0, dropped)
-    assert len(phone.sent) == count + 1 and phone.sent[-1][1]["ae_lock"] is False
+    assert len(_requests(phone)) == count + 1 and phone.sent[-1][1]["ae_lock"] is False
 
 
 def test_short_drop_does_not_tune_again():
     tuner, phone, end, count = _locked()
     end = _run(tuner, phone, 400.0, 50.0, lambda ev, locked, now: _measure(0.4))
-    _run(tuner, phone, end, 120.0, _peak(-1))
-    assert len(phone.sent) == count
+    _run(tuner, phone, end, 120.0, _peak(-1 / 3))
+    assert len(_requests(phone)) == count
 
 
 def test_clip_over_limit_tunes_again_at_once():
     tuner, phone, end, count = _locked()
     _run(tuner, phone, end, 6.0, lambda ev, locked, now: _measure(0.8, clip=0.3))
-    assert len(phone.sent) == count + 1 and phone.sent[-1][1]["ae_lock"] is False
+    assert len(_requests(phone)) == count + 1 and phone.sent[-1][1]["ae_lock"] is False
 
 
-def test_probe_every_30_minutes_tries_one_step_each_way():
-    tuner, phone, end, count = _locked(best=-1)
-    end = _run(tuner, phone, end, tuning.PROBE_INTERVAL_S - 120.0, _peak(-1))
-    assert len(phone.sent) == count  # locked at about 40 s: no probe before 30 min after it
-    _run(tuner, phone, end, 240.0, _peak(-1))
-    assert _evs(phone)[count:] == [(-1, False), (0, False), (-2, False), (-1, False), (-1, True)]
+def test_probe_every_30_minutes_tries_one_level_each_way():
+    tuner, phone, end, count = _locked()
+    end = _run(tuner, phone, end, tuning.PROBE_INTERVAL_S - 120.0, _peak(-1 / 3))
+    assert len(_requests(phone)) == count  # locked at about 40 s: no probe before 30 min after it
+    _run(tuner, phone, end, 240.0, _peak(-1 / 3))
+    assert _requests(phone, 0)[count:] == [(-3, False), (0, False), (-7, False), (-3, False), (-3, True)]
 
 
 def test_probe_moves_when_a_neighbour_is_better():
-    tuner, phone, end, count = _locked(best=-1)
-    _run(tuner, phone, end, tuning.PROBE_INTERVAL_S + 60.0, _peak(0))
-    assert phone.sent[-1][1] == {**phone.sent[-1][1], "ev": 0, "ae_lock": True}
-    assert max(abs(ev + 1) for ev, _ in _evs(phone)[count:]) == 1
+    tuner, phone, end, count = _locked()
+    _run(tuner, phone, end, tuning.PROBE_INTERVAL_S + 60.0, _peak(0.0))
+    assert _requests(phone)[-1] == (0, True)
+    assert {index for index, _ in _requests(phone)[count:]} <= {-7, -3, 0}
 
 
-def test_thermal_severe_pauses_and_keeps_the_last_locked_setting():
-    tuner, phone, end, count = _locked(best=-1)
+@pytest.mark.parametrize("hold", ["thermal", "mode"])
+def test_thermal_hold_pauses_and_keeps_the_last_locked_setting(hold):
+    tuner, phone, end, count = _locked()
     end = _run(tuner, phone, end, 6.0, lambda ev, locked, now: _measure(0.8, clip=0.3))
     assert phone.sent[-1][1]["ae_lock"] is False  # tuning again
-    phone.thermal = protocol.THERMAL_SEVERE
-    end = _run(tuner, phone, end, 60.0, _peak(-1))
+    if hold == "thermal":
+        phone.thermal = protocol.THERMAL_SEVERE
+    else:
+        phone.mode = "thermal_hold"
+    end = _run(tuner, phone, end, 60.0, _peak(-1 / 3))
     assert tuner.status()["state"] == "paused"
-    assert phone.sent[-1][1] == protocol.make_camera(phone.sent[-1][1]["seq"], tuning.locked_setting(-1))
-    count = len(phone.sent)
-    end = _run(tuner, phone, end, 60.0, _peak(-3))
-    assert len(phone.sent) == count  # nothing while paused
-    phone.thermal = 1
-    _run(tuner, phone, end, 10.0, _peak(-1))
+    assert (phone.sent[-1][1]["ev"], phone.sent[-1][1]["ae_lock"]) == (-3, True)
+    count = len(_requests(phone))
+    end = _run(tuner, phone, end, 60.0, _peak(-1.0))
+    assert len(_requests(phone)) == count  # no new request while paused (keep-alive only)
+    phone.thermal, phone.mode = 1, "vision"
+    _run(tuner, phone, end, 10.0, _peak(-1 / 3))
     assert tuner.status()["state"] == "locked"
 
 
 def test_phone_switch_off_means_no_messages_and_state_off():
-    tuner, phone = Tuner(), Phone(enabled=False)
-    phone.seq = 0
-    _run(tuner, phone, 0.0, 30.0, _peak(0))
+    tuner, phone = Tuner(), Phone(mode="disabled")
+    _run(tuner, phone, 0.0, 30.0, _peak(0.0))
     assert phone.sent == [] and tuner.status()["state"] == "off"

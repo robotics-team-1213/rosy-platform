@@ -262,27 +262,30 @@ def parse_pairing_uri(uri: str) -> dict:
 # -- D-589 camera tuning text messages -------------------------------------------------
 #
 # Downlink ``camera`` (Vision -> phone) asks for one allow-listed setting; uplink
-# ``camera_state`` (phone -> Vision) reports what the phone applied. Both are text messages
-# after ``hello``; an older peer logs and ignores an unknown type. The geometry (zoom, focus,
-# resolution, rotation, lens) is never part of them (D-589 2).
+# ``camera_state`` (phone -> Vision) reports what the phone applied, on change and after every
+# hello. Both are text messages after ``hello``; an older peer ignores an unknown type. The
+# geometry (zoom, focus, resolution, rotation, lens) is never part of them (D-589 2). ``ev`` is
+# the CameraX exposure compensation INDEX; one index is ``supported.ev_step`` EV. The phone
+# treats a request as fresh for CAMERA_FRESH_S only, then falls back to its local loop.
 
-CAMERA_EV_RANGE = (-6, 3)
 CAMERA_ANTIBANDING = ("60hz", "auto")
-#: Android PowerManager THERMAL_STATUS_SEVERE; at or above it the climb pauses (D-589 7).
+CAMERA_MODES = ("vision", "local", "disabled", "thermal_hold")
+CAMERA_FRESH_S = 60.0
+#: Android PowerManager THERMAL_STATUS_SEVERE; at or above it tuning pauses (D-589 7).
 THERMAL_SEVERE = 3
-THERMAL_RANGE = (0, 6)
 #: A text message longer than this is not a camera_state and is not parsed.
 MAX_TEXT_CHARS = 4096
 _U32_MAX = 0xFFFFFFFF
+_INDEX_LIMIT = 10_000  # far beyond any device's compensation range; rejects absurd numbers
 
 
 class CameraMessageError(ProtocolError):
-    """A ``camera``/``camera_state`` message failed validation; ``reason`` matches vectors.json."""
+    """A ``camera``/``camera_state`` message failed validation; ``reason`` names the key."""
 
 
 @dataclass(frozen=True)
 class CameraSetting:
-    ev: int
+    ev: int  # compensation index
     ae_lock: bool
     awb_lock: bool
     max_exposure_us: int | None
@@ -300,81 +303,94 @@ class CameraSetting:
 
 @dataclass(frozen=True)
 class CameraState:
-    seq: int
+    seq: int                   # echo of the last camera seq the phone saw, 0 if none
     applied: CameraSetting
-    enabled: bool = True                       # applied.enabled: the phone's own switch
-    ev_range: tuple[int, int] | None = None    # supported.ev_range, the device's EV steps
+    mode: str = "vision"       # vision | local | disabled (phone switch off) | thermal_hold
+    ev_min: int = 0
+    ev_max: int = 0
+    ev_step: float = 0.0       # EV per index; 0 when the device has no compensation
     exposure_us: int | None = None
     iso: int | None = None
-    thermal: int | None = None                 # Android THERMAL_STATUS_* (0..6)
+    thermal: int = -1          # PowerManager THERMAL_STATUS_*, -1 unknown
 
 
 def _int(value: object) -> bool:
     return type(value) is int
 
 
+def _positive_or_null(value: object) -> bool:
+    return value is None or (_int(value) and value > 0)
+
+
 def make_camera(seq: int, setting: CameraSetting) -> dict:
-    """Build a downlink ``camera`` message (validated like the phone validates it)."""
+    """Build a downlink ``camera`` message (validated as the phone validates it)."""
     message = {"type": "camera", "seq": seq, **setting.as_dict()}
     parse_camera(message)
     return message
 
 
-def _setting(raw: object, reason: str) -> CameraSetting:
-    if not isinstance(raw, dict):
-        raise CameraMessageError(reason, "setting must be an object")
+def _setting(raw: dict) -> CameraSetting:
     ev, max_us, antibanding = raw.get("ev"), raw.get("max_exposure_us"), raw.get("antibanding")
-    lo, hi = CAMERA_EV_RANGE
-    if not _int(ev) or not lo <= ev <= hi:
-        raise CameraMessageError("ev", f"ev must be an integer in {lo}..{hi}")
-    if type(raw.get("ae_lock")) is not bool or type(raw.get("awb_lock")) is not bool:
-        raise CameraMessageError("lock", "ae_lock and awb_lock must be booleans")
-    if max_us is not None and (not _int(max_us) or not 0 < max_us <= 1_000_000):
-        raise CameraMessageError("max_exposure_us", "max_exposure_us must be null or 1..1000000")
+    if not _int(ev) or abs(ev) > _INDEX_LIMIT:
+        raise CameraMessageError("ev", "ev must be an integer compensation index")
+    for key in ("ae_lock", "awb_lock"):
+        if type(raw.get(key)) is not bool:
+            raise CameraMessageError(key, f"{key} must be a boolean")
+    if "max_exposure_us" not in raw or not _positive_or_null(max_us):
+        raise CameraMessageError("max_exposure_us", "max_exposure_us must be a positive integer or null")
     if antibanding not in CAMERA_ANTIBANDING:
         raise CameraMessageError("antibanding", f"antibanding must be one of {CAMERA_ANTIBANDING}")
     return CameraSetting(ev, raw["ae_lock"], raw["awb_lock"], max_us, antibanding)
 
 
-def parse_camera(message: object) -> tuple[int, CameraSetting]:
-    """Validate a ``camera`` message; returns (seq, setting)."""
-    if not isinstance(message, dict) or message.get("type") != "camera":
-        raise CameraMessageError("type", "message type must be 'camera'")
+def _seq(message: dict) -> int:
     seq = message.get("seq")
     if not _int(seq) or not 0 <= seq <= _U32_MAX:
         raise CameraMessageError("seq", "seq must be a u32 integer")
-    return seq, _setting(message, "setting")
+    return seq
+
+
+def parse_camera(message: object) -> tuple[int, CameraSetting]:
+    """Validate a ``camera`` message; returns (seq, setting). Extra keys are ignored."""
+    if not isinstance(message, dict) or message.get("type") != "camera":
+        raise CameraMessageError("type", "message type must be 'camera'")
+    return _seq(message), _setting(message)
 
 
 def parse_camera_state(message: object) -> CameraState:
-    """Validate an uplink ``camera_state``. Unknown extra keys are ignored (forward compatible);
-    a known key with a wrong type or range rejects the whole message."""
+    """Validate an uplink ``camera_state`` strictly: every key the app sends must be present
+    with its type. Extra keys are ignored (forward compatible)."""
     if not isinstance(message, dict) or message.get("type") != "camera_state":
         raise CameraMessageError("type", "message type must be 'camera_state'")
-    seq = message.get("seq")
-    if not _int(seq) or not 0 <= seq <= _U32_MAX:
-        raise CameraMessageError("seq", "seq must be a u32 integer")
+    seq = _seq(message)
     applied = message.get("applied")
-    setting = _setting(applied, "applied")
-    enabled = applied.get("enabled", True)
-    if type(enabled) is not bool:
-        raise CameraMessageError("enabled", "applied.enabled must be a boolean")
+    if not isinstance(applied, dict):
+        raise CameraMessageError("applied", "applied must be an object")
+    setting = _setting(applied)
+    mode = applied.get("mode")
+    if mode not in CAMERA_MODES:
+        raise CameraMessageError("mode", f"applied.mode must be one of {CAMERA_MODES}")
     supported = message.get("supported")
     if not isinstance(supported, dict):
         raise CameraMessageError("supported", "supported must be an object")
-    ev_range = supported.get("ev_range")
-    if ev_range is not None:
-        if (not isinstance(ev_range, list) or len(ev_range) != 2 or not all(map(_int, ev_range))
-                or ev_range[0] > ev_range[1]):
-            raise CameraMessageError("supported", "supported.ev_range must be [low, high] integers")
-        ev_range = (ev_range[0], ev_range[1])
+    ev_min, ev_max, ev_step = supported.get("ev_min"), supported.get("ev_max"), supported.get("ev_step")
+    if (not _int(ev_min) or not _int(ev_max) or ev_min > ev_max
+            or max(abs(ev_min), abs(ev_max)) > _INDEX_LIMIT):
+        raise CameraMessageError("supported", "supported.ev_min/ev_max must be ordered integers")
+    if (isinstance(ev_step, bool) or not isinstance(ev_step, (int, float))
+            or not 0 <= ev_step <= 10 or ev_step != ev_step):
+        raise CameraMessageError("supported", "supported.ev_step must be a number 0..10")
+    if (any(type(supported.get(key)) is not bool for key in ("ae_lock", "awb_lock", "antibanding_60hz"))
+            or "max_exposure_us" not in supported or not _positive_or_null(supported["max_exposure_us"])):
+        raise CameraMessageError("supported", "supported capability flags are malformed")
     numbers = {}
     for key in ("exposure_us", "iso"):
-        value = message.get(key)
+        value = message.get(key, "missing")
         if value is not None and (not _int(value) or value < 0):
             raise CameraMessageError(key, f"{key} must be null or a non-negative integer")
         numbers[key] = value
     thermal = message.get("thermal")
-    if thermal is not None and (not _int(thermal) or not THERMAL_RANGE[0] <= thermal <= THERMAL_RANGE[1]):
-        raise CameraMessageError("thermal", "thermal must be null or an integer 0..6")
-    return CameraState(seq, setting, enabled, ev_range, numbers["exposure_us"], numbers["iso"], thermal)
+    if not _int(thermal) or not -1 <= thermal <= 6:
+        raise CameraMessageError("thermal", "thermal must be an integer -1..6")
+    return CameraState(seq, setting, mode, ev_min, ev_max, float(ev_step),
+                       numbers["exposure_us"], numbers["iso"], thermal)

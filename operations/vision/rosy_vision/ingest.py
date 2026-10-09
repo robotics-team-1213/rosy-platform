@@ -754,9 +754,9 @@ class IngestServer:
                          getattr(exc, "reason", "json"))
             return
         previous = src.camera_state
-        if previous is None or (previous.applied, previous.enabled) != (state.applied, state.enabled):
-            logger.info("source %s camera applied %s enabled=%s seq=%d", src.name,
-                        state.applied.fingerprint(), state.enabled, state.seq)
+        if previous is None or (previous.applied, previous.mode) != (state.applied, state.mode):
+            logger.info("source %s camera applied %s mode=%s seq=%d thermal=%d", src.name,
+                        state.applied.fingerprint(), state.mode, state.seq, state.thermal)
         src.camera_state = state
 
     def _handle_frame(self, src: _Source, message: bytes) -> None:

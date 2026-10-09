@@ -424,15 +424,17 @@ async def test_camera_state_is_kept_per_connection_and_bad_text_is_ignored():
         await _wait_for(lambda: "overhead-1" in h.server.source_names())
         link, state = h.server.camera_link("overhead-1")
         assert link is not None and state is None
-        bad = _VECTORS["camera_tuning"]["camera_state_invalid"][1]["message"]
+        example = _VECTORS["messages"]["camera_state_example"]
+        bad = {**example, "applied": {**example["applied"], "mode": "auto"}}
         for text in ("not json", json.dumps(bad), json.dumps({"type": "log"}), "[]",
-                     json.dumps({**_VECTORS["messages"]["camera_state_example"], "pad": "x" * 5000})):
+                     json.dumps({**example, "pad": "x" * 5000})):
             await conn.send(text)
-        await conn.send(json.dumps(_VECTORS["messages"]["camera_state_example"]))
+        await conn.send(json.dumps(example))
         await conn.send(_frame(1, 0))  # text never stops the frame path
         await _wait_for(lambda: h.server.camera_link("overhead-1")[1] is not None)
         state = h.server.camera_link("overhead-1")[1]
-        assert state.seq == 7 and state.applied.ev == -1 and state.applied.ae_lock is True
+        assert state.seq == 12 and state.applied.ev == -1 and state.applied.ae_lock is True
+        assert state.mode == "vision" and state.ev_step == 0.1
         await _wait_for(lambda: h.server.latest_frame("overhead-1") is not None)
         await conn.send(json.dumps(bad))  # a later bad one keeps the last good state
         await conn.send(_frame(2, 0))
