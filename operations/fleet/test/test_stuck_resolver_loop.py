@@ -426,3 +426,12 @@ def test_cancel_while_awaiting_the_robot_records_an_unknown_outcome():
     last = board.answers()[-1]
     assert last["accepted"] is None and last["code"] == "STUCK_DECISION_OUTCOME_UNKNOWN"
     assert (last["tier"], last["rule"]) == ("rule", "R2")
+
+
+def test_trip_robot_is_answered_with_wait_only():
+    """D-517 5 (M4): the loop no longer skips trip robots; with no peer ahead a trip robot goes to a human."""
+    loop, board, resolver_robot = _setup()
+    loop.trip_busy = lambda robot_id: robot_id == "rosy_01"
+    asyncio.run(loop.run_once())
+    assert not [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]
+    assert board.view("rosy_01")["resolver"]["escalated"] == "no_rule"

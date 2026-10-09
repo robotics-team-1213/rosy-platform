@@ -53,6 +53,7 @@ HW_TEST_REQUEST_FILE = "/run/rosy/hw-test.request"
 HW_TEST_RESULT_FILE = "/run/rosy-boot/hw-test.json"
 HW_CONFIRM_NAME = "hw-confirmations.json"
 HW_TEST_DEVICES = ("buzzer", "lamp")
+HW_TEST_ACTIONS = (*HW_TEST_DEVICES, "identify_blue", "identify_amber")
 HW_TEST_STATES = ("done", "busy", "unavailable", "failed")
 #: One test at a time: a second press inside this window starts nothing.
 HW_TEST_COOLDOWN_S = 10.0
@@ -124,7 +125,7 @@ def read_test_result(path: str) -> Optional[dict[str, Any]]:
     row = {key: data.get(key) for key in ("request_id", "action", "state", "detail")}
     if not all(isinstance(value, str) and len(value) <= MAX_TEXT for value in row.values()):
         return None
-    if row["action"] not in HW_TEST_DEVICES or row["state"] not in HW_TEST_STATES:
+    if row["action"] not in HW_TEST_ACTIONS or row["state"] not in HW_TEST_STATES:
         return None
     finished = _aware_time(data.get("finished_at"))
     if finished is None:

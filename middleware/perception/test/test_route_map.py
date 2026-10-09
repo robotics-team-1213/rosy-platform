@@ -138,6 +138,20 @@ def test_without_odometry_or_ground_there_is_no_output():
     assert f.state == "STOP"
 
 
+def test_odometry_jump_cannot_be_overridden_by_route_pursuit(monkeypatch):
+    scenario = SCENARIOS[5]
+    f = follower(scenario)
+    pose = tuple(scenario["start"])
+    frame = WORLD.render(pose)
+    assert f.update(0.0, pose, frame, lane_sim.GROUND, **lane_sim.KW) is not None
+    accepted = f.last["estimate"]
+    monkeypatch.setattr(f._localizer, "update", lambda *args, **kwargs: accepted)
+    jumped = (pose[0], pose[1] + 0.08, pose[2])
+    assert f.update(0.2, jumped, frame, lane_sim.GROUND, **lane_sim.KW) is None
+    assert f.last["reason"] == "odom_discontinuity"
+    assert f.update(0.4, jumped, frame, lane_sim.GROUND, **lane_sim.KW) is None
+
+
 def test_confidence_stays_inside_cores_band():
     """Confidence is CORE's speed scale: never above 1.0 and, when there is
     an output at all, above CORE's 0.35 minimum."""

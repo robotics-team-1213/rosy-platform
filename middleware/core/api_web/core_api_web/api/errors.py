@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from core_common.capability import CapabilityError
+from core_common.protocol.connect_reason import body as reason_body
 from core_features.navigation.manager import NavigationError
 from core_features.waypoints.manager import WaypointError
 
@@ -21,6 +22,17 @@ class ApiError(Exception):
         self.http_status = http_status
         self.message = message or code
         self.detail = detail
+
+
+class ReasonError(HTTPException):
+    """D-535: a connection or pairing refusal. The body keeps the route's older ``detail``
+    beside the ERR-101 ``error`` whose code, message and action come from connect_reason.
+    An app without the handler below still answers the older ``{"detail": ...}``."""
+
+    def __init__(self, http_status: int, code: str, legacy: Any, detail: Optional[dict] = None,
+                 headers: Optional[dict] = None) -> None:
+        super().__init__(http_status, legacy, headers)
+        self.http_status, self.code, self.legacy, self.reason_detail = http_status, code, legacy, detail
 
 
 def error_body(code: str, message: str, detail: Any = None) -> dict:
@@ -86,6 +98,12 @@ def register_exception_handlers(app) -> None:
     async def _api_error(_: Request, exc: ApiError):
         return JSONResponse(status_code=exc.http_status,
                             content=error_body(exc.code, exc.message, exc.detail))
+
+    @app.exception_handler(ReasonError)
+    async def _reason_error(_: Request, exc: ReasonError):
+        return JSONResponse(status_code=exc.http_status,
+                            content={"detail": exc.legacy, **reason_body(exc.code, exc.reason_detail)},
+                            headers={"Cache-Control": "no-store", **(exc.headers or {})})
 
     @app.exception_handler(NavigationError)
     async def _nav_error(_: Request, exc: NavigationError):

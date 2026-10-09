@@ -761,3 +761,44 @@
 - 증거: `docs/validation/uiux-pilot-phone-turn-layout-2026-10-08/result.md`. LOCAL Chromium 2000×1200·1333×760·1200×2000·390×844·320×568 영상/조작 5건, 수동/자동 회전 2건, 도구 전환·스크롤 1건 통과. G1 관련 80 passed/1 failed(`pinky-review` 원시 색상, 공유 `main`에서도 재현).
 - gate 변화: Pilot 표면과 제품 전체 HOLD. G1 실패, 전체 G2·실기·G3 미수용.
 - 결정: D-153, D-363의 영상 비율·조작 접근 계약을 유지한다.
+
+## 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
+- 변경: 상단 `운용 지도`에서 `/console`로 이동한다. Pilot의 가짜 `지도 목표` 운전 모드를 제거하고, 주행 중 이동에는 0 속도와 소유한 MANUAL의 IDLE 요청을 기다리도록 했다. 대기 중 모드 진입·중복 클릭을 처리하고 모드 요청을 3초로 제한한다.
+- 증거: `docs/validation/uiux-pilot-map-handoff-2026-10-08/result.md`의 390×844·2000×1200 전후 PNG, 브라우저 회귀 12 passed, 셸 자산 4 passed, known_failures 0 NEW. 합성 CORE의 LOCAL 증거다.
+- gate 변화: 없음. 설치본·실기 정지 readback·D-153 전체 G2/G3·현장 독회는 HOLD.
+- 결정: D-323, D-344, D-153. 지도 읽기와 목표 실행을 구분한다.
+
+## 2026-10-08 · uncommitted · fix(pilot): 운용 지도로 같은 탭 인증 인계
+- 변경: 주행 종료 요청 뒤 Pilot 토큰을 Console의 같은 탭 세션 키에 전달한다. 이전 Console 토큰은 현재 Pilot 사용자로 교체하고 URL·영구 저장소는 쓰지 않는다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). 주행 화면과 실제 CORE Console의 모바일·데스크톱 캡처, 관련 시험 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 흐름 증거 추가. 설치 앱·실기 정지 readback·전체 G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · feat(pilot): 앱이 연 세션만 쓴다
+- 변경: Rosy Pilot 앱(`pilotShell=android`) 안에서는 주입된 세션만 쓴다. 개발 연결, 코드 입력, 연동 코드, 서비스 워커, Rosy Robot 이동, 지도 목표(`/console`)를 열지 않는다. 세션이 없거나 거절되면 앱이 다시 고르도록 안내한다.
+- 증거: Android JVM `ShellConnectionTest` 1 passed (`X:/DevTemp/pilot-app-connect/build`). 브라우저 `test_android_shell_uses_the_app_session`와 `test_android_shell_without_a_session_stays_with_the_app` 3 passed, `known_failures.py` 0 NEW. 앱 프록시를 띄운 `test_bundled_page_uses_the_app_proxy` 1 passed(81.44s): 개발 연결은 한 번이었고 주행 시작까지 갔다. `known_failures.py` 0 NEW. 로그 `X:/DevTemp/pilot-app-connect/browser.txt`, `proxy-page.txt`. adb에 붙은 기기는 없었다.
+- gate 변화: 없음. 이 파일은 로봇에 올라가기 전에는 현장 화면이 바뀌지 않는다.
+- 결정: D-432, D-471. 새 API와 새 ADR은 없다.
+- 교훈: 앱 핸드오프는 `<head>`의 일반 스크립트다. Playwright init script는 그 순서보다 먼저 실행되어 같은 시험이 되지 않는다.
+
+## 2026-10-09 · uncommitted · fix(pilot): 연결 상태와 이유를 늘 보인다 (D-483 보완)
+- 변경: 실패마다 `LinkReason`(ROBOT_UNREACHABLE·CA_UNKNOWN·APPROVAL_*·RATE_LIMITED·CORE_NOT_READY·API_VERSION_TOO_OLD 등)과 다음 행동 문구를 `LinkStatus` 한 곳에서 정한다. 승인 대기 대화상자는 요청 번호·남은 시간·두 승인 경로와 "로봇 화면에 Pair request가 없으면 릴리스가 화면 코드를 못 보인다"를 보인다. 처음 연결의 인증서 확인은 로봇 LCD의 `CA xxxx xxxx xxxx xxxx`(앞 16자리) 또는 대시보드 전체 값과 대조하게 한다. 수신기가 끝낸 요청은 `PeerEnded(state)`로 거절·만료·취소를 구분한다. 세션 바는 끊김 동안 "연결 끊김 · 로봇이 응답하지 않습니다"를 보인다.
+- 증거: Android 단위 시험 97 passed(LinkStatusTest·PeerClientTest 종료 상태·TrustedProxyTest). 실기 9dfk·8kcn(055)에서 `/run/rosy-peer-display` 부재로 LCD 코드가 뜨지 않음을 확인(CORE 경고 FileNotFoundError).
+- gate 변화: SOURCE/LOCAL. 화면 코드 경로의 DEVICE 확인은 디렉터리·CA 줄이 든 릴리스(056 이후)에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): Robot 운용 지도 같은 탭 인계 검증
+
+- 변경: Pilot 주행→0 속도·IDLE 요청→실제 CORE Console 지도 문서의 인증 인계를 한 브라우저 탭에서 검증한다. 쿼리와 지도 없음 상태를 보존한다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 2000·390px 전환 전후 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
+- 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
+
+## 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
+- 변경: 823847295의 "승인 코드 입력칸이 한글 키보드에서 깨졌다" 기록에 빠진 표준 항목을 보완한다. 입력칸 `VISIBLE_PASSWORD`, 코드 알파벳 필터, 완료 키 보내기, 승인 폐기(401/403/409) 재요청 대화상자.
+- 증거: 823847295 Android 단위 시험(LinkStatusTest), 8kcn 태블릿 로그 "Approval code not accepted: PeerRefused HTTP 409".
+- gate 변화: SOURCE/LOCAL. 실기 화면 코드 승인은 릴리스 056 이후 DEVICE에서 확인.
+
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
+- 변경: 키보드 옵션(한 줄·완료)을 대화상자 표시 전에 정하고, Enter는 `IME_NULL`+`KEYCODE_ENTER` 누름으로 와도 보내도록 `LinkStatus.sendsCode` 한 곳에서 판정한다. 키를 뗄 때는 보내지 않는다.
+- 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
+- gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.

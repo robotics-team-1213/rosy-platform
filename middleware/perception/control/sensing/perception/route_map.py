@@ -18,7 +18,7 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free. Per frame:
              MAX_DISAGREE_M off (`disagreement`). `last["coverage"]` is the
              fraction of frames compared so far.
 
-Fail-closed (§6): no estimate, spread over MAX_SPREAD_M, match under
+Fail-closed (§6): odometry discontinuity, no estimate, spread over MAX_SPREAD_M, match under
 MIN_MATCH, a camera/route disagreement, or a pursuit target that is the
 route's end within LOOKAHEAD_M / 2 or behind the robot is no output, and
 CORE stops.
@@ -255,6 +255,8 @@ class RouteMapFollower:
         self._frames += 1
         self.last = {"estimate": estimate, "camera": camera, "tracker": self._camera.last,
                      "reason": None, "coverage": self._compared_frames / self._frames}
+        if self._camera.last.get("reason") == "odom_discontinuity":
+            return self._stop("odom_discontinuity")
         if estimate is None:
             return self._stop("NO_ESTIMATE")
         if estimate.spread_m > MAX_SPREAD_M:

@@ -1,0 +1,140 @@
+{
+ "results": [
+  {
+   "case": "SW",
+   "index": 0,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 3,
+    "state": "armed"
+   },
+   "result": "ended",
+   "final_state": "TRACKING",
+   "final_reason": "tracking",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 3,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 2,
+    "from_place_id": "SW",
+    "end_place_id": "SE",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3739,
+    "travelled_m": 0.3758,
+    "state": "ended",
+    "reason": "lane_arc_end_unarmed",
+    "ir_correction": {
+     "side": null,
+     "phase": null,
+     "away_m": 0.0,
+     "level_m": 0.0,
+     "used": false
+    }
+   },
+   "start_dr": 0.2866780443439855,
+   "end_dr": 0.02908099952323473,
+   "max_abs_dr": 0.2866780443439855,
+   "flow": -0.2575970448207508,
+   "n": 100,
+   "elapsed": 15.782
+  },
+  {
+   "case": "SW",
+   "index": 1,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 5,
+    "state": "armed"
+   },
+   "result": "ended",
+   "final_state": "TRACKING",
+   "final_reason": "tracking",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 5,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 3,
+    "from_place_id": "SW",
+    "end_place_id": "SE",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3739,
+    "travelled_m": 0.375,
+    "state": "ended",
+    "reason": "lane_arc_end_unarmed",
+    "ir_correction": {
+     "side": null,
+     "phase": null,
+     "away_m": 0.0,
+     "level_m": 0.0,
+     "used": false
+    }
+   },
+   "start_dr": 0.28667815417954373,
+   "end_dr": 0.02775419967092435,
+   "max_abs_dr": 0.28667815417954373,
+   "flow": -0.2589239545086194,
+   "n": 99,
+   "elapsed": 15.725999999999999
+  },
+  {
+   "case": "SW",
+   "index": 2,
+   "command_code": 200,
+   "command": {
+    "accepted": true,
+    "junction_seq": 7,
+    "state": "armed"
+   },
+   "result": "ended",
+   "final_state": "TRACKING",
+   "final_reason": "tracking",
+   "junction": {
+    "pending_action": null,
+    "place_id": null,
+    "state": "idle",
+    "seq": 7,
+    "turn_deg": null,
+    "reason": null,
+    "pivot_basis": null
+   },
+   "arc": {
+    "arc_seq": 4,
+    "from_place_id": "SW",
+    "end_place_id": "SE",
+    "curvature_1pm": 3.98,
+    "length_m": 0.3739,
+    "travelled_m": 0.3758,
+    "state": "ended",
+    "reason": "lane_arc_end_unarmed",
+    "ir_correction": {
+     "side": null,
+     "phase": null,
+     "away_m": 0.0,
+     "level_m": 0.0,
+     "used": false
+    }
+   },
+   "start_dr": 0.2866782272417096,
+   "end_dr": 0.02927991024447768,
+   "max_abs_dr": 0.2866782272417096,
+   "flow": -0.2573983169972319,
+   "n": 99,
+   "elapsed": 15.679000000000002
+  }
+ ],
+ "capability_at_end": true
+}

@@ -195,6 +195,16 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     return _status(svc)
 
 
+class LineExitSegment(BaseModel):
+    """D-520 1: the lane the robot enters after this place's turn is one circular arc to the next
+    place. Fleet sends it only to a robot announcing lane_arc, always with the instruction's map_id."""
+
+    curvature_1pm: float = Field(ge=-5.0, le=5.0)  # signed, left (CCW) +, 0.5 <= |k| <= 5
+    length_m: float = Field(gt=0, le=1.0)
+    outer_line_offset_m: float = Field(ge=0.05, le=0.20)
+    end_place_id: str = Field(min_length=1, max_length=128)
+
+
 class LineJunctionRequest(BaseModel):
     """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
 
@@ -211,6 +221,10 @@ class LineJunctionRequest(BaseModel):
     expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     # signed (2026-10-08): negative when the measured cross line is past the place point.
     pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
+    # D-520 1: the arc after this place, sent only to a robot announcing lane_arc.
+    exit_segment: Optional[LineExitSegment] = None
+    # lap SIM 2 (2026-10-08): a straight's lane heading change to the place (deg, left +).
+    lane_turn_deg: Optional[float] = Field(default=None, ge=-360, le=360, allow_inf_nan=False)
     # D-507 addendum (2026-10-08): a site-map bend, sent only to a robot announcing lane_bend.
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
@@ -221,7 +235,8 @@ def _expect(body: LineJunctionRequest):
     """D-507 2: the optional fields as one dict, or None for an old client (behaviour unchanged)."""
     fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
                   pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
-                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m)
+                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m,
+                  lane_turn_deg=body.lane_turn_deg)
     return fields if any(v is not None for v in fields.values()) else None
 
 
@@ -253,12 +268,21 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     if body.pivot_past_line_m is not None and (body.action == "stop" or (
             body.action != "straight" and body.turn_deg is None)):
         raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
+    if body.lane_turn_deg is not None and (body.action != "straight" or body.expect_in_m is None):
+        raise ApiError("VALIDATION_ERROR", 400, "lane_turn_deg belongs to straight with a window")
+    if body.exit_segment is not None and (
+            body.map_id is None or abs(body.exit_segment.curvature_1pm) < 0.5
+            or not (body.action == "straight" or body.turn_deg is not None)):
+        raise ApiError("VALIDATION_ERROR", 400, "exit_segment needs map_id, 0.5 <= |curvature_1pm| <= 5 "
+                       "and straight or a turn with turn_deg")
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
     try:
         result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
                                               body.stop_after_m, body.turn_deg, body.advance_m,
-                                              expect=_expect(body))
+                                              expect=_expect(body),
+                                              exit_segment=(None if body.exit_segment is None
+                                                            else body.exit_segment.model_dump()))
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())

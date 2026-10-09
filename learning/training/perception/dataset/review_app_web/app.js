@@ -1,9 +1,12 @@
 import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
+import {reviewViewport} from '/viewport.js';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
+reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
+document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
 // Filled from the workspace's bound class set (D-485), in class index order.
 let names = {'':'클래스 선택 필요'}, classOptions = [['','클래스 선택 필요']], classColors = {};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
@@ -15,8 +18,21 @@ let detailView=false;
 try {detailView=sessionStorage.getItem('rosy.review.detailView')==='true';} catch {}
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
+let modelDrafts = [];
+let draftPreview = null;
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
 function sourceCandidates() {return frame?.source?.objects || frame?.source?.boxes || [];}
+function selectedModelDraft() {return modelDrafts[Number($('model-draft-select').value)];}
+function draftBoxes() {return draftPreview==='model'?selectedModelDraft()?.boxes:draftPreview==='source'?sourceCandidates():null;}
+function draftStatus() {
+  const source=sourceCandidates().length,model=modelDrafts.length,current=frame.review.boxes.length;
+  const applied=frame.review.review_origin==='model_draft_pending_human' && modelDrafts.some(row=>row.sha256===frame.review.draft_sha256);
+  const edited=frame.review.review_origin==='pinky_web_edit' && !!frame.review.draft_sha256;
+  $('candidate-source').textContent=`저장된 박스 ${current}개 · ${applied?'모델 초안 적용됨 · 검수 대기':edited?'모델 초안에서 수정됨 · 검수 대기':model?`미적용 모델 초안 ${model}개`:source?`원본 후보 ${source}개`:'초안 없음 · 필요한 박스를 직접 그리세요'}`;
+  $('source-preview').hidden=$('candidates').hidden=!source;
+  $('source-preview').setAttribute('aria-pressed',String(draftPreview==='source'));
+  $('model-preview').setAttribute('aria-pressed',String(draftPreview==='model'));
+}
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function setView(detail) {
@@ -39,6 +55,8 @@ function setView(detail) {
 function enable() {
   const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
+  const step = !ready ? 0 : frame.status!=='pending' ? 3 : !frame.review.boxes.length && (modelDrafts.length || sourceCandidates().length) ? 1 : unclassified ? 2 : 3;
+  [...$('object-flow').children].forEach((item,index)=>{if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
   $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified;
   const reason = forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
   $('object-approval-hint').textContent = reason;
@@ -52,7 +70,10 @@ function enable() {
     button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.value));
   }
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
+  $('source-preview').disabled = !ready || !sourceCandidates().length;
   $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
+  $('model-candidates').disabled = locked || frame?.status === 'excluded' || !modelDrafts.length;
+  $('model-preview').disabled = !ready || !modelDrafts.length;
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
   $('undo').reason=locked?'작업 중':!undo?'수정 없음':frame?.status==='excluded'?'제외된 사진':'';
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
@@ -155,12 +176,21 @@ function paint() {
     const [x0,y0,x1,y1] = gesture.preview;
     ctx.setLineDash([marker,marker/2]); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.setLineDash([]);
   }
+  const preview=draftBoxes();
+  if(preview?.length){
+    ctx.save();ctx.strokeStyle=cssColor('--status-warn');ctx.fillStyle=cssColor('--status-warn');
+    ctx.lineWidth=Math.max(2,canvas.width/160);ctx.setLineDash([7,4]);
+    preview.forEach((box,i)=>{const [x0,y0,x1,y1]=box.bbox_xyxy;
+      ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.fillText(`AI ${i+1}`,x0+3,Math.max(14,y0-3));});
+    ctx.restore();
+  }
 }
 async function select(index) {
   const serial = ++loadSerial;
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
+  modelDrafts=[];draftPreview=null;$('model-draft-panel').hidden=true;
   for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
@@ -172,11 +202,17 @@ async function select(index) {
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
   const candidates=sourceCandidates();
-  $('candidate-details').open = frame.status === 'pending' && candidates.length > 0 && frame.review.boxes.length === 0 && frame.version <= 1;
-  $('candidate-source').textContent = candidates.length
-    ? `원본 객체 후보 ${candidates.length}개 · 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 사람이 모든 박스를 확인해야 합니다.`
-    : '원본 객체 후보가 없습니다. 자동 객체 탐지는 이 화면에서 실행하지 않습니다. 사진을 확인하고 필요한 박스를 직접 그리세요.';
-  if(frame.source.annotation_note) $('candidate-source').textContent += ` ${frame.source.annotation_note}.`;
+  if(candidates.length && !frame.review.boxes.length)draftPreview='source';
+  draftStatus();
+  request(`/api/object-drafts/${index}`).then(value=>{
+    if(serial!==loadSerial)return;
+    modelDrafts=value.drafts;
+    $('model-draft-select').replaceChildren(...modelDrafts.map((draft,i)=>new Option(
+      `${draft.origin || '모델'} · 박스 ${draft.boxes.length}개`,String(i))));
+    $('model-draft-panel').hidden=!modelDrafts.length;
+    if(modelDrafts.length && (frame.review.review_origin!=='model_draft_pending_human' || frame.review.draft_sha256!==modelDrafts[0].sha256))draftPreview='model';
+    draftStatus();paint();enable();
+  }).catch(()=>{if(serial===loadSerial)error('모델 객체 초안을 불러오지 못했습니다. 새로고침해 주세요.');});
   $('image-message').hidden = false; $('image-message').textContent = '사진을 불러오는 중';
   $('canvas').width = frame.source.width; $('canvas').height = frame.source.height;
   renderBoxes(); list(); paint(); enable();
@@ -239,7 +275,6 @@ function quickClasses() {
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
     icon.setAttribute('aria-hidden','true');
     actionIcon(icon,icons[cls.name]||'box');
-    if(cls.color) icon.style.color=`rgb(${cls.color.join(',')})`;
     label.textContent=cls.display; key.textContent=cls.hotkey?.toUpperCase()||'·';
     button.append(icon,label,key);
     button.onclick=()=>{if(button.disabled||selected===null)return;
@@ -258,7 +293,7 @@ async function mutate(action, extras={}, restoring=false) {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
-    undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
+    undo=restoring?null:['save','candidates','apply_object_draft'].includes(action)?{index:id,boxes:previous}:null;
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
     // Audits inside the approved/excluded filters stay where they are.
     const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&nextPending(id);
@@ -270,7 +305,8 @@ async function mutate(action, extras={}, restoring=false) {
     request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
       .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.';});
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
-    renderBoxes(); list(); paint();
+    if(['candidates','apply_object_draft'].includes(action))draftPreview=null;
+    draftStatus();renderBoxes(); list(); paint();
   } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent=`저장 실패 · ${e.message}`;}
   finally {busy=false; enable();}
 }
@@ -282,6 +318,12 @@ $('complete').onchange=enable;
 $('approve').onclick=()=> {if ($('complete').checked) mutate('approve',{complete_frame_review:true});};
 $('exclude').onclick=()=>mutate('exclude'); $('reopen').onclick=()=>mutate('reopen');
 $('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?')) mutate('candidates');};
+$('source-preview').onclick=()=>{draftPreview=draftPreview==='source'?null:'source';draftStatus();paint();};
+$('model-preview').onclick=()=>{draftPreview=draftPreview==='model'?null:'model';draftStatus();paint();};
+$('model-draft-select').onchange=()=>{draftPreview='model';draftStatus();paint();};
+$('model-candidates').onclick=()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
+  if(draft&&window.confirm(`현재 박스를 ${draft.origin || '모델'} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
+    mutate('apply_object_draft',{draft_sha256:draft.sha256});};
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
@@ -358,6 +400,7 @@ document.addEventListener('keydown',event=> {
   // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
   if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.repeat || busy || gesture) return;
+  if(event.key==='?' || event.code==='Slash' && event.shiftKey) {event.preventDefault();$('object-keys').open=!$('object-keys').open;return;}
   const key=shortcut(event);
   if(key==='v'&&ready){event.preventDefault();setView(!detailView);return;}
   if(key==='c' && !$('complete').disabled) {event.preventDefault();$('complete').click();return;}

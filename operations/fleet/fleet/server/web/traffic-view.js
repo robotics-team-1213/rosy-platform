@@ -7,7 +7,7 @@ import { trafficDrawing } from "/console/assets/site-map-model.js";
 // 테두리는 굵은 선에서 가는 선을 지운 따로 그린 판이라 밑의 실영상을 덮지 않는다.
 export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
-  el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length);
+  el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length || drawing.signals.length);
   if (!drawing) return;
   const band = Math.max(6, Math.min(16, 0.09 * pxPerM));
   const trace = (target, points) => {
@@ -51,6 +51,12 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
   for (const item of drawing.bands.filter((b) => b.state === "UNKNOWN")) outline([item.points], css("--status-warn"), band, 1.5, [4, 3]);
   ctx.save();
   ctx.lineCap = "round";
+  // 대열(M3): 앞 로봇에서 팔로워로 가는 가는 선 하나, 리더 색. 띠 위, 통행권 표시 아래.
+  for (const line of drawing.convoys) {
+    const a = toPoint(line.from.x, line.from.y), b = toPoint(line.to.x, line.to.y);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = colorOf(line.leader); ctx.lineWidth = 2; ctx.stroke();
+  }
   for (const tick of drawing.ticks) {
     const p = toPoint(tick.x, tick.y);
     const q = toPoint(tick.x + Math.cos(tick.angle) * 0.05, tick.y + Math.sin(tick.angle) * 0.05);
@@ -78,5 +84,26 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     const reach = band + 18 + Math.abs(nx) * 52;  // a sideways label needs room for its width
     drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
   }
-  window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length };
+  // D-525 8: 가상 신호 — 정지선 막대(접근로에 가로)와 그 바깥의 등 하나, 옆에 글자(색만으로 구별하지 않는다).
+  const lampColour = { green: css("--nominal"), yellow: css("--status-warn"), red: css("--status-crit") };
+  for (const stop of drawing.signals) {
+    const p = toPoint(stop.x, stop.y);
+    const q = toPoint(stop.x + Math.cos(stop.angle) * 0.05, stop.y + Math.sin(stop.angle) * 0.05);
+    const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    const nx = -(q.y - p.y) / span, ny = (q.x - p.x) / span, half = band * 0.9;
+    ctx.save();
+    ctx.lineCap = "butt";
+    for (const [colour, width] of [[css("--ground-deep"), 7], [css("--ink"), 3]]) {
+      ctx.beginPath(); ctx.moveTo(p.x - nx * half, p.y - ny * half); ctx.lineTo(p.x + nx * half, p.y + ny * half);
+      ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.stroke();
+    }
+    const lx = p.x + nx * (half + 10), ly = p.y + ny * (half + 10);
+    ctx.beginPath(); ctx.arc(lx, ly, 7, 0, Math.PI * 2);
+    ctx.fillStyle = lampColour[stop.lamp] || lampColour.red; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = css("--ground-deep"); ctx.stroke();
+    ctx.restore();
+    drawChip(ctx, null, lx + nx * 22, ly + ny * 22, stop.label, "");
+  }
+  window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,
+    convoys: drawing.convoys.length, signals: drawing.signals.length };
 }

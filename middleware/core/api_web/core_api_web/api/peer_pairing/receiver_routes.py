@@ -7,6 +7,8 @@ from pydantic import ValidationError, TypeAdapter
 from starlette.concurrency import run_in_threadpool
 
 from core_api_web.api.deps import get_services
+from core_api_web.api.errors import ReasonError
+from core_common.protocol.connect_reason import REASONS
 from core_api_web.api.v1.common import admin
 from core_api_web.api.v1.auth import client_allowed
 from core_common.protocol.peer_pairing import (ApprovalCodeConfirm, ReceiverDecision,SignedRequest, SignedSession, StateSnapshot, CreatedRequest,
@@ -15,14 +17,30 @@ from core_common.protocol.peer_pairing import (ApprovalCodeConfirm, ReceiverDeci
 router = APIRouter(prefix="/api/v1/auth/peer-pairing", tags=["auth"])
 
 
+def _reason(exc):
+    """D-535 code of a service refusal; anything else stays the older 409 meaning, start over."""
+    code = getattr(exc, "code", None)
+    return code if code in REASONS else "PAIRING_REQUIRED"
+
+
+def _retry(exc):
+    """Retry-After for a limit refusal that keeps its older 409 status."""
+    wait = getattr(exc, "retry_after_s", None)
+    if not wait:
+        return None, None
+    detail = {"retry_after_s": wait}
+    headers = {"Retry-After": str(wait)}
+    return detail, headers
+
+
 def service(request):
     if request.url.scheme != "https":
-        raise HTTPException(403, "authenticated HTTPS required")
+        raise ReasonError(403, "TLS_REQUIRED", "authenticated HTTPS required")
     from .receiver_initializer import get_receiver
     try:
         return get_receiver(request)
     except (ValueError, OSError):
-        raise HTTPException(503, "receiver pairing unavailable") from None
+        raise ReasonError(503, "PAIRING_UNAVAILABLE", "receiver pairing unavailable") from None
 
 
 async def body(request, model):
@@ -43,13 +61,13 @@ async def call(function, *args, schema):
         adapter = TypeAdapter(schema)
         result = adapter.dump_python(adapter.validate_python(result), mode='json')
         return JSONResponse(content=result, headers={"Cache-Control": "no-store"})
-    except ValueError:
-        raise HTTPException(409, "request unavailable or changed") from None
+    except ValueError as exc:
+        raise ReasonError(409, _reason(exc), "request unavailable or changed", *_retry(exc)) from None
 
 
 @router.get("/identity")
 async def identity(request: Request):
-    candidate = proof_service(request)
+    candidate = proof_service(request, identity=True)
     return await call(candidate.identity, schema=IdentitySnapshot)
 
 
@@ -57,7 +75,7 @@ async def identity(request: Request):
 async def create(request: Request):
     candidate = service(request)
     if request.client is None or not client_allowed(request.client.host):
-        raise HTTPException(403, "initial receiver approval requires LAN access")
+        raise ReasonError(403, "LAN_REQUIRED", "initial receiver approval requires LAN access")
     parsed = await body(request, SignedRequest)
     source = request.client.host if request.client else "unknown"
     return await call(candidate.request, parsed.fields.model_dump(), parsed.signature, source, schema=CreatedRequest)
@@ -96,15 +114,18 @@ async def confirm(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9
     try:
         result = await run_in_threadpool(candidate.confirm, request_id, x_request_secret, parsed.approval_code, source)
     except WrongCode as exc:
-        raise HTTPException(400, {"message": "wrong approval code", "remaining_attempts": exc.remaining}) from None
+        raise ReasonError(400, exc.code, {"message": "wrong approval code", "remaining_attempts": exc.remaining},
+                          {"remaining_attempts": exc.remaining}) from None
     except RoleRefused:
-        raise HTTPException(403, "screen-code approval is limited to operator") from None
+        raise ReasonError(403, RoleRefused.code, "screen-code approval is limited to operator") from None
     except CodeBudgetSpent:
-        raise HTTPException(429, "approval code attempts exhausted; approve from the console") from None
+        raise ReasonError(429, CodeBudgetSpent.code,
+                          "approval code attempts exhausted; approve from the console") from None
     except RateLimited:
-        raise HTTPException(429, "source rate limit reached") from None
-    except ValueError:
-        raise HTTPException(409, "request unavailable or changed") from None
+        raise ReasonError(429, "RATE_LIMITED", "source rate limit reached", {"retry_after_s": 60},
+                          {"Retry-After": "60"}) from None
+    except ValueError as exc:
+        raise ReasonError(409, _reason(exc), "request unavailable or changed", *_retry(exc)) from None
     return await call(lambda: result, schema=StateSnapshot)
 
 
@@ -126,14 +147,15 @@ async def revoke(request: Request, relationship_id: str = Path(pattern=r'^[A-Za-
     return await call(service(request).revoke, owner.token_id, relationship_id, schema=RevokedSnapshot)
 
 
-def admit(request, candidate):
+def admit(request, candidate, *, identity=False):
     try:
-        candidate.admit_proof(request.client.host if request.client else 'unknown')
+        candidate.admit_proof(request.client.host if request.client else 'unknown', identity=identity)
     except ValueError:
-        raise HTTPException(429, 'anonymous proof rate limit reached') from None
+        detail = 'anonymous identity rate limit reached' if identity else 'anonymous proof rate limit reached'
+        raise ReasonError(429, 'RATE_LIMITED', detail, {'retry_after_s': 60}, {'Retry-After': '60'}) from None
 
 
-def proof_service(request):
+def proof_service(request, *, identity=False):
     candidate = service(request)
-    admit(request, candidate)
+    admit(request, candidate, identity=identity)
     return candidate

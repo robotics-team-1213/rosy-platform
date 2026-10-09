@@ -381,7 +381,9 @@ def read_boot_status(path: str) -> Optional[dict[str, Optional[str]]]:
         return None
     if failed_unit is not None and (not isinstance(failed_unit, str) or len(failed_unit) > MAX_TEXT):
         return None
-    return {"stage": stage, "failed_unit": failed_unit}
+    release = data.get("release_id")  # D-535: the release the mDNS TXT already shows
+    release = release if isinstance(release, str) and 0 < len(release) <= 64 else None
+    return {"stage": stage, "failed_unit": failed_unit, "release_id": release}
 
 
 def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:

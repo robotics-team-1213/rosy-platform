@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import errno
 import math
+import socket
+import ssl
 from dataclasses import dataclass
 from typing import Optional
 
 import httpx
 
+from core_common.protocol import connect_reason
 from fleet.swarm.transport import RobotApiError
 
 # D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
@@ -112,6 +116,8 @@ class TripCaps:
     site_floor_map_id: Optional[str] = None
     #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
     junction_pivot: bool = False
+    #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
+    lane_arc: bool = False
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False
@@ -139,6 +145,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
                             junction_pivot=item.get("junction_pivot") is True,
+                            lane_arc=item.get("lane_arc") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             lane_bend=item.get("lane_bend") is True)
@@ -217,3 +224,40 @@ def classify_link(exc: BaseException | None, *, scheme: str,
     if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
         return "protocol"
     return "unreachable"
+
+
+def _transport_kind(exc: BaseException, scheme: str) -> str | None:
+    """D-535 closed transport vocabulary for an exception that never got an HTTP answer."""
+    chain, seen = [], exc
+    while seen is not None and len(chain) < 8:
+        chain.append(seen)
+        seen = seen.__cause__ or seen.__context__
+    for item in chain:
+        if isinstance(item, ssl.SSLCertVerificationError):
+            # OpenSSL X509_V_ERR_HOSTNAME_MISMATCH: the leaf names another host (IP instead of .local).
+            return "tls_name_mismatch" if getattr(item, "verify_code", None) == 62 else "tls_unknown_ca"
+    for item in chain:
+        if isinstance(item, socket.gaierror):
+            return "dns_failure"
+        if isinstance(item, ConnectionRefusedError):
+            return "connection_refused"
+        if isinstance(item, ssl.SSLError):
+            return "tls_handshake"
+        if isinstance(item, OSError) and item.errno in (errno.EHOSTUNREACH, errno.ENETUNREACH):
+            return "no_route"
+    if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
+        return "plain_http_to_tls"
+    return "timeout" if isinstance(exc, (httpx.TransportError, OSError, asyncio.TimeoutError)) else None
+
+
+def link_reason(exc: BaseException | None, *, scheme: str) -> dict | None:
+    """D-535 reason of a failed robot read: code, operator message, recovery action, retry."""
+    if exc is None:
+        return None
+    if isinstance(exc, RobotApiError):
+        code = connect_reason.classify(code=exc.code, http_status=exc.status) or connect_reason.HTTP_FALLBACK
+    else:
+        kind = _transport_kind(exc, scheme)
+        code = connect_reason.classify(transport=kind) if kind else connect_reason.HTTP_FALLBACK
+    retry, message, action = connect_reason.REASONS[code]
+    return {"code": code, "message": message, "action": action, "retry": retry}

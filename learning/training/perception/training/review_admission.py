@@ -127,14 +127,17 @@ class _Session:
         self.dataset, self.gate_path = None, None
         self._eval_snapshots = {}
         self.config_sha = _hash(config)
-        self.paths = [Path(config['gate']).resolve(), Path(config['camera_profile']).resolve(),
-                      *(Path(path).resolve() for path in source_files)]
-        self.bindings = {path: _stable_bytes(path) for path in self.paths}
+        self.paths = [Path(config['gate']).absolute(), Path(config['camera_profile']).absolute(),
+                      *(Path(path).absolute() for path in source_files)]
+        try:
+            self.bindings = {path: _stable_bytes(path) for path in self.paths}
+        except (ValueError, OSError) as exc:
+            raise JobError(str(exc)) from exc
         if expected_file_hashes is not None:
-            expected = {Path(path).resolve(): digest for path, digest in expected_file_hashes.items()}
+            expected = {Path(path).absolute(): digest for path, digest in expected_file_hashes.items()}
             if {path: hashlib.sha256(raw).hexdigest() for path, raw in self.bindings.items()} != expected:
                 raise JobError('validated gate/camera/trainer bytes changed before admission capture')
-        self.gate_doc = yaml.safe_load(self.bindings[Path(config['gate']).resolve()])
+        self.gate_doc = yaml.safe_load(self.bindings[Path(config['gate']).absolute()])
         from intake_eval_gate import _eval_gate_error
         if self.gate_doc.get('require_eval') is not True or _eval_gate_error(self.gate_doc):
             raise JobError('valid required evaluation gate needed for admission')
