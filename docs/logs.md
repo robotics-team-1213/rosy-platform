@@ -7594,3 +7594,9 @@ osy-d395-s1d\`.
 - 변경: 로봇 목록에 `2대 함께 조종`을 넣고, 두 인증 세션·카메라를 가진 단일 조이스틱 화면을 추가했다. 공통 수동 한도와 두 카메라 신선도를 확인한 뒤 두 CORE의 MANUAL 승인이 모두 성공할 때만 무장한다. 한쪽 명령 거절·연결·영상 실패 또는 손 떼기에서는 두 로봇에 0을 요청한다. leader/follower 추종은 준비 중으로 표시한다.
 - 증거: Android debug `:app:testDebugUnitTest :app:assembleDebug` 105 tests PASS, 빌드 성공. Lenovo TB-J606F에 무선 ADB로 최신 APK 설치, `rosy_40`·`rosy_41`의 두 카메라와 단일 조이스틱 실화면 캡처(`X:/DevTemp/pilot-group-entry/pilot-group-live-final.png`). 비영 teleop은 보내지 않았다.
 - gate 변화: SOURCE와 두 카메라·화면 DEVICE 확인. 두 로봇의 동시 주행·명령 해제·한쪽 단절 물리 정지 FIELD는 별도 확인 전까지 HOLD.
+
+## 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
+
+- 변경: D-430 safety review 예외에 D-581 과거 커밋 4개를 정확한 SHA로 등록하고 독립 검토 결과를 docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md에 남겼다.
+- 증거: ae08 통합본 기준 AI PC 원격 테스트 24 passed, known_failures 0 new/0 known. 첫 커밋은 단독 거절이며 후속 epoch/hold/stream 보완을 포함한 통합본에만 이력 예외를 적용한다.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 승인과 현장 운행은 HOLD.
