@@ -559,3 +559,8 @@
 - 변경: `ROSY_DEVICE_UID`를 로봇 설정에 반영하고, 프로비저닝된 Pi에서 설정 시리얼이 없으면 `/proc/cpuinfo`의 Serial을 읽는다. 둘 다 없는 경우 값을 만들어내지 않는다.
 - 증거: 관련 CORE/계약 테스트 97 passed; `known_failures.py` 신규 실패 0. 장치 배포·기존 Fleet 등록 행 보강은 별도 확인.
 - gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.
+
+## 2026-10-09 · uncommitted · feat(core_common): 장치 개발 모드 표식 (D-548)
+- 변경: `DEV_MODE_MARKER = /etc/rosy/dev-mode`. 장치 모드의 `dev_auth_enabled()`는 `ROSY_DEV_AUTH` 대신 이 파일만 본다. 없으면 D-193 7 그대로.
+- 증거: test_auth_pairing.py의 load_config 병합 확인.
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.

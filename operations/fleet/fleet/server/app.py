@@ -338,6 +338,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
+        tether_task = app.state.tether_watch.start()  # D-526
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -368,7 +369,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, identity_task, lane_task,
+                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
                                lease_task):
                 if background is not None:
                     background.cancel()
@@ -635,8 +636,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
                                                    roster=lambda: console.robot_ids),
                          read_guard=read_guard, require_named_operator=require_named_operator)
-    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half
-    install_tether_routes(app, robot_ids=lambda: console.robot_ids, read_guard=read_guard,
+    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
+    install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,

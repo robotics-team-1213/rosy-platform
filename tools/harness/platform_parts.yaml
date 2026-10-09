@@ -681,6 +681,7 @@ safety_modules:
   - operations/fleet/fleet/server/owner_recovery_routes.py
   - operations/fleet/fleet/server/console.py
   - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/tether_watch.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
@@ -735,3 +736,5 @@ safety_anchors:
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
+  - {symbol: fleet.server.tether_watch.map_pose, public: true}

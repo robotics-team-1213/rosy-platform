@@ -3472,7 +3472,7 @@ def test_development_mode_console_gets_a_session_and_shows_the_badge(console_url
         page.route("**/api/**", serve_api)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
-            "() => document.getElementById('user-role').textContent.includes('development-0a1b2c3d')",
+            "() => document.getElementById('user-role').title.includes('development-0a1b2c3d')",  # D-540 2: id in title
             timeout=8000)
 
         assert page.is_visible("#development-badge")
