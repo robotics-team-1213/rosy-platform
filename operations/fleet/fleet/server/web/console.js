@@ -140,6 +140,7 @@ const view = {
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
+  robotNames: {}, // enrolled robot_id -> verified discovery hostname; presentation only
   cardChoice: {},  // D-540 3: robot_id -> the operator's fold {open, attention}
   queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -437,6 +438,23 @@ async function refreshDiscovery() {
     const snapshot = await call("/api/fleet/discovery");
     life.check();
     discoveryGate.ok();
+    let names = { ...view.robotNames };
+    try {
+      const listing = await call("/api/fleet/enrollment/robots");
+      life.check();
+      names = Object.fromEntries((listing.robots || [])
+        .filter((row) => row.robot_id && row.hostname)
+        .map((row) => [row.robot_id, row.hostname]));
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+    for (const device of snapshot.devices || []) {
+      if (device.status === "enrolled" && device.robot_id && device.name) names[device.robot_id] = device.name;
+    }
+    if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
+      view.robotNames = names;
+      render();
+    }
     const pending = snapshot.scanner_online
       ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
     const pendingNote = el("discovery-pending");
