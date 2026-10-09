@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 # One private env file for the stack, Compose and (through site-firewall.py apply) the host units.
 DEFAULT_ENV_FILE = "/etc/rosy/site/site.env"
-DEFAULT_SECRETS_DIR = "/etc/rosy/site/secrets"
+DEFAULT_SECRETS_DIR = "/etc/rosy/site-secrets"
 DEFAULT_UNITS = ("rosy-overhead-advertise.service", "rosy-fleet-advertise.service")
 FULLCHAIN_FIX = ("build it with `cat site.crt site-ca.crt > site-fullchain.crt` and point the "
                  "site_cert secret at that file (deploy/site/README.md)")

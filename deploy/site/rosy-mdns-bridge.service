@@ -10,7 +10,7 @@ Group=rosy-mdns
 # Only ROSY_SITE_TLS_HOST and ROSY_SITE_HTTPS_PORT, written from `docker compose config` by
 # site-firewall.py apply (rosy-site-firewall.service); no LAN address.
 EnvironmentFile=/run/rosy-site/site-public.env
-ExecStart=/usr/bin/python3 /opt/rosy/site/mdns-bridge.py --ca-file /etc/rosy/site/secrets/site-ca.crt --token-file /etc/rosy/site/secrets/discovery_token
+ExecStart=/usr/bin/python3 /opt/rosy/site/mdns-bridge.py --ca-file /etc/rosy/site-secrets/site-ca.crt --token-file /etc/rosy/site-secrets/discovery_token
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

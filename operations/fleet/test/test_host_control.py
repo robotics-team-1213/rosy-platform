@@ -115,6 +115,41 @@ def test_only_fleet_mounts_the_service_control_key():
     assert "FLEET_DIR=/etc/rosy/fleet-host-control" in INSTALL.read_text(encoding="utf-8")
 
 
+def test_vision_cannot_reach_fleet_secrets():
+    compose = yaml.safe_load((SITE / "compose.yaml").read_text(encoding="utf-8"))
+    services = compose["services"]
+    env = dict(line.split("=", 1) for line in
+               (SITE / ".env.example").read_text(encoding="utf-8").splitlines()
+               if re.match(r"^ROSY_SITE_\w+_DIR=", line))
+    config, secrets_dir = env["ROSY_SITE_CONFIG_DIR"].rstrip("/"), env["ROSY_SITE_SECRETS_DIR"]
+    assert not (secrets_dir + "/").startswith(config + "/") and secrets_dir != config
+    # Vision may mount exactly one config file, never a directory that could hold secrets.
+    for item in services["vision"]["volumes"]:
+        if isinstance(item, str):
+            assert item.split(":")[0] == "vision_state", item
+            continue
+        if item["type"] == "bind":
+            assert item["source"].endswith("/site-cameras.yaml") and item["read_only"], item
+    mounted = str(services["vision"]["volumes"])
+    assert "SECRETS_DIR" not in mounted and "host-control" not in mounted
+    own = {"fleet": {"registry_token", "fleet_sighting_token", "discovery_token",
+                     "vision_preview_secret", "robot_credential_key", "site_cert", "site_key",
+                     "site_ca"},
+           "vision": {"phone_ingress_token", "fleet_sighting_token", "vision_preview_secret",
+                      "site_cert", "site_key", "site_ca"},
+           "proxy": {"site_cert", "site_key", "site_ca"}}
+    for name, expected in own.items():
+        assert set(services[name]["secrets"]) == expected, name
+    for forbidden in ("registry_token", "discovery_token", "robot_credential_key"):
+        assert forbidden not in services["vision"]["secrets"]
+        assert forbidden not in services["proxy"]["secrets"]
+    pairing = yaml.safe_load((SITE / "compose.pairing.yaml").read_text(encoding="utf-8"))
+    assert pairing["services"]["vision"].get("volumes") is None
+    for name in ("fleet", "vision"):
+        assert pairing["services"][name]["secrets"] == ["pairing_sync_token"]
+    assert "proxy" not in pairing["services"]
+
+
 def _config(tmp_path, targets):
     (tmp_path / "id_ed25519").write_text("k")
     (tmp_path / "known_hosts").write_text("h")

@@ -480,7 +480,7 @@ avahi-browse -rtpk _rosy-fleet._tcp
 avahi-browse -rtpk _rosy-overhead._tcp
 python3 /opt/rosy/site/fleet-mdns.py discover
 python3 /opt/rosy/site/fleet-mdns.py discover --expect-hostname <hostname>.local \
-  --ca-file /etc/rosy/site/secrets/site-ca.crt
+  --ca-file /etc/rosy/site-secrets/site-ca.crt
 ```
 
 The final command prints an HTTPS URL only if exactly one matching site is
@@ -604,7 +604,16 @@ through this stack. The unit starts the immutable loaded images with
 `--no-build`; stopping it runs Compose `down` and preserves the named SQLite
 volume. It does not authorize robot motion.
 
-Create `/etc/rosy/site` and `/etc/rosy/site/secrets` outside the checkout. Copy
+Create `/etc/rosy/site` and `/etc/rosy/site-secrets` outside the checkout. The
+secrets directory must stay outside the config directory: Fleet mounts the whole
+config directory, Vision (uid 10001, accepts phone uploads) mounts only
+`site-cameras.yaml`, and each service gets only its own Compose `secrets:`
+(`registry_token`, `discovery_token` and `robot_credential_key` are Fleet only;
+`test_vision_cannot_reach_fleet_secrets` pins this). A site that still has
+`/etc/rosy/site/secrets` runs `sudo sh deploy/site/migrate-site-secrets.sh`
+(`--dry-run` first), then restarts `rosy-site-stack.service`; the script moves the
+directory, sets `ROSY_SITE_SECRETS_DIR` in `site.env` and leaves a symlink at the
+old path for host units that are not updated yet. Copy
 `site-cameras.yaml.example`, `robots.yaml.example`, and
 `site-users.yaml.example` there, then replace every map/calibration/device
 placeholder with reviewed site data. `robots.yaml` contains CORE credentials
@@ -1008,7 +1017,7 @@ sudo systemctl enable --now rosy-site-autoupdate.timer
   "key_id": "<site-signing-key-id>",
   "public_key": "/etc/rosy/site/trust/site-release-ed25519.pub.pem",
   "health_url": "https://<site-fqdn>:8443/healthz",
-  "health_ca": "/etc/rosy/site/secrets/<site-ca-file>",
+  "health_ca": "/etc/rosy/site-secrets/<site-ca-file>",
   "health_timeout_s": 300,
   "keep": 3
 }
@@ -1123,9 +1132,9 @@ Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태�
 
 ```json
 "functional_checks": [
-  {"path": "/api/fleet/state", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+  {"path": "/api/fleet/state", "token_file": "/etc/rosy/site-secrets/<viewer-token-file>",
    "required_ids": ["<robot-id>"]},
-  {"path": "/api/fleet/vision/sources", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+  {"path": "/api/fleet/vision/sources", "token_file": "/etc/rosy/site-secrets/<viewer-token-file>",
    "required_ids": ["<camera-source-id>"]}
 ]
 ```
@@ -1401,7 +1410,7 @@ runs `rosy-model-watch doctor --watch-config /etc/rosy/model-watch.yaml`
   the `rosy-model-watch` group on a local store, or the share's own
   permissions on a NAS or Drive folder.
 - **Token (backend hf only).** For a private repo, paste a read-only HF token
-  into `/etc/rosy/site/secrets/hf_token` (root:rosy-model-watch 0640) with
+  into `/etc/rosy/site-secrets/hf_token` (root:rosy-model-watch 0640) with
   `sudoedit`. The unit passes only its path (`HF_TOKEN_FILE`); the token never
   appears in a command line, the unit, the config, or the checkout. An empty
   or missing file means no token, which is what a public repo needs.
