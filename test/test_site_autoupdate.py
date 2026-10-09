@@ -294,6 +294,27 @@ def test_functional_sources_gate_checks_configured_camera(host):
     assert updater.healthy(upd.read_env(host.paths.site_env), OLD)[0] is False
 
 
+def test_missing_old_robot_id_is_reported_without_blocking_unchanged_roster(host, capsys):
+    rows, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
+    http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
+    host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': 'unused',
+                                        'required_ids': ['robot-test', 'renamed-robot']}]
+    assert _updater(host, http, fake).run() == upd.EXIT_OK
+    assert fake.running == NEW
+    assert 'renamed-robot' in capsys.readouterr().out
+
+
+def test_candidate_cannot_replace_observed_robot_with_another_id(host):
+    rows, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
+    http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
+    host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': 'unused',
+                                        'required_ids': ['robot-test']}]
+    http.functional = lambda *args: {'robots': [{'robot_id':
+        'replacement' if fake.running == NEW else 'robot-test'}]}
+    assert _updater(host, http, fake).run() == upd.EXIT_FAILED
+    assert fake.running == OLD
+
+
 def test_functional_http_failure_never_discloses_token(tmp_path, monkeypatch, capsys):
     from deploy.site import site_update_io as io
     token = tmp_path / 'viewer-token'
