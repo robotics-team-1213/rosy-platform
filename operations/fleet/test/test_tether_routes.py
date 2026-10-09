@@ -150,15 +150,89 @@ def test_a_failed_stop_is_retried_until_core_answers():
     assert calls == ["r", "r"] and watch.view("r")["stop_sent"] is True
 
 
-def test_map_pose_skips_odom_and_non_finite_poses():
-    assert map_pose({"pose": {"x": 1, "y": 2, "yaw": 0.5}}) == (1.0, 2.0, 0.5)
-    assert map_pose({"pose": {"x": 1, "y": 2, "yaw": 0}, "localization": {"pose_frame": "odom"}}) is None
-    assert map_pose({"pose": {"x": float("nan"), "y": 2, "yaw": 0}}) is None
-    assert map_pose({"pose": {"x": 1, "y": 2}}) is None and map_pose(None) is None
+POSE = {"x": 1, "y": 2, "yaw": 0.5}
+MAP_OK = {"state": "LOCALIZED", "pose_frame": "map"}
+
+
+def test_map_pose_needs_a_trusted_map_pose():
+    assert map_pose({"pose": POSE, "localization": MAP_OK}) == (1.0, 2.0, 0.5)
+    assert map_pose({"pose": POSE}) is None  # legacy, no localization block: fail closed
+    assert map_pose({"pose": POSE, "localization": None}) is None
+    assert map_pose({"pose": POSE, "localization": {"state": "LOCALIZED", "pose_frame": "odom"}}) is None
+    for state in ("UNKNOWN", "CANDIDATES", "SUSPECT"):  # map frame, not trusted
+        assert map_pose({"pose": POSE, "localization": {"state": state, "pose_frame": "map"}}) is None
+    assert map_pose({"pose": POSE, "localization": {"pose_frame": "map"}}) is None  # unreadable
+    assert map_pose({"pose": {"x": float("nan"), "y": 2, "yaw": 0}, "localization": MAP_OK}) is None
+    assert map_pose({"pose": {"x": 1, "y": 2}, "localization": MAP_OK}) is None and map_pose(None) is None
+
+
+def test_a_hung_stop_does_not_stall_the_other_robots():
+    tethers = {r: {"anchor_xy": [0.0, 0.0], "radius_m": 1.0} for r in ("a", "b")}
+    stops = []
+
+    async def pose(_robot_id):
+        return (5.0, 0.0, 0.0)
+
+    async def stop(robot_id):
+        if robot_id == "a":
+            await asyncio.sleep(60)
+        stops.append(robot_id)
+    watch = TetherWatch(tethers, pose=pose, stop=stop, clock=Clock(), stop_timeout_s=0.05)
+    asyncio.run(watch.tick())
+    assert stops == ["b"] and watch.view("b")["stop_sent"] is True
+    assert watch.view("a")["stop_sent"] is False and watch.view("a")["stop_error"] == "TimeoutError"
+
+
+def test_a_check_that_raises_does_not_stop_the_tick():
+    watch, _stops, clock = _watch([(0, 0, 0)])
+
+    async def boom(*_args):
+        raise RuntimeError("boom")
+    watch._check = boom
+    asyncio.run(watch.tick())
+    assert watch.tick_age_s() == 0.0
+
+
+def test_tick_age_shows_a_stopped_watch_and_a_dead_task_is_logged(caplog):
+    watch, _stops, clock = _watch([(0, 0, 0)])
+    assert watch.tick_age_s() is None
+    asyncio.run(watch.tick())
+    clock.now += 7.0
+    assert watch.tick_age_s() == 7.0 and watch.view("r")["tick_age_s"] == 7.0
+
+    async def dies():
+        async def boom():
+            raise ValueError("dead")
+        task = asyncio.create_task(boom())
+        task.add_done_callback(TetherWatch._ended)
+        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.sleep(0)
+    with caplog.at_level("ERROR", logger="fleet.tether_watch"):
+        asyncio.run(dies())
+    assert any("tether watch ended" in r.message and r.levelname == "ERROR" for r in caplog.records)
+
+
+def test_repeated_stop_failures_raise_an_operator_alarm_and_keep_retrying():
+    async def pose(_robot_id):
+        return (5.0, 0.0, 0.0)
+
+    async def stop(_robot_id):
+        raise ConnectionError("down")
+    watch = TetherWatch({"r": {"anchor_xy": [0.0, 0.0], "radius_m": 1.0}}, pose=pose, stop=stop, clock=Clock(),
+                        alarm_after=3)
+    for _ in range(2):
+        asyncio.run(watch.tick())
+    assert watch.alarms() == []
+    asyncio.run(watch.tick())
+    assert watch.alarms() == [{"robot_id": "r", "code": "TETHER_STOP_FAILED",
+                               "reason": "tether_radius: ConnectionError"}]
+    asyncio.run(watch.tick())
+    assert watch.view("r")["stop_failures"] == 4
 
 
 def test_trip_stops_through_the_existing_core_estop_client_and_shows_in_the_list(tmp_path):
-    robot = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 4.0, "y": 0.0, "yaw": 0.0}})
+    robot = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 4.0, "y": 0.0, "yaw": 0.0},
+                                           "localization": MAP_OK, "timestamp": "t1"})
     client = _client(tmp_path, robot=robot)  # no lifespan: this test runs the only watch tick
     assert client.post(URL, json=BODY, headers=OPERATOR).status_code == 200
     asyncio.run(client.app.state.tether_watch.tick())
@@ -168,3 +242,61 @@ def test_trip_stops_through_the_existing_core_estop_client_and_shows_in_the_list
     # Setting the tether again is the operator's re-arm: a fresh watch.
     assert client.post(URL, json=BODY, headers=OPERATOR).status_code == 200
     assert client.get("/api/fleet/tethers", headers=VIEWER).json()["tethers"][0]["watch"] is None
+
+
+def _tripped_client(tmp_path, **state):
+    robot = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 4.0, "y": 0.0, "yaw": 0.0},
+                                        "localization": MAP_OK, "timestamp": "t1", **state})
+    client = _client(tmp_path, robot=robot)
+    assert client.post(URL, json=BODY, headers=OPERATOR).status_code == 200
+    return client, robot
+
+
+def test_a_frozen_pose_stamp_trips_pose_stale_and_a_legacy_robot_is_stopped(tmp_path):
+    client, robot = _tripped_client(tmp_path)
+    robot._state["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}  # inside the circle, but the state never advances
+    watch = client.app.state.tether_watch
+    watch._tethers["rosy_60"]["anchor_xy"] = [0.0, 0.0]
+    clock = Clock()
+    watch._clock = clock
+    for _ in range(int(STALE_S / 0.5) + 2):
+        asyncio.run(watch.tick())
+        clock.now += 0.5
+    assert watch.view("rosy_60")["trip"] == "tether_pose_stale" and robot.calls.count(("estop",)) == 1
+    legacy = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                                         "timestamp": "t1"})
+    (tmp_path / "legacy").mkdir()
+    client = _client(tmp_path / "legacy", robot=legacy)
+    client.post(URL, json=BODY, headers=OPERATOR)
+    watch = client.app.state.tether_watch
+    clock = Clock()
+    watch._clock = clock
+    for k in range(int(STALE_S / 0.5) + 2):
+        legacy._state["timestamp"] = f"t{k}"
+        asyncio.run(watch.tick())
+        clock.now += 0.5
+    assert watch.view("rosy_60")["trip"] == "tether_pose_stale" and legacy.calls.count(("estop",)) == 1
+
+
+def test_the_list_carries_the_watch_tick_age_and_set_and_clear_are_logged(tmp_path, caplog):
+    client, _robot = _tripped_client(tmp_path)
+    assert client.get("/api/fleet/tethers", headers=VIEWER).json()["watch_age_s"] is None  # never ticked
+    asyncio.run(client.app.state.tether_watch.tick())
+    assert client.get("/api/fleet/tethers", headers=VIEWER).json()["watch_age_s"] >= 0.0
+    with caplog.at_level("WARNING", logger="fleet.tether_routes"):
+        client.post(URL, json={**BODY, "radius_m": 1.5}, headers=OPERATOR)
+        client.delete(URL, headers=OPERATOR)
+    texts = [r.getMessage() for r in caplog.records]
+    assert any("by=bob" in t and "radius_m=0.8->1.5" in t for t in texts)
+    assert any("cleared" in t and "by=bob" in t for t in texts)
+
+
+def test_a_failing_trip_cancel_does_not_hide_the_delivered_estop(tmp_path):
+    client, robot = _tripped_client(tmp_path)
+
+    async def boom(*_args):
+        raise RuntimeError("trip store down")
+    client.app.state.trip_runner.cancel_robot = boom
+    asyncio.run(client.app.state.tether_watch.tick())
+    view = client.app.state.tether_watch.view("rosy_60")
+    assert robot.calls.count(("estop",)) == 1 and view["stop_sent"] is True and view["stop_error"] is None

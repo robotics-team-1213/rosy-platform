@@ -334,7 +334,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
-        tether_task = asyncio.create_task(app.state.tether_watch.run())  # D-526
+        tether_task = app.state.tether_watch.start()  # D-526
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))

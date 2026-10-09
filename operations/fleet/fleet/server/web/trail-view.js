@@ -3,7 +3,7 @@
 // 최대 TRAIL_MAX 점, TRAIL_STEP_M 이상 움직였을 때만 새 점. 새로 고치면 처음부터 다시 모은다.
 // odom 자세(localization.pose_frame)는 지도 좌표가 아니므로 궤적·테더 판정에 쓰지 않는다.
 // map-view 가 자기 toPx(격자 칸 또는 D-513 7 로 돌린 미터 뷰)를 넘기므로 지도와 같이 돈다.
-export const TRAIL_S = 120, TRAIL_MAX = 600, TRAIL_STEP_M = 0.01, TETHER_POLL_MS = 5000;
+export const TRAIL_S = 120, TRAIL_MAX = 600, TRAIL_STEP_M = 0.01, TETHER_POLL_MS = 5000, WATCH_STALE_S = 2;
 
 const mapPose = (robot) => (robot?.state?.localization?.pose_frame === "odom" ? null : robot?.state?.pose);
 
@@ -31,7 +31,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
   view.trails = recordTrails(view.trails || new Map(), view.robots, now);
   if (call && now - tetherAt > TETHER_POLL_MS) {
     tetherAt = now;
-    call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; }, () => {}); // 실패하면 직전 목록을 둔다
+    call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; view.watchAge = r.watch_age_s; }, () => {}); // 실패하면 직전 목록을 둔다
   }
   let drawn = 0;
   ctx.save();
@@ -54,7 +54,8 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
     const pose = mapPose(view.robots.find((robot) => robot.robot_id === tether.robot_id));
     // 로봇이 원 밖이면 주의 색, D-526 감시가 정지를 내렸으면 위험 색 — 테더 자체는 경계선일 뿐 경고가 아니다.
     const outside = pose && Math.hypot(pose.x - ax, pose.y - ay) > r;
-    const tripped = tether.watch?.state === "tripped";
+    // 감시 루프가 멈췄거나(마지막 틱이 2 s 넘게 전, 또는 틱 없음) 죽었으면 정지 못 하니 트립과 같은 위험 색.
+    const tripped = tether.watch?.state === "tripped" || !(view.watchAge <= WATCH_STALE_S);
     ctx.strokeStyle = ctx.fillStyle = window.RosyPalette.cssColor(
       tripped ? "--status-crit" : outside ? "--status-warn" : "--ink-quiet");
     ctx.beginPath(); // 원도 toPx 로 점을 찍는다 — 격자 y 뒤집기와 화면 회전을 그대로 따른다.
@@ -68,5 +69,6 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
   }
   ctx.restore();
   window.__trailOverlay = { segments: drawn, tethers: (view.tethers || []).length,
-    tripped: (view.tethers || []).filter((t) => t.watch?.state === "tripped").map((t) => t.robot_id) };
+    tripped: (view.tethers || []).filter((t) => t.watch?.state === "tripped").map((t) => t.robot_id),
+    watchRunning: view.watchAge <= WATCH_STALE_S };
 }
