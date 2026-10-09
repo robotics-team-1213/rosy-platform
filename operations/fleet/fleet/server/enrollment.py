@@ -235,7 +235,9 @@ class EnrollmentService:
         self._transport = transport
         self._tls_bindings = tls_bindings
         if tls_bindings is not None:
-            tls_bindings.validate(store.rows())
+            pending = tls_bindings.validate(store.rows())
+            if pending:
+                _LOG.warning("TLS bindings pending enrollment (D-565): %s", ", ".join(pending))
         self._clock = clock
         self._gates: dict[str, RobotGate] = {}
         self._tokens: dict[str, str] = {}
@@ -262,7 +264,7 @@ class EnrollmentService:
     def _console(self):
         return self._roster._console
 
-    def _http(self, address: str) -> httpx.AsyncClient:
+    def _http(self, address: str, pending=None) -> httpx.AsyncClient:
         kwargs: dict[str, Any] = {}
         base_url = f"http://{address}"
         for row in self._store.rows():
@@ -274,10 +276,11 @@ class EnrollmentService:
             rows = [row for row in self._store.rows() if row["address"] == address]
             if len(rows) > 1:
                 raise EnrollmentError("conflict", 409, "several enrolled robots share that address")
-            if rows and self._tls_bindings.binding(rows[0]["robot_id"]) is not None:
+            if pending is not None or (rows and self._tls_bindings.binding(rows[0]["robot_id"]) is not None):
                 from fleet.server.enrollment_tls import EnrollmentIdentityTransport
                 from fleet.swarm.discovery_transport import DiscoveryTransport
-                endpoint = self._endpoint(rows[0], "anonymous-bootstrap")
+                endpoint = self._endpoint(rows[0] if pending is None else {
+                    "robot_id": pending.robot_id, "address": address}, "anonymous-bootstrap")
                 base_url = endpoint.base_url
                 kwargs["transport"] = DiscoveryTransport(endpoint, inner=EnrollmentIdentityTransport(
                     endpoint, self._tls_bindings, inner=self._transport))
@@ -383,7 +386,19 @@ class EnrollmentService:
 
     # --- enroll ------------------------------------------------------------
 
-    def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None]:
+    def _pending_binding(self, hostnames: set[str], port: int):
+        """D-565: an HTTPS robot with no row enrolls only through an approved pending binding.
+
+        The scan only picks the binding; TLS (its CA and hostname), the identity probe and
+        the robot_id read after pairing must all match it before anything is stored.
+        """
+        binding = (self._tls_bindings.pending(self._store.rows(), next(iter(hostnames)), port)
+                   if self._tls_bindings is not None and len(hostnames) == 1 else None)
+        if binding is None:
+            raise EnrollmentError("tls_binding_required", 409, "HTTPS requires an approved TLS binding")
+        return binding
+
+    def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None, Any]:
         if (discovery_name is None) == (address is None):
             raise EnrollmentError("bad_request", 400, "choose one discovered robot or one address")
         if address is not None:
@@ -391,10 +406,12 @@ class EnrollmentService:
             secure = [row for row in (self._discovery.rows() if self._discovery else [])
                       if f"{row['address']}:{row['port']}" == target and row.get("transport") == "https"]
             enrolled = [row for row in self._store.rows() if row["address"] == target]
+            if secure and not enrolled:
+                return target, None, self._pending_binding({r["hostname"] for r in secure}, secure[0]["port"])
             if secure and (len(enrolled) != 1 or self._tls_bindings is None
                            or self._tls_bindings.binding(enrolled[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
-            return target, None
+            return target, None, None
         if self._discovery is None:
             raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
         if any((row.get("discovery_name") or row["hostname"]).lower() == discovery_name.lower()
@@ -411,25 +428,39 @@ class EnrollmentService:
                 row["status"] == "conflict" for row in rows):
             raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
         row = rows[0]
+        pending = None
         if row.get("transport") == "https":
             registered = [r for r in self._store.rows() if r["address"] == f"{row['address']}:{row['port']}"]
-            if (len(registered) != 1 or self._tls_bindings is None
+            if not registered:
+                pending = self._pending_binding({row["hostname"]}, row["port"])
+            elif (len(registered) != 1 or self._tls_bindings is None
                     or self._tls_bindings.binding(registered[0]["robot_id"]) is None):
                 raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
         if not row.get("enrollable"):
             raise EnrollmentError("not_enrollable", 409, "that row is not waiting for registration")
-        return f"{row['address']}:{row['port']}", row
+        return f"{row['address']}:{row['port']}", row, pending
 
     async def enroll(self, *, code: object, principal_id: str,
                      discovery_name: str | None = None, address: str | None = None) -> dict:
         self._require_available()
         normalized = normalize_code(code)
-        target, row = self._candidate(discovery_name, address)
-        async with self._http(target) as http:
-            paired = await self._exchange(http, normalized, principal_id, target)
+        target, row, pending = self._candidate(discovery_name, address)
+        async with self._http(target, pending) as http:
+            try:
+                paired = await self._exchange(http, normalized, principal_id, target)
+            except ValueError as exc:
+                # TLS or the identity probe failed before the code left Fleet. Never retried over HTTP.
+                from fleet.server.enrollment_tls import EnrollmentTlsError
+                if pending is None:
+                    raise
+                outcome = "tls_binding_mismatch" if isinstance(exc, EnrollmentTlsError) else "unreachable"
+                self._store.audit(action="enroll", outcome=outcome, principal_id=principal_id, target=target)
+                if outcome == "unreachable":
+                    raise EnrollmentError(outcome, 502, "the approved TLS name is not reachable") from None
+                raise EnrollmentError(outcome, 409, "the robot does not prove its approved TLS binding") from None
             token = paired["token"]
             try:
-                return await self._bind_and_store(http, paired, row, target, principal_id)
+                return await self._bind_and_store(http, paired, row, target, principal_id, pending)
             except EnrollmentError as exc:
                 await self._logout(http, token)
                 self._store.audit(action="enroll", outcome=exc.reason or exc.code,
@@ -497,7 +528,7 @@ class EnrollmentService:
                                reason=reason, detail=detail)
 
     async def _bind_and_store(self, http: httpx.AsyncClient, paired: dict, row: dict | None,
-                              target: str, principal_id: str) -> dict:
+                              target: str, principal_id: str, pending=None) -> dict:
         received_at = self._clock()
         token = paired["token"]
         role = paired.get("role")
@@ -521,6 +552,9 @@ class EnrollmentService:
             raise self._consumed("wrong_robot", avahi_renamed=False)
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
+        if pending is not None and robot_id != pending.robot_id:
+            raise EnrollmentError("tls_binding_mismatch", 409,
+                                  "the robot reports a robot_id other than its approved TLS binding")
         token_id = str(paired.get("id") or me.get("id") or "")
         if not token_id:
             raise self._consumed("verify_failed")
@@ -541,6 +575,10 @@ class EnrollmentService:
         self._store.insert(record, seal(self._key, token, slot="rest", robot_id=robot_id,
                                         token_id=token_id))
         try:
+            if pending is not None:
+                # The downgrade fence a bound row gets at load: this id never goes back to HTTP.
+                self._store.remember_tls([dict(robot_id=robot_id, origin=f"https://{pending.hostname}:{pending.port}",
+                                               ca_sha256=pending.tls_ca_sha256)])
             gate = self._gate_for(record)
             endpoint = self._endpoint(record, token)
             self._roster.add(endpoint, self._client(endpoint, gate))
