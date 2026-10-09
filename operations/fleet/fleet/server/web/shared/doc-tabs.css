@@ -33,14 +33,7 @@
 .task-nav a:hover, .task-nav a:focus-visible { color: var(--ink); background: var(--surface-raised); }
 .task-nav a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
-@media (width >= 64rem) {
-  .task-nav { grid-column: 1; grid-row: 1 / span 12; align-self: start; position: sticky; top: var(--space-4); flex-direction: column; }
-}
-@media (width < 64rem) {
-  .task-nav { overflow-x: auto; scrollbar-width: thin; }
-  .task-nav a { flex: 0 0 auto; white-space: nowrap; }
-}
-@media (width < 30rem) {
-  .task-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
-  .task-nav a { white-space: normal; }
-}
+/* One scrolling row at every width: a side column shifted the content off the stop feedback
+   and a phone grid pushed the map below the first screen. */
+.task-nav { overflow-x: auto; scrollbar-width: thin; }
+.task-nav a { flex: 0 0 auto; white-space: nowrap; }

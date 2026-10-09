@@ -1,8 +1,4 @@
 main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
-@media (width >= 64rem) {
-  main:has(> .task-nav) { grid-template-columns: 11rem minmax(0, 1fr); }
-  main > :not(.task-nav) { grid-column: 2; }
-}
 ui-section { display: grid; gap: var(--space-3); }
 .map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
 .map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
