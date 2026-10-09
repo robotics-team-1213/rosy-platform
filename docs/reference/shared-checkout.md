@@ -48,7 +48,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    밖의 `run-1.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN),
    AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
-   `tools/land.py`가 이를 쓴다. 어느 PC도 닿지 않을 때만 로컬로 돌린다. 커밋된
+   `tools/land.py`가 이를 쓴다. 시험 PC가 하나도 닿지 않으면 노트북으로 넘어가지 않고 10분 동안 30초마다 다시 시도한 뒤 실패로 끝낸다(D-584). 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. `--local`과 `ROSY_TEST_LOCAL`은 오류로 거절한다. 커밋된
    HEAD만 보내므로 먼저 커밋한다. Gazebo는 노트북에서 돌리지 않고
    `python tools/remote/remote_pytest.py --pick sim`이 고른 PC에서 돌린다.
    실험실 PC의 경로는 `X:\DevTemp\<이름>\run-1.txt`다. exit 1의 `NEW`는 그

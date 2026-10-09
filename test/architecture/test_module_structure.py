@@ -95,14 +95,6 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "fleet/fleet/server/stuck_resolver.py": (
-        608,
-        "split: re-judged at 608 on 2026-10-10 after D-577 added bounded lane-lost "
-        "WAIT and escalation rules. This pure decision core still has no transport or robot "
-        "command authority; stuck_resolver_loop.py owns polling and dispatch. Keep chain state "
-        "here, and move the R1-R5 rule predicates into a sibling pure rules module on further "
-        "growth. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md",
-    ),
     "deploy/site/rosy_site_autoupdate.py": (
         616,
         "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
@@ -213,7 +205,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_732,
+        49_877,
+        "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
+        "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
+        "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
         "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
         "(+271 over 49461). Crosswalk geometry and API stay with site_map.py and its existing "
         "routes/store; editing and display stay in site-map.js and map-view.js. No new command "

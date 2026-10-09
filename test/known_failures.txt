@@ -6,5 +6,3 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
-test/architecture/test_module_structure.py::test_over_budget_code_has_a_recorded_verdict  # main c2c55608c (2026-10-10): D-577 grew fleet/server/stuck_resolver.py to 608 lines without a size verdict; remove when its owner records one
-test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # main c2c55608c (2026-10-10): fleet grew to 49461 lines past 49303+150 after D-577; remove when re-judged

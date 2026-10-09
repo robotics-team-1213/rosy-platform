@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
+- 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
 - 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
 - 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
 - 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
-- 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
-- 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프

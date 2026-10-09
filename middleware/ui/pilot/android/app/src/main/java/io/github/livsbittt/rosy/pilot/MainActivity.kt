@@ -35,6 +35,11 @@ class MainActivity : Activity() {
     /** 세션 상단 배너의 정상 문구 — 일시 실패 뒤 회복 콜백이 이 값으로 되돌린다. */
     @Volatile private var connectedLabel: String? = null
     private var web: WebView? = null
+    private var screens: LinearLayout? = null
+    private var secondaryWeb: WebView? = null
+    private var secondaryProxy: PilotProxy? = null
+    private var secondarySession: LobbySession? = null
+    @Volatile private var secondaryVersion = 0L
     private var pairingDialog: AlertDialog? = null
     @Volatile private var session: LobbySession? = null
     @Volatile private var attempt = 0L
@@ -119,6 +124,10 @@ class MainActivity : Activity() {
         if (current != null && !current.authorized()) {
             lastError = "연결 끊김 · 로그인 세션이 끝났거나 로봇 목록이 바뀌었습니다. 로봇을 다시 선택하면 승인 기록으로 다시 연결합니다."
             returnToLobby(); status.text = lastError; return
+        }
+        if (secondarySession != null && secondarySession?.authorized() != true) {
+            closeSecondaryRobot()
+            status.text = "두 번째 로봇 연결이 끝났습니다. 다시 선택해 연결하세요."
         }
         if (web != null || opening) return
         val records = candidates.records()
@@ -212,36 +221,19 @@ class MainActivity : Activity() {
                     bar.addView(button("로봇 목록") { returnToLobby() })
                     status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
+                    bar.addView(button("두 번째 로봇") { chooseSecondaryRobot(candidate) })
                     bar.addView(button("기기·연결") { deviceDetails(candidate) })
                     root.addView(bar)
                     healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
-                    val view = WebView(this); web = view; view.setBackgroundColor(PilotColors.background)
-                    view.webChromeClient = object : android.webkit.WebChromeClient() {
-                        override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
-                            android.util.Log.e("RosyPilot", "Web console ${message.messageLevel()} ${message.sourceId().substringBefore('?')} line ${message.lineNumber()}")
-                            return true
-                        }
-                    }
+                    val view = WebView(this); web = view
                     // Private debug-device visual evidence is allowed after pairing; code dialogs
                     // remain protected and release sessions always block captures.
                     if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     else window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    view.settings.apply {
-                        javaScriptEnabled = true; domStorageEnabled = true; allowFileAccess = false; allowContentAccess = false
-                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                        setSupportMultipleWindows(false); javaScriptCanOpenWindowsAutomatically = false; safeBrowsingEnabled = true
-                    }
-                    view.webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean =
-                            request.url.scheme != "http" || "http://${request.url.encodedAuthority}" != ready.origin
-                    }
-                    root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
-                    CookieManager.getInstance().apply {
-                        setAcceptCookie(true); setAcceptThirdPartyCookies(view, false)
-                        setCookie(ready.origin, "rosy-shell=${ready.capability}; Path=/; HttpOnly; SameSite=Strict") {
-                            if (proxy === ready && web === view) view.loadUrl("${ready.origin}/pilot")
-                        }
-                    }
+                    screens = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    screens!!.addView(view, LinearLayout.LayoutParams(0, -1, 1f))
+                    root.addView(screens, LinearLayout.LayoutParams(-1, 0, 1f))
+                    loadRobotView(view, ready) { proxy === ready && web === view }
                     val connectionLabel = when (approved.peerApproval?.persistent) { true -> "승인 유지 · 연결됨"; false -> "기간 제한 승인 · 연결됨"; null -> if (offer.mode == "development") "개발 연결" else "연결됨" }
                     connectedLabel = "${candidate.name} · ${approved.target.id} · $connectionLabel"
                     status.text = connectedLabel
@@ -263,15 +255,111 @@ class MainActivity : Activity() {
         lastError = "${candidate.name.ifBlank { "선택한 로봇" }} · $message"
         refresh(); status.text = lastError
     } }
+    private fun loadRobotView(view: WebView, relay: PilotProxy, current: () -> Boolean) {
+        view.setBackgroundColor(PilotColors.background)
+        view.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                android.util.Log.e("RosyPilot", "Web console ${message.messageLevel()} ${message.sourceId().substringBefore('?')} line ${message.lineNumber()}")
+                return true
+            }
+        }
+        view.settings.apply {
+            javaScriptEnabled = true; domStorageEnabled = true; allowFileAccess = false; allowContentAccess = false
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            setSupportMultipleWindows(false); javaScriptCanOpenWindowsAutomatically = false; safeBrowsingEnabled = true
+        }
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean =
+                request.url.scheme != "http" || "http://${request.url.encodedAuthority}" != relay.origin
+        }
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true); setAcceptThirdPartyCookies(view, false)
+            setCookie(relay.origin, "${relay.cookieName}=${relay.capability}; Path=/; HttpOnly; SameSite=Strict") {
+                if (current()) view.loadUrl("${relay.origin}/pilot")
+            }
+        }
+    }
+    private fun chooseSecondaryRobot(primary: Candidate) {
+        val others = candidates.records().filter {
+            it.host != primary.host && (primary.robotId.isEmpty() || it.robotId != primary.robotId) &&
+                runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false)
+        }
+        if (others.isEmpty()) { status.text = "다른 로봇을 찾지 못했습니다. 같은 Wi-Fi와 전원을 확인하세요."; return }
+        AlertDialog.Builder(this).setTitle("두 번째 로봇")
+            .setItems(others.map { it.name }.toTypedArray()) { _, index -> openSecondaryRobot(others[index]) }
+            .setNegativeButton("취소", null).show()
+    }
+    private fun openSecondaryRobot(incoming: Candidate) {
+        closeSecondaryRobot()
+        val addresses = runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
+        val candidate = incoming.copy(addresses = addresses)
+        val version = secondaryVersion
+        status.text = "${candidate.name} · 두 번째 연결 확인 중…"
+        io.execute {
+            var relay: PilotProxy? = null
+            try {
+                val approved = if (candidate.secure) peerUi.connect(candidate, candidates,
+                    { version == secondaryVersion && foreground && web != null }, {}) else run {
+                    val offer = LobbyPairing.offer(candidate)
+                    val saved = if (offer.mode == "paired") vault.inspect(candidate, offer, candidates).session else null
+                    saved?.takeIf { LobbyPairing.reuse(it) }
+                        ?: if (offer.mode == "development") LobbyPairing.connect(candidate, offer, candidates) else null
+                }
+                check(approved != null && approved.authorized()) { "approval required" }
+                check(approved.target.id != session?.target?.id) { "same robot selected twice" }
+                relay = PilotProxy(approved, AssetBundle(assets),
+                    { message -> main.post { if (version == secondaryVersion) status.text = "${candidate.name} · 연결 끊김 · $message" } },
+                    { main.post { if (version == secondaryVersion) connectedLabel?.let { status.text = it } } })
+                relay.verifyIdentity(); relay.start(5000, false)
+                val ready = relay
+                main.post {
+                    if (version != secondaryVersion || !foreground || web == null) { io.execute { ready.stop() }; return@post }
+                    if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0)
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    secondarySession = approved; secondaryProxy = ready
+                    val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                    val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                    heading.addView(label("${candidate.name} · ${approved.target.id}", 16f), LinearLayout.LayoutParams(0, -2, 1f))
+                    heading.addView(button("두 번째 로봇 닫기") { closeSecondaryRobot() })
+                    panel.addView(heading)
+                    val view = WebView(this); secondaryWeb = view
+                    panel.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
+                    screens!!.addView(panel, LinearLayout.LayoutParams(0, -1, 1f))
+                    loadRobotView(view, ready) { secondaryProxy === ready && secondaryWeb === view }
+                    connectedLabel?.let { status.text = it }
+                }
+            } catch (error: Exception) {
+                relay?.stop()
+                main.post {
+                    if (version != secondaryVersion || web == null) return@post
+                    if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0)
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    status.text = "${candidate.name} · 두 번째 연결 실패 · ${LinkStatus.failure(error, candidate.secure)}"
+                }
+            }
+        }
+    }
+    private fun closeSecondaryRobot() {
+        secondaryVersion++
+        peerUi.close()
+        secondaryWeb?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
+        secondaryWeb?.stopLoading()
+        val oldView = secondaryWeb; secondaryWeb = null
+        oldView?.let { view -> (view.parent as? LinearLayout)?.let { panel -> screens?.removeView(panel) }; view.destroy() }
+        val oldRelay = secondaryProxy; secondaryProxy = null; secondarySession = null
+        if (oldRelay != null) io.execute { oldRelay.stop() }
+    }
     private fun endSession(forget: Candidate? = null, afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
         attempt++; peerUi.close(); screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
         connectedLabel = null
+        closeSecondaryRobot()
         val closingAttempt = attempt
         pairingDialog?.dismiss(); pairingDialog = null
         web?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
         web?.stopLoading(); web?.destroy(); web = null
         val oldRelay = proxy; proxy = null; session = null
+        screens = null
         val oldCandidates = candidates; candidates = CandidateStore()
         discovery?.stop(clearCandidates = false); discovery = null
         // Serialize the cooling completion behind startup/stale relay cleanup and native zero.
