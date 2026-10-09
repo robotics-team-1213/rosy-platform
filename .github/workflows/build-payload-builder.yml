@@ -1,0 +1,54 @@
+name: Build Pinky payload builder image
+run-name: Payload builder ${{ github.sha }}
+
+# D-553 addendum 3 (user decision 2026-10-10): an ARM64 image with the ROS
+# snapshot prerequisites and rosdep apt packages already installed, so the
+# payload build skips ~3 min of apt. It only caches inputs the payload build
+# would install from the same pinned sources; build-native-payload.yml pulls
+# it by digest (input builder_image). No secrets: GITHUB_TOKEN pushes to GHCR.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - deploy/robot/pinky_pro/image/payload-builder/**
+      - deploy/robot/pinky_pro/image/inputs.lock.yaml
+      - deploy/robot/pinky_pro/image/rosdep_apt_batch.py
+      - .github/workflows/build-payload-builder.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rosy-payload-builder-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-builder-image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "IMAGE=ghcr.io/${owner}/rosy-payload-builder:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          bash deploy/robot/pinky_pro/image/payload-builder/make-builder-image.sh "ghcr.io/${owner}/rosy-payload-builder:${GITHUB_SHA}"
+
+      - name: Push image and print its digest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          echo "builder image: $digest" | tee -a "$GITHUB_STEP_SUMMARY"
+          docker image ls "$IMAGE"

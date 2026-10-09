@@ -6,6 +6,9 @@ run-name: Pinky payload ${{ inputs.release_id }}
 # build-pinky-image.yml, but no image: build-native-payload.sh builds install/,
 # build_payload_release.py assembles the unsigned release. Signing stays
 # offline (sign_image_release.py); this job never sees a private key.
+# D-553 addendum 3: the job runs in the payload-builder image (pinned by
+# digest), which already holds the ROS snapshot prerequisites and rosdep apt
+# packages; build-native-payload.sh still runs rosdep against the same pins.
 
 on:
   workflow_dispatch:
@@ -14,9 +17,15 @@ on:
         description: Release ID (YYYY.MM.DD-NNN)
         required: true
         type: string
+      builder_image:
+        description: Payload builder image pinned by digest (build-payload-builder.yml)
+        required: true
+        type: string
+        default: ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:PENDING
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: rosy-native-payload-${{ github.ref }}
@@ -26,7 +35,13 @@ jobs:
   build-unsigned-payload:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    container:
+      image: ${{ inputs.builder_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     env:
+      BUILDER_IMAGE: ${{ inputs.builder_image }}
       RELEASE_ID: ${{ inputs.release_id }}
       PAYLOAD_WORK: /tmp/rosy-payload-work
       DIST_ROOT: /tmp/rosy-payload-dist
@@ -42,70 +57,26 @@ jobs:
         run: |
           set -euo pipefail
           test "$(uname -m)" = aarch64
+          [[ "$BUILDER_IMAGE" =~ ^ghcr\.io/robotics-team-1213/rosy-payload-builder@sha256:[0-9a-f]{64}$ ]]
           test -z "$(git status --porcelain)"
           [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]]
           df -h /
 
-      - name: Install native ROS build prerequisites
+      - name: Prepare the payload builder container
         shell: bash
         run: |
           set -euo pipefail
-          # Runner only (throwaway disk): no fsync per unpacked file and no
-          # man-db rebuild per apt transaction. The image build never sees this.
-          echo force-unsafe-io | sudo tee /etc/dpkg/dpkg.cfg.d/90-rosy-ci-unsafe-io > /dev/null
-          sudo rm -f /var/lib/man-db/auto-update
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            build-essential cmake curl gpg python3-yaml
-          ros_source=/tmp/ros2-apt-source.deb
-          curl --fail --location --proto '=https' --proto-redir '=https' \
-            --output "$ros_source" \
-            https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.2.0/ros2-apt-source_1.2.0.noble_all.deb
-          ros_apt_source_sha256='0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5'
-          printf '%s  %s\n' "$ros_apt_source_sha256" "$ros_source" \
-            | sha256sum --check --strict
-          sudo dpkg -i "$ros_source"
-          # D-482: pin ROS to the image's dated snapshot (single source: inputs.lock.yaml).
-          ros_snapshot_url="$(python3 -c "import yaml; print(yaml.safe_load(open('deploy/robot/pinky_pro/image/inputs.lock.yaml', encoding='utf-8-sig'))['ros']['apt_snapshot_url'])")"
-          [[ "$ros_snapshot_url" =~ ^http://snapshots\.ros\.org/jazzy/[0-9]{4}-[0-9]{2}-[0-9]{2}/ubuntu$ ]]
-          # D-482 addendum: the snapshot repo is signed by its own key, not the
-          # ros2-apt-source key. Fetch it by full fingerprint, keep it in its own
-          # keyring and trust it for the snapshot source only (Signed-By).
-          ros_snapshot_key_fpr="$(python3 -c "import yaml; print(yaml.safe_load(open('deploy/robot/pinky_pro/image/inputs.lock.yaml', encoding='utf-8-sig'))['ros']['apt_snapshot_key_fingerprint'])")"
-          [[ "$ros_snapshot_key_fpr" =~ ^[0-9A-F]{40}$ ]]
-          ros_snapshot_keyring=/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg
-          curl --fail --location --proto '=https' --proto-redir '=https' \
-            --output /tmp/ros-snapshots-key.asc \
-            "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${ros_snapshot_key_fpr}"
-          sudo install -d -m 0755 /etc/apt/keyrings
-          gpg --dearmor < /tmp/ros-snapshots-key.asc | sudo tee "$ros_snapshot_keyring" > /dev/null
-          sudo chmod 0644 "$ros_snapshot_keyring"
-          ros_snapshot_key_got="$(gpg --show-keys --with-colons "$ros_snapshot_keyring" \
-            | awk -F: '$1 == "pub" { want = 1; next } want && $1 == "fpr" { print $10; want = 0 }')"
-          if [[ "$ros_snapshot_key_got" != "$ros_snapshot_key_fpr" ]]; then
-            echo "::error::ROS snapshot key fingerprint mismatch: got '${ros_snapshot_key_got}', want ${ros_snapshot_key_fpr}"
-            exit 1
-          fi
-          # Replace the live packages.ros.org stanza with the snapshot stanza.
-          sudo rm -f /etc/apt/sources.list.d/ros2.sources
-          printf 'Types: deb\nURIs: %s\nSuites: %s\nComponents: main\nSigned-By: %s\n' \
-            "$ros_snapshot_url" "$(. /etc/os-release && echo "$VERSION_CODENAME")" "$ros_snapshot_keyring" \
-            | sudo tee /etc/apt/sources.list.d/ros2-snapshots.sources > /dev/null
-          grep -qx "URIs: $ros_snapshot_url" /etc/apt/sources.list.d/ros2-snapshots.sources
-          grep -qx "Signed-By: $ros_snapshot_keyring" /etc/apt/sources.list.d/ros2-snapshots.sources
-          if grep -rqs 'packages\.ros\.org' /etc/apt/sources.list /etc/apt/sources.list.d/; then
-            echo "::error::a live packages.ros.org source is still configured"
-            exit 1
-          fi
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            python3-colcon-common-extensions python3-rosdep \
-            python3-pip python3-setuptools python3-wheel \
-            ros-jazzy-ros-base ros-dev-tools
-          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
-            sudo rosdep init
-          fi
-          sudo rosdep update --rosdistro jazzy
+          # D-553 addendum 3: ROS prerequisites and rosdep apt packages come preinstalled
+          # (build-payload-builder.yml, install-ros-build-prereqs.sh: same D-482 pins).
+          echo "builder image: $BUILDER_IMAGE" | tee -a "$GITHUB_STEP_SUMMARY"
+          test -f /opt/ros/jazzy/setup.bash
+          test -f /etc/apt/sources.list.d/ros2-snapshots.sources
+          if grep -rqs 'packages\.ros\.org' /etc/apt/sources.list /etc/apt/sources.list.d/; then exit 1; fi
+          # The job's HOME is /github/home; rosdep's cache was written for root at image build.
+          if [[ "$HOME" != /root ]]; then mkdir -p "$HOME" && ln -sfn /root/.ros "$HOME/.ros"; fi
+          # Lists were dropped from the image; anything rosdep or the hardware deps still
+          # need comes from the same pinned sources.
+          apt-get update -qq
 
       - name: Resolve and verify run-specific lock
         shell: bash
@@ -136,7 +107,7 @@ jobs:
               --release-id "$RELEASE_ID" \
               --lock "$RESOLVED_LOCK" \
             | tee /tmp/rosy-native-payload-build.log
-          sudo chown -R "$USER:$USER" "$PAYLOAD_WORK"
+          sudo chown -R "$(id -u):$(id -g)" "$PAYLOAD_WORK"
           df -h /
 
       - name: Assemble unsigned payload release
