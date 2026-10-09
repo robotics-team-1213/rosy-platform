@@ -1110,8 +1110,8 @@ class FleetConsole(TripAware):
             "pending_triggers": [list(t) for t in session.pending_triggers],
             "stream_evidence": stream_evidence,
             # D-581: why a follower gets no ceiling-anchored samples (null when not anchoring).
-            "anchor": (session.relay.anchor.status()
-                       if session.relay is not None and session.relay.anchor is not None else None),
+            "anchor": (None if getattr(session.relay, "anchor", None) is None
+                       else session.relay.anchor.status()),
             "relay": None if stats is None else {
                 "paused": stats.paused,
                 "leader_rx_hz": round(stats.leader_rx_hz, 2),
