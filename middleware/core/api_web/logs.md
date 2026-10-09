@@ -816,6 +816,12 @@
 - 변경: `/etc/rosy/dev-mode`가 있는 장치 CORE만 공용 `rosy-dev-*` 토큰을 받는다(`core_common.config.dev_auth_enabled`, `deps._refused_in_device_mode`). 기동 때 `auth.development_mode`. 공용 개발 토큰은 장치에서 `host/ssh/*` 403. API v1.156.
 - 증거: test_auth_pairing.py(표식 유무·이벤트), test_host_ssh.py(셸 거부).
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · feat(api): D-531 문맥 능력 표시
+
+- 변경: 설정이 켜진 CORE만 `rosy.controls/1` `base_velocity.route_context: true`를 노출한다. 상태 조회는 CORE의 마지막 발행 문맥과 발행 시각을 읽는다.
+- 증거: api_web 149 passed, 15 skipped, `known_failures.py` 신규 실패 0. 실제 Fleet 소비는 미확인.
+- gate 변화: D-531 P1 SOURCE 후보.
 ## 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.164 (D-546 5)
 - 변경: `GET /api/v1/localization/request`(`LOCALIZE_ASSIST`, 404 `NO_REQUEST`), 이벤트 `localization.request`·`localization.request_cleared`. API 기준서 v1.164과 버전 고정 테스트 갱신.
 - 증거: `middleware/core/gateway/test/test_localization_api.py`.
