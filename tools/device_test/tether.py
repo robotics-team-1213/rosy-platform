@@ -217,7 +217,8 @@ def tether_check(robot, args):
                          f"{pts['robot']}")
     try:      # the drawn robot must be the target: its lamp blinks there (D-512 amendment 2)
         t["identity"] = identify.identify(robot, pts["robot"], identify.radius_px(
-            rec["map_to_image"], draw_pose[:2], _project), path.parent)
+            rec["map_to_image"], draw_pose[:2], _project), path.parent,
+            identify.floor_polygon(rec["map_to_image"], rec.get("track_bounds_m"), _project))
     except identify.Refused as exc:     # the refusal and its frames go into the verdict as evidence
         t.update(identity=exc.evidence, visual_check_ok=False)
         path.write_text(json.dumps(v, indent=2), encoding="utf-8")
