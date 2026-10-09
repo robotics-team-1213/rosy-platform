@@ -161,7 +161,7 @@ def test_wifi_autoconnect_is_cut_only_outside_a_nonempty_allow_list(tmp_path):
     _lib(tmp_path, "safe wifi-allow\n", "", {})
     wifi = "site-net:802-11-wireless:yes\nold\\:cafe:802-11-wireless:yes\nlab:802-11-wireless:no\ntailscale0:tun:yes\n"
     fake, bin_dir = _fakes(tmp_path, wifi=wifi)
-    assert _run(tmp_path, bin_dir, fake, "check").returncode == 1  # no allow list: refuse, report
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0  # no allow list: not configured, fine
     assert not any("modify" in c for c in _calls(fake))
     _host_file(tmp_path, "/etc/rosy/host-state/wifi-allow", "site-net\n")
     _run(tmp_path, bin_dir, fake, "check")
