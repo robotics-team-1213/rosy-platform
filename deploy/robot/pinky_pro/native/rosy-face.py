@@ -377,8 +377,8 @@ class Lamp:
         self._process = None
         self.pattern: str | None = None
 
-    def available(self) -> bool:
-        if not self.enabled:
+    def available(self, *, for_identify: bool = False) -> bool:
+        if not self.enabled and not for_identify:
             return False
         if not (self._root / LAMP_NODE).exists():
             self._log.once("lamp-node", "no /dev/ws281x_pwm (rp1_ws281x_pwm); lamp left out")
@@ -456,9 +456,9 @@ class Lamp:
 
     def identify(self, color: str, unsafe: Callable[[], bool]) -> tuple[str, str]:
         """Temporary blue/amber pulse, then restore the state pattern."""
-        resume, self.pattern = self.pattern, None
+        resume, self.pattern = self.pattern if self.enabled else None, None
         self.stop()
-        if not self.available():
+        if not self.available(for_identify=True):
             self.show(resume)
             return "unavailable", "램프를 사용할 수 없음"
         process = None
@@ -740,11 +740,12 @@ class FaceDisplay:
                 return True
             view = read_view(self.root, self._battery_value)
             return self.lamp_pattern_for(view, self.robot_state_of(view)) not in IDENTIFY_OVER
-        if request["action"].startswith("identify_") and (
-                self._lamp is None or self._lamp.pattern not in IDENTIFY_OVER or unsafe_identity()):
+        identifying = request["action"].startswith("identify_")
+        identify_ready = identifying and self._lamp is not None and self._lamp.available(for_identify=True)
+        if identifying and (not identify_ready or unsafe_identity()):
             # Answered at once, so rosy-hw-test does not wait out its hand-over timeout.
             self._tested = request["request_id"]
-            state = "unavailable" if self._lamp is None else "failed"
+            state = "failed" if identify_ready else "unavailable"
             write_test_result(self.root / TEST_RESULT, json.dumps(
                 {"schema": 1, "request_id": request["request_id"], "action": request["action"],
                  "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절"},

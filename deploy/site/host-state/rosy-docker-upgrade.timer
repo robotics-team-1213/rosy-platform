@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Ubuntu docker.io upgrade for the ROSY site host
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=45min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

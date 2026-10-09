@@ -1045,8 +1045,9 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1182,
-        "accept: re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
+        1183,
+        "accept: re-judged at 1183 on 2026-10-09 for D-472/D-537: identify may briefly use a normally disabled lamp through rosy-face while the normal pattern stays off; "
+        "zero growth allowance remains. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
         "the first 16 digits of the validated TLS CA fingerprint for tablet comparison; "
         "zero growth allowance remains. Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
         "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "

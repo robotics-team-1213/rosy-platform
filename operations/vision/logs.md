@@ -341,3 +341,9 @@
 - 증거: 합성 프레임 시험(일치, 두 blob, 가림, 프레임 누락, 다른 색, 설정 임계) 6건과 워커 1건. 임계값은 잠정, ceiling_north 실측 전
 - gate 변화: 없음. FIELD 실측(LED 가시성·색 분리·시각 오차) 미실시
 - 결정: D-472 addendum 6항 측정 먼저
+
+## 2026-10-09 · uncommitted · fix(vision): D-539 운영자 재학습 배경을 재시작 뒤에도 쓴다
+- 변경: `BackgroundStore`(source마다 npz 하나, JPEG q95, 트랙 밖 검게)와 `BackgroundBlobDetector.relearn()`. 운영자 재학습(Fleet `relearn_seq` 증가)의 마지막 30프레임만 revision·작업 크기와 함께 저장하고, 프로세스의 첫 학습에서 같은 revision·크기면 재생해 바로 검출한다. CLI `--track-state DIR`, compose named volume `vision_state:/var/lib/rosy-vision`
+- 원인: 2026-10-09 현장 `site-af80a5b37eec`가 09:52 자동 갱신으로 재시작하며 매트 위 두 로봇을 배경으로 배웠다(`relearn_seq` 0, 로봇 NO_POSE, 빈 곳 미확인 2개). 매일 06:08 재부팅도 같다
+- 증거: 합성 프레임 시험 6건(재시작 재생·저장본 없음·시작 학습 미저장·다른 revision·트랙 밖 0·손상 파일)과 워커 1건
+- gate 변화: 없음. 현장 배포 뒤 빈 매트 재학습 → Vision 재시작 → 주차 로봇 검출 확인 전

@@ -1,0 +1,11 @@
+[Unit]
+Description=Rosy host guard: health ladder for the team PCs and robots (D-530)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rosy-host-guard
+ExecStart=/usr/bin/python3 /usr/local/bin/rosy-host-guard
+SyslogIdentifier=rosy-host-guard
+TimeoutStartSec=600

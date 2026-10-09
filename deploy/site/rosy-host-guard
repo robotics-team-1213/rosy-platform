@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Site host guard for the team PCs and robots (D-530); rosy-host-guard.timer runs it every 10 min.
+
+Generalizes the model PC guard. /etc/rosy/host-guard/hosts.conf (host-local, it has addresses;
+see host-guard.conf.example) lists one host per line:
+
+  <name> pc <ssh-target> <quiet HH:MM-HH:MM or ->
+  <name> robot <host>:<port>
+
+A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
+the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
+GUARD_BAD_CHECKS bad answers in a row -> restart the watched user units that are down (or reboot
+when none are down); still bad at twice that count -> reboot. Never inside the host's quiet
+window (its nightly reboot; a reboot whose +10 min lands in the window is not sent), never within GUARD_MIN_UPTIME_S of boot. An unreachable pc is only
+logged: the hardware watchdog and the host-local rosy-ssh-watchdog own that case. Robots are only
+probed on their CORE port; their recovery belongs to D-412 and the rosy-* units.
+
+Every action is appended to <state>/actions.jsonl; <state>/status.json holds the current state.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+CONFIG = Path(os.environ.get("GUARD_CONFIG", "/etc/rosy/host-guard/hosts.conf"))
+STATE = Path(os.environ.get("GUARD_STATE", "/var/lib/rosy-host-guard"))
+KEY = os.environ.get("GUARD_KEY", "/etc/rosy/host-guard/id_ed25519")
+KNOWN = os.environ.get("GUARD_KNOWN_HOSTS", "/etc/rosy/host-guard/known_hosts")
+BAD_CHECKS = int(os.environ.get("GUARD_BAD_CHECKS", "3"))          # 3 x 10 min
+MIN_AVAIL_PCT = int(os.environ.get("GUARD_MIN_AVAIL_PCT", "3"))
+MAX_SWAP_PCT = int(os.environ.get("GUARD_MAX_SWAP_PCT", "80"))
+MAX_LOAD_PER_CORE = float(os.environ.get("GUARD_MAX_LOAD_PER_CORE", "4"))
+MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
+REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
+
+
+def now_hhmm() -> str:
+    return os.environ.get("GUARD_NOW") or time.strftime("%H:%M")
+
+
+def in_quiet(window: str, now: str) -> bool:
+    if window == "-":
+        return False
+    start, end = window.split("-")
+    return start <= now < end if start <= end else (now >= start or now < end)
+
+
+def ssh(target: str, command: str) -> str | None:
+    cmd = ["ssh", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+           "-o", "ServerAliveInterval=10", "-o", f"UserKnownHostsFile={KNOWN}", target, command]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def tcp_ok(address: str) -> bool:
+    host, port = address.rsplit(":", 1)
+    try:
+        with socket.create_connection((host, int(port)), timeout=5):
+            return True
+    except OSError:
+        return False
+
+
+def act(name: str, action: str, reason: str) -> None:
+    print(f"{name}: {action} ({reason})", flush=True)
+    with open(STATE / "actions.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"time": int(time.time()), "host": name, "action": action, "reason": reason}) + "\n")
+
+
+def plus_minutes(hhmm: str, minutes: int) -> str:
+    total = (int(hhmm[:2]) * 60 + int(hhmm[3:]) + minutes) % 1440
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
+    answer = ssh(target, "health")
+    if answer is None:
+        entry["state"] = "unreachable"
+        print(f"{name}: unreachable (watchdog's job if it froze)", flush=True)
+        return
+    fields = answer.split()
+    avail, swap, load, cores, uptime = int(fields[0]), int(fields[1]), float(fields[2]), int(fields[3]), int(fields[4])
+    down = [] if len(fields) < 6 or fields[5] == "-" else fields[5].split(",")
+    reasons = []
+    if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
+        reasons.append(f"memory avail {avail}% swap {swap}%")
+    if load > cores * MAX_LOAD_PER_CORE:
+        reasons.append(f"load {load}/{cores} cores")
+    if down:
+        reasons.append("down " + ",".join(down))
+    if not reasons:
+        entry.update(state="ok", bad=0, restarted=False)
+        return
+    entry["bad"] = entry.get("bad", 0) + 1
+    entry["state"] = "bad"
+    reason = f"{entry['bad']}/{BAD_CHECKS}: " + "; ".join(reasons)
+    print(f"{name}: unhealthy {reason}", flush=True)
+    if entry["bad"] >= BAD_CHECKS and down and not entry.get("restarted"):
+        for unit in down:
+            ssh(target, f"restart {unit}")
+            act(name, f"restart {unit}", reason)
+        entry["restarted"] = True
+    elif entry["bad"] >= BAD_CHECKS * (2 if entry.get("restarted") else 1):
+        if uptime < MIN_UPTIME_S:
+            print(f"{name}: would reboot, but it booted {uptime}s ago", flush=True)
+            return
+        if in_quiet(quiet, plus_minutes(now_hhmm(), REBOOT_DELAY_MIN)):
+            print(f"{name}: would reboot, but the delayed reboot lands in its nightly window", flush=True)
+            return
+        ssh(target, "reboot")
+        act(name, "reboot", reason)
+        entry.update(bad=0, restarted=False)
+
+
+def main() -> int:
+    STATE.mkdir(parents=True, exist_ok=True)
+    status_file = STATE / "status.json"
+    status = json.loads(status_file.read_text(encoding="utf-8")) if status_file.exists() else {}
+    now = now_hhmm()
+    for raw in CONFIG.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].split()
+        if not line:
+            continue
+        name, kind = line[0], line[1]
+        entry = status.setdefault(name, {})
+        if kind == "robot":
+            entry["state"] = "ok" if tcp_ok(line[2]) else "unreachable"
+        elif kind == "pc":
+            if in_quiet(line[3], now):
+                entry["state"] = "quiet"
+            else:
+                check_pc(name, line[2], line[3], entry)
+        else:
+            print(f"{name}: unknown kind {kind}", flush=True)
+            continue
+        entry["time"] = int(time.time())
+    tmp = status_file.with_suffix(".tmp")
+    tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, status_file)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
