@@ -2873,3 +2873,7 @@
 - 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)
 - 증거: test_overhead_tracking_console.py가 TRACKING_MS ≤ 500 ms와 그 사용을 고정
 - gate 변화: 없음. 현장 반영 뒤 깜박임 재확인 전
+## 2026-10-09 · uncommitted · uiux(fleet): 큐 항목이 그 자리에서 결정으로 펼친다, 레일 하나만 스크롤, 접힌 로봇 카드 (D-540 3, 계획 (c))
+- 변경: `#stuck-panel`을 없애고 막힘 다섯 답(같은 값, 같은 비활성 사유, 경로 권한 그대로)을 최우선 큐 행 펼침으로 옮겼다. 재계획 확인(`바뀐 경로로 계속` / `운행 취소`, quiet·확인 없음)을 큐 행으로 더했다(`web/trip-replan.js`, 현장 지도 칸은 (e)까지 남는다). 한 번에 한 행, 가장 급한 결정이 먼저 펼친다. 넓은 단은 문서가 스크롤하지 않고 레일만 스크롤한다(큐 12rem·로봇 목록 15rem 상한 제거, 지도 칸은 남는 높이를 채움). 로봇 카드는 정상이면 한 줄(이름·운행 한 줄·배터리), 예외·선택이면 펼침, 오프라인·비상 정지 래치·안전 상태 미확인·보정 lease(`robot.calibration`, (h1) 필드)는 접기 없이 펼침. `전체 로봇 보기` 토글 제거. Cell 승인은 제안 대기 목록을 읽는 경로가 없어 이 브랜치에 넣지 않았다.
+- 증거: ai PC(모델 PC가 첫 실행 중 응답 끊김) `operations/fleet/test/`+`test_module_structure` 1 failed(fleet 단위 크기 판정, 아래), 관제 브라우저 묶음+새 `test_console_queue_inline_browser.py`는 main 스냅숏과 같은 실패만. node `queue-inline.test.mjs` 7건. 캡처 `X:\DevTemp\fleet-queue\{before,after}\`.
+- gate 변화: 없음. fleet 단위 크기 47012+150을 넘는다(+185, 판정 재심 필요) — 착지 보류.

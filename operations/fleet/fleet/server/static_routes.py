@@ -42,6 +42,7 @@ CONSOLE_ASSETS = {
     "formation.js": ("formation.js", "application/javascript"),
     "motion-readiness.js": ("motion-readiness.js", "application/javascript"),
     "line-stuck.js": ("line-stuck.js", "application/javascript"),
+    "trip-replan.js": ("trip-replan.js", "application/javascript"),
     "link-tag.js": ("link-tag.js", "application/javascript"),
     "site-path.js": ("site-path.js", "application/javascript"),
     "localization-badge.js": ("localization-badge.js", "application/javascript"),

@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createLineStuckPanel } from "./line-stuck.js";
+import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createStartPointView } from "./start-point-view.js";
@@ -130,7 +131,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -139,7 +140,8 @@ const view = {
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
-  showAllRobots: false,
+  cardChoice: {},  // D-540 3: robot_id -> the operator's fold {open, attention}
+  queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
   cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
@@ -264,23 +266,13 @@ function render() {
   const focusedCard = focused?.closest?.("#roster article");
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
-    ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
-  const attention = view.robots.filter((robot) => roster.needsAttention(robot));
-  const normalCount = view.robots.length - attention.length;
-  const toggle = el("roster-toggle");
-  toggle.hidden = normalCount === 0;
-  toggle.setAttribute("aria-expanded", String(view.showAllRobots));
-  toggle.textContent = view.showAllRobots ? "개입 대상만 보기" : `전체 로봇 보기 · 정상 ${normalCount}대`;
-  const shown = view.showAllRobots ? view.robots : view.robots.filter((robot) =>
-    roster.needsAttention(robot) || robot.robot_id === view.selected);
-  if (shown.length) {
-    rosterBox.replaceChildren(...shown.map((robot) => roster.card(robot, view.robots.indexOf(robot))));
-  } else if (view.robots.length) {
-    const empty = document.createElement("p");
-    empty.className = "hint";
-    empty.setAttribute("role", "status");
-    empty.textContent = `개입할 로봇 없음 · 정상 ${normalCount}대`;
-    rosterBox.replaceChildren(empty);
+    ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
+  // D-540 3 — every robot has a card; a nominal one is one line (roster.card decides). Exceptions first
+  // (D-201); the colour index stays the robot's own.
+  if (view.robots.length) {
+    const order = [...view.robots.keys()].sort((a, b) =>
+      roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
+    rosterBox.replaceChildren(...order.map((index) => roster.card(view.robots[index], index)));
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -300,12 +292,13 @@ function render() {
     const nextCard = [...rosterBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
-      ? nextCard?.querySelectorAll("ui-button")[focusedButton] : nextCard;
+      ? nextCard?.querySelectorAll("ui-button, button")[focusedButton] : nextCard;
     nextFocused?.focus({preventScroll: true});
   }
   signals.render();
   roster.fillQueues();
   lineStuck.render();
+  tripReplan.render();
 
   formation.fillLeaders();
   mapView.draw();
@@ -382,7 +375,7 @@ async function refreshState() {
     paintSitePath();
     view.robots = snapshot.robots;
     view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
-    if (requestedRobotFocus && view.robots.some(robot => robot.robot_id === requestedRobotFocus)) view.showAllRobots = true;
+    if (requestedRobotFocus) roster.openCard(requestedRobotFocus);
     view.stateUnavailable = false;
     view.stateLoaded = true;
     if (view.selected) {
@@ -763,14 +756,11 @@ const mapView = createMapView({ scope: pageScope,
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
-// D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
-const lineStuck = createLineStuckPanel({ scope: pageScope, el, view, call, log,
+// D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
+const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
-
-pageScope.listen(el("roster-toggle"), "click", () => {
-  view.showAllRobots = !view.showAllRobots;
-  render();
-});
+const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
+  isOperator: () => auth.role === "operator", namedReason });
 
 // D-415 — 로그 지우기
 pageScope.listen(el("log-clear"), "click", () => {

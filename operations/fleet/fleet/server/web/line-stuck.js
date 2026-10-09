@@ -172,7 +172,7 @@ export function refusalText(robotId, decision, err) {
 
 // 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
 // 못 본다. 종류별 헬퍼가 리터럴을 담는다.
-function quietButton(text) {
+export function quietButton(text) {
   const node = document.createElement("ui-button");
   node.setAttribute("kind", "quiet");
   node.type = "button";
@@ -180,7 +180,7 @@ function quietButton(text) {
   return node;
 }
 
-function primaryButton(text) {
+export function primaryButton(text) {
   const node = document.createElement("ui-button");
   node.setAttribute("kind", "primary");
   node.type = "button";
@@ -188,13 +188,13 @@ function primaryButton(text) {
   return node;
 }
 
-function setReason(node, reason) {
+export function setReason(node, reason) {
   node.disabled = Boolean(reason);
   if (reason) node.setAttribute("reason", reason);
   else node.removeAttribute("reason");
 }
 
-export function createLineStuckPanel({ scope, el, view, call, log, isOperator, namedReason = () => "" }) {
+export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const results = new Map();
@@ -255,17 +255,15 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator, n
   }
 
   function item(robotId, stuck) {
-    const li = document.createElement("li");
+    const li = document.createElement("div");
     li.className = "stuck-item";
     li.dataset.robotId = robotId;
     li.dataset.stuckId = stuck.stuck_id;
     if (stuck.robot_online === false) li.classList.add("offline");
 
+    // D-540 3: the queue row above already names the robot.
     const head = document.createElement("div");
     head.className = "stuck-head";
-    const name = document.createElement("b");
-    name.textContent = robotId;
-    name.id = `stuck-name-${robotId}`;
     const cause = document.createElement("ui-tag");
     cause.setAttribute("status", "crit");
     cause.textContent = CAUSE_LABEL[stuck.cause] || stuck.cause || "원인 미상";
@@ -274,7 +272,7 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator, n
     phase.setAttribute("status", stuck.phase === "BACKING" || stuck.phase === "SETTLING" ? "warn" : "neutral");
     phase.textContent = PHASE_LABEL[stuck.phase] || stuck.phase || "—";
     phase.title = stuck.phase || "";
-    head.append(name, cause, phase);
+    head.append(cause, phase);
     if (stuck.robot_online === false) {
       const offline = document.createElement("ui-tag");
       offline.setAttribute("status", "warn");
@@ -302,7 +300,7 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator, n
     const actions = document.createElement("div");
     actions.className = "stuck-actions";
     actions.setAttribute("role", "group");
-    actions.setAttribute("aria-labelledby", name.id);
+    actions.setAttribute("aria-label", `${robotId} 판단`);
     for (const spec of specs) {
       const node = quietButton(spec.confirm ? `${spec.label}…` : spec.label);
       node.dataset.decision = spec.decision;
@@ -366,10 +364,8 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator, n
     return li;
   }
 
+  // D-540 3: each answer lives in its queue row's slot (roster.fillQueues makes the slot).
   function render(focusKey = null, focusRobot = null) {
-    const panel = el("stuck-panel");
-    const list = el("stuck-list");
-    if (!panel || !list) return;
     const stucks = view.stateUnavailable ? [] : pendingStucks(view.robots);
     const live = new Map(stucks.map((robot) => [robot.robot_id, robot.line_stuck.stuck_id]));
     // A confirm step belongs to one stuck id: a closed or replaced stuck drops it.
@@ -384,34 +380,27 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator, n
       ? { robot: focusRobot, key: focusKey }
       : activeItem ? { robot: activeItem.dataset.robotId, key: active.dataset?.focusKey } : null;
 
-    const existing = new Map([...list.children].map((node) => [node.dataset.robotId, node]));
-    const ordered = [];
     for (const robot of stucks) {
+      const slot = document.querySelector(`[data-decision-slot="${CSS.escape(`${robot.robot_id}|stuck`)}"]`);
+      if (!slot) continue;
       const stuck = robot.line_stuck;
       // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
       const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
       const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
-      let node = existing.get(robot.robot_id);
+      const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
-        node = item(robot.robot_id, stuck);
+        slot.replaceChildren(item(robot.robot_id, stuck));
         signatures.set(robot.robot_id, signature);
       } else {
         // 멈춘 시간만 바뀌었다 — 항목을 다시 만들지 않는다(포커스·확인 단계 유지).
         const held = node.querySelector('[data-fact="held"] dd');
         if (held) held.textContent = stuckFacts(stuck).find(([key]) => key === "held")[2];
       }
-      ordered.push(node);
     }
-    const same = ordered.length === list.children.length
-      && ordered.every((node, index) => list.children[index] === node);
-    if (!same) list.replaceChildren(...ordered);
-    panel.hidden = ordered.length === 0;
-    const count = el("stuck-count");
-    if (count) count.textContent = ordered.length ? `${ordered.length}건` : "";
 
     if (keepFocus?.robot && keepFocus.key) {
-      const owner = [...list.children].find((node) => node.dataset.robotId === keepFocus.robot);
+      const owner = document.querySelector(`.stuck-item[data-robot-id="${CSS.escape(keepFocus.robot)}"]`);
       // The focused control may be gone (confirm step dropped): land on the item's first answer.
       const target = owner?.querySelector(`[data-focus-key="${keepFocus.key}"]`)
         || owner?.querySelector("ui-button[data-decision]");

@@ -39,6 +39,38 @@ function tag(text, cls) {
   return node;
 }
 
+/** D-540 3: the queue row open on its decision. The operator's last pick holds while that row lives;
+ * otherwise the most urgent decision row (critical first) is open. */
+export function openDecisionKey(keys, choice) {
+  if (choice && keys.includes(choice.key)) return choice.open ? choice.key : null;
+  return keys[0] ?? null;
+}
+
+/** D-540 3: a card stays open whatever the operator chose while the robot is offline (no link or no
+ * state), its E-stop is latched, its safety state is not nominal, or a calibration lease holds it. */
+export function mustExpand(robot) {
+  const estop = robot.state?.safety?.estop;
+  return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
+}
+
+/** D-540 3: open on an exception or selection, one line when nominal; the operator's fold or unfold
+ * holds until the robot's exceptions change. `attention` is the exception key ("" when nominal). */
+export function cardExpanded({ must, selected, attention, choice }) {
+  if (must || selected) return true;
+  if (choice && choice.attention === attention) return choice.open;
+  return attention !== "";
+}
+
+// D-540 3 — a disclosure (queue row, folded card line, fold) shows and hides; it never moves a robot.
+function disclosure(className, expanded, onClick) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = className;
+  node.setAttribute("aria-expanded", String(expanded));
+  node.addEventListener("click", onClick);
+  return node;
+}
+
 function blockWith(button, reason) {
   button.disabled = Boolean(reason);
   if (reason) button.setAttribute("reason", reason);
@@ -51,18 +83,25 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
   function attentionItems(robot) {
     const state = robot.state;
+    // D-407 / D-540 3: a stuck robot waits for an answer; the row opens into its decision. An offline
+    // robot keeps the row (last value, answers locked) so the question does not vanish with the link.
+    const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
+    const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
+    const stuck = robot.line_stuck
+      ? [{ severity: "crit", text: `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}`, decision: "stuck" }] : [];
     // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 큐는 비어 있었다. 가장 흔한 예외부터 말한다.
-    if (!robot.online && robot.link === "degraded") return [{ severity: "warn", text: ": 응답 지연" }];
-    if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }];
-    if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
+    if (!robot.online && robot.link === "degraded") return [{ severity: "warn", text: ": 응답 지연" }, ...stuck];
+    if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }, ...stuck];
+    if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }, ...stuck];
     const items = [];
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     if ("power_health" in robot && power.problem)
       items.push({ severity: "warn", text: `: ${power.problem}` });
-    // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 큐 아래 판단 요청이다.
-    const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
-    const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
-    if (robot.line_stuck) items.push({ severity: "crit", text: `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}` });
+    items.push(...stuck);
+    // D-494 5 / D-540 3: a trip held at a place for a changed route waits for the operator's confirm.
+    if ((view.trafficTrips || []).some((trip) => trip.robot_id === robot.robot_id && trip.hold)) {
+      items.push({ severity: "crit", text: ": 바뀐 경로 확인 — 운행이 장소에서 기다립니다", decision: "replan" });
+    }
     if (localizationUrgent(robot.localization)) {
       // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
       items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
@@ -95,6 +134,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
     return items;
+  }
+  // Clock-like digits ("3초 전") are not a new exception.
+  function attentionKey(robot) {
+    return view.stateUnavailable ? "" : attentionItems(robot).map((item) => item.text.replace(/\d+/g, "#")).join("|");
+  }
+  function openCard(robotId) {
+    const robot = view.robots.find((row) => row.robot_id === robotId);
+    if (robot) view.cardChoice = { ...view.cardChoice, [robotId]: { open: true, attention: attentionKey(robot) } };
   }
   function needsAttention(robot) {
     return view.stateUnavailable || attentionItems(robot).length > 0;
@@ -146,6 +193,28 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
     const nav = navTag(state);
+    // D-540 3: one line when nominal; the four must-expand states keep the card open.
+    const attention = attentionKey(robot);
+    const must = view.stateUnavailable || mustExpand(robot);
+    const selected = view.selected === robot.robot_id;
+    const fold = (open) => scope.guard(() => {
+      view.cardChoice = { ...view.cardChoice, [robot.robot_id]: { open, attention } };
+      render();
+    });
+    const tripLine = view.stateUnavailable ? "" : trafficCardLine(view.traffic, robot.robot_id);
+    if (!cardExpanded({ must, selected, attention, choice: view.cardChoice?.[robot.robot_id] })) {
+      node.dataset.collapsed = "";
+      const line = disclosure("robot-line", false, fold(true));
+      line.title = "카드 펼치기";
+      const battery = nodeWithText("span", "robot-line-battery");
+      battery.dataset.fact = "battery";
+      battery.append(nodeWithText("span", "sr-only", "배터리 "),
+        nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
+      line.append(nodeWithText("b", "", robot.robot_id),
+        nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
+      node.appendChild(line);
+      return node;
+    }
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
     const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
@@ -201,9 +270,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       locTag.dataset.localization = "";
       head.appendChild(locTag);
     }
+    if (!must && !selected) {
+      const shut = disclosure("robot-fold", true, fold(false));
+      shut.textContent = "접기";
+      shut.setAttribute("aria-label", `${robot.robot_id} 카드 접기`);
+      head.appendChild(shut);
+    }
     node.appendChild(head);
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"). 새 패널을 만들지 않는다.
-    const tripLine = view.stateUnavailable ? "" : trafficCardLine(view.traffic, robot.robot_id);
     if (tripLine) {
       const line = nodeWithText("p", "trip-line", tripLine);
       line.dataset.fact = "trip";
@@ -488,45 +562,73 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     head.querySelector("small").textContent = names.join(" · ");
   }
 
+  // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
+  // urgent decision row. Rows are kept by key so a 1 s poll never drops focus or a confirm step.
+  function syncRows(list, rows, open) {
+    const old = new Map([...list.children].map((node) => [node.dataset.key, node]));
+    const nodes = rows.map((row, index) => {
+      const named = index === 0 || rows[index - 1].robotId !== row.robotId;  // the name once per robot
+      let li = old.get(row.key);
+      if (!li || li.dataset.decision !== (row.decision || "")) {
+        li = document.createElement("li");
+        li.dataset.key = row.key;
+        li.dataset.decision = row.decision || "";
+        const line = row.decision ? disclosure("queue-row", false, scope.guard(() => {
+          view.queueChoice = { key: row.key, open: line.getAttribute("aria-expanded") !== "true" };
+          render();
+        })) : li;
+        if (row.decision) {
+          const body = nodeWithText("div", "queue-decision");
+          body.id = `decision-${row.key.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+          body.dataset.decisionSlot = row.key;
+          line.setAttribute("aria-controls", body.id);
+          li.append(line, body);
+        }
+        line.append(document.createElement("b"), nodeWithText("span", "queue-text"));
+      }
+      const line = row.decision ? li.firstElementChild : li;
+      const name = line.querySelector("b");
+      name.textContent = row.robotId;
+      name.className = named ? "" : "sr-only";
+      const text = line.querySelector(".queue-text");
+      if (text.textContent !== row.text) text.textContent = row.text;
+      if (row.decision) {
+        line.setAttribute("aria-expanded", String(open === row.key));
+        li.lastElementChild.hidden = open !== row.key;
+      }
+      return li;
+    });
+    if (nodes.length !== list.children.length || nodes.some((node, i) => list.children[i] !== node)) {
+      list.replaceChildren(...nodes);
+    }
+  }
+
   function fillQueues() {
     // ADR-1000: Populate Queues
     const warnList = el("warning-list");
     const critList = el("critical-list");
-    warnList.innerHTML = "";
-    critList.innerHTML = "";
-
-    let warningCount = 0;
-    let criticalCount = 0;
-
-    const queueItem = (robotId, text) => {
-      const li = document.createElement("li");
-      const name = document.createElement("b");
-      name.textContent = robotId;
-      li.append(name, document.createTextNode(text));
-      return li;
-    };
-
+    const rows = { crit: [], warn: [] };
     for (const r of view.stateUnavailable ? [] : view.robots) {
       for (const item of attentionItems(r)) {
-        if (item.severity === "crit") {
-          critList.appendChild(queueItem(r.robot_id, item.text));
-          criticalCount++;
-        } else {
-          warnList.appendChild(queueItem(r.robot_id, item.text));
-          warningCount++;
-        }
+        const list = item.severity === "crit" ? rows.crit : rows.warn;
+        const key = `${r.robot_id}|${item.decision || list.length}`;
+        list.push({ ...item, robotId: r.robot_id, key });
       }
     }
+    const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
+    const open = openDecisionKey(decisions, view.queueChoice);
+    syncRows(critList, rows.crit, open);
+    syncRows(warnList, rows.warn, open);
     setTriageHead("warning-head", "주의 요망", warnList);
     setTriageHead("critical-head", "최우선 개입 요망", critList);
 
     // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
     // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
     // (D-201 회차 계측에서 style.display 토글이 실서버에서는 무시됨을 확인).
-    warnList.parentElement.hidden = warningCount === 0;
-    critList.parentElement.hidden = criticalCount === 0;
-    document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
+    warnList.parentElement.hidden = rows.warn.length === 0;
+    critList.parentElement.hidden = rows.crit.length === 0;
+    document.querySelector(".queues-panel").hidden = (rows.warn.length + rows.crit.length) === 0;
   }
 
-  return { card, fillQueues, queuedReason, needsAttention, attentionItems };
+  return { card, fillQueues, queuedReason, needsAttention, attentionItems, openCard };
 }
