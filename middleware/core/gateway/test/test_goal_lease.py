@@ -143,7 +143,7 @@ def test_goal_without_lease_is_unchanged(robot):
 def test_bad_ttl_is_400_and_leaves_the_mode(robot, ttl):
     tc, svc, executor, _clock = robot
     mode = svc.modes.mode
-    reply = tc.post("/api/v1/navigation/goal", headers=OPERATOR, content=(
+    reply = tc.post("/api/v1/navigation/goal", headers={**OPERATOR, "Content-Type": "application/json"}, content=(
         '{"x": 1.0, "y": 0.5, "correlation_id": "a-1", "lease_ttl_s": %s}' % (
             {"nan": "NaN", "inf": "Infinity"}.get(ttl, ttl))).encode())
     assert reply.status_code == 400 and executor.sent == [] and svc.modes.mode is mode
