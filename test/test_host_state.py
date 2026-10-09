@@ -264,3 +264,41 @@ def test_hang_settings_wait_for_approval_on_every_pc():
         for line in manifest.read_text(encoding="utf-8").splitlines():
             if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
                 assert line.startswith("approval"), (role, line)
+
+
+def _apt_fakes(tmp_path, installed):
+    """dpkg-query reports `installed`; apt-get logs its call."""
+    fake, bin_dir = _fakes(tmp_path)
+    (fake / "dpkg.out").write_text("".join(f"{name} install ok installed\n" for name in installed))
+    for name, body in (("dpkg-query", 'cat "$FAKE/dpkg.out"\n'), ("apt-get", "")):
+        path = bin_dir / name
+        path.write_text(f'#!/bin/sh\necho "{name} $*" >> "$FAKE/calls"\n{body}exit 0\n')
+        path.chmod(0o755)
+    return fake, bin_dir
+
+
+def test_apt_lines_wait_for_the_sim_approval_and_the_timer_only_reports(tmp_path):
+    """D-571: packages install only with --approve sim; the drift timer never runs apt-get."""
+    fake, bin_dir = _apt_fakes(tmp_path, ["pkg-a"])
+    _lib(tmp_path, "", "approval=sim apt pkg-a pkg-b\n", {})
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert status["awaiting_approval"] == ["apt packages missing: pkg-b"]
+    assert not [c for c in _calls(fake) if c.startswith("apt-get")]
+
+    dry = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run").stdout
+    assert "[approval=sim] apt packages missing:" in dry and "skip (needs --approve)" in dry
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "sim").returncode == 0
+    assert any(c.startswith("apt-get install -y -q --no-install-recommends ros-jazzy-ros-gz")
+               for c in _calls(fake))
+
+
+def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
+    """D-571: the site PC (Ubuntu 26.04, production) gets the container image, not apt sim packages."""
+    for role, folder in ROLES.items():
+        lines = [line for line in (ROOT / "deploy" / folder / "host-state" / "manifest").read_text(
+            encoding="utf-8").splitlines() if line.split()[1:2] == ["apt"]]
+        if role == "site":
+            assert not lines
+        else:
+            assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role
