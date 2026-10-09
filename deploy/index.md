@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
 - 2026-10-09 · uncommitted · docs(decision): split model test hosts
 - 2026-10-08 · uncommitted · AI PC 오프라인 Decision watchdog
 - 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리
 - 2026-10-08 · uncommitted · feat(face): D-472 식별 점멸 — 움직이는 로봇, 안전 거절, 6 s 상한
-- 2026-10-07 · uncommitted · fix(release): push 게이트 해제 — D-502 수선 쌍 provenance 등록과 line-follow 핀 갱신
