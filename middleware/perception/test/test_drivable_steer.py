@@ -63,3 +63,10 @@ def test_a_lidar_wall_beyond_the_model_view_closes_the_way():
     way = _lane(0.5, -HALF)                 # open straight ahead in the camera, wide to the left
     error, confidence, debug = DrivableSteer().update(way, 1, G, XO, HALF, wall_ahead_m=0.18)
     assert debug["ahead_m"] < 0.14 and debug["strategy"] == "drivable_pivot_left", debug
+
+
+def test_a_closed_corner_turns_toward_the_opening_seen_on_the_way_in():
+    steer = DrivableSteer()
+    steer.update(_lane(0.5, -HALF, x_max=0.33), 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    error, _, debug = steer.update(_lane(0.06, -0.06, x_max=0.13), 2, G, XO, HALF, (0.1, 0.0, 0.0), (0.1, 0.0, 0.0))
+    assert debug["strategy"] == "drivable_pivot_left" and debug.get("exit_from_memory"), debug
