@@ -372,7 +372,7 @@ class FleetWrongWay:
         cur = self.state == raw
         at = self.spot is not None and math.hypot(gt[0] - self.spot[0], gt[1] - self.spot[1]) <= self.tol
         return dict(state=self.state, pose_stamp=stamp, lane_heading_deg=round(deg(self.lane), 1),
-                    turn_deg=round(turn, 2) if cur and self.state == 'WRONG_WAY' else None,
+                    turn_deg=round(turn, 2) if cur else None,   # Fleet: detail of the reported state, any state
                     **({'turn_spot': True} if cur and at and self.state == 'WRONG_WAY' else {}))
 
 
@@ -662,6 +662,8 @@ def main():
     ap.add_argument('--lane', type=float, default=-90.0, help='s3/s4: lane direction (deg, map)')
     ap.add_argument('--spot', type=int, default=None, help='turn spot 0-3 (SPOTS): pose there, facing against the ring')
     ap.add_argument('--spot-tol', type=float, default=0.018, help='Fleet turn_spot_tolerance_m (FleetWrongWay)')
+    ap.add_argument('--approach', type=float, default=0.0,
+                    help='--spot: start this far before the spot, driving toward it against the ring (m)')
     ap.add_argument('--yaw-off', type=float, default=0.0, help='--spot: facing = ring + 180 + this (deg)')
     ap.add_argument('--camloss', type=float, default=0.0, help='s5: SIGSTOP line_observer this long (s)')
     ap.add_argument('--camloss-proc', default='image_bridge', help='s5: process to SIGSTOP (image_bridge | line_observer_node)')
@@ -676,6 +678,8 @@ def main():
     if a.spot is not None:
         x, y, ring = SPOTS[a.spot]
         a.spot_xy, a.lane, yd = (x, y), ring, ring + 180.0 + a.yaw_off
+        h = math.radians(yd)
+        x, y = x - a.approach * math.cos(h), y - a.approach * math.sin(h)   # behind the spot, facing it
     a.pose, a.lane_deg, a.lane = (x, y, math.radians(yd)), a.lane, math.radians(a.lane)
     p = CueProbe(a)
     sm = {'s1': s1, 's2': s2, 's3': s3, 's4': s4, 's5': s5, 's6': s6}[a.scenario](p, a)
