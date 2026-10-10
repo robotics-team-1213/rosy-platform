@@ -13,7 +13,7 @@
 1. **옵션 A: 메타데이터만 고친 새 revision을 만든다.**
    - 이름은 `d379-auto-lanes-rosy26-v1-groups`다. 모든 프레임에 `capture_group: rec-<session>`을 적는다. 녹화 세션 하나가 capture group 하나다.
    - 프레임·마스크·conf 파일 2811개는 원본 revision과 바이트가 같다. 바뀌는 것은 `manifest.json`뿐이다.
-   - manifest의 `annotation` 블록에 `annotation_of: d379-auto-lanes-rosy26-v1@54db240045672350bb7138abcf1608342918423ff7b67d5eccb65c951a074135`, 그룹 규칙, 결정자, 날짜, 근거를 적는다.
+   - manifest의 `annotation` 블록에 원본 revision `annotation_of: d379-auto-lanes-rosy26-v1@54db240045672350bb7138abcf1608342918423ff7b67d5eccb65c951a074135`, 그룹 규칙, 결정자, 날짜, 근거를 적는다.
    - 그룹 표기는 운영자(사용자)의 주장이다. D-464 3항과 같이 수집 경계의 선언이며, 카메라·시간·자세·지도 보정의 증명이 아니다.
    - 게시는 기존 immutable `Store.put_dataset` 경로로 한다. 원본 revision `54db2400…`은 지우지도 고치지도 않는다.
 2. **새 번들은 annotated revision을 학습 자료로 적는다.** int8-hf 번들 `lane-seg-20261009-3831b20d`부터 이 이름을 쓴다. 가중치는 같은 자료로 학습한 것이므로 다시 학습하지 않는다.
