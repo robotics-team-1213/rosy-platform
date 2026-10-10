@@ -111,9 +111,11 @@ def test_convoy_follows_the_leader_from_the_formation_block(site):  # noqa: F811
         browser, page, errors = _open(playwright, site, API, posts, answers)
         assert page.locator("#formation-heading").inner_text() == "대형·대열"
         page.locator(".convoy-form-wrap > summary").click()
-        assert page.locator("#convoy-go").get_attribute("reason").startswith("반복 운행 중인 리더가 없습니다")
-        page.locator("#convoy-follower").select_option("rosy_02")
+        # Leader first: only a robot on an open repeat trip; the follower list leaves out robots on a trip.
         assert page.locator("#convoy-leader").input_value() == "rosy_01"
+        followers = page.locator("#convoy-follower option").all_inner_texts()
+        assert "rosy_01" not in followers and "rosy_02" in followers
+        page.locator("#convoy-follower").select_option("rosy_02")
         page.locator("#convoy-start").select_option("A")
         page.clock.run_for(1100)
         _shot(page, "convoy-1440x900.png")

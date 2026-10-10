@@ -178,7 +178,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         roster = page.inner_text("#roster")
         assert "끊김" in roster, "연결이 끊긴 팔로워의 증거 태그가 없다"
         assert "지연" not in roster, "정상 스트림(4.8 Hz)에 지연 태그가 붙었다 — 정상은 무색이어야 한다"
-        assert "0.60m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
+        assert "0.60 m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
         # D-540 3: every robot has a card; the nominal ones are one line, the exception is open.
         assert [card.get_attribute("data-robot-id")
                 for card in page.locator("#roster article:not([data-collapsed])").all()] == ["rosy_03"]
@@ -294,7 +294,7 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
         arm = page.locator("#formation-start")
         assert arm.get_attribute("disabled") == (None if supported else "")
         if not supported:
-            assert "수동 주행만 지원" in page.inner_text("#formation-detail")
+            assert "수동 주행만 지원" in page.inner_text("#formation-why")
         assert not errors
         browser.close()
 
@@ -671,11 +671,11 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
         robot['state']['safety']['estop'] = False
         robot['state']['line_follow']['mode'] = 'CAMERA_LINE'
-        fallback = page.get_by_role('button', name='IR 추적 선택', exact=True)
+        fallback = page.get_by_role('button', name='IR 차선 추종으로 전환…', exact=True)
         fallback.wait_for()
         fallback.click()
         robot['state']['line_follow']['mode'] = 'OFF'
-        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 추적 선택")')
+        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
@@ -996,7 +996,7 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('formation-state')?.textContent"
-            " === '유지 중'"
+            " === '멈춤 · 재개 대기'"
         )
         assert page.locator("#formation-state").get_attribute("status") == "warn"
         assert page.locator("#formation-state").get_attribute("title") == "HOLDING"
@@ -1026,7 +1026,7 @@ def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(cons
         browser, page, errors = _open_console(p, api)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '유지 중'")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '멈춤 · 재개 대기'")
         assert page.locator("#formation-resume").is_disabled()
         assert "비상 정지" in page.inner_text("#formation-detail")
         assert "safety.estop" not in page.inner_text("#formation-detail")
@@ -2238,7 +2238,7 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         )
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
+        fallback = page.get_by_role("button", name="IR 차선 추종으로 전환…", exact=True)
         fallback.wait_for(state="visible")
         fallback.click()
         dialog = page.locator('dialog.ui-confirm')
@@ -2247,7 +2247,7 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         dialog.locator('ui-button[kind=quiet]').click()
         browser.close()
 
-    assert "rosy_01" in confirm and "IR 추적" in confirm and "요청할까요?" in confirm
+    assert "rosy_01" in confirm and "IR 차선 추종" in confirm and "요청할까요?" in confirm
     assert not [method_path for method_path in posts if method_path[0] == "POST"]
     assert errors == []
 
@@ -3639,7 +3639,9 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
         goal = page.locator('#roster ui-button[data-goal-robot-id]').first
         goal.wait_for()
-        page.wait_for_function(f'() => document.querySelector("#formation-reform")?.getAttribute("reason") === "{named}"')
+        # D-540 6: the block says the cause once; every button it holds says "위 사유".
+        page.wait_for_function(f'() => document.querySelector("#formation-why")?.textContent.includes("{named}")')
+        assert page.locator("#formation-reform").get_attribute("reason") == "위 사유"
         assert goal.get_attribute("reason") == named
         assert page.locator("#formation-stop").get_attribute("reason") != named
         assert page.locator("#formation-stop").get_attribute("disabled") is None
