@@ -24,8 +24,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 055fd333ce · fix(isaac): headless startup exclusion과 물리 드라이브 복구
+- 2026-10-11 · 97973b01d · fix(isaac): SDK 환경 분리와 headless 실행 복구
 - 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
 - 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
 - 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
-- 2026-10-04 · uncommitted · docs(isaac): 모델 PC의 주행·관제·적재 연계 검토
-- 2026-09-30 · uncommitted · fix(sim): isaac_sim을 D-310 target 표에 등록
