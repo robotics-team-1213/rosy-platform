@@ -88,11 +88,6 @@ def _trusted_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
 
 
 def _trusted_map_pose(row: Mapping):
-    from fleet.localization.trust import LEGACY, classify
-
-    state = row.get("state")
-    if not isinstance(state, Mapping) or classify(state) == LEGACY:
-        return None
     return _map_pose(row)
 
 

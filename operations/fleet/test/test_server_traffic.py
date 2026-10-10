@@ -72,11 +72,13 @@ def _console(*robots: FakeRobot) -> FleetConsole:
 
 
 def _navigating(robot_id):
-    return {"robot_id": robot_id, "navigation": "NAVIGATING"}
+    return {"robot_id": robot_id, "navigation": "NAVIGATING",
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
 def _arrived(robot_id):
-    return {"robot_id": robot_id, "navigation": "ARRIVED"}
+    return {"robot_id": robot_id, "navigation": "ARRIVED",
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
 def test_a_conflicting_mission_is_cancelled_and_queued():
@@ -322,8 +324,8 @@ def test_an_untrusted_robot_never_trusted_blocks_the_whole_track():
     assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
 
 
-def test_a_robot_without_localization_keeps_todays_behaviour_and_warns():
-    """Legacy policy (contract §3): `localization: null` is trusted as before, with a console warning."""
+def test_a_robot_without_localization_blocks_without_inventing_a_map_pose():
+    """Missing localization cannot establish a map pose."""
     mover = _mover()
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3)))
     console = _console(mover, other)
@@ -331,10 +333,10 @@ def test_a_robot_without_localization_keeps_todays_behaviour_and_warns():
 
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
-    assert "queued" not in result                 # no map: today the robot's costmap handles it
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
     row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
-    assert row["localization"]["legacy"] is True
-    assert row["localization"]["label"] == "위치 상태 미보고"
+    assert row["localization"]["legacy"] is False and row["localization"]["trusted"] is False
+    assert row["localization"]["label"] == "위치 모름"
 
 
 def test_a_mission_held_behind_an_untrusted_robot_drops_its_claim():
@@ -372,13 +374,14 @@ def test_an_untrusted_mover_is_queued_without_sending_the_goal():
     assert _goal_calls(mover) == 1 and "rosy_01" not in console._queued
 
 
-def test_a_legacy_mover_is_dispatched_as_today():
+def test_a_mover_without_localization_is_queued_without_dispatch():
     mover = _mover()
     mover._state = _standing("rosy_01", (-2.0, 0.0))
     console = _console(mover)
     run(console.snapshot())
-    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
-    assert _goal_calls(mover) == 1
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["dispatch_attempted"] is False
+    assert _goal_calls(mover) == 0
 
 
 # --- D-395 S2 Finding 1: a legacy-null pose is never a trusted pose ------------------------
@@ -406,7 +409,7 @@ def test_s2_null_at_power_on_then_candidates_blocks_the_whole_track():
     mover = _mover()
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (9.0, 9.0), None))
     console = _console(mover, other)
-    run(console.snapshot())                                       # legacy: pose used as today
+    run(console.snapshot())                                       # missing localization: pose never trusted
     other._state = _standing("rosy_02", (9.0, 9.0), _loc("CANDIDATES", "odom"))
     run(console.snapshot())
 
@@ -465,10 +468,10 @@ def test_a_d395_robot_that_goes_null_is_untrusted_until_the_grace_lapses():
     assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
 
     clock.now = 30.0
-    snapshot = run(console.snapshot())                       # null for 30 s: legacy again
+    snapshot = run(console.snapshot())                       # null for 30 s: cached position expires
     row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
-    assert row["localization"]["legacy"] is True
-    assert "rosy_01" not in console._queued
+    assert row["localization"]["legacy"] is False and row["localization"]["trusted"] is False
+    assert "rosy_01" in console._queued
     assert "rosy_02" not in console._trusted                 # the stale trusted pose is dropped
 
 
@@ -492,7 +495,7 @@ def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
     assert result["reason"] == "LOCALIZATION_UNTRUSTED"
 
 
-def test_a_true_legacy_robot_keeps_todays_behaviour_over_time():
+def test_missing_localization_never_becomes_trusted_by_timeout():
     mover = _mover()
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), None))
     console, clock = _clocked(mover, other)
@@ -500,9 +503,9 @@ def test_a_true_legacy_robot_keeps_todays_behaviour_over_time():
         clock.now = t
         snapshot = run(console.snapshot())
         row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
-        assert row["localization"]["legacy"] is True
+        assert row["localization"]["legacy"] is False and row["localization"]["trusted"] is False
 
-    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+    assert run(console.goal("rosy_01", 2.0, 0.0))["reason"] == "LOCALIZATION_UNTRUSTED"
     assert "rosy_02" not in console._trusted
 
 

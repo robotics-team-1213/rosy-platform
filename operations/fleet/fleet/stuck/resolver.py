@@ -99,18 +99,18 @@ def _pose_of(row: Mapping) -> Optional[tuple[float, float, float]]:
 
 
 def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
-    """Painted-map xy. A legacy snapshot has no localization block (D-395).
+    """Painted-map xy only from an explicit LOCALIZED map snapshot (D-395).
 
     LOCALIZED + map is the same xy. An odom-frame pose is not the painted track,
     and the twist integrator in body_stop is the command, not this pose.
     """
-    from fleet.localization.trust import LEGACY, TRUSTED, classify
+    from fleet.localization.trust import TRUSTED, classify
 
     state = row.get("state")
     if not row.get("online", True) or not isinstance(state, Mapping):
         return None
     verdict = classify(state)
-    if verdict not in (LEGACY, TRUSTED):
+    if verdict != TRUSTED:
         return None
     if "localization" in row:
         # Console owns the D-395 restart grace. Null raw localization is not
@@ -118,7 +118,7 @@ def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
         badge = row["localization"]
         if not isinstance(badge, Mapping) or badge.get("trusted") is not True:
             return None
-        if (badge.get("legacy") is True) != (verdict == LEGACY):
+        if badge.get("legacy") is True:
             return None
     return _pose_of(row)
 

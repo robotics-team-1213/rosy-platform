@@ -6,12 +6,12 @@
 // D-536 guide row, what trips read) places it; the badge then says that, not "위치 상태 미보고".
 export function localizationTag(loc, guideRow) {
   if (!loc) return null;
-  const site = loc.legacy ? guideRow?.pose : null;
+  const site = !loc.trusted && loc.state === "UNKNOWN" ? guideRow?.pose : null;
   if (site && SITE_POSE_STATE[site.state]) {
     return { text: `위치 ${SITE_POSE_STATE[site.state]}`, cls: site.state === "LOCALIZED" ? "" : "warn",
       title: `Fleet MapPose · ${site.state}` };
   }
-  const cls = loc.needs_human ? "crit" : loc.legacy || !loc.trusted ? "warn" : "";
+  const cls = loc.needs_human ? "crit" : !loc.trusted ? "warn" : "";
   const title = loc.legacy ? "localization: null" : `${loc.state} · ${loc.pose_frame}`;
   return { text: loc.label, cls, title };
 }
@@ -42,8 +42,8 @@ export function robotPoseText(state, localization) {
   return `${poseFrame(state, localization)} ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
 }
 
-/** The robot's own pose when it is a map pose the map may draw: map frame and LOCALIZED (a pre-D-395 robot
- * with no localization block counts when it reports a map). Never odom: a manual-only robot's odom pose
+/** The robot's own pose requires explicit map frame and LOCALIZED. Missing localization is unknown.
+ * Never odom: a manual-only robot's odom pose
  * drawn on the map put it where it was not (field check 2026-10-10). Fleet's map pose and Rosy Cam
  * tracking have their own layers (guide circle, tracking ring). */
 export function robotMapPose(robot) {
@@ -52,7 +52,7 @@ export function robotMapPose(robot) {
   if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y) || !Number.isFinite(pose.yaw)) return null;
   if (poseFrame(state, robot.localization) !== "map") return null;
   const loc = state.localization;
-  return loc == null || loc.state === "LOCALIZED" ? pose : null;
+  return loc?.state === "LOCALIZED" && loc.pose_frame === "map" ? pose : null;
 }
 
 /** Fleet's site map pose: "지도 0.69, -0.44 · 확정·카메라", "지도 위치 모름", or null without a guide row. */
@@ -88,7 +88,7 @@ export function positionTag(loc, guideRow) {
     return { text: words ? `지도 위치 ${words}` : "지도 위치", cls: pose.state === "LOCALIZED" ? "" : "warn",
       title: `Fleet map pose: ${pose.state} · ${pose.source}` };
   }
-  if (loc && !loc.legacy) return localizationTag(loc);
+  if (loc) return localizationTag(loc);
   if (!loc && !guideRow) return null;  // offline or no evidence at all: the card says offline already
   return { text: "지도 위치 없음", cls: "",
     title: loc?.legacy ? "Fleet map pose: none · CORE localization: null" : "Fleet map pose: none" };

@@ -126,8 +126,8 @@ class FleetConsole(TripAware):
         #: from a LOCALIZED map snapshot, never from a legacy-null one (S2 Finding 1).
         self._trusted: dict[str, tuple] = {}
         #: Robots that have reported `localization` -> since when they report null (None
-        #: while reporting). Such a robot is untrusted, not legacy, while null for less
-        #: than `trust.LAPSED_GRACE_S` (a CORE restart); after that it is legacy again.
+        #: while reporting). After `trust.LAPSED_GRACE_S` its cached position expires;
+        #: missing localization stays untrusted.
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
@@ -674,8 +674,7 @@ class FleetConsole(TripAware):
                     if since is None:
                         self._loc_null_since[robot_id] = self._clock()
                     elif self._clock() - since >= trust.LAPSED_GRACE_S:
-                        # Legacy again. Its old trusted pose is stale by now: if it reports
-                        # again unlocalized, it blocks the whole track until LOCALIZED.
+                        # Expire the stale position; missing localization remains untrusted.
                         del self._loc_null_since[robot_id]
                         self._trusted.pop(robot_id, None)
                 trusted = trust.trusted_xy(state)
@@ -711,9 +710,8 @@ class FleetConsole(TripAware):
         return x, y, (yaw if yaw is not None and math.isfinite(yaw) else None)
 
     def _verdict(self, robot_id: str) -> str:
-        """`trust.classify`, except a lapsed D-395 robot is untrusted, not legacy."""
-        verdict = trust.classify(self._seen.get(robot_id))
-        return trust.UNTRUSTED if verdict == trust.LEGACY and self._lapsed(robot_id) else verdict
+        """Trust only an explicit LOCALIZED map snapshot."""
+        return trust.classify(self._seen.get(robot_id))
 
     def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
         return (self._verdict(robot_id) == trust.UNTRUSTED
