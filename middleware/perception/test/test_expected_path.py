@@ -30,6 +30,15 @@ def _commit(yaw=0.0, ahead=0.40):
     return path
 
 
+def test_a_gap_breaks_an_uncommitted_streak():
+    path = _new()
+    path.update((0.0, 0.0, 0.0), 0.0, _centre())
+    path.update((0.0, 0.0, 0.0), 0.1, _centre())
+    assert path.hold((0.0, 0.0, 0.0), 0.2)["error"] is None
+    path.update((0.0, 0.0, 0.0), 0.3, _centre())
+    assert not path.update((0.0, 0.0, 0.0), 0.4, _centre())["committed"]
+
+
 def test_two_centre_frames_do_not_commit():
     path = _new()
     path.update((0.0, 0.0, 0.0), 0.0, _centre())

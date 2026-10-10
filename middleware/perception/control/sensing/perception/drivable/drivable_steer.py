@@ -326,7 +326,7 @@ class DrivableSteer:
         self.decisions = collections.deque(maxlen=16)       # (t, s, strategy, outcome)
         self._last_out = self._pending = None
 
-    def reset(self):
+    def _forget_latches(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
         self._pivot_yaw = None
         self._crosswalk_pose = None
@@ -372,13 +372,21 @@ class DrivableSteer:
                     dict(info, strategy="drivable_creep_map"))
         self._tangent_from = None
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
+    def reset(self):
+        """Drop latches and any expected-path coast. An exception in the node calls this."""
+        self._forget_latches()
+        self._expected_path = None
 
     def lost(self, stamp):
-        """No fresh way this frame: forget the latch only after FORGET_S without one."""
+        """No fresh way this frame: forget the latch only after FORGET_S without one.
+
+        The expected-path coast is not a latch. Forgetting the pivot must not end it at
+        1.5 s while its own budget still runs to 2.5 s.
+        """
         if self._lost_since is None:
             self._lost_since = stamp
         elif stamp - self._lost_since > FORGET_S:
-            self.reset()
+            self._forget_latches()
 
     def crosswalk(self, pose):
         """A crosswalk zone was seen this frame (D-491 extent): hold the heading through it."""
