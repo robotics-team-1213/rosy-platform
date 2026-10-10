@@ -173,7 +173,7 @@ def test_a_d468_owned_tick_still_opens_it():
         stamp = round(t * 1e9)
         m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
                               received_at=t)
-        m.note_issued(0.03 if t < 1.0 else 0.0, 0.0, t)                # one push, then D-468 holds
+        m.note_issued(0.03 if t < 1.5 else 0.0, 0.0, t)                # one push, then D-468 holds
         t = round(t + 0.05, 6)
     with m._lock:
         m._local_owned_tick(6.0)
