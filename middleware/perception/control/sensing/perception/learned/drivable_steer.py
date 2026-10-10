@@ -318,7 +318,9 @@ class DrivableSteer:
                 self._failed = self._failed[-15:] + [(ctx["s"], "creep")]
             return None, None, dict(info, strategy="none", reason="creep_done")
         tx, ty = _to_current(*self._creep_target, pose)
-        if ctx.get("guide") and abs(math.degrees(math.atan2(ty, tx)) - ctx["ahead"]) >                 abs(ctx["ahead"] - ctx["here"]) + REALIGN_DEG:
+        bearing = math.degrees(math.atan2(ty, tx))
+        if ctx.get("guide") and (bearing * ctx["ahead"] < 0 and abs(bearing) > 10.0 if abs(ctx["ahead"]) >= EXIT_BEND_DEG
+                                 else abs(bearing - ctx["ahead"]) > REALIGN_DEG):
             return None, None, dict(info, strategy="none", reason="creep_heading")   # the way leaves the route
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
