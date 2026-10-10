@@ -323,6 +323,15 @@ def test_the_fake_core_follows_the_junction_contract():
 
 # ---- start checks ---------------------------------------------------------------------
 
+def test_pinky_trip_exposes_body_width_for_ai_route_check():
+    from core_common.robot_body import NOMINAL_BODY
+
+    runner, store, ports = _setup(_free_map("lane"), caps=LANE)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    view = run(runner.start("p1", "bob"))
+    assert view["body_half_width_m"] == pytest.approx(NOMINAL_BODY.half_width_m)
+
+
 def test_start_refuses_with_every_d491_code_in_order():
     runner, store, ports = _setup()
     assert _code(runner.start("nope", "bob")) == "TRIP_PLAN_UNKNOWN"
