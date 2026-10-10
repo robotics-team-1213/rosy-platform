@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 10955eeaa4 · docs: D-620 live API version alignment
 - 2026-10-09 · uncommitted · docs(api): 경로 문맥 굽이 단계 v1.166
 - 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.164 (D-546 5)
 - 2026-10-09 · uncommitted · feat(api): D-531 문맥 능력 표시
 - 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
-- 2026-10-09 · uncommitted · fix(api): D-541 Safety-Review 반영

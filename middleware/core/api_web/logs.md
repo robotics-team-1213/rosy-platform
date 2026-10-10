@@ -838,3 +838,9 @@
 - 변경: CORE API 설명의 계약 버전을 v1.166으로 맞춘다. `line_follow.route_context`의 굽이 단계는 선택 필드이며 기본 경로 문맥은 꺼져 있다.
 - 증거: `test_line_follow_contract_docs.py`.
 - gate 변화: SOURCE 계약 일치. 실제 주행 수용은 별도.
+
+## 2026-10-10 · 10955eeaa4 · docs: D-620 live API version alignment
+
+- 변경: FastAPI 설명과 API 계약 변경 이력을 v1.202에 맞춘다.
+- 증거: 원격 계약 회귀에서 버전 불일치 재현 후 수정. 재검증 대기.
+- gate 변화: 없음. 실물 적용 증거가 아니다.
