@@ -32,6 +32,8 @@
 
 ## 검증
 
+사용자 추가 요구(2026-10-10): 로봇의 실제 API 문의와 AI PC 직접 추론을 적용한다. 기존 `nav.line_stuck_opened`/`nav.line_stuck_asked`에 선택 `inquiry`를 더한다. `situation-inquiry-v1`은 stuck_id에 묶인 목적·관찰·센서 나이·시도 수와 assessment/direction 요청이며 실행 권한은 CORE 재검사다. Fleet case는 발생 사건의 원래 ts와 문의를 전달한다. 새로운 이동 명령 API나 OFF/E-stop을 무장시키는 문의는 만들지 않는다. AI PC의 loopback Ollama에는 동일 모델 digest를 설치하고 제한된 환경변수를 기록해 같은 영상 재생으로 평가한다.
+
 공통 계약의 미지원 유형·허위 검증·잘못된 프레임 연결 거절, 두 도메인의 같은 형식, 기존 proposal 호환성, 실제 VLM 출력과 Fleet API 경계 시험을 원격에서 검증한다. 로봇암 장치 시험이나 자율 코너 통과 성공은 이 계약 시험으로 대체하지 않는다.
 
 **Related:** D-18, D-392, D-430, D-516, D-577, D-610, D-618.
