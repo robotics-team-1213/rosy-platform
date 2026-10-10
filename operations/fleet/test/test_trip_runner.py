@@ -355,6 +355,20 @@ def test_start_refuses_with_every_d491_code_in_order():
     assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
 
 
+def test_one_lap_start_rechecks_selected_place_before_opening_a_lease():
+    runner, store, ports = _setup()
+    graph = store.active()[2]
+    arc = graph.arcs["ring_s:fwd"]
+    x, y, yaw = arc.point_at(0.1)
+    ports.at(arc, 0.1)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw), goal="NW"),
+                     store.routing_config)
+    store.record_plan(plan_id="lap", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "NW", "via": ["SE"], "start_at": "NW"}, result={"plan": plan_body(plan)})
+    assert _code(runner.start("lap", "bob")) == "TRIP_START_PLACE_MISMATCH"
+    assert runner.running() is None
+
+
 
 def test_d593_a_still_operator_pin_starts_up_to_its_anchor_age_limit():
     """D-593 7 (user 2026-10-10): a pin older than 2 s starts only while odom has not moved."""

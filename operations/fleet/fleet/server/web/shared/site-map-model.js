@@ -15,6 +15,8 @@ export const AI_FACT_LABEL = {
   incident_context: '사건 원인 초안',
 };
 export const TRIP_ERROR_LABEL = {
+  TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
+  TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
   TRIP_OFF_MAP: '찍은 점에서 차로 폭 두 배 안에 차로가 없습니다',
@@ -370,6 +372,23 @@ export function repeatTripBody(map, start, leader = '') {
   const at = starts.indexOf(start);
   return {to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true,
     ...(leader ? {convoy: {leader}} : {})};
+}
+
+/** A finite circuit through another stop, ending at the selected starting place. */
+export function oneLapBody(map, start, via) {
+  const stops = (map?.places || []).filter(place => ['start', 'stop'].includes(place.kind)).map(place => place.id);
+  if (!stops.includes(start) || !stops.includes(via) || start === via) {
+    throw new Error('출발·경유 정지 장소를 서로 다르게 고르세요');
+  }
+  return {to: start, via: [via], repeat: false, start_at: start};
+}
+
+export function oneLapReason({active, running, start, via}) {
+  if (!active) return '활성 지도가 없습니다';
+  if (running) return '이 로봇은 이미 운행 중입니다';
+  const stops = (active.map?.places || []).filter(place => ['start', 'stop'].includes(place.kind));
+  if (stops.length < 2) return '한 바퀴에는 정지 장소가 두 곳 이상 필요합니다';
+  return start && via && start !== via ? '' : '서로 다른 출발·경유 장소를 고르세요';
 }
 
 // D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then

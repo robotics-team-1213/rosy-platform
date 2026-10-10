@@ -26,6 +26,7 @@ from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, replan_hold, turn_target
+from fleet.routing.trip import ARRIVED_M
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
@@ -154,6 +155,12 @@ class TripRunner(TripAdmission, TripProgress):
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
             pose, enable = await self._pose_checks(robot_id, graph, plan["segments"], start=True)
+            start_at = (row.get("request") or {}).get("start_at")
+            if start_at is not None:
+                distance = math.dist((pose.x, pose.y), graph.place_xy(start_at))
+                if distance > ARRIVED_M:
+                    raise TripError(422, "TRIP_START_PLACE_MISMATCH",
+                                    {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
@@ -166,6 +173,8 @@ class TripRunner(TripAdmission, TripProgress):
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
+                if start_at is not None and moved is not None:
+                    raise TripError(422, "TRIP_START_PLACE_MOVED", moved)
                 leader = (request.get("convoy") or {}).get("leader")
                 refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
                     self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
