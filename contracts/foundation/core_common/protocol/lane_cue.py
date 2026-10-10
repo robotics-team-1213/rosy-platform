@@ -37,6 +37,9 @@ class LaneCueRequest(BaseModel):
     fleet_epoch: str = Field(min_length=1, max_length=64)
     seq: int = Field(ge=0)
     ttl_s: float = Field(gt=0, le=MAX_CUE_TTL_S, allow_inf_nan=False)
+    #: CORE wall-clock stamp of the newest odom in Fleet's pose (snapshot odom_pose.stamp, as the
+    #: D-517 authority); a pivot angle is counted from the odom yaw at this stamp.
+    pose_stamp: float = Field(gt=0, allow_inf_nan=False)
     state: Literal["ON_LANE", "ON_LINE", "OFF_LANE", "OFF_MAP", "WRONG_WAY"]
     #: Where the lane centre is, seen from the robot (ON_LINE / OFF_LANE).
     side: Optional[Literal["left", "right"]] = None

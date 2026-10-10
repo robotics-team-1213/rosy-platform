@@ -322,12 +322,20 @@ def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
     return {"accepted": accepted, "reason": reason}
 
 
+def lane_cue_seat(auth: AuthContext = Depends(operator)) -> AuthContext:
+    """D-430 review 6: only Fleet's site enrollment token (D-555 3 seat), never a shared dev token."""
+    from core_api_web.api.v1.fleet_link import _CODE_SOURCES
+    if auth.shared_dev or not (auth.source in _CODE_SOURCES and auth.label.startswith("site:")):
+        raise ApiError("FORBIDDEN", 403, "requires the Fleet site enrollment token")
+    return auth
+
+
 @line_follow_router.post("/lane-cue")
-def set_lane_cue(body: LaneCueRequest, _: AuthContext = Depends(operator),
+def set_lane_cue(body: LaneCueRequest, auth: AuthContext = Depends(lane_cue_seat),
                  svc: CoreServicesLike = Depends(get_services)):
-    """D-511 rev 1: Fleet's lane return cue. The /advice seat (operator): it starts nothing; the
-    CAMERA_LINE keep reads it only while it already drives (``fleet_lane_cue_enabled``)."""
-    accepted, reason = svc.line_follow.set_lane_cue(body.model_dump())
+    """D-511 rev 1/2: Fleet's lane cue, from the Fleet site enrollment token only. It never lifts a
+    stop; the CAMERA_LINE keep reads it while it drives (``fleet_lane_cue_enabled``, lane_cue.py)."""
+    accepted, reason = svc.line_follow.set_lane_cue(body.model_dump(), principal_ref=auth.principal_ref)
     return {"accepted": accepted, "reason": reason}
 
 
@@ -356,6 +364,8 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
             yield_m=body.yield_m, yield_turn_rad=body.yield_turn_rad)
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
+    # D-511 / D-430 review 5: an answered stuck releases a latched lane-cue HOLD (off-map, lost cue).
+    svc.line_follow.release_lane_cue_latch(principal_ref=auth.principal_ref)
     if outcome in ("manual", "idle"):
         # Line-follow already stopped under its lock; the rest is POST /mode (nav and swarm
         # cancel on MANUAL, mode.changed, state).

@@ -13,6 +13,7 @@ from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
+from core_features.line_follow.lane_cue import LaneCueMixin
 from core_features.line_follow.crosswalk_report import CrosswalkReportMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
@@ -31,7 +32,7 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
+class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
                         ArcMixin, CrosswalkGateMixin, CrosswalkReportMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
@@ -78,6 +79,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._init_arc()  # D-520 (arc/lane_arc.py)
         self._init_authority()  # D-517 4 (authority.py)
         self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
+        self._init_lane_cue()  # D-511 rev 1/2 (lane_cue.py)
         self._init_crosswalk_report()  # D-573 6 (crosswalk_report.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
@@ -131,6 +133,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._reset_arc(reason or default)
             self._init_authority()
             self._xwalk.reset()
+            self._init_lane_cue()  # D-430 review 10: a mode change (and E-stop) drops the cue and its latch
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -269,6 +272,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             return self._status.model_copy(update={'crosswalk': None if zone is None else LineCrosswalkStatus(**zone),
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
+                                                   'lane_cue': self._lane_cue_view(self._clock()),
                                                    'route_context': self._route_context_current,
                                                    'route_context_published_at_s':
                                                    self._route_context_published_at_s})
@@ -415,6 +419,12 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             angular = -turn if guard == "left" else turn
             linear *= self._config.ir_guard_speed_scale
             reason = f"lane_edge_{guard}"
+        elif guard in ("cue_left", "cue_right"):
+            # D-511: Fleet says the lane centre is on that side; the IR edge turn toward it, no back-creep.
+            turn = min(self._config.ir_guard_turn, self._config.max_angular)
+            angular = turn if guard == "cue_left" else -turn
+            linear *= self._config.ir_guard_speed_scale
+            reason = f"fleet_{guard}"
         elif guard == "crosswalk":
             reason = "ir_guard_crosswalk"
         if abs(angular) > cap:
@@ -535,6 +545,14 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 guard = "crosswalk"  # D-491: known crosswalk under the IR row
             elif guard == "centre" and self._centre_on_cross_line(current):
                 guard = "cross_line"  # D-507 6: a straight crossing's measured cross line
+        cue = None
+        if self._mode is LineFollowMode.CAMERA_LINE and self._config.fleet_lane_cue_enabled:
+            # D-511 rev 1/2: before the body stop so D-422 measures the twist the cue produces.
+            cue = self._lane_cue_plan(current, cap)
+            if cue is not None and cue[0] == "hold":
+                return self._stop_decision("HOLD", cue[1])
+            if cue is not None and cue[0] == "side" and guard in (None, "clear"):
+                guard = "cue_" + cue[1]   # IR first: only an IR that sees no line takes Fleet's side
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:
@@ -543,6 +561,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             if self._scan_points is not None and self._observation is not None:
                 # 관측이 하나도 없으면 의도가 없다 — 재지 않고 WAITING 으로 둔다.
                 self._update_intended(guard, cap)
+                if cue is not None and cue[0] == "turn":
+                    self._intended = (0.0, cue[1])   # D-422: a pivot is checked on its rotation circle
                 if self._config.body_stop_known:
                     # D-422: 몸 윤곽이 의도 경로를 따라 쓸고 갈 때 첫 접촉까지의 거리.
                     self._set_clearance(*self._body_clearance(current))
@@ -613,6 +633,9 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             return self._loss_or_stop(current, "HOLD", "lane_recovery", age)
 
         self._loss_started_at = None
+        if cue is not None and cue[0] == "turn":
+            # After the LOST latch, NOMINAL ground and a fresh camera FOLLOW (D-430 review 3).
+            return self._lane_cue_turn(cue)
         error = float(observation.error)
         linear, angular, reason = self._steer(observation, guard, cap)
         decision = LineFollowDecision(
