@@ -172,3 +172,28 @@ def test_wall_rejects_rebound_hosts(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_failed_export_never_leaves_final_video_or_overwrites_sidecar(tmp_path, monkeypatch):
+    m = module()
+    s = m.Session(tmp_path / "session", [{"id": "camera", "kind": "site"}], clock=lambda: 1000.)
+    s.finish()
+    out = tmp_path / "movie.mp4"
+    class FailedEncoder:
+        def __init__(self, args, **kwargs):
+            import io
+            self.stdin = io.BytesIO()
+            Path(args[-1]).write_bytes(b"incomplete video")
+        def wait(self):
+            return 1
+        def kill(self):
+            pass
+    monkeypatch.setattr(m.subprocess, "Popen", FailedEncoder)
+    with pytest.raises(OSError):
+        m.render(s.out, out)
+    assert not out.exists()
+    sidecar = Path(str(out) + ".json")
+    sidecar.write_text("prior evidence")
+    with pytest.raises(FileExistsError):
+        m.render(s.out, out)
+    assert sidecar.read_text() == "prior evidence"
