@@ -481,3 +481,16 @@ A recording can refer to one configured `harvest` entry instead of repeating its
 ```
 
 The recording's `harvest` value is a zero-based index into the configured harvest list. After the idle-gated, checksum-verified harvest completes, the job resolves that session ID to exactly one `<dest>/<device>/<session>` folder and passes the folder to the existing LiDAR auto-label stage. Missing or duplicate matches fail before cataloging or labeling. Existing `raw` and `video` recording entries remain supported. Harvest references select recordings explicitly; they do not mark other harvested sessions for labeling.
+
+## Fleet 사건 검토 연결
+
+선택 설정 `"incidents": "<private-fleet-export.json>"`는 Fleet에서 내려받은 사건 JSON을 읽는다.
+수집된 각 raw 세션의 `stuck_markers.json`을 기존 `incident_feedback.bind()`로 정확한
+`stuck_id`에 연결하고 작업 폴더에 `incident-feedback.json`을 남긴다.
+`rosy.recording.incident_feedback_job/1` 출력의 `sessions`는 세션별 원인 초안·사람 검토 후보·
+누락 사건을 담는다. 마커가 없는 세션과 video 입력은 `missing_markers`이며 연결이 확인된
+것으로 취급하지 않는다. 준비 완료 결과의 `incident_feedback` 필드가 출력 경로다.
+
+운영자 이름·자유 메모·원본 사건 JSON은 복사하지 않는다. 입력 사건 파일·마커·출력은
+작업 체크포인트의 해시 검사에 포함하므로 바뀐 자료로 기존 작업을 재개하면 거부된다.
+원인 검토는 화소 라벨·평가 정답·모델 활성화 승인이 아니며 trainer 설정에는 전달하지 않는다.
