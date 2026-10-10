@@ -26,7 +26,7 @@ from core_common.robot_body import NOMINAL_BODY
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import advance_m, exit_segment, lane_action, replan_hold, turn_target
+from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target
 from fleet.routing.trip import ARRIVED_M
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
