@@ -15,9 +15,9 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.sighting_store import SightingStore
-from fleet.server.ai_facts import AiFactLog
+from fleet.stuck.ai_facts import AiFactLog
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -415,11 +415,14 @@ def test_resolved_by_comes_from_the_last_non_escalate_answer(tmp_path, answers, 
     ((0.80, 0.00, 3.14), 0),        # beyond reach
 ])
 def test_peer_ahead_at_open_uses_the_resolver_judgement(tmp_path, peer_pose, expected):
-    from fleet.server.stuck_resolver import ResolverConfig, peer_ahead
+    from fleet.stuck.lane_lost import peer_ahead
+    from fleet.stuck.resolver import ResolverConfig
 
     board, log, _ = _episode_board(tmp_path)
     me = _online(pose=(0.0, 0.0, 0.0), stuck={**STUCK, "local_enabled": True})
     peer = _online("rosy_02", stuck=None, pose=peer_pose)
+    for robot in (me, peer):                 # R1 reads D-395 trusted map poses only (D-577 남은 항목 4)
+        robot["state"]["localization"] = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
     board.observe([me, peer])
     row = next(r for r in log.episodes() if r["robot_id"] == "rosy_01")
     assert row["peer_ahead_at_open"] == expected
@@ -436,7 +439,7 @@ def test_local_enabled_at_open_keeps_cores_value(tmp_path, local, stored):
 
 def test_no_own_pose_leaves_peer_ahead_unknown_and_trip_busy_is_recorded(tmp_path):
     board, log, _ = _episode_board(tmp_path)
-    board.observe([_online()])
+    board.observe([_online(), _online("rosy_02", stuck=None, pose=(1.0, 0.0, 0.0))])
     assert log.episodes()[0]["peer_ahead_at_open"] is None
     assert log.episodes()[0]["trip_busy_at_open"] is None       # no trip runner yet
 

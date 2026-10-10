@@ -25,3 +25,9 @@
 - 보고서의 Rosy Cam 관측은 당시 가까운 관측이지 장애물의 사진이나 원인 증명이 아니다. 관측이 없을 때 null을 유지한다.
 - AI 상황 사실은 행별 검토가 가능하지만, 같은 순환에서 매 초 생긴 행을 하나의 영속 사건으로 묶지 않는다. AI PC가 꺼진 동안 Fleet의 순환만 생긴 경우도 아직 영속 사건 ID가 없다. 이 두 연결과 운행 결과 연결은 후속 구현이다.
 - 시험 PC 호스트 테스트는 UI 렌더링과 API 계약을 확인한다. 현장 Fleet 이미지·인증 브라우저·Rosy Cam 프레임·물리 로봇 수용은 따로 확인한다.
+
+### Addendum (2026-10-10, 크기 판정 재검토)
+
+- 이 ADR의 구현(d783ee15a, 04125b6ad, 952ea0509, 0a2ff2373, 14:21–14:53 KST)은 main 배포 동결 중에 착지했다. 이때 `server/line_stuck.py`가 +168줄 커졌는데, known_failures가 크기 시험 노드 전체를 실패로 적어 두어 드러나지 않았다(동결 위반).
+- 독립 재판정은 새 `fleet/fleet/stuck` 단위(1781줄) 안에서 이 증가를 받아들였다. 조건: 다음 증가 전에 `LineStuckAnswerLog`의 보고서·검토 부분을 날짜가 붙은 plan 문서에 따라 `stuck/reports.py`로 옮긴다.
+- D-607 P0 뒤 경로는 `operations/fleet/fleet/stuck/board.py`(옛 `server/line_stuck.py`)이다.

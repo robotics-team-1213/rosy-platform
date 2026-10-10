@@ -18,7 +18,6 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
-| `line_stuck.py` | D-407 `LineStuckBoard` — 로봇별 열린 차선 막힘(CORE `line_follow.stuck` + `nav.line_stuck_opened` 여유)과 넘긴 답 기록. 판단은 CORE 가 한다; 콘솔은 `web/line-stuck.js` |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
 | `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
 | `identity.py` | D-472 `IdentityService` — 움직이는 미확인 로봇 한 대씩 CORE LED 점멸을 요청(≤ 6 s), Vision 판정으로 익명 트랙에 묶고 손실·0.30 m 겹침·revision 변경·`identity_ttl_s`에 풀어 `confirmed_track_pose`(D-511 입력)를 낸다. 지도 자세 중재·trip·명령은 읽지 않는다(`test_boundaries.py`) |
