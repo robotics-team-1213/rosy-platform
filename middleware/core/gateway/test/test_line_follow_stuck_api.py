@@ -337,3 +337,17 @@ def test_principal_ref_keeps_configured_ids_and_hides_hash_prefix_ids():
     anon = principal_ref({"id": digest[:12], "digest": digest})
     assert anon.startswith("anon-") and digest[:12] not in anon
     assert principal_ref({"id": digest[:12], "digest": digest}) == anon     # stable in a run
+
+
+@pytest.mark.parametrize("decision", ["ABORT", "MANUAL"])
+def test_abort_and_manual_in_emergency_are_refused_before_the_stuck_is_consumed(
+        core_client, decision):
+    """Safety review of fix/battery-estop-latch-release: ABORT/MANUAL used to consume
+    the stuck, then fail on the mode change (EMERGENCY has no exit but release)."""
+    client, services, stuck_id = _stuck(core_client)
+    assert services.modes.transition(Mode.EMERGENCY)[0]
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": decision},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and "EMERGENCY_ACTIVE" in refused.text
+    assert services.line_follow.status().stuck.stuck_id == stuck_id
+    assert services.modes.mode is Mode.EMERGENCY

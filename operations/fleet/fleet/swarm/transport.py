@@ -141,6 +141,7 @@ class RobotClient(Protocol):
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
+    async def identify_lamp_result(self, request_id: str) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_request(self) -> Optional[dict]: ...
@@ -392,6 +393,10 @@ class HttpRobotClient:
             raise ValueError("unsupported identification color")
         return await self._post("/api/v1/host/lamp/identify" + ("?quiet=true" if quiet else ""),
                                 {} if color is None else {"color": color})
+
+    async def identify_lamp_result(self, request_id: str) -> dict:
+        """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
+        return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

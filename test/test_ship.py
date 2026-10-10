@@ -166,6 +166,7 @@ def device(tmp_path: Path):
     (stub / "systemctl").write_text(
         '#!/bin/sh\necho "$*" >> "$SYSTEMCTL_LOG"\n'
         'case "$*" in show*) echo 0;; *"is-active --quiet rosy-navigation"*) exit 3;;\n'
+        '  *"is-active --quiet rosy-io"*) exit 3;;\n'
         '  *"is-active --quiet rosy-camera"*) [ -z "$CAMERA_DIES" ];; esac\n')
     (stub / "systemctl").chmod(0o755)
     return tmp_path, root, public, tarball
@@ -214,7 +215,9 @@ def test_full_mode_restarts_the_runtime_and_waits_for_core(device):
     out = completed.stdout.decode()
     assert completed.returncode == 0, out + completed.stderr.decode()
     assert f"SHIP_OK release={NEW} mode=full" in out and "ready stub" in out
-    assert calls[0].startswith("stop rosy-runtime.target rosy-core.service")
+    # a280ddd30 probes rosy-io before the stop; the stub reports it down (no settle wait).
+    assert [c for c in calls if not c.startswith("is-active")][0].startswith(
+        "stop rosy-runtime.target rosy-core.service")
     assert "start rosy-runtime.target" in calls
 
 

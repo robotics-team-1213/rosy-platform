@@ -92,6 +92,7 @@ SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
+              "fleet/fleet/stuck",
               "perception/control/sensing/perception",
               "perception/control/sensing/perception/learned")
 
@@ -168,6 +169,15 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md, and decide then whether "
         "server/traffic_reservations.py moves in or retires.",
     ),
+    "fleet/fleet/stuck": (
+        1781,
+        "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
+        "re-judged 2026-10-10) + D-608 incident reports "
+        "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
+        "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
+        "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
+        "+150 allowance measured from 1781",
+    ),
     "fleet/fleet/server/web/map-view.js": (
         831,
         "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
@@ -218,7 +228,18 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_848,
+        51_324,
+        "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
+        "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
+        "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "
+        "Previously "
+        "split: re-judged at 53090 on 2026-10-10: D-608 adds read-only incident reports, reviews and evidence joins within Fleet; the existing stuck subpackage split remains due before further growth. Previously "
+        "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
+        "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
+        "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
+        "(stuck_* +27, second breach of the D-577 move rule), D-589/D-555 +6; no new owner, no new command path. "
+        "Next fleet growth first lands docs/plans/2026-10-10-fleet-stuck-subpackage.md; next lane_compliance growth "
+        "registers fleet/fleet/localization (1567) as a SIZE_UNITS entry. Previously "
         "split: re-judged at 51848 on 2026-10-10 after D-577 AI PC proposals/acting facts over 51672 "
         "(+176, self-judged): proposal envelope check beside the lane-lost rules in server/stuck_lane_lost.py, "
         "proposal store/route/audit in server/ai_facts.py, loop wiring +20; no new owner, every answer still "
@@ -669,8 +690,18 @@ SIZE_VERDICTS = {
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
-        832,
+        1_175,
+        "split: re-judged at 1175 on 2026-10-10: D-608 adds incident display, human review and JSON export within the existing Fleet session and role boundary. Extract the incident panel before further console growth. Previously "
+        "split: re-judged at 993 on 2026-10-10 over 832 (+161; independent re-judge, critic): D-593 pin tool +45, "
+        "site path/link +48, host/marker +18, stop/cancel feedback +33, D-596 b +12, D-519 login +8; owners unchanged. "
+        "The D-473 follow-up was not done: before any growth (HARD_TIER 1000 leaves zero allowance) move the "
+        "auth/session bootstrap (D-473/D-519) and the D-593 pin press-drag into their own web assets with "
+        "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
+    ),
+    "fleet/fleet/server/web/shared/styles.css": (
+        802,
+        "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
     "fleet/fleet/server/cell_job_store.py": (
         824,
@@ -731,7 +762,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_366,
+        1_375,
+        "accept: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
+        "LineFollowStatus so a parsed copy (Fleet hub snapshot, D-555) keeps the crosswalk key; same owner, "
+        "no new type. Previously "
         "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "
         "re-judged at 1360 (independent read-only critic: LineCrosswalkStatus lives in protocol/line_crosswalk.py; "
         "here one re-export, LineStuckStatus.detail, LineFollowStatus.crosswalk/crosswalk_reported and the "
@@ -910,8 +944,11 @@ SIZE_VERDICTS = {
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "core/services/core_features/line_follow/manager.py": (
-        605,
-        "accept: one line-follow decision and loss owner; recovery already lives in separate "
+        763,
+        "accept: re-judged at 763 on 2026-10-10 for the site deploy (self-judged; NEEDS the independent re-judge): "
+        "growth from D-573 6 crosswalk gate report, drivable boundary memory and the restored lane-cue wiring "
+        "(f20de97ca); still one line-follow decision/loss owner, no new writer. Next growth moves the lane-cue "
+        "and crosswalk-report state into their own mixins. Previously accept at 605: one line-follow decision and loss owner; recovery already lives in separate "
         "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",
@@ -1185,8 +1222,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1265,
-        "accept: re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        1268,
+        "accept: re-judged at 1268 on 2026-10-10 for D-596 rev 2026-10-10: the identify refusal now names its reason "
+        "(CAUTION_ACTIVE, ESTOP, ...) for CORE to hand to Fleet; it stays with the one process that owns the lamp. "
+        "Previously re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
         "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
         "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
         "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
