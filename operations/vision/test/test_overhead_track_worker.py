@@ -31,6 +31,34 @@ JPEG = cv2.imencode(".jpg", np.full((360, 640, 3), 120, np.uint8))[1].tobytes()
 FOUND = DetectorResult((Detection(1.2345, 0.4321, 0.181, 0.83), Detection(2.5, 1.0, 0.2, 0.5)), "OK")
 
 
+@pytest.mark.parametrize("hfov,scale", [(60., 1), (60., .5), (None, 1)])
+def test_led_ring_returns_height_corrected_blob_to_original_pixels(monkeypatch, hfov, scale):
+    from rosy_vision.track import geometry, led_identity
+    from rosy_vision.track.model import Calibration, ROBOT_TOP_HEIGHT_M
+
+    matrix = np.diag([.0025, .0025, 1.])
+    calibration = Calibration("ceiling_north", "map_v2_fleet", "cal-v3",
+                              tuple(matrix.ravel()), (640, 360), (0., 0., 1.6, .9), hfov)
+    camera = geometry.camera_from_homography(matrix, calibration.image_size, hfov)
+    floor_pixel = (.125, .45)
+    position = floor_pixel if camera is None else geometry.parallax_correct(
+        floor_pixel, camera, ROBOT_TOP_HEIGHT_M)
+    shrink = 1. if camera is None else (camera[2] - ROBOT_TOP_HEIGHT_M) / camera[2]
+    captured = []
+    monkeypatch.setattr(led_identity, "sample_frame", lambda image, **kwargs: captured.append(kwargs))
+    worker = TrackWorker(camera=CAMERA, ingest=_Ingest(), client=_Client(), detector=_Detector())
+    try:
+        image = np.zeros((int(360 * scale), int(640 * scale), 3), np.uint8)
+        result = DetectorResult((Detection(*position, .16 * shrink, .9),), "OK")
+        worker._identity_sample(image, 100., calibration, result)
+        for sample in captured:
+            blob, = sample["blobs"]
+            assert (blob.x_px, blob.y_px, blob.radius_px) == pytest.approx((50 * scale, 180 * scale, 32 * scale))
+            assert (blob.map_x, blob.map_y) == position
+    finally:
+        worker.close()
+
+
 def _quad(cx, cy, half=2):
     return ((cx - half, cy - half), (cx + half, cy - half), (cx + half, cy + half), (cx - half, cy + half))
 
