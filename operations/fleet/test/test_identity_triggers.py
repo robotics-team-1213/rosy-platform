@@ -3,7 +3,7 @@
 import asyncio
 
 from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload
-from fleet.server.identity import IdentityConfig, IdentityService
+from fleet.server.identity import IdentityConfig, IdentityError, IdentityService
 from fleet.server.identity_triggers import AutoTriggers
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking import TrackingService
@@ -136,10 +136,10 @@ def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
     assert identity.triggers.backoff("rosy_40") == 1
 
 
-def _verdict(identity, source, request_id, x, y, at):
+def _verdict(identity, source, request_id, x, y, at, evidence=None):
     return identity.accept_verdict(source, {
         "source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": request_id, "state": "matched",
-        "x": x, "y": y, "captured_at": at, "calibration_revision": "cal-1", "evidence": {}})
+        "x": x, "y": y, "captured_at": at, "calibration_revision": "cal-1", "evidence": evidence or {}})
 
 
 def test_a_caution_lamp_decoy_elsewhere_is_never_named():
@@ -161,3 +161,99 @@ def test_a_caution_lamp_decoy_elsewhere_is_never_named():
     clock.now += 6.2
     frame((1.1, 1.0, None), (2.5, 1.0, None))
     assert _verdict(identity, source, other["request_id"], 2.5, 1.0, clock.now - 1.0)["reason"] == "no_prediction"
+
+
+class _MapPose:
+    def __init__(self, x, y, state="DEGRADED", dead_reckon_m=0.0):
+        self.x, self.y, self.state, self.dead_reckon_m = x, y, state, dead_reckon_m
+
+
+def _scored(*blobs):
+    return [{"x": x, "y": y, "score": score, "marker_id": None} for x, y, score in blobs]
+
+
+def test_the_expected_place_follows_the_robot_off_its_last_marker_place():
+    """Site 2026-10-10 11:08: rosy_41's last marker place (0.38, -0.47) held a ghost blob (score 0.716,
+    background learned with the robot there) while Fleet's map pose had bridged the robot by odom to
+    (0.962, -0.011). The ghost must not be the robot; the robot's own blob near the bridge is."""
+    triggers = AutoTriggers(CONFIG)
+    _due(triggers, 0.0, _snap([_marker("rosy_41", 0.38, -0.47)]))
+    lost = {"robot_id": "rosy_41", "status": "NO_POSE"}
+    bridged = {"rosy_41": _MapPose(0.962, -0.011, dead_reckon_m=1.2)}
+    ghost_and_sliver = {"robots": [lost], "unknown": _scored((0.397, -0.500, 0.716), (0.9719, -0.2046, 0.054))}
+    due = triggers.due(10.0, ghost_and_sliver, {"rosy_40": SAFE, "rosy_41": SAFE}, watched=WATCHED,
+                       skip=set(), last_reason={}, map_poses=bridged)
+    assert due == []                                  # ghost 0.75 m off the bridge, sliver below MIN_BLOB_SCORE
+    robot = {"robots": [lost], "unknown": _scored((0.397, -0.500, 0.716), (0.95, -0.12, 0.8))}
+    due = triggers.due(14.0, robot, {"rosy_40": SAFE, "rosy_41": SAFE}, watched=WATCHED,
+                       skip=set(), last_reason={}, map_poses=bridged)
+    assert due == [("rosy_41", "marker_missing")]
+    x, y, radius = triggers.expected("rosy_41", bridged["rosy_41"])
+    assert (x, y) == (0.962, -0.011) and radius == 0.5 + 0.15 * 1.2
+    # No map pose (UNKNOWN after an odom reset): the last marker place, as before.
+    assert triggers.expected("rosy_41", _MapPose(None, None, "UNKNOWN")) == (0.38, -0.47, 0.5)
+
+
+def test_a_robot_in_caution_is_not_asked():
+    """rosy-face keeps the caution lamp (line-follow HOLD, dock failed) and refuses the blink (D-472 5)."""
+    triggers = AutoTriggers(CONFIG)
+    _due(triggers, 0.0, _snap([_marker("rosy_41", 1.0, 1.0)]))
+    lost = _snap([{"robot_id": "rosy_41", "status": "NO_POSE"}], [(1.1, 1.0)])
+    hold = {**SAFE, "line_follow": {"mode": "CAMERA_LINE", "state": "HOLD"}}
+    assert _due(triggers, 10.0, lost, states={"rosy_40": SAFE, "rosy_41": hold}) == []
+    off = {**SAFE, "line_follow": {"mode": "OFF", "state": "HOLD"}}
+    assert _due(triggers, 14.0, lost, states={"rosy_40": SAFE, "rosy_41": off}) == [("rosy_41", "marker_missing")]
+
+
+def test_an_operator_request_to_a_robot_in_caution_is_refused_with_its_reason():
+    clock, _source, identity, robots, frame = _site()
+    frame((1.0, 1.0, None))
+    identity.tracking.observe_states([{"robot_id": "rosy_41", "online": True, "state": {
+        **SAFE, "line_follow": {"mode": "CAMERA_LINE", "state": "HOLD"}}}], now=clock.now)
+    try:
+        asyncio.run(identity.request("rosy_41"))
+    except IdentityError as exc:
+        assert (exc.status_code, exc.code) == (409, "IDENTIFY_ROBOT_CAUTION")
+    else:
+        raise AssertionError("a robot in caution was asked to blink")
+    assert robots["rosy_41"].calls == []
+
+
+def test_a_verdict_is_checked_against_the_bridged_place_not_the_old_marker_place():
+    clock, source, identity, robots, frame = _site()
+    frame((0.38, -0.47, 41))
+    identity.triggers.due(clock.now, identity.tracking.snapshot(), {}, watched={"rosy_41"},
+                          skip=set(), last_reason={})          # last marker place (0.38, -0.47)
+    identity.map_pose = lambda rid: _MapPose(0.962, -0.011, dead_reckon_m=1.2) if rid == "rosy_41" else None
+    started = asyncio.run(identity.request("rosy_41"))
+    clock.now += 6.2
+    frame((0.397, -0.500, None), (0.95, -0.05, None))           # ghost at the old place, robot at the bridge
+    ghost = _verdict(identity, source, started["request_id"], 0.397, -0.500, clock.now - 1.0,
+                     evidence={"mode": "steady"})            # steady colour stays inside the place
+    assert (ghost["state"], ghost["reason"]) == ("UNKNOWN", "far_from_robot")
+    real = _verdict(identity, source, started["request_id"], 0.95, -0.05, clock.now - 1.0)
+    assert real["state"] == "CONFIRMED"
+
+
+def test_a_blue_blink_names_a_carried_robot_outside_its_expected_place():
+    """D-596 amendment (a), user decision 2026-10-10: a carried robot's odom does not move, so its expected
+    place is wrong. A blue on/off blink can only be the asked robot (one blue request per source), so it
+    names the robot anywhere. Steady blue and amber (the caution lamp's pattern) stay inside the place."""
+    clock, source, identity, robots, frame = _site()
+    identity.map_pose = lambda rid: _MapPose(0.962, -0.011, dead_reckon_m=0.054) if rid == "rosy_41" else None
+    started = asyncio.run(identity.request("rosy_41"))
+    assert started["color"] == "blue"
+    clock.now += 6.2
+    frame((0.398, -0.499, None))                               # carried to the crosswalk, 0.75 m away
+    named = _verdict(identity, source, started["request_id"], 0.398, -0.499, clock.now - 1.0,
+                     evidence={"candidates": [{"off_s": 1.3}]})
+    assert named["state"] == "CONFIRMED"
+    assert identity.confirmed_track_pose("rosy_41")["use"] == "observation-only"   # never a map pose
+    identity._drop("rosy_41", "ttl")
+    other = asyncio.run(identity.request("rosy_40", "amber"))
+    identity.map_pose = lambda rid: _MapPose(1.0, 1.0)
+    clock.now += 6.2
+    frame((0.398, -0.499, None))
+    amber = _verdict(identity, source, other["request_id"], 0.398, -0.499, clock.now - 1.0)
+    assert (amber["state"], amber["reason"]) == ("UNKNOWN", "far_from_robot")
+

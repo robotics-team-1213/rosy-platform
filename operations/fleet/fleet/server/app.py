@@ -16,6 +16,7 @@ ingest_routes, static_routes, enrollment_routes(D-361). 각 모듈은 자기 저
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hmac
 import logging
 import sqlite3
@@ -45,8 +46,8 @@ from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
-from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
-from fleet.server.stuck_resolver_loop import StuckResolverLoop
+from fleet.stuck.resolver import ResolverConfig, StuckResolver
+from fleet.stuck.loop import StuckResolverLoop
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -337,7 +338,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
                       if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
-        identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
+        identity_task = asyncio.create_task(identity.run())  # also polls CORE's blink answers (D-596)
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
@@ -541,6 +542,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
@@ -558,7 +560,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
-        config=lane_compliance_config or LaneComplianceConfig(), identity=identity)
+        config=lane_compliance_config or LaneComplianceConfig(), identity=identity,
+        clients=console.clients)   # D-511 rev 1: the return cue
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
@@ -568,7 +571,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
-    from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
+    from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
                                            db_path=task_service.store.path if task_service else None,
                                            acting=ai_facts_acting)
@@ -598,6 +601,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
@@ -625,8 +629,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               site_maps=site_maps, require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
-        """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
-        return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
+        """D-494 1: trip caps from the capability cache; None for an older image or no answer.
+        D-604: a kept value older than two refreshes drops its line camera (front/status is asked)."""
+        display = console._capability_display
+        caps = trip_caps(await display.shown(robot_id, wait_s=2.0))
+        age = display.age(robot_id)
+        if caps is not None and (age is None or age > 2 * display.refresh_s):
+            caps = dataclasses.replace(caps, line_camera=None)
+        return caps
 
     if (trip_lease or {}).get("required") and console_token and console.uses_rest_token(console_token):
         # D-541 1: the lease owner is the robot REST token; browsers hold the console token

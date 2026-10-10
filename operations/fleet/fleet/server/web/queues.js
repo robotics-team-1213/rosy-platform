@@ -20,6 +20,27 @@ export function queueRowText(text, named) {
   return named ? text : text.replace(/^:\s*/, "");
 }
 
+/** One warn cause on several robots is one row (decision rows never group; crit rows are not passed here). */
+export function groupRows(rows, min = 2) {
+  const same = new Map();
+  for (const row of rows) if (!row.decision) same.set(row.text, [...(same.get(row.text) || []), row]);
+  const out = [], done = new Set();
+  for (const row of rows) {
+    const group = row.decision ? null : same.get(row.text);
+    if (!group || group.length < min) { out.push(row); continue; }
+    if (!done.has(row.text)) out.push({ severity: row.severity, text: row.text, robotId: "",
+      group: group.map((r) => r.robotId), key: `group|${row.text}` });
+    done.add(row.text);
+  }
+  return out;
+}
+
+/** "배터리 근거 확인 불가 — 센서/CORE 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
+export function groupText(text, ids, shown = 3) {
+  const few = ids.slice(0, shown).join(" · ");
+  return `${text.replace(/^:\s*/, "")} · ${ids.length}대 (${few}${ids.length > shown ? ` 외 ${ids.length - shown}대` : ""})`;
+}
+
 /** D-540 3: the queue row open on its decision. The operator's last pick holds while that row lives;
  * otherwise the most urgent decision row (critical first) is open. */
 export function openDecisionKey(keys, choice) {
@@ -144,6 +165,14 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         ? { severity: "crit", text: `: 차로 이탈 — ${text}` }
         : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
     }
+    // D-511 개정 1: Fleet이 본 복귀 상태 한 줄. 같은 판정을 로봇에도 보낸다(lane-cue).
+    const back = lane?.return;
+    const backText = { OFF_LANE: "차로 밖 — 차로로 복귀 지시", OFF_MAP: "지도 밖 — 정지·확인 필요",
+                       WRONG_WAY: "역주행 — 돌아서기 지시", ON_LINE: "차선 위 — 안쪽으로 보정" }[back?.state];
+    if (backText) {
+      const side = back.side ? ` (${back.side === "left" ? "왼쪽" : "오른쪽"})` : "";
+      items.push({ severity: back.state === "ON_LINE" ? "warn" : "crit", text: `: ${backText}${side}` });
+    }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
     items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
     items.push(...guideAttention(view.guide, robot.robot_id));  // D-536 coordinate guides
@@ -156,13 +185,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
   function attentionKey(robot) {
     return view.stateUnavailable ? "" : attentionItems(robot).map((item) => item.text.replace(/\d+/g, "#")).join("|");
   }
-  // D-252: 큐 머리는 ui-triage. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로 둔다.
-  function setTriageHead(id, label, list) {
+  // D-252 ui-triage head: category + robot count. D-540 3: names only in the rows (title keeps them).
+  function setTriageHead(id, label, rows) {
     const head = el(id);
     if (!head) return;
-    const names = [...new Set([...list.querySelectorAll("li b")].map((b) => b.textContent))];
-    head.querySelector("b").textContent = `${label} ${names.length}`;
-    head.querySelector("small").textContent = names.join(" · ");
+    const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
+    head.querySelector("b").textContent = `${label} ${names.size}`;
+    Object.assign(head.querySelector("small"), { textContent: "", title: [...names].join(" · ") });
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
@@ -170,6 +199,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
   function syncRows(list, rows, open) {
     const old = new Map([...list.children].map((node) => [node.dataset.key, node]));
     const nodes = rows.map((row, index) => {
+      if (row.group) return groupRow(old.get(row.key), row);
       const named = index === 0 || rows[index - 1].robotId !== row.robotId;  // the name once per robot
       let li = old.get(row.key);
       if (!li || li.dataset.decision !== (row.decision || "")) {
@@ -207,6 +237,25 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     }
   }
 
+  // A grouped row opens (native disclosure, kept by key across polls) to every robot's name.
+  function groupRow(li, row) {
+    if (!li || li.dataset.group !== "1") {
+      li = document.createElement("li");
+      li.dataset.key = row.key;
+      li.dataset.group = "1";
+      const details = document.createElement("details");
+      details.className = "queue-group";
+      details.append(document.createElement("summary"), nodeWithText("p", "hint", ""));
+      li.append(details);
+    }
+    const summary = li.querySelector("summary"), all = li.querySelector("p");
+    const text = groupText(row.text, row.group);
+    if (summary.textContent !== text) summary.textContent = text;
+    const names = row.group.join(" · ");
+    if (all.textContent !== names) all.textContent = names;
+    return li;
+  }
+
   function fillQueues() {
     // ADR-1000: Populate Queues
     const warnList = el("warning-list");
@@ -220,12 +269,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       }
     }
     rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
+    rows.warn = groupRows(rows.warn);
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);
     syncRows(critList, rows.crit, open);
     syncRows(warnList, rows.warn, open);
-    setTriageHead("warning-head", "주의 요망", warnList);
-    setTriageHead("critical-head", "최우선 개입 요망", critList);
+    setTriageHead("warning-head", "주의 요망", rows.warn);
+    setTriageHead("critical-head", "최우선 개입 요망", rows.crit);
 
     // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
     // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다

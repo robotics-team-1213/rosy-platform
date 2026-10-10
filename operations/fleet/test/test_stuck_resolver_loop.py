@@ -13,9 +13,9 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
-from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
-from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.resolver import ResolverConfig, StuckResolver
+from fleet.stuck.loop import PRINCIPAL_ID, StuckResolverLoop
 from site_map_fixture import painted_track
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
@@ -149,8 +149,10 @@ def test_applied_yield_with_lost_reply_is_escalated_without_replay(error):
     door = next(item for item in painted.doors if item.edge_id == "east")
     state = _state(stuck={**STUCK, "decisions": ["WAIT", "YIELD"]})
     state["pose"] = dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.2, direction=1)))
+    state["localization"] = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
     peer = {"robot_id": "peer", "online": True, "state": {
-        "pose": dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.45, direction=-1)))}}
+        "pose": dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.45, direction=-1))),
+        "localization": {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}}}
     board = LineStuckBoard(clock=FakeClock())
     applied = []
 
@@ -527,3 +529,22 @@ def test_d577_r5_wait_transport_failure_is_resent_once_then_escalated():
     asyncio.run(loop.run_once())
     assert _decisions(robot) == ["WAIT", "WAIT"]
     assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"
+
+
+def test_d577_r5_cut_off_by_a_fleet_stop_still_raises_the_human_row():
+    """D-577 남은 항목 3: Fleet stops (task cancel) while the R5 WAIT is in flight."""
+    robot = _HangingRobot("rosy_01", state=_state_9dfk())
+    loop, board, _ = _setup(state=_state_9dfk(), resolver_robot=robot)
+
+    async def scenario():
+        task = asyncio.create_task(loop.run_once())
+        for _ in range(200):
+            if robot.calls:
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asyncio.run(asyncio.wait_for(scenario(), 5))
+    assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"
+    assert board.answers()[-1]["decision"] == "ESCALATE"

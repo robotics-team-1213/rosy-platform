@@ -14,8 +14,8 @@ without a seen edge it is the D-491 corridor half width. Lateral pad = the evide
 return (no return, a return in front of A or a part of A inside range_min is UNKNOWN). The camera
 paint is never an occupancy source: only LiDAR rays judge A.
 
-Crossing needs crosswalk_look_s of consecutive empty scans (at least crosswalk_look_min_scans)
-while standing still. There is no timeout: after crosswalk_report_s without that proof the gate
+Crossing needs crosswalk_clear_s of consecutive empty scans (at least crosswalk_look_min_scans)
+while standing still; any non-empty scan restarts it (D-573 rev 3). There is no timeout: after crosswalk_report_s without that proof the gate
 asks for a human (D-407 cause ``crosswalk_blocked``) and keeps standing. A zone armed once and then
 lost (odom epoch or frame change) stops for good until the session resets (D-573 3.4).
 """
@@ -390,7 +390,7 @@ class CrosswalkGate:
             self._state = WAITING if self._reason is not None else LOOKING
         if self._blocked_since is None:
             self._blocked_since = now
-        if now - self._blocked_since >= report_s - 1e-9:
+        if self._window is None and now - self._blocked_since >= report_s - 1e-9:   # not while clearing
             self.report = self._last_bad or UNKNOWN
         return 0.0, "crosswalk_" + (self._reason or "looking")
 
@@ -405,6 +405,17 @@ class CrosswalkGate:
                     look_progress=round(min(1.0, self._span / self._look_s), 2) if looking else None)
 
 
+
+
+def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None) -> Zone:
+    """A D-491 zone record with a resolved anchor as a Zone. Along the road the frame's crosswalk
+    bound (D-573 6 개정), else along_default, else the lane's lateral bound (D-491 as before)."""
+    a = z["anchor"]
+    along = z.get("along")
+    along = along if along is not None else along_default if along_default is not None else z["uncertainty"]
+    return Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"], far=z["far"],
+                margin=along + range_error_fraction * z["far"],
+                left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"])
 
 
 class CrosswalkGateMixin:
@@ -447,11 +458,8 @@ class CrosswalkGateMixin:
         for z in self._crosswalks._zones:  # ponytail: shares the D-491 list; an accessor if a third reader comes
             if z["anchor"] is None and z["epoch"] == ev.epoch:
                 z["anchor"] = ev._image_pose(z["stamp_ns"])
-            a = z["anchor"]
-            if a is not None:
-                out.append(Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"],
-                                far=z["far"], margin=z["uncertainty"] + c.crosswalk_range_error_fraction * z["far"],
-                                left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"]))
+            if z["anchor"] is not None:
+                out.append(zone_of(z, c.crosswalk_range_error_fraction))
         return out
 
     def _fresh_corridor(self, now: float):
@@ -479,7 +487,7 @@ class CrosswalkGateMixin:
             now, zones=self._crosswalk_zones(), pose=pose,
             key=None if pose is None else (self._return_evidence.epoch, pose.frame),
             still=self._standing_still(now), scan=self._xwalk_scan, geo=self._crosswalk_geometry(),
-            cruise=c.cruise_speed, look_s=c.crosswalk_look_s, min_scans=c.crosswalk_look_min_scans,
+            cruise=c.cruise_speed, look_s=c.crosswalk_clear_s, min_scans=c.crosswalk_look_min_scans,
             report_s=c.crosswalk_report_s, stale_s=c.clearance_stale_s,
             odom_error_fraction=c.crosswalk_odom_error_fraction, range_sigma_m=c.crosswalk_range_sigma_m,
             persist_k=c.crosswalk_persist_k, persist_n=c.crosswalk_persist_n,

@@ -48,3 +48,20 @@
   - `caution` 램프는 주황 1 s 켬·1 s 끔이라 주황 확인 점멸과 같다. 7항의 파랑 우선과 예상 자리 제한으로 막는다. 예상 자리 0.5 m 안에 주의 상태의 다른 로봇이 있으면 여전히 헷갈릴 수 있다(그때 두 blob이 0.30 m 안이면 겹침으로 거절).
   - 배경에 박혔는데 D-547 추정에도 잡히지 않은 로봇은 blob이 없어 LED로도 찾지 못한다(현장 2026-10-10의 `rosy_41`). 그때는 로봇을 매트 밖으로 옮긴 뒤 배경을 다시 학습한다.
   - 정색 표시는 점멸보다 약한 증거다. 익명 blob이 하나뿐일 때만 쓴다.
+
+### 개정 2026-10-10 — 마커를 잃은 로봇을 실제로 다시 찾게 (fix/marker-loss-auto-relocalize)
+
+현장 2026-10-10 11:08–11:25(사이트 `e6ffe9c2`): 자동 요청은 실제로 나갔다(`GET /api/fleet/tracking/identity`에서 11:18:38 `rosy_41` `trigger: marker_missing`, 11:23:47 `rosy_40`). 판정은 모두 UNKNOWN `none`(한 번 `stale`)이었다. 원인은 셋이다.
+
+1. **Vision이 램프 빛을 못 읽었다.** 11:23:47 `rosy_40` 파랑 창의 실제 프레임에서 빛은 로봇 옆 바닥에 비친 옅은 파랑(HSV 약 120/85/135)이고 중심이 blob 반지름의 약 1.8배 밖이다. `led-identity/2`의 고리(0.6–1.6 r)와 바닥값(S≥110, V≥150)으로 고리 몫은 켬 0.0005, 끔 0.0이었다(켬 기준 0.02). **`led-identity/3`**: 고리 바깥 2.6 r, S≥60, V≥120. 같은 프레임에서 켬 0.039, 끔 0.003이다. 패턴·창·`on_fraction`·`off_fraction`은 그대로다.
+2. **예상 자리가 마지막 마커 자리에 머물렀다.** 로봇이 odom으로 멀리 간 뒤에도 7항의 예상 자리는 마지막 마커 자리였고, 그 자리에 배경 유령 blob(배경을 로봇이 서 있을 때 배움, D-600 `unknown_floor` 16점)이 남았다. 바뀐 규칙: 예상 자리는 Fleet 지도 자세(D-494 3, 마지막 sighting에서 odom으로 이은 자세, `LOCALIZED` 또는 `DEGRADED`)이고 반경은 `auto_near_m` + 앵커 뒤 odom 길 1 m마다 0.15 m(최대 1.0 m)다. 지도 자세가 없으면 지금처럼 마지막 마커 자리, 그다음 추적 행의 지도 자세(반경 `auto_near_m`). 이 자리는 묻고 판정을 확인하는 데만 쓰고 지도 자세에 다시 넣지 않는다(D-472 부록 3항 그대로). 점수 0.1 미만 blob(차선 조각, 현장 0.054)은 3항 규칙에서 세지 않는다.
+3. **주의 표시 중에는 점멸이 거절된다.** `rosy-face`는 주의(차선 HOLD, 도킹 실패) 중 식별 점멸을 거절한다(D-472 5, 그대로 둔다). CORE는 요청 파일만 쓰고 수락하므로 Fleet에는 `none`으로만 보였다. 이제 Fleet은 로봇 상태가 주의(`line_follow.mode` ≠ OFF이고 `state` = HOLD, 또는 `docking.state` = DOCK_FAILED)면 자동으로 묻지 않고, 운영자 요청은 409 `IDENTIFY_ROBOT_CAUTION`으로 이유를 돌려준다. API v1.191.
+
+바뀌지 않는 것: LED 확인 트랙은 여전히 이름 확인과 D-511·표시 전용이다. 지도 자세의 앵커는 sighting(D-587)과 운영자 핀(D-593)뿐이다.
+
+**사용자 결정 2026-10-10 (feat/led-confirm-anywhere-pin-prefill, 적용):**
+
+- (a) **"붙임" — 파랑 점멸은 예상 자리 밖에서도 이름을 붙인다.** 로봇이 들려 옮겨지면 odom이 움직이지 않아 지도 자세와 예상 자리가 둘 다 틀린다. 파랑 켬·끔 무늬(점멸, `evidence.mode`가 `steady`가 아님)는 그 source에 열린 파랑 요청이 하나뿐이고(2항, 7항) 파랑 켬·끔을 내는 것은 식별 점멸뿐이라, 요청한 로봇 말고는 낼 수 없다. 그래서 Fleet은 이 판정에 `far_from_robot`을 적용하지 않는다. 미끼·주의 가드는 그대로다: 주황은 주의(caution) 램프와 같은 무늬라 예상 자리 안에서만 받고 예상 자리를 모르면 `no_prediction`이다. 정색 표시(`steady`)는 약한 증거라 파랑이어도 예상 자리 안에서만 받는다. 확인 트랙은 여전히 이름과 D-511·표시 전용이다(D-472 부록 3항).
+- (b) **"핀 제안" — LED로 확인된 자리에서 핀을 시작한다.** Fleet 지도 자세가 `LOCALIZED`가 아닌 로봇에 LED 확인 트랙(`CONFIRMED`)이 있으면, 콘솔의 D-593 "위치 찍기"는 그 blob 자리를 위치로 쓰고 운영자는 지도를 눌러 끌어 방향만 정해 확인한다(확인 문구에 "LED로 확인된 자리"). 앵커는 운영자 핀이고 LED만으로는 `LOCALIZED`가 되지 않는다(D-598 2항).
+
+**사용자 결정 2026-10-10 — 로봇이 거절 이유를 직접 알린다 (feat/core-lamp-identify-result, 적용):** 위 3항은 Fleet이 로봇 상태로 주의를 짐작한다. 짐작이 빗나가면(Fleet이 모르는 주의, E-Stop, 램프 없음) 여전히 `none`이다. 이제 `rosy-face`가 식별 점멸을 거절할 때 결과에 이유(`CAUTION_ACTIVE`·`ESTOP`·`STATE_DISPLAY`·`CORE_UNAVAILABLE`·`LAMP_UNAVAILABLE`)를 쓰고, `rosy-hw-test`가 그것을 `hw-test.json`의 `reason`으로 옮긴다. CORE는 `GET /host/lamp/identify/{request_id}`로 마지막 요청을 `pending`·`shown`·`refused`·`expired`로 답한다. Fleet은 창이 열린 동안 1 s마다 묻고, `refused`면 창을 닫고 UNKNOWN `lamp_refused`와 로봇의 이유(`last.lamp_reason`)를 남기며, 콘솔이 그 이유를 보인다. 3항의 Fleet 쪽 주의 판단은 그대로 둔다(묻기 전에 거르는 것). 양쪽 하위 호환: 이전 CORE는 404라 Fleet이 그 요청을 다시 묻지 않고 지금처럼 Vision 판정을 기다린다; 이전 payload의 거절은 이유 없이 `FAILED`로 온다. 이유는 다음 로봇 payload부터(D-412). API v1.198.

@@ -65,10 +65,19 @@ EDGE_MEMORY_MAX_X_M = 0.25
 BODY_HALF_M = NOMINAL_BODY.half_width_m
 #: a remembered boundary point this close to the path robot->target blocks that target
 CROSS_TOL_M = 0.015
+#: boundary points nearer than this along the arc are not judged (projection and odometry noise)
+CROSS_MIN_ALONG_M = 0.06
+#: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
+PIVOT_MAX_RAD = 1.75
+#: after a crosswalk zone is seen, no pivot or exit turn for this much travel
+CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
 NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
-EXIT_NEAR_M = 0.10
+EXIT_NEAR_M = 0.05
+#: the bottom rows and centre half-width (px) that tell a line under the body
+STRADDLE_ROWS = 12
+STRADDLE_HALF_PX = 12
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -94,7 +103,8 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={}, edges_m=[])
+    out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False, exit_point_m={},
+               exit_reach_m={}, near_centre_m=None, edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -102,6 +112,13 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     if float(_row_x([rows.max()], ground, x_offset)[0]) > float(_row_x([height - 1], ground, x_offset)[0]) + NEAR_GAP_M:
         out["reason"] = "way_beyond_line"
         return out
+    # A line under the robot: the bottom rows' middle is not way but one side is (the body straddles
+    # a line; 9dfk sat on the ring's island line, IR lane_departure, 20261010T032022Z_rosy_41).
+    bottom = way[height - STRADDLE_ROWS:]
+    mid = int(round(ground.principal_x))
+    if bottom.any() and not bottom[:, mid - STRADDLE_HALF_PX:mid + STRADDLE_HALF_PX].any():
+        left, right = bottom[:, :mid].sum(), bottom[:, mid:].sum()
+        out["straddle"] = "left" if left > right else "right"
     first = np.argmax(way[rows], axis=1)
     last = width - 1 - np.argmax(way[rows, ::-1], axis=1)
     xs = _row_x(rows, ground, x_offset)
@@ -138,9 +155,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
             near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
-            far = int(np.argmax(np.where(hit, xs, -np.inf)))
-            reach[side] = float(xs[far])
-            # the point to arc toward: where the way leaves the view on that side, farthest out
+            # aim at the middle of the opening, not its far end: the far end cut the inside corner
+            # (9dfk 20261010T030423Z_rosy_41 left the lane twice at the NE spoke turning right)
+            idx = np.flatnonzero(hit)
+            far = int(idx[np.argsort(xs[idx])[len(idx) // 2]])
+            reach[side] = float(xs[hit].max())
             out["exit_point_m"][side] = (round(float(xs[far]), 3),
                                                        round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:
@@ -183,11 +202,31 @@ def _crosses(points, tx, ty):
         ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
         along = ang * abs(r)
         length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
-    hit = (along > 0.03) & (along < length) & (across < CROSS_TOL_M)
+    hit = (along > CROSS_MIN_ALONG_M) & (along < length) & (across < CROSS_TOL_M)
     if not hit.any():
         return None
     first = int(np.argmin(np.where(hit, along, np.inf)))
     return float(pts[first, 1])
+
+
+#: CORE line-follow law the error is shaped for (rosy_default.yaml line_follow; robot overlays):
+#: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
+CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.04
+
+
+def pursuit_error(tx, ty, confidence):
+    """The keep error whose CORE command drives the pure-pursuit arc to (tx, ty): curvature
+    k = 2y/(x^2+y^2) and w/v = k under CORE's law (CORE keeps the curvature when it caps w).
+    error = -y/half made CORE turn 5-30x tighter than the road (independent review: actual radius
+    0.025 m vs road 0.25 m in turns), cutting corners onto lines (user 2026-10-10)."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6:
+        return 0.0
+    k = 2.0 * ty / d2
+    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
+    kc = abs(k) * speed
+    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0 else 1.0
+    return float(-math.copysign(min(1.0, error), k))
 
 
 def _to_world(point, pose):
@@ -220,10 +259,14 @@ class DrivableSteer:
         self._side = None
         self._memory = None
         self._edges = []
+        self._pivot_yaw = None
+        self._crosswalk_pose = None
         self._lost_since = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
+        self._pivot_yaw = None
+        self._crosswalk_pose = None
         self._edges = []
         self._lost_since = None
 
@@ -233,6 +276,18 @@ class DrivableSteer:
             self._lost_since = stamp
         elif stamp - self._lost_since > FORGET_S:
             self.reset()
+
+    def crosswalk(self, pose):
+        """A crosswalk zone was seen this frame (D-491 extent): hold the heading through it."""
+        self._crosswalk_pose = pose
+
+    def _in_crosswalk(self, pose):
+        if self._crosswalk_pose is None or pose is None:
+            return False
+        if math.hypot(pose[0] - self._crosswalk_pose[0], pose[1] - self._crosswalk_pose[1]) > CROSSWALK_HOLD_M:
+            self._crosswalk_pose = None
+            return False
+        return True
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
                wall_ahead_m=None, side_clear_m=None):
@@ -259,6 +314,12 @@ class DrivableSteer:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        if side is not None and current_pose is not None and _crosses(
+                seen, *_to_current(info["exit_point_m"][side], source_pose, current_pose)) is not None:
+            # an "opening" beyond a boundary seen earlier is a strip past a line, not a road
+            # (p8: exit right at y -0.17 m by the crosswalk, beyond the lane's boundary line)
+            side = info["exit"] = None
+            info["exit_behind_line"] = True
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
         # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
@@ -280,8 +341,33 @@ class DrivableSteer:
             side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
+        if info.get("straddle") is not None and not self._in_crosswalk(current_pose):
+            # off the line first: turn toward the way (CORE creeps back while its IR sees the line,
+            # D-344 §12 amendment 3), then the normal rules
+            self._smoothed = self._pivot = None
+            error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
+            return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
+        if self._in_crosswalk(current_pose):
+            # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
+            # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
+            # and crosses (p8/p10: pivots at the bottom-road crosswalk became U-turns).
+            side, self._pivot, self._side = None, None, None
+            info["crosswalk_hold"] = True
+            if ahead < LOOKAHEAD_M:
+                self._smoothed = 0.0 if self._smoothed is None else self._smoothed
+                return 0.0, ONE_CONFIDENCE, dict(info, strategy="drivable_crosswalk_straight")
         if self._pivot is None and ahead < PIVOT_AHEAD_M and side is not None:
             self._pivot = side
+            self._pivot_yaw = None if current_pose is None else current_pose[2]
+        if self._pivot is None:
+            self._pivot_yaw = None
+        elif self._pivot_yaw is not None and current_pose is not None and abs(
+                math.atan2(math.sin(current_pose[2] - self._pivot_yaw), math.cos(current_pose[2] - self._pivot_yaw))) > PIVOT_MAX_RAD:
+            # Budget spent: drop the turn and its memories and carry on with what is in front (a
+            # sticky stop here held 9dfk LOST for good, 20261010T040459Z_rosy_41).
+            self._pivot = self._side = self._memory = self._pivot_yaw = None
+            side = info["exit"] = None
+            info["pivot_limit"] = True
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
@@ -294,13 +380,10 @@ class DrivableSteer:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"][side]
         tx, ty = _to_current(target, source_pose, current_pose)
-        crossing = _crosses(seen, tx, ty)
-        if crossing is not None:
-            # the way to the target crosses a boundary seen earlier (floor beyond a line that has
-            # left the view): steer along it instead, toward the side the robot is on
-            strategy, ty = strategy + "_kept", (crossing - BODY_HALF_M - 0.01 if crossing > 0 else crossing + BODY_HALF_M + 0.01)
+        # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
+        # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
-        error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
+        error = pursuit_error(tx, self._smoothed, confidence)
         return error, confidence, dict(info, strategy=strategy, target_now_m=(round(tx, 3), round(self._smoothed, 3)))
 

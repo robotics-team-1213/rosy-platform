@@ -248,3 +248,34 @@ def test_a_future_stamped_track_reports_its_negative_age():
     _confirm(clock, tracking, identity)
     clock.now -= 0.2                       # the site clock is behind the detection stamp
     assert identity.confirmed_track_pose("rosy_60")["age_s"] == pytest.approx(-0.2)
+
+
+class Error404(Exception):
+    status = 404
+
+
+def test_a_refused_blink_ends_the_window_with_the_robot_s_reason():
+    """D-596 rev 2026-10-10: CORE says rosy-face refused (caution); Fleet closes the window with that
+    reason instead of a silent ``none``. A CORE without the route (404) keeps the old behaviour."""
+    clock, tracking, identity, robots = _setup()
+    answers = {"rosy_60": [{"state": "pending"}, {"state": "refused", "reason": "CAUTION_ACTIVE"}]}
+
+    async def result(robot_id, request_id):
+        answer = answers[robot_id]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer.pop(0)
+    robots["rosy_60"].identify_lamp_result = lambda request_id: result("rosy_60", request_id)
+    robots["rosy_26"].identify_lamp_result = lambda request_id: result("rosy_26", request_id)
+    answers["rosy_26"] = Error404()
+    asyncio.run(identity.request("rosy_60"))
+    asyncio.run(identity.request("rosy_26"))
+    asyncio.run(identity.poll_lamps())                        # pending: the window stays open
+    assert {p["robot_id"] for p in identity.snapshot()["pendings"]} == {"rosy_60", "rosy_26"}
+    asyncio.run(identity.poll_lamps())                        # refused: closed with the reason
+    assert [p["robot_id"] for p in identity.snapshot()["pendings"]] == ["rosy_26"]
+    row = identity.confirmed_track_pose("rosy_60")
+    assert row["state"] == "UNKNOWN" and row["reason"] == "lamp_refused"
+    assert identity.snapshot()["robots"][1]["last"]["lamp_reason"] == "CAUTION_ACTIVE"
+    asyncio.run(identity.poll_lamps())                        # old CORE: asked once, window untouched
+    assert identity._pending["rosy_26"].lamp == "unsupported"

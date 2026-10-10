@@ -14,7 +14,7 @@ from functools import partial
 from typing import Callable, Literal, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Query, Request, Response
+from fastapi import Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
@@ -22,7 +22,7 @@ from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
@@ -53,6 +53,13 @@ class LineStuckDecisionRequest(BaseModel):
 class LineStuckClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class IncidentReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    root_cause: Literal["line_marking", "obstacle", "robot_fault", "localization",
+                        "traffic_wait", "unknown"]
+    note: str = Field(max_length=1000)
 
 
 class IdentifyLampRequest(BaseModel):
@@ -194,6 +201,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # D-472/D-596: one request per colour per source (IdentityService); CORE and rosy-face keep the final safety decision.
     if identity is None:
         identity = IdentityService(console.clients, tracking=tracking)
+    if map_pose is not None and identity.map_pose is None:   # D-596 amendment: where to look, as app.py
+        identity.map_pose = map_pose.arbitrated_pose
     app.state.identity = identity
 
     # D-540 9: moving routes need a named operator; stops (WAIT/ABORT, formation stop) stay open.
@@ -247,6 +256,29 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
         # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
         return {"episodes": board.episodes(limit)}
+
+    @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
+    def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
+        return {"reports": board.reports(limit), "traffic_reports": board.traffic_reports(limit)}
+
+    @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
+              tags=["line-stuck"])
+    def review_traffic_fact(body: IncidentReviewRequest,
+                            fact_row: int = Path(ge=1, le=2**63 - 1),
+                            principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        if not board.review_traffic_fact(fact_row, principal_id=principal.principal_id,
+                                         root_cause=body.root_cause, note=body.note):
+            raise HTTPException(status_code=404, detail={"code": "INCIDENT_NOT_FOUND"})
+        return {"reviewed": True}
+
+    @app.post("/api/fleet/incidents/{robot_id}/{stuck_id}/review", dependencies=operator_guard,
+              tags=["line-stuck"])
+    def review_incident(robot_id: str, stuck_id: str, body: IncidentReviewRequest,
+                        principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        if not board.review(robot_id, stuck_id, principal_id=principal.principal_id,
+                            root_cause=body.root_cause, note=body.note):
+            raise HTTPException(status_code=404, detail={"code": "INCIDENT_NOT_FOUND"})
+        return {"reviewed": True}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])

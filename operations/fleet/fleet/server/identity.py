@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
-from fleet.server.identity_triggers import AutoTriggers
+from fleet.server.identity_triggers import AutoTriggers, caution
 
 LAMP_IDENTIFY_COLORS = ("blue", "amber")  # CORE LampIdentifyRequest.color values (D-472 4)
 
@@ -89,6 +89,7 @@ class _Pending:
     not_before: float
     not_after: float
     reason: str = "operator"
+    lamp: Optional[str] = None  # D-596 rev 2026-10-10: CORE's answer once final (shown, expired, unsupported)
 
 
 @dataclass
@@ -117,6 +118,9 @@ class IdentityService:
         self._last: dict[str, dict] = {}       # robot_id -> last outcome (readback)
         self._asked_at: dict[str, float] = {}
         self.triggers = AutoTriggers(config)
+        #: robot_id -> Fleet MapPose (MapPoseService.arbitrated_pose); app.py sets it. Only the
+        #: expected place for asking and for checking a verdict, never written back (addendum 3).
+        self.map_pose: Optional[Callable[[str], Any]] = None
 
     # --- request ---------------------------------------------------------------------
 
@@ -141,6 +145,11 @@ class IdentityService:
                 raise IdentityError(409, "IDENTIFY_BUSY", "이 로봇의 LED 확인이 진행 중입니다")
             if self.confirmed_track_pose(robot_id)["state"] == "CONFIRMED":
                 raise IdentityError(409, "IDENTIFY_ALREADY_CONFIRMED", "이미 확인된 트랙이 있습니다")
+            if self.tracking is not None and caution(self.tracking.robot_state(robot_id)):
+                # D-472 5: rosy-face keeps the caution lamp and refuses the blink; CORE accepts the
+                # request file anyway, so without this the window would only end in ``none``.
+                raise IdentityError(409, "IDENTIFY_ROBOT_CAUTION",
+                                    "로봇이 주의 표시(HOLD 등) 중이라 LED 점멸을 할 수 없습니다")
             sources = () if self.tracking is None else tuple(
                 s.source_id for s in self.tracking.sources if robot_id in s.robot_ids)
             # D-596 1: one colour per source at a time; with one in use the other is asked for by name.
@@ -178,8 +187,33 @@ class IdentityService:
                     "not_after": pending.not_after, "sources": list(sources),
                     "state": "pending_visual_confirmation", "trigger": reason}
 
+    async def poll_lamps(self) -> None:
+        """D-596 rev 2026-10-10: ask CORE whether rosy-face blinked; a refusal ends the window with its
+        reason instead of a silent ``none``. Once per tick per open request; a CORE without the
+        route (404) is not asked again for that request."""
+        clients = self._clients()
+        for pending in self._open():
+            client = clients.get(pending.robot_id)
+            if pending.lamp is not None or not hasattr(client, "identify_lamp_result"):
+                continue
+            try:
+                answer = await client.identify_lamp_result(pending.request_id)
+            except Exception as exc:  # down or slow: asked again next tick while the window is open
+                if getattr(exc, "status", None) == 404:
+                    pending.lamp = "unsupported"
+                continue
+            state = answer.get("state") if isinstance(answer, Mapping) else None
+            if state in ("shown", "expired"):
+                pending.lamp = state
+            elif state == "refused" and self._pending.get(pending.robot_id) is pending:
+                del self._pending[pending.robot_id]
+                self._last[pending.robot_id] = {"state": "UNKNOWN", "reason": "lamp_refused",
+                                                "lamp_reason": answer.get("reason"), "at": self._clock(),
+                                                "trigger": pending.reason}
+
     async def tick(self) -> list[dict]:
         """D-596 2: ask every robot the trigger rules name (colours permitting); the started requests."""
+        await self.poll_lamps()
         if not self.config.auto_request or self.tracking is None:
             return []
         now = self._clock()
@@ -192,7 +226,8 @@ class IdentityService:
         due = self.triggers.due(now, self.tracking.snapshot(),
                                 {rid: self.tracking.robot_state(rid) for rid in watched},
                                 watched=watched, skip=skip,
-                                last_reason={rid: (self._last.get(rid) or {}).get("reason") for rid in watched})
+                                last_reason={rid: (self._last.get(rid) or {}).get("reason") for rid in watched},
+                                map_poses={rid: self._map_pose(rid) for rid in watched})
         started = []
         for robot_id, reason in due:
             try:
@@ -249,7 +284,12 @@ class IdentityService:
         predicted = self._predicted(robot_id)
         if predicted is None and pending.color == "amber":
             return self._unknown(robot_id, "no_prediction", source.source_id)
-        if predicted is not None and math.hypot(x - predicted[0], y - predicted[1]) > self.config.auto_near_m:
+        # D-596 amendment (a), user decision 2026-10-10: a blue blink names the robot anywhere on the
+        # source, because a source has one blue request at a time and only an identify blinks blue on/off.
+        # Amber (the caution lamp's pattern) and the weaker steady colour stay inside the expected place.
+        blink_anywhere = pending.color == "blue" and (body.get("evidence") or {}).get("mode") != "steady"
+        if (predicted is not None and not blink_anywhere
+                and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]):
             return self._unknown(robot_id, "far_from_robot", source.source_id)
         now = self._clock()
         found = self._continue(latest, x, y)
@@ -266,14 +306,16 @@ class IdentityService:
         self._pending.pop(robot_id, None)  # done: this colour is free again
         return {"robot_id": robot_id, "state": "CONFIRMED", "source_id": source.source_id}
 
-    def _predicted(self, robot_id: str) -> Optional[tuple[float, float]]:
-        """Where the robot should be: its last ceiling marker, else its map-frame pose; None unknown."""
-        marker = self.triggers.last_marker(robot_id)
-        if marker is not None:
-            return marker
+    def _predicted(self, robot_id: str) -> Optional[tuple[float, float, float]]:
+        """(x, y, radius) where the robot should be (``AutoTriggers.expected``); None unknown."""
         row = next((r for r in self.tracking.snapshot().get("robots") or [] if r.get("robot_id") == robot_id), {})
-        pose = row.get("pose")
-        return None if not pose else (float(pose["x"]), float(pose["y"]))
+        return self.triggers.expected(robot_id, self._map_pose(robot_id), row)
+
+    def _map_pose(self, robot_id: str):
+        try:
+            return None if self.map_pose is None else self.map_pose(robot_id)
+        except Exception:   # an expected place is a hint; without it the marker place is used
+            return None
 
     def on_detections(self, source_id: str, payload) -> None:
         """Follow every binding on this source to its continuing detection, or drop it."""

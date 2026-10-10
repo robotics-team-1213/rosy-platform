@@ -141,6 +141,7 @@ class RobotClient(Protocol):
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
+    async def identify_lamp_result(self, request_id: str) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_request(self) -> Optional[dict]: ...
@@ -301,6 +302,13 @@ class HttpRobotClient:
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
 
+    async def line_follow_trip_start(self) -> dict:
+        """D-601 A: only the trip loop, holding the trip lease after every start check, turns the camera
+        line on; ``line_follow_mode`` (operator routes) still selects only IR_LINE or OFF."""
+        return self._check(await self._http.put(
+            "/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=self._headers()
+        ))
+
     async def line_follow(self) -> dict:
         """D-143 ``GET /api/v1/line-follow``: selected mode and status."""
         return await self._get("/api/v1/line-follow")
@@ -334,6 +342,10 @@ class HttpRobotClient:
         """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
         return await self._post("/api/v1/line-follow/advice", body)
 
+    async def line_follow_lane_cue(self, body: dict) -> dict:
+        """D-511 rev 1: Fleet's lane return cue ``LaneCueRequest``; an old CORE answers 404."""
+        return await self._post("/api/v1/line-follow/lane-cue", body)
+
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None) -> dict:
@@ -345,9 +357,13 @@ class HttpRobotClient:
             body["yield_turn_rad"] = yield_turn_rad
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
+    async def front_status(self) -> dict:
+        """CORE ``GET /api/v1/vision/front/status`` (D-601 B: ``available`` = the front camera is live)."""
+        return await self._get("/api/v1/vision/front/status")
+
     async def front_frame(self) -> tuple[bytes, dict]:
         """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
-        status = await self._get("/api/v1/vision/front/status")
+        status = await self.front_status()
         if not status.get("available") or not status.get("sequence"):
             raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
                                 "front camera preview is missing or stale")
@@ -377,6 +393,10 @@ class HttpRobotClient:
             raise ValueError("unsupported identification color")
         return await self._post("/api/v1/host/lamp/identify" + ("?quiet=true" if quiet else ""),
                                 {} if color is None else {"color": color})
+
+    async def identify_lamp_result(self, request_id: str) -> dict:
+        """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
+        return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

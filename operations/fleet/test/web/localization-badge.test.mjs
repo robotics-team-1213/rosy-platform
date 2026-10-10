@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  localizationTag, localizationUrgent, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
+  localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
 } from "../../fleet/server/web/localization-badge.js";
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
@@ -35,6 +35,16 @@ test("a robot without D-395 warns 위치 상태 미보고", () => {
   assert.equal(legacy.cls, "warn");
 });
 
+test("a robot without D-395 that Fleet's MapPose places shows the MapPose state, not 미보고", () => {
+  // Field 2026-10-10: rosy_40 (motor mode) was LOCALIZED by camera and the badge said 위치 상태 미보고.
+  const legacy = row({ state: null, pose_frame: null, legacy: true, label: "위치 상태 미보고" });
+  assert.deepEqual(localizationTag(legacy, { pose: { x: 1, y: 2, state: "LOCALIZED" } }),
+    { text: "위치 확정", cls: "", title: "Fleet MapPose · LOCALIZED" });
+  assert.equal(localizationTag(legacy, { pose: { x: 1, y: 2, state: "DEGRADED" } }).cls, "warn");
+  assert.equal(localizationTag(legacy, { pose: null }).text, "위치 상태 미보고");
+  assert.equal(localizationTag(row(), { pose: { state: "DEGRADED" } }).text, "위치 확정");  // D-395 robot: its own
+});
+
 test("a mission held behind an untrusted robot says why", () => {
   assert.match(untrustedQueuedReason("rosy_02"), /^rosy_02 위치를 확인할 수 없어 대기 중/);
 });
@@ -52,6 +62,12 @@ test("the card names the robot pose frame and shows Fleet's site map pose apart"
     "지도 0.69, -0.44 · 추정·odom 이음");
   assert.equal(sitePoseText({ robot_id: "a", pose: { x: 1, y: 2, state: "LOCALIZED", source: "sighting" } }),
     "지도 1.00, 2.00 · 확정·카메라");
+  // Field 2026-10-10: odom newer than a 0.4 s camera anchor read "확정·odom 이음".
+  const bridged = { x: 1, y: 2, state: "LOCALIZED", source: "bridged", anchor_source: "sighting" };
+  assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 0.4 } }), "지도 1.00, 2.00 · 확정·카메라");
+  assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 3 } }), "지도 1.00, 2.00 · 확정·odom 이음");
+  assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 0.2, anchor_source: "operator_pin" } }),
+    "지도 1.00, 2.00 · 확정·운영자 핀");
 });
 
 test("the map draws the robot's own pose only when it is a LOCALIZED map pose, never odom", () => {
@@ -63,4 +79,35 @@ test("the map draws the robot's own pose only when it is a LOCALIZED map pose, n
   assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: { state: "LOCALIZED", pose_frame: "map" } } }), pose);
   assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: null } }), pose);  // pre-D-395 Nav2 robot
   assert.equal(robotMapPose({ state: null }), null);
+});
+
+test("the card's position chip speaks what places the robot, and a missing CORE block is not a fault", () => {
+  const legacy = row({ state: null, pose_frame: null, legacy: true, trusted: false, label: "위치 상태 미보고" });
+  const guide = (pose) => ({ robot_id: "rosy_01", pose });
+  // Fleet's site map pose first, even when CORE reports nothing (lane following without Nav2).
+  assert.deepEqual(positionTag(legacy, guide({ x: 0.69, y: -0.44, state: "LOCALIZED", source: "sighting" })),
+    { text: "지도 위치 확정 · 카메라", cls: "", title: "Fleet map pose: LOCALIZED · sighting" });
+  assert.equal(positionTag(row(), guide({ x: 1, y: 2, state: "DEGRADED", source: "bridged" })).text, "지도 위치 추정 · odom 이음");
+  // No Fleet pose: CORE's own state when CORE reports one.
+  assert.deepEqual(positionTag(row(), guide(null)), localizationTag(row()));
+  // Neither: plain words, no warn chip.
+  assert.deepEqual(positionTag(legacy, guide(null)),
+    { text: "지도 위치 없음", cls: "", title: "Fleet map pose: none · CORE localization: null" });
+  assert.equal(positionTag(legacy, undefined).cls, "");
+  assert.equal(positionTag(null, undefined), null);
+  // A person must decide: still critical.
+  assert.equal(positionTag(row({ needs_human: true, trusted: false, label: "위치 확인 필요" }),
+    guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" })).cls, "crit");
+});
+
+test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {
+  const { pinPrefill } = await import("../../fleet/server/web/localization-badge.js");
+  const identity = { robots: [{ robot_id: "rosy_41", state: "CONFIRMED", x: 0.398, y: -0.499 },
+    { robot_id: "rosy_40", state: "UNKNOWN", x: null, y: null }] };
+  const degraded = { pose: { x: 0.962, y: -0.011, state: "DEGRADED" } };
+  assert.deepEqual(pinPrefill(identity, degraded, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.deepEqual(pinPrefill(identity, { pose: null }, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.equal(pinPrefill(identity, { pose: { x: 0.4, y: -0.5, state: "LOCALIZED" } }, "rosy_41"), null);
+  assert.equal(pinPrefill(identity, degraded, "rosy_40"), null);
+  assert.equal(pinPrefill(null, degraded, "rosy_41"), null);
 });

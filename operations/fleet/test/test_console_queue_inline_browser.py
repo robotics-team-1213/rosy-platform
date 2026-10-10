@@ -52,6 +52,7 @@ OFFLINE = _robot("rosy_04", online=False, error={"reachable": False, "code": "Co
 OFFLINE["state"] = None
 API = {
     "/api/fleet/session": {"principal_id": "bob", "role": "operator"},
+    "/api/fleet/incidents": {"reports": []},
     "/api/fleet/state": {"fleet": {"name": "site", "online": 3, "total": 4}, "ts": 0.0,
                          "robots": [_robot("rosy_01", line_stuck=STUCK), _robot("rosy_02"), _robot("rosy_03"),
                                     OFFLINE]},
@@ -63,6 +64,69 @@ API = {
                              "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
                              "relay": None},
 }
+
+
+def test_incident_report_shows_source_evidence_and_records_review(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    report = {"schema": "rosy.incident.v1", "id": "line_stuck:rosy_01:stuck-abc",
+              "stuck_id": "stuck-abc", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+              "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": None,
+              "evidence": {"core": {"cause": "obstacle_ahead", "phase_at_open": "ASKING",
+                                    "held_s_max": 12, "attempts_max": 1},
+                           "fleet": {"close_reason": None, "pose_state": "LOCALIZED", "pose_age_s": 0.4,
+                                     "resolved_by": None},
+                           "rosy_cam": {"source_id": "ceiling_north", "seq": 21,
+                                        "captured_at": 1791608400},
+                           "ai_facts": [{"kind": "stalled", "stage": "shadow", "confidence": 0.8},
+                                        {"kind": "incident_context", "stage": "shadow", "confidence": 0.45,
+                                         "value": {"cause_draft": "obstacle", "missing": ["interpreted_front_image"],
+                                                   "support": [{"source": "core_sensor", "field": "front_clearance_m",
+                                                                "value": 0.12}]}}],
+                           "front_image": {"status": "not_retained"}},
+              "actions": [], "reviews": []}
+    posts = []
+    traffic = {"schema": "rosy.incident.v1", "id": "ai_fact:17", "classification": "wait_cycle_confirmed",
+               "robot_ids": ["rosy_01", "rosy_02"], "opened_at": "2026-10-10T05:00:00+00:00",
+               "evidence": {"ai_fact": {"fact_row": 17, "kind": "wait_cycle_confirmed",
+                                        "source": "analyzer:traffic_watch@1", "stage": "shadow",
+                                        "confidence": 0.7, "value": {"fleet_agrees": False},
+                                        "evidence": {"fleet_wait_cycle": None}}},
+               "actions": [], "reviews": []}
+    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic]},
+           "/api/fleet/enrollment/robots": {"robots": [{"robot_id": "rosy_01", "hostname": "rosy-pinky-demo"}]},
+           "/api/fleet/discovery": {"scanner_online": True, "devices": []}}
+    answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True}),
+               "/api/fleet/incidents/facts/17/review": (200, {"reviewed": True})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        item = page.locator("#incident-list li")
+        expect(item).to_have_count(1)
+        expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
+        item.locator("summary").click()
+        expect(item).to_contain_text("Rosy Cam: ceiling_north")
+        expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
+        expect(item).to_contain_text("interpreted_front_image")
+        expect(item).to_contain_text("AI 참고: stalled (shadow, 80%)")
+        expect(item).to_contain_text("이미지는 보존되지 않음")
+        item.locator("select").select_option("obstacle")
+        item.locator("input").fill("현장 상자 확인")
+        item.locator("button[type=submit]").click()
+        assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
+        assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
+        fact = page.locator("#incident-traffic-list li")
+        fact.locator("summary").click()
+        expect(fact).to_contain_text("AI 단독 대기 순환 판단")
+        fact.locator("select").select_option("traffic_wait")
+        fact.locator("button[type=submit]").click()
+        assert posts[-1][0] == "/api/fleet/incidents/facts/17/review"
+        with page.expect_download() as download_info:
+            page.locator("#incident-export").click()
+        download = download_info.value
+        assert download.suggested_filename == "rosy-incidents.json"
+        assert json.loads(Path(download.path()).read_text(encoding="utf-8"))["traffic_reports"][0]["id"] == "ai_fact:17"
+        assert not errors
+        browser.close()
 
 # Elements that scroll on their own right now (the document is reported separately).
 SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
@@ -243,5 +307,69 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
             box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
             assert box and box["y"] + box["height"] <= 768, (decision, box)
         _shot(page, "console-stuck-evidence-1024x768.png")
+        assert not errors
+        browser.close()
+
+
+def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_routes(site):
+    """D-577 (d): a wait-cycle row opens on Fleet's resolver decision and the AI facts (shadow). `바뀐 경로로 계속`
+    posts confirm-replan, `운행 취소` posts cancel (no confirm step), `로봇 카드 열기` opens the card and posts
+    nothing. No other route is called."""
+    from playwright.sync_api import sync_playwright
+
+    running = {**HELD, "trip_id": "t-rosy_03", "plan_id": "t-rosy_03", "robot_id": "rosy_03", "hold": None}
+    cycle = ["rosy_02", "rosy_03"]
+    api = {**API,
+           "/api/fleet/traffic": {**API["/api/fleet/traffic"], "wait_cycle": cycle, "resolver": [
+               {"robot_id": "rosy_02", "trigger": "wait_cycle", "decision": "replan", "cycle": cycle,
+                "blocked_edges": ["e1"]},
+               {"robot_id": "rosy_03", "trigger": "wait_cycle", "decision": "wait", "cycle": cycle}]},
+           "/api/fleet/trips": {"running": HELD, "trips": [HELD, running], "open": [HELD, running]},
+           "/api/fleet/ai": {"status": {"state": "present"}, "proposals": [], "facts": [
+               {"kind": "wait_cycle_confirmed", "robot_ids": cycle, "value": {"held_s": 4.0}, "confidence": 0.9,
+                "evidence": {}, "source": "analyzer:traffic_watch@1", "observed_at": 0, "ttl_s": 3,
+                "stage": "shadow"}]}}
+    posts = []
+    answers = {"/api/fleet/trips/t-rosy_02/confirm-replan": (200, {**HELD, "hold": None}),
+               "/api/fleet/trips/t-rosy_03/cancel": (200, {**running, "state": "canceled"})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        page.clock.run_for(1500)
+
+        def slot_of(robot_id):
+            page.locator(f'li[data-key="{robot_id}|deadlock"] > .queue-row').click()
+            page.clock.run_for(300)
+            return page.locator(f'[data-decision-slot="{robot_id}|deadlock"]')
+
+        slot = slot_of("rosy_02")
+        text = slot.inner_text()
+        assert "rosy_02 · 해결기 다른 길 계획" in text and "rosy_03 · 해결기 다른 로봇 대기" in text
+        assert "AI 참고 · 교착 확인 (모두 멈춤) · rosy_02, rosy_03 · 신뢰도 90%" in text
+        _shot(page, "console-deadlock-1440x900.png")
+        slot.locator('ui-button[data-replan="confirm"]').click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts:
+                break
+        assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
+
+        card = page.locator('#roster article[data-robot-id="rosy_03"]')
+        card.locator(".robot-fold").click()
+        assert card.get_attribute("data-collapsed") == ""
+        slot = slot_of("rosy_03")
+        assert slot.locator('ui-button[data-replan="confirm"]').get_attribute("reason") == "확인할 바뀐 경로가 없습니다"
+        slot.locator('ui-button[data-replan="cancel"]').click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if ("/api/fleet/trips/t-rosy_03/cancel", None) in posts:
+                break
+        assert ("/api/fleet/trips/t-rosy_03/cancel", None) in posts
+        before = list(posts)
+        page.locator('[data-decision-slot="rosy_03|deadlock"] ui-button[data-replan="card"]').click()
+        page.clock.run_for(300)
+        assert card.get_attribute("data-collapsed") is None
+        assert posts == before
+        assert {path for path, _ in posts} <= {"/api/fleet/trips/t-rosy_02/confirm-replan",
+                                                "/api/fleet/trips/t-rosy_03/cancel"}
         assert not errors
         browser.close()
