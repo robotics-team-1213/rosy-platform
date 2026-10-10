@@ -212,7 +212,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_848,
+        52_208,
+        "split: re-judged at 52208 on 2026-10-10 after merging main over 51848 (self-judged): main brought "
+        "the D-577 deadlock analyzers and other Fleet work (+350); this branch adds the Fleet map-pose chooser "
+        "for the R1/rear bands (+12) in server/stuck_lane_lost.py. The fleet/fleet/stuck move is still owed, see "
+        "docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 51848 on 2026-10-10 after D-577 AI PC proposals/acting facts over 51672 "
         "(+176, self-judged): proposal envelope check beside the lane-lost rules in server/stuck_lane_lost.py, "
         "proposal store/route/audit in server/ai_facts.py, loop wiring +20; no new owner, every answer still "
