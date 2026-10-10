@@ -10,6 +10,7 @@ D-517의 `repeat: true`는 계속 도는 운행이다. 현장 `map_v2_fleet` v5�
 
 1. 관제는 정지 가능한 두 장소를 출발·복귀 장소와 경유 장소로 고른다. `POST /trip`에 `to: start_at`, `via: [other]`, `repeat: false`, `start_at: place_id`를 보낸다. Fleet은 기존 지도 A* 계획, 별도 시작 승인, D-517 교통 블록, D-494 정지·재계획을 재사용한다. 두 로봇은 각각 독립된 plan/trip이다.
 2. `start_at`은 선택 필드다. 있을 때는 유한 trip이고, `to`와 같으며, 다른 `via`가 있어야 한다. 계획 때와 시작 직전에 `LOCALIZED` 지도 자세가 그 장소에서 0.05 m 이내여야 한다. 아니면 `TRIP_START_PLACE_MISMATCH`로 거절한다. D-517의 구역 규칙이 최종 정지를 다른 곳으로 옮겨야 하면 `TRIP_START_PLACE_MOVED`로 거절한다. 필드가 없는 기존 요청은 그대로 동작한다.
+   - 시작 직전 선택된 첫 경로 구간의 중심선 거리와 D-424 Pinky Pro 공칭 몸 반폭 합이 그 구간 반폭을 넘으면 `TRIP_START_BODY_OUTSIDE_ROUTE`로 거절한다. 지원하는 차체 치수가 없거나 이동할 계획 구간이 없으면 각각 `TRIP_BODY_UNKNOWN`, `TRIP_NO_ROUTE`로 거절한다. 이 검사는 시작 명령을 보내기 전에 실행한다.
 3. Fleet과 CORE가 주행·안전 권한을 갖는다. AI PC의 계획 경로 이탈 분석은 별도 그림자 사실로 검증한 뒤 연결하며 직접 로봇을 움직이지 않는다. 현장 설치 전에는 `rosy_40`의 `junction_turn:false`와 두 로봇의 주행·정지 근거를 해결해야 한다. 능력 광고를 강제로 참으로 바꾸지 않는다.
 
 ### Consequences and evidence

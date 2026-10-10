@@ -1828,6 +1828,8 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 
 `POST /api/fleet/robots/{robot_id}/trip`의 선택 필드 `start_at: place_id`는 관제에서 고른 출발·복귀 장소다. 이 필드는 `repeat: false`, `to: start_at`, 하나 이상의 다른 `via` 장소와 함께 사용한다. 잘못된 조합은 422 유효성 오류다. Fleet은 계획 시 현재 `LOCALIZED` 지도 자세가 그 장소에서 0.05 m 이내인지 검사하고, `POST /api/fleet/trips/{plan_id}/start`에서 새 자세로 다시 검사한다. 멀면 422 `TRIP_START_PLACE_MISMATCH`와 `{place, distance_m, limit_m}`를 반환하며 출발하지 않는다. D-517 구역 규칙이 정지를 다른 장소로 옮겨야 하는 경로는 시작 시 422 `TRIP_START_PLACE_MOVED`로 거절한다. 필드가 없는 기존 trip의 동작은 같다. CORE API와 envelope 1.0은 바뀌지 않는다.
 
+유한 `start_at` trip은 시작 직전 첫 계획 구간의 중심선 거리와 Pinky Pro 공칭 몸 반폭을 더해 차선 반폭 이내인지 확인한다. 넘으면 422 `TRIP_START_BODY_OUTSIDE_ROUTE`와 `{edge_id, body_margin_m}`(음수 m)를 반환한다. 알 수 없는 로봇 몸체는 `TRIP_BODY_UNKNOWN`, 비어 있는 계획 구간은 `TRIP_NO_ROUTE`로 출발을 거절한다. 계획 미리보기의 기존 `start_check`는 로봇 중심·방향 기준이며 시작 때 몸체 검사를 다시 수행한다.
+
 AI PC의 `ai_observer`는 열린 trip 중 `GET /api/fleet/trips`와 필요할 때 `GET /api/fleet/site-map/active`를 읽고 `POST /api/fleet/ai/facts`에 `kind: "trip_route_check"`를 보낼 수 있다(D-577 개정, v1.199). `value`는 `{status: "ON_ROUTE"|"OFF_ROUTE"|"UNKNOWN", offset_m?, limit_m?, reason?}`이고 `evidence`는 `trip_id`, `map_version`, `pose_source`, `pose_age_s`, 가능한 경우 `edge_id`를 담는다. 이 사실은 `shadow`이며 Fleet의 정지 권한이나 CORE 안전 명령을 대체하지 않는다.
 
 열린 Pinky Pro trip view는 `body_half_width_m`(m, D-424 URDF 공칭)을 싣는다. AI PC의 `trip_route_check`는 계획 선분의 `width_m/2 - body_half_width_m`를 `limit_m`으로 사용해 몸체 가장자리가 계획 구간 밖이면 `OFF_ROUTE`로 보고한다. 반폭이 없거나 유효하지 않으면 `UNKNOWN`이며 중심점 판정으로 대체하지 않는다. AI PC와 Fleet이 같은 지도 자세를 읽으므로 이 사실만으로 실제 차체 경계 침범이 없었다고 증명하지 않는다.
