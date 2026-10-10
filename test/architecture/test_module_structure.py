@@ -1010,8 +1010,11 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow": (
-        2_957,
-        "accept: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
+        3_357,
+        "accept: re-judged at 3357 on 2026-10-10 for D-511 rev 1-5 (feat/core-fleet-lane-cue, self-judged, "
+        "independent re-judge requested): lane_cue.py (Fleet lane cue, the same LineFollowManager domain under "
+        "its lock) and odom_pivot.py (camera-independent pivot, pure, reused by D-607 P3). Earlier: "
+        "independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
         "(read-only critic agent); docs/plans/2026-10-10-core-line-follow-size-unit.md registers the rest of "
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
