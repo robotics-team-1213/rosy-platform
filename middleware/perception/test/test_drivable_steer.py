@@ -113,3 +113,14 @@ def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
     error, confidence, debug = DrivableSteer().update(beyond, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
                                                       wall_ahead_m=None, side_clear_m={"left": None, "right": None})
     assert error is None and debug["reason"] == "way_beyond_line"
+
+
+def test_pursuit_error_realises_the_arc_under_cores_law():
+    from control.sensing.perception.learned.drivable_steer import (
+        CORE_CRUISE_MPS, CORE_CURVE_SLOWDOWN, CORE_MIN_CONFIDENCE, CORE_STEERING_GAIN, pursuit_error)
+    x, y, conf = 0.25, 0.05, 0.9
+    error = pursuit_error(x, y, conf)
+    w = -CORE_STEERING_GAIN * error
+    v = CORE_CRUISE_MPS * (conf - CORE_MIN_CONFIDENCE) / (1 - CORE_MIN_CONFIDENCE) * max(0.2, 1 - CORE_CURVE_SLOWDOWN * abs(error))
+    assert abs(w / v - 2 * y / (x * x + y * y)) < 1e-6 and error < 0
+    assert pursuit_error(0.25, 0.0, conf) == 0.0
