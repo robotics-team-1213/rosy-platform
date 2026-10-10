@@ -785,17 +785,11 @@ class FaceDisplay:
             # The pattern is recomputed from the files (the lamp's own is None mid-blink).
             # D-596 rev 2026-10-10: the answer is the refusal reason CORE hands on to Fleet.
             core = self._core()
-            if core is None:
-                return "CORE_UNAVAILABLE"
-            if core.get("estop") is not False:
-                return "ESTOP"
-            if core.get("caution"):
-                return "CAUTION_ACTIVE"
+            if core is None or core.get("estop") is not False or core.get("caution"):
+                return "CORE_UNAVAILABLE" if core is None else "CAUTION_ACTIVE" if core.get("estop") is False else "ESTOP"
             view = read_view(self.root, self._battery_value)
             pattern = self.lamp_pattern_for(view, self.robot_state_of(view), core)
-            if pattern in IDENTIFY_OVER:
-                return None
-            return "CAUTION_ACTIVE" if pattern == "caution" else "STATE_DISPLAY"
+            return None if pattern in IDENTIFY_OVER else "CAUTION_ACTIVE" if pattern == "caution" else "STATE_DISPLAY"
         identifying = request["action"].startswith("identify_")
         identify_ready = identifying and self._lamp is not None and self._lamp.available(for_identify=True)
         refused = identifying and ("LAMP_UNAVAILABLE" if not identify_ready else unsafe_identity())
