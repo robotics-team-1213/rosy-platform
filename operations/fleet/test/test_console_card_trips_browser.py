@@ -281,3 +281,28 @@ def test_rail_panels_do_not_overlap(site):  # noqa: F811
             _shot(page, f"rail-{width}x{height}.png")
         assert not errors
         browser.close()
+
+
+def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
+    """D-540 6 (user decision 2026-10-10): 전체 주행 취소 is a stop — quiet, no confirm dialog, open to the shared
+    console token too (D-540 9), and the line beside it says at once that it was sent and to how many robots."""
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    result = {"cancelled": 3, "total": 3, "evidence": "CORE_REPLY_ONLY", "formation": None,
+              "robots": [{"robot_id": r, "result": "cancelled", "steps": {}, "tasks": {"awaiting_core_result": []}}
+                         for r in ("rosy_01", "rosy_02", "rosy_03")],
+              "tasks": {"canceled": [], "error": None}}
+    api = {**API, "/api/fleet/session": {"principal_id": "site-console", "role": "operator"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, {"/api/fleet/cancel-all": (200, result)})
+        button = page.locator("#cancel-all")
+        assert button.get_attribute("kind") == "quiet" and not button.evaluate("node => node.disabled")
+        button.click()
+        assert page.locator("dialog.ui-confirm").count() == 0
+        _settle(page, posts, "/api/fleet/cancel-all")
+        assert ("/api/fleet/cancel-all", None) in posts
+        expect(page.locator("#cancel-all-result")).to_contain_text("전체 주행 취소를 보냈습니다 · 3대")
+        assert not any(path == "/api/fleet/estop" for path, _ in posts)
+        assert not errors
+        browser.close()

@@ -713,8 +713,9 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
-def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url, width, height):
-    """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
+def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url, width, height):
+    """D-421 / D-540 6 (user decision 2026-10-10) — 전체 주행 취소는 확인 없이 바로 나가고(멈춤), 보낸 대수와
+    로봇별 결과, 물리 정지 미확인을 쓴다. 래치(비상 정지)는 걸지 않는다."""
     from playwright.sync_api import sync_playwright
 
     step_ok = {"ok": True}
@@ -756,21 +757,15 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#cancel-all").click()
-        dialog = page.locator('dialog.ui-confirm')
-        dialog.wait_for()
-        confirms = [dialog.inner_text()]
-        stop = page.locator("#estop").bounding_box()
-        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        save_temp_screenshot(page, "fleet_cancel_all_confirm.png" if width == 1920 else f"fleet_cancel_all_confirm_{width}.png")
-        dialog.locator('ui-button[kind=quiet]').click()
-        declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
+        assert page.locator("#cancel-all").get_attribute("kind") == "quiet"
         assert page.locator("#cancel-all-result").is_hidden()
         page.locator("#cancel-all").click()
-        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.locator('dialog.ui-confirm').count() == 0  # a stop never waits behind a dialog
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
         page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
         summary = page.locator("#cancel-all-result")
+        assert summary.inner_text().startswith("전체 주행 취소를 보냈습니다 · 3대")
         assert "1/3 · 물리 정지 미확인" in summary.inner_text()
         result_box = summary.bounding_box()
         assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
@@ -789,9 +784,7 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 
-    assert "비상 정지 래치는 걸지 않습니다" in confirms[0]
-    assert declined == []
-    assert ("POST", "/api/fleet/cancel-all") in posts
+    assert [post for post in posts if post[1] == "/api/fleet/cancel-all"] == [("POST", "/api/fleet/cancel-all")]
     assert ("POST", "/api/fleet/estop") not in posts
 
 
@@ -803,8 +796,7 @@ def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url)
         browser, page, errors = _open_console(p, api)
         page.set_viewport_size({"width": 320, "height": 568})
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#cancel-all").click()
-        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.locator("#cancel-all").click()  # no confirm: a stop goes at once (D-540 6)
         result = page.locator("#cancel-all-result")
         expect(result).to_contain_text("주행 취소 결과 확인 불가")
         expect(result).to_contain_text("로봇 상태를 다시 확인하세요")
