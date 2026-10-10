@@ -503,8 +503,9 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                 local = self._apply_lane_return(current, decision)
                 if local is not None:
                     self._local_owned_tick(current)  # D-468 owns the tick: no_motion restarts (stuck_wiring)
-                return self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
+                decision = self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
                     current, local if local is not None else self._apply_recovery(current, decision))))
+                return self._signal_committed(decision)
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.

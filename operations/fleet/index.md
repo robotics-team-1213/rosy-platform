@@ -55,6 +55,7 @@
 | D-489 | 관제 경로 계획은 방향 있는 차로 그래프에서 "차로 단위 상태"로 시간 비용 A*를 푼다 — 전역 경로는 Fleet, 국소 추종은 로봇, 다중 로봇 교통은 별도 층 |
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 
 ## 계획·결과 문서
 
@@ -92,6 +93,6 @@
 
 - 2026-10-10 · 79402f1f2 · fix: observation-first situation context
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
+- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · aa37d8cb6 · fix(fleet): 일정 시간 점등과 주기 재식별
 - 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
-- 2026-10-10 · 008d62b301 · feat(fleet): reassess stuck heading
