@@ -92,6 +92,7 @@ class TrafficService:
         self._tried: dict[str, tuple[str, list]] = {}
         #: D-610 7: ``(cycle, avoidable, now) -> (robot, edges) | None`` from the AI PC (app.py sets it).
         self.ai_replan = lambda _cycle, _avoidable, _now: None
+        self.avoidable: dict = {}
         self._cycle: tuple[frozenset, int] = (frozenset(), 0)
         #: robot id -> (route id, trim, front in route metres, clock) of its last accepted front
         self._front: dict[str, tuple[str, float, float, float]] = {}
@@ -309,6 +310,7 @@ class TrafficService:
             if index < len(live.segments) - 1 and live.segments[index]["edge_id"] not in edges:
                 avoidable[robot_id] = edges  # the unit lies past its next place: plan around it from there
         cycle = self._view["wait_cycle"]
+        self.avoidable = avoidable                            # D-610 7: the AI PC's deadlock case reads it
         seen = frozenset(cycle or ())
         self._cycle = (seen, self._cycle[1] + 1 if seen and seen == self._cycle[0] else int(bool(seen)))
         pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
