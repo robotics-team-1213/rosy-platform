@@ -101,7 +101,9 @@ function markLocked(reason = "auth") {
   connectionView.open();
   auth.role = null;
   incidentReports = [];
+  incidentTrafficReports = [];
   el("incident-list").replaceChildren();
+  el("incident-traffic-list").replaceChildren();
   el("incident-export").disabled = true;
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
   showSignedOut({fold: false, refused: reason === "auth"});
@@ -199,11 +201,47 @@ async function call(path, options = {}) {
   }
 }
 
-let incidentReports = [];
+let incidentReports = [], incidentTrafficReports = [];
 function incidentLine(parent, value) {
   const line = document.createElement("p");
   line.textContent = value;
   parent.append(line);
+}
+function incidentReviewForm(report, path) {
+  const form = document.createElement("form");
+  const select = document.createElement("select");
+  select.className = "ui-field";
+  select.setAttribute("aria-label", `${report.robot_ids.join(", ")} 원인 분류`);
+  for (const [value, label] of Object.entries(INCIDENT_CAUSES)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+  select.value = report.reviews.at(-1)?.root_cause || "unknown";
+  const note = document.createElement("input");
+  note.className = "ui-field";
+  note.maxLength = 1000;
+  note.placeholder = "판단 근거 또는 수정 내용";
+  note.setAttribute("aria-label", `${report.robot_ids.join(", ")} 검토 메모`);
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "검토 기록";
+  form.append(select, note, save);
+  form.addEventListener("submit", pageScope.guard(async event => {
+    event.preventDefault();
+    save.disabled = true;
+    try {
+      await call(path, {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({root_cause: select.value, note: note.value})});
+      log(`${report.robot_ids.join(", ")} 사건 검토를 기록했습니다.`, "good");
+      await refreshIncidents();
+    } catch (error) {
+      log(`사건 검토 기록 실패: ${error.message}`, "bad");
+      save.disabled = false;
+    }
+  }));
+  return form;
 }
 async function refreshIncidents() {
   if (auth.locked) return;
@@ -211,8 +249,9 @@ async function refreshIncidents() {
   try {
     const payload = await call("/api/fleet/incidents?limit=10");
     incidentReports = payload.reports || [];
-    status.textContent = incidentReports.length ? `최근 사건 ${incidentReports.length}건 · 최신순` : "기록된 정지 사건이 없습니다.";
-    el("incident-export").disabled = !incidentReports.length;
+    incidentTrafficReports = payload.traffic_reports || [];
+    status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
+    el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
     const list = el("incident-list");
     list.replaceChildren();
     for (const report of incidentReports) {
@@ -239,45 +278,47 @@ async function refreshIncidents() {
       incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause]} · ${latest.note || "메모 없음"} (${latest.principal_id})`
         : "사람 검토: 아직 없음");
       if (auth.role === "operator") {
-        const form = document.createElement("form");
-        const select = document.createElement("select");
-        select.className = "ui-field";
-        select.setAttribute("aria-label", `${report.robot_ids[0]} 원인 분류`);
-        for (const [value, label] of Object.entries(INCIDENT_CAUSES)) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = label;
-          select.append(option);
-        }
-        select.value = latest?.root_cause || "unknown";
-        const note = document.createElement("input");
-        note.className = "ui-field";
-        note.maxLength = 1000;
-        note.placeholder = "판단 근거 또는 수정 내용";
-        note.setAttribute("aria-label", `${report.robot_ids[0]} 검토 메모`);
-        const save = document.createElement("button");
-        save.type = "submit";
-        save.textContent = "검토 기록";
-        form.append(select, note, save);
-        form.addEventListener("submit", pageScope.guard(async event => {
-          event.preventDefault();
-          save.disabled = true;
-          try {
-            await call(`/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`, {
-              method: "POST", headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({root_cause: select.value, note: note.value}),
-            });
-            log(`${report.robot_ids[0]} 사건 검토를 기록했습니다.`, "good");
-            await refreshIncidents();
-          } catch (error) {
-            log(`사건 검토 기록 실패: ${error.message}`, "bad");
-            save.disabled = false;
-          }
-        }));
-        detail.append(form);
+        detail.append(incidentReviewForm(report,
+          `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
       }
       item.append(detail);
       list.append(item);
+    }
+    const trafficList = el("incident-traffic-list");
+    trafficList.replaceChildren();
+    const shown = new Set();
+    for (const report of incidentTrafficReports) {
+      const ai = report.evidence.ai_fact;
+      const key = `${report.classification}|${report.robot_ids.join(",")}`;
+      if (shown.has(key)) continue;
+      shown.add(key);
+      const item = document.createElement("li");
+      item.className = "stuck-item incident-row closed";
+      const detail = document.createElement("details");
+      const summary = document.createElement("summary");
+      const name = report.classification === "wait_cycle_confirmed"
+        ? ai.value?.fleet_agrees === false ? "AI 단독 대기 순환 판단" : "AI·Fleet 대기 순환 일치"
+        : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
+           livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
+          || report.classification;
+      summary.textContent = `${name} · ${report.robot_ids.join(", ")} · ${report.opened_at}`;
+      detail.append(summary);
+      incidentLine(detail, `AI ${ai.source} · ${ai.stage} · 신뢰도 ${Math.round(ai.confidence * 100)}%`);
+      incidentLine(detail, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
+      incidentLine(detail, "CORE·Rosy Cam: 이 AI 사실과 연결된 영속 표본 없음");
+      const latest = report.reviews.at(-1);
+      incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause]} · ${latest.note || "메모 없음"} (${latest.principal_id})`
+        : "사람 검토: 아직 없음");
+      if (auth.role === "operator") detail.append(incidentReviewForm(report,
+        `/api/fleet/incidents/facts/${ai.fact_row}/review`));
+      item.append(detail);
+      trafficList.append(item);
+      if (shown.size === 5) break;
+    }
+    if (!shown.size) {
+      const empty = document.createElement("li");
+      empty.textContent = "저장된 AI 상황 사실이 없습니다.";
+      trafficList.append(empty);
     }
   } catch (error) {
     if (error.name === "AbortError") return;
@@ -286,7 +327,8 @@ async function refreshIncidents() {
 }
 pageScope.listen(el("incident-refresh"), "click", refreshIncidents);
 pageScope.listen(el("incident-export"), "click", () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({reports: incidentReports}, null, 2)], {type: "application/json"}));
+  const url = URL.createObjectURL(new Blob([JSON.stringify({reports: incidentReports,
+    traffic_reports: incidentTrafficReports}, null, 2)], {type: "application/json"}));
   const link = document.createElement("a");
   link.href = url;
   link.download = "rosy-incidents.json";
@@ -1015,7 +1057,9 @@ function useToken(token) {
   auth.role = null;
   applyRoleToControls(null, operatorControls());
   incidentReports = [];
+  incidentTrafficReports = [];
   el("incident-list").replaceChildren();
+  el("incident-traffic-list").replaceChildren();
   el("incident-export").disabled = true;
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
   if (auth.token) {

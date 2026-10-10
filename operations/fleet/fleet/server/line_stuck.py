@@ -151,10 +151,18 @@ class LineStuckBoard:
     def reports(self, limit: int = 100) -> list[dict]:
         return self._log.reports(limit) if self._log is not None else []
 
+    def traffic_reports(self, limit: int = 100) -> list[dict]:
+        return self._log.traffic_reports(limit) if self._log is not None else []
+
     def review(self, robot_id: str, stuck_id: str, *, principal_id: str,
                root_cause: str, note: str) -> bool:
         return self._log.review(robot_id, stuck_id, principal_id=principal_id,
                                 root_cause=root_cause, note=note) if self._log is not None else False
+
+    def review_traffic_fact(self, fact_row: int, *, principal_id: str,
+                            root_cause: str, note: str) -> bool:
+        return self._log.review_traffic_fact(fact_row, principal_id=principal_id,
+                                             root_cause=root_cause, note=note) if self._log is not None else False
 
     def _now_iso(self) -> str:
         return datetime.fromtimestamp(self._wall(), timezone.utc).isoformat(timespec="milliseconds")
@@ -349,6 +357,13 @@ class LineStuckAnswerLog:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS fleet_incident_reviews_stuck "
                 "ON fleet_incident_reviews(robot_id, stuck_id)")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_ai_fact_reviews (
+                       review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       fact_row INTEGER NOT NULL, at TEXT NOT NULL,
+                       principal_id TEXT NOT NULL, root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_ai_fact_reviews_fact ON fleet_ai_fact_reviews(fact_row)")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -479,6 +494,51 @@ class LineStuckAnswerLog:
                 """INSERT INTO fleet_incident_reviews (robot_id, stuck_id, at, principal_id, root_cause, note)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (robot_id, stuck_id, datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                 principal_id, root_cause, note))
+        return True
+
+    def traffic_reports(self, limit: int = 100) -> list[dict]:
+        """Durable AI situation facts, kept distinct from CORE line-stuck episodes."""
+        with closing(self._connect()) as connection:
+            if not connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_ai_facts'").fetchone():
+                return []
+            facts = connection.execute(
+                """SELECT fact_row, kind, robot_ids, value, confidence, evidence, source,
+                          observed_at, ttl_s, stage, rule_input FROM fleet_ai_facts
+                   WHERE kind IN ('wait_cycle_confirmed', 'wait_cycle_stale_input',
+                                  'waiting_but_moving', 'livelock', 'stalled', 'unknown_occupancy_long')
+                   ORDER BY fact_row DESC LIMIT ?""", (limit,)).fetchall()
+            reports = []
+            for fact in facts:
+                row = dict(fact)
+                row["robot_ids"] = json.loads(row["robot_ids"])
+                row["value"] = json.loads(row["value"])
+                row["evidence"] = json.loads(row["evidence"])
+                reviews = [dict(item) for item in connection.execute(
+                    """SELECT at, principal_id, root_cause, note FROM fleet_ai_fact_reviews
+                       WHERE fact_row=? ORDER BY review_id""", (row["fact_row"],))]
+                reports.append({"schema": "rosy.incident.v1", "id": f"ai_fact:{row['fact_row']}",
+                                "classification": row["kind"], "robot_ids": row["robot_ids"],
+                                "opened_at": datetime.fromtimestamp(row["observed_at"], timezone.utc).isoformat(),
+                                "evidence": {"ai_fact": row, "fleet": None, "core": None,
+                                             "rosy_cam": None, "front_image": {"status": "not_retained"}},
+                                "actions": [], "reviews": reviews})
+        return reports
+
+    def review_traffic_fact(self, fact_row: int, *, principal_id: str,
+                            root_cause: str, note: str) -> bool:
+        with closing(self._connect()) as connection, connection:
+            if not connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_ai_facts'").fetchone():
+                return False
+            if not connection.execute(
+                    "SELECT 1 FROM fleet_ai_facts WHERE fact_row=?", (fact_row,)).fetchone():
+                return False
+            connection.execute(
+                """INSERT INTO fleet_ai_fact_reviews (fact_row, at, principal_id, root_cause, note)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (fact_row, datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
                  principal_id, root_cause, note))
         return True
 
