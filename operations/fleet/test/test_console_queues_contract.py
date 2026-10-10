@@ -58,7 +58,7 @@ def test_the_queues_panel_heads_the_rail():
     assert "main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);" in styles
     assert ".console-primary { grid-column: 1; }" in styles
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 3;" in shell
+    assert "const MAP_PANEL = 2;" in shell
 
 
 def test_queue_and_roster_attention_share_one_rule():
