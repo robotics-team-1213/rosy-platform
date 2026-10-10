@@ -24,6 +24,7 @@ from core_api_web.api.v1.common import (
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.lane_cue import LaneCueRequest
 from core_common.protocol.line_advice import LineAdviceRequest
 from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
@@ -318,6 +319,15 @@ def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
     """D-525: Fleet's signal advice for the trip leg, display only. The /authority seat
     (operator) without the manual-release or calibration-lease checks: it moves nothing."""
     accepted, reason = svc.line_advice.accept(body, time.monotonic())
+    return {"accepted": accepted, "reason": reason}
+
+
+@line_follow_router.post("/lane-cue")
+def set_lane_cue(body: LaneCueRequest, _: AuthContext = Depends(operator),
+                 svc: CoreServicesLike = Depends(get_services)):
+    """D-511 rev 1: Fleet's lane return cue. The /advice seat (operator): it starts nothing; the
+    CAMERA_LINE keep reads it only while it already drives (``fleet_lane_cue_enabled``)."""
+    accepted, reason = svc.line_follow.set_lane_cue(body.model_dump())
     return {"accepted": accepted, "reason": reason}
 
 
