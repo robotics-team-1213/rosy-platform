@@ -1509,7 +1509,7 @@ D-610 deadlock cases appear in `/api/fleet/ai/problems` after a stable wait cycl
 
 `captured_at`, `observed_at`, `judged_at`은 UTC Unix seconds이며 `age_s`, `ttl_s`는 초 단위 기간이다. VLM 응답의 `source`는 `vlm:<model>@<digest12>:<prompt>`이며 `evidence.seen`은 영상에서 판단한 내용, `reason`은 짧은 사유 코드다. `evidence.views`의 두 영상은 각각 `frame_id`, `captured_at`, `age_s`, `sha256`으로 추적한다. JPEG와 Vision lease는 응답 기록에 복사하지 않는다. 모델 이름만 같아도 digest가 다르면 동일 판단자로 간주하지 않는다.
 
-현재 Qwen 어댑터는 두 영상이 모두 있어야 판단하며 모델 호출 제한은 6 s, 제안 TTL은 6 s다. 누락 영상·모델 부재·시간 초과·잘못된 JSON·허용 목록 밖 단어는 제안을 보내지 않고 기존 규칙으로 돌아간다. Fleet은 실행 시점의 문제 ID, TTL, 원인별 허용 단어, 교차로·위치·뒤쪽 차량·trip 권한을 다시 검사한다. CORE는 현재 센서, 차체 여유, 후방 경로와 사각, 충돌 정지·watchdog을 재검사한다. AI-first 전용 영상 신선도 제한은 별도로 적용하며 사례 조회만으로 이 모드를 활성화하지 않는다.
+현재 Qwen 어댑터는 두 영상이 모두 있어야 판단하며 모델 호출 제한은 10 s, 제안 TTL은 12 s다. 누락 영상·모델 부재·시간 초과·잘못된 JSON·허용 목록 밖 단어는 제안을 보내지 않고 기존 규칙으로 돌아간다. Fleet은 실행 시점의 문제 ID, TTL, 원인별 허용 단어, 교차로·위치·뒤쪽 차량·trip 권한을 다시 검사한다. CORE는 현재 센서, 차체 여유, 후방 경로와 사각, 충돌 정지·watchdog을 재검사한다. AI-first 전용 영상 신선도 제한은 별도로 적용하며 사례 조회만으로 이 모드를 활성화하지 않는다.
 
 예시의 `queued`와 최종 `verdict`를 구분한다. 아래는 계약 시험용 상황이며 실제 현장 모델 판단 결과는 별도 증거로 기록한다.
 
@@ -1529,7 +1529,7 @@ v1.202 / D-619: `evidence.assessment`를 선택 추가한다. 공통 계약은 `
 
 `inquiry_observed_at`은 기존 사건의 ISO-8601 UTC 문자열이다. VLM evidence에는 실제 `model_options`도 기록하고 프로필은 `<model>@<digest12>:<prompt_id>:<options_sha8>`로 설정을 구분한다. exact prompt와 options가 같아도 모델 설명의 정확성은 독립 검증이 필요하다.
 
-v5는 작업 보고가 영상 해석을 왜곡하지 않도록 영상별 개별 관찰 뒤 작업 맥락으로 판단한다. 전체 호출이 하나의 6초 제한을 공유하며 하나라도 실패하면 proposal을 만들지 않는다. `evidence.prompt.calls[]`에 모든 실제 호출의 text/model_options와 관찰 단계의 robot_id/view를 기록한다. 최종 `assessment.observations`는 원본 프레임별 개별 관찰을 그대로 연결한다. 2초/3초 신선도 admission은 유지하며, 판단의 반환과 명령 수락은 별개다.
+v5는 작업 보고가 영상 해석을 왜곡하지 않도록 영상별 개별 관찰 뒤 작업 맥락으로 판단한다. 전체 호출이 하나의 10초 제한을 공유하며 하나라도 실패하면 proposal을 만들지 않는다. `evidence.prompt.calls[]`에 모든 실제 호출의 text/model_options와 관찰 단계의 robot_id/view를 기록한다. 최종 `assessment.observations`는 원본 프레임별 개별 관찰을 그대로 연결한다. 2초/3초 신선도 admission은 유지하며, 판단의 반환과 명령 수락은 별개다.
 
 모델에는 문제 종류·목표 로봇·센서/지도 상태·최근 실제 처리 결과·영상 메타데이터를 전달한다. 임의 operator_report/requested_outcome을 포함한 요청은 사용자 보고·가설로 명시하며 측정 사실로 승인하지 않는다. 최근 history는 최대 3건만 입력하고 맥락 JSON이 12,000자 또는 전체 프롬프트가 20,000자를 넘으면 VLM 판단을 보류한다. JSON을 중간에서 잘라 보내지 않는다. Qwen 응답은 JSON Schema로 필수 assessment를 제한한다. proposal evidence의 `prompt {id, sha256, text}`는 모델이 받은 정확한 요청문이고 `inference_s`는 실제 모델 호출 이후 파싱까지의 측정 시간이다. JPEG·lease·credential은 prompt 기록에서 제외한다. 기존 API의 권한과 CORE 실행 검사는 그대로 유지한다.
 

@@ -111,7 +111,7 @@ class AiProposal(BaseModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
     source: str = Field(pattern=r"^(analyzer:[a-z0-9_.-]+@[A-Za-z0-9_.-]+|vlm:[A-Za-z0-9_.:@/-]+)$", max_length=128)
     observed_at: float
-    ttl_s: float = Field(gt=0.0, le=8.0)
+    ttl_s: float = Field(gt=0.0, le=12.0)
     body: dict[str, Any] = Field(default_factory=dict)    # D-610 7: REPLAN {blocked_edges: [...]}
 
     @field_validator("evidence")

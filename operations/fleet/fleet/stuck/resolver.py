@@ -38,7 +38,7 @@ class ResolverConfig:
     #: D-577 1: R3 trusts a known Fleet map pose only while it is LOCALIZED and this fresh.
     pose_max_age_s: float = 2.0
     #: D-577 개정 2026-10-10: how long a stuck waits for an AI PC proposal before the rules answer.
-    ai_wait_s: float = 5.0
+    ai_wait_s: float = 12.0
 
 
 @dataclass(frozen=True)

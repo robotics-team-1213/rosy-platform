@@ -47,7 +47,7 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     assert views["rosy_cam"]["frame_id"] == "rc-9" and views["rosy_cam"]["age_s"] == 1.0
     assert views["front"]["age_s"] == 1.5 and len(views["front"]["sha256"]) == 64
     chat = calls[-1]
-    assert chat[0] == "http://127.0.0.1:11434/api/chat" and 0 < chat[2] <= 6.0
+    assert chat[0] == "http://127.0.0.1:11434/api/chat" and 0 < chat[2] <= 10.0
     assert "images" not in chat[1]["messages"][0]
     assert len(calls) == 3
     assert "context cause is a report, not proof" in chat[1]["messages"][0]["content"]
@@ -162,7 +162,7 @@ def test_observation_pipeline_uses_one_total_deadline(monkeypatch):
     calls = []
     def post(url, body, timeout):
         calls.append(body)
-        elapsed[0] = 7.0
+        elapsed[0] = 11.0
         return {'message': {'content': '{"observation":"A wall is visible."}'}}
     assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
     assert len(calls) == 1
@@ -184,7 +184,21 @@ def test_final_reply_after_total_deadline_is_discarded(monkeypatch):
     def post(url, body, timeout):
         result = reply(url, body, timeout)
         if body.get('format', {}).get('required') != ['observation']:
-            elapsed[0] = 7.0
+            elapsed[0] = 11.0
         return result
     assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
     assert len(calls) == 3
+
+
+def test_reply_between_old_and_new_deadline_is_kept(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr('rosy_situation.vlm.time.monotonic', lambda: elapsed[0])
+    reply, calls = _post({'decision': 'WAIT'})
+    def post(url, body, timeout):
+        result = reply(url, body, timeout)
+        elapsed[0] += 3.0
+        return result
+    proposal = Vlm(post=post, get=RUNNING).judge(_case(), 100.0)
+    assert proposal['evidence']['inference_s'] == 9.0
+    assert proposal['observed_at'] == 100.0 and proposal['ttl_s'] == 12.0
+    assert [call[2] for call in calls] == [10.0, 7.0, 4.0]

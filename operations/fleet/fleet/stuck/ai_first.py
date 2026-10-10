@@ -28,7 +28,7 @@ STUCK_WORDS = frozenset({"WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "
 GATE_STATES = frozenset({"armed", "approaching", "looking", "waiting"})
 MAX_AGE_S = {"rosy_cam": 2.0, "front": 3.0}           # D-610 5
 PER_PROBLEM, PER_HOUR = 3, 6                          # D-610 2
-VLM_WAIT_S = 8.0                                      # D-610 8: with a model loaded
+VLM_WAIT_S = 12.0                                     # D-619: 10 s inference plus delivery.
 OPPOSITE = {"BACK_AND_RETRY": "RESUME", "RESUME": "BACK_AND_RETRY"}
 
 
