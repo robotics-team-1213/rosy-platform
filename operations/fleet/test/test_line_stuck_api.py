@@ -566,13 +566,25 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
         "robot_ids": ["rosy_01"], "value": {"still_s": 21}, "confidence": 0.8,
         "evidence": {"source": "state"}, "source": "analyzer:test@1", "observed_at": at,
         "ttl_s": 3.0, "stage": "shadow"}])
+    AiFactLog(tmp_path / "fleet.sqlite3").append([{
+        "received_at": at + 9, "principal_id": "ai-pc", "kind": "incident_context",
+        "robot_ids": ["rosy_01"], "value": {"cause_draft": "obstacle"}, "confidence": 0.35,
+        "evidence": {"stuck_id": "stuck-abc"}, "source": "analyzer:incident_context@1",
+        "observed_at": at + 9, "ttl_s": 3.0, "stage": "shadow"}, {
+        "received_at": at + 1, "principal_id": "ai-pc", "kind": "incident_context",
+        "robot_ids": ["rosy_01"], "value": {"cause_draft": "unknown"}, "confidence": 0.2,
+        "evidence": {"stuck_id": "another-stuck"}, "source": "analyzer:incident_context@1",
+        "observed_at": at + 1, "ttl_s": 3.0, "stage": "shadow"}])
     response = client.get("/api/fleet/incidents", headers=_auth(VIEWER))
     assert response.status_code == 200, response.text
     [report] = response.json()["reports"]
     assert report["classification"] == "line_stuck"
     assert report["evidence"]["core"]["cause"] == "obstacle_ahead"
     assert report["evidence"]["rosy_cam"]["source_id"] == "ceiling_north"
-    assert report["evidence"]["ai_facts"][0]["stage"] == "shadow"
+    assert report["evidence"]["ai_facts"][0]["kind"] == "incident_context"
+    assert report["evidence"]["ai_facts"][0]["evidence"]["stuck_id"] == "stuck-abc"
+    assert report["evidence"]["ai_facts"][1]["kind"] == "stalled"
+    assert len(report["evidence"]["ai_facts"]) == 2
     assert report["evidence"]["front_image"]["status"] == "requestable_while_open"
     [traffic] = response.json()["traffic_reports"]
     assert traffic["classification"] == "stalled" and traffic["evidence"]["ai_fact"]["source"] == "analyzer:test@1"
