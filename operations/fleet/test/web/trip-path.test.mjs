@@ -2,11 +2,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip, tripErrorText, tripRefusalText,
+  oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip,
+  tripErrorText, tripRefusalText,
   tripStartReason,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
+
+test('one lap uses a finite trip via a different stop and returns to its start', () => {
+  const map = {places: [{id: 'W_mid', kind: 'stop'}, {id: 'E_mid', kind: 'stop'}]};
+  assert.deepEqual(oneLapBody(map, 'W_mid', 'E_mid'),
+    {to: 'W_mid', via: ['E_mid'], repeat: false, start_at: 'W_mid'});
+  assert.equal(oneLapReason({active: {map}, running: null, start: 'W_mid', via: 'E_mid'}), '');
+  assert.match(oneLapReason({active: {map}, running: null, start: 'W_mid', via: 'W_mid'}), /서로 다른/);
+  assert.throws(() => oneLapBody(map, 'W_mid', 'W_mid'));
+});
 
 test('plan and start call the D-494 routes with the escaped id', async () => {
   const calls = [];

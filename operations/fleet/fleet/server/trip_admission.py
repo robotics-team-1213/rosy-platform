@@ -42,7 +42,7 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 
 
 class TripAdmission:
-    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool):
+    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
         map_id = self._store.active()[1].map_id
         lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
@@ -51,7 +51,8 @@ class TripAdmission:
             raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
         refused = unsupported(graph, segments, kind=caps.kind, modes=caps.modes,
                               junction_turn=caps.junction_turn, config=self._routing,
-                              max_turn_deg=self.config.max_turn_deg, repeat=repeat)
+                              max_turn_deg=self.config.max_turn_deg, repeat=repeat,
+                              final_place=final_place)
         if refused is not None:
             raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor

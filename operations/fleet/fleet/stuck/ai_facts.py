@@ -29,7 +29,7 @@ FACT_KINDS = ("wait_cycle_confirmed", "wait_cycle_stale_input", "waiting_but_mov
               "unknown_occupancy_long", "lane_obs_vs_range", "lane_conf_collapse", "shadow_active_drift",
               "pose_vs_paint", "pose_sources_disagree", "obstacle_identity",
               # D-577 개정 2026-10-10 (analyzer stuck_scene): the field stuck causes
-              "rear_blocked", "path_blocked_by_robot", "incident_context")
+              "rear_blocked", "path_blocked_by_robot", "incident_context", "trip_route_check")
 #: D-577 7 (2) under the user's go 2026-10-10: these kinds, for the robots in
 #: ``fleet.stuck_resolver.ai_facts_acting``, turn a resolver back-off into R5 WAIT + a human. Nothing else.
 ACTING_KINDS = frozenset({"rear_blocked", "path_blocked_by_robot"})

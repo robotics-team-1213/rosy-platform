@@ -22,10 +22,12 @@ from typing import Awaitable, Callable, Iterable, Optional
 
 import httpx
 
+from core_common.robot_body import NOMINAL_BODY
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import advance_m, exit_segment, lane_action, replan_hold, turn_target
+from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target
+from fleet.routing.trip import ARRIVED_M
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
@@ -147,13 +149,30 @@ class TripRunner(TripAdmission, TripProgress):
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
             repeat = bool((row.get("request") or {}).get("repeat"))
             graph = self._graph_for(plan["map_version"])
-            caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat)
+            caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
+                                           plan["actions"][-1]["place_id"])
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
             pose, enable, turns = await self._start_pose(robot_id, graph, plan["segments"], principal_id)
+            start_at = (row.get("request") or {}).get("start_at")
+            if start_at is not None:
+                distance = math.dist((pose.x, pose.y), graph.place_xy(start_at))
+                if distance > ARRIVED_M:
+                    raise TripError(422, "TRIP_START_PLACE_MISMATCH",
+                                    {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
+                if caps.kind != "pinky_pro":
+                    raise TripError(422, "TRIP_BODY_UNKNOWN", {"kind": caps.kind})
+                if not plan["segments"]:
+                    raise TripError(422, "TRIP_NO_ROUTE")
+                first = graph.arcs[arc_id(plan["segments"][0])]
+                offset = first.project(pose.x, pose.y)[0]
+                margin = first.width_m / 2 - offset - NOMINAL_BODY.half_width_m
+                if margin < 0:
+                    raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
+                                    {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
@@ -166,6 +185,8 @@ class TripRunner(TripAdmission, TripProgress):
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
+                if start_at is not None and moved is not None:
+                    raise TripError(422, "TRIP_START_PLACE_MOVED", moved)
                 leader = (request.get("convoy") or {}).get("leader")
                 refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
                     self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
@@ -187,6 +208,7 @@ class TripRunner(TripAdmission, TripProgress):
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
+                    "body_half_width_m": NOMINAL_BODY.half_width_m if caps.kind == "pinky_pro" else None,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
                     "lease": lease, "stop_moved": moved}
@@ -421,7 +443,7 @@ class TripRunner(TripAdmission, TripProgress):
                 return
             if off is not None:
                 await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
-                                                           **pose_diagnostics(pose)}, halt_free=False)
+                                                           **pose_diagnostics(pose)})
                 return
             if live.view["state"] == "started":
                 live.view["state"] = "running"
