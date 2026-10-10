@@ -86,9 +86,10 @@ def _observed_at(value):
 
 def _base(row):
     caps = row.get("capabilities") or {}
-    controls = caps.get("controls") or {}
-    return next((i for i in controls.get("items", ()) if isinstance(i, dict)
-                 and i.get("kind") == "base_velocity"), {})
+    controls = caps.get("controls") if isinstance(caps, dict) else None
+    items = controls.get("items") if isinstance(controls, dict) else None
+    return next((i for i in items if isinstance(i, dict)
+                 and i.get("kind") == "base_velocity"), {}) if isinstance(items, list) else {}
 
 
 def select(row, rows, config, *, now, attempt):
@@ -121,7 +122,8 @@ def select(row, rows, config, *, now, attempt):
     kind = "PIVOT" if proof.get("turn_spot") is True else "KTURN"
     base = _base(row)
     body = nominal_body_for(base.get("robot_kind"))
-    if body is None or kind not in (base.get("stuck_realign") or ()):
+    kinds = base.get("stuck_realign")
+    if body is None or not isinstance(kinds, (list, tuple)) or kind not in kinds:
         return None, "body_or_capability_unproved"
     if kind == "KTURN" and (clearance.get("rear_state") != "clear"
             or not finite(clearance.get("rear_clearance_m")) or clearance["rear_clearance_m"] <= .06):
