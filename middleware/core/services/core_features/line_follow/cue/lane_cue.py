@@ -143,6 +143,10 @@ class LaneCueMixin:
             sign = old[0]                                   # near 180 deg the sign is noise: keep it
         self._cue_streak["pivot"] = (None if sign is None else
                                      (sign, old[1], old[2] + 1, now) if old and old[0] == sign else (sign, now, 1, now))
+        old = self._cue_streak.get("ww")
+        if cue["state"] != "WRONG_WAY" or (old and now - old[2] > STREAK_GAP_S):
+            old = None
+        self._cue_streak["ww"] = ((old[0], old[1] + 1, now) if old else (now, 1, now)) if cue["state"] == "WRONG_WAY" else None
         side = cue.get("side") if (cue["state"] in ("ON_LINE", "OFF_LANE") and cue.get("offset_m") is not None
                                    and abs(cue["offset_m"]) >= SIDE_MIN_OFFSET_M) else None
         old = self._cue_streak.get("side")
@@ -208,9 +212,11 @@ class LaneCueMixin:
                  if spot else junction.state != "idle")
         return armed or (arc is not None and arc.state == "running") or self._xwalk.zone is not None
 
-    def _lane_cue_spot_running(self) -> bool:
-        """A turn-spot pivot that already turned at least one tick (the camera was needed to start)."""
-        return self._pivot is not None and self._pivot_spot and self._pivot.ticks > 0
+    def _lane_cue_spot_running(self, now: float) -> bool:
+        """A turn-spot pivot that already turned, or one about to start with the robot standing still
+        (run 2 fix 3: the camera is not needed to turn in place; IR stale and body stop still apply)."""
+        return (self._pivot is not None and self._pivot_spot
+                and (self._pivot.ticks > 0 or self._standing_still(now)))
 
     def _camera_follows(self, now: float) -> bool:
         o, at = self._observation, self._received_at
@@ -221,6 +227,9 @@ class LaneCueMixin:
         """None (the keep drives), ("hold", reason), ("turn", angular, reason) or ("side", side)."""
         if self._cue_latch is not None:
             return ("hold", self._cue_latch)
+        cue = self._fresh_cue(now)
+        if cue is not None and cue["state"] == "OFF_MAP":
+            return self._latch("fleet_off_map", now)          # a stop: latched whatever else is open
         if self._recovery.status(now) is not None:
             # An open D-407 stuck: its answer (Fleet's REALIGN, a human) owns the robot. No pivot or
             # side steering until it closes; a running pivot is dropped, not latched.
@@ -228,23 +237,27 @@ class LaneCueMixin:
             return None
         if self._cue_reacquire_until is not None:
             return self._reacquire(now)
-        cue = self._fresh_cue(now)
         if self._pivot is not None:
             if self._lane_cue_busy(now, spot=self._pivot_spot):
                 return self._latch("fleet_turn_interrupted", now)   # a junction/arc/zone took over
             return self._pivot_step(now, cue, cap)
         if cue is None:
             return None
-        if cue["state"] == "OFF_MAP":
-            return self._latch("fleet_off_map", now)
         angle = self._cue_angle(cue)
         streak = self._cue_streak.get("pivot")
-        if cue["state"] == "WRONG_WAY" and not (cue.get("turn_spot") and angle is not None):
-            return self._latch("fleet_wrong_way", now)      # rev 4: no in-lane U-turn; Fleet decides
+        if cue["state"] == "WRONG_WAY":
+            ww = self._cue_streak.get("ww")
+            if not (ww and ww[1] >= 2 and now - ww[0] >= DEBOUNCE_S):
+                return None                                 # run 2 fix 2: one cue is not a verdict yet
+            if not (cue.get("turn_spot") and angle is not None):
+                return self._latch("fleet_wrong_way", now)  # rev 4: no in-lane U-turn; Fleet decides
         if angle is not None:
             if (streak and streak[2] >= 2 and now - streak[1] >= DEBOUNCE_S and self._cue_yaw0 is not None
                     and not self._lane_cue_busy(now, spot=cue["state"] == "WRONG_WAY")):
-                return self._pivot_start(now, streak[0] * abs(angle), cap)
+                # run 2 fix 1: near 180 deg the kept sign may differ from this cue's; turning the kept way
+                # by 360 - |angle| reaches the same heading instead of finishing 2(180 - |angle|) off.
+                kept = streak[0] * (abs(angle) if (angle > 0) == (streak[0] > 0) else 360.0 - abs(angle))
+                return self._pivot_start(now, kept, cap)
             return None
         side = self._cue_streak.get("side")
         if side and side[1] >= 2:
@@ -285,7 +298,9 @@ class LaneCueMixin:
         return ("turn", sign * rate, self._pivot_reason)
 
     def _reacquire(self, now: float):
-        if self._camera_follows(now):
+        cue = self._fresh_cue(now)
+        heading_ok = cue is None or cue.get("turn_deg") is None or abs(cue["turn_deg"]) <= PIVOT_DONE_DEG
+        if self._camera_follows(now) and heading_ok:
             self._cue_reacquire_until = None
             return None
         if now > self._cue_reacquire_until:

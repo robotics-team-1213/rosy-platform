@@ -274,6 +274,10 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'lane_cue': self._lane_cue_view(self._clock()),
+                                                   # run 2 fix 4: a latched cue HOLD names itself even when
+                                                   # a later gate (junction_waiting) rewrote the reason
+                                                   **({'reason': self._cue_latch} if self._cue_latch
+                                                      and self._status.state == 'HOLD' else {}),
                                                    'route_context': self._route_context_current,
                                                    'route_context_published_at_s':
                                                    self._route_context_published_at_s})
@@ -581,7 +585,7 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
         self._escalated = False
         # D-511 rev 5: a turn-spot pivot that already turned runs through camera loss and LOST, with the
         # IR centre exemption (D-344 §12, turn spots only); the body stop ran above, the gates run after.
-        spot = cue is not None and cue[0] == "turn" and self._lane_cue_spot_running()
+        spot = cue is not None and cue[0] == "turn" and self._lane_cue_spot_running(current)
         if guard is not None:
             # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
             if guard == "stale":

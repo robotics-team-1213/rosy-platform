@@ -349,17 +349,23 @@ def test_the_cue_stands_down_while_a_stuck_is_open():
 def test_wrong_way_off_a_turn_spot_is_a_latched_hold_never_a_pivot():
     rig = Rig()
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0, turn_spot=False)
+    assert rig.step().linear > 0                                       # one cue is not a verdict
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0, turn_spot=False)
     d = rig.step()
     assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "fleet_wrong_way"
     rig.wait(3.0)
     assert rig.step().linear == 0 and rig.m._pivot is None             # still held, Fleet silent
-    rig.cue("ON_LANE", 2)
+    rig.cue("ON_LANE", 3)
     assert rig.step().linear > 0
 
 
 def test_wrong_way_without_an_angle_is_latched_too():
     rig = Rig()
     rig.cue("WRONG_WAY", 1)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2)
     assert rig.step().linear == 0 and rig.m._cue_latch == "fleet_wrong_way"
 
 
@@ -490,3 +496,49 @@ def test_the_lap_context_is_validated_kept_and_shown():
     with pytest.raises(ValueError):
         LaneCueRequest(cue_id="c1", fleet_epoch="e", seq=1, ttl_s=1.0, pose_stamp=1.0, state="ON_LANE",
                        context={**ctx, "extra": 1})
+
+
+
+# ---- Gazebo run 2 fixes ---------------------------------------------------------------------------
+
+def test_near_180_a_kept_sign_turns_the_rest_of_the_circle_to_the_same_heading():
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1, turn_deg=178.0)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=-178.0)                          # Fleet's sign flipped
+    assert rig.step().angular > 0                                     # kept sign: left
+    assert math.degrees(rig.m._pivot.total) == pytest.approx(182.0)   # 360 - 178: same final heading
+
+
+def test_a_spot_pivot_starts_standing_still_without_the_camera():
+    rig = Rig()
+    rig.wait(1.0, camera=False)                                       # stopped, camera lost (junction)
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.step(camera=False)
+    rig.wait(0.5, camera=False)
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    d = rig.step(camera=False)
+    assert d.linear == 0 and d.angular < 0 and rig.m.status().reason == "fleet_wrong_way_turn"
+
+
+def test_reacquire_needs_the_heading_along_the_lane_too():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    d, seq = _turn_on(rig, seq, camera=False)
+    assert rig.m.status().reason == "fleet_turn_reacquire"
+    rig.cue("WRONG_WAY", seq, turn_deg=60.0)                          # camera back, heading not
+    assert rig.step(camera=True).linear == 0
+    rig.cue("ON_LANE", seq + 1, turn_deg=5.0)
+    assert rig.step(camera=True).linear > 0
+
+
+def test_off_map_latches_even_with_a_stuck_open_and_the_latch_names_the_hold():
+    rig = Rig()
+    rig.m._recovery.status = lambda now: {"stuck_id": "s1"}
+    rig.cue("OFF_MAP", 1)
+    assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")
+    rig.m._recovery.status = lambda now: None
+    rig.m._junction = {"state": "waiting", "expires_at": 1e9}
+    rig.step()
+    assert rig.m.status().reason == "fleet_off_map"
