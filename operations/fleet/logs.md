@@ -3053,3 +3053,10 @@
 - Change: the card's position chip says Fleet's site map pose first (지도 위치 확정/추정 · 카메라/odom 이음), CORE localization only when CORE reports one, else a neutral 지도 위치 없음 (no warn for a missing CORE block; the D-587 marker-yaw reason is not known to Fleet, so not shown). Map markers carry short ids with declutter (hidden on overlap except selected/called/최우선). The same warn cause on several robots is one expandable queue row; 최우선 rows stay one per robot and first; queue heads count instead of repeating names (D-540 3). 전체 주행 취소 runs at once without a confirm (D-540 6, user decision), quiet, any operator, "전체 주행 취소를 보냈습니다 · N대"; dialog contract pins console.js at 3.
 - Evidence: model/AI PC remote runs: operations/fleet/test 3326 passed; guard suites only the perception size verdict listed in known_failures; browser suites equal clean main 8d7b5939f (11 known failures) plus new tests passing (labels/grouping, cancel-all immediate, 100 robots).
 - Gate: SOURCE. Console only; 전체 주행 취소 calls the unchanged /api/fleet/cancel-all.
+
+
+## 2026-10-10 · uncommitted · fix(fleet): remove implicit legacy map-pose trust
+
+- Change: 사용자 결정에 따라 위치 미보고를 UNKNOWN/untrusted로 처리한다. LOCALIZED + map만 교통·bays·교착 해결기의 원시 지도 자세로 쓴다. 30 s null 뒤 캐시 좌표를 버려도 신뢰는 복원하지 않는다. 목표 admission은 현재 상태를 먼저 읽는다. 화면은 map_id만 있는 raw pose를 지도에 그리지 않고 Fleet MapPose 출처와 CORE 상태를 구분한다.
+- Evidence: AI PC 원격 집중 시험 193개 및 enrollment/formation/priority/task 호출부 시험 116개 통과; known_failures 비교 0 NEW. node localization-badge 10개 통과. 전체 Fleet 첫 실행의 위치 생략 fixture 실패 6개를 수정했으며 최종 통합 게이트는 착지 도구에서 다시 검사한다.
+- Gate: SOURCE. 설치 이미지·현장 화면은 이 변경으로 아직 검증하지 않았다. 물리 주행이나 LED 신원 확인을 지시하지 않았다.
