@@ -65,6 +65,7 @@ Use context in this order: task intent; timestamped device state and sensor meas
 identity and calibration; recent attempted actions and their outcomes; operator reports as hypotheses.
 Missing values mean unknown, not zero or clear. Compare view timestamps before combining observations.
 clearance_at_open_m is a retained stuck-opening snapshot, not current clearance or permission to move.
+route_context is timestamped intent, not motion permission; expired valid_until is historical intent.
 Current state_age_s does not refresh that measurement; CORE must check current sensors.
 If ceiling target identity is unknown, describe the scene without attributing a position to this robot.
 Never infer the intended turn or metric geometry without a supplied route or calibrated map.
@@ -233,6 +234,8 @@ class Vlm:
             return None
         if decision not in words:
             _LOG.warning("vlm word %r not allowed for %s", decision, case.get("kind"))
+            return None
+        if time.monotonic() - started > TIMEOUT_S:
             return None
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
         evidence = {"views": cited[rid], "map_pose": (members[rid].get("context") or {}).get("map_pose"),

@@ -175,3 +175,16 @@ def test_invalid_independent_observation_drops_the_whole_proposal():
         return {'message': {'content': '{"observation":"", "verified":true}'}}
     assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
     assert len(calls) == 1
+
+
+def test_final_reply_after_total_deadline_is_discarded(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr('rosy_situation.vlm.time.monotonic', lambda: elapsed[0])
+    reply, calls = _post({'decision': 'WAIT'})
+    def post(url, body, timeout):
+        result = reply(url, body, timeout)
+        if body.get('format', {}).get('required') != ['observation']:
+            elapsed[0] = 7.0
+        return result
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 3
