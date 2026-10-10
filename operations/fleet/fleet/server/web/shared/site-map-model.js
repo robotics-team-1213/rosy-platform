@@ -643,6 +643,8 @@ export function trafficCardLine(traffic, robotId) {
   const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);  // D-517 5 (M4)
   if (resolver?.trigger === "wait_cycle") {
     parts.push(`교착 · ${RESOLVER_DECISION_LABEL[resolver.decision] || RESOLVER_DECISION_LABEL.human}`);
+  } else if (traffic.wait_cycle?.includes(robotId)) {
+    parts.push("대기 순환 후보 · 지속 여부 확인 중");
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   const advice = robot.advice;  // D-551: display-only signal advice to CORE
@@ -674,7 +676,10 @@ export function trafficAttention(traffic, robotId, clock, now) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
     const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
-    items.push({ severity: "crit", decision: "deadlock", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
+    const confirmed = resolver.some((row) => row.trigger === "wait_cycle");
+    items.push(confirmed
+      ? { severity: "crit", decision: "deadlock", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` }
+      : { severity: "warn", text: `: 대기 순환 후보 — ${[...cycle, cycle[0]].join(" → ")} · 지속 여부 확인 중` });
   }
   if (mine?.trigger === "unknown") {
     items.push({ severity: "crit", text: ": 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요" });

@@ -100,6 +100,9 @@ test("deadlock slot (D-577 d): Fleet's decision per robot, AI facts for this rob
   assert.equal(none.lines[0], "a · 해결기 판단 전");
   assert.equal(none.confirmReason, "운영자 권한이 필요합니다");
   assert.equal(deadlockView(traffic, null, [], "a", { operator: true }).cancelReason, "열린 운행이 없습니다");
+  const disagree = [{kind: "wait_cycle_confirmed", robot_ids: ["a", "b"], confidence: 0.7,
+    value: {fleet_agrees: false}, observed_at: 3}];
+  assert.match(deadlockView(traffic, held, disagree, "a", {operator: true}).lines.at(-1), /Fleet 순환과 불일치/);
 });
 
 test("a later row of the same robot hides the name and its colon", () => {
