@@ -11,6 +11,7 @@ from typing import Mapping
 import yaml
 
 from core_common.protocol.place_markers import check_place_marker_ids
+from core_common.protocol.sightings import check_marker_yaw_offsets
 from fleet.server.sightings import SightingSource
 
 _REQUIRED = {
@@ -20,11 +21,14 @@ _REQUIRED = {
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
     "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
-    "calibration_source", "place_markers",
+    "calibration_source", "place_markers", "marker_yaw_offset_deg",
+    "auto_tune",  # D-589: Vision only; Fleet reads the same file and ignores it
 }
 CREDENTIAL_KINDS = ("static", "paired")
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+#: D-580: `robot_ids: enrolled` = every robot on the live roster (robots.yaml + enrolled).
+ROSTER = "enrolled"
 
 
 def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -78,9 +82,10 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
         if calibration_source == "field_boundary" and "corner_world_m" not in row:
             raise ValueError(f"sources[{index}] is field_boundary and needs corner_world_m")
-        if (not isinstance(robot_ids, list) or not robot_ids
-                or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
-            raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list")
+        follow = robot_ids == ROSTER  # D-580
+        if not follow and (not isinstance(robot_ids, list) or not robot_ids
+                           or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
+            raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list or {ROSTER!r}")
         if calibration_source == "corner_markers" and (
                 not isinstance(corner_ids, list) or len(corner_ids) != 4
                 or any(type(marker_id) is not int or marker_id < 0 for marker_id in corner_ids)):
@@ -103,7 +108,7 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
                        or type(marker_id) is not int or marker_id < 0
                        for robot_id, marker_id in markers.items())):
             raise ValueError(f"sources[{index}].robot_markers must map robot ids to marker ids")
-        if set(markers) - set(robot_ids):
+        if not follow and set(markers) - set(robot_ids):
             raise ValueError(f"sources[{index}].robot_markers names robots outside robot_ids: "
                              f"{', '.join(sorted(set(markers) - set(robot_ids)))}")
         if len(set(markers.values())) != len(markers):
@@ -115,15 +120,21 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
                                                    robot_marker_ids=markers.values())
         except ValueError as exc:
             raise ValueError(f"sources[{index}].{exc}") from exc
+        try:  # D-587 4: Vision applies the offsets; Fleet only refuses a bad file the same way.
+            check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"), None if follow else robot_ids)
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         sources.append(SightingSource(
             source_id=row["source_id"],
             token=token,
-            robot_ids=tuple(robot_ids),
+            robot_ids=() if follow else tuple(robot_ids),
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
             corner_marker_ids=None if corner_ids is None else tuple(corner_ids),
             corner_world_m=corner_world_m,
-            robot_markers=tuple(markers.items()),
+            robot_markers=() if follow else tuple(markers.items()),
+            follow_roster=follow,
+            marker_overrides=tuple(markers.items()) if follow else (),
             credential=credential,
             calibration_source=calibration_source,
             place_markers=place_markers,

@@ -6,6 +6,7 @@ import math
 import time
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Callable
 
 from rosy_vision.detect import detect_markers
@@ -78,25 +79,28 @@ class VisionWorker:
             return ()
 
         markers = self.detector(frame.jpeg)
+        camera = self._camera()
         # Installer guidance only (phone status); ids, never pixels, leave this process.
         self.ingest.report_markers(
             self.source_id,
-            [marker_id for marker_id in (self.camera.corner_marker_ids or ())
+            [marker_id for marker_id in (camera.corner_marker_ids or ())
              if marker_id in markers],
-            [robot for robot, marker_id in self.camera.robot_markers.items() if marker_id in markers],
+            [robot for robot, marker_id in camera.robot_markers.items() if marker_id in markers],
         )
         homography = await self._field_calibration_step(frame) if self.calibrator else None
         sightings = project_frame(
-            self.camera,
+            camera,
             source_id=self.source_id,
             seq=frame.header.seq,
             captured_at=frame.captured_at,
             markers=markers,
             homography=homography,
         )
+        sent: list[str] = []
         try:
             for sighting in sightings:
                 await self.publisher.publish(sighting)
+                sent.append(sighting.robot_id)
         finally:
             # A rejected sighting must not cost the frame its tracking step, and a tracking
             # failure must not mask the sighting error.
@@ -104,12 +108,24 @@ class VisionWorker:
                 self._publish_place_markers(frame, markers, homography)
             if self.tracker is not None:
                 try:
-                    await self.tracker.process(frame, markers)
+                    # D-587 1: a sighting that failed to send is left for the tracker to send.
+                    await self.tracker.process(frame, markers, frozenset(sent), camera)
                 except Exception as exc:
                     # Do not log URLs, request bodies, headers, or arbitrary exception text.
                     logger.error("tracking step failed source=%s error_type=%s",
                                  self.source_id, type(exc).__name__)
         return sightings
+
+    def _camera(self) -> CameraMap:
+        """D-580: the robot markers Fleet named on the tracking config read, else the site YAML."""
+        config = getattr(self.tracker, "config", None)
+        markers = config.get("robot_markers") if isinstance(config, dict) else None
+        if not isinstance(markers, dict):
+            return self.camera
+        try:
+            return replace(self.camera, robot_markers=dict(markers))
+        except (TypeError, ValueError, AttributeError):
+            return self.camera
 
     def _publish_place_markers(self, frame, markers, homography) -> None:
         """D-564: one in-flight send at most every ``PLACE_MARKER_INTERVAL_S``; never blocks the frame loop."""

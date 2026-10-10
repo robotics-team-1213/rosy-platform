@@ -406,3 +406,62 @@ async def test_connect_log_reprs_and_caps_phone_supplied_text(caplog):
     assert r"evil\nFAKE" in line
     # 64 characters: "evil\nFAKE LOG LINE " (19) plus 45 x.
     assert "x" * 45 in line and "x" * 46 not in line
+
+
+# -- D-589 camera tuning text messages --------------------------------------------------------
+
+_VECTORS = json.loads((__import__("pathlib").Path(__file__).resolve().parents[3] / "test" / "fixtures"
+                       / "protocol" / "overhead-ingest.v1.json").read_text(encoding="utf-8"))
+
+
+@run_async
+async def test_camera_state_is_kept_per_connection_and_bad_text_is_ignored():
+    async with _Harness() as h:
+        assert h.server.camera_link("overhead-1") == (None, None)
+        conn = await h.connect()
+        await conn.send(json.dumps(_hello()))
+        await conn.recv()  # config
+        await _wait_for(lambda: "overhead-1" in h.server.source_names())
+        link, state = h.server.camera_link("overhead-1")
+        assert link is not None and state is None
+        example = _VECTORS["messages"]["camera_state_example"]
+        bad = {**example, "applied": {**example["applied"], "mode": "auto"}}
+        for text in ("not json", json.dumps(bad), json.dumps({"type": "log"}), "[]",
+                     json.dumps({**example, "pad": "x" * 5000})):
+            await conn.send(text)
+        await conn.send(json.dumps(example))
+        await conn.send(_frame(1, 0))  # text never stops the frame path
+        await _wait_for(lambda: h.server.camera_link("overhead-1")[1] is not None)
+        state = h.server.camera_link("overhead-1")[1]
+        assert state.seq == 12 and state.applied.ev == -1 and state.applied.ae_lock is True
+        assert state.mode == "vision" and state.ev_step == 0.1
+        await _wait_for(lambda: h.server.latest_frame("overhead-1") is not None)
+        await conn.send(json.dumps(bad))  # a later bad one keeps the last good state
+        await conn.send(_frame(2, 0))
+        await _wait_for(lambda: h.server.latest_frame("overhead-1").header.seq == 2)
+        assert h.server.camera_link("overhead-1")[1] == state
+        replacement = await h.connect()
+        await replacement.send(json.dumps(_hello()))
+        await replacement.recv()
+        await _wait_for(lambda: h.server.camera_link("overhead-1")[0] not in (None, link))
+        assert h.server.camera_link("overhead-1")[1] is None  # a new connection reports again
+        await conn.close()
+        await replacement.close()
+
+
+@run_async
+async def test_send_camera_reaches_the_phone_as_one_text_message():
+    async with _Harness() as h:
+        assert await h.server.send_camera("overhead-1", {"type": "camera"}) is False
+        conn = await h.connect()
+        await conn.send(json.dumps(_hello()))
+        await conn.recv()  # config
+        await _wait_for(lambda: "overhead-1" in h.server.source_names())
+        example = _VECTORS["messages"]["camera_example"]
+        assert await h.server.send_camera("overhead-1", example) is True
+        while True:  # status messages may come first
+            received = json.loads(await asyncio.wait_for(conn.recv(), 2.0))
+            if received["type"] == "camera":
+                break
+        assert received == example
+        await conn.close()

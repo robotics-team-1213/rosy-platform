@@ -57,7 +57,11 @@ export function classifyTracking(body) {
     unknown.push({ x: item.x, y: item.y, ...(Number.isInteger(item.marker_id) ? { markerId: item.marker_id } : {}) });
   }
   robots.sort((a, b) => a.robotId.localeCompare(b.robotId));
-  return { robots, unknown };
+  // D-600: 배경이 아직 못 본 바닥(로봇이 서 있던 자리). 있을 때만 싣는다.
+  const unknownFloor = (body?.sources || []).flatMap(source => source?.unknown_floor || [])
+    .filter(area => area && [area.x, area.y, area.radius_m].every(finite) && area.radius_m > 0)
+    .map(area => ({ x: area.x, y: area.y, radiusM: area.radius_m }));
+  return { robots, unknown, ...(unknownFloor.length ? { unknownFloor } : {}) };
 }
 
 // 상태줄: source 마다 한 조각. Fleet 409(보정·지도 불일치, 검출 거부)가 검출기 상태보다 먼저다.

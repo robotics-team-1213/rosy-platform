@@ -7570,3 +7570,53 @@ osy-d395-s1d\`.
 - 변경: 지도 서쪽 바깥 모서리를 SIM 전용 `bend` 장소로 넣고 기존 CORE 굽이 지시와 선택적 D-531 경로 문맥을 폐루프에서 비교했다. 제품 지도와 주행 기본 설정은 건드리지 않았다.
 - 증거: `docs/validation/lane-west-bend-candidate-2026-10-09/result.md`; U-Net 문맥 켬 2회 모두 서쪽 모서리를 지나고 1회 `arrived`, 1회 링 `arc_mismatch` 정지. 문맥 끔 2회는 모서리 통과 뒤 연결 실패 1회, 굽이 `odom` 중단 1회. SIM 차체 표본·도색 중심선 대리값은 모두 안전 승격 근거가 아니다.
 - gate 변화: 서쪽 모서리 지도 굽이 후보의 ROS-SIM 유효성만 확인. 반복 완주·승인 경계·연속 sweep·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
+
+- 변경: `convert.py --int8`를 quant_pre_process 뒤 s8 활성·채널별 s8 가중치 QDQ로 바꾸고, `--int8-fp32-nodes`(lane_seg 기본 `first_conv last_conv`, object_det 기본 없음)로 남길 fp32 노드를 고른다. 보정 메모리 상한 `CalibMaxIntermediateOutputs=7`과 그 배수 프레임 수를 하나 줄이는 처리(ORT 1.26)를 넣었다. 새 결정이 아니라 D-423 3항(보정 이미지 int8, 판정은 intake)의 매개변수다.
+- 증거: 모델 PC `~/rosy-ml/scratch/lane-int8-hf-20261009`: 챔피언 62db9403의 int8-hf 사본 lane-seg-20261009-3831b20d가 평가 집합 rosy26-heldout-wall-role-20261006에서 mIoU 0.8110(fp32 0.8109), lane_line 0.9007, drivable 0.5608. 8kcn Pi 5 `infer_mask` 2스레드 스핀 끔 80회 두 번: fp32 p50 329.8/324.9 ms, int8-hf p50 195.5/197.7 ms(p95 220.5/236.8, 부하 8–12). convert 시험 19 passed(모델 PC).
+- gate 변화: 현행 intake는 챔피언 fp32와 int8-hf 둘 다 「training dataset overlaps or cannot exclude reserved eval sources」로 떨어뜨린다(d379-auto-lanes-rosy26-v1 세션에 capture_group 없음). 이 때문에 READY 게시와 로봇 전달은 HOLD.
+
+## 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
+
+- 변경: 리뷰 반영(3e92fc7c4). `convert.py --int8`는 과제별 `INT8_RECIPES`를 쓴다. lane_seg `s8s8-pc-pre`(quant_pre_process, s8 활성, 채널별 가중치, 그래프 입력·출력 Conv fp32, 보정 상한, 상한 배수면 마지막 프레임 제외), object_det `u8s8-pt`(이전 quantize_static 기본값 그대로). 지표 `int8_recipe`, `int8_fp32_nodes`(쉼표 문자열), `int8_calibration_frames`. 2026-10-09 항목(`uncommitted`)의 커밋은 214e3fe32다. 로그는 append-only라 그 제목은 고치지 않는다.
+- 결정(사용자, 2026-10-10, 선택지 A): `d379-auto-lanes-rosy26-v1@54db2400…`의 8개 녹화 세션을 세션마다 한 촬영 묶음 `rec-<session>`으로 단정했다. 근거는 `sources[]`의 장치·시작/끝 시각(예약 평가 세션과 겹치지 않음)이다. 모델 PC 운영 store에 `d379-auto-lanes-rosy26-v1-groups@e643de1cf1f17cde3f8632d11f02717d6a54074676dde816ca6b7bc241ca7029`을 `Store.put_dataset`으로 게시했다. 이미지·마스크·conf 2811개는 원본과 바이트가 같고, manifest에는 `frames[].capture_group`과 `annotation`(annotation_of, 결정자, 날짜, 근거)만 더했다. 그래서 내용 sha는 기록 없는 증명본 58239d9e…와 다르다. int8-hf 번들 lane-seg-20261009-3831b20d만 새 revision을 가리키게 manifest를 다시 썼다(`dataset.annotation_of`). fp32 62db9403 번들은 그대로 두었다.
+- 증거: 실제 intake(`--store /srv/rosy/store`, 평가 집합 rosy26-heldout-wall-role-20261006): **PASS**, mIoU 0.8110(챔피언 62db9403 0.8109), lane_line 0.9007, drivable 0.5608, disjoint True, 예약 겹침 없음. 번들 sha: model.onnx `3831b20d…ab58d`, model_manifest.json `348ae945…f2d4c`, intake_report.json `2e2a474c…8a6a3`. 실제 모델 두 개(62db9403, 28e8454d) 모두 새 Conv 규칙으로 `/enc1/enc1.0/Conv`, `/head/Conv`가 나온다. convert 시험 27 passed(모델 PC).
+- gate 변화: 로봇 전달·READY 게시는 하지 않았다. 전달은 `deliver.py --slot paint`로 사람이 한다.
+
+## 2026-10-10 · uncommitted · uiux(pilot): 2대 공용 조이스틱 (D-590)
+
+- 변경: 로봇 목록에 `2대 함께 조종`을 넣고, 두 인증 세션·카메라를 가진 단일 조이스틱 화면을 추가했다. 공통 수동 한도와 두 카메라 신선도를 확인한 뒤 두 CORE의 MANUAL 승인이 모두 성공할 때만 무장한다. 한쪽 명령 거절·연결·영상 실패 또는 손 떼기에서는 두 로봇에 0을 요청한다. leader/follower 추종은 준비 중으로 표시한다.
+- 증거: Android debug `:app:testDebugUnitTest :app:assembleDebug` 105 tests PASS, 빌드 성공. Lenovo TB-J606F에 무선 ADB로 최신 APK 설치, `rosy_40`·`rosy_41`의 두 카메라와 단일 조이스틱 실화면 캡처(`X:/DevTemp/pilot-group-entry/pilot-group-live-final.png`). 비영 teleop은 보내지 않았다.
+- gate 변화: SOURCE와 두 카메라·화면 DEVICE 확인. 두 로봇의 동시 주행·명령 해제·한쪽 단절 물리 정지 FIELD는 별도 확인 전까지 HOLD.
+
+## 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
+
+- 변경: D-430 safety review 예외에 D-581 과거 커밋 4개를 정확한 SHA로 등록하고 독립 검토 결과를 docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md에 남겼다.
+- 증거: ae08 통합본 기준 AI PC 원격 테스트 24 passed, known_failures 0 new/0 known. 첫 커밋은 단독 거절이며 후속 epoch/hold/stream 보완을 포함한 통합본에만 이력 예외를 적용한다.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 승인과 현장 운행은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
+
+- 변경: 74b87f13b의 D-430 검토 근거를 정확한 커밋 예외와 검증 기록에 추가하고 CORE 시험 경로를 바로잡았다.
+- 증거: 독립 diff 검토에서 주석·동등한 상태 조회·릴레이 팩토리 선택 축약만 확인했다. 원격 모델 PC 집중 시험 16 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
+
+- 변경: 03d530eab의 D-430 정확한 커밋 예외와 사후 독립 검토 근거를 추가했다.
+- 증거: 작성자와 다른 통합 담당자가 앱 주입·기본 릴레이·팩토리 우선순위·조회 전용 상태를 검토했다. 모델 PC 원격 시험 55 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소하며 TRAIL SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시
+
+- 변경: Fleet이 1 s마다 로봇의 지도 좌표(로봇 LOCALIZED·map 보고, 아니면 Fleet map pose LOCALIZED/DEGRADED, 아니면 천장 카메라 CAMERA_ONLY)를 사이트 DB `fleet_robot_path`에 2 cm/30 s로 줄여 24 h 남기고 `GET /api/fleet/robots/{robot_id}/path`(API v1.177)로 준다. 콘솔 궤적은 이 기록을 그린다(최근 2분·10분·이번 운행, 로봇별, 실선/파선/점선). `localization: null` pose(odom일 수 있음)를 지도에 그리던 결함을 없앴다.
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new/0 known), 가드·버전 고정 시험 통과, 브라우저 시험 9 passed(궤적은 새로 고침 뒤에도 남음), node web 242 passed.
+- gate 변화: SOURCE만. 현장 1일 저장량·실제 로봇 표시 확인은 별도. 지도 위 로봇 아이콘의 odom 표시는 남은 일.
+## 2026-10-10 · uncommitted · feat(fleet): D-601 trip 출발이 카메라 차선 주행을 켜고 출발 자세·차선 카메라를 본다
+
+- 변경: 첫 간선이 lane인 trip 출발에서 로봇이 OFF면 모든 검사·lease·trip 열림 뒤 마지막으로 Fleet이 CAMERA_LINE을 켠다(끝에서는 언제나 OFF). 출발 정렬 검사 `TRIP_START_HEADING_MISMATCH`(20°)·`TRIP_START_OFF_LANE`, 계획 `start_check`와 콘솔 "출발 가능/방향 반대(178°)/차선 밖 5 cm", 앞 카메라 미리보기가 없으면 `TRIP_LANE_CAMERA_UNAVAILABLE`(`fleet.trip.lane_camera_check`, SIM은 false). trip_runner 시작 검사·진행 판정을 trip_admission/trip_progress로 옮김. API v1.192. 자동 제자리 정렬은 후속(CORE 목표 yaw 회전 미션 필요).
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new), 가드(module_structure·safety_separation·robot_literals·behavior_test_ownership·web_dialog·line_follow_contract_docs·harness·shared/web) 0 new(fleet 패키지 크기는 main에서 이미 known). 독립 리뷰 critic APPROVE WITH FIXES, HIGH 2·MEDIUM 1 고침.
+- gate 변화: SOURCE만. 현장(rosy_40 카메라 거절, 반대로 선 로봇, 꺼진 로봇 출발·끝) 확인과 SIM 사이트 설정 `lane_camera_check: false`는 별도.
+## 2026-10-10 · uncommitted · docs(route): D-609 계획-실행-완료 증거 파이프라인
+
+- 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
+- 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
+- gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.

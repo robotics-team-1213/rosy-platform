@@ -54,6 +54,12 @@ class LaneJunctionPort(Protocol):
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         """The robot's selected line-follow mode (``GET /api/v1/line-follow`` ``mode``)."""
 
+    async def start_camera_line(self, robot_id: str) -> dict:
+        """D-601 A: ``PUT /api/v1/line-follow/mode {mode: CAMERA_LINE}`` from the trip lease owner."""
+
+    async def front_camera(self, robot_id: str) -> dict:
+        """D-601 B: ``GET /api/v1/vision/front/status``."""
+
 
 class HttpLaneJunction:
     """D-494 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
@@ -109,6 +115,12 @@ class HttpLaneJunction:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None
 
+    async def start_camera_line(self, robot_id: str) -> dict:
+        return await self._client(robot_id).line_follow_trip_start()
+
+    async def front_camera(self, robot_id: str) -> dict:
+        return await self._client(robot_id).front_status()
+
 
 @dataclass(frozen=True)
 class TripConfig:
@@ -135,6 +147,15 @@ class TripConfig:
     junction_wait_s: float = 10.0
     #: A trip starts only within this long after the pose's sighting anchor.
     start_anchor_age_s: float = 2.0
+    #: D-593 7 (user, 2026-10-10): an operator-pin anchor up to the map pose's anchor age limit
+    #: (10 s) also starts a trip, but only while odom has moved at most this much since the pin.
+    pin_start_still_m: float = 0.02
+    pin_start_still_deg: float = 2.0
+    #: D-601 D (user, 2026-10-10): a lane trip starts only with the robot within this of its first
+    #: lane's direction (and on that lane); the planner's own snap allows ``fleet.routing.heading_tol_deg``.
+    start_heading_tol_deg: float = 20.0
+    #: D-601 B: a lane plan needs the robot's front preview live; false only where none exists (SIM).
+    lane_camera_check: bool = True
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -155,11 +176,19 @@ class TripConfig:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
+            if item.name == "lane_camera_check":
+                if not isinstance(value, bool):
+                    raise ValueError("fleet.trip.lane_camera_check must be true or false")
+                continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
         if not 0.05 <= self.arc_outer_line_offset_m <= 0.20:  # D-520 1: CORE's range
             raise ValueError("fleet.trip.arc_outer_line_offset_m must be in [0.05, 0.20]")
+        if self.start_heading_tol_deg > 90.0:
+            raise ValueError("fleet.trip.start_heading_tol_deg must be at most 90")
+        if self.pin_start_still_m > 0.10 or self.pin_start_still_deg > 10.0:  # D-593 7: "not moved"
+            raise ValueError("fleet.trip.pin_start_still_m/deg must be at most 0.10 m / 10 deg")
         if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
             raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 

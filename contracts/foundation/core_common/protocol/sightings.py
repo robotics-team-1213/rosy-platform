@@ -13,8 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 _ROBOT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-#: How the worker measured this frame's image-to-map calibration (D-484).
-CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
+#: How the worker measured this frame's image-to-map calibration (D-484). D-587:
+#: "approved_record" is the source's approved D-457 record, checked against Fleet's copy.
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary", "approved_record")
+#: Calibration sources that never carry corner marker ids.
+_NO_CORNER_SOURCES = ("field_boundary", "approved_record")
 
 
 class SiteSightingPayload(BaseModel):
@@ -89,8 +92,8 @@ class SiteSightingPayload(BaseModel):
 
     @model_validator(mode="after")
     def _markers_and_source_agree(self) -> "SiteSightingPayload":
-        if self.calibration_source == "field_boundary" and self.corner_marker_ids is not None:
-            raise ValueError("a field_boundary sighting carries no corner marker ids")
+        if self.calibration_source in _NO_CORNER_SOURCES and self.corner_marker_ids is not None:
+            raise ValueError(f"a {self.calibration_source} sighting carries no corner marker ids")
         if self.corner_marker_ids is None and self.calibration_source is None:
             raise ValueError("a sighting needs corner marker ids or a calibration source")
         return self
@@ -110,3 +113,27 @@ class SiteSightingPayload(BaseModel):
             if source is not None and not isinstance(source, str):
                 raise ValueError("calibration source must be a string")
         return value
+
+
+def check_marker_yaw_offsets(value, robot_ids) -> dict[str, float]:
+    """D-587 4: per-robot sticker yaw offset in degrees (robot front to sticker top edge, CCW +).
+
+    Shared by the Vision and Fleet site-camera parsers. Keys must be this source's
+    ``robot_ids`` (None for a D-580 ``robot_ids: enrolled`` source: any robot id); values
+    finite numbers with |value| <= 360. Missing means nominal 0.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("marker_yaw_offset_deg must map robot ids to degrees")
+    allowed = None if robot_ids is None else set(robot_ids)
+    offsets = {}
+    for robot_id, degrees in value.items():
+        if (not isinstance(robot_id, str) or not _ROBOT_ID.fullmatch(robot_id)
+                or (allowed is not None and robot_id not in allowed)):
+            raise ValueError(f"marker_yaw_offset_deg names {robot_id!r}, which is not a robot of this source")
+        if (isinstance(degrees, bool) or not isinstance(degrees, (int, float))
+                or not math.isfinite(degrees) or abs(degrees) > 360.0):
+            raise ValueError(f"marker_yaw_offset_deg for {robot_id!r} must be finite degrees within +-360")
+        offsets[robot_id] = float(degrees)
+    return offsets

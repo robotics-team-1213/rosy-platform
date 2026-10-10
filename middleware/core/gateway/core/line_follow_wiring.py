@@ -43,6 +43,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
     if removed:
         raise ValueError(f"line_follow.{', line_follow.'.join(removed)} was removed (D-507 9); "
                          "declare the walked site floor as line_follow.site_floor_map_id: <map_id>")
+    if "crosswalk_look_s" in raw:   # D-573 rev 3: no alias, an old overlay fails closed loudly
+        raise ValueError("line_follow.crosswalk_look_s was removed (D-573 rev 3); "
+                         "use line_follow.crosswalk_clear_s (default 5.0 s of continuous clear)")
     defaults = LineFollowConfig()
     return LineFollowConfig(
         cruise_speed=float(raw.get("cruise_speed", defaults.cruise_speed)),
@@ -52,6 +55,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
+        lost_auto_resume=_flag(raw, "lost_auto_resume", defaults.lost_auto_resume),
+        lost_resume_frames=_whole(raw, "lost_resume_frames", defaults.lost_resume_frames),
+        lost_resume_s=float(raw.get("lost_resume_s", defaults.lost_resume_s)),
         ir_calibration_revision=raw.get("ir_calibration_revision") or None,
         # D-422: unset = derived (path + URDF body) or the pre-D-422 LiDAR-origin defaults.
         obstacle_stop_m=_optional_float(raw.get("obstacle_stop_m")),
@@ -75,14 +81,30 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
         ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
+        ir_guard_min_linear=float(raw.get("ir_guard_min_linear", defaults.ir_guard_min_linear)),
+        ir_guard_back_speed=float(raw.get("ir_guard_back_speed", defaults.ir_guard_back_speed)),
         ir_row_x_m=_optional_float(raw.get("ir_row_x_m")),
         crosswalk_zone_max_m=float(raw.get("crosswalk_zone_max_m", defaults.crosswalk_zone_max_m)),
         crosswalk_odom_error_fraction=float(raw.get(
             "crosswalk_odom_error_fraction", defaults.crosswalk_odom_error_fraction)),
         crosswalk_range_error_fraction=float(raw.get(
             "crosswalk_range_error_fraction", defaults.crosswalk_range_error_fraction)),
+        crosswalk_max_uncertainty_m=float(raw.get(
+            "crosswalk_max_uncertainty_m", defaults.crosswalk_max_uncertainty_m)),
+        crosswalk_gate_enabled=_flag(raw, "crosswalk_gate_enabled", defaults.crosswalk_gate_enabled),
+        fleet_lane_cue_enabled=_flag(raw, "fleet_lane_cue_enabled", defaults.fleet_lane_cue_enabled),
+        crosswalk_clear_s=float(raw.get("crosswalk_clear_s", defaults.crosswalk_clear_s)),
+        crosswalk_look_min_scans=_whole(raw, "crosswalk_look_min_scans", defaults.crosswalk_look_min_scans),
+        crosswalk_report_s=float(raw.get("crosswalk_report_s", defaults.crosswalk_report_s)),
+        crosswalk_cross_speed=float(raw.get("crosswalk_cross_speed", defaults.crosswalk_cross_speed)),
+        crosswalk_approach_default_m=float(raw.get(
+            "crosswalk_approach_default_m", defaults.crosswalk_approach_default_m)),
+        crosswalk_range_sigma_m=float(raw.get("crosswalk_range_sigma_m", defaults.crosswalk_range_sigma_m)),
+        crosswalk_persist_k=_whole(raw, "crosswalk_persist_k", defaults.crosswalk_persist_k),
+        crosswalk_persist_n=_whole(raw, "crosswalk_persist_n", defaults.crosswalk_persist_n),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
+        stuck_report_s=float(raw.get("stuck_report_s", defaults.stuck_report_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
         recovery_back_speed=float(raw.get("recovery_back_speed", defaults.recovery_back_speed)),
         recovery_rear_clear_m=float(raw.get("recovery_rear_clear_m", defaults.recovery_rear_clear_m)),
@@ -113,6 +135,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "obstacle_ultrasonic_half_angle_deg", defaults.obstacle_ultrasonic_half_angle_deg)),
         obstacle_ultrasonic_stale_s=float(raw.get(
             "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
+        obstacle_blind_floor=_flag(raw, "obstacle_blind_floor", defaults.obstacle_blind_floor),
         bridge_enabled=_flag(raw, "bridge_enabled", defaults.bridge_enabled),
         bridge_lookahead_m=float(raw.get("bridge_lookahead_m", defaults.bridge_lookahead_m)),
         bridge_coast_m=float(raw.get("bridge_coast_m", defaults.bridge_coast_m)),

@@ -15,8 +15,8 @@ from typing import Awaitable, Callable, Mapping, Optional
 import httpx
 
 from fleet.server.console_routes import transport_failure
-from fleet.server.line_stuck import LineStuckBoard
-from fleet.server.stuck_resolver import Answer, Escalate, StuckResolver
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.resolver import Answer, Escalate, StuckResolver
 from fleet.swarm.transport import RobotApiError
 
 PRINCIPAL_ID = "fleet-resolver"
@@ -33,6 +33,10 @@ class StuckResolverLoop:
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        #: D-577 7: live acting AI facts about a robot (`AiFactsBoard.acting_facts`, app.py sets it).
+        self.ai_facts: Callable[[str], list] = lambda _robot_id: []
+        #: D-577 개정 2026-10-10: the AI PC proposal board (`AiFactsBoard`; app.py sets it). None = no AI.
+        self.ai_board = None
         self.wake = asyncio.Event()
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
@@ -45,7 +49,16 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
-        for action in self._resolver.step(now, robots):
+        actions = self._resolver.step(now, robots)
+        verdicts, self._resolver.ai_verdicts[:] = list(self._resolver.ai_verdicts), []
+        if verdicts and self.ai_board is not None:
+            for verdict in verdicts:
+                log.info("ai proposal robot=%s stuck=%s %s/%s -> %s", verdict["robot_id"], verdict["stuck_id"],
+                         verdict["decision"], verdict["reason"], verdict["verdict"])
+            self.ai_board.verdicts.extend(verdicts)
+            if self.ai_board.log is not None:
+                await asyncio.to_thread(self.ai_board.log.append_verdicts, verdicts)
+        for action in actions:
             if isinstance(action, Escalate):
                 self._escalated(action)
             else:
@@ -58,6 +71,15 @@ class StuckResolverLoop:
         pose = self.map_pose(row["robot_id"])
         if pose is not None:
             extra["map_pose"] = pose
+        facts = self.ai_facts(row["robot_id"])
+        if facts:
+            extra["ai_facts"] = facts
+        if self.ai_board is not None:
+            proposal = self.ai_board.proposal(row["robot_id"])
+            if proposal is not None:
+                extra["ai_proposal"] = proposal
+            if self.ai_board.waiting(row["robot_id"]):
+                extra["ai_wait"] = True
         return {**row, **extra} if extra else row
 
     async def run(self) -> None:
@@ -98,7 +120,8 @@ class StuckResolverLoop:
             return
         self._resolver.sent(answer, now)
         record = dict(robot_id=answer.robot_id, stuck_id=answer.stuck_id,
-                      decision=answer.decision, principal_id=PRINCIPAL_ID, tier="rule",
+                      decision=answer.decision, principal_id=PRINCIPAL_ID,
+                      tier="ai" if answer.rule == "ai" else "rule",
                       rule=answer.rule)
         code: Optional[str] = None
         try:
@@ -114,6 +137,9 @@ class StuckResolverLoop:
                 escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
                 if escalation is not None:
                     self._escalated(escalation)
+            elif answer.escalate is not None:          # D-577 남은 항목 3: R5's human row is not lost
+                self._escalated(Escalate(answer.robot_id, answer.stuck_id, answer.escalate),
+                                rule=answer.rule, decision=answer.decision)
             raise
         except RobotApiError as exc:
             code = exc.code
@@ -128,7 +154,10 @@ class StuckResolverLoop:
                                message=f"unexpected client error ({type(exc).__name__})")
         else:
             self._board.record(**record, accepted=True, outcome=result.get("outcome"))
-        self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="rule",
+        if answer.rule == "ai" and self.ai_board is not None and self.ai_board.log is not None:
+            await asyncio.to_thread(self.ai_board.log.set_outcome, answer.robot_id, answer.stuck_id,
+                                    answer.decision, code or "accepted")
+        self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="ai" if answer.rule == "ai" else "rule",
                                   rule=answer.rule, decision=answer.decision, escalated=None)
         escalation = self._resolver.result(answer, code=code)
         if escalation is not None:

@@ -1,4 +1,4 @@
-"""tools/remote/remote_pytest.py with fake ssh: host order, local fallback, exit codes, bundle range."""
+"""tools/remote/remote_pytest.py with fake ssh: host order, no local run (D-584), exit codes, bundle range."""
 
 from __future__ import annotations
 
@@ -80,13 +80,45 @@ def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path)
     assert " 400% test/x.py" in sent[0]  # CPU cap
 
 
-def test_unreachable_and_forced_local(monkeypatch):
+def test_unreachable_and_local_env_rejected(monkeypatch):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     assert rp.place("pytest", ["a@1"], [None]) == ([], ["a@1: unreachable"])
     monkeypatch.setattr(rp, "probe", lambda h: host())
     assert rp.placed_hosts("pytest", ["a@1"]) == ["a@1"]
-    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")
-    assert rp.placed_hosts("pytest", ["a@1"]) == []
+    for value in ("1", "0", ""):  # any value is an error, never a silent pass
+        monkeypatch.setenv("ROSY_TEST_LOCAL", value)
+        with pytest.raises(SystemExit, match="D-584"):
+            rp.placed_hosts("pytest", ["a@1"])
+
+
+def test_local_flag_rejected_and_require_host_is_a_noop(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    with pytest.raises(SystemExit, match="D-584"):
+        rp.main(["--local", "--", "test/x.py"])
+    monkeypatch.setattr(rp, "probe", lambda h: None)
+    with pytest.raises(SystemExit, match="no test host reachable"):
+        rp.main(["--require-host", "--wait", "0", "--", "test/x.py"])
+
+
+def test_no_host_retries_until_the_deadline_then_fails_without_running_pytest(monkeypatch, tmp_path):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    now, probes = [0.0], []
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None: probes.append(now[0]) or [])
+    monkeypatch.setattr(rp, "capture", lambda *a, **kw: pytest.fail("pytest must not run on this machine"))
+    with pytest.raises(SystemExit, match=r"no test host reachable \(D-584\)"):
+        rp.run([["test/x.py"]], [tmp_path / "1.txt"], repo=ROOT, wait=600, poll=30,
+               sleep=lambda s: now.__setitem__(0, now[0] + s), clock=lambda: now[0])
+    assert probes == [30.0 * i for i in range(21)]  # probe, then every 30 s until 600 s
+
+
+def test_host_appearing_during_the_wait_runs_there(monkeypatch, tmp_path):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    now, answers = [0.0], [[], [], ["a@1"]]
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None: answers.pop(0))
+    monkeypatch.setattr(rp, "run_on", lambda host, inv, logs, sha, repo, label: [0] * len(inv))
+    codes = rp.run([["test/x.py"]], [tmp_path / "1.txt"], repo=ROOT, wait=600, poll=30,
+                   sleep=lambda s: now.__setitem__(0, now[0] + s), clock=lambda: now[0])
+    assert codes == [0] and now[0] == 60.0
 
 
 def test_pytest_falls_back_to_full_non_site_hosts_but_sim_does_not(monkeypatch):
@@ -110,8 +142,8 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
     assert rp.main(["--pick", "sim"]) == 1
     assert capsys.readouterr().out == ""
     monkeypatch.setenv("ROSY_TEST_LOCAL", "1")
-    assert rp.main(["--pick", "sim"]) == 1
-    assert "ROSY_TEST_LOCAL=1" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="D-584"):
+        rp.main(["--pick", "sim"])
 
 
 def test_probe_parser_reads_only_the_rosyprobe_line():
@@ -163,7 +195,7 @@ def test_unreachable_hosts_stop_the_gate(monkeypatch, tmp_path):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "probe", lambda host: None)
     with pytest.raises(SystemExit, match="no test host reachable"):
-        rp.run([["test/x.py"]], [tmp_path / "run-1.txt"], repo=ROOT)
+        rp.run([["test/x.py"]], [tmp_path / "run-1.txt"], repo=ROOT, wait=0)
 
 
 def test_worst_exit_code_counts_nothing_collected_as_pass():

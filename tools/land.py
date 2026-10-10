@@ -32,6 +32,8 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
+import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -357,19 +359,13 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
-    env = dict(ENV)
-    if args.browser:
-        env.update(ROSY_RUN_BROWSER_TESTS="1", ROSY_BROWSER_TESTS="1")
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     if args.browser:
-        # Playwright/Chromium are not on the test hosts, so browser runs stay on this machine.
-        codes = [step(wt, [python, "-m", "pytest", *inv, *remote_pytest.PYTEST_TAIL], log, "pytest", env,
-                      allow_fail=True)[0] for inv, log in zip(invocations, logs)]
-    else:
-        # HEAD is the candidate (merge commit included); the runner ships it to the model/AI PC.
-        # Unlike pre-push (--require-host), no reachable host falls back to a local run of this
-        # same merged worktree with a warning: land tests what it lands either way.
-        codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+        raise Stop("browser tests need Chromium, which only a test host can supply, and never run on this"
+                   " laptop (D-584); run them on a host and report them as not run here")
+    # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
+    # no host means it waits, then fails, and nothing lands).
+    codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
@@ -440,6 +436,7 @@ def land(args) -> int:
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
+        reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
         if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
@@ -466,6 +463,7 @@ def land(args) -> int:
             # Only module-scoped suites may skip; root test/ guards read the records themselves.
             invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
                                              for inv in invocations) if kept]
+            reusable = False  # module suites ran on an earlier candidate, not this one
             summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
@@ -484,6 +482,10 @@ def land(args) -> int:
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
             landed = out(main_co, "rev-parse", "HEAD")
+            if reusable and landed == candidate:
+                record = land_record.write(wt, candidate, main_sha, invocations,
+                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))])
+                summary.append(f"land record for pre-push: {record}")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
                              f"rounds: {round_no}", f"commits merged onto main: {count}",
@@ -501,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
     parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
-    parser.add_argument("--browser", action="store_true", help="set ROSY_RUN_BROWSER_TESTS=1 ROSY_BROWSER_TESTS=1")
+    parser.add_argument("--browser", action="store_true", help="refused: browser tests never run on this laptop (D-584)")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     args = parser.parse_args(argv)

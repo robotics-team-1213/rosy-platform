@@ -51,6 +51,7 @@ HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.\-]*")
 # their old version, be dropped.
 DPKG_COMMAND = "dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\n' 'ros-jazzy-*'"
 PUSH_SCRIPT = r"deploy\robot\pinky_pro\rosy-release-push.ps1"
+PUSH_MANY_SCRIPT = r"deploy\robot\pinky_pro\rosy-release-push-many.ps1"
 
 SshRunner = Callable[[list[str]], tuple[int, str, str]]
 ToolRunner = Callable[[list[str]], int]
@@ -178,7 +179,7 @@ def read_lists(tarball: Path) -> dict[str, str]:
     with tarfile.open(tarball, "r:gz") as tar:
         for member in tar:
             name = _member_name(member.name)
-            if name in wanted and member.isreg():
+            if (name in wanted or name == "source-ref.txt") and member.isreg():
                 found[name] = tar.extractfile(member).read().decode("utf-8")
     missing = sorted(wanted - set(found))
     if missing:
@@ -292,6 +293,9 @@ def push_commands(hosts: list[str], tarball: Path) -> list[str]:
     for host in hosts or ["<robot-ip>"]:
         base = f"{PUSH_SCRIPT} -Robot {host} -Tarball {_ps_path(tarball)}"
         lines += [f"{base} -PrintCommands   # dry run", base]
+    if len(hosts) > 1:
+        # D-553 addendum 2: the same pushes at the same time, one log per robot.
+        lines.append(f"{PUSH_MANY_SCRIPT} -Robot {','.join(hosts)} -Tarball {_ps_path(tarball)}   # all at once")
     return lines
 
 
@@ -363,6 +367,10 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
             raise PrepareError(f"required-ros-packages.txt names packages missing from rosy-packages.txt: {missing}")
         release_ros = parse_release_ros_packages(lists["ros-packages.txt"])
         print(f"release {release_id}: {len(release_ros)} ros-jazzy packages, required ROSY packages all present")
+        # D-553 addendum 3: a branch build is for manual bench pushes; publish refuses it.
+        source_ref = lists.get("source-ref.txt", "").strip() or "unrecorded (built before D-553 addendum 3)"
+        print(f"source ref: {source_ref}" + ("" if source_ref.startswith(("main", "unrecorded"))
+                                             else "  (branch build: manual push only, never the D-412 channel)"))
         if args.skip_abi:
             print("ABI check skipped (--skip-abi)")
         else:

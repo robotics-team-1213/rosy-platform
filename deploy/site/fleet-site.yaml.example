@@ -5,15 +5,17 @@
 # authority는 false로 둔다(D-550 J2 경고만). 신호등은 화면 표시용이고 로봇을 막지 않는다.
 # 새로 뜬 Fleet은 전부 적색에서 시작한다. 운영자가 콘솔에서 자동(cycle)을 눌러야 돈다.
 fleet:
+  stuck_resolver:          # D-577 개정 2026-10-10: 판단기가 Fleet 등록 자격으로 답할 등록 로봇(로봇별 승인)
+    enrolled_robots: [rosy_40, rosy_41]
   traffic:
     zones:
-      roundabout:            # map_v2_fleet v4, 일방통행 순환로
-        edges: [ring_n, ring_s, ring_e, ring_w]
+      roundabout:            # map_v2_fleet v5(deploy/site/site-maps), 반시계 일방 순환로 + 빗금까지 잇는 차로 넷
+        edges: [ring_n, ring_s, ring_e, ring_w, ring_in_ne, ring_in_sw, ring_out_nw, ring_out_se]
         capacity: 1
     signals:
       sig_ring:
         zone: roundabout
-        phases:
+        phases:              # 실제 입구 둘(북동·남서 빗금). 북서·남동 빗금은 일방 고리의 출구다
           - {approach: "east:fwd", green_s: 8}
           - {approach: "west:fwd", green_s: 8}
         yellow_s: 2

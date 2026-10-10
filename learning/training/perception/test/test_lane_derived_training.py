@@ -101,6 +101,13 @@ def test_ignore_top_must_match_the_dataset(tmp_path):
         train_job.run(config, tmp_path / "job")
 
 
+def test_head_must_be_a_known_variant(tmp_path):
+    config, _, _ = _setup(tmp_path)
+    config["training"]["head"] = "wide"
+    with pytest.raises(JobError, match="head must be"):
+        train_job.run(config, tmp_path / "job")
+
+
 def test_unfinalized_derived_dataset_is_refused(tmp_path):
     config, dataset, _ = _setup(tmp_path)
     doc = json.loads((dataset / "manifest.json").read_text())

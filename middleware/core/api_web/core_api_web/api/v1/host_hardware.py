@@ -6,13 +6,14 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import stat
 import threading
 import time
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from core_api_web.api.errors import ApiError
@@ -53,7 +54,8 @@ HW_TEST_REQUEST_FILE = "/run/rosy/hw-test.request"
 HW_TEST_RESULT_FILE = "/run/rosy-boot/hw-test.json"
 HW_CONFIRM_NAME = "hw-confirmations.json"
 HW_TEST_DEVICES = ("buzzer", "lamp")
-HW_TEST_ACTIONS = (*HW_TEST_DEVICES, "identify_blue", "identify_amber")
+HW_TEST_ACTIONS = (*HW_TEST_DEVICES, "identify_blue", "identify_amber",
+                   "identify_blue_quiet", "identify_amber_quiet")  # D-596: _quiet = no call chirp
 HW_TEST_STATES = ("done", "busy", "unavailable", "failed")
 #: One test at a time: a second press inside this window starts nothing.
 HW_TEST_COOLDOWN_S = 10.0
@@ -65,6 +67,12 @@ HW_CONFIRM_WINDOW_S = 300.0
 #: rosy-hw-test and CORE share a clock; a finish time further ahead than this is not trusted.
 HW_CONFIRM_FUTURE_SKEW_S = 5.0
 _last_test: dict[str, float] = {}
+#: D-596 rev 2026-10-10: request path -> (request_id, monotonic time) of the last identify. One
+#: result file holds one outcome and the cool-down spaces requests, so only the last one is asked.
+_last_identify: dict[str, tuple[str, float]] = {}
+#: rosy-hw-test takes 1.5 s and waits 15 s for rosy-face; no answer by then is ``expired``.
+IDENTIFY_RESULT_WAIT_S = 20.0
+IDENTIFY_REASON = re.compile(r"[A-Z][A-Z_]{0,39}")
 #: Two presses in the same instant must not both pass the cool-down check.
 _test_lock = threading.Lock()
 #: Two answers in the same instant must not drop each other's device.
@@ -117,8 +125,10 @@ def _aware_time(value: Any) -> Optional[datetime]:
     return moment if moment.tzinfo is not None else None
 
 
-def read_test_result(path: str) -> Optional[dict[str, Any]]:
-    """rosy-hw-test's last outcome, validated like hardware.json, or None."""
+def read_test_result(path: str, *, with_reason: bool = False) -> Optional[dict[str, Any]]:
+    """rosy-hw-test's last outcome, validated like hardware.json, or None.
+
+    ``with_reason`` adds rosy-face's identify refusal code (D-596 rev 2026-10-10), or None."""
     data = _read_small_json(path)
     if not isinstance(data, dict) or data.get("schema") != 1:
         return None
@@ -131,6 +141,9 @@ def read_test_result(path: str) -> Optional[dict[str, Any]]:
     if finished is None:
         return None
     row["finished_at"] = finished.astimezone(timezone.utc).isoformat(timespec="seconds")
+    if with_reason:
+        reason = data.get("reason")
+        row["reason"] = reason if isinstance(reason, str) and IDENTIFY_REASON.fullmatch(reason) else None
     return row
 
 
@@ -372,15 +385,18 @@ def host_lamp_identify(
     body: LampIdentifyRequest,
     auth: AuthContext = Depends(operator),
     svc: CoreServicesLike = Depends(get_services),
+    quiet: Annotated[bool, Query()] = False,
 ):
-    """Ask the sole face owner for a short visual challenge; no motion or identity claim."""
+    """Ask the sole face owner for a short visual challenge; no motion or identity claim.
+    D-596: ``?quiet=true`` (Fleet's automatic requests) blinks without the call chirp."""
     request_path, _result, _confirm = _test_paths(svc)
     color = body.color or _identify_color(svc)
     if color is None:
         raise ApiError("IDENTIFY_COLOR_UNSET", 409, "이 로봇의 식별 색이 설정되지 않았습니다")
     request_id = secrets.token_hex(8)
     # Milliseconds: rosy-hw-test refuses an identify older than 1.5 s (D-472 4, total <= 6 s).
-    payload = json.dumps({"action": f"identify_{color}", "request_id": request_id,
+    action = f"identify_{color}" + ("_quiet" if quiet else "")
+    payload = json.dumps({"action": action, "request_id": request_id,
                           "by": auth.token_id,
                           "requested_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")},
                          sort_keys=True) + "\n"
@@ -394,8 +410,33 @@ def host_lamp_identify(
         except OSError as exc:
             raise ApiError("HW_TEST_UNAVAILABLE", 503, "램프 식별 요청을 전달하지 못했습니다") from exc
         _last_test[request_path] = now
+        _last_identify[request_path] = (request_id, now)
     return {"accepted": True, "request_id": request_id, "color": color,
             "state": "pending_visual_confirmation"}
+
+
+@hardware_router.get("/lamp/identify/{request_id}")
+def host_lamp_identify_result(
+    request_id: str,
+    _auth: AuthContext = Depends(operator),
+    svc: CoreServicesLike = Depends(get_services),
+):
+    """D-596 rev 2026-10-10: did rosy-face show the blink or refuse it (and why)?
+
+    ``shown`` means the lamp blinked, not that a camera saw it. ``refused`` carries rosy-face's
+    reason (CAUTION_ACTIVE, ESTOP, ...), or the bare hw-test state from a payload before it."""
+    request_path, result_path, _confirm = _test_paths(svc)
+    last = _last_identify.get(request_path)
+    if last is None or last[0] != request_id:
+        raise ApiError("IDENTIFY_REQUEST_UNKNOWN", 404, "이 식별 요청을 모릅니다(마지막 요청만 답합니다)")
+    result = read_test_result(result_path, with_reason=True)
+    if result is not None and result["request_id"] == request_id:
+        if result["state"] == "done":
+            return {"request_id": request_id, "state": "shown", "reason": None, "detail": result["detail"]}
+        return {"request_id": request_id, "state": "refused",
+                "reason": result["reason"] or result["state"].upper(), "detail": result["detail"]}
+    expired = time.monotonic() - last[1] > IDENTIFY_RESULT_WAIT_S
+    return {"request_id": request_id, "state": "expired" if expired else "pending", "reason": None, "detail": None}
 
 
 #: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).

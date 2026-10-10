@@ -25,6 +25,10 @@ class ReferencePose:
     map_id: Optional[str] = None
     #: D-559: "map" | "odom" | None (an older leader that does not say).
     frame: Optional[str] = None
+    #: D-581: "fleet" when Fleet re-expressed the leader in `for_robot_id`'s odom frame.
+    anchor: Optional[str] = None
+    for_robot_id: Optional[str] = None
+    anchor_hold: Optional[str] = None
 
 
 def follow_goal(reference: ReferencePose, distance: float, lateral: float) -> NavGoalSpec:

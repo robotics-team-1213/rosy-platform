@@ -4,7 +4,16 @@ import re
 
 import numpy as np
 
-V13_ANNOTATION = {"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"}
+# D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
+V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
+                   {"annotation_origin": "map_projected", "adr": "D-563"})
+
+
+def _v13_annotation_ok(dataset: dict) -> bool:
+    """One admitted pair, or a drivable union's '+'-joined pairs (each admitted)."""
+    origins, adrs = str(dataset.get("annotation_origin")).split("+"), str(dataset.get("adr")).split("+")
+    return len(origins) == len(adrs) and all({"annotation_origin": o, "adr": a} in V13_ANNOTATIONS
+                                             for o, a in zip(origins, adrs))
 
 
 def v13_lineage_error(doc: dict) -> str | None:
@@ -15,13 +24,34 @@ def v13_lineage_error(doc: dict) -> str | None:
             or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", str(parent.get("model_revision")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(parent.get("onnx_sha256")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(dataset.get("revision")))
-            or any(dataset.get(key) != value for key, value in V13_ANNOTATION.items())
+            or not _v13_annotation_ok(dataset)
             or doc.get("camera_provenance") not in ("accepted", "provisional")):
         return ("v13-drivable needs lane_seg parent_lane_model lineage, a 64-hex dataset revision, "
-                "dataset annotation_origin derived_from_reviewed_lanes with adr D-554 and a camera_provenance "
+                "dataset annotation_origin derived_from_reviewed_lanes (D-554) or map_projected (D-563) and a camera_provenance "
                 "mark (D-554 item 7: provisional stays in the lane_seg shadow slot)")
     return None
 
+
+# D-566 shadow gate on the trainer's val numbers (manifest metrics).
+MAX_OUTSIDE_BAND_FP, MIN_NEAR_CENTRE_RATIO = 0.15, 0.8
+
+
+def v13_quality_error(doc: dict) -> str | None:
+    """D-566: refuse a v13-drivable candidate that paints the off-road band or misses the road ahead."""
+    metrics = doc.get("metrics") or {}
+    fp, near = metrics.get("val_outside_band_fp"), metrics.get("val_near_centre_drivable")
+    beyond = metrics.get("val_beyond_line_fp")
+    if not _number(fp) or not _number(beyond) or not isinstance(near, dict)             or not _number(near.get("pred")) or not _number(near.get("label")):
+        return ("v13-drivable needs metrics val_outside_band_fp, val_beyond_line_fp and "
+                "val_near_centre_drivable (D-566, D-576)")
+    if fp > MAX_OUTSIDE_BAND_FP:
+        return f"val_outside_band_fp {fp:.3f} > {MAX_OUTSIDE_BAND_FP} (D-566)"
+    if beyond > MAX_OUTSIDE_BAND_FP:
+        return f"val_beyond_line_fp {beyond:.3f} > {MAX_OUTSIDE_BAND_FP} (D-576)"
+    if near["pred"] < MIN_NEAR_CENTRE_RATIO * near["label"]:
+        return (f"near-centre predicted drivable {near['pred']:.3f} < {MIN_NEAR_CENTRE_RATIO} x label "
+                f"{near['label']:.3f} (D-566)")
+    return None
 
 
 def _number(v) -> bool:

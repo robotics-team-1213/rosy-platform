@@ -20,7 +20,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 | `project.py` | Marker observations to site map (uses the `games` homography) |
 | `publish.py` | Source-token-only Fleet sighting client |
 | `worker.py` | Latest-frame camera-to-Fleet pipeline, no queues |
-| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
+| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`), D-587 `marker_sightings.py` (identified robot markers through the approved record become sightings) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
 | `vision_config.py` | Validated camera/map config; secrets resolved by env name |
 | `pairing_sync.py` | Paired camera credentials synced from Fleet (token hashes only, D-341) |
 | `rectify.py` | Display-only lens/plane rectification for preview (D-318) |

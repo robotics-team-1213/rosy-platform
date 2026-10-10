@@ -24,6 +24,7 @@ from core_api_web.api.v1.common import (
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.lane_cue import LaneCueRequest
 from core_common.protocol.line_advice import LineAdviceRequest
 from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
@@ -321,6 +322,15 @@ def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
     return {"accepted": accepted, "reason": reason}
 
 
+@line_follow_router.post("/lane-cue")
+def set_lane_cue(body: LaneCueRequest, _: AuthContext = Depends(operator),
+                 svc: CoreServicesLike = Depends(get_services)):
+    """D-511 rev 1: Fleet's lane return cue. The /advice seat (operator): it starts nothing; the
+    CAMERA_LINE keep reads it only while it already drives (``fleet_lane_cue_enabled``)."""
+    accepted, reason = svc.line_follow.set_lane_cue(body.model_dump())
+    return {"accepted": accepted, "reason": reason}
+
+
 @line_follow_router.post("/stuck/decision")
 def decide_line_stuck(body: LineStuckDecisionRequest,
                       auth: AuthContext = Depends(require_grant(STUCK_DECIDE)),
@@ -337,7 +347,9 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         # calibration lease like POST /mode does; checked before the stuck is consumed.
         # WAIT holds and ABORT goes to IDLE, so they stay open like e-stop.
         require_calibration_owner(svc, auth, "line-follow stuck decision")
-    if body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD") and (
+    # Only WAIT holds. ABORT/MANUAL change the mode, which EMERGENCY refuses (only
+    # release leaves it), so refuse them here before the stuck is consumed.
+    if body.decision != "WAIT" and (
             svc.safety.estop or svc.modes.is_emergency):
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     try:

@@ -367,6 +367,28 @@ def test_anchor_age_degrades_without_new_sightings():
     assert pose.state == DEGRADED and pose.anchor_age_s == pytest.approx(12.0)
 
 
+def test_a_parked_robot_with_a_rarely_read_marker_localizes_again():
+    """Site 2026-10-10: rosy_40 parked, its marker read about one frame in eight; sightings came
+    more than max_anchor_age_s apart, each reset the agreement count, LOCALIZED never came back.
+    Odom stood still between them, so agreeing sightings any time apart re-localize it."""
+    tr = MapPoseTracker("r1")
+    for t in (0.0, 25.0, 50.0):                                  # 25 s apart, odom jitter only
+        for k in range(int(t * 2) - 50 if t else 0, int(t * 2) + 1):
+            tr.add_odom(odom(k / 2, x=1e-9 * k), T0 + k / 2)
+        tr.add_sighting(seen(t, x=ANCHOR[0] + 0.01), T0 + t)
+    pose = tr.pose(T0 + 50.0)
+    assert (pose.state, pose.anchor_age_s) == (LOCALIZED, pytest.approx(0.0))
+
+
+def test_a_moving_robot_still_needs_fresh_sightings_after_the_anchor_age():
+    tr = localized()
+    for i in range(1, 31):                                       # 0.3 m in 15 s, no sighting
+        tr.add_odom(odom(0.2 + 0.5 * i, x=0.01 * i), T0 + 0.2 + 0.5 * i)
+    tr.add_sighting(seen(15.2, y=ANCHOR[1] + 0.3), T0 + 15.2)   # agrees, but the bridge was 15 s
+    tr.add_odom(odom(15.3, x=0.3), T0 + 15.3)
+    assert tr.pose(T0 + 15.3).state == DEGRADED
+
+
 def test_another_map_id_starts_a_new_anchor():
     tr = MapPoseTracker("r1")
     for i in range(3):

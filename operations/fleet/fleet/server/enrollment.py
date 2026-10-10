@@ -240,7 +240,7 @@ class EnrollmentService(HubLinkMixin):
     def _console(self):
         return self._roster._console
 
-    def _http(self, address: str, pending=None) -> httpx.AsyncClient:
+    def _http(self, address: str, pending=None, renumber: bool = False) -> httpx.AsyncClient:
         kwargs: dict[str, Any] = {}
         base_url = f"http://{address}"
         for row in self._store.rows():
@@ -259,7 +259,7 @@ class EnrollmentService(HubLinkMixin):
                     "robot_id": pending.robot_id, "address": address}, "anonymous-bootstrap")
                 base_url = endpoint.base_url
                 kwargs["transport"] = DiscoveryTransport(endpoint, inner=EnrollmentIdentityTransport(
-                    endpoint, self._tls_bindings, inner=self._transport))
+                    endpoint, self._tls_bindings, inner=self._transport, any_receiver=renumber))
         return httpx.AsyncClient(base_url=base_url, trust_env=False,
                                  follow_redirects=False,
                                  timeout=httpx.Timeout(10.0, connect=3.0), **kwargs)
@@ -433,7 +433,9 @@ class EnrollmentService(HubLinkMixin):
         self._require_available()
         normalized = normalize_code(code)
         target, row, pending = self._candidate(discovery_name, address)
-        async with self._http(target, pending) as http:
+        # D-580: a binding a robot enrolled through here (same hostname, CA, file row) may come back renumbered.
+        renumber = pending is not None and self._tls_bindings.proven(pending)
+        async with self._http(target, pending, renumber) as http:
             try:
                 paired = await self._exchange(http, normalized, principal_id, target)
             except ValueError as exc:
@@ -448,7 +450,7 @@ class EnrollmentService(HubLinkMixin):
                 raise EnrollmentError(outcome, 409, "the robot does not prove its approved TLS binding") from None
             token = paired["token"]
             try:
-                return await self._bind_and_store(http, paired, row, target, principal_id, pending)
+                return await self._bind_and_store(http, paired, row, target, principal_id, pending, renumber)
             except EnrollmentError as exc:
                 await self._logout(http, token)
                 self._store.audit(action="enroll", outcome=exc.reason or exc.code,
@@ -516,7 +518,7 @@ class EnrollmentService(HubLinkMixin):
                                reason=reason, detail=detail)
 
     async def _bind_and_store(self, http: httpx.AsyncClient, paired: dict, row: dict | None,
-                              target: str, principal_id: str, pending=None) -> dict:
+                              target: str, principal_id: str, pending=None, renumber: bool = False) -> dict:
         received_at = self._clock()
         token = paired["token"]
         role = paired.get("role")
@@ -544,7 +546,10 @@ class EnrollmentService(HubLinkMixin):
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
         if pending is not None and robot_id != pending.robot_id:
-            raise self._consumed("tls_binding_mismatch")
+            if not renumber:
+                raise self._consumed("tls_binding_mismatch")
+            if self._tls_bindings.claims(set(), {robot_id}):
+                raise self._consumed("robot_id_conflict")  # another approved binding owns that id
         token_id = str(paired.get("id") or me.get("id") or "")
         if not token_id:
             raise self._consumed("verify_failed")
@@ -564,7 +569,10 @@ class EnrollmentService(HubLinkMixin):
         }
         self._store.insert(record, seal(self._key, token, slot="rest", robot_id=robot_id,
                                         token_id=token_id))
+        renamed = None
         try:
+            if pending is not None and robot_id != pending.robot_id:
+                renamed = self._tls_bindings.renumber(pending, robot_id)
             if pending is not None:
                 # The downgrade fence a bound row gets at load: this id never goes back to HTTP.
                 self._store.remember_tls([dict(robot_id=robot_id, origin=f"https://{pending.hostname}:{pending.port}",
@@ -574,7 +582,12 @@ class EnrollmentService(HubLinkMixin):
             self._roster.add(endpoint, self._client(endpoint, gate))
         except Exception:
             self._store.delete(robot_id)
+            if renamed is not None:  # back to the old id, so the token logout still proves TLS
+                self._tls_bindings.renumber(renamed, pending.robot_id)
             raise
+        if renamed is not None:
+            self._store.audit(action="tls_renumber", outcome="renumbered", principal_id=principal_id,
+                              target=f"{pending.robot_id}->{robot_id}")
         self._gates[robot_id] = gate
         self._tokens[robot_id] = token
         self._store.audit(action="enroll", outcome="enrolled", principal_id=principal_id,
@@ -803,6 +816,8 @@ class EnrollmentService(HubLinkMixin):
         if row is None:
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
         self._endpoint(row, "anonymous-bootstrap")  # validate before changing the mounted roster
+        if self._tls_bindings is not None:
+            self._tls_bindings.remember(robot_id)  # D-580: this binding may come back renumbered
         on_roster = robot_id in self._roster.robot_ids
         if on_roster:
             blocker = self._roster.removal_blockers(robot_id)

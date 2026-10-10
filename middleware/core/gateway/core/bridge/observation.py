@@ -25,6 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.crosswalk_gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
@@ -181,6 +182,9 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     config = line.config
     path = config.obstacle_mode == "path"
     try:
+        if getattr(line, "wants_crosswalk_scan", False):  # D-573: every ray (no return = unknown)
+            line.observe_crosswalk_scan(scan_rays(sample, forward_deg=config.lidar_forward_deg),
+                                        range_min=_range_min(sample), received_at=received_at)
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear
         # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
         # Sector mode builds them only while a stuck can be near (review L6).

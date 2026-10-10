@@ -173,3 +173,28 @@ def test_learned_paint_cannot_be_selected_in_a_mode_that_ignores_it(tmp_path):
                       + "    paint_source: learned\n"
                       "    learned_lane_pointer: /var/lib/rosy/models/shadow\n", encoding="utf-8")
     assert usable_operator_overlay(str(target))[0] is None
+
+
+def test_learned_paint_target_drivable_loads(tmp_path):
+    target = tmp_path / "drivable.yaml"
+    target.write_text(OPERATOR + "    paint_source: learned\n"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow\n"
+                      "    learned_paint_target: drivable\n", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] == str(target)
+
+
+def test_learned_paint_target_is_inert_after_a_switch_back_to_threshold(tmp_path):
+    # Host Agent lane_perception.set rewrites only paint_source; the file must stay loadable.
+    target = tmp_path / "threshold.yaml"
+    target.write_text(OPERATOR + "    paint_source: threshold\n    learned_paint_target: drivable\n", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] == str(target)
+
+
+@pytest.mark.parametrize("value", ["road", "learned_drivable", "true", "1"])
+def test_an_unknown_learned_paint_target_skips_the_overlay(tmp_path, value):
+    target = tmp_path / "bad-target.yaml"
+    target.write_text(OPERATOR + "    paint_source: learned\n"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow\n"
+                      f"    learned_paint_target: {value}\n", encoding="utf-8")
+    path, note = usable_operator_overlay(str(target))
+    assert path is None and "learned_paint_target" in note

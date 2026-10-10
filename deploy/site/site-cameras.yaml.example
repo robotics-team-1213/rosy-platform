@@ -1,10 +1,12 @@
 # Copy outside the repository to /etc/rosy/site/site-cameras.yaml.
 # Marker IDs, map dimensions and revisions below are illustrative; survey and
 # calibrate the real installation before accepting sightings.
-# robot_ids are enrolled robots that are on the floor. robot_markers may be {}
-# when those robots have no ceiling marker (D-457). A placeholder id is not a robot.
+# robot_ids: enrolled (D-580) follows Fleet's live roster: enrolling, renumbering or
+# unenrolling a robot in the console needs no edit here. A list of ids still works
+# (fixed targets). A placeholder id is not a robot.
 # A robot's marker id equals its robot number: rosy_NN wears DICT_4X4_50 id NN,
-# robots are 40-49, 7 is the dock tag and 30-38 are corners/places (D-562).
+# robots are 40-49, 7 is the dock tag and 30-38 are corners/places (D-562). With
+# robot_ids: enrolled, robot_markers lists only exceptions ({} = numbers for all).
 sources:
   # credential: static (default) - the phone is given a fixed token by hand (rosyov:// link).
   # credential: paired - D-341: the phone asks the site to connect and an operator approves it in the
@@ -14,19 +16,25 @@ sources:
     phone_token_env: ROSY_PHONE_CEILING_NORTH
     token_env: ROSY_FLEET_CEILING_NORTH_TOKEN
     fleet_base_url: https://proxy:8443
-    robot_ids: [rosy_40]
+    robot_ids: enrolled
     map_id: replace-with-surveyed-map-id
     calibration_revision: replace-after-calibration
     processor_revision: aruco-opencv-4.12
     corner_marker_ids: [30, 31, 32, 33]
     corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
-    robot_markers:
-      rosy_40: 40
+    robot_markers: {}
     heading_edge: [1, 2]
+    # D-587: sticker top edge direction from the robot front (deg, CCW +), per robot. A robot
+    # without a measured value sends no approved_record sighting (no ceiling map pose).
+    # Measure it with tools/calibration/ceiling_marker_yaw.py (one straight forward drive).
+    # marker_yaw_offset_deg: {rosy_40: 0}
     # D-564: floor place markers Fleet may teach draft places from (34 start-south,
     # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
     # edge forward as the robot stickers (heading_edge). Omit to send none.
     place_markers: [34, 35, 36, 37, 38]
+    # D-589: Vision keeps tuning this camera's exposure for recognition (needs --track).
+    # false: Vision sends no camera messages and the phone follows its own D-544 settings.
+    auto_tune: true
 
   # A second source needs its own sighting token wired in too: add a secret file and its
   # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet
@@ -47,3 +55,14 @@ sources:
   #   robot_markers:
   #     rosy_40: 40
   #   heading_edge: [1, 2]
+
+# D-472/D-596 LED identity (Fleet reads this top-level block; every field optional). Defaults:
+# Fleet asks by itself (auto_request: true) when a robot's marker has been missing for 3 s near an
+# anonymous blob, after two blobs split, or after an odom reset; at most once per robot per 30 s,
+# never during an E-stop. Each request blinks the robot's rear lamp 3 s and chirps twice.
+# identity:
+#   auto_request: false          # operator "LED로 찾기" only
+#   auto_min_interval_s: 30.0
+#   auto_marker_missing_s: 3.0
+#   auto_near_m: 0.5
+#   identity_ttl_s: 60.0

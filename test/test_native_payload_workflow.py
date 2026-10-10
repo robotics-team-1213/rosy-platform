@@ -17,8 +17,16 @@ def _job():
     return _workflow()["jobs"]["build-unsigned-payload"]
 
 
+PREREQS = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "payload-builder" / "install-ros-build-prereqs.sh"
+
+
 def _run_text() -> str:
     return "\n".join(step.get("run", "") for step in _job()["steps"])
+
+
+def _ros_install_text() -> str:
+    """D-553 addendum 3: the ROS prerequisites moved into the payload-builder image script."""
+    return PREREQS.read_text(encoding="utf-8")
 
 
 def test_manual_native_arm64_and_read_only():
@@ -30,7 +38,8 @@ def test_manual_native_arm64_and_read_only():
     assert triggers["workflow_dispatch"]["inputs"]["release_id"]["required"] is True
     assert job["runs-on"] == "ubuntu-24.04-arm"
     assert job.get("continue-on-error") is not True
-    assert workflow["permissions"] == {"contents": "read"}
+    # packages: read pulls the payload-builder image (D-553 addendum 3); nothing writes.
+    assert workflow["permissions"] == {"contents": "read", "packages": "read"}
 
 
 def test_no_secrets_and_no_signing_in_ci():
@@ -60,7 +69,7 @@ def test_builds_payload_only_then_assembles_unsigned_release():
 
 def test_ros_apt_source_is_checksum_pinned_like_the_image_workflow():
     image = (ROOT / ".github" / "workflows" / "build-pinky-image.yml").read_text(encoding="utf-8")
-    text = _run_text()
+    text = _ros_install_text()
     # Public apt-source SHA-256 checksum: integrity data, not a credential.
     apt_source_sha256 = "0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5"
 
@@ -94,12 +103,12 @@ def test_ros_is_installed_from_the_image_locks_snapshot():
         (ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8-sig")
     )
     url = lock["ros"]["apt_snapshot_url"]
-    text = _run_text()
+    text = _ros_install_text()
 
     assert url.startswith("http://snapshots.ros.org/jazzy/") and url.endswith("/ubuntu")
     assert "['ros']['apt_snapshot_url']" in text
     assert "ros2.sources" in text
-    assert "snapshots.ros.org/jazzy/20" not in WORKFLOW.read_text(encoding="utf-8")
+    assert "snapshots.ros.org/jazzy/20" not in WORKFLOW.read_text(encoding="utf-8") + text
     assert text.index("apt_snapshot_url") < text.index("ros-jazzy-ros-base")
 
 
@@ -109,8 +118,8 @@ def test_snapshot_signing_key_is_pinned_by_fingerprint_and_scoped():
         (ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8-sig")
     )
     key_fingerprint = lock["ros"]["apt_snapshot_key_fingerprint"]
-    text = _run_text()
-    rendered = WORKFLOW.read_text(encoding="utf-8")
+    text = _ros_install_text()
+    rendered = WORKFLOW.read_text(encoding="utf-8") + text
     keyring = "/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg"
 
     # ROS 2 docs "Snapshot repository": 4B63 CF8F DE49 746E 98FA 01DD AD19 BAB3 CBF1 25EA.
@@ -126,7 +135,7 @@ def test_snapshot_signing_key_is_pinned_by_fingerprint_and_scoped():
     assert "exit 1" in text[check:check + 300]
     # Scoped trust: Signed-By on the snapshot stanza, live stanza removed, no global trust.
     assert "Signed-By: %s" in text
-    assert "sudo rm -f /etc/apt/sources.list.d/ros2.sources" in text
+    assert "rm -f /etc/apt/sources.list.d/ros2.sources" in text
     assert 'grep -qx "Signed-By: $ros_snapshot_keyring"' in text
     assert "apt-key" not in rendered
     assert "trusted.gpg.d" not in rendered
@@ -134,3 +143,20 @@ def test_snapshot_signing_key_is_pinned_by_fingerprint_and_scoped():
     assert "allow-insecure" not in rendered.lower()
     assert "allowunauthenticated" not in rendered.lower()
     assert check < text.index("ros-jazzy-ros-base")
+
+
+def test_the_job_runs_in_the_builder_image_pinned_by_digest():
+    """D-553 addendum 3: the prerequisites are a cached image, pulled read-only by digest."""
+    workflow = _workflow()
+    job = _job()
+    default = workflow.get("on", workflow.get(True))["workflow_dispatch"]["inputs"]["builder_image"]["default"]
+    assert job["container"]["image"] == "${{ inputs.builder_image }}"
+    assert job["container"]["credentials"]["password"] == "${{ github.token }}"
+    assert default.startswith("ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:")
+    text = _run_text()
+    assert "rosy-payload-builder@sha256:[0-9a-f]{64}$" in text  # a tag or another image stops the job
+    assert text.index('[[ "$BUILDER_IMAGE" =~') < text.index("build-native-payload.sh")
+    builder = (ROOT / ".github" / "workflows" / "build-payload-builder.yml").read_text(encoding="utf-8")
+    assert "payload-builder/make-builder-image.sh" in builder and "secrets." not in builder
+    make = (PREREQS.parent / "make-builder-image.sh").read_text(encoding="utf-8")
+    assert "ubuntu@sha256:" in make and "install-ros-build-prereqs.sh" in make

@@ -53,12 +53,13 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/camera-peer.js": 2,
     "operations/fleet/fleet/server/web/cell/cell.js": 1,
     "operations/fleet/fleet/server/web/confirmed-action.js": 1,
+    # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
     "operations/fleet/fleet/server/web/console.js": 3,
     "operations/fleet/fleet/server/web/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/fleet/fleet/server/web/roster.js": 1,
     # Activation, camera-draft replacement (D-497); trip cancel left with the 운행 panel (D-540 4).
     "operations/fleet/fleet/server/web/site-map.js": 2,
-    "operations/fleet/fleet/server/web/tracking-view.js": 1,
+    "operations/fleet/fleet/server/web/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

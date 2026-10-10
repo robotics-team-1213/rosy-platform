@@ -50,7 +50,7 @@ from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
-                              v13_lineage_error)
+                              v13_lineage_error, v13_quality_error)
 import drivable_versions  # noqa: E402  D-558 ledger
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
@@ -489,7 +489,7 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         report["model_revision"] = manifest.model_revision
         if manifest.model_revision.startswith("v13-drivable-"):  # D-554 lineage, D-558 version
             error = v13_lineage_error(manifest.raw) or drivable_versions.intake_error(
-                manifest.raw, ledger or drivable_versions.LEDGER)
+                manifest.raw, ledger or drivable_versions.LEDGER) or v13_quality_error(manifest.raw)
             if error:
                 raise ValueError(error)
             report["model_version"] = manifest.model_version
