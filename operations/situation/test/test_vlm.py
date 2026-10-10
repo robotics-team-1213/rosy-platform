@@ -30,6 +30,8 @@ def _post(answer, fail=None):
         calls.append((url, body, timeout))
         if fail is not None:
             raise fail
+        if body.get("format", {}).get("required") == ["observation"]:
+            return {"message": {"content": json.dumps({"observation": "A wall meets the carpeted floor."})}}
         if url.endswith("/api/show"):
             return {"digest": "abcdef0123456789"}
         return {"message": {"content": json.dumps(answer)}}
@@ -40,13 +42,14 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     post, calls = _post({"decision": "back_and_retry", "reason": "Rear clear", "confidence": 0.7, "seen": "empty"})
     proposal = Vlm(post=post, get=RUNNING).judge(_case(), now=100.0)
     assert proposal["decision"] == "BACK_AND_RETRY" and proposal["reason"] == "rear_clear"
-    assert proposal["source"].startswith("vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
+    assert proposal["source"].startswith("vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v5:")
     views = proposal["evidence"]["views"]
     assert views["rosy_cam"]["frame_id"] == "rc-9" and views["rosy_cam"]["age_s"] == 1.0
     assert views["front"]["age_s"] == 1.5 and len(views["front"]["sha256"]) == 64
     chat = calls[-1]
-    assert chat[0] == "http://127.0.0.1:11434/api/chat" and chat[2] == 6.0
-    assert len(chat[1]["messages"][0]["images"]) == 2
+    assert chat[0] == "http://127.0.0.1:11434/api/chat" and 0 < chat[2] <= 6.0
+    assert "images" not in chat[1]["messages"][0]
+    assert len(calls) == 3
     assert "context cause is a report, not proof" in chat[1]["messages"][0]["content"]
     assert proposal["evidence"]["assessment"]["verification"] == "unverified"
     assert chat[1]["format"]["required"] == ["decision", "reason", "confidence", "seen", "assessment"]
@@ -70,7 +73,7 @@ def test_model_profile_requires_a_running_model_with_a_digest():
     assert empty.profile() is None
     running = Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]})
-    assert running.profile().startswith("qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
+    assert running.profile().startswith("qwen3-vl:8b-instruct@abcdef012345:d619-v5:")
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
 
@@ -136,3 +139,52 @@ def test_model_parameters_are_bounded_recorded_and_change_profile(monkeypatch):
         monkeypatch.setenv('ROSY_VLM_OPTIONS', invalid)
         with pytest.raises(ValueError):
             Vlm()
+
+
+def test_each_image_is_observed_without_task_priors_before_context_judgement():
+    post, calls = _post({"decision": "WAIT"})
+    case = {**_case(), "context": {"operator_report": "there is a corner and enough room"}}
+    proposal = Vlm(post=post, get=RUNNING).judge(case, 100.0)
+    assert len(calls) == 3
+    for _, body, _ in calls[:2]:
+        assert len(body["messages"][0]["images"]) == 1
+        assert "enough room" not in body["messages"][0]["content"]
+    assert "images" not in calls[-1][1]["messages"][0]
+    assert "enough room" in calls[-1][1]["messages"][0]["content"]
+    assert len(proposal["evidence"]["prompt"]["calls"]) == 3
+    assert {row["description"] for row in proposal["evidence"]["assessment"]["observations"]} == {
+        "A wall meets the carpeted floor."}
+
+
+def test_observation_pipeline_uses_one_total_deadline(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr('rosy_situation.vlm.time.monotonic', lambda: elapsed[0])
+    calls = []
+    def post(url, body, timeout):
+        calls.append(body)
+        elapsed[0] = 7.0
+        return {'message': {'content': '{"observation":"A wall is visible."}'}}
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 1
+
+
+def test_invalid_independent_observation_drops_the_whole_proposal():
+    calls = []
+    def post(url, body, timeout):
+        calls.append(body)
+        return {'message': {'content': '{"observation":"", "verified":true}'}}
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 1
+
+
+def test_final_reply_after_total_deadline_is_discarded(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr('rosy_situation.vlm.time.monotonic', lambda: elapsed[0])
+    reply, calls = _post({'decision': 'WAIT'})
+    def post(url, body, timeout):
+        result = reply(url, body, timeout)
+        if body.get('format', {}).get('required') != ['observation']:
+            elapsed[0] = 7.0
+        return result
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 3
