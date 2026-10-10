@@ -379,7 +379,7 @@ def test_realign_body_belongs_to_realign_only(core_client):
 
 
 def test_realign_enabled_is_offered_announced_and_checked_by_core(core_client):
-    on = {"line_follow": {"stuck_realign_enabled": True, "obstacle_mode": "path"}}
+    on = {"line_follow": {"stuck_realign_enabled": True, "obstacle_mode": "path", "recovery_local_enabled": True}}
     client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=on, **kw))
     assert "REALIGN" in client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["decisions"]
     services.state.set_velocity(0.0, 0.0)  # a live base (D-32) announces the drive control
