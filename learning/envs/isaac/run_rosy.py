@@ -62,6 +62,7 @@ def main():
         app_config.update(width=640, height=480, anti_aliasing=0)
     simulation_app = SimulationApp(app_config)
     guard = None
+    headless_menu = None
     wheel_drives = []
     watchdog_ready = False
     try:
@@ -74,6 +75,9 @@ def main():
 
         manager = omni.kit.app.get_app().get_extension_manager()
         if args.headless:
+            import omni.kit.menu.utils
+
+            headless_menu = omni.kit.menu.utils.get_instance()
             # Its file-menu callback outlives USD teardown in the installed 5.1 SDK.
             manager.set_extension_enabled_immediate("isaacsim.gui.menu", False)
         for name in ("isaacsim.asset.importer.urdf", "isaacsim.ros2.bridge", "omni.graph.scriptnode",
@@ -264,6 +268,11 @@ def main():
                 guard.reset()
                 if watchdog_ready:
                     force_zero_wheels(og.Controller, wheel_drives)
+            if headless_menu is not None:
+                # Remove delayed menu callbacks while the USD context still exists.
+                omni.timeline.get_timeline_interface().stop()
+                headless_menu.clear_menu_data()
+                simulation_app.update()
         finally:
             command_watchdog.ACTIVE_WATCHDOG = None
             simulation_app.close()
