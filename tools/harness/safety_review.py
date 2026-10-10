@@ -41,6 +41,15 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "8ff5c68d36c83fe9c6916a992a567420f013a949":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "safety manager docstring only, identical execution; D-602 advisory class contract and person_feet "
+        "rejection regressions agree. See docs/validation/today-worktree-integration-2026-10-10/result.md.",
+    "1168199f168a9eec93747b45ee91c91670da9d1c":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact followup snapshot diff approved; known-kind nominal body selection rejects unknown kinds "
+        "and route pose freshness stays conservative. See docs/validation/"
+        "today-worktree-integration-2026-10-10/result.md; no device acceptance.",
     "dc4ef1a90f3f8c28db9eccbf7b9288980eb297fe":  # git commit revision
         "Independent lap_review retrospective source review on 2026-10-10: safety.py AST identical "
         "to first parent ff1f70b3c (already carries independent Safety-Review APPROVE WITH NOTES); "
