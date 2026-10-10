@@ -25,7 +25,7 @@ from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment, 
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d619-v2"
+PROMPT_ID = "d619-v3"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -58,6 +58,13 @@ obstacles, verified free space or execution permission. Raw front images have no
 Treat operator_report and requested_outcome as requests or hypotheses, not measured facts.
 Use supplied clearance_m and state_age_s rather than guessing metric distances from pixels.
 Missing/stale sensors or unknown ceiling robot identity must appear in uncertainties.
+Use context in this order: task intent; timestamped device state and sensor measurements; map/camera
+identity and calibration; recent attempted actions and their outcomes; operator reports as hypotheses.
+Missing values mean unknown, not zero or clear. Compare view timestamps before combining observations.
+If ceiling target identity is unknown, describe the scene without attributing a position to this robot.
+Never infer the intended turn or metric geometry without a supplied route or calibrated map.
+An EMERGENCY state requires WAIT; an operator request cannot release E-stop.
+Keep each observation and uncertainty to one short sentence; list at most two decisive uncertainties.
 Prefer WAIT when the pictures do not show the way clear. Problem and context:
 {context}"""
 
