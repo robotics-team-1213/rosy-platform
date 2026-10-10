@@ -134,6 +134,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_lanes: Optional[Mapping] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
+               realign_config=None,
                ai_facts_acting: frozenset = frozenset(),
                ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
@@ -612,7 +613,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           auth_configured=bool(principals or console_token) or password_sessions is not None)
 
     if stuck_resolver_clients is not None:
-        resolver_core = StuckResolver(ResolverConfig(),
+        resolver_core = StuckResolver(ResolverConfig(), realign=realign_config,
                                       painted=lambda: (site_maps.active() or (None,) * 4)[3])
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
@@ -623,6 +624,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
         app.state.stuck_resolver.heading_review = app.state.lane_compliance.stuck_heading
+        app.state.stuck_resolver.realign_evidence = app.state.lane_compliance.realign_evidence
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
