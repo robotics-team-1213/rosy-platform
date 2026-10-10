@@ -1,9 +1,11 @@
-# ROSY Platform 정체성과 3단계 책임 구조 설계
+# ROSY Platform 정체성과 최대 5단계 책임 구조 설계
 
 **상태:** Proposed. 2026-10-11 사용자 요청에 따른 제품·구조 재검토다. 기존 Accepted ADR, API, 배포 구조를 변경·승격하지 않는다.
 **기준:** `81b6ed879`, `docs/core-responsibility-plan`. 세계 상태와 행동 예측을 함께 다룬다는 사용자 답변을 반영한다.
 **실행:** [플랫폼 구조 실행 계획](2026-10-11-rosy-platform-identity-and-structure.md).
 **상세:** [CORE·Drive·Arm·Safety 설계](2026-10-11-core-responsibility-and-driving-design.md), [상세 실행 계획](2026-10-11-core-responsibility-and-driving.md).
+
+**개정:** 같은 대화의 후속 요청에 따라 3단계 개요를 유지하고 복잡한 도메인의 내부 책임은 최대 5단계까지 허용한다. 모든 폴더를 5단계로 만드는 제안은 아니다.
 
 ## 1. ROSY가 무엇을 소유하는 제품인가
 
@@ -58,37 +60,83 @@
 
 `runtime/site/learning`은 실행 호스트를 연상시키고, `control/world/ai/...`만으로 최상위를 구성하면 online/offline 권한과 원장 경계가 약해진다. 이번 권고는 현재 역할 이름을 유지하고 **2·3단계의 도메인 이름을 더 정확하게 고치는 것**이다. 추후 root 명칭 자체를 바꿀 근거가 생기면 D-427 후속 ADR에서 결정한다.
 
-## 4. 최대 3 depth 목표 분류
+## 4. 최대 5 depth 목표 분류
 
-depth는 저장소 root 아래 책임 폴더를 센다: `middleware/control/drive`가 3이다. 아래 트리는 **미래 책임·패키지 holder의 목표안**이며 빈 폴더 생성 목록이 아니다. `src/rosy/...`, package 구현·test/resource 같은 언어/빌드 내부 경로는 이 분류 depth와 별개다. 실제 물리 depth도 모두 3으로 제한하려면 namespace/ament/vendor 규칙을 먼저 대조해야 한다.
+depth는 저장소 root 아래 책임 폴더를 센다. `middleware/control/drive`가 3, `middleware/control/drive/recovery`가 4, `middleware/control/drive/recovery/stuck`이 5다. **1–3단계에서 제품의 역할과 도메인을 찾고, 필요한 곳의 4–5단계에서 책임과 교체 단위를 설명한다.**
+
+| 단계 | 구분할 의미 | 예 |
+|---|---|---|
+| 1 | 제품 파트·권한 경계 | middleware, operations, learning |
+| 2 | 주요 기능 영역 | core, control, world, training |
+| 3 | 장치 도메인 또는 기능 범위 | drive, arm, local, state, world_model |
+| 4 | 해당 범위의 응집된 책임 | planning, tracking, recovery, projections, inference |
+| 5 | 실제로 구별할 하위 문제·교체 단위 | lane_return, stuck, trajectory, rollout |
+
+아래는 **미래 책임 배치 목표안**이며 빈 폴더 생성 목록이 아니다. `{...}`는 형제 후보이고, 단일 파일·단일 역할이면 폴더로 승격하지 않는다. `src/rosy/...`, package 구현·test/resource 같은 언어/빌드 내부 경로는 이 책임 분류 depth와 별개다. 실제 filesystem의 전체 경로를 5단계로 제한하는 규칙은 아니며 namespace/ament/vendor 규칙은 이동 계획에서 따로 대조한다.
 
 ```text
 rosy-platform/
-├─ middleware/                    # 장치 실행
-│  ├─ core/{gateway,api,events}    # 공통 관문·조립; services의 공통 책임은 여기 소유
-│  ├─ control/{drive,arm}          # 도메인 계획·제어·복구; 새 제안, 이동 계약 필요
-│  ├─ perception/{sensors,vision} # 관측 생성; 현재 absorbed control을 단계적으로 분해
-│  ├─ execution/local             # 로컬 시도·취소·receipt·재시작 수명
+├─ middleware/                         # 장치 실행
+│  ├─ core/                            # 장치 공통 관문·조립
+│  │  ├─ gateway/{admission,transport}
+│  │  ├─ api/{http,websocket}
+│  │  ├─ runtime/{composition,lifecycle} # 프로세스 기동·종료
+│  │  ├─ capabilities                  # 등록·사용 가능 기능의 근거
+│  │  ├─ state                         # 공통 읽기 snapshot
+│  │  └─ events                        # 사건·감사 연결
+│  ├─ control/                         # 장치 도메인별 실행
+│  │  ├─ drive/
+│  │  │  ├─ planning/{nav2,route_context}
+│  │  │  ├─ tracking/{line_follow,path_follow,swarm}
+│  │  │  ├─ recovery/{lane_return,stuck,realign}
+│  │  │  ├─ docking                    # 도킹 단계·제어·재접근
+│  │  │  ├─ localization               # 지역화 미션·제한 동작
+│  │  │  └─ safety/{clearance,envelope}
+│  │  └─ arm/
+│  │     ├─ planning/{kinematics,trajectory}
+│  │     ├─ tracking/{joints,gripper}
+│  │     ├─ recovery                   # HOLD·재검사·재계획
+│  │     └─ safety/{limits,workspace}
+│  ├─ perception/
+│  │  ├─ sensors/{lidar,imu,ir}
+│  │  └─ vision/{lane,objects,dock}
+│  ├─ execution/local/
+│  │  ├─ admission                     # owner·lease·시작 조건
+│  │  ├─ lifecycle                     # 시도·취소·재시작 조정
+│  │  └─ receipts                      # 수락·종단·확인 근거
 │  ├─ skills/{api,navigation,manipulation}
-│  ├─ devices/{pinky,omx}         # apps/device의 장치 조합·profile·bringup
+│  ├─ devices/
+│  │  ├─ pinky/{profile,bringup,binding}
+│  │  └─ omx/{profile,bringup,binding}
 │  ├─ drivers/{imu_bno055,pinky_adc,pinky_lamp,pinky_led}
 │  └─ ui/{robot,pilot,face}
-├─ operations/                    # 현장 상태·작업 조정
-│  ├─ fleet                      # 기존 원장·자원·dispatch·console
-│  ├─ execution/{api,site}
-│  ├─ world/{api,state}           # 관측·확정 사건의 조회 projection
-│  ├─ decision/{rules,models}     # 작업/대응 후보의 선택; 실행 권한은 admission
-│  ├─ prediction/world_model     # 미래 상태 예측, 새 제안; world/state와 별도
-│  ├─ situation                  # 현재 상황·예외 분석; 사실만
-│  ├─ vision                     # 현장 카메라·신호 관측
+├─ operations/                         # 현장 상태·작업 조정
+│  ├─ fleet/{routing,traffic,roster}     # 원장·dispatch 원자성은 유지
+│  ├─ execution/
+│  │  ├─ api
+│  │  └─ site/{admission,scheduling,journal}
+│  ├─ world/
+│  │  ├─ api
+│  │  └─ state/{observations,frames,projections}
+│  ├─ prediction/world_model/
+│  │  ├─ context                       # 상태·행동·horizon 참조
+│  │  ├─ inference/{rollout,uncertainty}
+│  │  └─ results                       # 만료·기권·예측 근거
+│  ├─ decision/{context,rules,proposals}
+│  ├─ situation/{analyzers,incidents}   # 현재 상황·예외의 사실
+│  ├─ vision                           # 현장 카메라·신호 관측
 │  ├─ processes/{cell,palletizing}
 │  ├─ site_devices/{dock,signal}
 │  ├─ apps/{fleet,games}
 │  └─ ui/{console,cam}
-├─ learning/                      # 경험·학습·독립 평가
-│  ├─ curation/{pinky,omx}        # 기록→episode; 장치별 원본 매핑
-│  ├─ training/{perception,pinky,omx,world_model}
-│  ├─ evaluation/{perception,policy,world_model}
+├─ learning/                           # 경험·학습·독립 평가
+│  ├─ curation/{pinky,omx}              # 기록→episode; 장치별 매핑
+│  ├─ training/
+│  │  ├─ {perception,pinky,omx}
+│  │  └─ world_model/{datasets,objectives,jobs}
+│  ├─ evaluation/
+│  │  ├─ {perception,policy}
+│  │  └─ world_model/{replay,metrics,acceptance}
 │  ├─ registry/{policy,models}
 │  └─ envs/{isaac,replay}
 ├─ contracts/{foundation,ros_idl,motion,skill,learning}
@@ -104,6 +152,24 @@ rosy-platform/
 
 이 트리의 중괄호는 같은 depth의 형제다. 새 `middleware/control`은 CORE 밖의 **논리 도메인 구현 holder** 제안이며 두 번째 공개 API·process·writer가 아니다. 현재 D-429가 기각한 top-level `decision`과 구분하고, 기존 D-427의 물리 목적 경로 변경이므로 ADR 없이 이동하지 않는다.
 
+### 4.1 깊이를 늘릴 때 지켜야 할 책임 경계
+
+- **CORE runtime과 local lifecycle:** 앞쪽은 프로세스 기동/종료·의존 주입, 뒤쪽은 명령 시도·취소·재시작 조정이다. 도메인 내부 상태기계를 복제하지 않는다.
+- **공통 local 수명과 Drive/Arm recovery:** 식별·lease·receipt·취소의 공통 의무는 기존 계약을 쓴다. 어떤 동작으로 복구하고 어떤 근거로 성공하는지는 해당 도메인이 결정한다. local wheel에 모든 owner를 물리 이동하는 제안이 아니다.
+- **Drive planning과 Fleet routing:** 로봇의 Nav2/route context와 사이트 lane graph·자원/교통은 다른 범위다. 전체 경로 탐색을 Drive로 옮기지 않는다.
+- **tracking/gripper와 장치 binding/driver:** 후보·단계·완료 판단은 도메인, vendor/ROS/action 전송은 binding/driver다. Arm의 gripper를 별도 무검사 writer로 만들지 않는다.
+- **state와 prediction:** 측정/확정 사건의 projection과 가정한 미래 rollout은 다른 생명주기다. 예측이 관측 상태나 실제 결과를 덮어쓰지 않는다.
+- **training dataset와 curation/registry:** training 하위 datasets는 모델 입력 구성·sampling 책임이다. episode 원본·검수/계보·승격의 또 다른 기준 저장소를 만들지 않는다.
+- **장치별 Safety:** 표의 workspace/envelope는 필요한 검사 책임의 후보다. 현행 구현·실물 보장으로 선언하지 않는다. 지금 보호 대상 옆에 있는 guard/anchor를 먼저 보존한다.
+
+### 4.2 언제 4·5단계가 필요한가
+
+동일 책임 안에 실제 서로 다른 코드 역할과 소비자가 있어야 한다. [기존 CORE 분리 기준](2026-09-06-module-split-criteria.md)과 현재 gateway package의 AGENTS처럼 새 패키지는 미소유 요구사항, 서로 다른 두 역할, 복수 패키지 소비자를 확인한다. 단순 파일 이동은 결합된 lock·generation·transaction·호환 export를 유지한다.
+
+예를 들어 Drive recovery는 현행 lane return, stuck, realign의 전제·제어·종단 조건이 달라 하위 책임을 나눌 근거가 있다. 그러나 하나의 `camera_fault.py`를 eligibility/service/manager 폴더로 늘리는 근거는 없다. 예측 uncertainty나 Arm workspace처럼 구현·실소비자가 없는 가지는 설계 후보로만 두고 먼저 만들지 않는다.
+
+논리 depth가 5인데 실제 namespace를 더하면 filesystem이 깊어지는 경우 migration 표에 그대로 적는다. 실제 파일까지 평평하게 만드는 과정에서 `src` layout·ament resource·test discovery를 임의로 변경하지 않는다.
+
 ### 이름별 유지·변경 이유
 
 | 현행 이름 | 권고 | 의미와 조건 |
@@ -118,7 +184,7 @@ rosy-platform/
 | `prediction` | 첫 실소비자 때 신설 후보 | 행동 조건부 미래 예측의 별도 수명·budget·평가를 표현 |
 | `safety` | cross-cutting 책임 유지 | 기존 장치 guard 옆에 배치; 최상위 중앙 safety 서비스로 모으지 않음 |
 
-각 물리 이동은 호출자·설치·launch·manifest·test·Safety 검토를 포함한 단위로 한다. 3 depth를 위해 모든 feature를 큰 단일 파일로 합치거나 같은 타입을 다른 파트에 복제하지 않는다.
+각 물리 이동은 호출자·설치·launch·manifest·test·Safety 검토를 포함한 단위로 한다. 5 depth 상한을 이유로 모든 feature를 큰 단일 파일로 합치거나 폴더 수를 늘리거나 같은 타입을 다른 파트에 복제하지 않는다.
 
 ## 5. 세계 상태와 world model은 연결하되 섞지 않는다
 
@@ -158,7 +224,7 @@ flowchart LR
 - **world model 교체:** 같은 평가 입력·horizon·출력 의미·fallback을 고정하고 provider/model artifact만 교체한다. 승인 정책·예측을 사실로 승격하는 규칙은 모델이 변경하지 않는다.
 - **새 공정:** 공정 recipe/compiler가 Skill 계획을 내고 site execution이 승인/예약한다. world가 레시피·작업 원장을 모두 소유하지 않는다.
 
-책임 확장은 소비자·계약·교체 단위·실패 출구로 검증한다. 폴더가 3단계라는 사실만으로 확장성이 증명되지는 않는다.
+책임 확장은 소비자·계약·교체 단위·실패 출구로 검증한다. 폴더가 3단계인지 5단계인지보다 같은 책임의 소유자와 의존 방향이 명확한지가 기준이다.
 
 ## 7. 구현 순서와 현재 한계
 

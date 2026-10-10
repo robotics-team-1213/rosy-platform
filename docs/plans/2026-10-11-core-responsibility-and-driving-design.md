@@ -4,7 +4,7 @@
 **기준:** 2026-10-11, `81b6ed879`, 작업 브랜치 `docs/core-responsibility-plan`.
 **실행:** [구현 계획](2026-10-11-core-responsibility-and-driving.md).
 
-**상위 구조:** [ROSY 정체성·3단계 폴더·world model 설계](2026-10-11-rosy-platform-identity-and-structure-design.md).
+**상위 구조:** [ROSY 정체성·최대 5단계 책임 폴더·world model 설계](2026-10-11-rosy-platform-identity-and-structure-design.md).
 
 ## 1. 목적과 범위
 
