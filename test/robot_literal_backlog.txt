@@ -10,8 +10,8 @@ middleware/ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
 middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
 middleware/core/api/core_api_web/api/app.py
-middleware/core/navigation/launch/hardware.launch.py
-middleware/core/navigation/params/nav2_params.yaml
+middleware/control/drive/planning/nav2/launch/hardware.launch.py
+middleware/control/drive/planning/nav2/params/nav2_params.yaml
 middleware/perception/config/line_follow.yaml
 middleware/perception/config/robot.yaml
 middleware/perception/control/calibration_relocation.py

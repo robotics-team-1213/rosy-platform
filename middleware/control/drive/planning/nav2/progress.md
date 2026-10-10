@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "Nav2 모션 상한 fail-closed 계약 시험 통과 (2026-09-15, 5 passed)"
-    cmd: "python3 -m pytest test/test_nav2_profile_limits.py -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/nav2-source -- test/test_nav2_profile_limits.py -q"
   LOCAL:
     state: GO
     evidence: "36 passed (2026-09-15 Windows, 미커밋 WIP 포함 작업 트리). 패키지 전용 pytest 없음 — repo test/에서 모듈 경로 시험 5개를 grep해 실행"
-    cmd: "python3 -m pytest test/test_nav2_hardware_slice.py test/test_footprint_profiles.py test/test_nav2_profile_limits.py test/test_nav2_bandwidth_contracts.py test/test_flask_launch_removed.py -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/nav2 -- test/test_nav2_hardware_slice.py test/test_footprint_profiles.py test/test_nav2_profile_limits.py test/test_nav2_bandwidth_contracts.py test/test_flask_launch_removed.py -q"
   ROS-SIM:
     state: HOLD
     blocker: "Nav2/SLAM Toolbox 실물 launch 미재실행. 현재는 ament_lint와 조합 계약 시험뿐 — ROS 2 Jazzy 환경에서 hardware.launch.py/gz_*.launch.xml 재실행 필요"

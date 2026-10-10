@@ -10,7 +10,7 @@ unnoticed.
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCH = ROOT / "middleware" / "core" / "navigation" / "launch"
+LAUNCH = ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "launch"
 
 _REMOVED_WEB_LAUNCHES = (
     "web_nav2.launch.xml",
@@ -35,7 +35,7 @@ def test_no_navigation_xml_starts_a_web_server():
 
 
 def test_navigation_package_does_not_install_flask():
-    cmake = (ROOT / "middleware" / "core" / "navigation" / "CMakeLists.txt").read_text(
+    cmake = (ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     assert "nav2_web_server.py" not in cmake

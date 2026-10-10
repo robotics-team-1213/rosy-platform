@@ -11,7 +11,8 @@ On-robot middleware. CORE (the external API and the only final `/cmd_vel` publis
 
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | Gateway, events, services, web API, navigation (see `core/AGENTS.md`) |
+| `core/` | Gateway, events, services and web API (see `core/AGENTS.md`) |
+| `control/` | Device control responsibilities: Drive planning backend (see `control/AGENTS.md`) |
 | `devices/` | Pinky and OMX hardware-family assembly, profiles and adapters (see `devices/AGENTS.md`, D-626) |
 | `drivers/` | Board drivers: IMU, ADC, lamp, LED (see `drivers/AGENTS.md`) |
 | `perception/` | Absorbed Control package. It must not publish the operational final command beside CORE (see `perception/AGENTS.md`) |
