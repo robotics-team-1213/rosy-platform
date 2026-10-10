@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional
 
-from fleet.server.stuck_resolver import ResolverConfig, _map_pose, _peer_in_band
+from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
 
 
 def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = "R3") -> Optional[str]:
@@ -98,3 +98,33 @@ def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfi
             return "crosswalk"
         return "peer_behind" if peer_behind(row, rows, config) else None
     return lane_lost_hold(row, stuck, rows, chain, config, rule="R3" if cause == "lane_lost" else "R6")
+
+
+def ai_answer(resolver, now, row, stuck, rows, chain):
+    """D-577 개정 2026-10-10: the AI PC proposes, Fleet checks the envelope, CORE re-checks.
+
+    An Answer for a valid proposal, "wait" while an acting robot's AI PC still has time, or None: the
+    rules answer. Every judged proposal goes to ``resolver.ai_verdicts`` (audit), each one only once."""
+    rid, sid = str(row["robot_id"]), str(stuck["stuck_id"])
+    proposal = row.get("ai_proposal")
+    if proposal is not None and proposal["stuck_id"] != sid:
+        _judge(resolver, chain, proposal, now, "stuck_mismatch")
+        proposal = None
+    if proposal is None:
+        waiting = row.get("ai_wait") and now - chain.seen_at < resolver.config.ai_wait_s
+        return "wait" if waiting else None
+    if _judge(resolver, chain, proposal, now, None, row, stuck, rows) != "forwarded":
+        return None
+    decision = proposal["decision"]
+    return Answer(rid, sid, decision, "ai", escalate=f"ai_wait:{proposal['reason']}" if decision == "WAIT" else None)
+
+
+def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=None) -> Optional[str]:
+    key = (proposal["stuck_id"], proposal["decision"], proposal["reason"])
+    if key in chain.ai_judged:
+        return None
+    chain.ai_judged.add(key)
+    if verdict is None:
+        verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, resolver.config) or "forwarded"
+    resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
+    return verdict

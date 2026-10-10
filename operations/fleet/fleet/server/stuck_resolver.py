@@ -285,7 +285,9 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
             return self._next_segment(row, rows)
-        proposed = self._ai_answer(now, row, stuck, rows, chain)
+        from fleet.server.stuck_lane_lost import ai_answer
+
+        proposed = ai_answer(self, now, row, stuck, rows, chain)
         if proposed is not None:
             return None if proposed == "wait" else proposed
         rule = self._rule(row, stuck, rows, chain)
@@ -308,38 +310,6 @@ class StuckResolver:
         if len(rule) == 4:
             return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
         return Answer(rid, sid, rule[1], rule[0])
-
-    def _ai_answer(self, now, row, stuck, rows, chain):
-        """D-577 개정 2026-10-10: the AI PC proposes, Fleet checks the envelope, CORE re-checks.
-
-        Returns an Answer for a valid proposal, "wait" while an acting robot's AI PC still has time,
-        or None: the rules answer. Every judged proposal is appended to ``ai_verdicts`` (audit)."""
-        rid, sid = str(row["robot_id"]), str(stuck["stuck_id"])
-        proposal = row.get("ai_proposal")
-        if proposal is not None and proposal["stuck_id"] != sid:
-            self._judge(chain, proposal, now, "stuck_mismatch")
-            proposal = None
-        if proposal is None:
-            waiting = row.get("ai_wait") and now - chain.seen_at < self.config.ai_wait_s
-            return "wait" if waiting else None
-        why = self._judge(chain, proposal, now, None, row, stuck, rows)
-        if why != "forwarded":
-            return None
-        decision = proposal["decision"]
-        return Answer(rid, sid, decision, "ai",
-                      escalate=f"ai_wait:{proposal['reason']}" if decision == "WAIT" else None)
-
-    def _judge(self, chain, proposal, now, verdict, row=None, stuck=None, rows=None) -> Optional[str]:
-        key = (proposal["stuck_id"], proposal["decision"], proposal["reason"])
-        if key in chain.ai_judged:
-            return None
-        chain.ai_judged.add(key)
-        if verdict is None:
-            from fleet.server.stuck_lane_lost import ai_proposal_invalid
-
-            verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, self.config) or "forwarded"
-        self.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
-        return verdict
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
         chain.escalated.add(sid)
