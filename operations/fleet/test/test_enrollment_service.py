@@ -398,8 +398,10 @@ def test_moving_robot_address_change_raises_an_alarm_and_holds_overlapping_traff
     core = FakeCore(navigation="NAVIGATING", pose=(0.0, 0.0), path=corridor)
     cores = {PINNED: core, MOVED: FakeCore()}
     crossing = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "navigation": "IDLE",
+                                           "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                            "pose": {"x": 1.5, "y": 2.0, "yaw": 0.0}})
     apart = FakeRobot("rosy_02", state={"robot_id": "rosy_02", "navigation": "IDLE",
+                                        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                         "pose": {"x": 0.0, "y": 20.0, "yaw": 0.0}})
     service, network, console, discovery, _, _ = build(tmp_path, cores, static=(crossing, apart))
     discovery.replace_scan([scan_row()])
