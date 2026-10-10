@@ -201,3 +201,5 @@
 
 **Related:** [D-2](D-2-cmd-vel.md), [D-12](D-12-mission-fleet.md), [D-143](D-143-ir-navigation-evidence.md),
 [D-323](D-323-rosy-pilot-teleop-app.md), [D-368](D-368-pilot-live-driver-video.md), [D-342](D-342-manual-limit-commissioning-ladder.md).
+
+- **순항 개정 (2026-10-10, 사용자 기본 속도 2-3배 요청).** Pinky Pro 순항과 선속도 상한은 0.10 m/s다(실물 오버레이 0.04의 2.5배). 조향 이득도 0.8에서 2.0으로 올려 경로 곡률을 유지한다. 각속도 상한에 걸리면 선속도도 같은 비율로 줄이는 §13은 유지한다. 현장 두 로봇의 cruise_speed/max_linear 오버레이는 0.10으로 맞추며, 8kcn의 옛 obstacle_stop_m 0.12 / obstacle_resume_m 0.17은 제거하여 D-591 몸 기준 제동 간격을 쓴다. 0.10 m/s에서 정지 몸 간격은 0.030 m, 재출발은 0.060 m다. 모든 지도에서 같은 CORE 경로를 사용하고 몸 치수·회전 반경·IR·e-stop 검사를 유지한다. 호스트 시험과 실물 수용은 별도 증거다.

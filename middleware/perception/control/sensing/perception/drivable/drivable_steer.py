@@ -49,12 +49,12 @@ ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.10
-#: a side whose LiDAR shows a wall nearer than this (lateral, within 0.35 m ahead) is no exit
-SIDE_WALL_M = 0.20
+#: base_link lateral distance: body half width plus the operator's 5 cm outside-body margin
+SIDE_WALL_M = NOMINAL_BODY.half_width_m + 0.05
 #: the way's nearest row may start at most this far beyond the frame's bottom row
 NEAR_GAP_M = 0.04
 #: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
-WALL_STANDOFF_M = 0.08
+WALL_STANDOFF_M = NOMINAL_BODY.front_x_m + 0.02
 #: an opening seen this far back (odometry travel) still names the side to turn at a closed way
 EXIT_MEMORY_M = 0.5
 PAINT_HALF_M = PAINT_HALF_WIDTH_M
@@ -400,7 +400,9 @@ class DrivableSteer:
         seen = [_to_current(p, (0.0, 0.0, 0.0), current_pose) for p in self._edges] if current_pose is not None else []
         if wall_ahead_m is not None and info["target_m"] is not None:
             info["wall_ahead_m"] = round(wall_ahead_m, 3)
-            info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
+            # CORE owns speed-dependent stopping; a distant wall must not invent a corner.
+            if wall_ahead_m <= WALL_STANDOFF_M:
+                info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
         if side_clear_m:
             # A wall beside the robot is no road (the floor between a wall corner and the tape reads as
             # an opening); keep right only between real openings (D-384 2).
@@ -409,6 +411,9 @@ class DrivableSteer:
                 if info.get(key) is not None and info[key] not in open_sides:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
+            for remembered in (self._memory[0] if self._memory else None, self._side, self._pivot):
+                if remembered is not None and side_clear_m.get(remembered) is not None and side_clear_m[remembered] < SIDE_WALL_M:
+                    self._memory = self._side = self._pivot = self._pivot_yaw = None
         ahead, side = info["ahead_m"], info["exit"]
         bridge = False
         if guide_deg is not None:
@@ -461,6 +466,9 @@ class DrivableSteer:
             # (p8: exit right at y -0.17 m by the crosswalk, beyond the lane's boundary line)
             side = info["exit"] = None
             info["exit_behind_line"] = True
+            # The same rejected opening cannot return through the memory or turn latch below.
+            info["seen_exit"] = None
+            self._memory = self._side = self._pivot = self._pivot_yaw = None
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
         # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).

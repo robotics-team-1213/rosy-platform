@@ -5,6 +5,10 @@
 # Only robot facts belong here; operator tuning stays in the overlay.
 
 line_follow:
+  # D-344 amendment 2026-10-10: 2.5x the 0.04 m/s pilot; keep steering/speed curvature.
+  cruise_speed: 0.10
+  max_linear: 0.10
+  steering_gain: 2.0
   # D-344 §11 (numbered D-349 in the 2026-09-29 pilot log) front obstacle stop
   # (+-20 deg, stop 0.20 m, resume 0.28 m): the sector is centred on this scan
   # angle. rplidar_link is yaw pi on base_link (URDF), so scan 0 is the robot's
