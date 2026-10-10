@@ -3054,7 +3054,7 @@
 - Evidence: model/AI PC remote runs: operations/fleet/test 3326 passed; guard suites only the perception size verdict listed in known_failures; browser suites equal clean main 8d7b5939f (11 known failures) plus new tests passing (labels/grouping, cancel-all immediate, 100 robots).
 - Gate: SOURCE. Console only; 전체 주행 취소 calls the unchanged /api/fleet/cancel-all.
 
-## 2026-10-10 · fix(trip): free 경로 이탈 때 목표 취소
+## 2026-10-10 · uncommitted · fix(trip): free 경로 이탈 때 목표 취소
 
 - Change: Fleet의 0.5초 trip 감독에서 `LOCALIZED` 자세가 계획 경로 폭의 절반을 벗어나면 free 구간의 진행 중인 CORE 목표를 취소한다. 위치 상실 시 기존 deadman 정책은 유지한다.
 - Evidence: `test_trip_runner.py` 경로 이탈 사례에서 목표 취소와 `stop_sent`를 확인한다.
