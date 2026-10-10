@@ -160,7 +160,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         body = plan_body(plan)
         if any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in body["segments"]):
             try:  # D-601 B: no lane trip for a robot whose line camera is not live
-                await runner.camera_check(robot_id)
+                await runner.camera_check(robot_id, caps)
             except TripError as exc:
                 record({"error": exc.code, "detail": exc.detail})
                 raise _refuse(exc.code, exc.detail) from exc
