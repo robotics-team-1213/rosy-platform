@@ -103,7 +103,7 @@ def test_lane_lost_frames_keep_the_answer_only_while_stationary():
 def test_over_limit_uncertainty_frames_are_blind():
     s = Sim(enabled=False, edges=EDGES)
     _drive(s, TRAVEL + 0.02)
-    _blind(s, 0.12, uncertainty=0.02)
+    _blind(s, 0.12, uncertainty=0.025)  # over the D-491 lateral cap 0.024
     assert s.m.status().crosswalk.reason == "not_watched"
     _drive(s, 0.03)          # watched again: its span overlaps the last good frame's [0.12, 0.58], no gap
     assert _state(s) is None
@@ -112,7 +112,7 @@ def test_over_limit_uncertainty_frames_are_blind():
 def test_a_blind_gap_past_the_last_span_restarts_the_run():
     s = Sim(enabled=False, edges=EDGES)
     _drive(s, TRAVEL + 0.02)
-    _blind(s, 0.60, steps=40, uncertainty=0.02)        # past the last good frame's far span end 0.58
+    _blind(s, 0.60, steps=40, uncertainty=0.025)        # past the last good frame's far span end 0.58
     _drive(s, 0.03)
     assert s.m.status().crosswalk.reason == "not_watched"
     _drive(s, TRAVEL)
@@ -173,9 +173,19 @@ def test_crosswalk_bound_over_the_config_bound_is_unadmittable():
     assert s.m.status().crosswalk.reason == "camera_crosswalk_unadmittable"
 
 
-def test_field_like_frames_are_never_null():
-    """9dfk today: lane lateral bound 0.024 m (> D-491 0.015) with a 0.024 m along-track bound."""
+def test_field_like_frames_are_watched():
+    """8kcn/9dfk today: lane lateral 0.024 m (> D-468 0.015, at the D-491 cap) with a 0.024 m along-track
+    bound. The along-track bound admits the frame; it sees no crosswalk, so the run ends null, and a
+    crosswalk it does see is reported (D-573 6 개정 2)."""
     s = Sim(enabled=False, edges=EDGES, xw_u=0.024, lat_u=0.024)
+    _drive(s, TRAVEL + 0.02)
+    assert _state(s) is None
+    s.frame(crosswalk=(s.x + NEAR, s.x + FAR))
+    assert _state(s) == "ahead"
+
+
+def test_lateral_over_the_cap_is_never_null():
+    s = Sim(enabled=False, edges=EDGES, xw_u=0.024, lat_u=0.025)
     states = []
     for _ in range(60):
         _drive(s, 0.02)

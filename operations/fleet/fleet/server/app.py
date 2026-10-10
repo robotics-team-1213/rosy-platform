@@ -46,8 +46,8 @@ from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
-from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
-from fleet.server.stuck_resolver_loop import StuckResolverLoop
+from fleet.stuck.resolver import ResolverConfig, StuckResolver
+from fleet.stuck.loop import StuckResolverLoop
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -571,7 +571,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
-    from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
+    from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
                                            db_path=task_service.store.path if task_service else None,
                                            acting=ai_facts_acting)

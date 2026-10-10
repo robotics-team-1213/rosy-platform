@@ -143,6 +143,20 @@
           </div>
         </div>
       </section>
+      <section class="panel incident-panel" aria-labelledby="incident-heading">
+        <div class="robot-head">
+          <h2 id="incident-heading">정지·교착 사건 보고서</h2>
+          <span class="spacer"></span>
+          <ui-button kind="quiet" id="incident-refresh" type="button">새로고침</ui-button>
+          <ui-button kind="quiet" id="incident-export" type="button" disabled>JSON 내보내기</ui-button>
+        </div>
+        <p class="hint">CORE 정지, Fleet 위치·조치, Rosy Cam 관측, AI 참고 사실을 출처별로 확인합니다. 대기 순환은 위 개입 목록에서 확인합니다.</p>
+        <p id="incident-status" class="hint" role="status">관제 접속 후 사건을 불러옵니다.</p>
+        <ul id="incident-list" class="issue-list"></ul>
+        <h3>AI 상황 사실</h3>
+        <p class="hint">그림자 사실은 조치 명령이 아닙니다. Fleet 대기 순환과 다른 판단은 운영자가 확인합니다.</p>
+        <ul id="incident-traffic-list" class="issue-list"></ul>
+      </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
           <h2 id="roster-heading">등록 로봇</h2>
@@ -215,37 +229,34 @@
             <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
             <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
           </div>
-          <details class="formation-form-wrap"><summary>대형 설정</summary><div class="formation-form">
+          <!-- 대형(D-20): 리더를 Fleet이 몰고 팔로워가 리더 뒤 자리로 붙는다. 대열(D-517 M3)은 차로 위 반복 운행이다. -->
+          <details class="formation-form-wrap"><summary id="formation-form-summary">대형 설정 · 리더와 팔로워</summary><div class="formation-form">
             <label for="formation-leader">리더</label>
-            <select class="ui-field" id="formation-leader"></select>
+            <select class="ui-field" id="formation-leader" data-robot-picker></select>
             <label for="formation-shape">모양</label>
-            <select class="ui-field" id="formation-shape">
-              <option value="COLUMN">COLUMN 종대</option>
-              <option value="LINE">LINE 횡대</option>
-              <option value="V">V</option>
-              <option value="GRID">GRID</option>
-              <option value="CIRCLE">CIRCLE</option>
-              <option value="FOLLOW">FOLLOW</option>
-              <option value="TRAIL">TRAIL 자취 따라가기</option>
-            </select>
+            <select class="ui-field" id="formation-shape"></select>
             <label for="formation-spacing">간격 m</label>
             <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
-            <span class="member-label" id="formation-members-label">포함 로봇</span>
+            <span class="member-label" id="formation-members-label">팔로워</span>
             <div id="formation-members" class="member-list" role="group" aria-labelledby="formation-members-label"></div>
           </div></details>
+          <p class="hint" id="formation-why" role="status"></p>
           <div class="robot-actions formation-actions">
-            <ui-button kind="quiet" id="formation-start" type="button">무장</ui-button>
+            <ui-button kind="quiet" id="formation-start" type="button">대형 시작</ui-button>
             <ui-button kind="quiet" id="formation-reform" type="button">대형 변경</ui-button>
-            <ui-button kind="quiet" id="formation-resume" type="button">재개</ui-button>
-            <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
+            <ui-button kind="quiet" id="formation-resume" type="button">대형 재개</ui-button>
+            <ui-button kind="quiet" id="formation-stop" type="button">대형 해제</ui-button>
           </div>
-          <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
-          <details class="convoy-form-wrap"><summary>대열 — 반복 운행 따라가기</summary><div class="formation-form">
-            <label for="convoy-follower">팔로워</label>
-            <select class="ui-field" id="convoy-follower"></select>
+          <p class="hint" id="formation-help">시작: 팔로워가 리더 뒤 자리로 붙음 · 변경: 모양·간격만 바꿈 · 재개: 멈춘 대형을 다시 움직임 · 해제: 팔로워 추종을 끔</p>
+          <p class="hint" id="formation-detail"></p>
+          <label class="robot-filter" for="formation-filter">로봇 찾기
+            <input class="ui-field" id="formation-filter" type="search" placeholder="이름 일부 · 예: 012" autocomplete="off"></label>
+          <details class="convoy-form-wrap"><summary>대열 · 반복 운행하는 리더 뒤를 따라 돌기</summary><div class="formation-form">
             <label for="convoy-leader">리더</label>
-            <select class="ui-field" id="convoy-leader"></select>
-            <label for="convoy-start">출발 자리</label>
+            <select class="ui-field" id="convoy-leader" data-robot-picker></select>
+            <label for="convoy-follower">팔로워</label>
+            <select class="ui-field" id="convoy-follower" data-robot-picker></select>
+            <label for="convoy-start">팔로워 출발 자리</label>
             <select class="ui-field" id="convoy-start"></select>
           </div>
           <div class="robot-actions formation-actions">

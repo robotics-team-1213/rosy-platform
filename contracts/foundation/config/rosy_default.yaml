@@ -157,16 +157,17 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # 8kcn accepted record at the detector's 0.33 m range (D-573 6 derivation).
   crosswalk_max_uncertainty_m: 0.058
   # D-573 crosswalk gate (Safety-Review): stop s_wait before a camera crosswalk zone (URDF body +
-  # LiDAR range_min), look, cross only after crosswalk_look_s of empty LiDAR scans; no timeout;
-  # crosswalk_blocked stuck to a human after crosswalk_report_s. Needs obstacle_mode path. Keep
+  # LiDAR range_min), look, cross only after crosswalk_clear_s of continuous empty LiDAR scans
+  # (D-573 rev 3: any person/unknown/stale scan restarts it); no timeout; crosswalk_blocked stuck
+  # to a human after crosswalk_report_s (must exceed crosswalk_clear_s). Needs obstacle_mode path. Keep
   # false until D-577 open item 1 (LEGACY odom pose in the Fleet rear band, stuck_resolver
   # _map_pose) is closed: line_follow.crosswalk null opens the resolver's R3 back-off.
   crosswalk_gate_enabled: false
   # D-511 rev 1: Fleet's lane return cue (side / turn / off-map hold / crosswalk hint) in the
   # CAMERA_LINE keep; IR, body stop and the D-573 gate still win. Safety-Review.
   fleet_lane_cue_enabled: false
-  crosswalk_look_s: 1.0
-  crosswalk_look_min_scans: 8     # 10 Hz LiDAR x 1 s x 0.8
+  crosswalk_clear_s: 5.0          # D-573 rev 3 (user 2026-10-10): no one for 5 s, then cross
+  crosswalk_look_min_scans: 40    # 10 Hz LiDAR x 5 s x 0.8
   crosswalk_report_s: 10.0
   crosswalk_cross_speed: 0.04     # lane slow value (cruise 0.08 x 0.5)
   crosswalk_approach_default_m: 0.0   # strip beside a camera-only zone's lane corridor; 0 = corridor only

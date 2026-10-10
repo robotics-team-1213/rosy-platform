@@ -1513,7 +1513,7 @@ def test_formation_reform_and_resume_refuse_a_trip_robot():
 
 def test_the_fleet_stuck_resolver_marks_a_trip_robot():
     """D-517 5 (M4): no longer skipped; the resolver gives a marked trip robot stopping answers only."""
-    from fleet.server.stuck_resolver_loop import StuckResolverLoop
+    from fleet.stuck.loop import StuckResolverLoop
 
     seen = []
 

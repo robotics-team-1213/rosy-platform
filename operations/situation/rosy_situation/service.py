@@ -79,6 +79,8 @@ class Situation:
         self._last_beat: Optional[float] = None
         self._posts: deque = deque()
         self.input_lag_s: Optional[float] = None
+        from rosy_situation.incident_context import ContextDraft
+        self.context_draft = ContextDraft()
 
     def owner_mode(self) -> str:
         try:
@@ -116,6 +118,27 @@ class Situation:
         for key, path in (("state", "/api/fleet/state"), ("traffic", "/api/fleet/traffic"),
                           ("line_stuck", "/api/fleet/line-stuck")):
             snapshot[key] = self.fleet.call(path)
+        if any((str(row.get("robot_id") or ""), str(row.get("stuck_id") or "")) not in self.context_draft.seen
+               for row in (snapshot["line_stuck"].get("pending") or [])):
+            context = {"map": None, "cameras": {}}
+            try:
+                active = self.fleet.call("/api/fleet/site-map/active")
+                site_map = active.get("map") or {}
+                context["map"] = {"map_id": site_map.get("map_id"),
+                                  "version": active.get("version"), "places": site_map.get("places") or []}
+            except (OSError, ValueError) as exc:
+                _LOG.warning("incident map context unavailable: %s", exc)
+            try:
+                sightings = self.fleet.call("/api/fleet/sightings")
+                for row in sightings.get("sightings") or []:
+                    rid = row.get("robot_id")
+                    if rid and (rid not in context["cameras"] or
+                                row.get("captured_at", 0) > context["cameras"][rid].get("captured_at", 0)):
+                        context["cameras"][rid] = {key: row.get(key) for key in
+                                                    ("source_id", "seq", "captured_at", "age_ms", "stale")}
+            except (OSError, ValueError) as exc:
+                _LOG.warning("incident camera context unavailable: %s", exc)
+            snapshot["incident_context"] = context
         stuck_event = False
         try:
             events = self.fleet.call(f"/api/fleet/events?after_id={self.cursor}&limit=200")
@@ -164,7 +187,7 @@ class Situation:
             _LOG.warning("fleet read failed: %s", exc)
             return PERIOD_S
         self._log("input", snapshot)
-        facts = self.analyzers(snapshot)
+        facts = self.analyzers(snapshot) + self.context_draft(snapshot)
         for fact in facts:
             self._log("facts", fact)
         self.queue.extend(facts)
