@@ -73,6 +73,9 @@ def main():
         from pxr import Gf, PhysicsSchemaTools, Sdf, Usd, UsdGeom, UsdPhysics
 
         manager = omni.kit.app.get_app().get_extension_manager()
+        if args.headless:
+            # Its file-menu callback outlives USD teardown in the installed 5.1 SDK.
+            manager.set_extension_enabled_immediate("isaacsim.gui.menu", False)
         for name in ("isaacsim.asset.importer.urdf", "isaacsim.ros2.bridge", "omni.graph.scriptnode",
                      "isaacsim.core.nodes", "isaacsim.robot.wheeled_robots"):
             manager.set_extension_enabled_immediate(name, True)
