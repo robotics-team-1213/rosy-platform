@@ -34,3 +34,7 @@ D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when
 D-610 reserved on feat/ai-first-problem-resolution; remove when its ADR lands
 D-611 reserved on feat/evidence-mode-hold; remove when its ADR lands
 D-612 reserved on feat/perception-gaps; remove when its ADR lands
+D-610 reserved for AI-first problem resolution in another active branch (refs/adr/D-610); remove when it lands
+D-611 reserved for learned paint evidence mode in another active branch (refs/adr/D-611); remove when it lands
+D-612 reserved for perception blind-spot registry in another active branch (refs/adr/D-612); remove when it lands
+D-613 reserved for Fleet finite one-lap trip in another active branch (refs/adr/D-613); remove when it lands
