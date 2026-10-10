@@ -30,6 +30,7 @@ def context(row: Mapping, stuck: Optional[Mapping] = None) -> dict:
     return {"cause": stuck.get("cause"), "detail": stuck.get("detail"), "phase": stuck.get("phase"),
             "attempts": stuck.get("attempts"), "rear_state": stuck.get("rear_state"),
             "state_age_s": age,
+            "robot_inquiry": stuck.get("inquiry"),
             "current_mode": state.get("mode"),
             "task_intent": {"task": "lane_follow_recovery", "trip_active": bool(row.get("trip")),
                             "goal": "recover the intended lane direction without overriding CORE safety"},
