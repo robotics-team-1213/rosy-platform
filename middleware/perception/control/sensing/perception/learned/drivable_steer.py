@@ -65,6 +65,12 @@ EDGE_MEMORY_MAX_X_M = 0.25
 BODY_HALF_M = NOMINAL_BODY.half_width_m
 #: a remembered boundary point this close to the path robot->target blocks that target
 CROSS_TOL_M = 0.015
+#: boundary points nearer than this along the arc are not judged (projection and odometry noise)
+CROSS_MIN_ALONG_M = 0.06
+#: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
+PIVOT_MAX_RAD = 1.75
+#: after a crosswalk zone is seen, no pivot or exit turn for this much travel
+CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
 NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
@@ -183,7 +189,7 @@ def _crosses(points, tx, ty):
         ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
         along = ang * abs(r)
         length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
-    hit = (along > 0.03) & (along < length) & (across < CROSS_TOL_M)
+    hit = (along > CROSS_MIN_ALONG_M) & (along < length) & (across < CROSS_TOL_M)
     if not hit.any():
         return None
     first = int(np.argmin(np.where(hit, along, np.inf)))
@@ -220,10 +226,14 @@ class DrivableSteer:
         self._side = None
         self._memory = None
         self._edges = []
+        self._pivot_yaw = None
+        self._crosswalk_pose = None
         self._lost_since = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
+        self._pivot_yaw = None
+        self._crosswalk_pose = None
         self._edges = []
         self._lost_since = None
 
@@ -233,6 +243,18 @@ class DrivableSteer:
             self._lost_since = stamp
         elif stamp - self._lost_since > FORGET_S:
             self.reset()
+
+    def crosswalk(self, pose):
+        """A crosswalk zone was seen this frame (D-491 extent): hold the heading through it."""
+        self._crosswalk_pose = pose
+
+    def _in_crosswalk(self, pose):
+        if self._crosswalk_pose is None or pose is None:
+            return False
+        if math.hypot(pose[0] - self._crosswalk_pose[0], pose[1] - self._crosswalk_pose[1]) > CROSSWALK_HOLD_M:
+            self._crosswalk_pose = None
+            return False
+        return True
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
                wall_ahead_m=None, side_clear_m=None):
@@ -259,6 +281,12 @@ class DrivableSteer:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        if side is not None and current_pose is not None and _crosses(
+                seen, *_to_current(info["exit_point_m"][side], source_pose, current_pose)) is not None:
+            # an "opening" beyond a boundary seen earlier is a strip past a line, not a road
+            # (p8: exit right at y -0.17 m by the crosswalk, beyond the lane's boundary line)
+            side = info["exit"] = None
+            info["exit_behind_line"] = True
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
         # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
@@ -280,8 +308,24 @@ class DrivableSteer:
             side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
+        if self._in_crosswalk(current_pose):
+            # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
+            # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
+            # and crosses (p8/p10: pivots at the bottom-road crosswalk became U-turns).
+            side, self._pivot, self._side = None, None, None
+            info["crosswalk_hold"] = True
+            if ahead < LOOKAHEAD_M:
+                self._smoothed = 0.0 if self._smoothed is None else self._smoothed
+                return 0.0, ONE_CONFIDENCE, dict(info, strategy="drivable_crosswalk_straight")
         if self._pivot is None and ahead < PIVOT_AHEAD_M and side is not None:
             self._pivot = side
+            self._pivot_yaw = None if current_pose is None else current_pose[2]
+        if self._pivot is None:
+            self._pivot_yaw = None
+        elif self._pivot_yaw is not None and current_pose is not None and abs(
+                math.atan2(math.sin(current_pose[2] - self._pivot_yaw), math.cos(current_pose[2] - self._pivot_yaw))) > PIVOT_MAX_RAD:
+            self._smoothed = None
+            return None, None, dict(info, strategy="none", reason="pivot_limit")
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
@@ -296,9 +340,13 @@ class DrivableSteer:
         tx, ty = _to_current(target, source_pose, current_pose)
         crossing = _crosses(seen, tx, ty)
         if crossing is not None:
-            # the way to the target crosses a boundary seen earlier (floor beyond a line that has
-            # left the view): steer along it instead, toward the side the robot is on
-            strategy, ty = strategy + "_kept", (crossing - BODY_HALF_M - 0.01 if crossing > 0 else crossing + BODY_HALF_M + 0.01)
+            # The arc to the target crosses a boundary seen earlier (floor beyond a line that has left
+            # the view): pull the target back to the robot's side of it. A clamp, never a swap to the
+            # other side (replacing the target flipped the error sign frame to frame, p8 140-178 s).
+            margin = BODY_HALF_M + 0.01
+            clamped = min(ty, crossing - margin) if crossing > 0 else max(ty, crossing + margin)
+            if clamped != ty:
+                strategy, ty = strategy + "_kept", clamped
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
         error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
