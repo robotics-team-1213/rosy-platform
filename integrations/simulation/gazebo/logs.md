@@ -292,3 +292,8 @@
 ` 줄 이음(e789581de)을 고쳤다.
 - 증거: 모델 PC `map_v2_fleet_lane`(domain 91, port 8199): `vision/front/status` `available: true`, `source GZ`, `age_ms` 41–150, sequence 157→176(약 5 fps). `GET /api/v1/traffic` `mode DISABLED` 그대로. 30 s CPU tick: 릴레이 18(코어 한 개의 0.6%), CORE 2780, gz 1602. `use_sim_time` 켠 릴레이는 20 s에 477 tick(약 24%)이었다. 테스트 `operations/fleet/test/test_fleet_sim_site_d601.py`.
 - gate 변화: 없음. 카메라 SIM에서 Fleet lane trip 실주행은 하지 않았다.
+
+## 2026-10-10 — 곡률 학습 맵 선택
+
+- map_v2_fleet_real.launch.py의 map_variant:=training-curved가 world와 lane_graph를 같은 파생 번들에서 선택한다. 기본 실행은 기존 실물 기준 맵이다.
+- 원격 계약 시험을 이어 수행한다. 시뮬레이터 실행·신호 준수·두 로봇 Fleet 수용은 아직 확인하지 않았다.

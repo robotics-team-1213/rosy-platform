@@ -61,6 +61,23 @@ def test_default_camera_args_keep_the_lap_bench_camera():
     assert '<arg name="cam_mount_z" default="0.0495"/>' in sim
 
 
+def test_training_variant_selects_world_and_graph_from_the_same_bundle():
+    tree = ast.parse(LAUNCH.read_text(encoding="utf-8"))
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                    and n.name == "generate_launch_description")
+    assignments = {n.targets[0].id: n.value for n in function.body if isinstance(n, ast.Assign)}
+    for name in ("world", "map_graph"):
+        assert isinstance(assignments[name].args[0].elts[0], ast.Name)
+        assert assignments[name].args[0].elts[0].id == "map_bundle"
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert 'LaunchConfiguration("map_variant")' in source
+    assert 'choices=[".", "training-curved"]' in source
+    assert '"debug_lane_graph": map_graph' in source
+    assert '"lane_graph_path": map_graph' in source
+    assert (BUNDLE / "training-curved" / "lane_graph.yaml").is_file()
+    assert (BUNDLE / "training-curved" / "worlds" / "map_v2_fleet_real.world").is_file()
+
+
 def test_acceptance_lap_runs_the_payload_corner_and_offset_values():
     """D-495 SIM acceptance: the payload line_follow.yaml decides corner turning and the lens
     offset; this launch must not pin them, and the payload matches this profile."""
