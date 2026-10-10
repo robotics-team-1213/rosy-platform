@@ -218,8 +218,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_550,
-        "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
+        52_729,
+        "split: re-judged at 52729 on 2026-10-10 over 52550 (+179, self-judged, independent re-judge requested): "
+        "D-511 rev 2-6 in localization/lane_compliance.py and the new pure localization/lap_context.py (lap "
+        "driving context), the cue sender in server/lane_compliance_service.py; same owners. Earlier: "
+        "re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
         "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
         "(stuck_* +27, second breach of the D-577 move rule), D-589/D-555 +6; no new owner, no new command path. "
