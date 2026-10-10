@@ -477,6 +477,7 @@
 
 ## 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
 - Symptom: LED sampling inverted a height-corrected robot point as a floor point; edge-of-image samples were displaced.
-- Change: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
-- Regression: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
+- 변경: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
+- 증거: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
+- gate 변화: SOURCE regression verified; live LED confirmation pending.
 
