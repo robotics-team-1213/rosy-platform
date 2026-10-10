@@ -31,16 +31,19 @@ def test_no_checkpoint_recovers_current_lane_with_measured_low_speed_approach():
     ctl = ReturnController(BODY)
     state = (0.,.055,0.)
     phases = set()
+    trace = []
     for step in range(241):
         t = 1.+step*.05
         action = ctl.tick(inputs(t,*state))
         phases.add(action.phase)
+        if not trace or trace[-1][1] != action.phase:
+            trace.append((t, action.phase, action.reason, state))
         assert abs(action.linear) <= .04 and abs(action.angular) <= .3
         if action.recovered:
             assert inputs(t,*state).corridor.margin(BODY) >= .015
             assert abs(state[2]) <= .12
             break
-        assert not action.fleet_required
+        assert not action.fleet_required, trace
         state = advance(state,action)
     else:
         raise AssertionError(f"local recovery failed; phases={phases}, state={state}")

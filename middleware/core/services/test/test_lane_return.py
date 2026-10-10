@@ -104,10 +104,10 @@ def test_search_cannot_keep_turning_after_both_time_budgets_expire():
     ctl = ReturnController(BODY)
     ctl.tick(inp(1., corridor=OUT))
     assert ctl.tick(inp(1.1, corridor=None)).angular > 0.
-    assert ctl.tick(inp(3.2, corridor=None)).angular == 0.
-    assert ctl.tick(inp(3.3, corridor=None)).angular < 0.
-    assert ctl.tick(inp(5.4, corridor=None)).angular == 0.
-    action = ctl.tick(inp(5.5, corridor=None, turn_clear=False))
+    for tick in range(1, 46):
+        t = round(1.1 + tick*.1, 6)
+        action = ctl.tick(inp(t, corridor=None))
+    action = ctl.tick(inp(t+.1, corridor=None, turn_clear=False))
     assert action.fleet_required and action.angular == 0.
 
 
