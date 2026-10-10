@@ -149,7 +149,8 @@ def generate_launch_description():
             executable="sim_jpeg_relay.py",
             name="sim_jpeg_relay",
             output="screen",
-            parameters=[{"use_sim_time": True}],
+            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
+            # subscription cost ~24% of a core against <1% without (2026-10-10).
             remappings=[("camera/image_raw", "camera/front")],
         ),
         Node(
