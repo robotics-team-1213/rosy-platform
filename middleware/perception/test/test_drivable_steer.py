@@ -60,10 +60,33 @@ def test_odometry_moves_the_target_into_the_current_pose():
     assert turned > straight + 0.05      # turned left since the frame: the same point now lies right
 
 
-def test_a_lidar_wall_beyond_the_model_view_closes_the_way():
+def test_only_a_wall_within_two_cm_of_the_body_front_invents_a_closed_way():
     way = _lane(0.5, -HALF)                 # open straight ahead in the camera, wide to the left
-    error, confidence, debug = DrivableSteer().update(way, 1, G, XO, HALF, wall_ahead_m=0.18)
+    distant = DrivableSteer().update(way, 1, G, XO, HALF, wall_ahead_m=0.18)[2]
+    assert distant["strategy"] == "drivable_centre", distant
+    error, confidence, debug = DrivableSteer().update(way, 1, G, XO, HALF, wall_ahead_m=0.06)
     assert debug["ahead_m"] < 0.14 and debug["strategy"] == "drivable_pivot_left", debug
+
+
+def test_remembered_exit_cannot_turn_towards_a_newly_seen_side_wall():
+    steer = DrivableSteer()
+    pose = (0.0, 0.0, 0.0)
+    steer.update(_lane(0.5, -HALF, x_max=0.33), 1, G, XO, HALF, pose, pose)
+    debug = steer.update(_lane(0.06, -0.06, x_max=0.13), 2, G, XO, HALF,
+                         pose, pose, side_clear_m={"left": 0.10, "right": None})[2]
+    assert debug["strategy"] != "drivable_pivot_left" and not debug.get("exit_from_memory"), debug
+
+
+def test_exit_rejected_for_crossing_a_boundary_cannot_return_from_memory():
+    steer = DrivableSteer()
+    pose = (0.0, 0.0, 0.0)
+    steer.update(_lane(0.5, -HALF, x_max=0.33), 1, G, XO, HALF, pose, pose)
+    # A previously observed transverse boundary lies between us and the apparent opening.
+    steer._edges = [(0.15, float(y)) for y in np.linspace(-0.5, 0.5, 80)]
+    closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
+    debug = steer.update(closed, 2, G, XO, HALF, pose, pose)[2]
+    assert debug.get("exit_behind_line") and not debug.get("exit_from_memory"), debug
+    assert debug["strategy"] != "drivable_pivot_left", debug
 
 
 def test_a_closed_corner_turns_toward_the_opening_seen_on_the_way_in():
