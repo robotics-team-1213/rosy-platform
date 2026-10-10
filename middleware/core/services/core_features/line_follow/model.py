@@ -154,6 +154,8 @@ class LineFollowConfig:
     # camera zone cannot tell a waiting strip from the track wall beside it (map_v2_fleet: wall
     # 0.13 m from the lane centre); site strips come from the Fleet map approach[] (D-573 1). Off.
     crosswalk_gate_enabled: bool = False
+    # D-511 rev 1: read Fleet's lane cue (POST /line-follow/lane-cue) in the CAMERA_LINE keep. Off.
+    fleet_lane_cue_enabled: bool = False
     crosswalk_look_s: float = 1.0
     crosswalk_look_min_scans: int = 8
     crosswalk_report_s: float = 10.0
@@ -396,6 +398,8 @@ class LineFollowConfig:
     def _check_crosswalk_gate(self) -> None:
         if type(self.crosswalk_gate_enabled) is not bool:
             raise ValueError("crosswalk_gate_enabled must be a boolean")
+        if type(self.fleet_lane_cue_enabled) is not bool:
+            raise ValueError("fleet_lane_cue_enabled must be a boolean")
         if not (_finite(self.crosswalk_look_s) and 0.5 <= self.crosswalk_look_s <= 5.0):
             raise ValueError("crosswalk_look_s must be in [0.5, 5]")
         if type(self.crosswalk_look_min_scans) is not int or not 1 <= self.crosswalk_look_min_scans <= 100:

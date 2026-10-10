@@ -89,6 +89,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         crosswalk_max_uncertainty_m=float(raw.get(
             "crosswalk_max_uncertainty_m", defaults.crosswalk_max_uncertainty_m)),
         crosswalk_gate_enabled=_flag(raw, "crosswalk_gate_enabled", defaults.crosswalk_gate_enabled),
+        fleet_lane_cue_enabled=_flag(raw, "fleet_lane_cue_enabled", defaults.fleet_lane_cue_enabled),
         crosswalk_look_s=float(raw.get("crosswalk_look_s", defaults.crosswalk_look_s)),
         crosswalk_look_min_scans=_whole(raw, "crosswalk_look_min_scans", defaults.crosswalk_look_min_scans),
         crosswalk_report_s=float(raw.get("crosswalk_report_s", defaults.crosswalk_report_s)),

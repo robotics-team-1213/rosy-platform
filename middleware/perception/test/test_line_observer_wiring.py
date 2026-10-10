@@ -95,7 +95,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     exec(compile(ast.Module(body=methods, type_ignores=[]), '<camera-route-callback>', 'exec'), namespace)
     params = dict(require_camera_controls_stable=False, camera_lane_mode='keep',
                   lane_half_width_m=0.0925, paint_source='threshold',
-                  camera_ground_source='GAZEBO', lane_corner_turning=True)
+                  camera_ground_source='GAZEBO', lane_corner_turning=True, crosswalk_uncertainty_enabled=False)
     inbox = RouteContextInput()
     inbox.receive(json.dumps(dict(v=1, seq=7, place_id='bend-1', map_id='map-1',
                                   stamp_s=10.0, valid_until_s=10.8, kind='bend',
