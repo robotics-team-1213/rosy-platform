@@ -77,6 +77,13 @@ def test_remembered_exit_cannot_turn_towards_a_newly_seen_side_wall():
     assert debug["strategy"] != "drivable_pivot_left" and not debug.get("exit_from_memory"), debug
 
 
+def test_side_exit_with_more_than_five_cm_outside_the_body_remains_open():
+    way = _lane(0.5, -0.5, x_max=0.15) | _lane(0.5, -0.03, x_max=0.33)
+    debug = DrivableSteer().update(way, 1, G, XO, HALF,
+                                  side_clear_m={"left": 0.145, "right": None})[2]
+    assert debug["exit"] == "left", debug
+
+
 def test_exit_rejected_for_crossing_a_boundary_cannot_return_from_memory():
     steer = DrivableSteer()
     pose = (0.0, 0.0, 0.0)

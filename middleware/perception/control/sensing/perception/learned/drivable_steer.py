@@ -52,8 +52,8 @@ ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.10
-#: a side whose LiDAR shows a wall nearer than this (lateral, within 0.35 m ahead) is no exit
-SIDE_WALL_M = 0.20
+#: base_link lateral distance: body half width plus the operator's 5 cm outside-body margin
+SIDE_WALL_M = NOMINAL_BODY.half_width_m + 0.05
 #: the way's nearest row may start at most this far beyond the frame's bottom row
 NEAR_GAP_M = 0.04
 #: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
