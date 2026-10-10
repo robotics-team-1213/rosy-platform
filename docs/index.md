@@ -306,8 +306,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · be92428a1 · docs: 플랫폼·CORE 구조 계획의 원격 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
 - 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
-- 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
