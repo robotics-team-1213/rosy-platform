@@ -19,3 +19,9 @@
 브랜치 `feat/one-lap-current`의 `2c43968d5`에서 유한 한 바퀴 시작 직전 첫 경로의 차체 여유가 음수이면 출발을 거절한다. 원격 AI PC에서 차체 이탈 출발 거부와 두 로봇의 각자 원위치 도착을 포함한 Fleet 시험 27개, Fleet·AI 관련 회귀 시험 175개가 통과했다. 두 로그는 각각 `X:/DevTemp/one-lap-body-start-fixture/run-1.txt`, `X:/DevTemp/one-lap-body-start-regression2/run-1.txt`이고 `known_failures.py` 결과는 두 실행 모두 NEW 0, KNOWN 0이다. `rosy_harness.py lint`는 오류 0, 기존 검증 상태 경고 24개였고 `safety_review.py main HEAD`는 34개 커밋을 검사해 통과했다.
 
 이 증거는 후보 코드와 가짜 CORE의 동작 범위다. Fleet의 **주행 중** trip 이탈 정지는 아직 중심점 기준이고 AI PC의 차체 기반 경로 사실은 그림자 판정이므로 실제 이탈 방지를 입증하지 않는다. 후보 Fleet 이미지·AI PC 버전이 현장에 설치되지 않았고, Gazebo와 장치·현장 주행 검증도 열려 있다. 현장 HOLD와 출발 조건은 위 판정 그대로다.
+
+## AI 경로 편차의 관제 연결
+
+`65c834b0c`에서 관제의 AI 사실 조회 조건을 교착 발생뿐 아니라 열린 trip에도 적용했다. 같은 로봇·trip·지도 버전의 최신 유효 `OFF_ROUTE` 사실은 차체 허용 경계 초과 거리와 위치 확인 경고로 표시한다. 오래된 사실, 다른 운행·지도, 비정상 수치, 새 `ON_ROUTE`·`UNKNOWN`, trip 종료는 경고를 내지 않는다. 관련 Node 26개 시험을 확인했고, 원격 AI PC에서 전체 관제 Node 시험을 실행하는 `test_console_web_node_unit_tests_pass`를 포함한 `test_site_map_api.py`, `test_console_disabled_features.py`, `test_console_palette.py` 45개 시험이 통과했다(`X:/DevTemp/one-lap-ai-route-queue/run-1.txt`, NEW 0·KNOWN 0). lint 오류 0·경고 24개, Safety-Review 36개 커밋 검사가 통과했다.
+
+이 표시는 AI 관찰을 운영자에게 전달하며 로봇을 움직이거나 정지시키지 않는다. 실제 브라우저 렌더와 현장 설치·주행 수용은 이 시험에 포함되지 않는다.
