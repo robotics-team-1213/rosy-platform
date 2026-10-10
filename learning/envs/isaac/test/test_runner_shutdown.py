@@ -74,13 +74,15 @@ def test_headless_menu_callbacks_are_cleared_before_usd_shutdown(tmp_path, monke
     monkeypatch.setattr(run_rosy, "check_urdf", lambda *a, **k: None)
     monkeypatch.setattr(run_rosy, "validate_output_path", lambda path: path)
     events = []
-    menu = SimpleNamespace(clear_menu_data=lambda: events.append("clear"))
+    menu = SimpleNamespace(clear_menu_data=lambda: events.append("clear"),
+                           rebuild_menus=lambda: events.append("rebuild"))
     manager = SimpleNamespace(set_extension_enabled_immediate=lambda *a: None)
     omni = SimpleNamespace(
         graph=SimpleNamespace(core=None), usd=None,
         timeline=SimpleNamespace(get_timeline_interface=lambda: SimpleNamespace(stop=lambda: events.append("stop"))),
         kit=SimpleNamespace(commands=None, app=SimpleNamespace(get_app=lambda: SimpleNamespace(
-            get_extension_manager=lambda: manager)), menu=SimpleNamespace(utils=SimpleNamespace(get_instance=lambda: menu))))
+            get_extension_manager=lambda: manager)),
+            menu=SimpleNamespace(utils=SimpleNamespace(get_instance=lambda: menu))))
 
     class App:
         def __init__(self, config):
@@ -107,4 +109,4 @@ def test_headless_menu_callbacks_are_cleared_before_usd_shutdown(tmp_path, monke
     monkeypatch.setattr(builtins, "__import__", sdk_import)
     with pytest.raises(RuntimeError, match="SDK importer initialization failed"):
         run_rosy.main()
-    assert events == (["stop", "clear", "update", "close"] if headless else ["close"])
+    assert events == (["stop", "clear", "rebuild", "update", "close"] if headless else ["close"])
