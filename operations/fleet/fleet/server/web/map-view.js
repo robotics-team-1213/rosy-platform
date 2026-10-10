@@ -797,6 +797,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         life.check();
       }
       view.traffic = traffic;
+      // D-577 (d): the AI facts (shadow) beside a wait-cycle row; read only while a cycle is shown.
+      view.trafficAi = traffic.wait_cycle?.length
+        ? (await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null))?.facts || [] : [];
     } catch (err) {
       if (err.name === "AbortError") return;
       if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;

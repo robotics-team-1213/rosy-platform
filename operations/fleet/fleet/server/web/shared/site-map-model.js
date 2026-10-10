@@ -5,6 +5,14 @@ export const PLACE_KIND_LABEL = {
   junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
+/** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
+export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
+/** D-577 3 AI PC fact kinds (shadow: shown, never acted on here). */
+export const AI_FACT_LABEL = {
+  wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
+  waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
+  unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
+};
 export const TRIP_ERROR_LABEL = {
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
@@ -613,7 +621,7 @@ export function trafficCardLine(traffic, robotId) {
   } else if (robot.waiting_for?.length && !(convoy?.follows && robot.waiting_for.join() === convoy.follows)) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
   const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);  // D-517 5 (M4)
   if (resolver?.trigger === "wait_cycle") {
-    parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
+    parts.push(`교착 · ${RESOLVER_DECISION_LABEL[resolver.decision] || RESOLVER_DECISION_LABEL.human}`);
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   const advice = robot.advice;  // D-551: display-only signal advice to CORE
@@ -645,7 +653,7 @@ export function trafficAttention(traffic, robotId, clock, now) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
     const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
-    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
+    items.push({ severity: "crit", decision: "deadlock", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
   }
   if (mine?.trigger === "unknown") {
     items.push({ severity: "crit", text: ": 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요" });
