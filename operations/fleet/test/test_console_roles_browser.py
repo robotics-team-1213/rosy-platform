@@ -318,14 +318,15 @@ def test_a_hundred_robots_stay_usable(tmp_path):
 
 def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
     """Ten robots on a robot grid: every map marker gets its short id unless the spot is taken (five robots on
-    one spot show one label; the stuck one always shows). Eight robots with the same warn cause are one queue
-    row "… · 8대 (…)", the stuck robot's 최우선 row stays its own and first, and no head repeats the names."""
+    one spot show one label; the stuck one always shows). Four more robots offline share one warn cause and
+    are one queue row "연결 끊김 · 4대 (…)"; the stuck robot's 최우선 row stays its own and first, and no
+    head repeats the names."""
     from playwright.sync_api import expect, sync_playwright
     from test_server_gather_source import _health
 
     grid = {"map_id": "m1", "width": 160, "height": 120, "resolution": 0.025,
             "origin": {"x": -2.0, "y": -1.5, "yaw": 0.0}, "data": [0] * (160 * 120)}
-    ids = [f"rosy_{i:03d}" for i in range(1, 11)]
+    ids = [f"rosy_{i:03d}" for i in range(1, 15)]
     robots = []
     for i, robot_id in enumerate(ids):
         spot = (0.0, 0.0) if i < 5 else (-1.4 + 0.5 * (i - 5), 1.0)  # five share one spot
@@ -338,10 +339,9 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             "robot_id": robot_id, "mode": "IDLE", "navigation": "IDLE", "map_id": "m1",
             "pose": {"x": spot[0], "y": spot[1], "yaw": 0.0}, "safety": {"estop": False},
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}, "line_follow": lane})
-        if i >= 2:  # eight robots whose power answer fails the schema: one warn cause on eight robots
-            robot.power_health_value = {"battery": {"percent": 80}}
-        else:
-            robot.power_health_value = _health(time.monotonic)
+        robot.power_health_value = _health(time.monotonic)
+        if i >= 10:  # four robots offline: one warn cause on four robots
+            robot.state_error = ConnectionError("down")
         robots.append(robot)
     console = FleetConsole([RobotEndpoint(r.robot_id, f"http://127.0.0.1:{9100 + i}", "t") for i, r in enumerate(robots)],
                            robots, relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
@@ -364,12 +364,12 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             browser, page, errors, _posts = _login(playwright, origin)
             group = page.locator("#warning-list li[data-group] summary")
             expect(group).to_have_count(1, timeout=20000)
-            expect(group).to_contain_text("· 8대 (rosy_003")
+            expect(group).to_contain_text("연결 끊김 · 4대 (rosy_011 · rosy_012 · rosy_013 외 1대)")
             expect(page.locator("#critical-list li").first).to_contain_text("rosy_003")
             assert page.locator("#critical-head small").inner_text() == ""
             assert page.locator("#warning-head small").inner_text() == ""
             group.click()
-            expect(page.locator("#warning-list li[data-group] p")).to_contain_text("rosy_010")
+            expect(page.locator("#warning-list li[data-group] p")).to_contain_text("rosy_014")
             page.wait_for_function("() => (window.__mapMarkers || []).length === 10", timeout=20000)
             labels = page.evaluate("(window.__mapChips || []).map((chip) => chip.text)")
             assert "003" in labels, labels                      # the stuck robot always has its label
