@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -16,8 +16,8 @@
 
 ## 계획·결과 문서
 
-- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
-- [2026-09-15-module-harness-design.md](../../../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
+- [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,8 +28,8 @@
 - `test/test_motor_control.py`
 - `test/test_bringup_motor_contracts.py`
 - `test/test_dynamixel_driver_safety.py`
-- `middleware/apps/device/pinky/bringup/test/test_command_deadman.py`
-- `middleware/apps/device/pinky/bringup/test/test_pinky_pro_adapter.py`
+- `middleware/devices/pinky/bringup/test/test_command_deadman.py`
+- `middleware/devices/pinky/bringup/test/test_pinky_pro_adapter.py`
 
 ## 최근 기록
 

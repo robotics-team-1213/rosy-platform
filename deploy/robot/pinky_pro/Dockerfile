@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY middleware/apps/device/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -73,7 +73,7 @@ WORKDIR /opt/rosy_ws
 COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY middleware/core/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
+COPY middleware/devices/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
@@ -136,8 +136,8 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && rm -rf .git
 COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
-COPY middleware/apps/device/pinky/description /opt/rosy_ws/src/sim/description
-COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
+COPY middleware/devices/pinky/description /opt/rosy_ws/src/sim/description
+COPY middleware/devices/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
 COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
 COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile

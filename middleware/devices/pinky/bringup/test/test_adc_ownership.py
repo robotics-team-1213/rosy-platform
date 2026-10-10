@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1]
-REPO = PACKAGE.parents[4]
+REPO = PACKAGE.parents[3]
 LAUNCH = PACKAGE / "launch" / "bringup_robot.launch.py"
 HARDWARE_LAUNCH = REPO / "middleware/core/navigation/launch/hardware.launch.py"
 IO_UNIT = REPO / "deploy/robot/pinky_pro/native/rosy-io.service"

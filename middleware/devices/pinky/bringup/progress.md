@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "모터 명령 경로 static 통합 계약 시험 통과 (2026-09-16 재실행, 9 passed — launch가 모든 모션 한계를 노드에 노출)"
-    cmd: "python3 -m pytest test/test_bringup_motor_contracts.py -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/pinky-bringup-source -- test/test_bringup_motor_contracts.py -q"
   LOCAL:
     state: GO
     evidence: "77 passed (2026-09-15 Windows, 미커밋 WIP 포함 작업 트리). AGENTS.md 지정 4개 파일 + 신규 test_pinky_pro_adapter.py"
-    cmd: "python3 -m pytest test/test_motor_control.py test/test_bringup_motor_contracts.py test/test_dynamixel_driver_safety.py src/bringup/test/test_command_deadman.py src/bringup/test/test_pinky_pro_adapter.py -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/pinky-bringup -- test/test_motor_control.py test/test_bringup_motor_contracts.py test/test_dynamixel_driver_safety.py middleware/devices/pinky/bringup/test -q"
   ROS-SIM:
     state: HOLD
     blocker: "Dynamixel/LiDAR/battery publisher 노드의 ROS 2 Jazzy 실물 또는 컨테이너 재실행 증거 없음"

@@ -1,6 +1,6 @@
 # pinky
 
-**Parent context:** `../AGENTS.md`
+**Parent context:** `../../apps/device/AGENTS.md`
 **Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
@@ -24,7 +24,7 @@ Pinky Pro device tree: board bringup, robot description, and the in-tree profile
 
 ### Testing Requirements
 
-Bringup tests: `python -m pytest middleware/apps/device/pinky/bringup/test -q`.
+Bringup tests: `python -m pytest middleware/devices/pinky/bringup/test -q`.
 
 ### Common Patterns
 

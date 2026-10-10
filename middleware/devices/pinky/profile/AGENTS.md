@@ -41,7 +41,7 @@ Pinky Pro robot composition (D-196). Config only: the HWA-001 profile and CAP-00
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/apps/device/pinky/profile/test -q
+python -m pytest middleware/devices/pinky/profile/test -q
 python -m pytest middleware/core/gateway/test contracts/foundation/test -q   # CORE reads this package via the source-tree fallback
 ```
 
