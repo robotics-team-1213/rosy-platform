@@ -310,7 +310,9 @@ class Situation:
                     view = (member.get("views") or {}).get("rosy_cam") or {}
                     if view.get("frame_path"):
                         try:
-                            member["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                            frame = self.fleet.frame(view["frame_path"], view["lease"])
+                            member["views"]["rosy_cam"] = {**frame, **{key: view[key] for key in (
+                                "target_robot_id", "map_id", "calibration_revision", "crop_map") if key in view}}
                         except (OSError, ValueError, KeyError) as exc:
                             _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
                             member["views"].pop("rosy_cam", None)

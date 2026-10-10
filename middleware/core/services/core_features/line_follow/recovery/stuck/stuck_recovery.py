@@ -446,6 +446,7 @@ class StuckRecovery:
                   "turn_clearance_m": inp.turn_m, "rear_blind_m": inp.rear_blind_m,
                   "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
                   "restuck_of": self._restuck_of, "attempts": self._attempts,
+                  "inquiry": self._inquiry(inp),
                   **({"detail": inp.cause_detail} if inp.cause in (CROSSWALK, NO_MOTION, *REPORT_ONLY) else {})},
         )
         if not ask:
@@ -475,8 +476,20 @@ class StuckRecovery:
             data={"stuck_id": self._id, "cause": self._cause, "console_linked": linked,
                   "local_fallback_s": fallback_s, "attempts": self._attempts,
                   "reason": reason,
+                  "inquiry": None if self._last is None else self._inquiry(self._last),
                   "decisions": list(self._decisions())},
         )
+
+    def _inquiry(self, inp: StuckInput) -> dict:
+        return {"version": "situation-inquiry-v1", "domain": "mobility", "task": "lane_follow_recovery",
+                "problem_id": self._id, "goal": "recover the intended lane without overriding CORE safety",
+                "requested_output": "assessment_and_direction", "attempts": self._attempts,
+                "observations": {"cause": inp.cause, "detail": inp.cause_detail,
+                                 "lane_visible": inp.lane_visible, "front_clear": inp.front_clear,
+                                 "scan_age_s": inp.scan_age_s, "geometry_known": inp.geometry_known,
+                                 "rear_state": inp.rear_state, "preview_seq": inp.preview_seq,
+                                 "trail_m": inp.trail_m, "trail_age_s": inp.trail_age_s},
+                "execution_authority": "CORE_recheck_required"}
 
     def _answered(self, stuck_id: str, decision: str, by: str, principal_ref: Optional[str],
                   accepted: bool, reason: Optional[str],

@@ -105,7 +105,7 @@ class Core:
 
     def clone(self):
         """A second client on its own connection (one HTTPSConnection is not thread-safe)."""
-        return Core(self.host, self.token, self.port, self.context)
+        return Core(self.host, self.token, self.port, self.context, self.tls_host)
 
     def raw_frame(self, timeout=5.0):
         """First JPEG of the driver MJPEG stream (no overlay); None when not available."""
@@ -237,8 +237,8 @@ def cmd_nudge(core, args):
 
 
 def _recording_state(core):
-    _, b = core.call("GET", "/recordings/active")
-    return ((b if isinstance(b, dict) else {}).get("active") or {})
+    status, b = core.call("GET", "/recordings/active")
+    return ((b if status == 200 and isinstance(b, dict) else {}).get("active") or {})
 
 
 def rec_start(core):
@@ -246,12 +246,19 @@ def rec_start(core):
     log("recording start", s, b if s != 201 else (b or {}).get("id"))
     if s != 201:
         sys.exit(f"recording refused: {s} {b}")
+    recording_id = b.get("id") if isinstance(b, dict) else None
+    if not isinstance(recording_id, str) or not recording_id:
+        sys.exit("recording start returned no id")
     for _ in range(40):
         st = _recording_state(core)
-        if st.get("state") == "recording":
-            log("recording", st.get("id"))
-            return st.get("id")
+        if st.get("id") and st["id"] != recording_id:
+            sys.exit("recording replaced before ready")
+        if st.get("state") == "recording" and st.get("id") == recording_id:
+            log("recording", recording_id)
+            return recording_id
         time.sleep(0.5)
+    if _recording_state(core).get("id") == recording_id:
+        core.call("POST", "/recordings/active/stop")
     sys.exit("recorder never reached 'recording'")
 
 
@@ -311,9 +318,9 @@ def cmd_drive(core, args):
     """A link stall longer than the 1 s deadman releases line-follow (driver_released); that
     stop stands, and the drive re-arms at most --rearm times inside the same recording."""
     continuous = getattr(args, "continuous_test", False)
-    started, holds, rearms = False, None, 0
+    started, holds, rearms, recording_id = False, None, 0, None
     try:
-        rec_start(core)
+        recording_id = rec_start(core)
         holds = _arm(core)
         if holds is None:
             raise SystemExit("line-follow refused")
@@ -331,6 +338,11 @@ def cmd_drive(core, args):
             if continuous and (status != 200 or lf.get("mode") != "CAMERA_LINE"):
                 log("test session ended or status unavailable -> stop")
                 break
+            if continuous:
+                recording = _recording_state(core)
+                if recording.get("state") != "recording" or recording.get("id") != recording_id:
+                    log("test recording ended or unavailable -> stop")
+                    break
             if released and not continuous and rearms < getattr(args, "rearm", 0):
                 rearms += 1
                 _disarm(holds)
@@ -359,7 +371,8 @@ def cmd_drive(core, args):
         _disarm(holds)
         if started:
             log("line-follow OFF", core.call("PUT", "/line-follow/mode", {"mode": "OFF"})[0])
-        rec_stop(core)
+        if recording_id and _recording_state(core).get("id") == recording_id:
+            rec_stop(core)
 
 
 def cmd_cam_watch(core, args):
