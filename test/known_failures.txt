@@ -7,4 +7,3 @@
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
 middleware/perception/test/test_line_observer_wiring.py::test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires  # fails on clean main 66bde0895 (2026-10-10), not D-589
-deploy/robot/pinky_pro/image/test/test_verify_mounted_image.py::test_inspect_passes_with_valid_image  # fails on clean origin/main e66eb4b16 too (2026-10-10, pre-push host): fixture lacks the D-247 IMU/lamp/OV5647 boot lines and lamp files the inspector requires; not in GitHub CI; fixture update owed by the image owner
