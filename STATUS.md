@@ -37,7 +37,7 @@
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [isaac_sim](learning/envs/isaac/progress.md) | sim | bed604ef (2026-09-30) | GO | GO | HOLD | N/A | N/A | N/A |
+| [isaac_sim](learning/envs/isaac/progress.md) | sim | 055fd333ce (2026-10-11) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 
@@ -87,4 +87,4 @@
 - dock DEVICE: 물리 도크 벤치 설치와 device-readback류 증거 없음. `dock/firmware/rosy_dock/rosy_dock.ino` 참조 구현만 존재하고 실기 조립·통전 시험 기록이 없다
 - signal ARTIFACT: ESP32 Arduino 펌웨어 빌드·플래시 증거 없음. 이 호스트에는 ESP32 toolchain이 없어 실행하지 않았다
 - signal DEVICE: 물리 벤치(G-S1) 미실행 — 수용 기준·절차는 docs/plans/2026-09-22-signals-acceptance-plan.md 로 고정했다. 최초 관문은 B0 신호등 입고 특성화(전압/배선/색당 전류), 이후 B2 부팅 글리치 10회(AC-02), B3 침묵→점멸 12 s(AC-11), B4 공유기 재시작 자기 복귀(AC-12, W1 위험)
-- isaac_sim ROS-SIM: Model-PC Isaac 5.1 SDK imported the referenced robot and ran 120 graph callbacks; independent observer received 117 clock and 117 odom messages. Initial and 243 subsequent Gate/USD wheel-target zero checks passed without a Twist publisher. Process exceeded its 120-second bound after SDK close returned (exit 124). Normal shutdown, actual driving/physical freshness stop, Nav2 and two-robot Fleet acceptance remain unverified. Host 33 passed/1 skipped does not promote runtime (D-322/D-434).
+- isaac_sim ROS-SIM: 2026-10-11 별도 SDK pip check/헤드리스 CORE 연결 확인. fixed links 병합으로 무명령 caster jitter를 줄이고 wheel force drive에서 기존 CORE auth API의 전진·회전·입력 만료 후 실제 정지를 관찰했다. 격리된 CORE 강제 종료 뒤 SDK watchdog 정지도 관찰했다. 목표 angular 0.3 rad/s에 약 0.19 rad/s로 추종 오차가 남아 I1 HOLD. SDK GUI menu는 종료 시 정리 대신 시작 단계에서 제외한다. 상세 source/실행/종료 판정은 docs/validation/isaac-headless-repair-2026-10-11/result.md 참조. 실제 STL 맵, 센서, Nav2, 두 대 Fleet와 RL은 미확인(D-322/D-434).
