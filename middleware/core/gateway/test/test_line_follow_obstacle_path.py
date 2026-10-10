@@ -290,8 +290,12 @@ def test_high_gain_preserves_curvature_at_config_and_manual_caps(ceiling, follow
     _camera(m, 10.0, error=error)
     d = m.tick(10.05)
     cap = 0.30 if ceiling is not None and follows else 0.70
+    free = _laddered(None, cruise_speed=0.10, max_linear=0.10,
+                     steering_gain=2.0, max_angular=2.0)
+    _camera(free, 10.0, error=error)
+    wide = free.tick(10.05)
     assert abs(d.angular) == pytest.approx(cap)
-    assert d.linear == pytest.approx(0.10 * (1 - 0.65 * abs(error)) * cap / (2.0 * abs(error)))
+    assert d.linear / d.angular == pytest.approx(wide.linear / wide.angular)
 
 
 def test_explicit_override_ignores_the_ladder_cap_and_the_floor_can_be_disabled():
