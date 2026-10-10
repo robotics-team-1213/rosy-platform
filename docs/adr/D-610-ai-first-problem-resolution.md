@@ -46,7 +46,7 @@
    - `unresolved`·`refused`면 같은 문제를 **결과를 붙여** AI에 다시 묻는다. 상한: 문제 하나에 AI 답 3번, 로봇 하나에 움직이는 AI 답 시간당 6번. **진동**: 같은 문제에서 서로 반대인 움직이는 답(예: `BACK_AND_RETRY` ↔ `RESUME`, 왼쪽 ↔ 오른쪽 `REALIGN`)이 두 번 이어지면 그만둔다. 상한·진동·D-438 60 s 기한 중 하나라도 걸리면 `WAIT` + 사람(`ai_exhausted`·`ai_hourly_cap`·`ai_oscillation`·`deadline`).
 3. **AI 우선 로봇, 되살리는 관문, 끄는 스위치.**
    - 현장 설정 `fleet.ai_first.robots`(로봇 id 목록, **기본 빈 목록**). 목록 밖 로봇은 지금 그대로다(D-577 규칙·관문).
-   - 현장 설정 `fleet.ai_first.keep_gates`(로봇 id → 되살릴 관문 이름 목록, 기본 빈 목록). 이름: `trip_wait_only`(trip 로봇은 `WAIT`만, D-517 M4), `crosswalk`(횡단보도 null 조건·`crosswalk_human`, D-577 저녁 1·6항), `trusted_pose`(움직이는 답에 신뢰 지도 자세), `r3_preconditions`(`BACK_AND_RETRY`의 R3 전제), `no_resume`(AI `RESUME` 금지), `no_realign`(AI `REALIGN` 금지). 관문 코드는 그대로 있고 이 목록이 AI 우선 로봇에서 켤지 정한다. 시험이 관문마다 "켜면 옛 동작"을 묶는다.
+   - 현장 설정 `fleet.ai_first.keep_gates`(로봇 id → 켜 둘 관문 이름 목록). 관문 코드는 rosy-b3 `fleet/fleet/stuck`에 그대로 있고 이 목록이 AI 우선 로봇에서 켤지 정한다. 이름(rosy-b3 답 2026-10-10): `ai_words`(원인 → 허용 단어, `RESUME`·`YIELD` 없음), `trip_wait_only`(trip 로봇은 `WAIT`만, D-517 M4), `crosswalk`(XW 제거 → `WAIT` + `crosswalk_human`, 현장 지도 횡단보도 0.29 m 보류, `crosswalk_unknown`), `trusted_pose`(LEGACY·신뢰하지 못한 지도 자세면 움직이는 답 없음), `r3_preconditions`(AI에는 R6 동료 면제 없음, CORE의 `rear_blocked`), `acting_fact_hold`(살아 있는 acting 사실이 후진을 R5로), `abort_requires_crosswalk_null`(AI `ABORT`는 횡단보도 null일 때만, 아니면 `ai_abort_held`). **기본값: `trip_wait_only`만 켜짐**(AI 우선 로봇도, Gazebo trip 시나리오와 그 자체 Safety-Review 전까지). 나머지는 AI 우선 로봇에서 기본 꺼짐이다. `after_answer`(이미 답한 막힘의 제안은 감사만)는 관문이 아니고 늘 그대로다. 비상정지·SAF-001은 관문이 아니라 1항이고 끌 수 없다. 시험이 관문마다 "켜면 옛 동작"을 묶고, 바뀌는 규칙마다 D-610을 인용한다.
    - 콘솔 **AI 우선 끄기**: 이름 있는 운영자가 누르면 모든 로봇이 그 자리에서 목록 밖 동작으로 돌아간다(메모리, 재시작 때 설정값). `POST /api/fleet/ai/first {enabled}` 하나다.
    - 꺼진 관문이 막았을 답은 기록에 `floor_would_hold:<관문>:<판정>`으로 남는다(9항).
 4. **문제 유형과 AI가 고를 수 있는 답.** 이미 있는 CORE·Fleet 명령만이다. 새 하향 통로는 없다.
@@ -59,10 +59,10 @@
    | `deadlock` | D-517 순환·livelock(`TrafficWatch`) | 순환의 한 로봇 `replan`(막을 간선), 나머지 `wait`(7항) |
    | `trip_failed` | trip `failed`·`stalled` | 로봇 정지·trip 취소 |
 
-   - **횡단보도 `RESUME`의 뜻.** "지금 건너라"가 아니라 "CORE 게이트의 자기 확인이 통과하면 간다"이다. Fleet은 횡단보도 0.29 m 안(D-577 1항 기준) 로봇의 AI `RESUME`을 CORE가 `line_follow.crosswalk`에 게이트 객체(`armed`·`approaching`·`looking`·`waiting`)를 보고할 때만 보낸다. 그러면 CORE는 D-573의 스캔 확인(`crosswalk_clear_s` 5 s, 빈 스캔 비율)을 지나야 움직인다. 게이트가 없는 로봇(보고 `null`·`unknown`)에는 물리적 확인이 없으므로 보내지 않고 `floor_would_hold:crosswalk:gate_off`로 남기며 규칙이 답한다.
+   - **횡단보도 `RESUME`의 뜻.** "지금 건너라"가 아니라 "CORE 게이트의 자기 확인이 통과하면 간다"이다. Fleet은 횡단보도 0.29 m 안(D-577 1항 기준) 로봇의 AI `RESUME`을 CORE가 게이트를 켠 채 `line_follow.crosswalk`에 게이트 객체 상태 `armed`·`approaching`·`looking`·`waiting` 중 하나를 보고할 때만 보낸다(D-573: 게이트 객체는 게이트가 켜져 있을 때만 나온다). `crossing`은 넣지 않는다(건너는 중의 막힘은 장애물·진행 문제로 다룬다). 그러면 CORE는 D-573의 스캔 확인(`crosswalk_clear_s` 5 s, 빈 스캔 비율)을 지나야 움직인다. 게이트가 꺼진 로봇(보고 `null`·`unknown`·`inside`·`ahead`)에는 물리적 확인이 없으므로 보내지 않고 `WAIT` + `crosswalk_human`이다(`floor_would_hold:crosswalk:gate_off`).
    - `YIELD`는 Fleet meet 기하가 길이와 회전을 정한다. AI는 "이 로봇이 비킨다"만 고른다. 기하가 없으면 보낼 수 없다.
    - `MANUAL`을 AI가 고르면 `WAIT` + 사람(`ai_manual`)이다.
-   - trip 로봇: Fleet 판단 규칙 "trip은 `WAIT`만"(D-517 M4)은 AI 우선 로봇에서 꺼진다(`trip_wait_only`로 되살림). CORE lease와 통행권 확인은 1항 그대로이므로 Fleet은 trip 로봇의 움직이는 답을 trip 주인 자격으로만 보내고, 그 움직임은 그 로봇이 이미 쥔 블록 안에서만 CORE가 허락한다. 블록 밖으로 나가야 하는 답은 7항 `replan`이다.
+   - trip 로봇: `trip_wait_only`가 기본으로 켜져 있어 AI 우선 로봇도 trip 중에는 `WAIT`만이다. 판단기는 trip 주인 자격으로 움직이는 답을 **보내지 않는다**(두 번째 lease 주인이 되기 때문이다, D-541). 뒤에 이 관문을 끄는 결정(Gazebo trip 시나리오 + 별도 Safety-Review)이 나면 AI 결정은 trip 실행기(lease 주인, 하나뿐인 쓰는 이)가 실행한다. 블록 밖으로 나가야 하는 답은 7항 `replan`이다.
 5. **증거와 신선도(Fleet 검사).** VLM 판단 하나는 증거를 인용해야 하고, Fleet은 모자라면 그 답을 보내지 않는다(그때는 규칙·관문).
    - Rosy Cam: 프레임 id·촬영 시각, 나이 ≤ 2.0 s. 로봇 앞 카메라: 프레임 id·촬영 시각, 나이 ≤ 3.0 s. 둘 중 하나라도 없거나 늦으면 거절(`evidence_missing:<view>`·`evidence_stale:<view>`).
    - 지도 자세: 상태와 나이(신뢰하지 못한 자세도 상태를 적어야 한다). 모델: `vlm:<profile_id>`(Ollama 모델 digest·프롬프트 id). heartbeat의 `model_profiles`에 없는 프로파일은 거절.
@@ -73,7 +73,8 @@
    - Fleet이 문제마다 케이스를 만든다: `GET /api/fleet/ai/case/{problem_id}`(`ai_observer` 읽기) — 유형·원인·상세, 로봇 상태, 지도 자세·상태·나이, 차로·경로·블록, 같은 로봇 10분의 최근 판단과 결과, Rosy Cam 자른 영상(로봇 둘레 1.0 m, JPEG, 프레임 id·촬영 시각), 로봇 앞 카메라 한 장(같은 꼴). 영상은 Fleet 메모리에만 있다(D-577 8항). AI PC는 영상을 디스크에 쓰지 않는다(sha256만 입력 로그에).
    - 모델: Ollama `qwen3-vl:8b-instruct`(D-492, digest·프롬프트 id 고정)를 AI PC 로컬 `http://127.0.0.1:11434`로, 시간 제한 6 s. 출력은 JSON 하나(`decision`, 몸체, `reason`, `confidence`, 인용 증거)이고 단어표 밖·형식 오류는 버린다.
    - 대신하기: `owner_mode`가 `available`이 아니거나 모델 설정 없음·시간 초과·형식 오류면 결정론 분석기 제안이다(5항 끝: 관문 전부).
-   - heartbeat `model_profiles`에 적재된 프로파일을 싣는다.
+   - heartbeat `model_profiles`에 적재된 프로파일(모델 id·digest·프롬프트 id)을 싣고, 제안마다 `source: vlm:<profile>`로 같은 값을 싣는다. `build_commit`(rosy-b3)과 `deploy/ai_pc/deploy-situation.sh`의 커밋별 디렉터리를 그대로 쓴다.
+   - Ollama 호출은 자기 스레드에서 시간 제한과 함께 돈다. heartbeat·사실 올리기·분석기 제안을 기다리게 하지 않는다. `owner_mode`를 따르고(`available`에서만 모델), systemd `MemoryMax`·`CPUQuota` 아래에서 돈다(공용 PC).
 7. **로봇-로봇 교착.** `handover.decide`가 순환을 찾으면 Fleet은 순환 구성원·블록·경로·자세·두 카메라로 케이스를 만들고 AI가 `replan`(누가, 막을 간선)을 고른다. Fleet은 실행 가능성과 불변식만 본다.
    - 고른 로봇이 순환 구성원이고, 막을 간선이 그 로봇의 `avoidable` 안이다.
    - 새 경로는 처음 trip과 같은 계획 검사를 다시 지난다(경로 계획, `trip_admission` 시작 검사 D-601, 횡단보도·차로 방향).
@@ -86,7 +87,7 @@
    - **사람 필요 유형 표** `fleet_human_classes`(버전마다 행: 키, 더함/뺌, 누가, 이유, 근거 통계, 시각). 처음 비어 있다(비상정지는 1항이라 표 밖). 표에 있는 키의 문제는 AI 답을 보내지 않고 `WAIT` + 사람(`human_class:<key>`).
    - **경향 작업**(Fleet 안, 하루 한 번과 콘솔 요청 때): 키마다 지난 7일 `n`, `unresolved` 비율, CORE 거절 비율, 사람 개입 비율, 아깝게 피함(답 뒤 창 안의 몸 정지·비상정지) 비율. `n` ≥ 5이고 (`unresolved` ≥ 0.5 또는 아깝게 피함 ≥ 0.2 또는 사람 개입 ≥ 0.5)이면 **후보**. 아깝게 피함은 한 번(`n` 무관)이어도 후보다.
    - **콘솔 「사람 판단 필요 유형」**: 후보와 근거, 더하기·거절(이름 있는 운영자, D-540 ②). **빼기는 관리자만**(이유 필수). 경향 작업은 표를 스스로 바꾸지 않는다. 검토 주기: 매주 한 번 운영자가 후보와 표를 본다(콘솔이 7일 넘게 안 본 후보 수를 보인다).
-10. **`judged_at`.** `fleet_ai_proposals.judged_at`은 벽시계(epoch s)다. 단조 시계는 판단기 안의 시간 비교에만 쓴다.
+10. **`judged_at`.** 기록의 시각(`fleet_ai_proposals.judged_at`, 문제 기록)은 `time.time()`(epoch s)이다. 나이·길이(`ttl_s`, 확인 창, 상한)는 모두 단조 시계로 잰다.
 
 ### 단계
 
@@ -110,7 +111,7 @@ P4 전에는 VLM 판단이 없으므로 5항 끝에 따라 모든 AI 제안이 �
 
 ### Safety-Review
 
-**바뀌는 것.** 지금까지 AI는 Fleet을 더 조심스럽게만 만들었다(D-577 7항). 이 ADR 뒤 AI 우선 로봇에서는 VLM이 움직이는 답을 고르고, Fleet은 모양·증거 신선도만 본다. 횡단보도 `RESUME`(게이트 있는 로봇), 신뢰하지 못한 자세의 후진·회전, trip 로봇의 블록 안 움직임, 운영자 확인 없는 재계획이 AI 판단으로 나갈 수 있다.
+**바뀌는 것.** 지금까지 AI는 Fleet을 더 조심스럽게만 만들었다(D-577 7항). 이 ADR 뒤 AI 우선 로봇에서는 VLM이 움직이는 답을 고르고, Fleet은 모양·증거 신선도만 본다. 횡단보도 `RESUME`(게이트를 켠 로봇, "비면 간다"), 신뢰하지 못한 자세의 후진·회전, 운영자 확인 없는 재계획이 AI 판단으로 나갈 수 있다.
 
 **남는 위험.**
 1. 모델이 장면을 틀리게 보고 움직이는 답을 고른다(예: 횡단보도의 사람 손·물체, 뒤의 동료 몸).
@@ -130,25 +131,26 @@ P4 전에는 VLM 판단이 없으므로 5항 끝에 따라 모든 AI 제안이 �
 - 범위: 로봇별 플래그 기본 꺼짐, 켜는 관문, 로봇별로 되살리는 관문, 콘솔 끄는 스위치(3항).
 - 사람은 언제나 비상정지·정지를 누를 수 있고 막힘 행을 펼쳐 맡을 수 있다(맡으면 AI는 조용하다, D-438 §1).
 
-**검토자가 볼 것.** (1) 비상정지 중 어떤 답도 없음, CORE 거절이 그대로 실패, (2) 2항 상한·진동·기한, (3) 7항 재계획이 블록 표를 우회하지 않고 계획 검사를 다시 지남, (4) 목록 밖 로봇과 `keep_gates`를 켠 관문의 동작이 옛 동작과 같음, (5) trip 주인 자격이 판단기 밖으로 새지 않음, (6) 증거 없는 AI 제안(분석기)이 옛 관문을 모두 지남, (7) 끄는 스위치가 다음 주기에 듣음.
+**검토자가 볼 것.** (1) 비상정지 중 어떤 답도 없음, CORE 거절이 그대로 실패, (2) 2항 상한·진동·기한, (3) 7항 재계획이 블록 표를 우회하지 않고 계획 검사를 다시 지남, (4) 목록 밖 로봇과 `keep_gates`를 켠 관문의 동작이 옛 동작과 같음, (5) 판단기가 trip 주인 자격을 쓰지 않고 `trip_wait_only`가 기본 켜짐, (6) 증거 없는 AI 제안(분석기)이 옛 관문을 모두 지남, (7) 끄는 스위치가 다음 주기에 듣음.
 
 ### rosy-b3 검토 답(2026-10-10)
 
 | # | 질문 | 답 |
 |---|---|---|
 | 1 | 물리적 마지막 선 | 1항. 몸 정지·LiDAR 정지·워치독·비상정지 래치(관리자 해제)·CORE 재확인·lease·통행권 권한은 AI가 끄거나 돌아가지 못하고, AI 답은 같은 CORE 거절 경로를 지난다 |
-| 2 | 횡단보도 `RESUME` | 4항 표 아래: "CORE 게이트 확인이 통과하면 간다", 게이트 객체를 보고하는 로봇에만 |
+| 2 | 횡단보도 `RESUME` | 4항 표 아래: "CORE 게이트 확인이 통과하면 간다", 게이트를 켠 로봇의 `armed`·`approaching`·`looking`·`waiting`에만 |
 | 3 | 증거 신선도 | 5항: 두 카메라 프레임 id·나이(2 s·3 s), 지도 자세 나이, 모델 프로파일, 없으면 거절. `ai_observer`는 그 밖의 쓰기 403 그대로(1항) |
 | 4 | 닫힌 고리 | 2항: 확인 → 결과 붙여 재질의 → 문제당 3번·로봇당 시간 6번 → 진동 감지 → 사람 |
 | 5 | AI PC 없음·느림 | 6·8항: 규칙 → 사람, 대기 5/8 s, 정지를 막지 않음 |
 | 6 | 사람 필요 학습 | 9항: 기록, 운영자 수락, 매주 검토, 빼기는 관리자 |
-| 7 | 켜기 전 | 「켜는 관문」: 재생 평가(39건·횡단보도 주행), Gazebo 4개, 로봇별 플래그(기본 꺼짐), 콘솔 끄는 스위치, 독립 Safety-Review |
+| 7 | 켜기 전 | 「켜는 관문」: 재생 평가(39건·횡단보도 주행), Gazebo 4개, 로봇별 플래그(기본 꺼짐), 콘솔 끄는 스위치, 독립 Safety-Review. trip은 `trip_wait_only` 기본 켜짐 |
 | 8 | 운영자 확인 없는 재계획 | 7항: 블록 표 유일한 쓰는 이, 점유 단위 허가 없음, trip 계획 검사 재실행 |
-| 9 | 관문 코드 | 3항: 지우지 않고 `keep_gates`로 로봇별 복원, 바뀌는 규칙마다 D-610을 인용하는 시험 |
+| 9 | 관문 코드 | 3항: 지우지 않고 `keep_gates` 일곱 이름으로 로봇별 복원(`trip_wait_only` 기본 켜짐), 바뀌는 규칙마다 D-610을 인용하는 시험 |
+| 답 2 | 관문 이름·횡단보도·trip·`judged_at`·heartbeat | 3항 이름 일곱, 4항 `crossing` 제외·게이트 꺼진 로봇은 `crosswalk_human`, 4항 trip 주인 자격 금지, 10항 기록은 벽시계·길이는 단조, 6항 Ollama 별도 스레드·`build_commit` 유지 |
 
 ### 먼저 실패해야 하는 시험
 
-- P1: 답 수락 뒤 창 안에 같은 로봇이 다시 막히면 `unresolved` + 결과 붙인 재질의, 세 번 뒤 `ai_exhausted`. 시간당 7번째 움직이는 AI 답은 `ai_hourly_cap`. 반대 답 두 번 이어지면 `ai_oscillation`. 풀리면 `resolved`. `judged_at`이 벽시계. 사람 필요 키는 사람. 비상정지 중 답 없음. AI 우선 로봇의 VLM 제안이 프레임 하나 없거나 늦으면 거절. 목록 밖 로봇과 `keep_gates` 관문은 옛 동작. 끄는 스위치 뒤 다음 주기부터 옛 동작. 분석기 제안은 관문 전부.
+- P1: 답 수락 뒤 창 안에 같은 로봇이 다시 막히면 `unresolved` + 결과 붙인 재질의, 세 번 뒤 `ai_exhausted`. 시간당 7번째 움직이는 AI 답은 `ai_hourly_cap`. 반대 답 두 번 이어지면 `ai_oscillation`. 풀리면 `resolved`. `judged_at`이 벽시계. 사람 필요 키는 사람. 비상정지 중 답 없음. AI 우선 로봇의 VLM 제안이 프레임 하나 없거나 늦으면 거절. 목록 밖 로봇과 `keep_gates` 관문은 옛 동작. AI 우선 로봇도 `keep_gates` 기본값에서 trip 중에는 `WAIT`만이고 판단기는 trip 주인 자격을 쓰지 않음. 끄는 스위치 뒤 다음 주기부터 옛 동작. 분석기 제안은 관문 전부.
 - P2: 20 s 정체에 AI 차선 주행 끔이 실행·확인. `UNKNOWN` 자세에 LED 식별 요청.
 - P3: AI `replan`이 `avoidable` 안이고 계획 검사를 지나면 `replan_hold` 없이 경로가 바뀌고 블록은 표가 다시 준다. 밖이면 지금 M4.
 - P4: 모델 시간 초과·형식 오류·단어표 밖에서 분석기로 대신함. 영상이 AI PC 디스크에 남지 않음. heartbeat `model_profiles`.
