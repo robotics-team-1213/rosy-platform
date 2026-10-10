@@ -288,11 +288,16 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "calibration")
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
+        from fleet.stuck.lane_lost import ai_answer, ai_late
+
         if sid in chain.answered:
+            ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
-        from fleet.stuck.lane_lost import ai_answer
+        if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
+            # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
+            return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
         if proposed is not None:

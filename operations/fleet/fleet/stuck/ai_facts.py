@@ -92,6 +92,8 @@ class AiHeartbeat(BaseModel):
     gpu_used_mib: Optional[int] = Field(default=None, ge=0)
     mem_used_mib: Optional[int] = Field(default=None, ge=0)
     input_lag_s: Optional[float] = Field(default=None, ge=0)
+    #: The git commit the AI PC service runs from (deploy/ai_pc/README.md), shown on the console.
+    build_commit: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{7,40}(-dirty)?$")
 
 
 class AiProposal(BaseModel):
@@ -168,7 +170,11 @@ class AiFactsBoard:
         self._beat: Optional[tuple[float, dict]] = None
         self._facts: deque = deque(maxlen=256)
         self._proposals: dict[str, dict] = {}            # robot id -> newest proposal
-        self.verdicts: deque = deque(maxlen=64)            # judged proposals, newest last (GET /api/fleet/ai)
+        # Judged proposals, newest last; GET /api/fleet/ai shows 64, the console counts the last hour.
+        self.verdicts: deque = deque(maxlen=1024)
+        #: Supervision row (app.py sets it once the resolver exists): resolver on/off, per-robot credential
+        #: presence, AI acting flag and last resolver answer. Never a secret.
+        self.chain: Callable[[], dict] = lambda: {"resolver": False, "robots": []}
         self._posts: deque = deque()
 
     def heartbeat(self, beat: AiHeartbeat) -> dict:
@@ -240,11 +246,40 @@ class AiFactsBoard:
         """D-577 7: the resolver's AI input, live ``acting`` facts about this robot (first id) only."""
         return [fact for fact in self.live(robot_id) if fact["stage"] == "acting" and fact["robot_ids"][0] == robot_id]
 
-    def robot_view(self, robot_id: str) -> dict:
-        """What a stuck queue row carries: the AI chip and this robot's live facts."""
+    def note_outcome(self, robot_id: str, stuck_id: str, decision: str, outcome: str) -> None:
+        """CORE's reply to a forwarded proposal, on the in-memory verdict (the table gets it too)."""
+        for verdict in reversed(self.verdicts):
+            if (verdict["robot_id"], verdict["stuck_id"], verdict["decision"]) == (robot_id, stuck_id, decision)                     and verdict["verdict"] == "forwarded":
+                verdict["outcome"] = outcome
+                return
+
+    def counts(self, window_s: float = 3600.0) -> dict:
+        """Proposals judged in the window: accepted (CORE took it), refused (CORE did not), held (Fleet's
+        gates kept it back), pending (forwarded, no reply yet)."""
+        counts = {"accepted": 0, "held": 0, "refused": 0, "pending": 0}
+        since = self.clock() - window_s
+        for verdict in self.verdicts:
+            if verdict["judged_at"] >= since:
+                counts[_outcome_class(verdict)] += 1
+        return counts
+
+    def robot_view(self, robot_id: str, stuck_id: Optional[str] = None) -> dict:
+        """What a stuck queue row carries: the AI chip, this robot's live facts and, for this stuck, the
+        newest AI proposal with Fleet's verdict and CORE's outcome."""
         status = self.status()
+        proposal = next(({key: verdict.get(key) for key in ("decision", "reason", "verdict", "outcome")}
+                         | {"class": _outcome_class(verdict)}
+                         for verdict in reversed(self.verdicts) if verdict["robot_id"] == robot_id
+                         and verdict["stuck_id"] == stuck_id), None)
         return {"ai": {"state": status["state"], "owner_mode": status["owner_mode"]},
-                "ai_facts": self.live(robot_id)}
+                "ai_facts": self.live(robot_id), "ai_proposal": proposal}
+
+
+def _outcome_class(verdict: dict) -> str:
+    if verdict["verdict"] != "forwarded":
+        return "held"
+    outcome = verdict.get("outcome")
+    return "pending" if outcome is None else "accepted" if outcome == "accepted" else "refused"
 
 
 def install_ai_routes(app, *, read_guard, authorize, db_path: Optional[Path],
@@ -289,6 +324,7 @@ def install_ai_routes(app, *, read_guard, authorize, db_path: Optional[Path],
 
     @app.get("/api/fleet/ai", dependencies=read_guard, tags=["ai"])
     def ai_status() -> dict:
-        return {"status": board.status(), "facts": board.live(), "proposals": list(board.verdicts)}
+        return {"status": board.status(), "facts": board.live(), "proposals": list(board.verdicts)[-64:],
+                "chain": {**board.chain(), "proposals_1h": board.counts()}}
 
     return board

@@ -604,6 +604,19 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
+
+    def ai_chain() -> dict:   # D-577 supervision row: credential presence only, never a secret
+        enrolled = console.clients() if stuck_resolver_enrolled else {}
+
+        def credential(rid: str) -> str:
+            if rid in (stuck_resolver_clients or {}):
+                return "token"
+            return "enrolled" if rid in stuck_resolver_enrolled and rid in enrolled else "none"
+        return {"resolver": getattr(app.state, "stuck_resolver", None) is not None,
+                "robots": [{"robot_id": rid, "credential": credential(rid), "ai_acting": rid in ai_facts_acting,
+                            "last_answer": app.state.line_stuck.last_resolver_answer(rid)}
+                           for rid in console.robot_ids]}
+    app.state.ai_facts.chain = ai_chain
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(

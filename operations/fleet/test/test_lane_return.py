@@ -114,6 +114,25 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
     assert states.count(ON_LANE) == 1 and states[-1] == ON_LANE
 
 
+def test_resolver_never_resumes_at_a_mapped_crosswalk_it_waits_for_a_human():
+    # XW removed after independent Safety-Review 2026-10-10: RESUME at a crosswalk could drive across with
+    # no look for people (CORE gate off) or override a "person present" hold. WAIT + a human instead.
+    from fleet.stuck.resolver import Answer, ResolverConfig, StuckResolver
+    for cause in ("no_motion", "lane_lost"):
+        for trip in (False, True):
+            resolver = StuckResolver(ResolverConfig())
+            resolver.at_crosswalk = lambda rid: rid == "r1"
+            row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
+                "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": cause, "local_enabled": True,
+                                                 "attempts": 0, "max_attempts": 2}, "crosswalk": None}}}
+            if trip:
+                row["trip"] = True
+            row["ai_proposal"] = {"robot_id": "r1", "stuck_id": "s1", "decision": "BACK_AND_RETRY",
+                                  "reason": "x", "confidence": 0.9, "evidence": {},
+                                  "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+            assert resolver.step(0.0, [row]) == [Answer("r1", "s1", "WAIT", "R5", escalate="crosswalk_human")]
+
+
 def test_resolver_never_auto_resumes_at_a_mapped_crosswalk():
     # The XW crosswalk RESUME rule was removed as unsafe (independent review 2026-10-10).
     from fleet.stuck.resolver import ResolverConfig, StuckResolver

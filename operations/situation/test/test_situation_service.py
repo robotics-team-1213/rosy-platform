@@ -204,3 +204,19 @@ def test_the_service_talks_to_a_real_fleet_as_ai_observer_and_moves_nothing(tmp_
         server.should_exit = True
         worker.join(timeout=20)
         listener.close()
+
+
+def test_heartbeat_reports_the_build_commit(tmp_path):
+    fleet = FakeFleet()
+    (tmp_path / "mode").write_text("shared")
+    Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=Clock(), commit="0123456789ab").step()
+    beat = next(body for path, body in fleet.calls if path == "/api/fleet/ai/heartbeat")
+    assert beat["build_commit"] == "0123456789ab"
+
+
+def test_build_commit_reads_git_or_is_none(tmp_path):
+    import re
+
+    assert service.build_commit(tmp_path) is None              # not a checkout
+    commit = service.build_commit()
+    assert commit is None or re.fullmatch(r"[0-9a-f]{7,40}(-dirty)?", commit)

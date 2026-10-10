@@ -26,7 +26,7 @@ MOTION_CALLS = {"follow", "swarm_cancel", "navigation_cancel", "navigation_goal"
                 "line_stuck_decision", "estop", "identify_lamp", "line_follow_junction", "trip_lease"}
 
 
-def _app(tmp_path, robot=None, clock=None):
+def _app(tmp_path, robot=None, clock=None, **options):
     robot = robot or FakeRobot("rosy_01")
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")], [robot])
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
@@ -34,7 +34,7 @@ def _app(tmp_path, robot=None, clock=None):
              for token, name, role in ((AI, "ai-pc", "ai_observer"), (OPERATOR, "op-7", "operator"),
                                        (VIEWER, "watcher", "viewer"))}
     app = create_app(console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
-                     start_task_dispatcher=False, site_users=users)
+                     start_task_dispatcher=False, site_users=users, **options)
     if clock is not None:
         app.state.ai_facts.clock = clock
     return app, robot, store
@@ -251,3 +251,50 @@ def test_proposal_is_kept_for_an_acting_robot_only_and_expires(tmp_path):
     assert bad.status_code == 422
     board.wall = lambda: time.time() + 7.0                     # past ttl_s: expired, rules answer
     assert board.proposal("rosy_01") is None
+
+
+# ---- D-577 supervision (연동 상태): chain view, build commit, proposal outcomes ----
+
+def test_d577_chain_view_shows_presence_never_secrets(tmp_path):
+    client = TestClient(_app(tmp_path)[0])
+    chain = client.get("/api/fleet/ai", headers=_auth(VIEWER)).json()["chain"]
+    assert chain == {"resolver": False, "proposals_1h": {"accepted": 0, "held": 0, "refused": 0, "pending": 0},
+                     "robots": [{"robot_id": "rosy_01", "credential": "none", "ai_acting": False,
+                                 "last_answer": None}]}
+    app, robot, _ = _app(tmp_path, stuck_resolver_clients={"rosy_01": FakeRobot("rosy_01")},
+                         ai_facts_acting=frozenset({"rosy_01"}))
+    app.state.line_stuck.record(robot_id="rosy_01", stuck_id="s-1", decision="WAIT", principal_id="fleet-resolver",
+                                accepted=True, tier="rule", rule="R5", escalated=None)
+    response = TestClient(app).get("/api/fleet/ai", headers=_auth(VIEWER))
+    chain = response.json()["chain"]
+    assert chain["resolver"] is True
+    assert chain["robots"][0] | {"last_answer": None} == {"robot_id": "rosy_01", "credential": "token",
+                                                          "ai_acting": True, "last_answer": None}
+    assert chain["robots"][0]["last_answer"]["decision"] == "WAIT"
+    assert "rest-token" not in response.text
+
+
+def test_d577_heartbeat_carries_the_build_commit(tmp_path):
+    client = TestClient(_app(tmp_path)[0])
+    body = {"service_version": "0.2.0", "owner_mode": "shared", "build_commit": "0123456789ab"}
+    assert client.post("/api/fleet/ai/heartbeat", headers=_auth(AI), json=body).status_code == 200
+    assert client.get("/api/fleet/ai", headers=_auth(VIEWER)).json()["status"]["build_commit"] == "0123456789ab"
+    bad = client.post("/api/fleet/ai/heartbeat", headers=_auth(AI), json={**body, "build_commit": "main; rm"})
+    assert bad.status_code == 422
+
+
+def test_d577_proposal_outcome_reaches_the_stuck_row_and_the_hourly_counts():
+    now = [5000.0]
+    board = ai_facts.AiFactsBoard(clock=lambda: now[0])
+    base = {"robot_id": "rosy_01", "stuck_id": "s-1", "reason": "r", "confidence": 0.5, "evidence": {},
+            "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+    board.verdicts.extend([
+        {**base, "decision": "ABORT", "verdict": "crosswalk_unknown", "judged_at": 4990.0},
+        {**base, "decision": "WAIT", "verdict": "forwarded", "judged_at": 4995.0},
+        {**base, "stuck_id": "s-0", "decision": "BACK_AND_RETRY", "verdict": "forwarded", "judged_at": 1000.0}])
+    assert board.robot_view("rosy_01", "s-1")["ai_proposal"] == {
+        "decision": "WAIT", "reason": "r", "verdict": "forwarded", "outcome": None, "class": "pending"}
+    board.note_outcome("rosy_01", "s-1", "WAIT", "accepted")
+    assert board.robot_view("rosy_01", "s-1")["ai_proposal"]["class"] == "accepted"
+    assert board.robot_view("rosy_01", "s-9")["ai_proposal"] is None
+    assert board.counts() == {"accepted": 1, "held": 1, "refused": 0, "pending": 0}   # s-0 is over an hour old
