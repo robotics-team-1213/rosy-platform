@@ -47,16 +47,21 @@ class ContextDraft:
                     missing.append("map_place_match")
             else:
                 missing.append("trusted_map_pose_and_active_map")
-            sensors = {key: stuck.get(key) for key in ("rear_state", "rear_clearance_m") if stuck.get(key) is not None}
+            sensors = {key: stuck.get(key) for key in ("front_clearance_m", "rear_state", "rear_clearance_m")
+                       if stuck.get(key) is not None}
             sensors["state_age_s"] = row.get("state_age_s")
             sensors["line_follow"] = {key: (state.get("line_follow") or {}).get(key)
                                       for key in ("mode", "stuck")}
             support.append({"source": "core_sensor", "field": "stuck_and_line_follow", "value": sensors})
             missing.append("interpreted_front_image")
+            draft = CAUSE.get(cause, "unknown")
+            if cause == "no_motion" and isinstance(sensors.get("front_clearance_m"), (int, float)):
+                if 0 <= sensors["front_clearance_m"] <= 0.3:
+                    draft = "obstacle"
             facts.append({"kind": "incident_context", "robot_ids": [rid],
-                          "value": {"cause_draft": CAUSE.get(cause, "unknown"), "status": "needs_review",
+                          "value": {"cause_draft": draft, "status": "needs_review",
                                     "support": support, "missing": missing},
-                          "confidence": 0.45 if cause in CAUSE else 0.2,
+                          "confidence": 0.45 if cause in CAUSE else 0.35 if draft == "obstacle" else 0.2,
                           "evidence": {"stuck_id": sid, "context_observed_at": snapshot["observed_at"],
                                        "camera_frame_interpreted": False},
                           "source": SOURCE, "observed_at": snapshot["observed_at"], "ttl_s": 3.0})
