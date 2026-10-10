@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 
+from control.sensing.perception.evidence_mode import EvidenceModes
 from control.sensing.perception.learned.paint_motion import (
     ODOM_HISTORY_MAX_LEAD_S, OdomHistory, _ground_to_pixel, mask_homography, warp_mask,
 )
@@ -200,6 +201,7 @@ class _Node:
         self._odom_stamp = 10.0
         self._paint_worker = _Recorder()
         self._paint_motion = lambda ground: "warp"
+        self._evidence_modes = EvidenceModes()
 
     def get_parameter(self, name):
         return _Param(self.params[name])
