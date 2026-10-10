@@ -1038,16 +1038,17 @@ SIZE_VERDICTS = {
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
     "perception/control/sensing/perception/learned": (
-        2_270,
+        2_657,
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "
         "when D-597 amendment 3 (a85739fcb, boundary memory on the pure-pursuit arc) took the parent "
-        "past 12004+150. Import path, colcon package and CORE command ownership do not change. "
-        "Re-judge on growth past +150.",
+        "past 12004+150. Re-judged at 2657 on 2026-10-10 for D-615 (learned/expected_path.py, the "
+        "committed straight corridor republished from odometry). Import path, colcon package and CORE "
+        "command ownership do not change. Re-judge on growth past +150.",
     ),
     "perception/control/sensing/perception": (
-        9_895,
+        10_053,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1061,7 +1062,9 @@ SIZE_VERDICTS = {
         "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
         "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
         "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891). Re-judged at 9895 on 2026-10-10: learned/ (2270) left this unit "
-        "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named.",
+        "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named. "
+        "Re-judged at 10053 on 2026-10-10 for D-615 (drivable_keep.py republishes the corridor and "
+        "lane_debug.py draws it). learned/ stays its own unit.",
     ),
     "control": (
         34_619,
