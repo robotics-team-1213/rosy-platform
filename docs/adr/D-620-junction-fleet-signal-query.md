@@ -55,3 +55,23 @@ Fleet에는 D-525 신호표와 D-536/D-593 지도 자세가 이미 있다.
 - Fleet 실제 hub/신호표 시험: paired 신원, 조회 오류의 unknown 응답,
   자유/점유 구역, 신선한 지도 자세와 오래된 자세.
 - 기존 교차로·Fleet 링크·API·횡단보도 회귀 시험. 실물 통과 판정은 별도다.
+
+### Execution record — 2026-10-10
+
+- 사용자의 “좋아” 승인으로 `fix/junction-device` 브랜치 push, native ARM64 payload
+  전체 빌드·서명, Fleet 이미지 빌드, `9dfk`와 `8kcn` 설치 및 현장 감독 시험을 진행한다.
+  이 승인은 main 착지나 자동 배포 게시를 포함하지 않는다.
+- 로봇 payload와 Fleet 이미지는 병렬로 준비할 수 있다. 두 구성 요소의 설치 revision,
+  인증된 Fleet 연결과 신호 응답을 확인한 뒤 `junction_signal_enabled`를 활성화한다.
+  기존 CORE 주행·횡단보도·E-Stop 게이트는 유지한다.
+- **SOURCE:** 승인 시점 설치 후보는 `fix/junction-device`의 `f7dfa282a`다.
+  D-620 구현과 기존 v2 모델 floor gate 및 CORE 몸체 자기 반사 보정을 포함한다.
+- **원격 시험:** 후보 코드 `e83d3038f9`에서 432 passed, 2 skipped, 0 NEW;
+  계약 코드 `d7f032f513`에서 1095 passed, 0 NEW다. 두 skip은 선택 의존성 시험이며
+  이 결과는 ARM64 추론이나 실물 이동 증거를 대신하지 않는다.
+- **ARTIFACT:** 이 기록 시점 새 ARM64 서명 payload와 Fleet 이미지 빌드는 미확인이다.
+- **DEVICE:** 이 기록 시점 두 로봇의 새 payload 설치, Fleet 이미지 적용과 신호 readback은
+  미확인이다. 빌드 성공만으로 설치 완료를 판정하지 않는다.
+- **FIELD:** 이 기록 시점 적색 대기→녹색 출발, 완전 무응답 3초→우측 진입 및
+  횡단보도 연속 clear 3초 후 통과는 실물 미확인이다. 요청 ID·신호 상태·CORE journal과
+  MCAP의 `/cmd_vel`·오돔을 함께 기록하며, `entered` 로그만으로 합격을 선언하지 않는다.
