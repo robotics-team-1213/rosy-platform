@@ -1491,7 +1491,35 @@ The tokenless camera exception applies only to the two Fleet preview endpoints a
 
 D-610 AI case reads use a separate 10-second Vision lease: `GET /api/fleet/ai/case/{problem_id}` (role `ai_observer`) may return `views.rosy_cam: {frame_path, lease}` only for a fresh accepted sighting on the active map. Its observed x/y centers a preview crop, including during pose loss; it grants no control authority. The lease signs `rectification: {mode: "map"}`, `crop_map: [x, y, radius_m]` (radius 0.1–2.0 m; AI case uses 1.0 m), `crop_map_id` and `crop_revision`. The AI PC requests `frame_path` with that lease from Vision directly. The reply carries the cropped JPEG and ordinary frame headers with `X-Frame-Rectified: map-crop`; missing or mismatched map/calibration returns 409 `plane-unavailable`. Fleet does not relay or persist the Rosy Cam JPEG. Each case fetches a fresh front image while the operator's retained image stays separate.
 
+D-618: open lane-stuck cases are readable without AI-first enrollment. Reading a case does not enroll the robot or grant command authority; proposal admission and D-577 execution checks remain unchanged.
+
 D-610 deadlock cases appear in `/api/fleet/ai/problems` after a stable wait cycle, only when every member is AI-first. A case has `context: {cycle, avoidable}` and `members: {robot_id: {context, views}}`, with both camera views per member. A VLM `REPLAN` proposal chooses a member `robot_id`, supplies `body: {blocked_edges: [...]}` within that robot's avoidable set, and cites its chosen views plus every member's views in `evidence.members`. Fleet rechecks all members' evidence and current avoidable edges; the trip runner repeats its admission checks before switching routes. Closed or changed cycles invalidate the published case.
+
+#### Fleet → AI PC → Fleet → CORE 판단 교환 규약 (D-577 / D-610 / D-618)
+
+기존 API의 비동기 요청·응답 구조를 사용한다. Fleet이 열린 문제를 게시하고 AI PC가 조회한다. AI PC의 HTTP 서버나 로봇 직접 명령 경로를 추가하지 않는다.
+
+| 단계 | 기존 API / 필드 | 완료 조건 |
+|---|---|---|
+| Fleet 판단 요청 | `GET /api/fleet/ai/problems`의 `problems[] {problem_id, kind, robot_id}` | 열린 문제 ID가 요청의 상관 ID다. 재조회·재판단은 같은 ID를 사용한다. |
+| 입력 획득 | `GET /api/fleet/ai/case/{problem_id}` | `context`, `history`, `views.front`, `views.rosy_cam`을 읽는다. 닫힌 문제는 404 `AI_CASE_NOT_OPEN`, 다른 역할의 사례 조회는 403 `AI_CASE_FORBIDDEN`. |
+| AI 판단 응답 | `POST /api/fleet/ai/proposals` | `robot_id`, `stuck_id`(요청 ID), `decision`, `reason`, `confidence`, `source`, `observed_at`, `ttl_s`, `evidence`, `body`로 응답한다. |
+| Fleet 접수 | 위 POST의 `state` | `queued`는 접수만 뜻한다. `absent`, `owner_busy`, `robot_not_acting`은 실행 대기열에 넣지 않는다. |
+| Fleet 판정·CORE 결과 | `GET /api/fleet/ai`의 `proposals[]`, `chain.robots[].last_answer`; `GET /api/fleet/line-stuck` | `robot_id` + `stuck_id`로 묶고 `source`, `decision`, `verdict`, `outcome`을 함께 보여준다. `forwarded`는 CORE에 전달한 상태이며 물리적 성공을 뜻하지 않는다. |
+
+모든 시각은 UTC Unix seconds다. VLM 응답의 `source`는 `vlm:<model>@<digest12>:<prompt>`이며 `evidence.seen`은 영상에서 판단한 내용, `reason`은 짧은 사유 코드다. `evidence.views`의 두 영상은 각각 `frame_id`, `captured_at`, `age_s`, `sha256`으로 추적한다. JPEG와 Vision lease는 응답 기록에 복사하지 않는다. 모델 이름만 같아도 digest가 다르면 동일 판단자로 간주하지 않는다.
+
+현재 Qwen 어댑터는 두 영상이 모두 있어야 판단하며 모델 호출 제한은 6 s, 제안 TTL은 6 s다. 누락 영상·모델 부재·시간 초과·잘못된 JSON·허용 목록 밖 단어는 제안을 보내지 않고 기존 규칙으로 돌아간다. Fleet은 실행 시점의 문제 ID, TTL, 원인별 허용 단어, 현재 센서·차체 여유·교차로·위치·뒤쪽 차량·trip 권한을 다시 검사하고 CORE도 재검사한다. AI-first 전용 영상 신선도 제한은 별도로 적용하며 사례 조회만으로 이 모드를 활성화하지 않는다.
+
+예시의 `queued`와 최종 `verdict`를 구분한다. 아래는 계약 시험용 상황이며 실제 현장 모델 판단 결과는 별도 증거로 기록한다.
+
+| 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |
+|---|---|---|---|
+| 벽 앞 차선 상실, 뒤쪽 통로가 보임 | `BACK_AND_RETRY`, `reason: rear_clear`, `evidence.seen: rear corridor visible` | D-577 후진 전제 충족 시 `forwarded`, CORE 응답 후 `outcome` 기록 | 판단 영상 ID·모델·근거와 CORE 수락 여부 |
+| 같은 영상이지만 실제 뒤쪽 센서가 막힘 | `BACK_AND_RETRY` | `rear_blocked` 등 검사 사유로 거절하고 기존 규칙 적용 | 모델 제안과 센서 때문에 실행하지 않은 이유 |
+| 영상 누락 또는 지원하지 않는 `REALIGN` 응답 | 제안 없음 | 기존 규칙 유지; 잘못된 단어를 API에 직접 보내면 422 | 영상 판단 미완료, 자동 명령 성공으로 표시하지 않음 |
+
+API 계약 시험은 `operations/situation/test/test_ai_case_flow.py`, `test_vlm.py`, `operations/fleet/test/test_ai_facts.py`, `test_ai_first.py`에서 사례 조회, 모델 응답, 역할·접수·만료·실행 검사를 각각 검증한다. 모델 대신 시험 응답을 사용한 결과와 실제 Qwen 추론 결과를 구분한다.
 
 Lease request body accepts `{ "source_id": "ceiling-north" }` for the original
 JPEG or an optional `rectification` object:

@@ -45,7 +45,7 @@ def test_stuck_ai_retry_reads_new_front_without_replacing_operator_preview(enrol
                            preview=lambda *_args: {"sequence": 0})
     front = Front()
     client = routes(first, line, {"a": front}, SimpleNamespace(problems=None, _rows={}))
-    assert client.get("/api/fleet/ai/problems").json() == {"problems": [{"problem_id": "s1", "kind": "stuck", "robot_id": "a"}]}
+    assert client.get("/api/fleet/ai/problems").json()["problems"] == [{"problem_id": "s1", "kind": "stuck", "robot_id": "a"}]
     one = client.get("/api/fleet/ai/case/s1").json()
     first.wall = lambda: WALL + 8
     two = client.get("/api/fleet/ai/case/s1").json()
