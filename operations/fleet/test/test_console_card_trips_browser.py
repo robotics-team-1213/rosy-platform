@@ -111,9 +111,11 @@ def test_convoy_follows_the_leader_from_the_formation_block(site):  # noqa: F811
         browser, page, errors = _open(playwright, site, API, posts, answers)
         assert page.locator("#formation-heading").inner_text() == "대형·대열"
         page.locator(".convoy-form-wrap > summary").click()
-        assert page.locator("#convoy-go").get_attribute("reason").startswith("반복 운행 중인 리더가 없습니다")
-        page.locator("#convoy-follower").select_option("rosy_02")
+        # Leader first: only a robot on an open repeat trip; the follower list leaves out robots on a trip.
         assert page.locator("#convoy-leader").input_value() == "rosy_01"
+        followers = page.locator("#convoy-follower option").all_inner_texts()
+        assert "rosy_01" not in followers and "rosy_02" in followers
+        page.locator("#convoy-follower").select_option("rosy_02")
         page.locator("#convoy-start").select_option("A")
         page.clock.run_for(1100)
         _shot(page, "convoy-1440x900.png")
@@ -205,7 +207,9 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
                 assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
-            form.scroll_into_view_if_needed()
+            # One atomic scroll: a 1 s poll may rebuild the card between a locator's resolve and its action.
+            page.evaluate("document.querySelector('#roster article[data-robot-id=\"rosy_02\"] .card-trip')"
+                          "?.scrollIntoView({block: 'nearest'})")
             _shot(page, f"card-trip-{width}x{height}.png")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
         assert not errors
@@ -277,5 +281,30 @@ def test_rail_panels_do_not_overlap(site):  # noqa: F811
             for (a, _, bottom), (b, top, _) in zip(boxes, boxes[1:]):
                 assert top >= bottom - 1, (width, a, bottom, b, top)
             _shot(page, f"rail-{width}x{height}.png")
+        assert not errors
+        browser.close()
+
+
+def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
+    """D-540 6 (user decision 2026-10-10): 전체 주행 취소 is a stop — quiet, no confirm dialog, open to the shared
+    console token too (D-540 9), and the line beside it says at once that it was sent and to how many robots."""
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    result = {"cancelled": 3, "total": 3, "evidence": "CORE_REPLY_ONLY", "formation": None,
+              "robots": [{"robot_id": r, "result": "cancelled", "steps": {}, "tasks": {"awaiting_core_result": []}}
+                         for r in ("rosy_01", "rosy_02", "rosy_03")],
+              "tasks": {"canceled": [], "error": None}}
+    api = {**API, "/api/fleet/session": {"principal_id": "site-console", "role": "operator"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, {"/api/fleet/cancel-all": (200, result)})
+        button = page.locator("#cancel-all")
+        assert button.get_attribute("kind") == "quiet" and not button.evaluate("node => node.disabled")
+        button.click()
+        assert page.locator("dialog.ui-confirm").count() == 0
+        _settle(page, posts, "/api/fleet/cancel-all")
+        assert ("/api/fleet/cancel-all", None) in posts
+        expect(page.locator("#cancel-all-result")).to_contain_text("전체 주행 취소를 보냈습니다 · 3대")
+        assert not any(path == "/api/fleet/estop" for path, _ in posts)
         assert not errors
         browser.close()
