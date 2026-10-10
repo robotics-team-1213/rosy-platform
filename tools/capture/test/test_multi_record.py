@@ -88,7 +88,8 @@ def test_render_general_grid_and_blank_stale_frames(tmp_path):
     renderer = m.Renderer(s.out)
     image = renderer.frame(1000.5)
     assert image.size == (1280, 720)
-    assert sum(image.tobytes()[i] > 200 and image.tobytes()[i + 1] < 50 for i in range(0, len(image.tobytes()), 3)) > 10000
+    pixels = image.tobytes()
+    assert sum(pixels[i] > 200 and pixels[i + 1] < 50 for i in range(0, len(pixels), 3)) > 10000
     stale = renderer.frame(1004.)
     pixels = stale.tobytes()
     assert sum(pixels[i] > 200 and pixels[i + 1] < 50 for i in range(0, len(pixels), 3)) == 0
