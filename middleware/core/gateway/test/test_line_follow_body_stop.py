@@ -62,6 +62,22 @@ def _step(m, points, *, error=0.0, confidence=1.0, t=T, range_min=0.05):
     return decision, m.status()
 
 
+@pytest.mark.parametrize("offset,expected", [(-0.003, "TRACKING"), (0.0, "HOLD"), (0.001, "HOLD")])
+def test_live_scan_feed_excludes_body_interior_but_keeps_outline_contacts(offset, expected):
+    from types import SimpleNamespace
+    from core.bridge.observation import front_clearance
+
+    m = _manager(lidar_forward_deg=0.0, obstacle_blind_floor=False)
+    m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=T, visible=True,
+                              error=0.0, confidence=1.0), received_at=T, source_now=T)
+    sample = dict(ranges=[LIDAR_TO_FRONT + offset] * 3, angle_min=0.0, angle_max=0.0,
+                  range_min=0.05, range_max=40.0)
+    front_clearance(SimpleNamespace(loc_mission=None, line_follow=m), sample, received_at=T)
+    decision = m.tick(T)
+    assert m.status().state == expected
+    assert (decision.linear > 0) == (expected == "TRACKING")
+
+
 # ---- derived numbers --------------------------------------------------------------------
 
 def test_stop_gap_is_margin_plus_reaction_plus_braking():
