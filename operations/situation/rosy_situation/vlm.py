@@ -3,7 +3,7 @@
 A case (``GET /api/fleet/ai/case/{problem_id}``) carries the problem, its context and two views: the Rosy Cam
 crop around the robot and one robot front-camera frame (JPEG base64, frame id, captured_at). The model is
 called on ``127.0.0.1`` only (the service runs on the AI PC, so the site PC -> AI PC network does not matter),
-with a 6 s timeout. Its answer must be one word of the case kind's table (D-610 4) and cite both views; anything
+with a 10 s timeout. Its answer must be one word of the case kind's table (D-610 4) and cite both views; anything
 else, a timeout or no model is ``None`` and the caller keeps the deterministic analyzer's proposal (D-610 5 end:
 that one still passes every D-577 gate). Frames are never written to disk; the proposal cites frame ids, ages and
 sha256 only.
@@ -27,8 +27,8 @@ from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment, 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
 PROMPT_ID = "d619-v5"
-TIMEOUT_S = 6.0
-TTL_S = 6.0
+TIMEOUT_S = 10.0
+TTL_S = 12.0                          # Includes inference and a 2 s Fleet delivery window.
 VIEWS = ("rosy_cam", "front")
 #: D-610 4: the words the model may choose per problem kind (existing CORE / Fleet commands only).
 WORDS = {"stuck": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "MANUAL"),

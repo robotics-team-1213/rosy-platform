@@ -1043,6 +1043,8 @@ class LineJunctionStatus(BaseModel):
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
     pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
+    signal_request_id: Optional[str] = None  # D-620: one stopped junction episode
+    signal_state: Optional[str] = None       # waiting | red | unknown | green | fallback | entered
 
 
 class LineFollowStatus(BaseModel):
@@ -1235,8 +1237,19 @@ class StateSnapshot(TripLeaseFields):
     odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
 
 
+class JunctionSignalAnswer(BaseModel):
+    """D-620: a paired Fleet answer, correlated to the stopped junction episode."""
+
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    lamp: Literal["green", "red", "unknown"]
+    may_enter: bool = Field(strict=True)
+    reason: str = Field(max_length=96)
+
+
 class HeartbeatPayload(BaseModel):
     state_snapshot: StateSnapshot
+    junction_signal_request: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{32}$")
 
 
 # --- 이벤트 (EVT-001, API Ref §8 이벤트 카탈로그) ---------------------------

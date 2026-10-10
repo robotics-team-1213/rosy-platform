@@ -302,8 +302,9 @@ def test_structured_assessment_is_optional_but_cannot_claim_verification_or_anot
         "uncertainties": ["Heading is not confirmed."]}, "mobility", views)
     body = {"robot_id": "rosy_01", "stuck_id": "s-1", "decision": "WAIT", "reason": "heading_uncertain",
             "confidence": 0.8, "evidence": {"views": views, "assessment": assessment},
-            "source": "vlm:qwen3-vl:8b-instruct@abc:d619-v1", "observed_at": time.time(), "ttl_s": 6.0}
+            "source": "vlm:qwen3-vl:8b-instruct@abc:d619-v1", "observed_at": time.time(), "ttl_s": 12.0}
     assert client.post("/api/fleet/ai/proposals", headers=_auth(AI), json=body).json() == {"state": "queued"}
+    assert client.post("/api/fleet/ai/proposals", headers=_auth(AI), json={**body, "ttl_s": 12.01}).status_code == 422
     for change in ({"verification": "verified"}, {"domain": "manipulation"},
                    {"observations": [{"source": "front", "frame_id": "other", "description": "A wall."}]}):
         reply = client.post("/api/fleet/ai/proposals", headers=_auth(AI), json={

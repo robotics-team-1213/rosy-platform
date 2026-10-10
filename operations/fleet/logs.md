@@ -1,4 +1,4 @@
-# fleet logs
+﻿# fleet logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
@@ -3109,6 +3109,12 @@
 - 증거: 원격 RED 5건으로 누락을 재현, 원격 통합 373 passed / 3 skipped. C 램프 시각표 포함 최종 시험은 별도 로그에 기록한다.
 - Gate: SOURCE. 정식 착지·푸시·사이트/로봇 payload 적용·실제 두 대 LED 식별·추종 주행은 미확인.
 
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
 ## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 
 - Change: D-619 uses raw front frames, calibrated ceiling metadata, task intent/current mode and sensor age; optional shared assessment validation preserves legacy proposals and D-577 authority. Qwen exact prompt and image hashes are recorded; no corner or arm acceptance claimed.
@@ -3120,3 +3126,8 @@
 - Change: Each image is observed independently before task context reasoning; exact per-call prompts/options remain recorded. The shared 6-second deadline also rejects late final replies. Fleet retains timestamped route intent without granting motion authority.
 - Evidence: Remote focused contracts 108 passed, known_failures 0 NEW. AI PC replay with local Qwen3-VL took 4.03/3.94 seconds and separated wall/front observations from ceiling objects in two cases; classification accuracy and execution freshness are unverified.
 - Gate: SOURCE / remote contracts / offline replay. D-577 freshness, enrollment and CORE authority remain unchanged; no autonomous corner or arm acceptance.
+## 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
+
+- Change: Integrated automatic-leader console selection. Lane convoy candidates are online open-repeat-trip robots; rank fresh LOCALIZED guide poses in the active map, otherwise robot number. Both callers share selection; formation capability admission is preserved.
+- Evidence: Node suite 274 passed; remote focused Python contracts 62 passed, known_failures 0 NEW. Independent led_review approved source and fleet size 51061.
+- Gate: SOURCE / remote contracts; deployment and physical convoy acceptance remain separate.

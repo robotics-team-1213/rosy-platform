@@ -22,6 +22,7 @@ from core_features.line_follow.recovery.junction.approach import (
     MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
 from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
+from .signal import JunctionSignalMixin
 
 JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop', 'bend')
 JUNCTION_REASONS = frozenset({'junction_transverse', 'junction_fork'})
@@ -66,9 +67,10 @@ class JunctionRefused(Exception):
         self.code = code
 
 
-class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
+class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixin):
     def _init_junction(self):
         self._junction_seq = 0
+        self._junction_signal = None
         self._turn_basis_now = None  # D-498 basis of this tick's maneuver refusal check
         self._junction = None  # None (idle) | dict: action, place_id, seq, state, ...
         self._junction_seen_at = None
@@ -125,6 +127,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
         self._cross_band = None  # D-507 6: a mode change or stop ends any crossing
+        if self._junction_signal is not None and not self._junction_signal.get('entered'):
+            self._junction_signal = None
 
     def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None,
                          strategy=None):
@@ -236,7 +240,9 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         state = 'unexpected' if j.get('outside') and j['state'] == 'armed' else j.get('state', 'idle')
         return LineJunctionStatus(pending_action=j.get('action'), place_id=j.get('place_id'),
                                   state=state, seq=self._junction_seq, turn_deg=j.get('turn_deg'),
-                                  reason=j.get('reason'), pivot_basis=j.get('pivot_basis'))
+                                  reason=j.get('reason'), pivot_basis=j.get('pivot_basis'),
+                                  signal_request_id=(self._junction_signal or {}).get('id'),
+                                  signal_state=(self._junction_signal or {}).get('state'))
 
     def _fresh_pose(self, now):
         samples = self._return_evidence.trail.samples
@@ -321,6 +327,7 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         if self._junction_held and not fresh and self._fresh_pose(now) is not None:
             self._junction_held = self._line_ahead(now)  # until odom passes the handed-over line
         seen = fresh or self._junction_held
+        self._signal_idle(now, seen)
         if seen and self._junction_entry is None:
             pose = self._fresh_pose(now)
             if pose is not None:
@@ -337,6 +344,7 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                     self._junction_entry = None  # review N2: the junction is left behind
                 return decision
             j = self._junction = dict(action=None, place_id=None, state='waiting')
+        j = self._signal_gate(j, now)
         if j['state'] == 'armed' and j['action'] == 'bend':
             return self._bend_armed(j, now, seen, decision)
         if j['state'] == 'armed':

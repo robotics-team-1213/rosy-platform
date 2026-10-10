@@ -29,6 +29,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-620
 - D-529
 - D-465
 - D-462
