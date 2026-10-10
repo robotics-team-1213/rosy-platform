@@ -363,8 +363,11 @@ class DrivableSteer:
             self._pivot_yaw = None
         elif self._pivot_yaw is not None and current_pose is not None and abs(
                 math.atan2(math.sin(current_pose[2] - self._pivot_yaw), math.cos(current_pose[2] - self._pivot_yaw))) > PIVOT_MAX_RAD:
-            self._smoothed = None
-            return None, None, dict(info, strategy="none", reason="pivot_limit")
+            # Budget spent: drop the turn and its memories and carry on with what is in front (a
+            # sticky stop here held 9dfk LOST for good, 20261010T040459Z_rosy_41).
+            self._pivot = self._side = self._memory = self._pivot_yaw = None
+            side = info["exit"] = None
+            info["pivot_limit"] = True
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
