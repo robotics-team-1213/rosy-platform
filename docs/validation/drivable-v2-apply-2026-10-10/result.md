@@ -22,3 +22,10 @@
 - 로봇 API의 `GET /line-follow/perception`은 9dfk에서 `applied: false`, `applied_model_revision: null`을 반환했다. 이 화면의 `model_revision`은 shadow 쪽 이전 모델로, paint 포인터의 새 추론 증거가 아니다. 카메라 로그에서도 새 revision을 확인하지 못했다. **실제 프레임에서 새 모델이 사용됐는지는 HOLD**다.
 - 팀 README의 hard-frame test 개선(선 밖 오검 13.9% → 1.7%)은 제공된 평가다. ROSY 독립 재생·폐루프 SIM, Pi 실측 지연, `paint_source_used`/`paint_model_revision` 비율, 실물 R1/R2 수용은 별개다. 새 모델을 설치했다는 사실로 주행 안전이나 성능을 승인하지 않는다.
 - 복귀 대상은 각 로봇의 `paint.previous`에 남은 `lane-seg-20261010-71edcb6d`다. 실패 또는 관문 미달 때 포인터를 이 경로로 되돌리고 실제 읽기를 다시 확인한다.
+
+## 카메라 실시간 읽기 — 2026-10-10
+
+- 두 로봇 모두 `rosy-camera`와 같은 ROS domain·CycloneDDS 설정으로 `/line/keep_debug`를 구독했다. 9dfk는 연속 8프레임 모두 `paint_source_used: learned_drivable`, `paint_model_revision: lane-seg-20261010-451f0f85`였다. 8kcn은 8프레임 중 5프레임에서 같은 revision을 확인했고, 처음 3프레임은 revision이 null이었다. 설치용 revision의 ONNX SHA-256은 위 원본 v2와 같다. 따라서 위의 "실제 프레임 사용 HOLD"는 해소됐지만, 8kcn의 프레임별 사용률과 지연은 아직 수용되지 않았다.
+- 9dfk의 사용 프레임 `paint_mask_age_s`는 0.248–0.499초, 8kcn은 0.495–0.875초였다. 이 표본은 정지 상태 1초가량의 짧은 관측이다. 양쪽 모두 `paint_reuse: warped`, `strategy: drivable_centre`였고 `paint_drivable.reason: ok`를 반환했다. 주행 중 지연이나 정확도의 증거는 아니다.
+- `/line-follow/perception`의 `model_revision`은 paint가 아닌 shadow를 읽는다. 9dfk shadow는 `lane-seg-20261006-28e8454d`, 8kcn shadow는 `v13-drivable-20261010-86c86e7f`로 유지했다. 8kcn의 이 API가 보고한 unsigned 오류도 그 shadow 모델에 대한 것이다. v2 설치용 paint 폴더에도 서명 파일은 없다. 차선 모델의 현재 런타임은 이를 경고로 처리하며 추론은 실행됐지만, 서명과 운영 승격은 별개다.
+- 두 로봇의 CORE는 확인 시 `IDLE`, line-follow `OFF`, 속도 0, E-Stop false였다. 목적지 navigation 능력은 둘 다 `goal_navigation: false`다. 사용자가 말한 navigation은 차선추종을 뜻한다. D-378의 후보별 R0 재생·폐루프, R1 그림자, 현장 감독·누르는 동안 조건이 미완료라 CAMERA_LINE 전환과 주행 명령은 보내지 않았다.
