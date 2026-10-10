@@ -1,3 +1,4 @@
+import hashlib
 import pytest
 import importlib.util
 import sys
@@ -73,7 +74,10 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # D-192 US-004: the motor bus overlay and its alias rule.
     (root / "boot/firmware").mkdir(parents=True)
     (root / "boot/firmware/config.txt").write_text(
-        "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+        "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\ndtoverlay=uart4-pi5\n"
+        # D-247 IMU bus and lamp overlay, D-288 OV5647 CAM1.
+        "dtoverlay=i2c0-pi5,pins_0_1\ncamera_auto_detect=0\ndtoverlay=ov5647\ndtoverlay=rosy-ws281x\n",
+        encoding="utf-8")
     # The LiDAR/motor UARTs carry no console; their gettys are masked.
     (root / "boot/firmware/cmdline.txt").write_text("console=ttyAMA10,115200 console=tty1 rootwait\n",
                                                     encoding="utf-8")
@@ -99,9 +103,49 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (root / "var/lib/dpkg/status").write_text("".join(
         f"Package: {name}\nStatus: install ok installed\n\n"
         for name in verify_mounted_image.DISPLAY_APT_PACKAGES), encoding="utf-8")
+    _add_lamp_and_camera(root)
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
+
+
+def _add_lamp_and_camera(root):
+    """D-247 lamp driver and D-288 camera payload, as customize-rootfs.sh installs them."""
+    kernel = "6.8.0-1010-raspi"
+    (root / verify_mounted_image.LAMP_DTBO).parent.mkdir(parents=True, exist_ok=True)
+    (root / verify_mounted_image.LAMP_DTBO).write_bytes(b"dtbo")
+    record = root / verify_mounted_image.LAMP_KERNEL_RECORD
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(kernel + "\n", encoding="utf-8")
+    modules = root / "lib/modules" / kernel
+    (modules / "kernel").mkdir(parents=True)
+    (modules / "extra").mkdir(parents=True)
+    (modules / "extra/rp1_ws281x_pwm.ko").write_bytes(b"ELF\0vermagic=" + kernel.encode() + b" SMP preempt\0")
+    (modules / "modules.alias").write_text("alias of:N*T*Craspberrypi,rp1-ws281x-pwm rp1_ws281x_pwm\n",
+                                           encoding="utf-8")
+    (root / verify_mounted_image.LAMP_UDEV_RULE).write_text("mock", encoding="utf-8")
+    modprobe = root / verify_mounted_image.LAMP_MODPROBE
+    modprobe.parent.mkdir(parents=True, exist_ok=True)
+    modprobe.write_text(verify_mounted_image.LAMP_OPTIONS + "\n", encoding="utf-8")
+    status = root / "var/lib/dpkg/status"
+    status.write_text(status.read_text(encoding="utf-8") + "".join(
+        f"Package: {name}\nStatus: hold ok installed\n\n"
+        for name in (f"linux-image-{kernel}", f"linux-modules-{kernel}")), encoding="utf-8")
+    source = root / verify_mounted_image.CAMERA_SOURCE_RECORD
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(verify_mounted_image.CAMERA_SOURCE_LOCK.read_bytes())
+    python_lock = verify_mounted_image.CAMERA_SOURCE_LOCK.with_name("camera-python-requirements.txt")
+    (root / verify_mounted_image.CAMERA_PYTHON_RECORD).write_text(
+        hashlib.sha256(python_lock.read_bytes()).hexdigest(), encoding="utf-8")
+    (root / "usr/local/bin").mkdir(parents=True, exist_ok=True)
+    for command in ("rpicam-hello", "rpicam-still"):
+        (root / "usr/local/bin" / command).write_text("mock", encoding="utf-8")
+    lib = root / "usr/local/lib/aarch64-linux-gnu"
+    (lib / "libcamera").mkdir(parents=True)
+    for name in ("libpisp.so.1", "libcamera.so.0.4", "libcamera/ipa_rpi_pisp.so"):
+        (lib / name).write_text("mock", encoding="utf-8")
+    for package in ("libcamera", "picamera2"):
+        (root / "usr/local/lib/python3.12/dist-packages" / package).mkdir(parents=True)
 
 def test_inspect_fails_if_docker_present(tmp_path):
     root = tmp_path / "root"
