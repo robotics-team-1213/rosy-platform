@@ -97,8 +97,18 @@
 
 ### 남은 항목 (Safety-Review 2026-10-10, 구현 (a))
 
-1. 뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다. D-573이 `crosswalk: null`을 내서 R3가 열리기 전에 닫아야 한다.
+1. ~~뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다.~~ **닫힘(2026-10-10, `feat/stuck-5s-fleet-ai`).** 뒤 띠는 이제 자신과 동료 모두 `localization`을 보고하는 신뢰 지도 자세로만 잰다. 동료가 온라인인데 어느 한쪽이 LEGACY(odom)면 R5 `peer_unknown`이다(`stuck_lane_lost.peer_behind`). D-573 횡단보도 관문을 켜도 R3가 odom 자세로 열리지 않는다.
 2. R5 전송이 실패한 뒤 다음 주기에 R3 조건이 모두 참이면 R3가 고를 수 있다.
 3. Fleet 정지(작업 취소)로 끊긴 R5 전송은 사람에게 올라가지 않는다.
+
+### 개정 (2026-10-10): 5 s 무동작 막힘(`no_motion`)과 등록 로봇 자격
+
+사용자 지시(2026-10-10): "로직에서 우리가 멈추게 되거나 어떤 상황 때문에 전혀 안 움직이는 게 5초 이상 지속되면, 이를 fleet 서버를 통해서 ai pc에서 이걸 어떻게 처리할지에 대해서 판단받고 이를 처리하게 하는 등의 로직이 필요할 것 같아. 신호등 진입을 관제 PC의 신호등을 보고 하듯이." 조정 세션은 이 지시를 9dfk(`rosy_41`)·8kcn(`rosy_40`)의 차선 주행 경로에 대한 사용자 승인으로 전했다.
+
+1. **규칙.** CORE 새 원인 `no_motion`([D-407](D-407-lane-stuck-recovery-console-then-local.md) 개정 2026-10-10)은 1항의 `lane_lost`와 같은 조건을 쓴다: 모두 참이면 R6 `BACK_AND_RETRY`(R3와 같은 후진·재판단, 규칙 예산을 쓴다), 하나라도 거짓이면 R5 `WAIT` + 사람(`no_motion_hold:<이유>`). `RESUME`·`YIELD`는 나가지 않는다. 원인 문자열만 본다는 1항의 규칙에 `no_motion`이 더해진다. 상세(HOLD 사유)는 표시에만 쓴다.
+2. **등록 로봇 자격(2항, D-503 6항).** 현장 설정 `fleet.stuck_resolver.enrolled_robots`(로봇 id 목록)에 적은 등록 로봇은 판단기가 Fleet이 D-361 등록 때 받은 CORE 자격(operator, `STUCK_DECIDE` 포함)으로 답한다. 별도 `stuck_resolver` 토큰을 새로 발급하지 않는 지름길이다: 판단기 코드는 `line_stuck_decision`만 부르고 `MANUAL`을 고르지 않지만, CORE 기록의 `principal_ref`는 Fleet의 등록 토큰 id가 된다. 기본은 빈 목록이고, 목록에 적는 것이 로봇별 승인이다. 이 개정은 `rosy_40`·`rosy_41`을 적는 것을 승인한다. 전용 최소 권한 자격은 후속이다.
+   - **같은 날 보완(실주행).** 9dfk가 릴리스 077에서 `HOLD lane_departure`(IR 가운데가 고리 바깥 선 위)로 25 s 섰다. 두 로봇이 온라인이고 둘 다 `localization`을 보고하지 않으면(LEGACY) R6가 매번 R5 `peer_unknown`이 되어 막다른 길이었다. 그래서 **`no_motion`(R6)에 한해 동료 자세를 모르는 것은 막지 않는다.** 뒤 여유·사각·지나온 길은 후진 전과 중에 CORE D-407 §4 몸 재검사가 판정한다(LiDAR가 뒤의 로봇 몸을 본다). 신뢰 지도 자세로 뒤에 동료가 보이면(`peer_behind`) 여전히 R5다. 횡단보도·시도·로컬 꺼짐·자세 조건도 그대로다. `lane_lost`(R3)는 3항의 닫힌 규칙 그대로다.
+3. **남은 항목 1 닫힘.** 위 「남은 항목」 1(LEGACY odom 자세)은 이 개정과 같은 브랜치에서 닫혔다. D-573 횡단보도 관문을 켜는 릴리스와 같이 가야 한다.
+4. **AI PC.** AI 사실은 이 개정에서도 shadow다(6·7항 그대로). `rosy-situation`(구현 (c))의 분석기는 아직 비어 있어 `no_motion` 막힘에 대한 사실을 내지 않는다. 사람 단계 행에 사실을 붙이는 경로는 (c)의 `ai_facts[]` 그대로다. `ai_facts_acting`은 7항 관문(재생 평가·Gazebo·shadow 3 운행일) 전에는 켜지 않는다. 사용자 승인은 그 관문 하나를 채울 뿐이다.
 
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.

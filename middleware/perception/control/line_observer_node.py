@@ -19,7 +19,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
@@ -46,6 +46,7 @@ from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denois
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.learned.drivable_steer import DrivableSteer
+from core_common.robot_body import PINKY_PRO
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -58,6 +59,9 @@ from .sensing.perception.route_map import RouteMapFollower
 _READ_ONLY = ParameterDescriptor(read_only=True)
 #: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
+#: D-597 amendment 2: the newest drivable way steers while its frame is at most this old (odometry
+#: moves its target; one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
+DRIVABLE_WAY_MAX_AGE_S = 1.5
 
 
 COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
@@ -175,6 +179,7 @@ class LineObserverNode(Node):
         # D-597 amendment 2: with the drivable target, keep steers from the way itself.
         self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
                                 and self._paint_worker.target == 'drivable' else None)
+        self._wall_ahead = None
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -225,6 +230,8 @@ class LineObserverNode(Node):
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
+            if self._drivable_steer is not None:   # D-597 amendment 2: a wall beyond the model's view
+                self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
             self.create_subscription(
@@ -550,13 +557,16 @@ class LineObserverNode(Node):
                                     if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
-                latest = self._paint_worker.latest_way() if self._drivable_steer is not None else None
+                latest = (self._paint_worker.latest_way(DRIVABLE_WAY_MAX_AGE_S)
+                          if self._drivable_steer is not None else None)
                 if latest is not None:
                     way, way_stamp = latest
                     error, confidence, steer = self._drivable_steer.update(
                         way, way_stamp, ground, self._lane_keeper._x_offset,
                         float(self.get_parameter('lane_half_width_m').value),
-                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp))
+                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp),
+                        **({} if self._wall_ahead is None or abs(image_stamp - self._wall_ahead[1]) >= 0.5
+                           else dict(wall_ahead_m=self._wall_ahead[0], side_clear_m=self._wall_ahead[2])))
                     observation = None if error is None else LaneObservation(error=error, confidence=confidence)
                     self._lane_keeper.last.update(
                         strategy=steer['strategy'], drivable_steer=steer,
@@ -567,7 +577,13 @@ class LineObserverNode(Node):
                     self._lane_keeper.last.pop('junction_ahead_m', None)
                     paint_used = 'learned_drivable'
                 elif self._drivable_steer is not None:
+                    # No fresh way: hold. The tape keeper on the boundary strips must not steer in
+                    # between (its corners and one-sided targets fought the way, 8kcn 20261009T234748Z).
                     self._drivable_steer.lost(image_stamp)
+                    observation = None
+                    self._lane_keeper.last.update(strategy='none', reason='drivable_way_stale', error=None,
+                                                  confidence=None, target_m=None)
+                    self._lane_keeper.last.pop('junction_ahead_m', None)
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,
@@ -715,6 +731,24 @@ class LineObserverNode(Node):
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
         self._odom_history.add(self._odom_stamp, *self._odom_pose)
+
+    def _on_scan(self, msg: LaserScan) -> None:
+        """Nearest return straight ahead in the body strip (URDF body, D-424), base_link x."""
+        view = PINKY_PRO.scan_view(dict(ranges=list(msg.ranges), angle_min=msg.angle_min,
+                                        angle_increment=msg.angle_increment, range_min=msg.range_min,
+                                        range_max=msg.range_max))
+        gap = PINKY_PRO.translation_gap(view.points, pad_m=0.0)
+        # nearest wall beside the robot on each side, within 0.35 m ahead (exit sides, D-597 amendment 2)
+        # A wall, not a post: returns within 0.20 m laterally spanning >= 0.10 m along x (the signal
+        # posts at the ring entries are a few cm wide and stand beside the road, 9dfk 20261010T010701Z_rosy_41).
+        near = {'left': [], 'right': []}
+        for x, y in view.points:
+            if 0.0 <= x <= 0.35 and PINKY_PRO.half_width_m <= abs(y) <= 0.20:
+                near['left' if y > 0 else 'right'].append((x, abs(y)))
+        side = {k: (min(p[1] for p in v) if v and max(p[0] for p in v) - min(p[0] for p in v) >= 0.10 else None)
+                for k, v in near.items()}
+        self._wall_ahead = (None if gap is None else PINKY_PRO.front_x_m + gap,
+                            float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side)
 
     def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9

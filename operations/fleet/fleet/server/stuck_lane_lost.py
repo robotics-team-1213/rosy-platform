@@ -10,7 +10,7 @@ from typing import Iterable, Mapping, Optional
 from fleet.server.stuck_resolver import ResolverConfig, _map_pose, _peer_in_band
 
 
-def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[str]:
+def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = "R3") -> Optional[str]:
     """D-577 1: why R3 may not back off (the R5 reason), or None when every precondition holds.
 
     The rear clearance, blind spot and travelled path stay CORE's re-check (D-407 §4)."""
@@ -18,7 +18,7 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[
         return "local_disabled"
     if int(stuck.get("attempts") or 0) >= int(stuck.get("max_attempts") or 0):
         return "attempts"
-    if "R3" in chain.retired:
+    if rule in chain.retired:
         return "refused"
     if chain.rule_answers >= config.rule_budget:
         return "rule_budget"
@@ -37,7 +37,9 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[
                 or not 0.0 <= age <= config.pose_max_age_s):
             return "pose"
     behind = peer_behind(row, rows, config)
-    if behind is None:
+    if behind is None and rule != "R6":
+        # D-577 개정 2026-10-10: a no_motion stuck (R6) is not held for an unknown peer pose; CORE's
+        # D-407 body re-check (rear clearance, blind band, trail) before and during the back-off decides.
         return "peer_unknown"
     if behind:
         return "peer_behind"
@@ -45,11 +47,21 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[
 
 
 def peer_behind(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
-    """D-577 1: R1's band mirrored behind the robot, on trust-gated map poses (D-395) only.
+    """D-577 1: R1's band mirrored behind the robot, on trusted map poses (D-395) only.
 
-    None = an online peer exists and this robot's or a peer's pose is missing or untrusted:
-    R3 must not back off blind (safety review 2026-10-09). No online peer = False."""
+    None = an online peer exists and this robot's or a peer's pose is missing, untrusted or
+    LEGACY (no `localization`: an odom pose, not the painted map; D-577 남은 항목 1, closed
+    2026-10-10): R3 must not back off blind. No online peer = False."""
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    return _peer_in_band(row, others, config, -1.0, pose_of=_map_pose, strict=True)
+    return _peer_in_band(row, others, config, -1.0, pose_of=_trusted_map_pose, strict=True)
+
+
+def _trusted_map_pose(row: Mapping):
+    from fleet.localization.trust import LEGACY, classify
+
+    state = row.get("state")
+    if not isinstance(state, Mapping) or classify(state) == LEGACY:
+        return None
+    return _map_pose(row)

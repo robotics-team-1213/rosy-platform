@@ -257,10 +257,10 @@
           <p class="hint" id="start-point-state" role="status">시작점 상태 확인 중</p>
         </section>
         <section class="install-step" aria-labelledby="tracking-relearn-heading">
-          <h3 id="tracking-relearn-heading">빈 트랙 배경</h3>
-          <p class="hint">로봇이 배경으로 굳어 관제 카메라가 찾지 못하면, 트랙 위의 로봇과 물건을 모두 치운 뒤 배경을 다시 학습합니다. 학습한 배경은 재시작 뒤에도 씁니다.</p>
+          <h3 id="tracking-relearn-heading">트랙 배경</h3>
+          <p class="hint">로봇이 배경으로 굳어 관제 카메라가 찾지 못하면 배경을 다시 학습합니다. 로봇은 그대로 둡니다: Fleet이 위치를 아는 로봇의 자리는 배우지 않고 로봇이 비킨 뒤 채웁니다(위치를 모르면 지도에서 먼저 찍습니다). 로봇이 아닌 물건은 치웁니다. 학습한 배경은 재시작 뒤에도 씁니다.</p>
           <div data-role-lock>
-            <ui-button kind="quiet" id="tracking-relearn" type="button" hidden>배경 다시 학습</ui-button>
+            <ui-button kind="quiet" id="tracking-relearn" type="button" hidden>배경 다시 학습 (로봇 그대로)</ui-button>
             <ui-status id="tracking-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
           </div>
           <p class="hint tracking-state" id="tracking-relearn-state" role="status"></p>

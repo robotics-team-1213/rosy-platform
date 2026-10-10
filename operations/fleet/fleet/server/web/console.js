@@ -15,6 +15,7 @@ import { addressMap, movableRobots, renumberBanner } from "/console/assets/addre
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { issueDevelopmentSession } from "/console/assets/development-auth.js";
 import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
@@ -549,7 +550,9 @@ async function refreshAuthorization() {
     loginForm.refresh(false);
     render();
     // Independent panels refresh side by side; one slow source does not delay the rest.
+    // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
+      mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
       refreshDiscovery(),
@@ -697,7 +700,7 @@ pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ x: start.x, y: start.y, yaw }), signals: [owner.signal] });
       if (!owner.current() || !life.current()) return;
-      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${pose.state}`, "good");
+      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
       mapView.refreshGuide?.();
     }, onError: (err) => log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad")});
 });
@@ -923,13 +926,13 @@ async function connectionMode() {
 // request, not a loop. useToken() invalidates in-flight polls so their stale 401s are dropped.
 async function renewDevelopmentSession() {
   if (!(await connectionMode())) return;
-  let session;
+  let token;
   try {
-    session = await fleetClient("/api/fleet/auth/development-session", { method: "POST" });
+    token = await issueDevelopmentSession(fleetClient);  // at most one per minute per page
   } catch (_err) {
     return;
   }
-  useToken(session.token);
+  if (token) useToken(token);
 }
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
@@ -968,7 +971,6 @@ pageScope.onResume(() => {
   visionView.reset();
   trackingView.reset();
   trackingView.refresh();
-  refreshAuthorization();
+  refreshAuthorization();  // refreshes the map once the session answers
   visionView.refreshSources();
-  mapView.refresh();
 });

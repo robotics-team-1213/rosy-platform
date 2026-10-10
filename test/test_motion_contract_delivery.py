@@ -28,6 +28,8 @@ def test_core_final_image_carries_contracts_in_the_copied_install_tree_and_probe
 
 
 def test_both_arm64_builders_install_offline_wheel_build_prerequisites():
-    for workflow in ("build-native-payload.yml", "build-pinky-image.yml"):
-        source = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+    # D-553 addendum 3: the payload job's prerequisites live in the payload-builder image script.
+    for source_path in (".github/workflows/build-pinky-image.yml",
+                        "deploy/robot/pinky_pro/image/payload-builder/install-ros-build-prereqs.sh"):
+        source = (ROOT / source_path).read_text(encoding="utf-8")
         assert "python3-pip python3-setuptools python3-wheel" in source

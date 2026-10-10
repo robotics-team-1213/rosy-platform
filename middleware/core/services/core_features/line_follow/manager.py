@@ -402,7 +402,9 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         angular = max(-self._config.max_angular,
                       min(self._config.max_angular, -self._config.steering_gain * error))
         reason = "tracking"
-        if guard in ("left", "right"):
+        if guard in ("left", "right") and linear < self._config.ir_guard_min_linear:
+            pass  # D-344 §12 개정: turning in place (camera linear < ir_guard_min_linear), the camera turn stands
+        elif guard in ("left", "right"):
             # 경계선이 왼쪽 IR 밑이면 오른쪽(음의 각속도, REP-103)으로 비킨다.
             turn = min(self._config.ir_guard_turn, self._config.max_angular)
             angular = -turn if guard == "left" else turn
@@ -466,6 +468,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
                 self._feed_return_trail(current)
                 if decision is self._arc_out:  # D-520: the arc owns this tick (no D-468/D-476/D-407,
+                    self._still_since = None
                     # no junction gate); D-517 4 and D-573 only ever lower it
                     return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
@@ -476,6 +479,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                     return self._crosswalk_gate(current, self._authority_gate(
                         current, self._junction_gate(current, decision)))
                 local = self._apply_lane_return(current, decision)
+                if local is not None:
+                    self._still_since = None  # D-468 owns the tick: no_motion restarts
                 return self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
                     current, local if local is not None else self._apply_recovery(current, decision))))
             finally:
@@ -548,7 +553,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
             if guard == "stale":
                 return self._stop_decision("HOLD", "lane_guard_stale")
-            if guard == "centre":
+            if guard == "centre" and not self._camera_turning_in_place(cap):
+                # D-344 §12 개정: a camera turn in place sweeps the IR row ~0.03 m; it does not cross.
                 return self._stop_decision("HOLD", "lane_departure")
         if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
@@ -652,6 +658,14 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         except Exception:  # noqa: BLE001 — 읽을 수 없으면 계단을 모른다: 멈춘다
             return True
         return not _finite(ceiling) or float(ceiling) < floor - 1e-9
+
+    def _camera_turning_in_place(self, cap: float) -> bool:
+        """D-344 §12 개정: the fresh camera command turns with linear under ir_guard_min_linear."""
+        observation = self._observation
+        if (self._config.ir_guard_min_linear <= 0.0 or observation is None or not observation.visible
+                or observation.error is None or observation.confidence < self._config.min_confidence):
+            return False
+        return self._steer(observation, None, cap)[0] < self._config.ir_guard_min_linear
 
     def _ir_guard(self, now: float) -> str:
         """stale | clear | left | right | centre — IR 이 본 경계선 위치."""

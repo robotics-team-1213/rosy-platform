@@ -90,3 +90,7 @@
 - 결정 1의 "main push만으로는 후보나 릴리스가 생기지 않는다"를 D-441이 바꾼다. 후보 이미지·묶음에 들어가는 경로나 workflow를 건드린 main push가 후보를 만든다. push에서 같은 태그의 릴리스가 이미 있으면 사전 job이 빌드 없이 성공한다. dispatch는 그대로 바로 실패한다. 새 push는 옛 push의 빌드 job만 취소하고, 릴리스 job은 취소하지 않는 한 그룹에서 줄을 선다.
 - 결정 4의 운영자 절차(기대 해시 옮기기, `gh attestation verify`, 서명, 업로드)는 서명 PC의 `auto_sign_candidates.py`가 같은 순서로 한다. 기대 해시는 출처 증명이 보고하는 `release.json` subject digest이고, 받은 바이트와 같아야 한다. 커밋이 main에 있고 태그가 `site-<커밋 12자리>`일 때만 기존 `sign_manifest_only`로 서명한다. 키는 그 PC에만 있다.
 - 사이트 호스트는 `rosy_site_autoupdate.py`(검증기 옆에 설치)로 서명된 최신 후보를 받아 같은 검증(서명 → 해시 → load → 이미지 ID)을 거친 뒤 전환하고, 건강 확인에 실패하면 되돌린다.
+
+### Addendum (2026-10-10, D-553 addendum 3)
+
+페이로드 빌드는 digest로 고정한 ARM64 빌더 이미지(`build-payload-builder.yml`, 같은 D-482 스냅샷 입력의 캐시) 안에서 돌고, 어느 브랜치에서든 dispatch할 수 있다. 서명은 여전히 운영 PC에서만 한다. 빌더 job만 `packages: write`를 job 토큰으로 갖는다. 근거와 조건은 [D-553](D-553-cd-speed-parallel-build-and-test-pcs.md) Addendum 3에 있다.

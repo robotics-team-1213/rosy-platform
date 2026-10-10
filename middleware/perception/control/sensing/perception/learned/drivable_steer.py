@@ -36,13 +36,25 @@ CORRIDOR_HALF_M = 0.03
 CORRIDOR_FILL = 0.8
 PIVOT_AHEAD_M = 0.14
 PIVOT_RELEASE_M = 0.22
+#: a latched turn side is released when the way runs this far straight ahead again
+TURN_RELEASE_M = 0.30
 PIVOT_ERROR = 0.5
 PIVOT_CONFIDENCE = 0.37
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
-EXIT_TIE_M = 0.03
+EXIT_TIE_M = 0.10
+#: a side whose LiDAR shows a wall nearer than this (lateral, within 0.35 m ahead) is no exit
+SIDE_WALL_M = 0.20
+#: the way's nearest row may start at most this far beyond the frame's bottom row
+NEAR_GAP_M = 0.04
+#: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
+WALL_STANDOFF_M = 0.08
+#: an opening seen this far back (odometry travel) still names the side to turn at a closed way
+EXIT_MEMORY_M = 0.5
+#: a side opening counts as an exit only once its near end is within this of the nearest way row
+EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -71,6 +83,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={})
     if not rows.size:
         return out
+    # The way must start under the robot: floor that begins only beyond a gap is past a line
+    # (9dfk 20261010T002541Z pivoted on the ring's island line, then drove into the island).
+    if float(_row_x([rows.max()], ground, x_offset)[0]) > float(_row_x([height - 1], ground, x_offset)[0]) + NEAR_GAP_M:
+        out["reason"] = "way_beyond_line"
+        return out
     first = np.argmax(way[rows], axis=1)
     last = width - 1 - np.argmax(way[rows, ::-1], axis=1)
     xs = _row_x(rows, ground, x_offset)
@@ -96,10 +113,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     # The side whose open border reaches farther wins (a wall corner leaves the floor on the border
     # only near the robot); within EXIT_TIE_M of each other, keep right (D-384 2).
     above = xs > float(xs.min()) + 0.04
-    reach = {}
+    reach, near_ok = {}, {}
     for side, edge in (("left", open_left), ("right", open_right)):
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
+            near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
             far = int(np.argmax(np.where(hit, xs, -np.inf)))
             reach[side] = float(xs[far])
             # the point to arc toward: where the way leaves the view on that side, farthest out
@@ -109,6 +127,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = "left" if reach["left"] > reach["right"] + EXIT_TIE_M else "right"
     elif reach:
         out["exit"] = next(iter(reach))
+    # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
+    # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
+    out["seen_exit"] = out["exit"]
+    if out["exit"] is not None and not near_ok[out["exit"]]:
+        out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     pursuit = min(lookahead, float(xs.max()))
     band = np.abs(xs - pursuit) <= ROW_BAND_M
@@ -140,10 +163,12 @@ class DrivableSteer:
         self._target = None
         self._pivot = None
         self._smoothed = None
+        self._side = None
+        self._memory = None
         self._lost_since = None
 
     def reset(self):
-        self._key = self._target = self._pivot = self._smoothed = None
+        self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
         self._lost_since = None
 
     def lost(self, stamp):
@@ -153,13 +178,46 @@ class DrivableSteer:
         elif stamp - self._lost_since > FORGET_S:
             self.reset()
 
-    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None):
-        """(error, confidence, debug) or (None, None, debug) for no target."""
+    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
+               wall_ahead_m=None, side_clear_m=None):
+        """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
+        of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
+        model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
         self._lost_since = None
         if way_key != self._key:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
         info = dict(self._target)
+        if wall_ahead_m is not None and info["target_m"] is not None:
+            info["wall_ahead_m"] = round(wall_ahead_m, 3)
+            info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
+        if side_clear_m:
+            # A wall beside the robot is no road (the floor between a wall corner and the tape reads as
+            # an opening); keep right only between real openings (D-384 2).
+            open_sides = [k for k in info["exit_reach_m"] if side_clear_m.get(k) is None or side_clear_m[k] >= SIDE_WALL_M]
+            for key in ("exit", "seen_exit"):
+                if info.get(key) is not None and info[key] not in open_sides:
+                    info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
+            info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
+        # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
+        # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
+        if info.get("seen_exit") is not None:
+            self._memory = (info["seen_exit"], current_pose)
+        elif self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
+                current_pose[0] - self._memory[1][0], current_pose[1] - self._memory[1][1]) > EXIT_MEMORY_M:
+            self._memory = None
+        if side is None and ahead < PIVOT_AHEAD_M and self._memory is not None:
+            side = info["exit"] = self._memory[0]
+            info["exit_from_memory"] = True
+        # The side chosen at a closing bend or junction is kept until the way runs ahead again
+        # (9dfk 20261010T001349Z weaved right/left at the ring's SE exit when the exit tie flipped).
+        if self._side is not None and ahead >= TURN_RELEASE_M:
+            self._side = None
+        if self._side is None and ahead < LOOKAHEAD_M and side is not None:
+            self._side = side
+        if self._side is not None and self._side in info["exit_point_m"]:
+            side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
         if self._pivot is None and ahead < PIVOT_AHEAD_M and side is not None:
@@ -170,7 +228,7 @@ class DrivableSteer:
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_pivot_{self._pivot}")
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
-            return None, None, dict(info, strategy="none", reason="drivable_closed")
+            return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
         strategy, target = "drivable_centre", info["target_m"]
         if ahead < LOOKAHEAD_M and side is not None:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit

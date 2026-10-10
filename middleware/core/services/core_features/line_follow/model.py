@@ -129,6 +129,10 @@ class LineFollowConfig:
     ir_guard_edge_error: float = 0.3
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
+    # D-344 §12 개정(2026-10-10): 카메라 명령의 선속도가 이보다 작으면(제자리·급회전, D-597 개정 2)
+    # 한쪽 IR 경계 비키기를 하지 않는다. 제자리 회전은 몸을 옆으로 옮기지 못해 비키기가 회전과 싸우기만
+    # 한다(과속방지턱 위 9dfk). 가운데 이탈 정지는 그대로다. 0 이면 끈다.
+    ir_guard_min_linear: float = 0.0
     # D-491: 감시가 쉬어도 되는 알려진 횡단보도 구간. ir_row_x_m 은 IR 센서 줄의 x(URDF ir_*_link,
     # base_footprint 앞)이고 없으면 쉬지 않는다. 구간 길이 상한과, 영상 시각부터 움직인 odom 거리에
     # 대한 오차 비율(여유 = 투영 불확실도 + 비율 × 이동 거리). 둘 다 실측 뒤 다시 정한다.
@@ -165,6 +169,9 @@ class LineFollowConfig:
     # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-495부터 켜짐이다.
     recovery_local_enabled: bool = False
     recovery_ask_s: float = 15.0
+    # 2026-10-10 사용자: 활성 차선 주행에서 명령이 이만큼 0 이면 원인과 무관하게 막힘을 열어 Fleet 에
+    # 묻는다(원인 no_motion, 상세 = HOLD 사유). 0 = 끔. 로컬 후진 대체 없음: Fleet 답 또는 사람만.
+    stuck_report_s: float = 5.0
     recovery_back_m: float = 0.08
     recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
@@ -319,6 +326,8 @@ class LineFollowConfig:
             raise ValueError("IR guard edge error must be in (0, 1) and turn positive")
         if not 0.0 <= self.ir_guard_speed_scale <= 1.0:
             raise ValueError("ir_guard_speed_scale must be in [0, 1]")
+        if not 0.0 <= self.ir_guard_min_linear < 1.0:
+            raise ValueError("ir_guard_min_linear must be in [0, 1)")
         if self.ir_row_x_m is not None and not (_finite(self.ir_row_x_m) and abs(self.ir_row_x_m) <= 0.2):
             raise ValueError("ir_row_x_m must be a finite base_footprint x within 0.2 m")
         if not (_finite(self.crosswalk_zone_max_m) and 0.0 < self.crosswalk_zone_max_m <= 0.5):
@@ -342,6 +351,8 @@ class LineFollowConfig:
                   self.recovery_trail_max_age_s)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
+        if not _finite(self.stuck_report_s) or not 0.0 <= self.stuck_report_s <= 60.0:
+            raise ValueError("stuck_report_s must be in [0, 60] (0 = off)")
         if not _finite(self.recovery_console_grace_s) or not 0.0 <= self.recovery_console_grace_s <= 10.0:
             raise ValueError("recovery_console_grace_s must be in [0, 10]")
         if self.recovery_trail_max_age_s > 300.0:
