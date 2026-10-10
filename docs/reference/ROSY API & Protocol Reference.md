@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.188
+**Version:** v1.190
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2650,6 +2650,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.190 | 2026-10-10 | Additive (D-511 개정 1, feat/core-fleet-lane-cue, Safety-Review 대상): `POST /api/v1/line-follow/lane-cue`(operator) — Fleet의 차로 복귀 신호 `LaneCueRequest` `{cue_id, fleet_epoch, seq, ttl_s (0 < s ≤ 2), state: ON_LANE|ON_LINE|OFF_LANE|OFF_MAP|WRONG_WAY, side?, bearing_deg?, turn_deg?, lane_heading_deg?, offset_m?, edge_id?, crosswalk_ahead?: {id, distance_m, length_m}}`, 응답 `{accepted, reason}`(`disabled`|`stale`). 설정 `line_follow.fleet_lane_cue_enabled`(기본 false, Pinky true). CAMERA_LINE 주행 중에만 읽는다: ON_LINE/OFF_LANE은 IR이 선을 못 볼 때 IR 가장자리 가지로 차로 가운데 쪽 조향, OFF_LANE에서 재진입점이 45° 넘게 옆이면 제자리 회전, WRONG_WAY는 `turn_deg`가 30° 안이 될 때까지 제자리 회전(없으면 HOLD `fleet_wrong_way`), OFF_MAP은 HOLD `fleet_off_map`, `crosswalk_ahead`는 D-573 게이트의 구역 하나. IR·몸체 정지·D-573 게이트·D-517 권한이 이긴다. `GET /line-follow` `lane_cue`(만료 전만). 공유 schema `core_common.protocol.lane_cue` |
 | v1.188 | 2026-10-10 | Additive (D-577 개정 2026-10-10 AI PC 판단, feat/ai-pc-judge): 새 `POST /api/fleet/ai/proposals`(`ai_observer`; 사용자 결정 "AI PC 제안 → Fleet 검증 후 실행": Fleet이 봉투를 검증해 CORE에 결정으로 보내거나 규칙으로 되돌아감, `fleet_ai_proposals` 감사, `GET /api/fleet/ai` `proposals[]`). AI 사실 종류 `rear_blocked`·`path_blocked_by_robot`(분석기 `analyzer:stuck_scene@1`). 현장 설정 `fleet.stuck_resolver.ai_facts_acting`(로봇 id 목록, 기본 빈 목록)의 로봇에서 이 두 종류는 `stage: acting`이 되고, 살아 있는 동안 판단기의 후진 답(R2·R3·R6)을 R5 `WAIT` + 사람(`<cause>_hold:ai:<kind>`)으로 바꾼다. 다른 답은 만들지 않는다. 로봇 API 변경 없음. |
 | v1.187 | 2026-10-10 | Behavioural + Additive (D-407·D-577 개정 2026-10-10, feat/stuck-5s-fleet-ai): CORE 설정 `line_follow.stuck_report_s`(기본 5.0, 0 = 끔, [0, 60]). 활성 차선 모드에서 결정이 그 시간 동안 0 이고 다른 막힘 원인이 없으면 막힘 `cause: no_motion`·`detail` = HOLD 사유를 열고 로컬 후진 없이 관제 답만 기다린다(`nav.line_stuck_asked` `reason: no_motion`). Fleet 판단기: `no_motion` 에 R6 `BACK_AND_RETRY`(R3 조건) 또는 R5 `WAIT` + 사람(`no_motion_hold:<이유>`); R3/R6 뒤 띠는 LEGACY odom 자세를 받지 않는다(`peer_unknown`); 현장 설정 `fleet.stuck_resolver.enrolled_robots`. 콘솔 원인 표시 `no_motion`. envelope 1.0 변경 없음 |
 | v1.186 | 2026-10-10 | Additive (D-600, feat/background-relearn-with-robots): `GET /api/fleet/detections/config` `occupied`, `OverheadDetectionsPayload.unknown_floor`(선택, `OK`만), `GET /api/fleet/tracking` source `unknown_floor`, `POST /api/fleet/tracking/relearn` 응답 `occupied`·`unlocated`. Robot API와 envelope 1.0 변경 없음 |
