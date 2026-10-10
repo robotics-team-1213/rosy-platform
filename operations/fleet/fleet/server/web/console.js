@@ -211,7 +211,7 @@ function incidentReviewForm(report, path) {
   const form = document.createElement("form");
   const select = document.createElement("select");
   select.className = "ui-field";
-  select.setAttribute("aria-label", `${report.robot_ids.join(", ")} 원인 분류`);
+  select.setAttribute("aria-label", `${report.robot_ids.map(incidentRobotName).join(", ")} 원인 분류`);
   for (const [value, label] of Object.entries(INCIDENT_CAUSES)) {
     const option = document.createElement("option");
     option.value = value;
@@ -223,7 +223,7 @@ function incidentReviewForm(report, path) {
   note.className = "ui-field";
   note.maxLength = 1000;
   note.placeholder = "판단 근거 또는 수정 내용";
-  note.setAttribute("aria-label", `${report.robot_ids.join(", ")} 검토 메모`);
+  note.setAttribute("aria-label", `${report.robot_ids.map(incidentRobotName).join(", ")} 검토 메모`);
   const save = document.createElement("button");
   save.type = "submit";
   save.textContent = "검토 기록";
@@ -234,7 +234,7 @@ function incidentReviewForm(report, path) {
     try {
       await call(path, {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({root_cause: select.value, note: note.value})});
-      log(`${report.robot_ids.join(", ")} 사건 검토를 기록했습니다.`, "good");
+      log(`${report.robot_ids.map(incidentRobotName).join(", ")} 사건 검토를 기록했습니다.`, "good");
       await refreshIncidents();
     } catch (error) {
       log(`사건 검토 기록 실패: ${error.message}`, "bad");
@@ -243,6 +243,11 @@ function incidentReviewForm(report, path) {
   }));
   return form;
 }
+function incidentRobotName(robotId) {
+  const name = view.robotNames[robotId];
+  return name && name !== robotId ? `${name} (${robotId})` : robotId;
+}
+
 async function refreshIncidents() {
   if (auth.locked) return;
   const status = el("incident-status");
@@ -260,7 +265,7 @@ async function refreshIncidents() {
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
       const core = report.evidence.core, fleet = report.evidence.fleet;
-      summary.textContent = `${report.robot_ids.join(", ")} · ${core.cause || "원인 미확인"} · ${report.opened_at}`;
+      summary.textContent = `${report.robot_ids.map(incidentRobotName).join(", ")} · ${core.cause || "원인 미확인"} · ${report.opened_at}`;
       detail.append(summary);
       incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "진행 중"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
       incidentLine(detail, `CORE: 단계 ${core.phase_at_open || "미확인"}, 정지 ${core.held_s_max ?? "미확인"}초, 재시도 ${core.attempts_max ?? "미확인"}`);
@@ -310,7 +315,7 @@ async function refreshIncidents() {
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || report.classification;
-      summary.textContent = `${name} · ${report.robot_ids.join(", ")} · ${report.opened_at}`;
+      summary.textContent = `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")} · ${report.opened_at}`;
       detail.append(summary);
       incidentLine(detail, `AI ${ai.source} · ${ai.stage} · 신뢰도 ${Math.round(ai.confidence * 100)}%`);
       incidentLine(detail, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
@@ -615,6 +620,7 @@ async function refreshDiscovery() {
     if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
       view.robotNames = names;
       render();
+      await refreshIncidents();
     }
     const pending = snapshot.scanner_online
       ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
