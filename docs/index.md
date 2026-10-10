@@ -210,6 +210,7 @@
 | D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
 | D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
 
 ## 계획·결과 문서
 
@@ -290,6 +291,7 @@
 - [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 
@@ -306,8 +308,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
 - 2026-10-11 · 179738b17 · docs: 최대 5단계 구조안 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: 도메인 개요 3단계·내부 책임 최대 5단계 구조안
 - 2026-10-11 · be92428a1 · docs: 플랫폼·CORE 구조 계획의 원격 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
-- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
