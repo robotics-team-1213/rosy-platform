@@ -88,9 +88,10 @@ def test_render_general_grid_and_blank_stale_frames(tmp_path):
     renderer = m.Renderer(s.out)
     image = renderer.frame(1000.5)
     assert image.size == (1280, 720)
-    assert sum(r > 200 and g < 50 for r, g, b in image.getdata()) > 10000
+    assert sum(image.tobytes()[i] > 200 and image.tobytes()[i + 1] < 50 for i in range(0, len(image.tobytes()), 3)) > 10000
     stale = renderer.frame(1004.)
-    assert sum(r > 200 and g < 50 for r, g, b in stale.getdata()) == 0
+    pixels = stale.tobytes()
+    assert sum(pixels[i] > 200 and pixels[i + 1] < 50 for i in range(0, len(pixels), 3)) == 0
 
 
 def test_workers_stop_independently_after_one_source_fails(tmp_path):
@@ -121,3 +122,52 @@ def test_workers_stop_independently_after_one_source_fails(tmp_path):
     assert "secret URL" not in text
     db = sqlite3.connect(session.out / "capture.sqlite3")
     assert db.execute("select source_id from frames").fetchall() == [("good",)]
+
+
+def test_nonfinite_frame_and_tracking_do_not_poison_session(tmp_path):
+    m = module()
+    s = m.Session(tmp_path / "session", [{"id": "a", "kind": "robot"}], clock=lambda: 1000.)
+    with pytest.raises(ValueError):
+        s.frame("a", b"jpeg", {"seq": 1, "captured_at": float("nan"), "received_at": 1000.,
+                               "timeline_at": 1000., "clock": "receipt"})
+    assert s.by_id["a"]["latest"] is None
+    with pytest.raises(ValueError):
+        s.positions({"ts": float("nan"), "robots": []})
+    assert s.position is None
+    s.frame("a", b"jpeg", {"seq": 1, "captured_at": 1000., "received_at": 1000.,
+                           "timeline_at": 1000., "clock": "source_utc"})
+    s.finish()
+
+
+def test_relative_session_and_large_robot_count(tmp_path, monkeypatch):
+    m = module()
+    monkeypatch.chdir(tmp_path)
+    sources = [{"id": f"robot_{i}", "kind": "robot"} for i in range(20)]
+    s = m.Session("session", sources, clock=lambda: 1000.)
+    s.finish()
+    renderer = m.Renderer("session")
+    assert renderer.frame(1000.).height > 720
+
+
+def test_wall_rejects_rebound_hosts(tmp_path):
+    m = module()
+    import functools
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+    (tmp_path / "session.json").write_text('{"safe":true}')
+    server = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(m.LocalWall, directory=str(tmp_path)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port)
+        conn.request("GET", "/session.json", headers={"Host": "attacker.example"})
+        r = conn.getresponse()
+        assert r.status == 403
+        r.read()
+        conn.request("GET", "/session.json")
+        r = conn.getresponse()
+        assert r.status == 200 and json.loads(r.read())["safe"]
+        conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
