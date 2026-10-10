@@ -600,7 +600,7 @@
 - 증거: 원격 회귀시험에서 선택 함수 부재를 재현했다. 수정 후 원격 재검증 대기.
 - gate 변화: 없음. 실기기 차체 이탈 방지 증거가 아니다.
 
-## 2026-10-10 ? uncommitted ? feat: shared situation direction (D-619)
+## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 
 - Change: Shared situation-v1 validates mobility/manipulation observations bound to caller-owned frames; model verification remains unverified.
 - Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.

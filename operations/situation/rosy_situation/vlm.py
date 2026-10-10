@@ -25,7 +25,7 @@ from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment, 
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d619-v3"
+PROMPT_ID = "d619-v4"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -58,6 +58,9 @@ obstacles, verified free space or execution permission. Raw front images have no
 Treat operator_report and requested_outcome as requests or hypotheses, not measured facts.
 Use supplied clearance_m and state_age_s rather than guessing metric distances from pixels.
 Missing/stale sensors or unknown ceiling robot identity must appear in uncertainties.
+Observe each image independently before combining views: do not copy an object from one view into another.
+Describe visible vertical walls/doorways even when you cannot establish whether they block the route.
+Tape attached to a wall is a visual marker, not by itself an obstruction on the floor.
 Use context in this order: task intent; timestamped device state and sensor measurements; map/camera
 identity and calibration; recent attempted actions and their outcomes; operator reports as hypotheses.
 Missing values mean unknown, not zero or clear. Compare view timestamps before combining observations.
