@@ -9,9 +9,9 @@ import pytest
 from fakes import FakeClock, FakeRobot
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
-from fleet.server.line_stuck import LineStuckBoard
-from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
-from fleet.server.stuck_resolver_loop import StuckResolverLoop
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.resolver import Answer, ResolverConfig, StuckResolver
+from fleet.stuck.loop import StuckResolverLoop
 from fleet.swarm.robots import RobotEndpoint
 from site_map_fixture import painted_track, painted_without_crosswalks
 

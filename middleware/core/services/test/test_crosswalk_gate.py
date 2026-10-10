@@ -539,14 +539,6 @@ def test_the_gate_needs_the_d422_path_mode():
         LineFollowConfig(**BODY, crosswalk_gate_enabled=True, obstacle_mode="sector")
 
 
-def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
-    """Fleet's hub re-parses the robot snapshot: null (gate on, outside a zone) must stay, absent stays absent."""
-    from core_common.protocol.schemas import LineFollowStatus
-
-    assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
-    assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
-
-
 # ---- D-573 rev 3 (2026-10-10 user): 5 s of continuous clear, then cross ----------------------------
 def _go_after(s, seconds):
     return next((t for t, d in s.run(seconds) if d.linear > 0), None)
@@ -605,3 +597,11 @@ def test_clear_window_defaults_and_report_ordering():
     assert c.crosswalk_report_s > c.crosswalk_clear_s
     with pytest.raises(ValueError):
         LineFollowConfig(crosswalk_clear_s=10.0, crosswalk_report_s=10.0)
+
+
+def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
+    """Fleet's hub re-parses the robot snapshot: null (gate on, outside a zone) must stay, absent stays absent."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
+    assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
