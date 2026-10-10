@@ -22,7 +22,7 @@ from typing import Any, Callable, Literal, Optional
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from .sqlite_policy import configure_connection
+from fleet.server.sqlite_policy import configure_connection
 
 COMMAND_WORDS = frozenset({"WAIT", "RESUME", "BACK_AND_RETRY", "YIELD", "ABORT", "MANUAL", "STOP", "GO"})
 FACT_KINDS = ("wait_cycle_confirmed", "wait_cycle_stale_input", "waiting_but_moving", "livelock", "stalled",

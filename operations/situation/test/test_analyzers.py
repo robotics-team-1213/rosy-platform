@@ -60,7 +60,7 @@ def test_stalled_reports_an_unreported_hold_after_20_s():
 
 
 def test_facts_pass_fleet_validation():
-    from fleet.server.ai_facts import AiFact
+    from fleet.stuck.ai_facts import AiFact
 
     a = Analyzer()
     stuck = {"robot_id": "r", "stuck_id": "s1", "rear_state": "blocked", "rear_clearance_m": 0.04}
@@ -82,7 +82,7 @@ def test_one_proposal_per_stuck_wait_when_the_rear_is_blocked():
 
 
 def test_proposals_pass_fleet_validation():
-    from fleet.server.ai_facts import AiProposal
+    from fleet.stuck.ai_facts import AiProposal
 
     a = Analyzer()
     a(_snap(1000.0, [_row("r")], [{"robot_id": "r", "stuck_id": "s1", "cause": "lane_lost"}]))

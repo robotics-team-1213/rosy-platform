@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional
 
-from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
+from fleet.stuck.resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
 from fleet.site_map import _inside, _point_segment
 
 #: D-573 1 / D-577 1: R3 holds within this of a site-map crosswalk. Robot URDF rear 0.076 m + the
@@ -69,10 +69,22 @@ def peer_behind(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -
     None = an online peer exists and this robot's or a peer's pose is missing, untrusted or
     LEGACY (no `localization`: an odom pose, not the painted map; D-577 남은 항목 1, closed
     2026-10-10): R3 must not back off blind. No online peer = False."""
+    return _trusted_band(row, rows, config, -1.0)
+
+
+def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
+    """R1's judgement: an online peer inside the front band, on trusted map poses (D-395) only.
+
+    None as in `peer_behind` (D-577 남은 항목 4: R1 compared LEGACY odom poses). Shared with the
+    Fleet stuck-episode log, so the recorded value is what R1 would see."""
+    return _trusted_band(row, rows, config, 1.0)
+
+
+def _trusted_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig, sign: float) -> Optional[bool]:
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    return _peer_in_band(row, others, config, -1.0, pose_of=_trusted_map_pose, strict=True)
+    return _peer_in_band(row, others, config, sign, pose_of=_trusted_map_pose, strict=True)
 
 
 def _trusted_map_pose(row: Mapping):
