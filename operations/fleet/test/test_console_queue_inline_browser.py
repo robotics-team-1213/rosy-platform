@@ -93,13 +93,16 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
                                         "confidence": 0.7, "value": {"fleet_agrees": False},
                                         "evidence": {"fleet_wait_cycle": None}}},
                "actions": [], "reviews": []}
-    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic]}}
+    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic]},
+           "/api/fleet/enrollment/robots": {"robots": [{"robot_id": "rosy_01", "hostname": "rosy-pinky-demo"}]},
+           "/api/fleet/discovery": {"scanner_online": True, "devices": []}}
     answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True}),
                "/api/fleet/incidents/facts/17/review": (200, {"reviewed": True})}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, answers)
         item = page.locator("#incident-list li")
         expect(item).to_have_count(1)
+        expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
         item.locator("summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
         expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
