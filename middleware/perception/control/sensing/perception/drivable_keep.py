@@ -23,19 +23,24 @@ WALL_MAX_AGE_S = 0.5
 
 #: A route guide older than this (by the camera stamp) is not used.
 GUIDE_MAX_AGE_S = 3.0   # the guide prior carries gaps up to 3 s (architect 2026-10-10)
+#: Map distance from the route centre line beyond which keep refuses to drive on (lane half 0.0925 +
+#: ~0.03 localisation): g7/g8-9dfk followed carpet 0.18-0.26 m off map v5 into the NW wall.
+OFF_ROUTE_HOLD_M = 0.12
 
 
 def parse_guide(raw, now):
-    """(heading_ahead_deg, stamp, pivot_ok, heading_here_deg) from a line/lane_guide JSON {heading_ahead_deg, stamp,
-    pivot_ok (the body's sweep circle fits here per the map; default true)}, or None."""
+    """(heading_ahead_deg, stamp, pivot_ok, heading_here_deg, off_route_m) from a line/lane_guide JSON
+    {heading_ahead_deg, stamp, pivot_ok (the body's sweep circle fits here per the map; default true),
+    heading_here_deg, off_route_m (map distance to the route centre line; optional)}, or None."""
     import json, math
     try:
         data = json.loads(raw)
         deg, stamp, ok = float(data["heading_ahead_deg"]), float(data.get("stamp", now)), data.get("pivot_ok", True) is not False
         here = float(data.get("heading_here_deg", deg))
+        off = None if data.get("off_route_m") is None else float(data["off_route_m"])
     except (ValueError, TypeError, KeyError):
         return None
-    return (deg, stamp, ok, here) if math.isfinite(deg) and math.isfinite(here) and abs(deg) <= 180.0 else None
+    return (deg, stamp, ok, here, off) if math.isfinite(deg) and math.isfinite(here) and abs(deg) <= 180.0 else None
 
 
 def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall, guide=None):
@@ -50,6 +55,11 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
         if guide is not None and abs(stamp - guide[1]) < GUIDE_MAX_AGE_S:
+            if guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M:
+                # off the map's road: the camera's carpet is no lane, HOLD for Fleet (D-607 R7)
+                last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
+                            drivable_steer=dict(off_route_m=round(guide[4], 3)))
+                return None, True
             extra['guide_deg'], extra['guide_pivot_ok'], extra['guide_here_deg'] = guide[0], guide[2], guide[3]
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
                                                pose_at(way_stamp), pose_at(stamp), **extra)
