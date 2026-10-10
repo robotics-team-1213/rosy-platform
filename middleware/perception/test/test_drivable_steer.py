@@ -164,3 +164,6 @@ def test_no_turn_circle_creeps_along_the_way_then_holds():
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=170.0, guide_here_deg=170.0,
                                    guide_pivot_ok=False)[2]
     assert debug["reason"] == "wrong_way_hold", debug
+    debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=16.0, guide_here_deg=170.0,
+                                   guide_pivot_ok=False)[2]
+    assert debug.get("reason") != "wrong_way_hold", debug     # a polyline joint, the lane ahead agrees

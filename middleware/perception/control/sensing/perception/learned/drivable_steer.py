@@ -348,6 +348,9 @@ class DrivableSteer:
             bridge = abs(guide_deg) < GUIDE_STRAIGHT_DEG
             # wrong way is judged on the lane direction here, not 0.25 m ahead (a hairpin ahead is a turn)
             here = guide_deg if guide_here_deg is None else guide_here_deg
+            # ... and agreed 0.25 m ahead: g7-9dfk held 344 frames on a polyline joint (here > 90, ahead 16)
+            if abs(guide_deg) <= GUIDE_REVERSE_DEG:
+                here = guide_deg
             if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
                 # facing against the lane where the turn circle does not fit (a 0.16 m lane, not one of
                 # the ring-entry turn spots): no U-turn in the lane, HOLD for Fleet (architect 2026-10-10)
