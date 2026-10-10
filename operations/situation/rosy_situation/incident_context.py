@@ -50,8 +50,8 @@ class ContextDraft:
             sensors = {key: stuck.get(key) for key in ("front_clearance_m", "rear_state", "rear_clearance_m")
                        if stuck.get(key) is not None}
             sensors["state_age_s"] = row.get("state_age_s")
-            sensors["line_follow"] = {key: (state.get("line_follow") or {}).get(key)
-                                      for key in ("mode", "stuck")}
+            line_follow = state.get("line_follow") or {}
+            sensors["line_follow"] = {"mode": line_follow.get("mode"), "stuck": bool(line_follow.get("stuck"))}
             support.append({"source": "core_sensor", "field": "stuck_and_line_follow", "value": sensors})
             missing.append("interpreted_front_image")
             draft = CAUSE.get(cause, "unknown")
