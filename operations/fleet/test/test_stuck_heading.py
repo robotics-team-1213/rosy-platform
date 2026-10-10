@@ -3,11 +3,13 @@
 import asyncio
 import math
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from fleet.localization.map_pose import MapPose
 from fleet.stuck.heading import reassess
+from fleet.server.lane_compliance_service import LaneComplianceMonitor
 from test_stuck_resolver_loop import _setup
 
 
@@ -27,6 +29,20 @@ def test_reassessment_wraps_to_lane_direction_without_authorizing_a_turn():
     assert result == {"status": "heading_compared", "turn_deg": 20.0,
                       "pose_stamp": 99.9, "edge_id": "lower", "map_version": 5,
                       "turn_spot": False}
+
+
+def test_monitor_reassesses_against_current_active_map():
+    pose, view = _inputs()
+    maps = SimpleNamespace(active=lambda: (5, SimpleNamespace(map_id="site"), None, None))
+    monitor = LaneComplianceMonitor(lambda: ["robot"],
+                                    poses=SimpleNamespace(arbitrated_pose=lambda _rid: pose),
+                                    site_maps=maps, wall=lambda: 100.1)
+    monitor._latest["robot"] = view
+    assert monitor.stuck_heading("robot")["turn_deg"] == 20.0
+    maps.active = lambda: (6, SimpleNamespace(map_id="site"), None, None)
+    assert monitor.stuck_heading("robot") == {"status": "lane_sample_untrusted"}
+    maps.active = lambda: None
+    assert monitor.stuck_heading("robot") == {"status": "pose_untrusted"}
 
 
 @pytest.mark.parametrize("change", [

@@ -266,6 +266,15 @@ class LaneComplianceMonitor:
     def view(self, robot_id: str) -> Optional[dict]:
         return self._latest.get(robot_id)
 
+    def stuck_heading(self, robot_id: str) -> dict:
+        """D-607: reassess direction from coherent map evidence without issuing a manoeuvre."""
+        from fleet.stuck.heading import reassess
+
+        active = self._site_maps.active()
+        return reassess(self._poses.arbitrated_pose(robot_id), self.view(robot_id), now=self._wall(),
+                        map_id=active[1].map_id if active is not None else None,
+                        map_version=active[0] if active is not None else None)
+
 
 def install_lane_compliance_routes(app, *, monitor: LaneComplianceMonitor, read_guard) -> None:
     @app.get("/api/fleet/robots/{robot_id}/lane-compliance", dependencies=read_guard, tags=["fleet"])

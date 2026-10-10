@@ -35,6 +35,8 @@ class StuckResolverLoop:
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        self.heading_review: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        self._heading_notes: dict[str, tuple] = {}
         #: D-577 7: live acting AI facts about a robot (`AiFactsBoard.acting_facts`, app.py sets it).
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
         #: D-577 개정 2026-10-10: the AI PC proposal board (`AiFactsBoard`; app.py sets it). None = no AI.
@@ -55,6 +57,7 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
+        self._review_headings(robots)
         await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         actions = self._resolver.step(now, robots)
@@ -91,6 +94,25 @@ class StuckResolverLoop:
             if self.ai_board.waiting(row["robot_id"]):
                 extra["ai_wait"] = True
         return {**row, **extra} if extra else row
+
+    def _review_headings(self, robots: list[dict]) -> None:
+        active = set()
+        for row in robots:
+            robot_id = row["robot_id"]
+            stuck = ((row.get("state") or {}).get("line_follow") or {}).get("stuck") or {}
+            if not row.get("online") or not stuck.get("stuck_id"):
+                continue
+            active.add(robot_id)
+            review = self.heading_review(robot_id)
+            if review is None:
+                continue
+            turn = review.get("turn_deg")
+            key = (stuck["stuck_id"], review["status"], review.get("map_version"),
+                   review.get("edge_id"), round(turn / 5) if turn is not None else None)
+            if self._heading_notes.get(robot_id) != key:
+                self._heading_notes[robot_id] = key
+                log.info("stuck heading robot=%s stuck=%s evidence=%s", robot_id, stuck["stuck_id"], review)
+        self._heading_notes = {rid: note for rid, note in self._heading_notes.items() if rid in active}
 
     async def run(self) -> None:
         last_error = None
