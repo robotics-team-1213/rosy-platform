@@ -10,7 +10,8 @@ Between sightings the pose is the anchor composed with the rigid odom delta sinc
 States: LOCALIZED; DEGRADED when the bridge is longer than `max_dead_reckon_m` or turned more
 than `max_bridge_turn_deg`, the anchor is older than `max_anchor_age_s`, or a sighting disagreed
 with the bridged prediction by more than `max_jump_m` / `max_jump_deg` (it re-anchors and needs
-`RECOVER_AFTER` consistent sightings; so does a first anchor); UNKNOWN when never anchored or
+`RECOVER_AFTER` consistent sightings; so does a first anchor; sightings more than
+`max_anchor_age_s` apart reset that count unless odom stood still between them); UNKNOWN when never anchored or
 odom is older than `max_odom_age_s`. An odom gap longer than `max_odom_age_s`, odom resuming
 after such staleness, or a step faster than `max_speed_mps` / `max_turn_rate_dps` (a CORE
 restart resets odom to 0) drops the anchor: the pose stays UNKNOWN until the next sighting.
@@ -54,6 +55,9 @@ ODOM_BUFFER = 256
 #: Allowance on top of `max_speed_mps * dt` for odom noise before a step counts as an odom reset.
 ODOM_STEP_MARGIN_M = 0.05
 ODOM_TURN_MARGIN_RAD = 0.1
+#: Odom path / turn since the anchor at or below which the robot stood still (odom jitter).
+STILL_PATH_M = 0.02
+STILL_TURN_RAD = math.radians(2.0)
 #: Sightings waiting for odom per robot (3.2 s at 10 Hz); the oldest goes first when full.
 PENDING_SIGHTINGS = 32
 
@@ -417,9 +421,14 @@ class MapPoseTracker:
             predicted = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))
             jumped = (math.dist(predicted[:2], seen[:2]) > cfg.max_jump_m
                       or abs(_wrap(predicted[2] - seen[2])) > math.radians(cfg.max_jump_deg))
-            stretched = (odom.path_m - anchor.odom.path_m > cfg.max_dead_reckon_m
-                         or odom.turn_rad - anchor.odom.turn_rad > math.radians(cfg.max_bridge_turn_deg)
-                         or sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s)
+            path = odom.path_m - anchor.odom.path_m
+            turn = odom.turn_rad - anchor.odom.turn_rad
+            # A robot that stood still since the anchor has no odom drift to bound: two agreeing
+            # sightings any time apart re-localize it (site 2026-10-10: rosy_40 parked, marker read
+            # 1 frame in 8, never LOCALIZED again). Same odom epoch is implied: a reset drops the anchor.
+            still = path <= STILL_PATH_M and turn <= STILL_TURN_RAD
+            stretched = (path > cfg.max_dead_reckon_m or turn > math.radians(cfg.max_bridge_turn_deg)
+                         or (sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s and not still))
             if jumped:
                 self._degraded, self._consistent = True, 0
             else:

@@ -25,7 +25,8 @@ from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
-from fleet.routing.execute import plan_body
+from fleet.routing.execute import arc_id, plan_body
+from fleet.server.trip_admission import start_check
 from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
 from fleet.swarm.transport import RobotApiError
 
@@ -157,6 +158,14 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         body = plan_body(plan)
+        if any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in body["segments"]):
+            try:  # D-601 B: no lane trip for a robot whose line camera is not live
+                await runner.camera_check(robot_id)
+            except TripError as exc:
+                record({"error": exc.code, "detail": exc.detail})
+                raise _refuse(exc.code, exc.detail) from exc
+        # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
+        body["start_check"] = start_check(active[2], body["segments"], *pose, runner.config.start_heading_tol_deg)
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
         return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}

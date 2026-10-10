@@ -801,7 +801,7 @@ def test_two_parallel_challenges_are_each_answered_and_hold_the_background(make_
         asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
     assert sorted(body["request_id"] for body in client.identity) == ["req-a", "req-b"]
     assert set(detector.holds) == {105.0}
-    assert all(body["processor_revision"] == "led-identity/2" for body in client.identity)
+    assert all(body["processor_revision"] == "led-identity/3" for body in client.identity)
 
 
 def test_no_tune_step_is_judged_while_an_led_identify_window_is_open():
