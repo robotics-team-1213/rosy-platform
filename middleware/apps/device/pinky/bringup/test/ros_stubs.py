@@ -152,6 +152,12 @@ def install(monkeypatch, world: World) -> None:
 
 def install_sdk(monkeypatch, world: World, module) -> None:
     events = world.sdk_events
+    # Motor model: torque per id, latched hardware error, position that follows
+    # the last goal unless the motor is stalled (hardware error or torque off).
+    world.hw_error = {}
+    world.torque = {}
+    world.position = {}
+    world.stall_on_goal = set()
 
     class Port:
         def __init__(self, device):
@@ -174,10 +180,23 @@ def install_sdk(monkeypatch, world: World, module) -> None:
 
         def reboot(self, _port, motor_id):
             events.append(("reboot", motor_id))
+            world.hw_error[motor_id] = 0
+            world.torque[motor_id] = 0
             return 0, 0
+
+        def read1ByteTxRx(self, _port, motor_id, address):
+            events.append(("read1", motor_id, address))
+            value = world.hw_error.get(motor_id, 0) if address == 70 else world.torque.get(motor_id, 0)
+            return value, 0, 0x80 if world.hw_error.get(motor_id) else 0
+
+        def read2ByteTxRx(self, _port, motor_id, address):
+            events.append(("read2", motor_id, address))
+            return 40, 0, 0
 
         def write1ByteTxRx(self, _port, motor_id, address, value):
             events.append(("write1", motor_id, address, value))
+            if address == 64:
+                world.torque[motor_id] = value
             return 0, 0
 
         def write4ByteTxRx(self, _port, motor_id, address, value):
@@ -186,7 +205,8 @@ def install_sdk(monkeypatch, world: World, module) -> None:
 
         def read4ByteTxRx(self, _port, motor_id, address):
             events.append(("read4", motor_id, address))
-            return 0, 0, 0
+            value = world.position.get(motor_id, 1000 * motor_id) if address == 132 else 0
+            return value, 0, 0
 
     class SyncWrite:
         def __init__(self, *_args):
@@ -201,6 +221,10 @@ def install_sdk(monkeypatch, world: World, module) -> None:
 
         def txPacket(self):
             events.append(("goal", tuple(self.params)))
+            for motor_id, param in self.params:
+                moving = any(param) and world.torque.get(motor_id) and not world.hw_error.get(motor_id)
+                if moving and motor_id not in world.stall_on_goal:
+                    world.position[motor_id] = world.position.get(motor_id, 1000 * motor_id) + 100
             return 0
 
     class BulkRead:
@@ -221,7 +245,7 @@ def install_sdk(monkeypatch, world: World, module) -> None:
             return True
 
         def getData(self, motor_id, address, _length):
-            return 0 if address == 128 else 1000 * motor_id
+            return 0 if address == 128 else world.position.get(motor_id, 1000 * motor_id)
 
     module("dynamixel_sdk", COMM_SUCCESS=0, PortHandler=Port, PacketHandler=Packet,
            GroupSyncWrite=SyncWrite, GroupBulkRead=BulkRead,

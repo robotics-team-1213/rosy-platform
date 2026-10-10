@@ -211,6 +211,24 @@ class Rosy(Node):
                     'cmd_vel is not subscribed, motor/ready stays false.'
                 )
 
+            self.get_logger().info('3b. Verifying motor health and torque...')
+            faults = self.driver.verify_motors(self.drive_enabled, self.drive_enabled)
+            if faults:
+                self.get_logger().warn(
+                    'Motor check failed, rebooting motors once: ' + '; '.join(faults))
+                if not self.driver.initialize_motors(
+                    profile_accel=self.motor_profile_acceleration,
+                    enable_torque=self.drive_enabled,
+                ):
+                    faults.append('re-initialization after reboot failed')
+                else:
+                    time.sleep(1.0)
+                    faults = self.driver.verify_motors(self.drive_enabled, self.drive_enabled)
+            if faults:
+                message = 'motor start verification failed: ' + '; '.join(faults)
+                self.get_logger().error(message + '. Exiting non-zero for systemd restart.')
+                raise RuntimeError(message)
+
             self.get_logger().info('4. Reading initial encoder values...')
             _, _, self.last_encoder_l, self.last_encoder_r = self.driver.get_feedback()
             if self.last_encoder_l is None:

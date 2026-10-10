@@ -48,6 +48,24 @@ def validate_profile_acceleration(profile_acceleration):
         raise ValueError('profile acceleration must be an integer from 1 through 32767')
     return profile_acceleration
 
+# Hardware Error Status bits (X-series Control Table, address 70).
+HARDWARE_ERROR_BITS = (
+    (0x01, 'input voltage'), (0x04, 'overheating'), (0x08, 'motor encoder'),
+    (0x10, 'electrical shock'), (0x20, 'overload'),
+)
+# Start-up motion probe: ~5 rpm for 0.4 s is about 8 ticks/ms of 4096 per turn,
+# a few millimetres of wheel travel. A free wheel moves well past the minimum.
+PROBE_RPM = 5.0
+PROBE_SECONDS = 0.4
+PROBE_MIN_TICKS = 20
+CURRENT_MA_PER_UNIT = 2.69
+
+
+def describe_hardware_error(value):
+    names = [name for bit, name in HARDWARE_ERROR_BITS if value & bit]
+    return f"0x{value:02X} ({', '.join(names) or 'unknown'})"
+
+
 class DynamixelDriver:
     def __init__(self, port, baudrate, dxl_ids, max_rpm=100.0):
         self.ADDR_OPERATING_MODE    = 11
@@ -55,6 +73,8 @@ class DynamixelDriver:
         self.ADDR_LED_RED           = 65
         self.ADDR_GOAL_VELOCITY     = 104
         self.ADDR_PROFILE_ACCEL     = 108
+        self.ADDR_HARDWARE_ERROR    = 70
+        self.ADDR_PRESENT_CURRENT   = 126
         self.ADDR_PRESENT_VELOCITY  = 128
         self.ADDR_PRESENT_POSITION  = 132
 
@@ -189,6 +209,68 @@ class DynamixelDriver:
                 self._disable_all()
                 return False
         return True
+
+    def _read_register(self, reader, dxl_id, address):
+        """Value of one register, or None without a clean reply (alert bit 0x80 is data, not failure)."""
+        try:
+            value, comm_result, packet_error = reader(self.portHandler, dxl_id, address)
+        except Exception:
+            return None
+        if comm_result != COMM_SUCCESS or packet_error & 0x7F:
+            return None
+        return value
+
+    def verify_motors(self, expect_torque, check_motion):
+        """Return fault strings for motors that are not really ready; [] means healthy.
+
+        Reads each motor's hardware-error status and torque flag. With
+        check_motion it also spins both wheels at PROBE_RPM for PROBE_SECONDS
+        and requires the position to move (a latched overload stalls at
+        constant position while the current climbs), then stops them.
+        """
+        read1 = self.packetHandler.read1ByteTxRx
+        faults = []
+        for dxl_id in self.DXL_IDS:
+            hardware_error = self._read_register(read1, dxl_id, self.ADDR_HARDWARE_ERROR)
+            if hardware_error is None:
+                faults.append(f'ID {dxl_id}: no reply reading hardware error status')
+            elif hardware_error:
+                faults.append(
+                    f'ID {dxl_id}: hardware error {describe_hardware_error(hardware_error)}')
+            torque = self._read_register(read1, dxl_id, self.ADDR_TORQUE_ENABLE)
+            if torque != int(bool(expect_torque)):
+                faults.append(f'ID {dxl_id}: torque enable is {torque}, expected {int(bool(expect_torque))}')
+        if faults or not check_motion:
+            return faults
+
+        read4 = self.packetHandler.read4ByteTxRx
+        before = [self._read_register(read4, i, self.ADDR_PRESENT_POSITION) for i in self.DXL_IDS]
+        try:
+            if not self.set_double_rpm(PROBE_RPM, PROBE_RPM):
+                return ['motion probe command was refused']
+            time.sleep(PROBE_SECONDS)
+            after = [self._read_register(read4, i, self.ADDR_PRESENT_POSITION) for i in self.DXL_IDS]
+            currents = [self._read_register(self.packetHandler.read2ByteTxRx, i,
+                                            self.ADDR_PRESENT_CURRENT) for i in self.DXL_IDS]
+            errors = [self._read_register(read1, i, self.ADDR_HARDWARE_ERROR) for i in self.DXL_IDS]
+        finally:
+            self.set_double_rpm(0, 0)
+        for index, dxl_id in enumerate(self.DXL_IDS):
+            if errors[index]:
+                faults.append(
+                    f'ID {dxl_id}: hardware error {describe_hardware_error(errors[index])} during motion probe')
+                continue
+            if before[index] is None or after[index] is None:
+                faults.append(f'ID {dxl_id}: no position reply during motion probe')
+                continue
+            moved = abs(decode_signed_32(after[index]) - decode_signed_32(before[index]))
+            if moved < PROBE_MIN_TICKS:
+                current = currents[index]
+                text = 'unknown' if current is None else (
+                    f'{abs(current - 65536 if current >= 32768 else current) * CURRENT_MA_PER_UNIT:.0f} mA')
+                faults.append(
+                    f'ID {dxl_id}: stalled, moved {moved} ticks (< {PROBE_MIN_TICKS}) at {PROBE_RPM:g} rpm, current {text}')
+        return faults
 
     def set_double_rpm(self, rpm_l, rpm_r):
         try:
