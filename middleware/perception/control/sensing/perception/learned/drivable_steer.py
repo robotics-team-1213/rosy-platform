@@ -283,15 +283,17 @@ class DrivableSteer:
         last valid way at most CREEP_MAX_M (camera nearest row - body front) for CREEP_MAX_S, then
         HOLD for Fleet (architect deadlock design 2026-10-10)."""
         now = time.monotonic()
-        if self._creep_from is None:
+        if self._creep_from is None or info.get("target_m") is not None:
+            # a fresh target on the way: the forward arc to it stays on the way (g6 2026-10-10: the ring
+            # curve kept ahead_m at 0.118, a capped creep then held 192 frames); the cap is for a lost way
             self._creep_from = (pose, now)
         start, since = self._creep_from
         moved = 0.0 if pose is None or start is None else math.hypot(pose[0] - start[0], pose[1] - start[1])
-        target = info.get("target_m") or self._creep_target
-        if target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
+        if info.get("target_m") is not None:
+            self._creep_target = (info["target_m"], source_pose)
+        if self._creep_target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
             return None, None, dict(info, strategy="none", reason="creep_done")
-        self._creep_target = target
-        tx, ty = _to_current(target, source_pose, pose)
+        tx, ty = _to_current(*self._creep_target, pose)
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
     def lost(self, stamp):

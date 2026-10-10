@@ -157,8 +157,10 @@ def test_no_turn_circle_creeps_along_the_way_then_holds():
     kw = dict(guide_deg=80.0, guide_pivot_ok=False)
     debug = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), **kw)[2]
     assert debug["strategy"] == "drivable_creep", debug
-    error, confidence, debug = steer.update(way, 2, G, XO, HALF, (0.08, 0.0, 0.0), (0.08, 0.0, 0.0), **kw)
-    assert error is None and debug["reason"] == "creep_done", debug
+    assert steer.update(way, 2, G, XO, HALF, (0.08, 0.0, 0.0), (0.08, 0.0, 0.0), **kw)[2]["strategy"] == "drivable_creep"
+    gone = np.zeros_like(way)                       # way lost: creep on the remembered target, then HOLD
+    error, confidence, debug = steer.update(gone, 3, G, XO, HALF, (0.08, 0.0, 0.0), (0.16, 0.0, 0.0), **kw)
+    assert error is None, debug
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=170.0, guide_here_deg=170.0,
                                    guide_pivot_ok=False)[2]
     assert debug["reason"] == "wrong_way_hold", debug
