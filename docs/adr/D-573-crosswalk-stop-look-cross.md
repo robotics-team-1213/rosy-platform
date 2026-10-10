@@ -367,3 +367,13 @@
 
 - 게이트는 D-491 목록의 `fleet_map` 구역도 무장한다. 그래서 카메라가 횡단보도를 놓쳐도 서고, 보고, 건넌다.
 - 9dfk는 첫 막대에서 IR `lane_departure`로 HOLD했고 Fleet은 WAIT로 답했다(막다른 길). 이제 Fleet 해결기는 지도의 횡단보도 위·앞 막대 0.15 m 안의 `lane_lost`·`no_motion` 막힘에 RESUME 한 번(`XW`)을 보낸다. CORE가 다시 검사하고 게이트가 다시 본다. 두 번째 막힘은 사람에게 간다.
+
+### 개정 3 (2026-10-10) — 5 s 동안 계속 비면 건넌다
+
+사용자 결정(2026-10-10): "횡단보도 검출 이후엔 사람이 없으면 5초 이상 그러면 지나가야 해. 그 로직도 빠르게 넣어."
+
+- 2항 "건너는 조건"의 보기 창을 `crosswalk_look_s` 1.0 s에서 설정 `line_follow.crosswalk_clear_s`(기본 5.0 s)로 바꾼다. `crosswalk_look_min_scans` 기본은 10 Hz × 5 s × 0.8 = 40이다.
+- 창 안의 모든 스캔이 지금의 판정(LiDAR 반사, 가장자리 지속 필터, 구역·대기 띠·출구)으로 "빔"이어야 한다. 사람, UNKNOWN(반사 없음·가림·사각), 오래된 스캔이 하나라도 오면 창을 처음부터 다시 연다. 비었음은 관찰해야 하고 시간만으로는 건너지 않는다.
+- 비워진 창이 도는 동안에는 사람에게 올리지 않는다(`crosswalk_blocked`는 창이 없을 때만 연다). `crosswalk_report_s`는 `crosswalk_clear_s`보다 커야 하고, 설정 검사가 같거나 작은 값을 거부한다. 기본 10 s > 5 s라서 처음부터 빈 횡단보도는 사람에게 가지 않는다.
+- E-Stop, D-422 몸 정지, 통행권, `obstacle_mode: path` 요구는 그대로다. 스냅숏 필드는 바뀌지 않는다(`look_progress`의 분모가 `crosswalk_clear_s`가 된다).
+- 구현 `feat/crosswalk-clear-5s`, CORE 정지 경로라 Safety-Review 대상이다.
