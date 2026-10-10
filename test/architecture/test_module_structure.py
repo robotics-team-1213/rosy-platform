@@ -171,11 +171,10 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/stuck": (
         1781,
-        "accept: measured at 1781 on 2026-10-10 after merging main: D-608 incident reports grew board.py "
-        "(server/line_stuck.py on main) by 168 and ai_facts.py by 2 before this move landed; independent "
-        "re-judge pending. Previously 1617 (independent re-judge 2026-10-10, critic: agree): pure move per "
-        "docs/plans/2026-10-10-fleet-stuck-subpackage.md (D-607 P0), 1608 at the move "
-        "(git -M 98-99%, import lines only, no shim); +9 D-577 남은 항목 4 R1 trusted poses (e297b05f8). "
+        "accept: 1617 after the pure move + R1 fix (D-607 P0, re-judged 2026-10-10) + D-608 incident reports "
+        "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
+        "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
+        "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
         "+150 allowance measured from 1781",
     ),
     "fleet/fleet/server/web/map-view.js": (
@@ -229,10 +228,10 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         51_324,
-        "split: measured at 51324 on 2026-10-10 after merging main (D-608 incident reports, 53090) into the "
-        "fleet/fleet/stuck move: 1781 lines left for fleet/fleet/stuck (D-607 P0). Independent re-judge pending "
-        "(the critic agreed 51085 before D-608). Next lane_compliance growth registers fleet/fleet/localization "
-        "(1567). +150 allowance measured from 51324. Previously "
+        "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
+        "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
+        "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "
+        "Previously "
         "split: re-judged at 53090 on 2026-10-10: D-608 adds read-only incident reports, reviews and evidence joins within Fleet; the existing stuck subpackage split remains due before further growth. Previously "
         "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
