@@ -23,6 +23,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `model.py` | Modes, observations, config (incl. D-407 `recovery_*`, URDF `body_*`), decisions |
 | `recovery/stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
 | `recovery/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
+| `progress_watch.py` | D-407 개정 / D-607 ROS-free odom-vs-issued-twist watch: `no_progress` / `dithering` while commanded but still (half URDF body length, `no_progress_yaw_deg`, restuck drift); intentional gate holds reset it |
 | `recovery/lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
 | `recovery/lane_bridge.py` | D-476 expected-road bridge (default off): armed by confident following (rev 1, no D-468 containment), slow drive along the followed lane's straight extension on a short loss, swept by D-422 (plus the D-468 floor proof when enforce), then hand-over to D-468 or today's HOLD/LOST |
 | `recovery/motion_admit.py` | D-507 6 `motion_admitted(now, linear, angular, kind, map_id)`: the one motion admission for D-468 return/retrace, D-476 bridge and D-495 junction motion; D-400 enforce proof, else the `site_floor_map_id` site basis (IR verdict per kind, path + URDF body, fresh scan, D-422 sweep of the twist); site-basis reverse only for `retrace` |
@@ -47,7 +48,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 ### Testing Requirements
 
-`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_lost_resume.py` (D-407 개정 2026-10-10), `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`, `middleware/core/services/test/test_crosswalk_gate.py`, `middleware/core/gateway/test/test_crosswalk_gate_wiring.py`
+`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_lost_resume.py` (D-407 개정 2026-10-10), `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `test_line_follow_stuck_no_progress.py` (D-607), `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`, `middleware/core/services/test/test_crosswalk_gate.py`, `middleware/core/gateway/test/test_crosswalk_gate_wiring.py`
 
 ## Dependencies
 
