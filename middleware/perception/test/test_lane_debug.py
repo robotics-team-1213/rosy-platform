@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from control.sensing.perception.lane_bev import BirdsEye
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
