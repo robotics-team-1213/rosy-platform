@@ -208,7 +208,7 @@ def _blink(chain, config: LedConfig) -> dict | None:
 
 
 def _steady(chain, config: LedConfig, *, require_off_after: bool = False) -> dict | None:
-    """D-596 3: an off frame, then ``steady_min_on`` on frames in a row; None otherwise."""
+    """Off then consecutive on frames; timed proof also needs a second off and >= 1 s on."""
     run, seen_off, found, on_at = 0, False, None, None
     for t, _b, share in chain:
         if share <= config.off_fraction:
