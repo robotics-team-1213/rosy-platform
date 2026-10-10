@@ -132,6 +132,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
+               stuck_resolver_enrolled: frozenset = frozenset(),
+               ai_facts_acting: frozenset = frozenset(),
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
@@ -339,6 +341,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
+        path_task = asyncio.create_task(app.state.paths.run())  # D-594
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -370,7 +373,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task):
+                               lease_task, path_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -538,9 +541,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    from fleet.swarm.anchor import anchored_relay_factory
+    console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
+    if tracking is not None:
+        tracking.map_pose = map_pose.arbitrated_pose   # D-600: robot regions Vision must not learn
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
@@ -561,6 +568,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
+    from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
+    app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
+                                           db_path=task_service.store.path if task_service else None,
+                                           acting=ai_facts_acting)
+    app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
@@ -581,8 +593,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
-            clients=lambda: stuck_resolver_clients)
+            # Enrolled robots the site config names answer with Fleet's own enrolled CORE credential
+            # (operator, carries STUCK_DECIDE): D-503 6 by user go 2026-10-10, per robot id.
+            clients=lambda: {**{rid: client for rid, client in console.clients().items()
+                                if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
+        app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(
@@ -626,6 +643,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    from fleet.server.map_pose_service import install_map_pin_route  # D-593
+    install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
+                          record_event=site_maps.record_event, busy=trip_runner.robot_busy)
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
 
@@ -649,6 +669,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
+    from fleet.server.path_history import PathRecorder, PathStore, install_path_routes  # D-594 display only
+    app.state.paths = PathRecorder(
+        PathStore(task_service.store.path if task_service is not None else None),
+        roster=lambda: console.robot_ids, gather=_gather_state, map_pose=map_pose,
+        tracking=tracking if tracking is not None and tracking.enabled else None,
+        trips=trip_runner.open_trips, formation=console.formation_status)
+    install_path_routes(app, paths=app.state.paths, read_guard=read_guard)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
                         require_operator=require_operator,

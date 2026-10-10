@@ -762,3 +762,9 @@ def test_d577_startup_names_the_robots_the_resolver_answers(tmp_path, monkeypatc
     monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
     cli.run_console(cli.parse_args(["console", "--robots", str(p)]))
     assert "stuck resolver answers: rosy_01" in capsys.readouterr().err
+
+
+def test_hub_link_left_empty_by_compose_is_off():
+    """D-555: deploy/site/compose.yaml passes "" for an unset ROSY_SITE_HUB_LINK_* (argparse makes Path(".") of it)."""
+    args = cli.parse_args(["console", "--hub-link-hostname", "", "--hub-link-ca", ""])
+    assert cli._hub_link(args) is None

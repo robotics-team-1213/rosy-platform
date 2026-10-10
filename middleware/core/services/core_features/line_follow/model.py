@@ -87,6 +87,13 @@ class LineFollowConfig:
     min_confidence: float = 0.35
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
+    # D-407 개정 (2026-10-10): CAMERA_LINE LOST resumes in the same mode once the lane is seen
+    # again for lost_resume_frames consecutive fresh confident frames spanning lost_resume_s, with
+    # no obstacle hold and the IR guard clear. Values = D-495 junction_reacquire_frames and D-407
+    # recovery_settle_s. false = today's latch until the operator reselects.
+    lost_auto_resume: bool = True
+    lost_resume_frames: int = 3
+    lost_resume_s: float = 1.0
     ir_calibration_revision: Optional[str] = None
     # D-344 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
     # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
@@ -122,6 +129,12 @@ class LineFollowConfig:
     ir_guard_edge_error: float = 0.3
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
+    # D-344 §12 개정(2026-10-10): 카메라 명령의 선속도가 이보다 작으면(제자리·급회전, D-597 개정 2)
+    # 한쪽 IR 경계 비키기를 하지 않는다. 제자리 회전은 몸을 옆으로 옮기지 못해 비키기가 회전과 싸우기만
+    # 한다(과속방지턱 위 9dfk). 가운데 이탈 정지는 그대로다. 0 이면 끈다.
+    ir_guard_min_linear: float = 0.0
+    # 같은 개정 2: 그때 IR 줄 밑에 선이 있으면 이 속도로 뒤로 물러나며 돈다(뒤가 비었을 때만). 0 이면 제자리.
+    ir_guard_back_speed: float = 0.0
     # D-491: 감시가 쉬어도 되는 알려진 횡단보도 구간. ir_row_x_m 은 IR 센서 줄의 x(URDF ir_*_link,
     # base_footprint 앞)이고 없으면 쉬지 않는다. 구간 길이 상한과, 영상 시각부터 움직인 odom 거리에
     # 대한 오차 비율(여유 = 투영 불확실도 + 비율 × 이동 거리). 둘 다 실측 뒤 다시 정한다.
@@ -130,10 +143,37 @@ class LineFollowConfig:
     crosswalk_odom_error_fraction: float = 0.05
     # 카메라가 잰 횡단보도 끝 거리의 앞뒤 오차 비율(9dfk 실측 2026-10-07: 0.3 m에서 약 1.5 cm).
     crosswalk_range_error_fraction: float = 0.05
+    # D-573 crosswalk gate (crosswalk_gate.py): stop before a camera crosswalk zone, look with the
+    # LiDAR, cross only after crosswalk_look_s of empty scans (>= crosswalk_look_min_scans: 10 Hz
+    # x 1 s x 0.8). No timeout: after crosswalk_report_s a D-407 crosswalk_blocked stuck asks a human.
+    # cross speed = the lane slow value (cruise 0.08 x bridge_slow_scale 0.5). approach default =
+    # the waiting strip beside a camera-only zone's lane corridor; 0 = the corridor only, because a
+    # camera zone cannot tell a waiting strip from the track wall beside it (map_v2_fleet: wall
+    # 0.13 m from the lane centre); site strips come from the Fleet map approach[] (D-573 1). Off.
+    crosswalk_gate_enabled: bool = False
+    crosswalk_look_s: float = 1.0
+    crosswalk_look_min_scans: int = 8
+    crosswalk_report_s: float = 10.0
+    crosswalk_cross_speed: float = 0.04
+    crosswalk_approach_default_m: float = 0.0
+    # D-573 rev 2: per-cell persistence at the look-area edge, from MEASURED range noise. sigma =
+    # the C1 range noise over the look range (8kcn rosy_40 stationary 60 s, 2026-10-10: median
+    # 0.6 mm < 0.2 m, 1.6-2.0 mm 0.2-0.5 m, max 3.4 mm), rounded up. A return within 3 sigma of A's
+    # outer edge (the band a surface just outside A reaches with its noise) names a 3-sigma cell;
+    # the cell is a person once hit in >= k of the last n scans. k = 2 of n = 3: a standing person
+    # (a hit every scan) counts after 2 scans (0.2 s at 10 Hz); a surface whose noise lands in one
+    # edge cell with per-scan chance p counts with chance 3p^2 (< 1 % for p < 0.05). Deeper than
+    # the band one return is a person at once (no filter there).
+    crosswalk_range_sigma_m: float = 0.0035
+    crosswalk_persist_k: int = 2
+    crosswalk_persist_n: int = 3
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
     # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-495부터 켜짐이다.
     recovery_local_enabled: bool = False
     recovery_ask_s: float = 15.0
+    # 2026-10-10 사용자: 활성 차선 주행에서 명령이 이만큼 0 이면 원인과 무관하게 막힘을 열어 Fleet 에
+    # 묻는다(원인 no_motion, 상세 = HOLD 사유). 0 = 끔. 로컬 후진 대체 없음: Fleet 답 또는 사람만.
+    stuck_report_s: float = 5.0
     recovery_back_m: float = 0.08
     recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
@@ -168,6 +208,9 @@ class LineFollowConfig:
     obstacle_resume_hysteresis_m: float = 0.03
     obstacle_ultrasonic_half_angle_deg: float = 15.0
     obstacle_ultrasonic_stale_s: float = 0.3
+    # D-591: off = the stop gap is not raised to the LiDAR range_min band (driving beside
+    # walls); remembered returns and the ultrasonic still stop the robot.
+    obstacle_blind_floor: bool = True
     # D-476 expected-road bridge: on a short lane loss right after confident following, drive
     # the followed lane's straight extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
@@ -285,6 +328,10 @@ class LineFollowConfig:
             raise ValueError("IR guard edge error must be in (0, 1) and turn positive")
         if not 0.0 <= self.ir_guard_speed_scale <= 1.0:
             raise ValueError("ir_guard_speed_scale must be in [0, 1]")
+        if not 0.0 <= self.ir_guard_min_linear < 1.0:
+            raise ValueError("ir_guard_min_linear must be in [0, 1)")
+        if not 0.0 <= self.ir_guard_back_speed <= 0.05:
+            raise ValueError("ir_guard_back_speed must be in [0, 0.05]")
         if self.ir_row_x_m is not None and not (_finite(self.ir_row_x_m) and abs(self.ir_row_x_m) <= 0.2):
             raise ValueError("ir_row_x_m must be a finite base_footprint x within 0.2 m")
         if not (_finite(self.crosswalk_zone_max_m) and 0.0 < self.crosswalk_zone_max_m <= 0.5):
@@ -293,6 +340,7 @@ class LineFollowConfig:
             raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
         if not (_finite(self.crosswalk_range_error_fraction) and 0.0 <= self.crosswalk_range_error_fraction <= 0.5):
             raise ValueError("crosswalk_range_error_fraction must be in [0, 0.5]")
+        self._check_crosswalk_gate()
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
@@ -307,6 +355,8 @@ class LineFollowConfig:
                   self.recovery_trail_max_age_s)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
+        if not _finite(self.stuck_report_s) or not 0.0 <= self.stuck_report_s <= 60.0:
+            raise ValueError("stuck_report_s must be in [0, 60] (0 = off)")
         if not _finite(self.recovery_console_grace_s) or not 0.0 <= self.recovery_console_grace_s <= 10.0:
             raise ValueError("recovery_console_grace_s must be in [0, 10]")
         if self.recovery_trail_max_age_s > 300.0:
@@ -338,7 +388,35 @@ class LineFollowConfig:
         if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
             raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
 
+    def _check_crosswalk_gate(self) -> None:
+        if type(self.crosswalk_gate_enabled) is not bool:
+            raise ValueError("crosswalk_gate_enabled must be a boolean")
+        if not (_finite(self.crosswalk_look_s) and 0.5 <= self.crosswalk_look_s <= 5.0):
+            raise ValueError("crosswalk_look_s must be in [0.5, 5]")
+        if type(self.crosswalk_look_min_scans) is not int or not 1 <= self.crosswalk_look_min_scans <= 100:
+            raise ValueError("crosswalk_look_min_scans must be a whole number in [1, 100]")
+        if not (_finite(self.crosswalk_report_s) and 1.0 <= self.crosswalk_report_s <= 600.0):
+            raise ValueError("crosswalk_report_s must be in [1, 600]")
+        if not (_finite(self.crosswalk_cross_speed) and 0.0 < self.crosswalk_cross_speed <= 0.10):
+            raise ValueError("crosswalk_cross_speed must be in (0, 0.10]")
+        if not (_finite(self.crosswalk_approach_default_m) and 0.0 <= self.crosswalk_approach_default_m <= 0.5):
+            raise ValueError("crosswalk_approach_default_m must be in [0, 0.5]")
+        if not (_finite(self.crosswalk_range_sigma_m) and 0.0 <= self.crosswalk_range_sigma_m <= 0.02):
+            raise ValueError("crosswalk_range_sigma_m must be in [0, 0.02]")
+        if (type(self.crosswalk_persist_k) is not int or type(self.crosswalk_persist_n) is not int
+                or not 1 <= self.crosswalk_persist_k <= self.crosswalk_persist_n <= 20):
+            raise ValueError("crosswalk_persist_k/n must be whole numbers, 1 <= k <= n <= 20")
+        if self.crosswalk_gate_enabled and not (self.body_stop_known and self.obstacle_mode == "path"):
+            # Crossing trusts the D-422 body stop (path mode, near-return memory) for the band
+            # inside range_min (review M4).
+            raise ValueError("crosswalk_gate_enabled needs the URDF body geometry and obstacle_mode "
+                             "path (D-573 2)")
+
     def _check_junction(self) -> None:
+        if type(self.lost_resume_frames) is not int or not 1 <= self.lost_resume_frames <= 20:
+            raise ValueError("lost_resume_frames must be a whole number in [1, 20]")
+        if not _finite(self.lost_resume_s) or not 0.0 <= self.lost_resume_s <= 10.0:
+            raise ValueError("lost_resume_s must be in [0, 10]")
         if type(self.junction_reacquire_frames) is not int or not 1 <= self.junction_reacquire_frames <= 20:
             raise ValueError("junction_reacquire_frames must be a whole number in [1, 20]")
         if not _finite(self.junction_turn_lead_s) or not 0.0 <= self.junction_turn_lead_s <= 1.0:

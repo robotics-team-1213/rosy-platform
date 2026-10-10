@@ -96,9 +96,11 @@ class VisionWorker:
             markers=markers,
             homography=homography,
         )
+        sent: list[str] = []
         try:
             for sighting in sightings:
                 await self.publisher.publish(sighting)
+                sent.append(sighting.robot_id)
         finally:
             # A rejected sighting must not cost the frame its tracking step, and a tracking
             # failure must not mask the sighting error.
@@ -106,7 +108,8 @@ class VisionWorker:
                 self._publish_place_markers(frame, markers, homography)
             if self.tracker is not None:
                 try:
-                    await self.tracker.process(frame, markers)
+                    # D-587 1: a sighting that failed to send is left for the tracker to send.
+                    await self.tracker.process(frame, markers, frozenset(sent), camera)
                 except Exception as exc:
                     # Do not log URLs, request bodies, headers, or arbitrary exception text.
                     logger.error("tracking step failed source=%s error_type=%s",

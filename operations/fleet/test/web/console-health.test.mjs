@@ -33,3 +33,12 @@ test('battery warning and docked-unconfirmed state give different next checks', 
   docked.state.docking = { state: 'DOCKED' };
   assert.match(powerHealthView(docked, 1000, 1000).problem, /도크·전압/);
 });
+
+test('a missing or late Fleet read is unknown without an attention problem; robot evidence is', () => {
+  const noRead = powerHealthView({ ...robot(), power_health: null, power_health_age_s: null }, 1000, 1000);
+  assert.equal(noRead.battery, '확인 불가');
+  assert.equal(noRead.problem, '');
+  assert.equal(powerHealthView(robot(), 1000, 7000).problem, '');
+  assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).problem, '');
+  assert.match(powerHealthView(robot({ evidence: 'missing' }), 1000, 1000).problem, /센서\/CORE/);
+});

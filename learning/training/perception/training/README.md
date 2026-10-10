@@ -373,6 +373,23 @@ python model/drivable_versions.py add v13.1.00 v13-drivable-YYYYMMDD-<sha8> --on
 python model/drivable_versions.py set-status v13.1.00 shadow   # candidate|shadow|rejected|retired
 ```
 
+D-566: `drivable_head`은 손실에 `pos_weight`(train 라벨 화소의 비drivable/drivable 비)를 두고, best epoch를
+`IoU − fp_lambda·val_outside_band_fp`(`training.fp_lambda`, 기본 1.0)로 고른다. 둘 다 `metrics.json`의
+`selection`에 남는다. val의 화면 아래 40% 가운데 열(행 144–239, 열 110–210) drivable 비율(예측/라벨)도
+`val_near_centre_drivable`로 남고, 두 지표는 모델 manifest `metrics`에 들어간다. intake는 둘이 없거나
+`val_outside_band_fp > 0.15`이거나 예측 비율이 라벨의 0.8배 미만이면 거부한다.
+
+모델 PC에서 5분을 넘는 작업(학습·intake·대량 추론)은 SSH 포그라운드가 아니라
+`systemd-run --user --unit=<이름> -p MemoryMax=6G -p MemorySwapMax=0 <스크립트>`로 돌리고, 결과는 실행 폴더의
+로그와 exit 파일로 판단한다. 시작 전에 남은 메모리를 본다. 모델 PC는 ZFS라 `free`의 available에 회수 가능한
+ARC가 빠져 실제보다 작게 나온다. `MemAvailable`에 ARC의 `size − c_min`을 더해 판단한다:
+
+```bash
+python3 -c "m={l.split(':')[0]:int(l.split()[1])*1024 for l in open('/proc/meminfo')}
+k={p[0]:int(p[2]) for p in (l.split() for l in open('/proc/spl/kstat/zfs/arcstats').readlines()[2:]) if len(p)==3}
+print((m['MemAvailable']+max(0,k['size']-k['c_min']))//2**30)"   # GB; 6 미만이면 기다린다
+```
+
 ### D-554 차선 파생 drivable 데이터셋
 
 `drivable_head`는 `IndexedReview` 대신 D-554 파생 데이터셋도 받는다. 사람이 검수한 5클래스

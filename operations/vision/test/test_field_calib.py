@@ -102,19 +102,22 @@ def test_orientation_rejects_a_different_frame_size():
     assert ok is False and "frame size" in reason
 
 
-def test_small_moves_update_the_quad_and_big_jumps_go_stale():
+def test_small_moves_keep_the_frozen_quad_and_big_jumps_go_stale():
     calibrator = FieldCalibrator(WORLD)
     calibrator.feed(_detection(QUAD))
     calibrator.resolve_orientation(_map_to_image(), SIZE)
-    # Noise far below the move gate keeps the calibration alive.
+    frozen = calibrator.homography().h
+    # D-595: noise below the move gate is a drift diagnostic; the quad and homography stay.
     noise = tuple((x + 1.0, y) for x, y in QUAD)
     state = calibrator.feed(_detection(noise))
-    assert state.state == "calibrated" and calibrator.homography() is not None
+    assert state.state == "calibrated" and state.corners == QUAD
+    assert state.drift_px == pytest.approx(1.0) and state.to_dict()["drift_px"] == 1.0
+    assert calibrator.homography().h == frozen
     # A jump larger than the gate is stale: no sightings from the old quad.
     state = calibrator.feed(_detection(_shifted((60.0, 0.0))))
     assert state.state == "stale"
     assert calibrator.homography() is None
-    assert state.corners == noise  # the accepted quad is still the last good one
+    assert state.corners == QUAD  # the accepted quad is still the frozen one
 
 
 def test_a_stable_quad_at_the_new_position_is_reacquired_with_orientation_kept():

@@ -18,6 +18,8 @@ REFUSED = "STUCK_DECISION_REFUSED"
 MISMATCH = "STUCK_ID_MISMATCH"
 #: Transport failures: one resend, then a human; uncertain YIELD is never replayed.
 TRANSPORT = ("ROBOT_UNREACHABLE", "STUCK_DECISION_OUTCOME_UNKNOWN")
+#: Causes that only ever get WAIT or BACK_AND_RETRY (D-577 1; no_motion = CORE stuck_report_s).
+LOST_LIKE = ("lane_lost", "no_motion")
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,8 @@ class ResolverConfig:
     peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
     #: D-577 1: R3 trusts a known Fleet map pose only while it is LOCALIZED and this fresh.
     pose_max_age_s: float = 2.0
+    #: D-577 개정 2026-10-10: how long a stuck waits for an AI PC proposal before the rules answer.
+    ai_wait_s: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,8 @@ class _Chain:
     answered: set = field(default_factory=set)       # stuck ids with an answer in flight/done
     retries: dict = field(default_factory=dict)      # stuck id -> transport resends
     escalated: set = field(default_factory=set)      # stuck ids already escalated
+    seen_at: float = 0.0                             # when the current stuck id was first seen
+    ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -164,6 +170,7 @@ class StuckResolver:
         self._pins: dict[str, str] = {}
         self._plans: dict[str, _YieldPlan] = {}
         self._sent_yield: dict[str, tuple] = {}
+        self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -179,7 +186,8 @@ class StuckResolver:
         if answer.decision == "YIELD" and answer.yield_m is not None:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
-        if (answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+        if ((answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+             or answer.rule == "ai" and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME" and answer.rule != "meet":
@@ -263,7 +271,7 @@ class StuckResolver:
         elif not chain.mode:
             chain.mode = mode
         if chain.stuck_id != sid:
-            chain.stuck_id, chain.closed_at = sid, None
+            chain.stuck_id, chain.closed_at, chain.seen_at = sid, None, now
             if chain.resume_id is not None and sid != chain.resume_id:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
@@ -277,7 +285,15 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
             return self._next_segment(row, rows)
+        from fleet.server.stuck_lane_lost import ai_answer
+
+        proposed = ai_answer(self, now, row, stuck, rows, chain)
+        if proposed is not None:
+            return None if proposed == "wait" else proposed
         rule = self._rule(row, stuck, rows, chain)
+        ai = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
+        if ai is not None and rule is not None and rule[1] == "BACK_AND_RETRY":
+            rule = ("R5", "WAIT", f"ai:{ai}")         # D-577 7 (2): an acting AI fact only stops a back-off
         if rule is not None and rule[1] == "ESCALATE":
             return self._escalate(chain, rid, sid, "meet")
         if rule is not None and rule[1] == "RESUME":
@@ -285,11 +301,11 @@ class StuckResolver:
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
         if rule[0] == "R5":                           # result() raises the human row after the send
-            return Answer(rid, sid, "WAIT", "R5", escalate=f"lane_lost_hold:{rule[2]}")
+            return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
         # §5: the one transport resend repeats an answer already counted; never block it.
         if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
             return self._escalate(chain, rid, sid, "rule_budget")
-        if stuck.get("cause") == "lane_lost" and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
+        if stuck.get("cause") in LOST_LIKE and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
             return self._escalate(chain, rid, sid, "no_rule")   # D-577 1: never RESUME/YIELD on lane_lost
         if len(rule) == 4:
             return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
@@ -321,11 +337,16 @@ class StuckResolver:
             candidates.append(("R1", "WAIT"))
         if cause == "obstacle_ahead" and not peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))
-        if cause == "lane_lost":
+        if cause in LOST_LIKE:
             from fleet.server.stuck_lane_lost import lane_lost_hold
 
-            hold = lane_lost_hold(row, stuck, rows, chain, self.config)
-            return ("R3", "BACK_AND_RETRY") if hold is None else ("R5", "WAIT", hold)
+            # no_motion (2026-10-10, any zero-command reason >= stuck_report_s): R6 = R3's back-off
+            # and look again under R3's preconditions; CORE re-checks the rear (D-407 §4).
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config,
+                                  rule="R3" if cause == "lane_lost" else "R6")
+            if hold is None:
+                return ("R3" if cause == "lane_lost" else "R6", "BACK_AND_RETRY")
+            return ("R5", "WAIT", hold)
         if peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))      # after a refused WAIT
         for rule in candidates:
@@ -336,7 +357,7 @@ class StuckResolver:
     def _next_segment(self, row, rows) -> Optional[Answer]:
         """The robot finished one segment and is holding off the resume path."""
         stuck = _stuck_of(row)
-        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") == "lane_lost":
+        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") in LOST_LIKE:
             return None
         meet = self._meet(row, rows)
         if meet is None:

@@ -205,7 +205,7 @@ main {
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
   #fleet-main > .console-primary > .panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
-  #fleet-main .map-stage { flex: none; min-height: max(20rem, calc(100dvh - 18rem)); }
+  #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
   #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
   .ops-block { gap: var(--space-2); }
@@ -238,10 +238,21 @@ main {
 
 .panel h2 { font-weight: var(--weight-emphasis); font-size: var(--text-title); margin: 0 0 var(--space-3); }
 
-.map-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); }
-/* 사이트 뷰 태그("사이트 W×H m · 카메라 관측 n/m대")는 320px에서 한 줄에 안 들어간다. */
-#map-tag { min-width: 0; max-width: 100%; white-space: normal; }
+.map-head { display: flex; flex-wrap: nowrap; align-items: baseline; gap: var(--space-3); min-width: 0; }
+.map-head > div:first-child, .map-head > ui-button { flex: 0 0 auto; }
+/* 늦게 들어오는 카메라 교정 설명이 배지를 늘려 지도를 아래로 밀지 않게 한다. */
+#map-tag { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-head .spacer { flex: 1; }
+/* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
+.trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
+.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--ink-quiet); }
+.trail-control > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.trail-robots { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); } .trail-panel .hint { margin: 0; font-size: var(--text-micro); }
+@media (width < 40rem) {
+  .map-head { flex-wrap: wrap; }
+  #map-tag { flex: 1 1 100%; }
+}
 
 .map-stage { position: relative; }
 /* D-493 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
@@ -403,6 +414,7 @@ main {
 /* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */
@@ -535,7 +547,7 @@ main {
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
-  #map-canvas { height: min(74vw, 22rem); }
+  .map-stage #map-canvas { height: min(150vw, 30rem); }
   .map-stage[data-map-state="unavailable"] #map-canvas { height: 11rem; }
   .queues-container { flex-direction: column; }
   .adjustment-columns { grid-template-columns: minmax(0, 1fr); }
@@ -652,6 +664,10 @@ main {
 .stuck-resolver { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
 .stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); }
 .stuck-facts dd.stuck-fact-unknown { color: var(--ink-quiet); }
+/* D-577 8: the stuck's one evidence picture, below the answers so they stay at rail scroll 0 (D-540 7). */
+.stuck-evidence { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.stuck-evidence img { display: block; max-width: 100%; max-height: 120px; width: auto; object-fit: contain; border-radius: var(--radius-button); }
+.stuck-evidence figcaption { font-size: var(--text-label); color: var(--ink-quiet); }
 .stuck-actions, .stuck-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .stuck-actions ui-button, .stuck-confirm-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
 .stuck-confirm { padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }

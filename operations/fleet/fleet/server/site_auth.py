@@ -15,6 +15,9 @@ from typing import Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException, Request
 
+AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577 4
+                      "/api/fleet/ai/proposals"})   # D-577 개정 2026-10-10: proposals, Fleet validates
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -43,7 +46,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
                 or not principal_id or len(principal_id) > 96
                 or any(ord(char) < 32 for char in principal_id)
                 or principal_id in seen_principal_ids
-                or role not in {"viewer", "operator", "policy-admin", "service"}):
+                or role not in {"viewer", "operator", "policy-admin", "service", "ai_observer"}):
             raise ValueError("site user credentials require a token, principal_id, and known role")
         principals[token] = SitePrincipal(principal_id, role)
         seen_principal_ids.add(principal_id)
@@ -139,10 +142,17 @@ def build_authorize(console_token: Optional[str],
                                                              "message": "console token required"})
             principal = SitePrincipal("site-console", "operator")
         request.state.site_principal = principal
+        # D-577 4: the AI PC reads like a viewer and writes only facts and heartbeats; it never reaches
+        # a stop, a stuck answer, a trip or any robot-moving route, whatever that route's own guard is.
+        if (principal.role == "ai_observer" and request.method not in ("GET", "HEAD")
+                and request.url.path not in AI_PATHS):
+            raise HTTPException(status_code=403, detail={"code": "AI_OBSERVER_FACTS_ONLY",
+                                                         "message": "ai_observer may post only facts and heartbeats"})
         if (task_service is not None and request.method == "POST"
                 and request.url.path.startswith("/api/fleet/")
                 and request.url.path != "/api/fleet/sightings"
                 and request.url.path != "/api/fleet/policy-evidence"
+                and request.url.path not in AI_PATHS   # D-577 4: audited in fleet_ai_facts
                 # D-525 rev 4: a signal demand repeats every 0.5 s; the route audits only a new one
                 and not (request.url.path.startswith("/api/fleet/traffic/signals/")
                          and request.url.path.endswith("/demand"))):

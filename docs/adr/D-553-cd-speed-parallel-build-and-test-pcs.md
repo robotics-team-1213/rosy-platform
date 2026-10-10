@@ -36,6 +36,90 @@
 - 예약 작업 안에서 Windows OpenSSH `-J`가 상속된 stdin 때문에 두 번째 로봇에서 60 s 동안 멈췄다. `run_ssh`는 `stdin=DEVNULL`로 부른다.
 - `install_robot_cd.ps1`은 작업 출력을 `<state_dir>/task-output.log`에 남긴다. 준비 거부 이유는 그 출력에만 찍힌다.
 
+### Addendum 2 (2026-10-10, 손으로 낸 릴리스 072의 시간과 줄일 곳)
+
+사용자 요청 "병렬로 로봇 릴리즈 시간 더 줄일 수 있는 것도 봐 주면 좋겠어"(2026-10-10). 드라이버블 조향을 두 대(9dfk, 8kcn)에서 고치는 동안 한 번 고칠 때마다 릴리스 한 번을 기다린다. 072를 잰 값(UTC, 2026-10-09):
+
+| 단계 | 시각 | 걸린 시간 | 근거 |
+|---|---|---|---|
+| main push(pre-push 생략) → 빌드 dispatch | 22:06:35 → 22:07:42 | 67 s | `ci` push 실행 생성 시각, 빌드 실행 생성 시각 |
+| ARM64 빌드 (`build-native-payload.yml` 37997483677) | 22:07:42 → 22:12:04 | 262 s | 아래 줄 |
+| └ apt·ROS 준비 단계 | | 67 s | 단계 시각 |
+| └ rosdep 일괄 apt (949개, 523 MB, 받기 21 s) | 22:09:06 → 22:10:57 | 111 s | 실행 로그 |
+| └ colcon build | 22:10:58 → 22:11:45 | 47 s | 실행 로그 |
+| └ 조립·확인·올리기 | | 17 s | 단계 시각 |
+| 빌드 끝 → 준비 시작(사람·에이전트 대기) | 22:12:04 → 약 22:13:48 | 약 104 s | 아티팩트 zip mtime − 받기 7.4 s |
+| `prepare_payload_release.py` | → 22:14:26 | 38 s | 받기 7.4, ABI 4.9, 풀기 5.3, 서명 8.3, 묶기 11.7 |
+| 8kcn push(로컬 검증·보정 가드 → claim 해제) | 22:14:4x → 22:17:26 | 약 160 s | 로봇 journal |
+| └ scp 24 MB | 22:15:09 → 22:16:04 | 55 s (약 0.45 MB/s) | sshd 세션 |
+| └ 로봇에서 풀기(`rosy-release-unpack.sh`) | 22:16:15 → 22:17:02 | 47 s | sshd 세션 |
+| └ activate·CORE 재시작·readiness | 22:17:03 → 22:17:16 | 13 s | journal |
+| 두 로봇 사이 대기 | 22:17:26 → 22:21:17 | 231 s | 로그 mtime·journal |
+| 9dfk push | 22:21:17 → 22:22:54 | 97 s (scp 44 s) | journal |
+| **합계** | 22:06:35 → 22:22:54 | **약 16분 20초** | |
+
+로봇 쪽 readiness 폴링은 이미 1 s 간격이라 줄일 것이 없다.
+
+**이번에 한 것(신뢰 경계·서명·출처는 그대로):**
+
+1. `deploy/robot/pinky_pro/rosy-release-push-many.ps1`이 로봇마다 바뀌지 않은 `rosy-release-push.ps1`을 동시에 하나씩 띄운다. claim, 보정 가드, readiness, 자동 롤백은 로봇마다 그대로다. 로그는 로봇마다 하나다. 하나라도 실패하면 exit 1이다. `prepare_payload_release.py`는 `--robot`이 둘 이상이면 이 한 줄을 같이 찍는다. 두 로봇 사이 대기(231 s)와 두 번째 push(97 s)가 없어진다. 업로드는 운영 PC 한 회선을 나눠 쓰므로 scp는 조금 길어질 수 있다. 줄어드는 몫은 약 4–5분이다.
+2. 스킬 `rosy-release-push`: dispatch 직후 실행 번호를 제목으로 찾고, `gh run watch --interval 10`과 준비를 한 명령줄에 잇는다. push → dispatch(67 s)와 빌드 끝 → 준비(104 s) 대기가 약 10–20 s로 준다.
+
+두 로봇을 같이 올리면 나쁜 릴리스가 두 대를 같이 멈춘다. activate의 readiness 실패 자동 롤백은 로봇마다 그대로 돈다. 주행을 망칠 수 있는 변경은 한 대 먼저(카나리) 올린다.
+
+**사용자 결정이 필요한 것(구현하지 않음):**
+
+| 안 | 줄어드는 시간 | 바뀌는 것 | 필요한 것 |
+|---|---|---|---|
+| A. 빌드 의존성을 미리 깐 ARM64 빌드 컨테이너(같은 스냅샷·잠금에서 만든 이미지, digest 고정) | 약 150–170 s (apt 67 + rosdep 111 중 대부분) | 빌드 입력에 컨테이너 이미지가 들어온다(D-437·D-482 출처) | 사용자 결정, D-437 addendum, 이미지 빌드·digest 갱신 절차 |
+| B. 빌드 쪽 rosdep apt에 `--no-install-recommends` | 추정 40–70 s (949개 중 글꼴·avahi·ghostscript 등 추천 패키지) | 빌드 호스트에 깔리는 집합. 선택 의존성을 `find_package(QUIET)`로 찾는 패키지는 결과물이 달라질 수 있다 | 검증 빌드 1회, `ros-packages.txt`·설치 트리 diff 비교 |
+| C. 벤치 반복용으로 브랜치 ref에서 빌드·서명 | pre-push·착지 대기 전부(그날 pre-push는 97커밋 차이로 길었다) | main 아닌 커밋이 서명된다. 지금 `prepare_payload_release.py`는 실행의 브랜치를 보지 않는다 | 사용자 결정, D-225·D-437 addendum(서명 대상 규칙, 릴리스 번호, D-412 자동 업데이트와의 순서) |
+| D. `land.py`가 이미 같은 sha로 돌린 affected 시험을 pre-push가 다시 쓰기 | pre-push 대부분 | D-346·D-584 게이트 | 사용자 결정. 그 전에는 origin을 main 가까이 자주 push해서 affected 범위를 작게 둔다 |
+| E. 파이썬만 바뀐 경우의 서명된 delta 페이로드(같은 activator) | 빌드 대부분, scp 24 MB → 수백 KB | 새 릴리스 형식(D-225) | 새 ADR. CORE dev overlay는 쓰지 않는다 |
+| F. 로봇 풀기 47 s를 한 번의 읽기로(검사와 풀기를 같은 tarfile 순회에서) | 약 15–20 s/로봇 | 보안 검사 스크립트(`rosy-release-unpack.sh`) | 검토와 시험 |
+| G. 운영 PC 업로드(0.45 MB/s) 대신 로봇이 GitHub Release에서 받기(D-412 게시 + `rosy-auto-update.service` 즉시 시작) | scp 44–55 s/로봇 | 반복 빌드도 공개 Release로 게시된다 | 사용자 결정 |
+
+같이 본 것: 072의 두 push 모두 `CALIBRATION CHECK UNREACHABLE ... connection was closed` 경고가 났다. 레거시 HTTP 모드라 경고만 하고 진행했다. 보정 가드가 이 두 로봇에서 실제로 돌지 않는다는 뜻이다. 속도와 별개로 확인이 필요하다.
+
+### Addendum 3 (2026-10-10, 사용자 승인: 델타 페이로드·pre-push 재사용·빌더 이미지·브랜치 빌드)
+
+사용자가 2026-10-10에 Addendum 2 표의 C, D, E와 빌더 컨테이너(A)를 승인했다(AskUserQuestion, 네 항목 모두 승인). 조정자가 전한 조건: 모든 페이로드는 같은 키로 서명한다. activator·롤백·CORE readiness는 그대로다. CORE dev overlay는 쓰지 않는다. 브랜치 빌드는 서명된 릴리스에 출처 ref와 sha를 남기고, D-412 자동 업데이트 채널은 main만 받는다. 브랜치 `feat/release-speed`.
+
+1. **델타 페이로드 (E).** `tools/release/make_delta_release.py`.
+   - 입력은 이 PC가 이미 준비한 서명된 base 릴리스(`<out>/x/<base>`, 그 tarball)와 커밋 하나다. 로봇은 그 base를 가지고 있어야 한다.
+   - 도구는 새 릴리스 전체를 로컬에서 다시 만든다. base 파일에 바뀐 파일을 얹고, 새 `install/.rosy-release`, `source-revision.txt`, `source-ref.txt`를 쓴다. 그 위에 `manifest.json`과 `SHA256SUMS`를 전부 다시 쓰고, `sign_image_release.py`로 같은 키로 서명하고, 전체 트리를 `verify_release_files`로 확인한다. GitHub 빌드와 같은 형식이다. `manifest.json` 키는 바꾸지 않는다(로봇의 옛 activator가 새 키를 거부한다).
+   - tarball에는 새 메타데이터, 바뀐 파일, `.rosy-delta-base`(base id, base `SHA256SUMS`의 sha256)만 들어간다.
+   - 바뀐 소스 파일은 base 페이로드에서 이름이 같고 base 시점 내용이 바이트 단위로 같은 파일에만 대응한다(그대로 복사된 Python 모듈, launch·config·data, native-runtime 스크립트). 같은 이름·내용의 소스가 둘 이상이면(빈 `__init__.py`) 경로 끝 두 부분까지 같아야 한다.
+   - 거부하고 전체 빌드를 요구하는 것: C/C++ 소스·헤더·인터페이스·`CMakeLists.txt`·`package.xml`·`setup.py`·`setup.cfg`, 추가·삭제·이름 바뀐 배포 파일, 대응하는 복사본이 없는 배포 파일. `docs/`, `test(s)/`, `tools/`, `.github/`, `.claude/`, `*.md`와 `--not-shipped <prefix>`로 적은 경로는 무시하고 출력에 남긴다.
+   - checked-hash `.pyc`는 그대로 둔다. Python이 소스 해시를 확인하고 바뀐 모듈만 메모리에서 다시 컴파일한다. 운영 PC는 Python 3.14라 로봇(3.12)용 pyc를 만들 수 없다.
+   - 로봇 쪽: `rosy-release-unpack.sh`(push가 매번 운영 PC에서 복사해 간다)가 표지를 읽는다. base가 없거나 base `SHA256SUMS`의 해시가 다르면 `DELTA_BASE_MISSING`/`DELTA_BASE_MISMATCH`로 멈춘다. 맞으면 base를 새 임시 폴더로 `cp -a` 하고(하드링크 아님: base는 롤백 대상이다) 델타를 얹은 뒤 표지를 지운다. 활성화는 지금처럼 `native_release.py verify()`가 새 서명으로 전체 트리를 검사한다. 빠진 파일·남는 파일·다른 해시는 모두 거부된다.
+   - push 사전 검사(`rosy-release-push.ps1`)는 델타면 `signing.verify_delta_files`로 서명과 실린 파일의 해시만 본다. 나머지는 로봇이 검사한다.
+   - `publish_payload_release.py`는 델타를 거부한다. 자동 업데이트 로봇은 base를 갖고 있다는 보장이 없다.
+   - 잰 값: 인지 코드 한 파일을 바꾼 커밋과 base 074. tarball 277 KB(전체 24 MB), 만들고 서명하는 데 15 s. 로컬에서 로봇과 같은 재구성(base 복사 + 델타 + 표지 삭제)을 하면 `verify_release_files` 거부 0건이었다. 실제 로봇 push는 하지 않았다.
+2. **pre-push가 land.py 결과를 다시 쓴다 (D).**
+   - `tools/land.py`는 main을 fast-forward 한 뒤 `<git-common-dir>/rosy-land/<sha>.json`을 남긴다. 내용은 착지한 커밋, 시험할 때의 main(base), 통과한 pytest invocation이다.
+   - 이 기록은 `--tests auto`일 때만 남긴다. records-only 지름길로 모듈 시험을 건너뛴 회차에서는 남기지 않는다.
+   - `tools/hooks/land_record.py owed`는 push할 커밋에서 기록 → base → 기록을 따라가며 origin/main까지 끊기지 않는지 본다.
+   - 끊기지 않으면 pre-push는 affected 계층을 건너뛰고, 어느 기록도 돌리지 않은 fast suite만 돌린다. lint, 생성 기록, Safety-Review 경고는 그대로 돈다.
+   - 기록이 하나라도 없으면(손으로 착지, `--tests none`) 지금과 똑같이 돈다.
+   - 착지 때 known_failures 비교를 통과한 결과를 쓰므로, main에 이미 있는 실패가 push를 막지 않는다.
+3. **빌더 이미지 (A).**
+   - `build-payload-builder.yml`이 `ghcr.io/<owner>/rosy-payload-builder:<sha>`를 만든다. 입력: digest로 고정한 Ubuntu 24.04, 워크플로 단계에서 그대로 옮긴 `install-ros-build-prereqs.sh`(체크섬 고정 apt source, D-482 스냅샷, 지문 고정 키), colcon root에 대해 rosdep이 푸는 apt 패키지.
+   - `build-native-payload.yml`의 job은 `builder_image` 입력(기본값은 고정 digest)의 컨테이너에서 돈다. digest가 아닌 이미지는 첫 단계에서 멈춘다.
+   - `build-native-payload.sh`는 여전히 같은 스냅샷에 rosdep install을 돌린다. 그래서 이미지는 새 출처가 아니라 캐시다. 이미지 뒤에 추가된 의존성은 빌드 때 설치된다.
+   - 권한은 페이로드 job `packages: read`, 빌더 job `packages: write`이고 job 토큰만 쓴다. 서명은 여전히 운영 PC에서만 한다(D-437).
+   - 아직 재지 못했다. 첫 빌더 실행에는 이 브랜치를 origin에 올려야 한다. 그런데 pre-push가 main(`c2a0a5d83`)에 이미 있는 실패 4건으로 막혔다. 기본 digest는 `PENDING`이고, 첫 실행 뒤 그 digest로 바꾸는 커밋이 필요하다. 그 전에는 이 워크플로를 main에 올리지 않는다.
+   - 바뀌는 것: `deb-packages.txt`는 GitHub 러너 호스트 전체가 아니라 컨테이너의 패키지 목록이 된다. `ros-packages.txt`(ABI 비교 대상)는 같은 스냅샷이라 같다.
+4. **브랜치 빌드 (C).**
+   - `build-native-payload.yml`은 어느 브랜치에서든 dispatch할 수 있다. dispatch한 브랜치 이름을 `source-ref.txt`로 페이로드에 쓰고, manifest와 서명이 그 파일을 덮는다. sha는 `source-revision.txt`에 그대로 있다.
+   - `prepare_payload_release.py`는 ref를 찍고 브랜치 빌드를 "수동 push 전용"으로 표시한다. `publish_payload_release.py`는 `source-ref.txt`가 `main`이 아니면 거부한다. `robot_cd.py`는 main만 빌드한다.
+   - 브랜치 빌드를 push한 로봇은 다음 main 게시가 오면 자동 업데이트로 바뀐다. 벤치 동안에는 `rosy-update-hold.ps1 -Hold`를 건다.
+   - 수동 릴리스 번호(full·델타·브랜치)는 `robot_cd`의 `payload-reserved-*` 태그로 잡히지 않는다. 같은 번호를 다시 쓰지 않도록 로봇의 `/opt/rosy/releases`와 태그를 보고 고른다(지금과 같다).
+5. **보정 가드.**
+   - 두 로봇 모두 CORE API가 8080에서 HTTPS라, 레거시 HTTP 가드는 연결이 닫혀 `UNREACHABLE` 경고만 내고 있었다.
+   - 이제 가드는 같은 strict-host-key ssh(호스트명이 증명되면 HostKeyAlias)로 로봇의 `ROSY_API_TLS_HOST`와 공개 CA를 읽고, `calibration_tls_read.py`(CA와 정확한 호스트명 검증)로 한 번 묻는다. 실패하면 이전 경고 그대로다.
+   - 8kcn·9dfk에서 읽기만 해서 확인했다. 둘 다 "no active calibration session", 각 3 s.
+
 ### Consequences
 
 - push → 서명 롤아웃이 약 18–20분에서 약 7–8분(+카나리)이 된다.

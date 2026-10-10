@@ -133,6 +133,22 @@ def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, 
         load_vision_sources(_write(tmp_path / "c.yaml", [_source(place_markers=bad)]), environ=env)
 
 
+def test_marker_yaw_offsets_reach_the_camera_map_and_bad_ones_refuse_start(tmp_path):
+    """D-587 4: per-robot sticker yaw offset, shared check with Fleet."""
+    path = _write(tmp_path / "s.yaml", [_source(marker_yaw_offset_deg={"rosy_01": -90})])
+    camera = load_vision_sources(path, environ=ENV)[0].camera
+    assert camera.marker_yaw_offset_deg == {"rosy_01": -90.0}
+    assert load_vision_sources(_write(tmp_path / "s.yaml", [_source()]), environ=ENV)[0].camera.marker_yaw_offset_deg == {}
+    # D-580 roster source: a robot on its default marker (no YAML override) may carry an offset.
+    enrolled = _write(tmp_path / "s.yaml", [_source(robot_ids="enrolled", robot_markers={},
+                                                    marker_yaw_offset_deg={"rosy_40": 180})])
+    assert load_vision_sources(enrolled, environ=ENV)[0].camera.marker_yaw_offset_deg == {"rosy_40": 180.0}
+    for bad in ({"rosy_02": 0}, {"rosy_01": "180"}, {"rosy_01": 361}, {"bad id": 0}):
+        with pytest.raises(ValueError, match="marker_yaw_offset_deg"):
+            load_vision_sources(_write(tmp_path / "s.yaml", [_source(marker_yaw_offset_deg=bad)]),
+                                environ=ENV)
+
+
 def test_enrolled_robot_ids_take_markers_from_fleet_and_fall_back_to_yaml(tmp_path):
     """D-580: Fleet's tracking config names the roster markers; the YAML is the fallback."""
     from types import SimpleNamespace
@@ -149,3 +165,19 @@ def test_enrolled_robot_ids_take_markers_from_fleet_and_fall_back_to_yaml(tmp_pa
     assert worker._camera().heading_edge == camera.heading_edge  # sticker front stays the YAML's (D-562)
     tracker.config = {"robot_markers": {"rosy_40": 30}}  # would hide a corner: refused, YAML kept
     assert worker._camera().robot_markers == {"rosy_41": 45}
+
+
+_ENV = {"ROSY_PHONE_CEILING_NORTH": "phone-secret", "ROSY_FLEET_CEILING_NORTH": "vision-secret"}
+
+
+def test_auto_tune_defaults_on_and_can_be_turned_off(tmp_path):
+    """D-589 6: Vision tunes the camera unless the source says auto_tune: false."""
+    assert load_vision_sources(_write(tmp_path / "a.yaml", [_source()]), environ=_ENV)[0].auto_tune is True
+    off = load_vision_sources(_write(tmp_path / "b.yaml", [_source(auto_tune=False)]), environ=_ENV)
+    assert off[0].auto_tune is False
+
+
+@pytest.mark.parametrize("value", ["false", 0, 1, None, "yes"])
+def test_auto_tune_must_be_a_boolean(tmp_path, value):
+    with pytest.raises(ValueError, match="auto_tune"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [_source(auto_tune=value)]), environ=_ENV)

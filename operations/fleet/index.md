@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
-- 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
-- 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
-- 2026-10-09 · uncommitted · refactor(fleet): 시작점·배경 다시 학습을 설치·보정으로 (D-540 (f))
-- 2026-10-09 · uncommitted · fix(fleet): site-map robot rings and labels stay on the map
+- 2026-10-10 · uncommitted · feat(situation): D-577 (c) rosy-situation 골격과 Fleet ai_observer 사실(shadow)
+- 2026-10-10 · uncommitted · uiux(fleet): D-577 (b) 막힘 행의 근거 그림과 알림
+- 2026-10-10 · uncommitted · fix(fleet): D-595 지도 맞춤 고정과 교정 어긋남 경고
+- 2026-10-10 · uncommitted · feat(fleet): D-596 LED 신원 확인 켜기
+- 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background

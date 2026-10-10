@@ -73,6 +73,7 @@ function Read-StoredToken([string]$Path) {
 # built here, so an argument may hold whitespace but never a double quote.
 $script:hostnameNote = ""
 $script:sshPath = ""
+$script:verifiedAlias = ""
 $sshWallClockMs = ($TimeoutSec + 5) * 1000
 
 function Format-NativeArgument([string]$Value) {
@@ -210,7 +211,81 @@ function Test-DeviceHostKey([string]$DeviceHost) {
                                 "$alias ($result); the claimed hostname $DeviceHost is not trusted")
         return $false
     }
+    $script:verifiedAlias = $alias
     return $true
+}
+
+# One GET through calibration_tls_read.py, which verifies the CA and the exact
+# hostname. Returns the parsed reply; throws on any failure.
+function Invoke-TlsProbe([string]$TlsHost, [string]$CaFile) {
+    $process = $null
+    try {
+        $helper = Join-Path $PSScriptRoot "calibration_tls_read.py"
+        $command = Get-Command $PythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1
+        foreach ($value in @($helper, $Robot, $TlsHost, $CaFile)) {
+            if ($value -match '["\r\n]' -or $value.EndsWith('\')) { throw "Unsupported argument." }
+        }
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = $command.Path
+        $arguments = @("-I", $helper, "--address", $Robot, "--hostname", $TlsHost,
+                       "--port", "$ApiPort", "--ca-file", $CaFile, "--timeout", "$TimeoutSec")
+        $info.Arguments = ($arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardInput = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $process = [System.Diagnostics.Process]::Start($info)
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        [void]$process.StandardError.ReadToEndAsync()
+        # The bearer exists only in the private child stdin, never its argv or logs.
+        $process.StandardInput.Write((@{ token = $token } | ConvertTo-Json -Compress))
+        $process.StandardInput.Close()
+        if (-not $process.WaitForExit(($TimeoutSec + 5) * 1000)) {
+            & taskkill.exe /T /F /PID $process.Id *> $null
+            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            throw "Probe timed out."
+        }
+        if ($process.ExitCode -ne 0 -or -not $stdout.Wait(2000)) { throw "Probe failed." }
+        $reply = $stdout.Result | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $reply -or -not ($reply.PSObject.Properties.Name -contains "session")) { throw "Invalid probe reply." }
+        return $reply
+    } finally {
+        if ($null -ne $process) { $process.Dispose() }
+    }
+}
+
+# D-553 addendum 3: CORE that serves HTTPS closes a plain-HTTP connection. In
+# legacy mode, read the robot's own TLS host name and public CA over the same
+# strict-host-key ssh (the pinned device transport; HostKeyAlias when the
+# hostname was proven) and probe once over verified TLS. Returns the reply or
+# $null (the caller then warns as before).
+function Get-TlsReplyOverPinnedSsh {
+    try {
+        if (-not $script:sshPath) {
+            $command = Get-Command $SshExe -CommandType Application -ErrorAction Stop | Select-Object -First 1
+            $script:sshPath = $command.Path
+        }
+        if (-not $KeyPath -and $env:LOCALAPPDATA) { $script:KeyPath = Join-Path $env:LOCALAPPDATA "Rosy\ssh\rosy-operator-ed25519" }
+        if (-not $KnownHosts -and $env:LOCALAPPDATA) { $script:KnownHosts = Join-Path $env:LOCALAPPDATA "Rosy\known_hosts" }
+        $remote = "sudo -n sh -c '. /etc/rosy/runtime.env; [ x`$ROSY_API_TLS = xrequired ] || exit 5; echo `$ROSY_API_TLS_HOST; cat `$ROSY_API_TLS_CA_FILE'"
+        $reply = Invoke-BoundedSsh (Get-SshArguments $remote $script:verifiedAlias)
+        if ($reply.timed_out -or $reply.exit_code -ne 0) { return $null }
+        $lines = @($reply.lines)
+        if ($lines.Count -lt 3 -or $lines[0] -cnotmatch '^[a-z0-9][a-z0-9.-]*\z' -or
+                $lines[1] -ne "-----BEGIN CERTIFICATE-----") { return $null }
+        $caFile = Join-Path ([IO.Path]::GetTempPath()) ("rosy-guard-ca-" + [Guid]::NewGuid().ToString("N") + ".pem")
+        try {
+            [IO.File]::WriteAllText($caFile, (($lines[1..($lines.Count - 1)]) -join "`n") + "`n")
+            $tlsReply = Invoke-TlsProbe $lines[0] $caFile
+            Write-Host "calibration check: CORE on $Robot serves TLS; checked over https as $($lines[0]) with the robot's CA"
+            return $tlsReply
+        } finally {
+            Remove-Item -LiteralPath $caFile -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        return $null
+    }
 }
 
 $token = $ApiToken
@@ -255,45 +330,15 @@ if (-not $token) {
 }
 
 if ($secureApi) {
-    $process = $null
     try {
-        $helper = Join-Path $PSScriptRoot "calibration_tls_read.py"
-        $command = Get-Command $PythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1
-        foreach ($value in @($helper, $Robot, $ApiTlsHost, $ApiCaFile)) {
-            if ($value -match '["\r\n]' -or $value.EndsWith('\')) { throw "Unsupported argument." }
-        }
-        $info = New-Object System.Diagnostics.ProcessStartInfo
-        $info.FileName = $command.Path
-        $arguments = @("-I", $helper, "--address", $Robot, "--hostname", $ApiTlsHost,
-                       "--port", "$ApiPort", "--ca-file", $ApiCaFile, "--timeout", "$TimeoutSec")
-        $info.Arguments = ($arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
-        $info.UseShellExecute = $false
-        $info.CreateNoWindow = $true
-        $info.RedirectStandardInput = $true
-        $info.RedirectStandardOutput = $true
-        $info.RedirectStandardError = $true
-        $process = [System.Diagnostics.Process]::Start($info)
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        [void]$process.StandardError.ReadToEndAsync()
-        # The bearer exists only in the private child stdin, never its argv or logs.
-        $process.StandardInput.Write((@{ token = $token } | ConvertTo-Json -Compress))
-        $process.StandardInput.Close()
-        if (-not $process.WaitForExit(($TimeoutSec + 5) * 1000)) {
-            & taskkill.exe /T /F /PID $process.Id *> $null
-            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
-            throw "Probe timed out."
-        }
-        if ($process.ExitCode -ne 0 -or -not $stdout.Wait(2000)) { throw "Probe failed." }
-        $reply = $stdout.Result | ConvertFrom-Json -ErrorAction Stop
-        if ($null -eq $reply -or -not ($reply.PSObject.Properties.Name -contains "session")) { throw "Invalid probe reply." }
+        $reply = Invoke-TlsProbe $ApiTlsHost $ApiCaFile
     } catch {
         [Console]::Error.WriteLine("Secure calibration check failed; operation refused.")
         exit 2
-    } finally {
-        if ($null -ne $process) { $process.Dispose() }
     }
 } else {
 $url = "http://${Robot}:${ApiPort}/api/v1/calibration/session"
+$reply = $null
 try {
     $reply = Invoke-RestMethod -Uri $url -Headers @{ Authorization = "Bearer $token" } `
         -TimeoutSec $TimeoutSec -UseBasicParsing -ErrorAction Stop
@@ -309,10 +354,13 @@ try {
         Write-Loud ("CALIBRATION CHECK FAILED for ${Robot}: HTTP $status. CORE may be older than " +
                     "API Ref v1.68. Make sure nobody is calibrating before $Action.")
     } else {
+        $reply = Get-TlsReplyOverPinnedSsh
+    }
+    if ($null -eq $reply -and $null -eq $status) {
         Write-Loud ("CALIBRATION CHECK UNREACHABLE for ${Robot} ($($_.Exception.Message)). CORE may " +
                     "be down. Make sure nobody is calibrating before $Action.")
     }
-    exit 0
+    if ($null -eq $reply) { exit 0 }
 }
 
 }
