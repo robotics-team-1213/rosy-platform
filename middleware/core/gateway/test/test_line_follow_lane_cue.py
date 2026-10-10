@@ -94,13 +94,14 @@ def test_wrong_way_debounces_turns_in_place_on_odom_and_stops_within_ten_degrees
     rig = Rig()
     d = _wrong_way(rig)
     assert d.linear == 0 and d.angular < 0 and rig.m.status().reason == "fleet_wrong_way_turn"
-    seq = 3
-    while rig.yaw > math.radians(-165):
-        rig.yaw -= math.radians(20)
+    for seq in range(3, 100):                                           # odom follows at 0.5 rad/s
+        rig.yaw -= 0.05
         rig.cue("WRONG_WAY", seq, turn_deg=-170.0 - math.degrees(rig.yaw))
-        seq += 1
         d = rig.step()
-    assert d.linear > 0                                                  # done: the keep drives again
+        if d.linear > 0:
+            break
+    assert d.linear > 0, rig.m.status().reason                          # done: the keep drives again
+    assert -180.0 <= math.degrees(rig.yaw) <= -155.0
     assert any(name == "nav.lane_cue" and data["action"] == "pivot" for name, data in rig.events.seen)
 
 
@@ -143,7 +144,7 @@ def test_no_pivot_without_a_fresh_camera_or_while_lost():
     rig.t += 0.5
     rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
     d = rig.step(0.4, camera=False)                                     # camera stale (> 0.3 s)
-    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "observation_stale"
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "camera_observation_stale"
 
 
 def test_ordering_epoch_and_pose_age():
