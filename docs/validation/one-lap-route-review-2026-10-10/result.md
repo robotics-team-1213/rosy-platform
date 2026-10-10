@@ -10,6 +10,7 @@
 - 별도 실제 Chromium 시험은 현장 시험 PC에서 AI 경로 편차 경고 표시와 새 `ON_ROUTE`에 따른 경고 해제를 확인했다. 열린 trip이 있고 교착이 없어도 조회하며 주행 명령은 보내지 않는다. 로그: `X:/DevTemp/one-lap-ai-route-browser/run-1.txt`.
 - main 통합 후보 commit `51c256284`의 원격 착지 1차 묶음은 6,123 + 4,278 + 3,388 = 13,789 passed, 각 로그의 `known_failures.py` 신규 0·기존 실패 0이다. 460건은 skip으로 통과 증거가 아니다. 검사 중 main이 변경되어 최종 착지 후보는 추가 검증한다. 로그: `X:/DevTemp/land/feat-one-lap-current/run-1-{1,2,3}.txt`.
 - AI PC에 통합 후보 commit `70c750457`의 소스를 별도 staging 경로로 전달해 SHA256 `89476e7c0705cd04a0e392c0379609fadfdc2632a2b24dac0edc83e81e0bf198`를 대조했다. 그 AI PC에서 새 모듈 v0.3.0을 읽고 합성 입력의 `ON_ROUTE`, `OFF_ROUTE`, 오래된 입력 `UNKNOWN`을 자체 확인했다. 상주 서비스는 변경하지 않았고 Fleet에 합성 사실을 보내지 않았다. 로그: `X:/DevTemp/one-lap/ai-stage-proof.txt`.
+- 2차 통합 묶음에서 안전 경계 검사 `test_decision_and_learning_use_only_safety_public_api`가 새 차체 선택 함수의 공개 선언 누락을 신규 실패로 검출했다. 이를 기존 실패로 처리하지 않는다. 독립 검토자 `lap_review`는 기존 읽기 전용 공칭 차체와 `None`만 반환하는 선택 함수 하나의 `public: true` 등록을 승인했다. 명령·안전 정책을 공개하지 않으며 기존 위반 목록이나 검사기를 완화하지 않는다. 수정 후 원격 안전 경계 재검증이 필요하다.
 
 ## 기존 병합의 소급 안전 검토
 
