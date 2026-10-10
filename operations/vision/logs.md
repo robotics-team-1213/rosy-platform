@@ -406,6 +406,11 @@
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
 
+## 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
+- 변경: 모든 학습(운영자 재학습·재시작·장면 변화)이 Fleet `occupied` 로봇 자리를 빼고 배운다(`track/robot_mask.py`). 이전 배경(어둡지 않은 곳) 또는 inpainting한 모르는 바닥으로 바꾸고, 모르는 바닥은 연속 3프레임 비고 어두운 픽셀 12 px 밖일 때 채운다(5 s에 한 번). 저장본이 모르는 바닥 지도를 같이 저장한다. 페이로드에 `unknown_floor`.
+- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTemp\bg-relearn\replay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
+- gate 변화: SOURCE. 현장 배포·재학습 확인 전
+
 ## 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
 
 - 변경: `track/led_identity.py` `led-identity/2` — `min_off_s` 0.8, `max_off_s` 2.2, `max_gap_s` 1.1, 익명 blob 하나일 때 정색 표시(`evidence.mode: steady`). 추적 워커가 `identity_challenges`의 요청마다 판정하고, 열린 창 끝까지 `BackgroundBlobDetector.hold`로 배경을 얼린다(학습 프레임·장면 변경 재학습·유령 치유 없음, 박힌 로봇의 추정은 램프가 켜져도 유지)

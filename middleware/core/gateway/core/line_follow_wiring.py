@@ -97,6 +97,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         crosswalk_persist_n=_whole(raw, "crosswalk_persist_n", defaults.crosswalk_persist_n),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
+        stuck_report_s=float(raw.get("stuck_report_s", defaults.stuck_report_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
         recovery_back_speed=float(raw.get("recovery_back_speed", defaults.recovery_back_speed)),
         recovery_rear_clear_m=float(raw.get("recovery_rear_clear_m", defaults.recovery_rear_clear_m)),

@@ -17,6 +17,7 @@ from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
+from core_features.line_follow.recovery.junction.gate import MANEUVER
 from core_features.line_follow.recovery.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
 
 #: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
@@ -37,6 +38,7 @@ class StuckRecoveryMixin:
         self._return_source_age: Optional[float] = None
         self._return_source_high_water_ns: Optional[int] = None
         self._trail = ForwardTrail()
+        self._still_since: Optional[float] = None  # zero base command since (stuck_report_s)
 
     def bind_recovery(self, **providers: Callable[[], object]) -> None:
         unknown = set(providers) - set(_PROVIDERS)
@@ -133,6 +135,7 @@ class StuckRecoveryMixin:
         with self._lock:
             return (self._mode is not LineFollowMode.OFF
                     and (self._recovery.stuck_id is not None or self._obstacle_blocked
+                         or self._still_since is not None
                          or self._lost_latched or self._loss_started_at is not None))
 
     @property
@@ -152,6 +155,7 @@ class StuckRecoveryMixin:
     def _recovery_reset(self, reason: str, now: float) -> None:
         self._recovery.reset(reason, now)
         self._trail.clear()
+        self._still_since = None
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
                        principal_ref: Optional[str] = None, now: Optional[float] = None,
@@ -255,6 +259,12 @@ class StuckRecoveryMixin:
             crosswalk = "person_present"
         cause = ("crosswalk_blocked" if crosswalk is not None else "obstacle_ahead" if self._escalated
                  else "lane_lost" if self._lost_latched else None)
+        detail = crosswalk
+        report_s = config.stuck_report_s
+        if (cause is None and report_s > 0.0 and self._still_since is not None
+                and now - self._still_since >= report_s):
+            # 2026-10-10 user: any reason the robot stays still this long goes to Fleet.
+            cause, detail = "no_motion", self._status.reason
         ceiling = self._provided("linear_ceiling")
         blind = None
         if known and self._range_min is not None:
@@ -266,7 +276,7 @@ class StuckRecoveryMixin:
         recovered_at = self._recovery.recovered_at
         moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
-            now=now, cause=cause, cause_detail=crosswalk, lane_visible=lane, front_clear=front_clear,
+            now=now, cause=cause, cause_detail=detail, lane_visible=lane, front_clear=front_clear,
             front_band_m=front, front_stop_m=front_stop,
             rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
@@ -288,9 +298,16 @@ class StuckRecoveryMixin:
     def _apply_recovery(self, now: float, decision: LineFollowDecision) -> LineFollowDecision:
         if self._mode is LineFollowMode.OFF:
             return decision
+        junction = self._junction  # a D-495 maneuver supplies its own twist after this (gate.py)
+        if (abs(decision.linear) > 1e-6 or abs(decision.angular) > 1e-6
+                or junction is not None and junction.get("state") in MANEUVER):
+            self._still_since = None
+        elif self._still_since is None:
+            self._still_since = now
         action = self._recovery.step(self._stuck_input(now))
         if action.kind == "resume":
             self._release_stuck(now)
+            self._still_since = None
         update: dict = {"stuck": self._stuck_status(now)}
         if action.kind == "pass":
             self._status = self._status.model_copy(update=update)

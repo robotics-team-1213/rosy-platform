@@ -497,15 +497,26 @@ def test_d577_r3_needs_every_precondition():
 
 def test_d577_peer_behind_holds_instead_of_backing_off():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
-    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0))
-    peer = _row("rosy_02", None, pose=(-0.20, 0.03, 0.0))
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0), localization=_frame("map"))
+    peer = _row("rosy_02", None, pose=(-0.20, 0.03, 0.0), localization=_frame("map"))
     assert r.step(0.0, [me, peer]) == _hold("peer_behind")
+
+
+@pytest.mark.parametrize("legacy", ["me", "peer"])
+def test_d577_legacy_odom_pose_never_clears_the_rear_band(legacy):
+    """D-577 남은 항목 1: a robot without `localization` reports odom, not the painted map."""
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0),
+              localization=None if legacy == "me" else _frame("map"))
+    peer = _row("rosy_02", None, pose=(-3.0, 0.0, 0.0),
+                localization=None if legacy == "peer" else _frame("map"))
+    assert r.step(0.0, [me, peer]) == _hold("peer_unknown")
 
 
 def test_d577_a_peer_ahead_does_not_block_r3():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
-    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0))
-    peer = _row("rosy_02", None, pose=(0.20, 0.0, 3.14))
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0), localization=_frame("map"))
+    peer = _row("rosy_02", None, pose=(0.20, 0.0, 3.14), localization=_frame("map"))
     assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
 

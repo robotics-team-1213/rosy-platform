@@ -132,6 +132,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
+               stuck_resolver_enrolled: frozenset = frozenset(),
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
@@ -544,6 +545,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
+    if tracking is not None:
+        tracking.map_pose = map_pose.arbitrated_pose   # D-600: robot regions Vision must not learn
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
@@ -588,7 +591,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
-            clients=lambda: stuck_resolver_clients)
+            # Enrolled robots the site config names answer with Fleet's own enrolled CORE credential
+            # (operator, carries STUCK_DECIDE): D-503 6 by user go 2026-10-10, per robot id.
+            clients=lambda: {**{rid: client for rid, client in console.clients().items()
+                                if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)

@@ -18,6 +18,8 @@ REFUSED = "STUCK_DECISION_REFUSED"
 MISMATCH = "STUCK_ID_MISMATCH"
 #: Transport failures: one resend, then a human; uncertain YIELD is never replayed.
 TRANSPORT = ("ROBOT_UNREACHABLE", "STUCK_DECISION_OUTCOME_UNKNOWN")
+#: Causes that only ever get WAIT or BACK_AND_RETRY (D-577 1; no_motion = CORE stuck_report_s).
+LOST_LIKE = ("lane_lost", "no_motion")
 
 
 @dataclass(frozen=True)
@@ -285,11 +287,11 @@ class StuckResolver:
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
         if rule[0] == "R5":                           # result() raises the human row after the send
-            return Answer(rid, sid, "WAIT", "R5", escalate=f"lane_lost_hold:{rule[2]}")
+            return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
         # §5: the one transport resend repeats an answer already counted; never block it.
         if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
             return self._escalate(chain, rid, sid, "rule_budget")
-        if stuck.get("cause") == "lane_lost" and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
+        if stuck.get("cause") in LOST_LIKE and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
             return self._escalate(chain, rid, sid, "no_rule")   # D-577 1: never RESUME/YIELD on lane_lost
         if len(rule) == 4:
             return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
@@ -321,11 +323,16 @@ class StuckResolver:
             candidates.append(("R1", "WAIT"))
         if cause == "obstacle_ahead" and not peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))
-        if cause == "lane_lost":
+        if cause in LOST_LIKE:
             from fleet.server.stuck_lane_lost import lane_lost_hold
 
-            hold = lane_lost_hold(row, stuck, rows, chain, self.config)
-            return ("R3", "BACK_AND_RETRY") if hold is None else ("R5", "WAIT", hold)
+            # no_motion (2026-10-10, any zero-command reason >= stuck_report_s): R6 = R3's back-off
+            # and look again under R3's preconditions; CORE re-checks the rear (D-407 §4).
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config,
+                                  rule="R3" if cause == "lane_lost" else "R6")
+            if hold is None:
+                return ("R3" if cause == "lane_lost" else "R6", "BACK_AND_RETRY")
+            return ("R5", "WAIT", hold)
         if peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))      # after a refused WAIT
         for rule in candidates:
@@ -336,7 +343,7 @@ class StuckResolver:
     def _next_segment(self, row, rows) -> Optional[Answer]:
         """The robot finished one segment and is holding off the resume path."""
         stuck = _stuck_of(row)
-        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") == "lane_lost":
+        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") in LOST_LIKE:
             return None
         meet = self._meet(row, rows)
         if meet is None:

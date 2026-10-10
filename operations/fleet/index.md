@@ -94,4 +94,4 @@
 - 2026-10-10 · uncommitted · uiux(fleet): D-577 (b) 막힘 행의 근거 그림과 알림
 - 2026-10-10 · uncommitted · fix(fleet): D-595 지도 맞춤 고정과 교정 어긋남 경고
 - 2026-10-10 · uncommitted · feat(fleet): D-596 LED 신원 확인 켜기
-- 2026-10-10 · uncommitted · feat(fleet): D-587 approved_record sighting 수용
+- 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background
