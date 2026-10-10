@@ -244,8 +244,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_802,
-        "split: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
+        50_834,
+        "split: independently re-judged at 50834 on 2026-10-10 by snapshot_review, excluding registered traffic, localization and stuck units; trip admission, AI wiring, drift diagnostics and UI retain their existing owners. Existing observe/server/UI split obligations and +150 remain. Previous verdict: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
         "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
         "D-511 rev 3-6 (+179) - 1707. +150 allowance measured from 49802. Previously "
         "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
@@ -694,8 +694,8 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged",
     ),
     "fleet/fleet/cli.py": (
-        705,
-        "accept: measured at 705 after moving fleet.traffic zone, signal and authority YAML parsers "
+        871,
+        "split: independently re-judged at 871 on 2026-10-10 by snapshot_review; drift, AI and trip configuration remains entrypoint wiring. Connection/session parser extraction is due and unimplemented; original budgets remain. Previous verdict: measured at 705 after moving fleet.traffic zone, signal and authority YAML parsers "
         "to traffic/config.py. The CLI keeps entrypoint and session argument wiring; extract its "
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
@@ -1289,8 +1289,8 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1270,
-        "accept: re-judged at 1270 on 2026-10-10 for D-583. The mixed-install fallback tries the turn-signal argument, then the D-546 recovery argument, then the three-argument lamp. Zero growth allowance remains. Previously "
+        1273,
+        "accept: independently re-judged at 1273 on 2026-10-10 by snapshot_review; mixed-install lamp fallback retains one presentation owner and zero growth allowance. Previous verdict: re-judged at 1270 on 2026-10-10 for D-583. The mixed-install fallback tries the turn-signal argument, then the D-546 recovery argument, then the three-argument lamp. Zero growth allowance remains. Previously "
         "re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
         "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
         "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "

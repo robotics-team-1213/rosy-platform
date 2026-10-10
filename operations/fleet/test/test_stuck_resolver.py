@@ -752,7 +752,7 @@ def _ai_row(proposal=None, stuck=None, wait=True):
 def _trusted(row):
     """A trusted, fresh Fleet map pose: the site map's crosswalks can be measured (D-573 1)."""
     row["state"]["localization"] = _frame("map")
-    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
+    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2, **row["state"]["pose"]}
     return row
 
 
@@ -882,7 +882,7 @@ def test_d577_ai_back_off_refused_when_the_rear_is_unknown_allowed_when_clear(ca
     unknown = _row("rosy_02", pose=(-0.2, 0.0, 0.0), localization=None)
     assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), unknown) == (
         "peer_unknown", [])
-    clear = _row("rosy_02", pose=(0.0, 1.0, 0.0))             # trusted, outside both bands
+    clear = _trusted(_row("rosy_02", pose=(0.0, 1.0, 0.0)))             # trusted, outside both bands
     assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), clear) == (
         "forwarded", [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")])
 
@@ -947,9 +947,8 @@ def test_d573_core_zone_holds_as_crosswalk(state):
 
 def test_d573_core_null_crosswalk_with_every_other_precondition_opens_r3():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
-    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
-    me["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
-    peer = _row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map"))
+    me = _trusted(_clear(_row(stuck=_lost(), localization=_frame("map"))))
+    peer = _trusted(_row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map")))
     assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
 

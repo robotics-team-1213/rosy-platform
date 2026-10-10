@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from core_common.robot_body import PINKY_PRO, ROTATION_SECTORS, SWEEP_PAD_M
+from core_common.robot_body import NOMINAL_BODY, ROTATION_SECTORS, SWEEP_PAD_M
 from core_features.line_follow.model import LineFollowMode
 from core_features.line_follow.recovery.stuck.realign.manoeuvre import Manoeuvre
 from core_features.line_follow.recovery.stuck.realign.recovery import RealignRecovery
@@ -83,7 +83,7 @@ class RealignMixin:
             if inp.turn_m is None or inp.turn_m < SWEEP_PAD_M + _TURN_CLEAR_M:
                 return "turn_blocked"
             base = [(x + c.body_lidar_x_m, y) for x, y in self._body_points]
-            if PINKY_PRO.seen_sectors(base) < ROTATION_SECTORS:   # geometry-free sector count (D-424)
+            if NOMINAL_BODY.seen_sectors(base) < ROTATION_SECTORS:   # geometry-free sector count (D-424)
                 return "turn_unseen"
         # D-422 on the twist this tick sends (the tick itself measured the camera's intent).
         saved, self._intended = self._intended, (linear, angular)
