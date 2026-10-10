@@ -236,3 +236,81 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
         assert _raw_words(page) == []
         assert not errors
         browser.close()
+
+
+def test_a_hundred_robots_stay_usable(tmp_path):
+    """The robot count must not matter: 100 fake COREs (5 stuck, 10 offline). Exceptions lead the queue and the
+    cards, nominal cards fold to one line, no horizontal overflow at 1440x900 and 1024x768, no long main-thread
+    task over 250 ms across polls, and the robot finder narrows the 99 follower boxes."""
+    from playwright.sync_api import sync_playwright
+    from test_server_gather_source import _health
+
+    ids = [f"rosy_{i:03d}" for i in range(1, 101)]
+    robots = []
+    for i, robot_id in enumerate(ids):
+        lane = {"mode": "CAMERA_LINE", "state": "TRACKING"}
+        if i % 20 == 7:
+            lane = {"mode": "CAMERA_LINE", "state": "HOLD", "stuck": {
+                "stuck_id": f"s-{robot_id}", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 4.0, "attempts": 0,
+                "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 60.0}}
+        robot = LaneRobot(robot_id, state={
+            "robot_id": robot_id, "mode": "IDLE", "navigation": "IDLE", "map_id": "m1",
+            "pose": {"x": (i % 10) * 0.3, "y": (i // 10) * 0.3, "yaw": 0.0}, "safety": {"estop": False},
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"}, "line_follow": lane})
+        robot.power_health_value = _health(time.monotonic)
+        if i % 10 == 9:
+            robot.state_error = ConnectionError("down")
+        robots.append(robot)
+    console = FleetConsole([RobotEndpoint(r.robot_id, f"http://127.0.0.1:{9000 + i}", "t") for i, r in enumerate(robots)],
+                           robots, relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=console.robot_ids)
+    app = create_app(console, task_service=tasks, site_users={}, start_task_dispatcher=False,
+                     site_logins={"kim": {"principal_id": "kim", "role": "operator",
+                                          "password_scrypt": hash_password("pw-1234")}},
+                     web_common=ROOT / "shared" / "web")
+    listener = safe_listener()
+    origin = f"http://localhost:{listener.getsockname()[1]}"
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    worker.start()
+    try:
+        deadline = time.monotonic() + 20
+        while not server.started and worker.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert server.started
+        with sync_playwright() as playwright:
+            browser, page, errors, _posts = _login(playwright, origin)
+            # The first gathers fill power evidence; nominal cards fold once it is fresh.
+            page.wait_for_function("() => document.querySelectorAll('#roster article[data-collapsed]').length >= 80",
+                                   timeout=30000)
+            page.evaluate("""() => { window.__lt = []; new PerformanceObserver((list) =>
+              window.__lt.push(...list.getEntries().map((e) => e.duration))).observe({type: 'longtask'}); }""")
+            page.wait_for_timeout(6000)  # several 1 s polls of 100 robots
+            longest = page.evaluate("Math.max(0, ...window.__lt)")
+            assert longest < 250, longest
+            assert page.evaluate("document.getElementsByTagName('*').length") < 12000
+            cards = page.locator("#roster article")
+            assert cards.count() == 100
+            first = [cards.nth(i).get_attribute("data-robot-id") for i in range(15)]
+            exceptions = {robot_id for i, robot_id in enumerate(ids) if i % 20 == 7 or i % 10 == 9}
+            assert set(first) == exceptions, first  # the 15 exception cards come first, open
+            assert page.locator("#critical-list li").first.inner_text().split(":")[0] in exceptions
+            head = page.locator("#critical-head small").inner_text() + page.locator("#warning-head small").inner_text()
+            assert "외" in head or len(head) < 120, head  # a group head never lists every name
+            for width, height in [(1440, 900), (1024, 768)]:
+                page.set_viewport_size({"width": width, "height": height})
+                page.wait_for_timeout(1200)
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+                assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), width
+            page.locator(".formation-form-wrap > summary").click()
+            members = page.locator("#formation-members")
+            assert members.bounding_box()["height"] <= 12 * 16 + 1  # a bounded list, not 99 rows of boxes
+            page.locator("#formation-filter").fill("05")
+            visible = page.locator("#formation-members label:not([hidden])").all_inner_texts()
+            assert visible and all("05" in robot_id for robot_id in visible), visible
+            assert not errors
+            browser.close()
+    finally:
+        server.should_exit = True
+        worker.join(timeout=20)
+        listener.close()
