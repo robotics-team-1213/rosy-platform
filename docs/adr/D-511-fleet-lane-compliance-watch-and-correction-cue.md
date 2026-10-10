@@ -151,3 +151,9 @@
 3. 회전이 10° 안으로 끝나면 카메라가 2 s 안에 다시 차선을 따라야 달린다. 그동안은 HOLD `fleet_turn_reacquire`이고, 넘으면 래치 HOLD `fleet_turn_no_lane`으로 Fleet을 기다린다.
 4. 회전 자리 밖 WRONG_WAY는 바뀌지 않는다(래치 HOLD `fleet_wrong_way`).
 5. 회전 기계는 카메라와 무관한 `odom_pivot.OdomPivot` 하나다. D-607 P3 REALIGN 회전이 이것을 다시 쓴다.
+
+### 개정 6 — 한 바퀴 경로의 주행 맥락 (2026-10-10)
+
+lane-cue에 선택 필드 `context`를 더한다. 사전 정보이고 움직임 명령이 아니다. 필드는 `{route: "lap", segment_id, s_m, lap_m, heading_deg, ahead_m (0.25), heading_ahead_deg, offset_m, next: {kind: junction|ring_entry|crosswalk|turn_spot|corner, ds_m, action: left|right|straight|stop_look|turn_spot, ref}, pose_age_s, anchor_age_s}`이다.
+- 한 바퀴는 현장 YAML `fleet.lane_compliance.lap_arcs`(지도 v5 8자, 7.38 m)다. 방향은 지도 일방 방향이고, `action`은 그 자리의 지도상 방향 변화다.
+- 엄격 스키마라 Fleet은 `guide_context: true`일 때만 보낸다. 기본값은 false이고, 로봇 CORE가 이 필드를 알 때 켠다. 400·422는 받을 수 없는 로봇으로 본다.
