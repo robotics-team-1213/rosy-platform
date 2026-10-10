@@ -6,7 +6,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { cardExpanded, createRoster, mustExpand } = await import("../../fleet/server/web/roster.js");
-const { openDecisionKey, queueRowText } = await import("../../fleet/server/web/queues.js");
+const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../fleet/server/web/queues.js");
 const { deadlockView, replanView } = await import("../../fleet/server/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
@@ -100,10 +100,29 @@ test("deadlock slot (D-577 d): Fleet's decision per robot, AI facts for this rob
   assert.equal(none.lines[0], "a · 해결기 판단 전");
   assert.equal(none.confirmReason, "운영자 권한이 필요합니다");
   assert.equal(deadlockView(traffic, null, [], "a", { operator: true }).cancelReason, "열린 운행이 없습니다");
+  const disagree = [{kind: "wait_cycle_confirmed", robot_ids: ["a", "b"], confidence: 0.7,
+    value: {fleet_agrees: false}, observed_at: 3}];
+  assert.match(deadlockView(traffic, held, disagree, "a", {operator: true}).lines.at(-1), /Fleet 순환과 불일치/);
 });
 
 test("a later row of the same robot hides the name and its colon", () => {
   // Field check 2026-10-10: ": Rosy Cam이 rosy_41를 찾지 못합니다" started with a bare colon.
   assert.equal(queueRowText(": 교통 대기", true), ": 교통 대기");
   assert.equal(queueRowText(": Rosy Cam이 rosy_41을 찾지 못합니다", false), "Rosy Cam이 rosy_41을 찾지 못합니다");
+});
+
+test("one warn cause on many robots is one row; decisions and single causes stay their own rows", () => {
+  const battery = ": 배터리 근거 확인 불가 — 센서/CORE 확인";
+  const rows = [
+    { robotId: "rosy_001", text: battery, key: "rosy_001|0" },
+    { robotId: "rosy_002", text: ": 연결 끊김", key: "rosy_002|1" },
+    ...["rosy_003", "rosy_004", "rosy_005", "rosy_006"].map((robotId, i) => ({ robotId, text: battery, key: `${robotId}|${i}` })),
+    { robotId: "rosy_007", text: battery, decision: "stuck", key: "rosy_007|stuck" },
+  ];
+  const out = groupRows(rows);
+  assert.deepEqual(out.map((row) => row.key), ["group|" + battery, "rosy_002|1", "rosy_007|stuck"]);
+  assert.deepEqual(out[0].group, ["rosy_001", "rosy_003", "rosy_004", "rosy_005", "rosy_006"]);
+  assert.equal(groupText(battery, out[0].group),
+    "배터리 근거 확인 불가 — 센서/CORE 확인 · 5대 (rosy_001 · rosy_003 · rosy_004 외 2대)");
+  assert.equal(groupText(": 연결 끊김", ["a", "b"]), "연결 끊김 · 2대 (a · b)");
 });

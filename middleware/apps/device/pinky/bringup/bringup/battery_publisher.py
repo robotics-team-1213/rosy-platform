@@ -100,7 +100,8 @@ def main(args=None):
         pass
     finally:
         publisher.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

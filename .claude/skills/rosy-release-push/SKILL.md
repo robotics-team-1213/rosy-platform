@@ -69,7 +69,11 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      the two push lines below. It never pushes.
    - Each phase prints its wall time. Release 021 (a 98 MB artifact) took 99 s to download
      and 28 s for everything else.
-3a. **Delta instead of a build (D-553 addendum 3).** When the commit only changes files the payload
+3a. **Delta instead of a build (D-553 addendum 3, 4).** One command reserves the id, builds, signs and pushes to both robots at once (camera-only restart when only camera perception code changed; `--dry-run` to preview):
+   ```powershell
+   python tools/release/ship.py --base <base-id> --robots 9dfk,8kcn
+   ```
+   The pieces by hand: When the commit only changes files the payload
    ships verbatim (Python modules, launch/config, native-runtime scripts) and both robots hold the
    base release this PC prepared, skip steps 1-3:
    ```powershell

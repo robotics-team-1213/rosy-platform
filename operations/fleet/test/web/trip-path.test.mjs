@@ -2,7 +2,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  planSummaryText, planTrip, repeatTripReason, startTrip, tripRefusalText,
+  planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip, tripErrorText, tripRefusalText,
+  tripStartReason,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
@@ -32,4 +33,20 @@ test('repeat reason: map, running trip, two start places, a chosen start', () =>
   assert.equal(repeatTripReason({active: one, running: null, start: 'A'}), '반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
   assert.equal(repeatTripReason({active: ACTIVE, running: null, start: ''}), '출발 자리를 고르세요');
   assert.equal(repeatTripReason({active: ACTIVE, running: null, start: 'A'}), '');
+});
+
+test('D-601 start check: 출발 가능, 방향 반대, 차선 밖, with numbers in refusals and on the start button', () => {
+  assert.equal(startCheckText({code: null}), '출발 가능');
+  assert.equal(startCheckText({code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: -178.2}), '방향 반대(178°)');
+  assert.equal(startCheckText({code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 35}), '방향 어긋남(35°)');
+  assert.equal(startCheckText({code: 'TRIP_START_OFF_LANE', off_lane_m: 0.05}), '차선 밖 5 cm');
+  const plan = {segments: [1], length_m: 1, eta_s: 3, map_version: 4, start_check: {code: null}};
+  assert.equal(planSummaryText(plan), '1개 차로 · 1.00 m · 약 3 s · 지도 v4 · 출발 가능');
+  assert.equal(tripStartReason({role: 'operator', plan, active: {version: 4}, running: null}), '');
+  const away = {...plan, start_check: {code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 178}};
+  assert.match(tripStartReason({role: 'operator', plan: away, active: {version: 4}, running: null}), /^방향 반대\(178°\) · /);
+  assert.match(tripErrorText('TRIP_HEADING_CONFLICT', {heading_err_deg: 178}), /방향 반대\(178°\)$/);
+  assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.12}), /차선 밖 12 cm$/);
+  assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE'), /카메라/);
+  assert.doesNotMatch(tripErrorText('TRIP_LINE_FOLLOW_NOT_ACTIVE'), /카메라 또는 IR/);
 });

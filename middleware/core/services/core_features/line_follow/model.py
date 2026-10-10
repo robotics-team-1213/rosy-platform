@@ -143,16 +143,22 @@ class LineFollowConfig:
     crosswalk_odom_error_fraction: float = 0.05
     # 카메라가 잰 횡단보도 끝 거리의 앞뒤 오차 비율(9dfk 실측 2026-10-07: 0.3 m에서 약 1.5 cm).
     crosswalk_range_error_fraction: float = 0.05
+    # D-573 6 개정: 한 프레임이 밝힌 횡단보도 앞뒤 최악 오차(crosswalk_uncertainty_m)의 상한. 8kcn 승인
+    # 기록(높이 ±5 mm, pitch ±0.25°, 3 px)으로 잰 검출 범위 끝(0.33 m)의 값. 유도는 D-573 6항 보고 개정.
+    crosswalk_max_uncertainty_m: float = 0.058
     # D-573 crosswalk gate (crosswalk_gate.py): stop before a camera crosswalk zone, look with the
-    # LiDAR, cross only after crosswalk_look_s of empty scans (>= crosswalk_look_min_scans: 10 Hz
-    # x 1 s x 0.8). No timeout: after crosswalk_report_s a D-407 crosswalk_blocked stuck asks a human.
+    # LiDAR, cross only after crosswalk_clear_s of continuous empty scans (>= crosswalk_look_min_scans:
+    # 10 Hz x 5 s x 0.8; D-573 rev 3, 2026-10-10 user: no one for 5 s, then go). No timeout: after
+    # crosswalk_report_s (> crosswalk_clear_s) a D-407 crosswalk_blocked stuck asks a human.
     # cross speed = the lane slow value (cruise 0.08 x bridge_slow_scale 0.5). approach default =
     # the waiting strip beside a camera-only zone's lane corridor; 0 = the corridor only, because a
     # camera zone cannot tell a waiting strip from the track wall beside it (map_v2_fleet: wall
     # 0.13 m from the lane centre); site strips come from the Fleet map approach[] (D-573 1). Off.
     crosswalk_gate_enabled: bool = False
-    crosswalk_look_s: float = 1.0
-    crosswalk_look_min_scans: int = 8
+    # D-511 rev 1: read Fleet's lane cue (POST /line-follow/lane-cue) in the CAMERA_LINE keep. Off.
+    fleet_lane_cue_enabled: bool = False
+    crosswalk_clear_s: float = 5.0
+    crosswalk_look_min_scans: int = 40
     crosswalk_report_s: float = 10.0
     crosswalk_cross_speed: float = 0.04
     crosswalk_approach_default_m: float = 0.0
@@ -340,6 +346,8 @@ class LineFollowConfig:
             raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
         if not (_finite(self.crosswalk_range_error_fraction) and 0.0 <= self.crosswalk_range_error_fraction <= 0.5):
             raise ValueError("crosswalk_range_error_fraction must be in [0, 0.5]")
+        if not (_finite(self.crosswalk_max_uncertainty_m) and 0.0 < self.crosswalk_max_uncertainty_m <= 0.5):
+            raise ValueError("crosswalk_max_uncertainty_m must be in (0, 0.5]")
         self._check_crosswalk_gate()
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
@@ -391,12 +399,16 @@ class LineFollowConfig:
     def _check_crosswalk_gate(self) -> None:
         if type(self.crosswalk_gate_enabled) is not bool:
             raise ValueError("crosswalk_gate_enabled must be a boolean")
-        if not (_finite(self.crosswalk_look_s) and 0.5 <= self.crosswalk_look_s <= 5.0):
-            raise ValueError("crosswalk_look_s must be in [0.5, 5]")
+        if type(self.fleet_lane_cue_enabled) is not bool:
+            raise ValueError("fleet_lane_cue_enabled must be a boolean")
+        if not (_finite(self.crosswalk_clear_s) and 0.5 <= self.crosswalk_clear_s <= 60.0):
+            raise ValueError("crosswalk_clear_s must be in [0.5, 60]")
         if type(self.crosswalk_look_min_scans) is not int or not 1 <= self.crosswalk_look_min_scans <= 100:
             raise ValueError("crosswalk_look_min_scans must be a whole number in [1, 100]")
         if not (_finite(self.crosswalk_report_s) and 1.0 <= self.crosswalk_report_s <= 600.0):
             raise ValueError("crosswalk_report_s must be in [1, 600]")
+        if not self.crosswalk_report_s > self.crosswalk_clear_s:
+            raise ValueError("crosswalk_report_s must exceed crosswalk_clear_s (a clear look never asks a human)")
         if not (_finite(self.crosswalk_cross_speed) and 0.0 < self.crosswalk_cross_speed <= 0.10):
             raise ValueError("crosswalk_cross_speed must be in (0, 0.10]")
         if not (_finite(self.crosswalk_approach_default_m) and 0.0 <= self.crosswalk_approach_default_m <= 0.5):

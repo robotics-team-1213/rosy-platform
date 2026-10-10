@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,3 +17,9 @@ LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane
 def painted_track():
     """The ``Painted`` the stuck resolver and /route read from an imported site map."""
     return painted_from(from_lane_graph(LANE_GRAPH))
+
+
+@lru_cache(maxsize=1)
+def painted_without_crosswalks():
+    """The same track on a site map without crosswalks (D-573 1): R3 is judged on its other rules."""
+    return replace(painted_track(), crosswalks=())

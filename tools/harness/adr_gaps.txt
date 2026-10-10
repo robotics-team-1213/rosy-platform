@@ -26,3 +26,7 @@ D-583 reserved in another active branch (refs/adr/D-583)
 D-585 reserved on adr-model-lap for model-driven lane lap acceptance; remove when it lands
 D-586 reserved on adr-model-lap for capture_group annotated revision; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
+D-602 reserved by another session (refs/adr/D-602), not yet on main; remove when it lands
+D-603 reserved by another session (refs/adr/D-603), not yet on main; remove when it lands
+D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
+D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands

@@ -51,6 +51,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-407 amendment 2026-10-10: CAMERA_LINE LOST auto-resume through the real line-follow
     # manager and its stuck-test helpers in this gateway test folder.
     "middleware/core/gateway/test/test_line_follow_lost_resume.py",
+    # D-511 rev 1: the Fleet lane cue driven through the real line-follow manager in this
+    # gateway test folder; the cue mixin has no core_features/test home yet.
+    "middleware/core/gateway/test/test_line_follow_lane_cue.py",
     "middleware/core/gateway/test/test_line_follow_obstacle.py",
     "middleware/core/gateway/test/test_line_follow_obstacle_path.py",
     # D-407 (2026-10-02): the stuck back-off through core.bridge.traffic_gate and the

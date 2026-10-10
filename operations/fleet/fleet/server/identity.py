@@ -89,6 +89,7 @@ class _Pending:
     not_before: float
     not_after: float
     reason: str = "operator"
+    lamp: Optional[str] = None  # D-596 rev 2026-10-10: CORE's answer once final (shown, expired, unsupported)
 
 
 @dataclass
@@ -186,8 +187,33 @@ class IdentityService:
                     "not_after": pending.not_after, "sources": list(sources),
                     "state": "pending_visual_confirmation", "trigger": reason}
 
+    async def poll_lamps(self) -> None:
+        """D-596 rev 2026-10-10: ask CORE whether rosy-face blinked; a refusal ends the window with its
+        reason instead of a silent ``none``. Once per tick per open request; a CORE without the
+        route (404) is not asked again for that request."""
+        clients = self._clients()
+        for pending in self._open():
+            client = clients.get(pending.robot_id)
+            if pending.lamp is not None or not hasattr(client, "identify_lamp_result"):
+                continue
+            try:
+                answer = await client.identify_lamp_result(pending.request_id)
+            except Exception as exc:  # down or slow: asked again next tick while the window is open
+                if getattr(exc, "status", None) == 404:
+                    pending.lamp = "unsupported"
+                continue
+            state = answer.get("state") if isinstance(answer, Mapping) else None
+            if state in ("shown", "expired"):
+                pending.lamp = state
+            elif state == "refused" and self._pending.get(pending.robot_id) is pending:
+                del self._pending[pending.robot_id]
+                self._last[pending.robot_id] = {"state": "UNKNOWN", "reason": "lamp_refused",
+                                                "lamp_reason": answer.get("reason"), "at": self._clock(),
+                                                "trigger": pending.reason}
+
     async def tick(self) -> list[dict]:
         """D-596 2: ask every robot the trigger rules name (colours permitting); the started requests."""
+        await self.poll_lamps()
         if not self.config.auto_request or self.tracking is None:
             return []
         now = self._clock()
@@ -258,7 +284,12 @@ class IdentityService:
         predicted = self._predicted(robot_id)
         if predicted is None and pending.color == "amber":
             return self._unknown(robot_id, "no_prediction", source.source_id)
-        if predicted is not None and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]:
+        # D-596 amendment (a), user decision 2026-10-10: a blue blink names the robot anywhere on the
+        # source, because a source has one blue request at a time and only an identify blinks blue on/off.
+        # Amber (the caution lamp's pattern) and the weaker steady colour stay inside the expected place.
+        blink_anywhere = pending.color == "blue" and (body.get("evidence") or {}).get("mode") != "steady"
+        if (predicted is not None and not blink_anywhere
+                and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]):
             return self._unknown(robot_id, "far_from_robot", source.source_id)
         now = self._clock()
         found = self._continue(latest, x, y)

@@ -136,7 +136,23 @@ export const HEALTH_LABEL = Object.freeze({OK: "정상", WARNING: "주의", ERRO
 export const SEVERITY_LABEL = Object.freeze({info: "정보", warning: "주의", error: "오류", critical: "심각"});
 export const SAFETY_POLICY_LABEL = Object.freeze({STOP: "정지", HOLD: "대기", RETURN_HOME: "복귀", CONTINUE: "계속"});
 export const TOKEN_SOURCE_LABEL = Object.freeze({card: "카드", manual: "수동", "pair-physical": "로봇 화면 코드", "pair-admin": "관리자 등록 코드", legacy: "설정 파일"});
-export const LINE_STATE_LABEL = Object.freeze({OFF: "꺼짐", mode_off: "추종 꺼짐"});
+export const LINE_STATE_LABEL = Object.freeze({
+  OFF: "꺼짐", mode_off: "추종 꺼짐", WAITING: "선 찾는 중", TRACKING: "추종 중", LOST: "선 놓침",
+  HOLD: "멈춤", RECOVERING: "복구 중",
+});
+// line_follow.mode (CORE /line-follow). "차선 추종" is the one operator word for it on every surface.
+export const LINE_FOLLOW_MODE_LABEL = Object.freeze({
+  CAMERA_LINE: "카메라 차선 추종", IR_LINE: "IR 차선 추종", OFF: "차선 추종 꺼짐",
+});
+
+// D-20 formation (Fleet swarm session). The enum stays in title and in the request body.
+export const FORMATION_STATE_LABEL = Object.freeze({
+  IDLE: "대기", ARMING: "시작 중", RUNNING: "진행 중", HOLDING: "멈춤 · 재개 대기", STOPPED: "해제됨",
+});
+export const FORMATION_SHAPE_LABEL = Object.freeze({
+  COLUMN: "종대 · 한 줄로 뒤따름", LINE: "횡대 · 옆으로 나란히", V: "V자", GRID: "격자", CIRCLE: "원형",
+  FOLLOW: "한 대 뒤따름 · 팔로워 1대", TRAIL: "자취 따라가기 · 리더가 간 길로",
+});
 
 export const EVIDENCE_LABEL = Object.freeze({
   fresh: "최신",
@@ -161,7 +177,7 @@ export function enumLabel(labels, value, fallback = "—") {
 }
 
 // SAFE_STOP is a DeviceState string on state.mode, not a RobotMode member.
-const MODE_ALIAS = Object.freeze({ SAFE_STOP: "안전 정지" });
+const MODE_ALIAS = Object.freeze({ SAFE_STOP: "안전 정지", LINE_FOLLOW: "차선 추종" });
 
 export function operatorModeLabel(value, fallback = "—") {
   if (Object.hasOwn(MODE_ALIAS, value)) return MODE_ALIAS[value];

@@ -59,8 +59,9 @@
 
 바뀌지 않는 것: LED 확인 트랙은 여전히 이름 확인과 D-511·표시 전용이다. 지도 자세의 앵커는 sighting(D-587)과 운영자 핀(D-593)뿐이다.
 
-**사용자에게 물을 것(제안, 이 개정이 하지 않음):**
+**사용자 결정 2026-10-10 (feat/led-confirm-anywhere-pin-prefill, 적용):**
 
-- (a) 로봇이 들려 옮겨지면 odom이 움직이지 않아 지도 자세와 예상 자리가 둘 다 틀린다. 파랑 **점멸**(정색 아님) 판정은 source마다 파랑 요청이 하나뿐이라 다른 로봇이 같은 무늬를 낼 수 없다. 파랑 점멸이면 예상 자리 밖이어도 이름을 붙이게(`far_from_robot` 예외) 할 것인가?
-- (b) LED로 확인된 blob은 자세가 아니라 이름이다(방향이 없다). 확인된 blob 자리를 콘솔 D-593 핀 대화상자에 미리 채우고 운영자가 방향만 정해 확정하는 길을 둘 것인가? 이 ADR은 LED만으로 `LOCALIZED`를 만들지 않는다(D-598 2항).
+- (a) **"붙임" — 파랑 점멸은 예상 자리 밖에서도 이름을 붙인다.** 로봇이 들려 옮겨지면 odom이 움직이지 않아 지도 자세와 예상 자리가 둘 다 틀린다. 파랑 켬·끔 무늬(점멸, `evidence.mode`가 `steady`가 아님)는 그 source에 열린 파랑 요청이 하나뿐이고(2항, 7항) 파랑 켬·끔을 내는 것은 식별 점멸뿐이라, 요청한 로봇 말고는 낼 수 없다. 그래서 Fleet은 이 판정에 `far_from_robot`을 적용하지 않는다. 미끼·주의 가드는 그대로다: 주황은 주의(caution) 램프와 같은 무늬라 예상 자리 안에서만 받고 예상 자리를 모르면 `no_prediction`이다. 정색 표시(`steady`)는 약한 증거라 파랑이어도 예상 자리 안에서만 받는다. 확인 트랙은 여전히 이름과 D-511·표시 전용이다(D-472 부록 3항).
+- (b) **"핀 제안" — LED로 확인된 자리에서 핀을 시작한다.** Fleet 지도 자세가 `LOCALIZED`가 아닌 로봇에 LED 확인 트랙(`CONFIRMED`)이 있으면, 콘솔의 D-593 "위치 찍기"는 그 blob 자리를 위치로 쓰고 운영자는 지도를 눌러 끌어 방향만 정해 확인한다(확인 문구에 "LED로 확인된 자리"). 앵커는 운영자 핀이고 LED만으로는 `LOCALIZED`가 되지 않는다(D-598 2항).
 
+**사용자 결정 2026-10-10 — 로봇이 거절 이유를 직접 알린다 (feat/core-lamp-identify-result, 적용):** 위 3항은 Fleet이 로봇 상태로 주의를 짐작한다. 짐작이 빗나가면(Fleet이 모르는 주의, E-Stop, 램프 없음) 여전히 `none`이다. 이제 `rosy-face`가 식별 점멸을 거절할 때 결과에 이유(`CAUTION_ACTIVE`·`ESTOP`·`STATE_DISPLAY`·`CORE_UNAVAILABLE`·`LAMP_UNAVAILABLE`)를 쓰고, `rosy-hw-test`가 그것을 `hw-test.json`의 `reason`으로 옮긴다. CORE는 `GET /host/lamp/identify/{request_id}`로 마지막 요청을 `pending`·`shown`·`refused`·`expired`로 답한다. Fleet은 창이 열린 동안 1 s마다 묻고, `refused`면 창을 닫고 UNKNOWN `lamp_refused`와 로봇의 이유(`last.lamp_reason`)를 남기며, 콘솔이 그 이유를 보인다. 3항의 Fleet 쪽 주의 판단은 그대로 둔다(묻기 전에 거르는 것). 양쪽 하위 호환: 이전 CORE는 404라 Fleet이 그 요청을 다시 묻지 않고 지금처럼 Vision 판정을 기다린다; 이전 payload의 거절은 이유 없이 `FAILED`로 온다. 이유는 다음 로봇 payload부터(D-412). API v1.198.

@@ -7610,3 +7610,13 @@ osy-d395-s1d\`.
 - 변경: Fleet이 1 s마다 로봇의 지도 좌표(로봇 LOCALIZED·map 보고, 아니면 Fleet map pose LOCALIZED/DEGRADED, 아니면 천장 카메라 CAMERA_ONLY)를 사이트 DB `fleet_robot_path`에 2 cm/30 s로 줄여 24 h 남기고 `GET /api/fleet/robots/{robot_id}/path`(API v1.177)로 준다. 콘솔 궤적은 이 기록을 그린다(최근 2분·10분·이번 운행, 로봇별, 실선/파선/점선). `localization: null` pose(odom일 수 있음)를 지도에 그리던 결함을 없앴다.
 - 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new/0 known), 가드·버전 고정 시험 통과, 브라우저 시험 9 passed(궤적은 새로 고침 뒤에도 남음), node web 242 passed.
 - gate 변화: SOURCE만. 현장 1일 저장량·실제 로봇 표시 확인은 별도. 지도 위 로봇 아이콘의 odom 표시는 남은 일.
+## 2026-10-10 · uncommitted · feat(fleet): D-601 trip 출발이 카메라 차선 주행을 켜고 출발 자세·차선 카메라를 본다
+
+- 변경: 첫 간선이 lane인 trip 출발에서 로봇이 OFF면 모든 검사·lease·trip 열림 뒤 마지막으로 Fleet이 CAMERA_LINE을 켠다(끝에서는 언제나 OFF). 출발 정렬 검사 `TRIP_START_HEADING_MISMATCH`(20°)·`TRIP_START_OFF_LANE`, 계획 `start_check`와 콘솔 "출발 가능/방향 반대(178°)/차선 밖 5 cm", 앞 카메라 미리보기가 없으면 `TRIP_LANE_CAMERA_UNAVAILABLE`(`fleet.trip.lane_camera_check`, SIM은 false). trip_runner 시작 검사·진행 판정을 trip_admission/trip_progress로 옮김. API v1.192. 자동 제자리 정렬은 후속(CORE 목표 yaw 회전 미션 필요).
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new), 가드(module_structure·safety_separation·robot_literals·behavior_test_ownership·web_dialog·line_follow_contract_docs·harness·shared/web) 0 new(fleet 패키지 크기는 main에서 이미 known). 독립 리뷰 critic APPROVE WITH FIXES, HIGH 2·MEDIUM 1 고침.
+- gate 변화: SOURCE만. 현장(rosy_40 카메라 거절, 반대로 선 로봇, 꺼진 로봇 출발·끝) 확인과 SIM 사이트 설정 `lane_camera_check: false`는 별도.
+## 2026-10-10 · uncommitted · docs(route): D-609 계획-실행-완료 증거 파이프라인
+
+- 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
+- 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
+- gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.

@@ -55,3 +55,13 @@ def test_crosswalk_extent_is_optional_and_ordered():
                 dict(near_m=.1, far_m=.2, linear=.03)):
         raw = evidence(); raw["crosswalk"] = bad
         with pytest.raises(ValidationError): LaneContainmentEvidence.model_validate(raw)
+
+
+def test_crosswalk_uncertainty_is_optional_bounded_and_strict():
+    """D-573 6 개정: along-track bound of the crosswalk detector, set whenever it ran; None = it did not."""
+    assert LaneContainmentEvidence.model_validate(evidence()).crosswalk_uncertainty_m is None
+    raw = evidence(); raw["crosswalk_uncertainty_m"] = 0.012
+    assert LaneContainmentEvidence.model_validate(raw).crosswalk_uncertainty_m == 0.012
+    for bad in (-0.001, 1.5, "0.01", float("nan")):
+        raw = evidence(); raw["crosswalk_uncertainty_m"] = bad
+        with pytest.raises(ValidationError): LaneContainmentEvidence.model_validate(raw)

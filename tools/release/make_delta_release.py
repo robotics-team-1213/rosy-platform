@@ -46,10 +46,11 @@ ROOT = Path(__file__).resolve().parents[2]
 RELEASE_TOOLS = ROOT / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(RELEASE_TOOLS))
 from build_payload_release import (  # noqa: E402
-    FIXED_MTIME, MANIFEST_FILENAME, seal_release,
+    FIXED_MTIME, MANIFEST_FILENAME,
 )
 from signing import (  # noqa: E402
-    CHECKSUM_FILENAME, DELTA_MARKER, SIGNATURE_FILENAME, sha256_file, verify_release_files,
+    CHECKSUM_FILENAME, DELTA_MARKER, SIGNATURE_FILENAME, parse_sha256sums, sign_checksums,
+    verify_delta_files, verify_signature,
 )
 
 RELEASE_ID = re.compile(r"\d{4}\.\d{2}\.\d{2}-\d{3}")
@@ -59,6 +60,7 @@ BUILD_INPUT_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"
 BUILD_INPUT_NAMES = {"CMakeLists.txt", "package.xml", "setup.py", "setup.cfg"}
 NOT_SHIPPED_TOPS = {"docs", "tools", "test", ".github", ".claude"}
 GENERATED = {"install/.rosy-release", "source-revision.txt", "source-ref.txt"}
+MODES_FILE = ".modes.json"  # beside a delta's files, never packed: exec bits for the next delta
 
 
 class DeltaError(Exception):
@@ -134,9 +136,41 @@ def plan_delta(base_files: dict[str, str], changes: list[tuple[str, str]], blob,
     return replace, ignored
 
 
-def read_modes(tarball: Path) -> dict[str, int]:
-    with tarfile.open(tarball, "r:gz") as bundle:
-        return {m.name: m.mode for m in bundle.getmembers() if m.isreg()}
+def base_modes(base: Path, tarball: Path) -> dict[str, int]:
+    """File modes of the base: its .modes.json, else its tarball, following delta tarballs to the full one."""
+    if (base / MODES_FILE).is_file():
+        return json.loads((base / MODES_FILE).read_text(encoding="utf-8"))
+    chain = []
+    while True:
+        with tarfile.open(tarball, "r:gz") as bundle:
+            chain.append({m.name: m.mode for m in bundle.getmembers() if m.isreg()})
+            marker = chain[-1].pop(DELTA_MARKER, None) is not None and bundle.extractfile(DELTA_MARKER).read()
+        if not marker:
+            break
+        parent = marker.decode("ascii").split()[0]
+        tarball = tarball.parent.parent / f"rosy-release-{parent}" / f"{parent}.tar.gz"
+    modes: dict[str, int] = {}
+    for layer in reversed(chain):
+        modes.update(layer)
+    return modes
+
+
+def signed_metadata(base: Path, public_key: Path) -> tuple[dict[str, str], dict]:
+    """The base's signed {path: sha256} and manifest. Only metadata is read: a delta's
+    base directory holds just the files it changed, and the robot verifies its full tree."""
+    sums = (base / CHECKSUM_FILENAME).read_bytes()
+    rejections = verify_signature(sums, (base / SIGNATURE_FILENAME).read_text(encoding="utf-8").strip(), public_key)
+    entries, parse_rejections = parse_sha256sums(sums)
+    rejections += parse_rejections
+    manifest_bytes = (base / MANIFEST_FILENAME).read_bytes()
+    if not rejections and hashlib.sha256(manifest_bytes).hexdigest() != entries.get(MANIFEST_FILENAME):
+        raise DeltaError("base manifest.json does not match its signed checksum")
+    if rejections:
+        raise DeltaError(f"base release does not verify: {rejections[0]}")
+    manifest = json.loads(manifest_bytes)
+    if {e["path"] for e in manifest["files"]} | {MANIFEST_FILENAME} != set(entries):
+        raise DeltaError("base manifest and checksum list name different files")
+    return entries, manifest
 
 
 def pack_delta(release_dir: Path, members: list[str], modes: dict[str, int], marker: bytes, out: Path) -> None:
@@ -167,7 +201,9 @@ def pack_delta(release_dir: Path, members: list[str], modes: dict[str, int], mar
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--base-dir", type=Path, required=True, help="signed base release directory (<out>/x/<base>)")
-    parser.add_argument("--base-tarball", type=Path, required=True, help="the base's signed tarball (file modes)")
+    parser.add_argument("--base-tarball", type=Path,
+                        help="the base's tarball, read for file modes when the base has no .modes.json "
+                             "(default <base-dir>/../../<base>.tar.gz)")
     parser.add_argument("--release-id", required=True, help="new YYYY.MM.DD-NNN, never used before")
     parser.add_argument("--revision", default="HEAD", help="commit to ship (default HEAD)")
     parser.add_argument("--source-ref", default="", help="ref the revision came from (default: current branch)")
@@ -183,14 +219,11 @@ def main(argv: list[str] | None = None) -> int:
         local_appdata = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
         private_key = local_appdata / "Rosy" / "signing" / f"{args.key_name}.private.pem"
         base = args.base_dir.resolve(strict=True)
-        rejections = verify_release_files(base, public_key)
-        if rejections:
-            raise DeltaError(f"base release does not verify: {rejections[0]}")
-        base_manifest = json.loads((base / MANIFEST_FILENAME).read_text(encoding="utf-8"))
+        base_sums, base_manifest = signed_metadata(base, public_key)
         base_id = base_manifest["release_id"]
         if args.release_id == base_id:
             raise DeltaError("the delta needs a new release id")
-        base_rev = (base / "source-revision.txt").read_text(encoding="utf-8").strip()
+        base_rev = base_manifest["git_revision"]
         rev = git("rev-parse", "--verify", f"{args.revision}^{{commit}}").decode().strip()
         if not (REVISION.fullmatch(base_rev) and REVISION.fullmatch(rev)):
             raise DeltaError("base or new revision is not a full commit")
@@ -220,28 +253,42 @@ def main(argv: list[str] | None = None) -> int:
         tarball = out_dir / f"{args.release_id}.tar.gz"
         if release_dir.exists() or tarball.exists():
             raise DeltaError(f"{release_dir} or {tarball} already exists; use a new release id")
+        modes = base_modes(base, args.base_tarball or base.parent.parent / f"{base.name}.tar.gz")
+        # Only the delta's own files exist locally: the robot holds the base and
+        # native_release.py verify() checks the whole rebuilt tree there.
         partial = out_dir / "x" / f".{args.release_id}.partial"
         shutil.rmtree(partial, ignore_errors=True)
-        shutil.copytree(base, partial, ignore=shutil.ignore_patterns(MANIFEST_FILENAME, CHECKSUM_FILENAME,
-                                                                      SIGNATURE_FILENAME))
-        for path, content in replace.items():
+        written = {**replace,
+                   "install/.rosy-release": f"{args.release_id}\n".encode(),
+                   "source-revision.txt": f"{rev}\n".encode(),
+                   "source-ref.txt": f"{source_ref}\n".encode()}
+        for path, content in written.items():
+            if path not in base_files:
+                raise DeltaError(f"{path} is not in the base release")
+            (partial / path).parent.mkdir(parents=True, exist_ok=True)
             (partial / path).write_bytes(content)
-        (partial / "install" / ".rosy-release").write_text(args.release_id + "\n", encoding="utf-8", newline="\n")
-        (partial / "source-revision.txt").write_text(rev + "\n", encoding="utf-8", newline="\n")
-        (partial / "source-ref.txt").write_text(source_ref + "\n", encoding="utf-8", newline="\n")
-        seal_release(partial, args.release_id, signing_key_id=args.key_name)
-        signed = subprocess.run([sys.executable, str(RELEASE_TOOLS / "sign_image_release.py"), str(partial),
-                                 "--private-key", str(private_key), "--public-key", str(public_key)],
-                                cwd=ROOT, env={**os.environ, "PYTHONUTF8": "1"})
-        if signed.returncode:
-            raise DeltaError("signing failed")
-        rejections = verify_release_files(partial, public_key)
+            base_files[path] = hashlib.sha256(content).hexdigest()
+        manifest = {**base_manifest, "release_id": args.release_id, "git_revision": rev,
+                    "signing_key_id": args.key_name,
+                    "files": [{"path": p, "sha256": base_files[p]} for p in sorted(base_files)]}
+        manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        (partial / MANIFEST_FILENAME).write_bytes(manifest_bytes)
+        entries = {**base_sums, **{p: base_files[p] for p in written},
+                   MANIFEST_FILENAME: hashlib.sha256(manifest_bytes).hexdigest()}
+        if set(entries) != set(base_sums):
+            raise DeltaError("the new checksum list does not cover the same files as the base")
+        sums = "".join(f"{entries[p]}  {p}\n" for p in sorted(entries)).encode("utf-8")
+        (partial / CHECKSUM_FILENAME).write_bytes(sums)
+        (partial / SIGNATURE_FILENAME).write_text(sign_checksums(sums, private_key) + "\n", encoding="utf-8")
+        rejections = verify_delta_files(partial, public_key)
         if rejections:
-            raise DeltaError(f"rebuilt release does not verify: {rejections[0]}")
+            raise DeltaError(f"delta does not verify: {rejections[0]}")
+        modes.update({p: modes.get(p, 0o644) for p in written})
+        (partial / MODES_FILE).write_text(json.dumps(modes, sort_keys=True), encoding="utf-8")
         os.replace(partial, release_dir)
-        members = sorted({*replace, *GENERATED, MANIFEST_FILENAME, CHECKSUM_FILENAME, SIGNATURE_FILENAME})
-        marker = f"{base_id}\n{sha256_file(base / CHECKSUM_FILENAME)}\n".encode()
-        pack_delta(release_dir, members, read_modes(args.base_tarball), marker, tarball)
+        members = sorted({*written, MANIFEST_FILENAME, CHECKSUM_FILENAME, SIGNATURE_FILENAME})
+        marker = f"{base_id}\n{hashlib.sha256((base / CHECKSUM_FILENAME).read_bytes()).hexdigest()}\n".encode()
+        pack_delta(release_dir, members, modes, marker, tarball)
     except (DeltaError, OSError, KeyError, ValueError, subprocess.CalledProcessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
