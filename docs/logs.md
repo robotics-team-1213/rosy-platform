@@ -7632,3 +7632,9 @@ osy-d395-s1d\`.
 - 변경: CORE `POST/GET/DELETE /api/v1/motion/rotate_to`(위치 미션 종류 `rotate_to`, odom 닫힌 고리, ≤ 180°·30°/s·15 s, RobotBody 여유 거절 `ROTATE_CLEARANCE`, lease 주인 또는 이름 있는 operator), 회전 법칙 `localization/rotate_to.py` 안전 태그. Fleet `fleet.trip.auto_align`(기본 false): `TRIP_START_HEADING_MISMATCH`면 회전 → 새 sighting → 다시 검사(최대 2회). API v1.194.
 - 증거: 모델 PC 원격 pytest(CORE services·gateway, Fleet trip·transport). 독립 리뷰는 ADR Review 절.
 - gate 변화: SOURCE만. 실로봇 회전 수용·`auto_align` 켜기는 별도.
+
+## 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
+
+- 변경: `tools/capture/drivable_steer.py`(로봇 위 루프, 계산만 하는 모드/MANUAL teleop, 가장 오른쪽 갈래, RobotBody 가드)와 단위 시험, D-592 개정(호스트=로봇, 늦으면 Fleet; crop128 71edcb6d; 갈래 규칙), 검증 기록 `docs/validation/d592-drivable-steer-field-test-2026-10-10.md`.
+- 증거: 9dfk 로봇 위 추론 p50 162 ms, 프레임 나이 p50 259 ms/p95 350 ms; drive1 10.6 s·0.31 m, `drivable_low`로 선 앞 정지, 개입 없음. 원격 pytest tools/capture/test 22 passed, known_failures 0 new.
+- gate 변화: D-378 R2 첫 실물 기록만. 차선 추종 수용·로봇 런타임 조향 소스는 HOLD.
