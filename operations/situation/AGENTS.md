@@ -3,7 +3,7 @@
 # situation
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-10
+**Updated:** 2026-10-10 (D-577 (d) traffic_watch)
 
 ## Purpose
 
@@ -15,8 +15,10 @@
 |------|-------------|
 | `rosy_situation/service.py` | The service loop, Fleet client, queue/backpressure, JSONL input/fact logs |
 | `rosy_situation/analyzers.py` | `Analyzer` (`analyzer:stuck_scene@1`): `rear_blocked`, `path_blocked_by_robot`, `stalled` from the snapshot |
+| `rosy_situation/deadlock.py` | `TrafficWatch` (`analyzer:traffic_watch@1`, phase (d)): wait cycles cross-checked with Fleet's `wait_cycle`, stale-input false cycles, waiting-but-moving, livelock, stalled trips, long UNKNOWN units; run inside `Analyzer` after the proposals, shadow only |
 | `test/test_situation_service.py` | Fake-Fleet unit tests and one in-process real Fleet test |
 | `test/test_analyzers.py` | Analyzer facts on synthetic snapshots |
+| `test/test_deadlock.py` | Traffic facts on synthetic snapshots, incl. a stale-pose false cycle and a quiet hour |
 
 ## For AI Agents
 
