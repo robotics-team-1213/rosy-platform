@@ -45,6 +45,8 @@ ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.03
+#: a side opening counts as an exit only once its near end is within this of the nearest way row
+EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -98,10 +100,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     # The side whose open border reaches farther wins (a wall corner leaves the floor on the border
     # only near the robot); within EXIT_TIE_M of each other, keep right (D-384 2).
     above = xs > float(xs.min()) + 0.04
-    reach = {}
+    reach, near_ok = {}, {}
     for side, edge in (("left", open_left), ("right", open_right)):
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
+            near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
             far = int(np.argmax(np.where(hit, xs, -np.inf)))
             reach[side] = float(xs[far])
             # the point to arc toward: where the way leaves the view on that side, farthest out
@@ -111,6 +114,10 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = "left" if reach["left"] > reach["right"] + EXIT_TIE_M else "right"
     elif reach:
         out["exit"] = next(iter(reach))
+    # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
+    # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
+    if out["exit"] is not None and not near_ok[out["exit"]]:
+        out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     pursuit = min(lookahead, float(xs.max()))
     band = np.abs(xs - pursuit) <= ROW_BAND_M
