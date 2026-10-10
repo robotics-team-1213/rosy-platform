@@ -14,13 +14,14 @@
 
 ### Decision
 
-1. **A. 출발이 카메라 차선 주행을 켠다.** lane 간선이 있는 계획의 출발에서 로봇 모드가 `OFF`이면 거절하지 않는다. 모든 시작 검사(능력, 바쁨, 자세, 출발 정렬 4항, lease, 정지 자리, 대열, 신호, 고리)를 통과하고, trip lease(D-541 7, 설정이 켜져 있으면)를 쥐고, trip이 열려 저장된 뒤 **마지막으로** Fleet이 로봇 토큰으로 `PUT /api/v1/line-follow/mode {mode: CAMERA_LINE}`을 보낸다. 운영자 경로(`POST /api/fleet/robots/{id}/line-follow`)는 그대로 `IR_LINE`·`OFF`만 받는다. trip 루프만 켤 수 있다(`HttpRobotClient.line_follow_trip_start`).
+1. **A. 출발이 카메라 차선 주행을 켠다.** 첫 간선이 `lane`인 계획의 출발에서 로봇 모드가 `OFF`이면 거절하지 않는다. 첫 간선이 `free`인 계획(좌표로 가다 차선으로 넘어감)은 켜지 않고 지금처럼 거절한다(리뷰 HIGH 1: 정렬 검사를 받지 않은 로봇이 켜지고, CORE가 Nav2 목표를 취소한다). 모든 시작 검사(능력, 바쁨, 자세, 출발 정렬 4항, lease, 정지 자리, 대열, 신호, 고리)를 통과하고, trip lease(D-541 7, 설정이 켜져 있으면)를 쥐고, trip이 열려 저장된 뒤 **마지막으로** Fleet이 로봇 토큰으로 `PUT /api/v1/line-follow/mode {mode: CAMERA_LINE}`을 보낸다. 운영자 경로(`POST /api/fleet/robots/{id}/line-follow`)는 그대로 `IR_LINE`·`OFF`만 받는다. trip 루프만 켤 수 있다(`HttpRobotClient.line_follow_trip_start`).
    - 이미 `CAMERA_LINE`이면 보내지 않는다(지금과 같다). `IR_LINE`이나 모르는 모드는 그대로 422 `TRIP_LINE_FOLLOW_NOT_ACTIVE`다. IR은 교차로를 못 보고(D-313 복구 선택), 모르는 상태에서 켜지 않는다.
    - CORE가 거절하거나 응답이 없으면 trip은 `failed(TRIP_LINE_FOLLOW_START_FAILED)`로 끝나고 D-494 9항대로 로봇을 멈춘다(교차로 `stop` + 모드 `OFF`). 출발 응답은 409 `TRIP_LINE_FOLLOW_START_FAILED`(`detail {error, status}`, `error`는 CORE 코드, 예 `MODE_CONFLICT`·`CALIBRATION_ACTIVE`)다.
    - 켜는 요청이 가는 동안 취소·E-Stop·lease 상실이 trip을 닫으면, 응답 뒤에 한 번 더 멈춘다(`_after_send`, D-494 10항과 같은 규칙).
+   - 응답이 없었으면(시간 초과) 늦게 도착한 켜기가 우리 `OFF` 뒤에 적용될 수 있어, 호출 한도(`port_timeout_s`)를 기다린 뒤 한 번 더 멈춘다(리뷰 MEDIUM).
    - 켠 trip은 `detail.line_follow_started: true`를 남긴다.
 2. **끝에서는 언제나 끈다.** trip의 모든 끝(도착, 취소, 실패, 멈춤, 재시작)은 지금처럼 `OFF`를 보낸다. 출발 전에 이미 `CAMERA_LINE`이었어도 되돌리지 않고 끈다. 이유: D-494 9항은 "모든 끝에서 바로 멈춘다"이고, 이전 모드로 되돌리면 trip이 끝난 로봇이 계속 달린다. 다음 trip은 꺼진 로봇을 다시 켜므로 운영자가 할 일이 없다.
-3. **B. 차선 카메라가 죽은 로봇은 계획에서 거절한다.** lane 간선이 있는 계획을 돌려주기 전에 Fleet은 로봇 `GET /api/v1/vision/front/status`(이미 있는 CORE 경로, D-577 8도 쓴다)를 한 번 읽는다. `available`이 `true`가 아니거나 읽지 못하면 422 `TRIP_LANE_CAMERA_UNAVAILABLE`(`detail {stale, age_ms}` 또는 `{error}`)이고 계획 기록에 남는다. 앞 카메라 미리보기는 line-follow 모드와 상관없이 road observer가 카메라 프레임마다 낸다. 그래서 CORE API를 바꾸지 않고 "지금 프레임이 들어오는가"를 본다. capabilities의 `drive_modes`는 바꾸지 않는다(서비스가 있다는 뜻으로 둔다).
+3. **B. 차선 카메라가 죽은 로봇은 계획에서 거절한다.** lane 간선이 있는 계획을 돌려주기 전에 Fleet은 로봇 `GET /api/v1/vision/front/status`(이미 있는 CORE 경로, D-577 8도 쓴다)를 한 번 읽는다. `available`이 `true`가 아니거나 읽지 못하면 422 `TRIP_LANE_CAMERA_UNAVAILABLE`(`detail {stale, age_ms}` 또는 `{error}`)이고 계획 기록에 남는다. 앞 카메라 미리보기는 line-follow 모드와 상관없이 road observer가 카메라 프레임마다 낸다. 그래서 CORE API를 바꾸지 않고 "지금 프레임이 들어오는가"를 본다. capabilities의 `drive_modes`는 바꾸지 않는다(서비스가 있다는 뜻으로 둔다). Gazebo SIM 런치는 road observer를 띄우지 않아 미리보기가 없다(리뷰 HIGH 2). 그래서 사이트 설정 `fleet.trip.lane_camera_check`(기본 `true`)를 두고, SIM 사이트 설정은 `false`로 둔다.
 4. **D. 출발 자세를 지도에 맞춰 Fleet이 정한다.** 출발(`/start`) 때 같은 D-494 3 지도 자세(`MapPose` `LOCALIZED`)를 계획의 첫 간선(lane일 때만)에 투영해 본다.
    - 차로 밖: 첫 차로 중심선에서 차로 폭의 절반보다 멀면 422 `TRIP_START_OFF_LANE`. 이 경계는 trip 루프의 차로 이탈 규칙(`_locate`)과 같다.
    - 방향: 투영점의 차로 방향(계획이 탈 방향, 일방이면 그 방향)과 로봇 yaw의 차가 `fleet.trip.start_heading_tol_deg`(기본 20°, 상한 90°)를 넘으면 422 `TRIP_START_HEADING_MISMATCH`. yaw가 없으면 같은 코드다.
@@ -60,10 +61,11 @@
 
 ### Review
 
-(독립 리뷰 결과를 착지 전에 적는다.)
+2026-10-10 독립 리뷰(critic 레인, 읽기 전용): **APPROVE WITH FIXES**. 순서(검사 → lease → trip 열림·저장 → PUT, 로봇 잠금 안), 끝의 언제나 `OFF`, 출발 정렬 검사, 순수 이동은 맞다고 판정했다. 고친 것: HIGH 1 첫 간선이 `free`면 켜지 않음, HIGH 2 SIM 오거절 → `fleet.trip.lane_camera_check`, MEDIUM 시간 초과 뒤 한 번 더 멈춤. 남긴 것(LOW): 첫 지시는 다음 tick이 보낸다. 첫 step은 로봇 호출 네 번까지라 LAN에서 0.5–1 s다(위 Safety-Review의 0.5 s는 tick 주기다). 그 사이 교차로에서는 CORE가 지시 없이 `waiting`으로 서고, 호 끝은 지시 없이 차선을 따른다. 출발 전 취소 뒤 CORE 거절이면 trip은 `canceled`인데 응답은 409다. Fleet 패키지 크기 판정은 이미 main에서 넘어 있어(known_failures) 주인에게 맡긴다.
 
 ### Consequences
 
 - API Reference v1.191: `/trip`(B·D), `/trips/{plan_id}/start`(A·D) 행과 변경 이력 한 줄. 로봇 API는 바뀌지 않는다.
-- 사이트 설정 `fleet.trip.start_heading_tol_deg` 하나가 생긴다.
+- 사이트 설정 `fleet.trip.start_heading_tol_deg`·`fleet.trip.lane_camera_check`가 생긴다. SIM 사이트 설정은 `lane_camera_check: false`가 필요하다.
+- Fleet 패키지 줄 수: 이 브랜치가 +약 150(seam 모듈 머리 34, 기능 약 115). 패키지 판정은 main에서 이미 51848+150을 넘어 `test/known_failures.txt`에 있다. 다시 판정하는 일은 패키지 주인이 한다.
 - trip_runner의 시작 검사와 진행 판정은 `server/trip_admission.py`·`server/trip_progress.py`로 옮겼다(크기 판정 seam, 동작 변화 없음).

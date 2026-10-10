@@ -154,6 +154,8 @@ class TripConfig:
     #: D-601 D (user, 2026-10-10): a lane trip starts only with the robot within this of its first
     #: lane's direction (and on that lane); the planner's own snap allows ``fleet.routing.heading_tol_deg``.
     start_heading_tol_deg: float = 20.0
+    #: D-601 B: a lane plan needs the robot's front preview live; false only where none exists (SIM).
+    lane_camera_check: bool = True
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -174,6 +176,10 @@ class TripConfig:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
+            if item.name == "lane_camera_check":
+                if not isinstance(value, bool):
+                    raise ValueError("fleet.trip.lane_camera_check must be true or false")
+                continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")

@@ -211,6 +211,11 @@ class TripRunner(TripAdmission, TripProgress):
         except _ROBOT_ERRORS as exc:
             detail = {"error": _code(exc), "status": getattr(exc, "status", None)}
             await self._stop(live, "failed", "TRIP_LINE_FOLLOW_START_FAILED", detail)
+            if detail["status"] is None:  # review M: a timed-out PUT may still land after our OFF
+                # ponytail: one more OFF after one call bound; a read-back loop if CORE is ever slower
+                await asyncio.sleep(self.config.port_timeout_s)
+                live.view["detail"].update(await self._halt(live))
+                self._save(live)
             raise TripError(409, "TRIP_LINE_FOLLOW_START_FAILED", detail) from exc
         live.view["detail"]["line_follow_started"] = True
         await self._after_send(live)  # a cancel or E-stop that landed meanwhile stops it again

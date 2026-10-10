@@ -62,7 +62,8 @@ class TripAdmission:
         enable = False
         if any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments):
             mode = await self._call(self._junction.line_follow_mode(robot_id), "TRIP_LINE_FOLLOW_NOT_ACTIVE")
-            enable = start and mode == "OFF"
+            # review HIGH 1: only a trip that starts on a lane; a free first segment keeps the refusal
+            enable = start and mode == "OFF" and graph.arcs[arc_id(segments[0])].drive_mode == "lane"
             if mode not in LINE_MODES and not enable:
                 raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
         pose = await self.map_pose(robot_id)
@@ -79,7 +80,10 @@ class TripAdmission:
 
     async def camera_check(self, robot_id: str) -> None:
         """D-601 B (plan time, lane plans): the robot's front camera, the line camera, must be live
-        (CORE ``vision/front/status`` ``available``); else 422 ``TRIP_LANE_CAMERA_UNAVAILABLE``."""
+        (CORE ``vision/front/status`` ``available``); else 422 ``TRIP_LANE_CAMERA_UNAVAILABLE``. Off with
+        ``fleet.trip.lane_camera_check: false`` (Gazebo SIM publishes no front preview)."""
+        if not self.config.lane_camera_check:
+            return
         status = await self._call(self._junction.front_camera(robot_id), "TRIP_LANE_CAMERA_UNAVAILABLE") or {}
         if status.get("available") is not True:
             raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {"stale": status.get("stale"),

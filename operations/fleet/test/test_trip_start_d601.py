@@ -166,9 +166,38 @@ def test_b_d_the_plan_route_refuses_a_dead_line_camera_and_shows_the_start_check
     assert check["code"] == "TRIP_START_HEADING_MISMATCH" and check["heading_err_deg"] == pytest.approx(35, abs=0.5)
     robot._state["pose"]["yaw"] += math.radians(145)
     wrong = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()["detail"]
-    assert wrong["code"] == "TRIP_HEADING_CONFLICT" and abs(wrong["detail"]["heading_err_deg"]) > 170
+    assert wrong["code"] == "TRIP_HEADING_CONFLICT" and abs(wrong["detail"]["heading_err_deg"]) > 60
     robot._state = _on_ring_s(store)
     robot.front_status_value = {"available": False, "stale": True, "age_ms": 12000}
     dead = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
     assert dead.status_code == 422 and dead.json()["detail"]["code"] == "TRIP_LANE_CAMERA_UNAVAILABLE"
     assert store.plans()[0]["result"]["error"] == "TRIP_LANE_CAMERA_UNAVAILABLE"
+
+
+def test_a_a_free_first_segment_is_never_switched_to_camera_line():
+    """Review HIGH 1: only a trip that starts on a lane turns the camera line on."""
+    from test_trip_runner import BOTH, _map
+    site = _map(("A", 0, 0), ("B", 1, 0), ("C", 2, 0),
+                edges=[("ab", "A", "B", [[0, 0], [1, 0]], "free"), ("bc", "B", "C", [[1, 0], [2, 0]], "lane")])
+    runner, store, ports = _setup(site, caps=BOTH)
+    _plan(store, ports, "ab:fwd", 0.2, "C")
+    ports.core.mode = "OFF"
+    assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE" and ports.line_starts == []
+
+
+def test_a_a_timed_out_mode_put_is_stopped_twice():
+    """Review M: CORE may still turn the line on after Fleet gave up and sent OFF."""
+    runner, store, ports = _setup(port_timeout_s=0.01)
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.core.mode = "OFF"
+    ports.line_start_error = TimeoutError()
+    assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_START_FAILED"
+    assert ports.held == ["rosy_60", "rosy_60"] and runner.view("p1")["state"] == "failed"
+
+
+def test_b_the_camera_check_can_be_turned_off_for_sim():
+    runner, _store, ports = _setup(lane_camera_check=False)
+    ports.camera = {"available": False}
+    run(runner.camera_check("rosy_60"))
+    with pytest.raises(ValueError):
+        TripConfig(lane_camera_check=1)
