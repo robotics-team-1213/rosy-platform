@@ -169,7 +169,7 @@ class IdentityService:
                     raise IdentityError(409, "IDENTIFY_BUSY", "파랑 LED 확인이 진행 중입니다")
             started = self._clock()
             self._asked_at[robot_id] = started
-            self.triggers.asked(robot_id, auto=auto)
+            self.triggers.asked(robot_id)
             # D-596 7: automatic requests are silent (no call chirp); a payload before D-596 still chirps.
             result = await client.identify_lamp(color, quiet=auto)
             if not isinstance(result, Mapping):
@@ -220,7 +220,7 @@ class IdentityService:
         clients = self._clients()
         watched = {rid for s in self.tracking.sources for rid in s.robot_ids if rid in clients}
         skip = {rid for rid in watched
-                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s * self.triggers.backoff(rid)
+                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s
                 or self.confirmed_track_pose(rid)["state"] == "CONFIRMED"}
         skip |= {p.robot_id for p in self._open()}
         due = self.triggers.due(now, self.tracking.snapshot(),

@@ -333,7 +333,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const why = nodeWithText("p", "hint");
       why.textContent = robot.error.reachable
         ? `로봇이 거절: ${robot.error.code}`
-        : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`;
+        : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? ?? robot.error.code}`;
       why.id = offlineWhyId;
       node.appendChild(why);
     }
