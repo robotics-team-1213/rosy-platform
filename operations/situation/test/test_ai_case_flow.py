@@ -2,6 +2,7 @@
 
 import base64
 import json
+import pytest
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -36,19 +37,22 @@ def routes(first, line, clients, loop=None, deadlock=lambda: None):
     return TestClient(app)
 
 
-def test_stuck_ai_retry_reads_new_front_without_replacing_operator_preview():
-    first = AiFirst(("a",))
+@pytest.mark.parametrize("enrolled", [(), ("a",)])
+def test_stuck_ai_retry_reads_new_front_without_replacing_operator_preview(enrolled):
+    first = AiFirst(enrolled)
     first.wall = lambda: WALL
     line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1"}],
                            preview=lambda *_args: {"sequence": 0})
     front = Front()
     client = routes(first, line, {"a": front}, SimpleNamespace(problems=None, _rows={}))
+    assert client.get("/api/fleet/ai/problems").json()["problems"] == [{"problem_id": "s1", "kind": "stuck", "robot_id": "a"}]
     one = client.get("/api/fleet/ai/case/s1").json()
     first.wall = lambda: WALL + 8
     two = client.get("/api/fleet/ai/case/s1").json()
     assert one["views"]["front"]["frame_id"] == "front:1"
     assert two["views"]["front"]["frame_id"] == "front:2"
     assert two["views"]["front"]["captured_at"] == WALL + 7.9
+    assert first.on("a") == bool(enrolled)
 
 
 def test_deadlock_case_service_vlm_and_fleet_replan_are_connected(tmp_path):
