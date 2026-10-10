@@ -26,15 +26,16 @@ GUIDE_MAX_AGE_S = 1.5
 
 
 def parse_guide(raw, now):
-    """(heading_ahead_deg, stamp, pivot_ok) from a line/lane_guide JSON {heading_ahead_deg, stamp,
+    """(heading_ahead_deg, stamp, pivot_ok, heading_here_deg) from a line/lane_guide JSON {heading_ahead_deg, stamp,
     pivot_ok (the body's sweep circle fits here per the map; default true)}, or None."""
     import json, math
     try:
         data = json.loads(raw)
         deg, stamp, ok = float(data["heading_ahead_deg"]), float(data.get("stamp", now)), data.get("pivot_ok", True) is not False
+        here = float(data.get("heading_here_deg", deg))
     except (ValueError, TypeError, KeyError):
         return None
-    return (deg, stamp, ok) if math.isfinite(deg) and -180.0 <= deg <= 180.0 else None
+    return (deg, stamp, ok, here) if math.isfinite(deg) and math.isfinite(here) and abs(deg) <= 180.0 else None
 
 
 def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall, guide=None):
@@ -49,7 +50,7 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
         if guide is not None and abs(stamp - guide[1]) < GUIDE_MAX_AGE_S:
-            extra['guide_deg'], extra['guide_pivot_ok'] = guide[0], guide[2]
+            extra['guide_deg'], extra['guide_pivot_ok'], extra['guide_here_deg'] = guide[0], guide[2], guide[3]
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
                                                pose_at(way_stamp), pose_at(stamp), **extra)
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),

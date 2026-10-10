@@ -294,7 +294,7 @@ class DrivableSteer:
         return True
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True):
+               wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True, guide_here_deg=None):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -324,19 +324,21 @@ class DrivableSteer:
             # the map knows which way the road goes where the camera sees two openings or none.
             info["guide_deg"] = round(guide_deg, 1)
             bridge = abs(guide_deg) < GUIDE_STRAIGHT_DEG
-            if abs(guide_deg) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
+            # wrong way is judged on the lane direction here, not 0.25 m ahead (a hairpin ahead is a turn)
+            here = guide_deg if guide_here_deg is None else guide_here_deg
+            if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
                 # facing against the lane where the map says the body's sweep circle does not fit
                 # (a straight 0.16 m lane): no turn here, drive on to where it fits (user 2026-10-10)
                 side = info["exit"] = None
                 self._pivot = self._side = None
                 info["reorient_deferred"] = True
-            elif abs(guide_deg) > GUIDE_REVERSE_DEG:
+            elif abs(here) > GUIDE_REVERSE_DEG:
                 # facing against the lane: turn in place toward its direction (user 2026-10-10: when
                 # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
                 # S-curve top and drove the loop backwards)
                 self._smoothed = self._pivot = self._side = None
-                error = -PIVOT_ERROR if guide_deg > 0 else PIVOT_ERROR
-                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if guide_deg > 0 else "right"))
+                error = -PIVOT_ERROR if here > 0 else PIVOT_ERROR
+                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
             want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG or info.get("reorient_deferred") else (
                 "left" if guide_deg > 0 else "right")
             if want is None:
