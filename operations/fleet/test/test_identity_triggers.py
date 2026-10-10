@@ -136,10 +136,10 @@ def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
     assert identity.triggers.backoff("rosy_40") == 1
 
 
-def _verdict(identity, source, request_id, x, y, at):
+def _verdict(identity, source, request_id, x, y, at, evidence=None):
     return identity.accept_verdict(source, {
         "source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": request_id, "state": "matched",
-        "x": x, "y": y, "captured_at": at, "calibration_revision": "cal-1", "evidence": {}})
+        "x": x, "y": y, "captured_at": at, "calibration_revision": "cal-1", "evidence": evidence or {}})
 
 
 def test_a_caution_lamp_decoy_elsewhere_is_never_named():
@@ -228,7 +228,32 @@ def test_a_verdict_is_checked_against_the_bridged_place_not_the_old_marker_place
     started = asyncio.run(identity.request("rosy_41"))
     clock.now += 6.2
     frame((0.397, -0.500, None), (0.95, -0.05, None))           # ghost at the old place, robot at the bridge
-    ghost = _verdict(identity, source, started["request_id"], 0.397, -0.500, clock.now - 1.0)
+    ghost = _verdict(identity, source, started["request_id"], 0.397, -0.500, clock.now - 1.0,
+                     evidence={"mode": "steady"})            # steady colour stays inside the place
     assert (ghost["state"], ghost["reason"]) == ("UNKNOWN", "far_from_robot")
     real = _verdict(identity, source, started["request_id"], 0.95, -0.05, clock.now - 1.0)
     assert real["state"] == "CONFIRMED"
+
+
+def test_a_blue_blink_names_a_carried_robot_outside_its_expected_place():
+    """D-596 amendment (a), user decision 2026-10-10: a carried robot's odom does not move, so its expected
+    place is wrong. A blue on/off blink can only be the asked robot (one blue request per source), so it
+    names the robot anywhere. Steady blue and amber (the caution lamp's pattern) stay inside the place."""
+    clock, source, identity, robots, frame = _site()
+    identity.map_pose = lambda rid: _MapPose(0.962, -0.011, dead_reckon_m=0.054) if rid == "rosy_41" else None
+    started = asyncio.run(identity.request("rosy_41"))
+    assert started["color"] == "blue"
+    clock.now += 6.2
+    frame((0.398, -0.499, None))                               # carried to the crosswalk, 0.75 m away
+    named = _verdict(identity, source, started["request_id"], 0.398, -0.499, clock.now - 1.0,
+                     evidence={"candidates": [{"off_s": 1.3}]})
+    assert named["state"] == "CONFIRMED"
+    assert identity.confirmed_track_pose("rosy_41")["use"] == "observation-only"   # never a map pose
+    identity._drop("rosy_41", "ttl")
+    other = asyncio.run(identity.request("rosy_40", "amber"))
+    identity.map_pose = lambda rid: _MapPose(1.0, 1.0)
+    clock.now += 6.2
+    frame((0.398, -0.499, None))
+    amber = _verdict(identity, source, other["request_id"], 0.398, -0.499, clock.now - 1.0)
+    assert (amber["state"], amber["reason"]) == ("UNKNOWN", "far_from_robot")
+

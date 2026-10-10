@@ -8,6 +8,8 @@ from fleet.localization.lane_compliance import (OFF_LANE, OFF_MAP, ON_LANE, ON_L
 from fleet.localization.map_pose import MapPose
 from fleet.routing.graph import build_graph
 from fleet.server.lane_compliance_service import LaneComplianceMonitor
+
+WW = LaneComplianceConfig(wrong_way=True)
 from fleet.site_map import SiteMap
 
 # One-way lane A(0,0) -> B(2,0), 0.185 m wide like map_v2_fleet; a crosswalk at x 1.0-1.12.
@@ -28,9 +30,13 @@ def test_classify_states_and_side():
     off = classify(0.5, -0.3, 0.0, 0.0, GRAPH, CW, LaneComplianceConfig(off_map_pad_m=0.5))
     assert off.state == OFF_LANE and off.side == "left" and off.bearing_deg > 0
     assert classify(5.0, 0.0, 0.0, 0.0, GRAPH, CW).state == OFF_MAP
-    assert classify(0.5, 0.0, math.pi, math.pi, GRAPH, CW).state == WRONG_WAY
-    # turning in place (body yaw reversed, travel still along) is not wrong way yet
-    assert classify(0.5, 0.0, math.pi, 0.0, GRAPH, CW).state == ON_LANE
+    assert classify(0.5, 0.0, math.pi, math.pi, GRAPH, CW).state == ON_LANE      # off by default
+    assert classify(0.5, 0.0, math.pi, math.pi, GRAPH, CW, WW).state == WRONG_WAY
+    # D-587 yaw wins over motion: a body turned back is wrong way; turned along is not
+    assert classify(0.5, 0.0, math.pi, 0.0, GRAPH, CW, WW).state == WRONG_WAY
+    assert classify(0.5, 0.0, 0.0, math.pi, GRAPH, CW, WW).state == ON_LANE
+    guide = classify(0.5, 0.0, 0.0, None, GRAPH, CW).guide
+    assert guide["next_place_id"] == "B" and abs(guide["to_end_m"] - 1.5) < 1e-6 and guide["ring"] is False
 
 
 def test_crosswalk_is_on_lane_and_hinted_ahead():
@@ -39,11 +45,11 @@ def test_crosswalk_is_on_lane_and_hinted_ahead():
     assert ahead["source"] == "fleet_map" and ahead["uncertainty_m"] > 0
     inside = classify(1.06, 0.07, 0.0, 0.0, GRAPH, CW)      # off-centre inside a crosswalk
     assert inside.state == ON_LANE and inside.crosswalk == "cw"
-    assert classify(0.7, 0.0, math.pi, math.pi, GRAPH, CW).crosswalk_ahead is None  # wrong way: no hint
+    assert classify(0.7, 0.0, math.pi, math.pi, GRAPH, CW, WW).crosswalk_ahead is None  # wrong way: no hint
 
 
 def test_tracker_debounces_and_wrong_way_needs_travel():
-    tr = ReturnTracker(LaneComplianceConfig(return_persist_s=1.0, wrong_way_min_m=0.1))
+    tr = ReturnTracker(LaneComplianceConfig(return_persist_s=1.0, wrong_way_min_m=0.1, wrong_way=True))
     tr.update(0.0, 0.5, 0.0, None, GRAPH, CW)
     assert tr.state == UNSEEN
     tr.update(1.0, 0.5, 0.0, None, GRAPH, CW)
@@ -99,7 +105,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
         clock[0] += 0.5
     assert monitor.view("r1")["return"]["state"] == OFF_LANE
     assert client.sent and client.sent[-1]["state"] == OFF_LANE and client.sent[-1]["side"] == "left"
-    assert client.sent[-1]["ttl_s"] <= 1.0
+    assert client.sent[-1]["ttl_s"] <= 1.0 and "guide" in client.sent[-1] and "crosswalk_ahead" not in client.sent[-1]
     poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m")
     for _ in range(6):
         asyncio.run(monitor.tick())
