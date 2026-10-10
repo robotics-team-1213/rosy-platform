@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 8dd17ab69 · uiux(preview): 카메라 미리보기가 조향에 쓴 drivable 길을 그린다
 - 2026-10-10 · 027e69e08 · feat(control): keep 모드 learned paint를 drivable 길로 (D-597)
 - 2026-10-10 · uncommitted · docs(control): verify CORE bend handoff and body footprint
 - 2026-10-10 · uncommitted · feat(control): keep closed-loop gap diagnostic
 - 2026-10-10 · uncommitted · fix(control): 정지 경계 교체 모순에서 기억 중단
-- 2026-10-09 · uncommitted · fix(control): D-570 리뷰 반영 — 재사용 기록 명확화, 워커 시계 상한, idle 주기 제거
