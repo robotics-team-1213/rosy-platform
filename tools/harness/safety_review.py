@@ -41,6 +41,14 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "ee632904548088c28c15ed16d75c21e539eb4ed6":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact commit requires explicit LOCALIZED map evidence and never restores trust by timeout. "
+        "See docs/validation/today-worktree-integration-2026-10-10/result.md; no device acceptance.",
+    "83b6b4b4440571cf25769b8d937d950757106657":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact commit rereads localization immediately before goal admission and rechecks client identity. "
+        "See docs/validation/today-worktree-integration-2026-10-10/result.md; no device acceptance.",
     "8ff5c68d36c83fe9c6916a992a567420f013a949":  # git commit revision
         "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
         "safety manager docstring only, identical execution; D-602 advisory class contract and person_feet "

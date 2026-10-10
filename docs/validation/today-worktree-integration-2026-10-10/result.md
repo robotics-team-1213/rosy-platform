@@ -37,3 +37,19 @@ Node 시험은 277 passed, 실패 0. lint는 오류 0이며 오래된 검증 기
 
 로그와 원본 스냅샷은 `X:/DevTemp/projects/rosy-platform/2026-10-10--170936--today-worktree-land--a864f6/`에 있다.
 동료 워크트리와 공유 main의 미추적 파일은 보존한다. 전체 CI, ARM64 이미지, 장치·현장 수용은 이 작업으로 확인하지 않는다.
+
+## 이어서 통합한 후속 작업
+
+사용자의 이어서 진행 요청으로 `ec0f662272`, `a7d988244`, `1a91278f3`, `ad8f9c861`을 추가 통합했다.
+`snapshot-review /root/snapshot_review`가 각 tip과 최종 `b7343fcf6`을 독립 정적 검토했다.
+구형 크기 판정과 이동 전 helper를 복원하지 않고 현재 관측 중복 방지·자세 누락 시 폐기를 보존한다.
+거절된 측면 출구의 latch를 지우며 앞벽의 가짜 모서리 판정만 좁힌다. 속도와 CORE 정지 권한은 바뀌지 않는다.
+명시적인 지도 localization 신뢰는 현재 `stuck/peer_pose.py` 소유 경로에 반영했다.
+이 단계의 독립 측정은 조향 파일 562줄, drivable 단위 917줄이다. 기존 분리 기준과 한도 안이다.
+
+같은 독립 검토자가 다음 과거 exact commit도 재검토해 retrospective EXEMPT 등록을 승인했다.
+
+- `ee6329045`: 명시적 LOCALIZED map만 신뢰하며, localization 누락을 시간 경과로 신뢰하지 않는다.
+- `83b6b4b44`: goal 직전 현재 localization을 읽고 client identity를 재확인한다.
+
+이는 정적 소스 승인이다. 후속 원격 시험, 안전 이력 검사와 착지 관문 결과는 별도 증거다.
