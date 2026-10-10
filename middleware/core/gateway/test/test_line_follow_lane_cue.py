@@ -414,7 +414,7 @@ def test_off_lane_pivot_off_a_spot_keeps_the_camera_and_ir_rules():
     rig.cue("OFF_LANE", 2, bearing_deg=90.0)
     assert rig.step().angular > 0                                   # turning toward the lane
     rig.cue("OFF_LANE", 3, bearing_deg=90.0)
-    d = rig.step(camera=False)
+    d = rig.step(0.4, camera=False)
     assert d.angular == 0                                           # not a turn spot: camera needed
 
 

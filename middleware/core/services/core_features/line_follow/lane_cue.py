@@ -204,7 +204,7 @@ class LaneCueMixin:
         """A junction instruction, an arc or a crosswalk zone owns the robot's heading now. At a turn
         spot the camera's junction is expected there: only an armed junction instruction counts."""
         arc, junction = self._arc_status(), self._junction_status()
-        armed = (junction.pending_action is not None and junction.state in ("armed", "unexpected")
+        armed = (junction.pending_action is not None and junction.state in ("armed", "unexpected", "aborted")
                  if spot else junction.state != "idle")
         return armed or (arc is not None and arc.state == "running") or self._xwalk.zone is not None
 
