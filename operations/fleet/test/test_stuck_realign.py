@@ -20,7 +20,10 @@ def config():
 
 
 def row():
-    return {"robot_id": "r1", "online": True, "state": {"safety": {"estop": False},
+    return {"robot_id": "r1", "online": True,
+        "capabilities": {"controls":{"items":[{"kind":"base_velocity", "robot_kind":"pinky_pro",
+                                                 "stuck_realign":["PIVOT", "KTURN"]}]}},
+        "state": {"safety": {"estop": False},
         "line_follow": {"mode": "CAMERA_LINE", "crosswalk": None, "stuck": {
             "stuck_id": "s1", "cause": "no_motion", "phase": "CONSOLE_ONLY",
             "local_enabled": True, "decisions": ["WAIT", "REALIGN"]}}},
@@ -65,6 +68,15 @@ def test_unknown_or_unsafe_evidence_never_selects_motion(change):
 def test_default_disabled_and_exhaustion_are_holds():
     assert select(row(), [row()], RealignConfig(), now=10.1, attempt=1)[0] is None
     assert select(row(), [row()], config(), now=10.1, attempt=3)[0] is None
+
+
+def test_real_active_map_integer_version_is_supported_and_body_is_required():
+    r = row(); r["realign_evidence"]["map_version"] = 5
+    cfg = RealignConfig.from_mapping({"realign_robots":["r1"], "realign_areas":[
+        {"map_revision":5, "polygon":[[-1,-1],[1,-1],[1,1],[-1,1]]}]})
+    assert select(r, [r], cfg, now=10.1, attempt=1)[0] is not None
+    r["capabilities"] = None
+    assert select(r, [r], cfg, now=10.1, attempt=1)[0] is None
 
 
 def test_body_near_area_edge_cannot_turn_even_with_turn_spot():
