@@ -7679,3 +7679,9 @@ osy-d395-s1d\`.
 - 변경: 후속 사용자 요청에 따라 플랫폼 목표 트리를 최대 5단계로 개정했다. CORE runtime/관문, Drive·Arm 계획/제어/복구/Safety, local 실행 수명, world 상태 projection, 행동 예측 inference, world model 학습/평가를 구분하고 폴더 승격·파일 유지·보류 기준을 계획에 반영했다.
 - 증거: 현재 gateway·line-follow·OMX 모듈 안내와 기존 분리 기준 대조, tracked source 최대 5 depth inventory. 네 문서 교차 링크와 목표 트리 depth≤5 확인, harness lint 0 errors/25 기존 freshness warnings. 원격 문서 계약 결과는 후보 커밋 검증 뒤 기록한다.
 - gate 변화: 없음. Proposed 문서 개정이며 소스/실제 폴더 이동·새 패키지 생성·장치 활성화·main 착지·push는 하지 않는다.
+
+## 2026-10-11 · 179738b17 · docs: 최대 5단계 구조안 문서 계약 검증
+
+- 변경: 목표 트리·계획 개정의 검증 결과를 기록했다. 코드와 실제 디렉터리는 변경하지 않았다.
+- 증거: 해당 후보 커밋의 모델 PC 원격 network/harness 문서 계약 121 성공 표시·exit 0, known_failures 0 NEW/0 known. 문서 링크·목표 책임 depth≤5와 기존 append-only journal의 Git blob 보존을 확인했다.
+- gate 변화: 없음. 패키징·장치·물리 수용은 확인하지 않았고 기존 gate를 올리지 않는다.
