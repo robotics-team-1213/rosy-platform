@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from typing import Awaitable, Callable, Literal, Optional
+from typing import Callable, Literal, Optional
 
 from fastapi import Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -46,9 +46,29 @@ def _front_view(board, robot_id: str, stuck_id: Optional[str], wall: float) -> O
             "jpeg_b64": shown["jpeg_base64"]}
 
 
+def rosy_cam_lease(robot_id: str, sightings, map_pose, signer, sources: tuple[str, ...]) -> Optional[dict]:
+    """Give the AI PC a short direct Vision read for a localized robot on the same map."""
+    if sightings is None or signer is None:
+        return None
+    pose = map_pose.arbitrated_pose(robot_id)
+    if pose is None or pose.state != "LOCALIZED" or pose.x is None or pose.y is None:
+        return None
+    row = next((row for row in sightings.snapshot()["sightings"]
+                if row.get("robot_id") == robot_id and not row.get("stale")
+                and row.get("source_id") in sources and row.get("map_id") == pose.map_id), None)
+    if row is None:
+        return None
+    try:
+        lease = signer.issue(principal_id="ai-case", source_id=row["source_id"], ttl_s=10,
+                             rectification={"mode": "map"}, crop_map=(pose.x, pose.y, 1.0))
+    except ValueError:
+        return None
+    return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease}
+
+
 def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guard, authorize,
                             require_named_operator, clients: Callable[[], dict],
-                            rosy_cam: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None) -> None:
+                            rosy_cam: Optional[Callable[[str], Optional[dict]]] = None) -> None:
     @app.get("/api/fleet/ai/first", dependencies=read_guard, tags=["ai"])
     def ai_first_view() -> dict:
         return first.view()
@@ -96,7 +116,7 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         history = [] if episodes is None else await asyncio.to_thread(
             episodes.episodes, 20, rid, wall - 600.0)
         views = {"front": front or _front_view(line_stuck, rid, stuck_id, wall),
-                 "rosy_cam": None if rosy_cam is None else await rosy_cam(rid)}
+                 "rosy_cam": None if rosy_cam is None else rosy_cam(rid)}
         return {**problem, "stuck_id": stuck_id, "context": context(row), "built_at": wall,
                 "history": [{k: h.get(k) for k in ("opened_at", "problem_id", "kind", "decision", "tier", "verdict",
                                                    "core_code", "outcome")} for h in history],

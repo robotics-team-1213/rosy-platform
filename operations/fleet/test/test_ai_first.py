@@ -4,20 +4,40 @@ from __future__ import annotations
 
 import asyncio
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from site_map_fixture import painted_track
 from test_stuck_resolver import _row, _stuck
 from fleet.stuck.ai_first import AiFirst, problem_key
+from fleet.stuck.ai_routes import rosy_cam_lease
 from fleet.stuck.closed_loop import reopen
 from fleet.stuck.episodes import ProblemLog
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.problems import ProblemWatch
 from fleet.stuck.resolver import Answer, Escalate, ResolverConfig, StuckResolver
+from core_common.protocol.vision_preview import VisionLeaseSigner
 
 WALL = 1_760_000_000.0
 PROFILE = "qwen3-vl:8b-instruct@abc:d610-v1"
+
+
+def test_ai_camera_lease_uses_only_fresh_same_map_sighting_and_localized_pose():
+    signer = VisionLeaseSigner("x" * 32)
+    pose = SimpleNamespace(state="LOCALIZED", x=0.2, y=0.3, map_id="track")
+    sighting = {"robot_id": "rosy_01", "source_id": "ceiling", "map_id": "track", "stale": False}
+    sightings = SimpleNamespace(snapshot=lambda: {"sightings": [sighting]})
+    poses = SimpleNamespace(arbitrated_pose=lambda _rid: pose)
+    view = rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",))
+    assert view["frame_path"] == "/api/vision/sources/ceiling/frame"
+    lease = signer.verify(view["lease"], source_id="ceiling")
+    assert lease["crop_map"] == [0.2, 0.3, 1.0] and lease["exp"] - lease["iat"] == 10
+    for bad in ({**sighting, "stale": True}, {**sighting, "map_id": "other"}):
+        sightings.snapshot = lambda: {"sightings": [bad]}
+        assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is None
+    pose.state = "LOST"
+    assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is None
 
 
 def _first(robots=("rosy_01",), keep=None):
