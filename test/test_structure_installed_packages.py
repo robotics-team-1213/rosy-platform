@@ -27,11 +27,11 @@ def test_source_holder_builds_and_installs_the_original_package(
     shutil.copytree(ROOT / source, copied,
                     ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
     wheels, installed = tmp_path / "wheels", tmp_path / "installed"
-    for args in (
-        ["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), str(copied)],
-        ["install", "--no-deps", "--no-index", "--target", str(installed),
-         *map(str, wheels.glob("*.whl"))],
-    ):
+    for operation in ("wheel", "install"):
+        args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), str(copied)]
+                if operation == "wheel" else
+                ["install", "--no-deps", "--no-index", "--target", str(installed),
+                 *map(str, wheels.glob("*.whl"))])
         result = subprocess.run([sys.executable, "-m", "pip", "--disable-pip-version-check", *args],
                                 cwd=tmp_path, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
