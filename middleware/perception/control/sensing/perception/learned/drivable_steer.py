@@ -49,6 +49,8 @@ EXIT_TIE_M = 0.03
 NEAR_GAP_M = 0.04
 #: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
 WALL_STANDOFF_M = 0.08
+#: an opening seen this far back (odometry travel) still names the side to turn at a closed way
+EXIT_MEMORY_M = 0.5
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
 EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
@@ -125,6 +127,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = next(iter(reach))
     # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
     # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
+    out["seen_exit"] = out["exit"]
     if out["exit"] is not None and not near_ok[out["exit"]]:
         out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
@@ -159,10 +162,11 @@ class DrivableSteer:
         self._pivot = None
         self._smoothed = None
         self._side = None
+        self._memory = None
         self._lost_since = None
 
     def reset(self):
-        self._key = self._target = self._pivot = self._smoothed = self._side = None
+        self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
         self._lost_since = None
 
     def lost(self, stamp):
@@ -185,6 +189,17 @@ class DrivableSteer:
             info["wall_ahead_m"] = round(wall_ahead_m, 3)
             info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
         ahead, side = info["ahead_m"], info["exit"]
+        # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
+        # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
+        # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
+        if info.get("seen_exit") is not None:
+            self._memory = (info["seen_exit"], current_pose)
+        elif self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
+                current_pose[0] - self._memory[1][0], current_pose[1] - self._memory[1][1]) > EXIT_MEMORY_M:
+            self._memory = None
+        if side is None and ahead < PIVOT_AHEAD_M and self._memory is not None:
+            side = info["exit"] = self._memory[0]
+            info["exit_from_memory"] = True
         # The side chosen at a closing bend or junction is kept until the way runs ahead again
         # (9dfk 20261010T001349Z weaved right/left at the ring's SE exit when the exit tie flipped).
         if self._side is not None and ahead >= TURN_RELEASE_M:
