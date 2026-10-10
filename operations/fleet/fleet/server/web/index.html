@@ -216,8 +216,6 @@
             <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
           </div>
           <!-- 대형(D-20): 리더를 Fleet이 몰고 팔로워가 리더 뒤 자리로 붙는다. 대열(D-517 M3)은 차로 위 반복 운행이다. -->
-          <label class="robot-filter" for="formation-filter">로봇 찾기
-            <input class="ui-field" id="formation-filter" type="search" placeholder="이름 일부 · 예: 012" autocomplete="off"></label>
           <details class="formation-form-wrap"><summary id="formation-form-summary">대형 설정 · 리더와 팔로워</summary><div class="formation-form">
             <label for="formation-leader">리더</label>
             <select class="ui-field" id="formation-leader" data-robot-picker></select>
@@ -237,6 +235,8 @@
           </div>
           <p class="hint" id="formation-help">시작: 팔로워가 리더 뒤 자리로 붙음 · 변경: 모양·간격만 바꿈 · 재개: 멈춘 대형을 다시 움직임 · 해제: 팔로워 추종을 끔</p>
           <p class="hint" id="formation-detail"></p>
+          <label class="robot-filter" for="formation-filter">로봇 찾기
+            <input class="ui-field" id="formation-filter" type="search" placeholder="이름 일부 · 예: 012" autocomplete="off"></label>
           <details class="convoy-form-wrap"><summary>대열 · 반복 운행하는 리더 뒤를 따라 돌기</summary><div class="formation-form">
             <label for="convoy-leader">리더</label>
             <select class="ui-field" id="convoy-leader" data-robot-picker></select>
