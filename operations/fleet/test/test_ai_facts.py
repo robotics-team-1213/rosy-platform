@@ -112,7 +112,7 @@ def test_incident_context_is_accepted_only_as_shadow(tmp_path):
     _fact(value=["ok", {"next": "STOP"}]),
     _fact(ttl_s=5.5),
     _fact(source="vlm:qwen3-vl-8b@lidar-identity/1", kind="obstacle_identity", ttl_s=8.5),
-    _fact(observed_at=time.time() + 30),
+    _fact(observed_at=time.time() + 3600),
     _fact(kind="all_clear"),
     _fact(confidence=1.5),
     _fact(source="human:bob"),
