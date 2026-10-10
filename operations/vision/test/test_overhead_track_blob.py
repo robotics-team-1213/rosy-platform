@@ -550,6 +550,94 @@ def test_a_large_dark_occluder_like_a_chair_is_not_healed():
     assert detector._model is model
 
 
+# D-589: the kept background replays only under the camera settings it was learned with.
+
+LOCKED = "ev=-7;ae=1;awb=1;max_us=33333;ab=60hz"
+OTHER = "ev=-3;ae=1;awb=1;max_us=33333;ab=60hz"
+
+
+def _kept(store, camera):
+    before = BackgroundBlobDetector(store=store)
+    if camera is not None:
+        before.camera_changed(camera)
+    before.relearn()
+    _learned(before)
+    assert store.path.exists()
+
+
+def test_a_kept_background_replays_under_the_same_camera_settings(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    after = BackgroundBlobDetector(store=store)
+    after.camera_changed(LOCKED)  # the phone reports its settings before the first frame
+    result = after.detect(Frame(_parked_robot_floor(), 100.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_other_camera_settings_or_none_known_learn_live(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    other = BackgroundBlobDetector(store=store)
+    other.camera_changed(OTHER)
+    assert other.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+    unknown = BackgroundBlobDetector(store=store)
+    assert unknown.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+
+
+def test_a_background_kept_before_d589_counts_as_a_mismatch_once_settings_are_known(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, None)  # no fingerprint in the file
+    known = BackgroundBlobDetector(store=store)
+    known.camera_changed(LOCKED)
+    assert known.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+    unknown = BackgroundBlobDetector(store=store)  # old app, no camera_state: as before D-589
+    assert unknown.detect(Frame(_parked_robot_floor(), 100.0), CAL).status == "OK"
+
+
+def test_a_camera_change_learns_again_and_replays_a_matching_kept_background(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    detector = BackgroundBlobDetector(store=store)
+    detector.camera_changed(OTHER)
+    _learned(detector)
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(LOCKED)  # the tuner locked again at the kept settings
+    result = detector.detect(Frame(_parked_robot_floor(), 200.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_first_settings_report_after_learning_keeps_the_background():
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(LOCKED, first=True)  # only names the settings learned under
+    assert detector.detect(Frame(_floor(), 11.5), CAL).status == "OK"
+    detector.camera_changed(LOCKED)  # the same settings again, but a new link or back to Vision
+    assert detector.detect(Frame(_floor(), 12.0), CAL).status == "LEARNING"
+
+
+def test_first_settings_report_while_learning_restarts_the_learn_with_replay(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    after = BackgroundBlobDetector(store=store)
+    assert after.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"  # no settings known yet
+    after.camera_changed(LOCKED, first=True)
+    result = after.detect(Frame(_parked_robot_floor(), 101.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_a_camera_change_during_an_operator_relearn_still_keeps_it(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    detector = BackgroundBlobDetector(store=store)
+    detector.camera_changed(OTHER)
+    detector.relearn()
+    detector.camera_changed(LOCKED)
+    _learned(detector)
+    assert store.path.exists()
+    replay = BackgroundBlobDetector(store=store)
+    replay.camera_changed(LOCKED)
+    assert replay.detect(Frame(_parked_robot_floor(), 100.0), CAL).status == "OK"
+
+
 # D-596 1: an LED identify window freezes the background (a standing robot blinks).
 
 def _lamp_on(image):
@@ -597,3 +685,15 @@ def test_no_learning_frame_is_taken_in_a_held_window():
     assert detector._learned == 0
     assert detector.detect(Frame(_floor(), 5.5), CAL).status == "LEARNING"
     assert detector._learned == 1
+
+
+def test_a_camera_change_does_not_fill_robot_regions_from_the_old_exposure():
+    """D-589 x D-600: the background of other camera settings is not a source for masked learning."""
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.reset()  # SCENE_CHANGED or operator relearn: the previous background may fill
+    assert detector._previous is not None
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(OTHER)
+    assert detector._previous is None

@@ -90,7 +90,8 @@ SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
-              "perception/control/sensing/perception")
+              "perception/control/sensing/perception",
+              "perception/control/sensing/perception/learned")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -705,8 +706,12 @@ SIZE_VERDICTS = {
         "D-600 (584) merged, plus the hold-stops-fill guard. (independent re-judge 2026-10-10, critic: agree - 5 over on one MOG2 owner; next growth first moves BackgroundStore to track/background_store.py with a re-export, then suspect/ghost healing). ROS-free, host-testable (X5)",
     ),
     "vision/rosy_vision/ingest.py": (
-        671,
-        "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
+        825,
+        "accept: re-judged 2026-10-10 at 825 (author's record, D-589 S1) when the camera/camera_state "
+        "text messages joined: they ride the same per-source connection and are kept per connection "
+        "like the frame; parsing lives in protocol.py and the tuning logic in track/tuning.py. The "
+        "next growth first moves the preview/proposal HTTP reads into their own module. Before: "
+        "one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
         "lifecycle, latest-frame store and the direct preview/proposal reads share one connection map); "
         "crossed 600 on 2026-10-01 when D-341 paired-credential admission and revoke closing joined the "
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
@@ -1093,8 +1098,17 @@ SIZE_VERDICTS = {
         "docs/validation/ui-release-integration-2026-10-04/README.md records the independent review. "
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
+    "perception/control/sensing/perception/learned": (
+        2_270,
+        "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
+        "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
+        "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "
+        "when D-597 amendment 3 (a85739fcb, boundary memory on the pure-pursuit arc) took the parent "
+        "past 12004+150. Import path, colcon package and CORE command ownership do not change. "
+        "Re-judge on growth past +150.",
+    ),
     "perception/control/sensing/perception": (
-        12_004,
+        9_895,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1107,7 +1121,8 @@ SIZE_VERDICTS = {
         "also lives in the learned backend it serves; the split plan is unchanged. Re-judged at 12004 "
         "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
         "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
-        "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891).",
+        "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891). Re-judged at 9895 on 2026-10-10: learned/ (2270) left this unit "
+        "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named.",
     ),
     "control": (
         34_619,

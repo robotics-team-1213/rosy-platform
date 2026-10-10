@@ -435,6 +435,17 @@ def test_fps_counts_accepted_payloads_over_three_seconds():
     assert service.snapshot()["sources"][0]["fps"] == 2.0
 
 
+def test_source_row_carries_the_camera_tuning_while_fresh():
+    service, clock = _service()
+    service.accept(AUTH, _payload(calibration_revision="cal-v3"))
+    assert service.snapshot()["sources"][0]["tuning"] is None
+    tuning = CASES["ok_with_tuning"]["payload"]["tuning"]
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", captured_at=NOW - 0.05, tuning=tuning))
+    assert service.snapshot()["sources"][0]["tuning"] == tuning
+    clock.now += 1.1
+    assert service.snapshot()["sources"][0]["tuning"] is None
+
+
 def test_approved_revision_is_the_record_on_the_source_map_until_revoked():
     """D-587 2: the sighting service asks this for an approved_record sighting."""
     service, _ = _service()
@@ -522,3 +533,13 @@ def test_fresh_unknown_floor_is_in_the_snapshot_and_the_config_names_regions():
     assert service.request_relearn("ceiling_north")["unlocated"] == ["rosy_02"]
     clock.now += 1.1
     assert service.snapshot()["sources"][0]["unknown_floor"] == []
+
+
+def test_source_row_carries_tuning_and_unknown_floor_together():
+    """D-589 x D-600: one payload carries both optional fields and the row passes both."""
+    service, _ = _service()
+    tuning = CASES["ok_with_tuning"]["payload"]["tuning"]
+    area = {"x": 1.0, "y": 0.5, "radius_m": 0.1}
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", tuning=tuning, unknown_floor=[area]))
+    row = service.snapshot()["sources"][0]
+    assert row["tuning"] == tuning and row["unknown_floor"] == [area]

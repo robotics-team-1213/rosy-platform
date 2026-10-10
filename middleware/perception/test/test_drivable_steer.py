@@ -90,3 +90,18 @@ def test_a_bend_inner_edge_does_not_block_the_arc_but_a_line_across_does():
     assert _crosses(inner, *target) is None
     across = [(0.15, y) for y in np.linspace(-0.1, 0.1, 20)]
     assert _crosses(across, 0.25, 0.0) is not None
+
+
+def test_at_a_crosswalk_a_closed_way_goes_straight_not_around():
+    steer = DrivableSteer()
+    steer.crosswalk((0.0, 0.0, 0.0))
+    error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33), 1, G, XO, HALF,
+                                            (0.05, 0.0, 0.0), (0.05, 0.0, 0.0))
+    assert (error, debug["strategy"]) == (0.0, "drivable_crosswalk_straight"), debug
+
+
+def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
+    steer = DrivableSteer()
+    closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
+    assert steer.update(closed, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))[2]["strategy"] == "drivable_pivot_left"
+    assert steer.update(closed, 2, G, XO, HALF, (0.0, 0.0, 1.9), (0.0, 0.0, 1.9))[2]["reason"] == "pivot_limit"
