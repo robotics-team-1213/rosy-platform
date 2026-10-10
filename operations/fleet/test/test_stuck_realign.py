@@ -1,6 +1,5 @@
 """D-622 standalone REALIGN: coherent map geometry, finite budgets and CORE transport."""
 import asyncio
-import copy
 import json
 import math
 
@@ -9,6 +8,8 @@ import pytest
 
 from fleet.stuck.realign import RealignConfig, select
 from fleet.stuck.resolver import Answer, ResolverConfig, StuckResolver
+from fleet.stuck.loop import StuckResolverLoop
+from fleet.stuck.board import LineStuckBoard
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient
 
@@ -88,6 +89,36 @@ def test_resolver_and_transport_preserve_realignment_body():
     def handler(request):
         seen.append(json.loads(request.content)); return httpx.Response(200, json={"outcome":"realign"})
     client = HttpRobotClient(RobotEndpoint("r1", "http://robot", "op-token"),
-                             client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+                             http=httpx.AsyncClient(base_url="http://robot", transport=httpx.MockTransport(handler)))
     asyncio.run(client.line_stuck_decision("s1", answer.decision, realign=answer.realign))
     assert seen[0] == {"stuck_id":"s1", "decision":"REALIGN", "realign":answer.realign}
+
+
+def test_loop_forwards_realignment_and_unknown_outcome_never_replays():
+    r = row()
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    answer = resolver.step(1., [r])[0]
+    seen = []
+    class Client:
+        async def line_stuck_decision(self, stuck_id, decision, **extra):
+            seen.append(extra)
+            raise httpx.ReadTimeout("response lost after request")
+    async def snapshot(): return {"robots": [r]}
+    board = LineStuckBoard(clock=lambda: 1.)
+    board.observe([r])
+    loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: {"r1":Client()})
+    asyncio.run(loop._answer(answer, 1.))
+    assert seen == [{"realign":answer.realign}]
+    assert resolver.step(2., [r]) == []
+    assert board.resolver_note("r1", "s1")["tier"] == "human"
+
+
+def test_cli_default_and_opt_in_configuration(tmp_path):
+    from types import SimpleNamespace
+    from fleet.cli import _realign_config
+    args = SimpleNamespace(site_config=None)
+    assert _realign_config(args) == RealignConfig()
+    path = tmp_path / "site.yaml"
+    path.write_text("fleet:\n  stuck_resolver:\n    realign_robots: [r1]\n", encoding="utf-8")
+    args.site_config = path
+    assert _realign_config(args).robots == frozenset({"r1"})

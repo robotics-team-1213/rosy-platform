@@ -137,7 +137,8 @@ class RobotClient(Protocol):
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict: ...
+                                  yield_turn_rad: float | None = None,
+                                  realign: dict | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
@@ -360,13 +361,18 @@ class HttpRobotClient:
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict:
+                                  yield_turn_rad: float | None = None,
+                                  realign: dict | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
         body: dict = {"stuck_id": stuck_id, "decision": decision}
         if yield_m is not None:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
             body["yield_turn_rad"] = yield_turn_rad
+        if realign is not None:
+            if decision != "REALIGN":
+                raise ValueError("realign body requires REALIGN decision")
+            body["realign"] = realign
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
     async def front_status(self) -> dict:

@@ -36,6 +36,7 @@ class StuckResolverLoop:
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
         self.heading_review: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        self.realign_evidence: Callable[[str], Optional[dict]] = lambda _robot_id: None
         self._heading_notes: dict[str, tuple] = {}
         #: D-577 7: live acting AI facts about a robot (`AiFactsBoard.acting_facts`, app.py sets it).
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
@@ -79,6 +80,12 @@ class StuckResolverLoop:
 
     def _row(self, row: dict) -> dict:
         extra = {}
+        if self._resolver.realign.robots:
+            try:
+                extra["realign_evidence"] = self.realign_evidence(row["robot_id"])
+            except Exception:  # noqa: BLE001 - absence must hold, never authorize motion
+                extra["realign_evidence"] = {"status":"observer_unavailable"}
+            extra["clearance_evidence"] = self._board.view(row["robot_id"])
         if self.trip_busy(row["robot_id"]):
             extra["trip"] = True
         pose = self.map_pose(row["robot_id"])
@@ -165,12 +172,14 @@ class StuckResolverLoop:
             extra = {}
             if answer.yield_m is not None and answer.yield_turn_rad is not None:
                 extra = {"yield_m": answer.yield_m, "yield_turn_rad": answer.yield_turn_rad}
+            if answer.realign is not None:
+                extra["realign"] = answer.realign
             result = await client.line_stuck_decision(answer.stuck_id, answer.decision, **extra)
         except asyncio.CancelledError:
             # Fleet is stopping mid-request: the robot may have applied the answer.
             self._board.record(**record, accepted=None, code="STUCK_DECISION_OUTCOME_UNKNOWN",
                                message="resolver stopped before the robot replied")
-            if answer.decision == "YIELD":
+            if answer.decision in ("YIELD", "REALIGN"):
                 escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
                 if escalation is not None:
                     self._escalated(escalation)
