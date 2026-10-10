@@ -47,6 +47,8 @@ SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.03
 #: the way's nearest row may start at most this far beyond the frame's bottom row
 NEAR_GAP_M = 0.04
+#: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
+WALL_STANDOFF_M = 0.08
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
 EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
@@ -170,12 +172,18 @@ class DrivableSteer:
         elif stamp - self._lost_since > FORGET_S:
             self.reset()
 
-    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None):
-        """(error, confidence, debug) or (None, None, debug) for no target."""
+    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
+               wall_ahead_m=None):
+        """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
+        of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
+        model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
         self._lost_since = None
         if way_key != self._key:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
         info = dict(self._target)
+        if wall_ahead_m is not None and info["target_m"] is not None:
+            info["wall_ahead_m"] = round(wall_ahead_m, 3)
+            info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
         ahead, side = info["ahead_m"], info["exit"]
         # The side chosen at a closing bend or junction is kept until the way runs ahead again
         # (9dfk 20261010T001349Z weaved right/left at the ring's SE exit when the exit tie flipped).
