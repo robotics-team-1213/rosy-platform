@@ -171,7 +171,8 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/stuck": (
         1781,
-        "accept: 1617 after the pure move + R1 fix (D-607 P0, re-judged 2026-10-10) + D-608 incident reports "
+        "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
+        "re-judged 2026-10-10) + D-608 incident reports "
         "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
         "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
         "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
