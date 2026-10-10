@@ -122,6 +122,10 @@ def test_rejection_leaves_files_and_index_untouched(repo, kind):
     status = git(work, "status", "--porcelain")
     result = apply(work, head)
     assert result.returncode != 0
+    reason = {"dirty": "not clean", "staged": "not clean", "untracked": "untracked/ignored",
+              "ignored": "untracked/ignored", "collision": "target already exists", "stale": "stale HEAD",
+              "safety": "Safety move", "safety_parent": "Safety move", "symlink": "linked path"}[kind]
+    assert reason in result.stderr, result.stderr
     assert (work / SOURCE).is_dir()
     assert git(work, "status", "--porcelain") == status
     assert {str(p.relative_to(work)): p.read_bytes() for p in work.rglob("*") if p.is_file()} == files
@@ -145,11 +149,11 @@ def test_apply_requires_reviewed_head(repo):
     assert (work / SOURCE).is_dir()
 
 
-def test_source_symlink_and_missing_manifest_fail_closed(repo):
+def test_missing_manifest_fails_closed(repo):
     _, work = repo
     (work / "tools/harness/platform_parts.yaml").unlink()
     result = apply(work)
-    assert result.returncode != 0
+    assert result.returncode != 0 and "platform_parts.yaml missing" in result.stderr
     assert (work / SOURCE).is_dir()
 
 
@@ -172,3 +176,19 @@ def test_path_boundary_validation(repo, path):
     spec.loader.exec_module(module)
     with pytest.raises(ValueError):
         module.checked_path(repo[1], path)
+
+
+def test_tracked_source_symlink_fails_closed(repo, tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows symlink privilege is not required by this fixture")
+    _, work = repo
+    outside = tmp_path / "private.txt"
+    outside.write_text("outside data must stay outside")
+    link = work / SOURCE / "link.txt"
+    link.symlink_to(outside)
+    git(work, "add", "--", f"{SOURCE}/link.txt")
+    git(work, "commit", "-m", "linked source fixture")
+    result = apply(work)
+    assert result.returncode != 0 and "linked path" in result.stderr
+    assert outside.read_text() == "outside data must stay outside"
+    assert link.is_symlink() and git(work, "status", "--porcelain") == ""
