@@ -27,21 +27,22 @@ class Rig:
         self.t, self.yaw = 10.0, 0.0
         self.events = _Events()
         config = LineFollowConfig(ir_guard_enabled=True, ir_calibration_revision=REV,
-                                  **{"fleet_lane_cue_enabled": True, **overrides})
+                                  **{"fleet_lane_cue_enabled": True, "obstacle_mode": "path", **overrides})
         self.m = LineFollowManager(self.events, config=config, clock=lambda: self.t)
         self.m._wall = lambda: WALL + self.t
         self.m.set_mode(LineFollowMode.CAMERA_LINE)
         self.feed()
 
-    def feed(self, camera=True, ir_error=None):
+    def feed(self, camera=True, ir_error=None, ground=None):
         t, m = self.t, self.m
         self.fed = t
         stamp = round(t * 1e9)
         m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0,
                               yaw=self.yaw, received_at=t)
         if camera:
+            extra = {} if ground is None else {"ground": ground}
             m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
-                                      error=0.0, confidence=0.9), received_at=t, source_now=t)
+                                      error=0.0, confidence=0.9, **extra), received_at=t, source_now=t)
         m.observe(LineObservation(source=LineFollowMode.IR_LINE, stamp=t, visible=ir_error is not None,
                                   error=ir_error, confidence=0.9 if ir_error is not None else 0.0,
                                   ir_calibrated=True, calibration_revision=REV), received_at=t, source_now=t)
@@ -193,7 +194,7 @@ def _token(svc, name, role, source, label):
 def test_api_only_the_fleet_site_token_may_post_and_the_wiring_answers(core_client):
     client, svc = core_client()
     lf = svc.line_follow
-    lf._config = replace(lf.config, fleet_lane_cue_enabled=True)
+    lf._config = replace(lf.config, fleet_lane_cue_enabled=True, obstacle_mode="path")
     body = {"cue_id": "c1", "fleet_epoch": "e", "seq": 1, "ttl_s": 1.0, "pose_stamp": 1.0, "state": "ON_LANE"}
     for headers in ({"Authorization": "Bearer rosy-dev-viewer"}, {"Authorization": "Bearer rosy-dev-operator"},
                     _token(svc, "screen", "operator", "pair-physical", "robot screen login")):
@@ -205,7 +206,7 @@ def test_api_only_the_fleet_site_token_may_post_and_the_wiring_answers(core_clie
 
 PINKY = dict(body_lidar_x_m=-0.017, body_rear_x_m=-0.076, body_rotation_radius_m=0.08257,
              body_half_width_m=0.05655, body_front_x_m=0.04205, body_ultrasonic_x_m=0.0267,
-             obstacle_mode="path", cruise_speed=0.04, obstacle_path_horizon_m=0.30,
+             cruise_speed=0.04, obstacle_path_horizon_m=0.30,
              obstacle_corridor_half_width_m=0.072, obstacle_release_s=0.0)
 
 
@@ -228,4 +229,87 @@ def test_the_body_stop_measures_the_pivot_on_its_rotation_circle():
     rig.t += 0.5
     rig.cue("WRONG_WAY", 2, turn_deg=170.0)
     d = step()
-    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason != "fleet_wrong_way_turn"
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "obstacle_ahead"
+
+
+def test_off_map_is_taken_with_an_old_pose_stamp_and_latches():
+    """Re-review 1: Fleet sends OFF_MAP after >= 3 s without a sighting, with an old stamp."""
+    rig = Rig()
+    body = {"cue_id": "c1", "fleet_epoch": "e", "seq": 1, "ttl_s": 1.0, "pose_stamp": WALL + rig.fed - 5.0,
+            "state": "OFF_MAP"}
+    assert rig.m.set_lane_cue(body, now=rig.t) == (True, None)
+    assert rig.step().linear == 0 and rig.m.status().reason == "fleet_off_map"
+
+
+@pytest.mark.parametrize("signs", [(179.0, -179.0, 179.0), (-178.0, 178.0, -179.0)])
+def test_a_turn_near_180_keeps_its_sign_and_ends_on_progress(signs):
+    """Re-review 3: Fleet's sign flips near 180 deg; the streak keeps the first sign, the pivot
+    ends after ~180 deg of odom progress, not at once on a wrapped angle."""
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1, turn_deg=signs[0])
+    rig.step()
+    rig.t += 0.5
+    rig.cue("WRONG_WAY", 2, turn_deg=signs[1])
+    d = rig.step()
+    first = 1 if signs[0] > 0 else -1
+    assert d.linear == 0 and d.angular * first > 0
+    for seq in range(3, 100):
+        rig.yaw = math.remainder(rig.yaw + first * 0.05, 2 * math.pi)
+        rig.cue("WRONG_WAY", seq, turn_deg=signs[seq % 3])
+        d = rig.step()
+        if d.linear > 0:
+            break
+    assert d.linear > 0 and (seq - 2) * 0.05 >= math.radians(165), (seq, rig.m.status().reason)
+
+
+def test_pivot_is_zeroed_by_the_authority_and_its_deadline_latches_without_restart():
+    rig = Rig(authority_required=True)
+    d = _wrong_way(rig)
+    assert (d.linear, d.angular) == (0, 0)                           # D-517 authority: no GO
+    for seq in range(3, 60):
+        rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
+        rig.step(0.25)
+        if rig.m._cue_latch:
+            break
+    assert rig.m._cue_latch == "fleet_turn_unconfirmed"
+    rig.m._config = replace(rig.m.config, authority_required=False)  # the gate releases
+    rig.cue("WRONG_WAY", 99, turn_deg=-170.0)
+    assert rig.step().angular == 0 and rig.m.status().reason == "fleet_turn_unconfirmed"
+
+
+@pytest.mark.parametrize("owner", ["junction_armed", "junction_aborted", "crosswalk_zone"])
+def test_no_pivot_start_while_a_junction_or_crosswalk_owns_the_heading(owner):
+    rig = Rig()
+    if owner == "crosswalk_zone":
+        rig.m._xwalk._zone = object()
+    else:
+        rig.m._junction = {"state": owner.split("_")[1], "action": "left", "place_id": "P"}
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.step()
+    rig.t += 0.5
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    rig.step()
+    assert rig.m._pivot is None and rig.m.status().reason != "fleet_wrong_way_turn"
+
+
+def test_no_pivot_while_lost_or_on_nominal_ground():
+    rig = Rig()
+    rig.m._lost_latched = True
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.step()
+    rig.t += 0.5
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    d = rig.step(ir_error=-0.9)                                      # IR sees a line: LOST stays latched
+    assert d.angular == 0 and rig.m.status().state == "LOST"
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.step(ground="NOMINAL")
+    rig.t += 0.5
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    d = rig.step(ground="NOMINAL")
+    assert d.angular == 0 and rig.m.status().reason == "nominal_ground_requires_driver"
+
+
+def test_enabling_needs_the_path_obstacle_mode():
+    with pytest.raises(ValueError, match="obstacle_mode path"):
+        LineFollowConfig(fleet_lane_cue_enabled=True, obstacle_mode="sector")

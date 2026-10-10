@@ -323,7 +323,9 @@ def set_line_advice(body: LineAdviceRequest, _: AuthContext = Depends(operator),
 
 
 def lane_cue_seat(auth: AuthContext = Depends(operator)) -> AuthContext:
-    """D-430 review 6: only Fleet's site enrollment token (D-555 3 seat), never a shared dev token."""
+    """D-430 review 6: the D-555 3 seat (screen-code token with a ``site:`` label, no shared dev token).
+    The label narrows the seat; it does not authenticate Fleet (any operator pairing by screen code
+    can choose it). A dedicated Fleet-hub grant replaces it when D-550 names a hub principal."""
     from core_api_web.api.v1.fleet_link import _CODE_SOURCES
     if auth.shared_dev or not (auth.source in _CODE_SOURCES and auth.label.startswith("site:")):
         raise ApiError("FORBIDDEN", 403, "requires the Fleet site enrollment token")

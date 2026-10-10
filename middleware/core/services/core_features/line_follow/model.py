@@ -400,6 +400,8 @@ class LineFollowConfig:
             raise ValueError("crosswalk_gate_enabled must be a boolean")
         if type(self.fleet_lane_cue_enabled) is not bool:
             raise ValueError("fleet_lane_cue_enabled must be a boolean")
+        if self.fleet_lane_cue_enabled and self.obstacle_mode != "path":
+            raise ValueError("fleet_lane_cue_enabled needs obstacle_mode path (D-422 measures the cue's twist)")
         if not (_finite(self.crosswalk_look_s) and 0.5 <= self.crosswalk_look_s <= 5.0):
             raise ValueError("crosswalk_look_s must be in [0.5, 5]")
         if type(self.crosswalk_look_min_scans) is not int or not 1 <= self.crosswalk_look_min_scans <= 100:
