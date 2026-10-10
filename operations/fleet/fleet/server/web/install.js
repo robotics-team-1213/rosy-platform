@@ -12,6 +12,7 @@ import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createStartPointView } from "./start-point-view.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
+import { createHostServices } from "./host-services.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
 import { addressMap, movableRobots } from "/console/assets/address-drift.js";
@@ -113,6 +114,13 @@ async function call(path, options = {}) {
   }
 }
 
+const hostServices = createHostServices({
+  root: el("host-services"),
+  call,
+  confirmIrreversible,
+  onPaint: () => applyRole(),
+});
+
 // Task navigation preserves mounted owners and drafts across auth/page epochs.
 const taskChooser = createTaskChooser({beforeSelect: from => {
   if (from === "calibration") visionView.pausePreview();
@@ -122,6 +130,7 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   {id: "robots", title: "로봇 등록", panel: el("robot-enrollment")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
+  {id: "hosts", title: "호스트 서비스", panel: el("host-services")},
 ]});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
@@ -307,6 +316,7 @@ async function refreshAuthorization(renewed = false) {
       peerPicker.refresh(),
       startPoints.refresh(),
       relearn.refresh(),
+      hostServices.refresh(),
     ]);
     life.check();
   } catch (_err) {
@@ -336,6 +346,7 @@ visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
+pageScope.interval(() => hostServices.refresh().catch(() => {}), 30000);
 
 pageScope.onResume(() => {
   visionView.reset();

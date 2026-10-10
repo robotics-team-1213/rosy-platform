@@ -7649,3 +7649,9 @@ osy-d395-s1d\`.
 - 변경: 인식 맹점 목록 `tools/harness/perception_gaps.yaml`을 sim2real 목록 옆에 두었다. 한 행은 녹음 id, `device:YYYY-MM-DD`, 또는 저장소 안 기록에서 태어나고, CLOSED는 저장소에 있는 재생과 `validated_by`가 있어야 한다. candidate는 HOLD 또는 CLOSED만 된다. 첫 행은 P-01 가까운 바닥(OPEN), P-02 ignore를 길로 다시 칠함(OPEN), P-03 9dfk 구역 없음(OPEN), P-04 차선 IR은 횡단보도 선택기가 아님(HOLD)이다.
 - 증거: D-612. 행 형식은 `test/test_perception_gaps.py`가 고정한다. 원격 시험 PC 결과와 known_failures 비교는 이 커밋을 보낸 뒤의 착지 기록이다. 주행 코드와 로봇 overlay는 바꾸지 않았다.
 - gate 변화: SOURCE만. 장치 수용, 8kcn 확인, 각 행을 닫는 재생은 별도.
+
+## 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
+
+- 변경: 가드가 이미 읽던 PC health(메모리 여유·스왑·부하·코어·가동·멈춘 유닛)를 status.json resources로 남긴다. GET /api/fleet/hosts가 읽기 전용 guard·drift를 붙인다(없거나 객체가 아니면 null). 설치·보정 작업 호스트 서비스가 그 수치를 보여주고, D-524의 닫힌 동작(10분 재부팅·취소·허용 유닛 재시작·정지)만 확인 뒤에 보낸다. 프로세스 종료와 로봇 재부팅은 없다. API v1.197. D-524·D-530·D-540은 Proposed인 채로 화면 문장만 고쳤다. 구현 9a9faf0e5, 시험 격리 23d5baa37.
+- 증거: AI PC 원격 pytest 143 passed, 2 warnings. known_failures 0 new, 0 known (X:/DevTemp/host-health/run-1.txt, HEAD 23d5baa37). 첫 실행은 AI PC에 있던 rosy-host-state status.json을 빈 값으로 기대해 1 failed였고, 없는 경로를 보게 고친 뒤 통과했다.
+- gate 변화: SOURCE만. 현장 가드 파일·Fleet 컨테이너 마운트·실제 재부팅은 하지 않았다. 화면은 현장 관제에 아직 없다.
