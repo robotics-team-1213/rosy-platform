@@ -1,4 +1,4 @@
-"""D-553 addendum 4: tools/release/ship.py and the robot side it sends (rosy-ship-remote.sh).
+"""D-553 addendum 4: tools/release/ship.py and the robot side it sends (tools/release/ship_remote.sh).
 
 The robot side runs for real against a scratch root (ROSY_SHIP_ROOT): the repo's
 rosy-release-unpack.sh hard-links the base, native_release.py verifies the whole

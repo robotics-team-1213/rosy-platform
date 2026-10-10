@@ -135,7 +135,7 @@
 5. **카메라만 재시작 (활성화 변경).** `native_release.py activate --release-id <id> --restart-unit rosy-camera.service`.
    - 링크 교체, 저널, 실패 시 롤백은 전체 활성화와 같다. 차이는 runtime 전체 대신 `rosy-camera.service`만 stop/start 한다는 것뿐이다. start 뒤 3 s 지나 `is-active`가 아니면 링크를 되돌리고 옛 카메라를 다시 띄운다. 허용 유닛은 `rosy-camera.service` 하나다.
    - `ship.py`가 이 모드를 고르는 조건: 바뀐 페이로드 파일이 모두 `control/sensing/perception/` 아래이거나 `camera_preview.launch.py`가 띄우는 노드 모듈(`line_observer_node` 등 7개)이다. CORE는 `control`을 import 하지 않고, rosy-io의 `ir_adc_node`는 `perception/`을 import 하지 않는다(`test/test_ship.py`가 정적 import로 고정).
-   - 로봇 쪽(`deploy/robot/pinky_pro/rosy-ship-remote.sh`)은 다음이면 전체 활성화로 돌아간다: 설치된 activator가 이 옵션을 모를 때, 현재 릴리스가 델타의 base가 아닐 때, CORE가 안 돌 때, `rosy-navigation`(control 노드를 띄운다)이 돌 때.
+   - 로봇 쪽(`tools/release/ship_remote.sh`, `tools/` 아래라 델타의 배포 파일로 세지 않는다)은 다음이면 전체 활성화로 돌아간다: 설치된 activator가 이 옵션을 모를 때, 현재 릴리스가 델타의 base가 아닐 때, CORE가 안 돌 때, `rosy-navigation`(control 노드를 띄운다)이 돌 때.
    - 그래서 CORE는 base 이전 릴리스 폴더를 작업 폴더로 둔 채 계속 돈다. 그 폴더의 CORE 코드는 새 릴리스와 바이트 단위로 같다(base가 현재 릴리스일 때만 허용하므로 연쇄해도 같다). CORE는 import를 `/opt/rosy/current` 경로로 하므로, 자동 업데이트의 정리가 옛 폴더를 지워도 작업 폴더만 사라진다. CORE가 다음에 재시작하면 현재 릴리스로 뜬다. CORE가 알리는 릴리스 번호는 그 사이 이전 값일 수 있다.
    - 이 activator는 image layer라, 이 변경이 든 릴리스가 한 번 동기화된 뒤부터 쓰인다. 그 전에는 위 규칙대로 전체 활성화가 된다.
 6. **image-layer 동기화는 델타가 `deploy/robot/native/` 파일을 바꿀 때만 돈다.** 동기화는 릴리스 안의 그 폴더를 기준으로 하므로, 그 폴더가 base와 같으면 할 일이 없다.

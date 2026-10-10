@@ -12,7 +12,7 @@
    CORE keeps running; otherwise "full" (activate-release.sh, CORE release check,
    CORE readiness), as rosy-release-push.ps1 does. The image-layer sync runs only
    when the delta changes a deploy/robot/native file.
-5. Pushes to every robot at once, one ssh session each (rosy-ship-remote.sh), and
+5. Pushes to every robot at once, one ssh session each (ship_remote.sh), and
    prints one summary. Logs: X:/DevTemp/rosy-release-<id>/ship-<robot>.txt.
 
 Signatures, the robot's full-tree verify (native_release.py) and its rollback on a
@@ -89,9 +89,9 @@ def remote_stdin(release_id: str, base_id: str, tarball: Path, mode: str, sync: 
         return f"base64 -d > \"$W/{name}\" <<'ROSY_B64'\n{base64.encodebytes(data).decode()}ROSY_B64\n"
     return ("set -u\nW=$(mktemp -d /var/tmp/rosy-ship.XXXXXX) || exit 1\n"
             + blob("rosy-release-unpack.sh", (PINKY / "native" / "rosy-release-unpack.sh").read_bytes())
-            + blob("rosy-ship-remote.sh", (PINKY / "rosy-ship-remote.sh").read_bytes())
+            + blob("ship_remote.sh", (Path(__file__).resolve().parent / "ship_remote.sh").read_bytes())
             + blob(f"{release_id}.tar.gz", tarball.read_bytes())
-            + f'bash "$W/rosy-ship-remote.sh" "$W" {release_id} {base_id} {mode} {int(sync)} {holder} </dev/null\n'
+            + f'bash "$W/ship_remote.sh" "$W" {release_id} {base_id} {mode} {int(sync)} {holder} </dev/null\n'
             + 'rc=$?; rm -rf -- "$W"; exit $rc\n').encode()
 
 

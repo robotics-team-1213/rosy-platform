@@ -2,9 +2,10 @@
 # D-553 addendum 4: the robot side of tools/release/ship.py, one ssh session per
 # robot instead of rosy-release-push.ps1's 13 (each ~2.5 s from this PC). Runs
 # as root (`sudo -n bash -s`); ship.py sends this file, the repo's
-# rosy-release-unpack.sh and the signed tarball in the same stdin.
+# rosy-release-unpack.sh and the signed tarball in the same stdin. It lives under
+# tools/ so a delta never counts it as a shipped file.
 #
-#   rosy-ship-remote.sh WORKDIR RELEASE_ID BASE_ID MODE SYNC HOLDER
+#   ship_remote.sh WORKDIR RELEASE_ID BASE_ID MODE SYNC HOLDER
 #     WORKDIR  root-owned scratch dir holding rosy-release-unpack.sh and <id>.tar.gz
 #     MODE     full   -> activate-release.sh (stops/starts the runtime), then the
 #                        CORE release check and CORE readiness, as the push does
