@@ -58,31 +58,55 @@ def test_ai_replan_checks_members_edges_evidence_and_ai_first():
     assert AiReplan(_first(robots=("b",)), _Board(_replan()))(("a", "b"), avoidable, 0.0) is None
 
 
+def _routable(monkeypatch, runner):
+    """This demo map has no other route around ring_n (TRIP_NO_ROUTE); hand back the trip's own plan
+    as the replanned route so the switch itself is under test."""
+    from fleet.server import trip_runner
+
+    def hold(_active, _pose, _remaining, _request, _caps, blocked, *_args):
+        live = runner._live["b"]
+        return {"reason": "replan", "map_version": live.view["map_version"], "blocked": sorted(blocked),
+                "plan": {k: live.view["plan"][k] for k in ("segments", "places", "actions")}}
+
+    monkeypatch.setattr(trip_runner, "replan_hold", hold)
+
+
 def test_an_ai_replan_switches_the_route_without_the_operator_after_the_start_checks(monkeypatch):
     runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
     _ticks(runner, fleet, n=CYCLE_PERIODS)
     row = runner._live["b"].traffic["resolver"]
     assert row["decision"] == "replan"
     row["ai"] = True                                  # as handover.decide marks a valid AI pick
+    rev = runner._live["b"].route_rev
     _ticks(runner, fleet)
     view = runner.view("b")
     assert view["hold"] is None and view["detail"]["replan_confirmed_by"] == "fleet-ai"
-    assert all(seg["edge_id"] != "ring_n" for seg in view["plan"]["segments"])
+    assert runner._live["b"].route_rev == rev + 1
+
+
+def test_without_the_ai_mark_the_replan_waits_for_the_operator(monkeypatch):
+    runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 1)
+    hold = runner.view("b")["hold"]
+    assert hold["reason"] == "replan" and hold["plan"] is not None
+    assert "replan_confirmed_by" not in runner.view("b")["detail"]
 
 
 def test_an_ai_replan_that_fails_the_start_checks_keeps_the_operator_hold(monkeypatch):
     from fleet.server.trip_runner import TripError
+    from test_lane_traffic import run
 
     runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
     _ticks(runner, fleet, n=CYCLE_PERIODS + 1)
     live = runner._live["b"]
     hold = live.view["hold"]
-    assert hold["reason"] == "replan" and hold["plan"] is not None
 
     async def refuse(*_args, **_kwargs):
         raise TripError(422, "TRIP_POSE_UNTRUSTED")
 
     monkeypatch.setattr(runner, "_pose_checks", refuse)
-    from test_lane_traffic import run
     run(runner._ai_confirm(live))
     assert live.view["hold"] == hold and live.view["detail"]["ai_replan_refused"] == "TRIP_POSE_UNTRUSTED"
