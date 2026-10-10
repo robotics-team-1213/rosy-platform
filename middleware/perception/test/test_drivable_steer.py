@@ -201,3 +201,11 @@ def test_a_map_corner_is_not_a_crosswalk_hold_and_creeps_toward_the_opening():
     error, _, debug = steer.update(corner, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), guide_deg=83.0,
                                    guide_here_deg=80.0, guide_pivot_ok=False)
     assert debug["strategy"] != "drivable_crosswalk_straight" and error is not None and error < 0, debug
+
+
+def test_a_creep_never_aims_at_an_opening_against_the_route():
+    # c2-8kcn: the way closed with an opening left while the map said right: no creep to the left
+    closed_left = _lane(0.06, -0.06, x_max=0.13) | _lane(0.5, 0.02, x_max=0.3)
+    error, _, debug = DrivableSteer().update(closed_left, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
+                                             guide_deg=-45.0, guide_here_deg=0.0, guide_pivot_ok=False)
+    assert error is None or error >= 0, debug

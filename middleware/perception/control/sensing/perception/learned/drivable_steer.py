@@ -437,6 +437,8 @@ class DrivableSteer:
                 self._smoothed = None
                 error = -PIVOT_ERROR if want == "left" else PIVOT_ERROR
                 if guide_deg is not None and not guide_pivot_ok:
+                    # an opening against the route is no creep target (c2-8kcn turned left, map said right)
+                    info["exit"] = None
                     return self._creep(info, current_pose, source_pose, half)
                 return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_pivot_" + want, guided=True)
             elif side is not None and side != want:
