@@ -573,7 +573,7 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
     assert report["evidence"]["core"]["cause"] == "obstacle_ahead"
     assert report["evidence"]["rosy_cam"]["source_id"] == "ceiling_north"
     assert report["evidence"]["ai_facts"][0]["stage"] == "shadow"
-    assert report["evidence"]["front_image"]["status"] == "not_retained"
+    assert report["evidence"]["front_image"]["status"] == "requestable_while_open"
     [traffic] = response.json()["traffic_reports"]
     assert traffic["classification"] == "stalled" and traffic["evidence"]["ai_fact"]["source"] == "analyzer:test@1"
     url = "/api/fleet/incidents/rosy_01/stuck-abc/review"
@@ -593,3 +593,8 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
     assert reviewed["reviews"][-1]["note"] == "floor box seen"
     assert client.post("/api/fleet/incidents/facts/99999/review", json=body,
                        headers=_auth(OPERATOR)).status_code == 404
+    robot._state = _state(stuck=None)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    _row(client)
+    [closed] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["reports"]
+    assert closed["evidence"]["front_image"]["status"] == "not_retained"

@@ -478,7 +478,8 @@ class LineStuckAnswerLog:
                                                                             "pose_yaw", "pose_state", "pose_age_s",
                                                                             "close_reason", "resolved_by", "escalation_code")},
                                     "rosy_cam": camera, "ai_facts": ai,
-                                    "front_image": {"status": "not_retained"}},
+                                    "front_image": {"status": "requestable_while_open" if row["closed_at"] is None
+                                                    else "not_retained"}},
                                 "actions": answers, "reviews": reviews})
         return reports
 
