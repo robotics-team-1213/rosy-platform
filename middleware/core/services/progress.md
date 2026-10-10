@@ -37,3 +37,6 @@ plans:
 ## 현재 유효한 금지사항
 
 - Depends on `core_common`. Never on `core_api_web` or `core`. Never import `control` (D-126).
+
+
+- 2026-10-11 D-623: fresh lane boundary revision and current inquiry implemented; independent source review approved, remote regression and DEVICE/FIELD pending.

@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fleet.server.static_routes import CONSOLE_ASSETS
 from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(
@@ -73,7 +74,10 @@ def _serve(route):
     if path.startswith("/common/"):
         target = COMMON / path.removeprefix("/common/")
     elif path.startswith("/console/assets/"):
-        target = FLEET / path.removeprefix("/console/assets/")
+        entry = CONSOLE_ASSETS.get(path.removeprefix("/console/assets/"))
+        if entry is None:
+            return route.fulfill(status=404, body="")
+        target = FLEET / entry[0]
     elif path.startswith("/dashboard/assets/"):
         target = DASHBOARD / path.removeprefix("/dashboard/assets/")
     elif path == "/console":

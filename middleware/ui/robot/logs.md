@@ -1240,3 +1240,9 @@
 - 변경: Console 차선 추종 패널이 `GET /api/v1/line-follow`의 `advice`(D-525/D-551)를 "가상" 주황 점선 칩으로 보인다. 등 점과 함께 글자로 녹색/황색/적색, 남은 초·녹색까지 초(정확하지 않으면 ≥), 정지선까지 거리, "통과 허가는 관제 authority(통행권)" 문구를 쓴다. CORE가 준 `expires_in_s`가 지나거나 상태 읽기가 실패하면 "신호 정보 없음"이고 지난 녹색을 남기지 않는다. API 변화 없음.
 - 증거: `test/test_line_signal_advice_browser.py`(문구·점선 테두리·만료·읽기 실패·모르는 등).
 - gate 변화: SOURCE 표시만(J3). 로봇 얼굴/LCD 한 줄은 face-inputs 전달이 필요해 이번에 하지 않았다. 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.

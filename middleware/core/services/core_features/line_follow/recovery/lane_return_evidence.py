@@ -36,6 +36,11 @@ class LaneReturnEvidence:
         self._received_at = None
         self._source_stamp_ns = None
         self._high_water_ns = None
+        self._boundary_reference = None
+        self._boundary_candidate = None
+        self._boundary_runs = 0
+        self._boundary_stamp = None
+        self._boundary_revision = 0
 
     def reset(self):
         self.trail.samples.clear()
@@ -44,6 +49,37 @@ class LaneReturnEvidence:
 
     def invalidate_lane(self):
         self._lane = self._received_at = self._source_stamp_ns = None
+
+    def boundary_change(self, view):
+        """D-623 inquiry evidence only; three new aligned samples confirm a changed corridor."""
+        result = {"state": "unknown", "revision": self._boundary_revision,
+                  "epoch": view.epoch, "source_stamp_ns": view.source_stamp_ns}
+        if view.reason != "ready" or view.pose is None or view.corridor is None:
+            self._boundary_candidate = None
+            self._boundary_runs = 0
+            return {**result, "reason": view.reason}
+        current = (view.epoch, view.corridor, view.pose)
+        reference = self._boundary_reference
+        if reference is None or reference[0] != view.epoch or reference[1].geometry_id != view.corridor.geometry_id:
+            self._boundary_reference = current
+            self._boundary_candidate, self._boundary_runs = None, 0
+            self._boundary_stamp = view.source_stamp_ns
+            return {**result, "state": "baseline", "geometry_id": view.corridor.geometry_id}
+        if view.source_stamp_ns != self._boundary_stamp:
+            self._boundary_stamp = view.source_stamp_ns
+            if view.corridor.matches(reference[1], reference[2], view.pose):
+                self._boundary_candidate, self._boundary_runs = None, 0
+            else:
+                candidate = self._boundary_candidate
+                consistent = candidate is not None and view.corridor.matches(candidate[1], candidate[2], view.pose)
+                self._boundary_runs = self._boundary_runs + 1 if consistent else 1
+                self._boundary_candidate = current
+                if self._boundary_runs >= 3:
+                    self._boundary_reference = current
+                    self._boundary_candidate, self._boundary_runs = None, 0
+                    self._boundary_revision += 1
+        return {**result, "state": "confirming" if self._boundary_runs else "confirmed",
+                "revision": self._boundary_revision, "geometry_id": view.corridor.geometry_id}
 
     def observe_pose(self, *, stamp_ns, source_now_ns, frame, x, y, yaw, received_at):
         if type(stamp_ns) is not int or type(source_now_ns) is not int:

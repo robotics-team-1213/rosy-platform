@@ -31,11 +31,52 @@ class FramedRobot(FakeRobot):
         super().__init__(*args, **kwargs)
         self.frame_error = None
 
-    async def front_frame(self):
+    async def front_frame(self, *, overlay=True):
         self._record("front_frame")
         if self.frame_error is not None:
             raise self.frame_error
         return JPEG, {"sequence": 812, "age_ms": 400, "source": "front"}
+
+
+def test_live_reads_new_raw_frames_without_replacing_incident_snapshot(tmp_path):
+    robot = FramedRobot("rosy_01", state=_state())
+    client = _client(robot, tmp_path)
+    _gather(client)
+    historical = _preview(client).json()
+    for _ in range(2):
+        result = _preview(client, "stuck-abc&live=true")
+        assert result.status_code == 200, result.text
+        assert result.json()["live"] is True
+        assert 0.4 <= result.json()["age_s"] <= 3
+    assert robot.calls.count(("front_frame",)) == 3
+    assert _preview(client).json()["jpeg_base64"] == historical["jpeg_base64"]
+
+
+@pytest.mark.parametrize("age", [None, -1, 3001, float("nan")])
+def test_live_does_not_show_unknown_or_stale_image_age(tmp_path, age):
+    robot = FramedRobot("rosy_01", state=_state())
+
+    async def front_frame(*, overlay):
+        assert overlay is False
+        return JPEG, {"sequence": 813, "age_ms": age, "source": "front"}
+
+    robot.front_frame = front_frame
+    client = _client(robot, tmp_path)
+    _gather(client)
+    assert _preview(client, "stuck-abc&live=true").status_code == 404
+
+
+def test_live_drops_frame_if_stuck_closed_while_fetching(tmp_path):
+    robot = FramedRobot("rosy_01", state=_state())
+    client = _client(robot, tmp_path)
+    _gather(client)
+
+    async def front_frame(*, overlay):
+        client.app.state.line_stuck.observe([{"robot_id": "rosy_01", "online": True, "state": _state(None)}])
+        return JPEG, {"sequence": 813, "age_ms": 100, "source": "front"}
+
+    robot.front_frame = front_frame
+    assert _preview(client, "stuck-abc&live=true").json()["detail"]["code"] == "STUCK_NOT_OPEN"
 
 
 def _state(stuck=STUCK) -> dict:

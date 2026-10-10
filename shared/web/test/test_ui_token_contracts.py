@@ -370,7 +370,8 @@ def test_irreversible_actions_are_a_fill_not_text():
         re.findall(r"(--[a-z0-9-]+):\s*var\((--[a-z0-9-]+)\)", tokens_text())
     )
     assert declared.get("--button-irreversible-bg", "").startswith("--status-crit")
-    assert declared.get("--button-irreversible-ink") in ("--ink", "--ink-on-crit")
+    assert declared.get("--button-irreversible-ink") == "--text-on-danger"
+    assert declared.get("--text-on-danger") == "--ink-on-crit"
 
 
 def test_typography_is_declared_in_the_token_file():
@@ -522,7 +523,7 @@ def test_a_danger_fill_carries_ink_not_dark_text():
         if "background: var(--status-crit)" not in body:
             continue
         ink = re.search(r"(?<![-a-z])color:\s*var\((--[a-z0-9-]+)\)", body)
-        if ink and ink.group(1) not in ("--ink", "--ink-on-crit", "--nominal"):
+        if ink and ink.group(1) not in ("--ink", "--ink-on-crit", "--nominal", "--text-on-danger"):
             offenders.append(f"{selector.strip()[:50]} -> color {ink.group(1)}")
     assert not offenders, f"위험 면 위에 잉크가 아닌 색을 얹는다: {offenders}"
 

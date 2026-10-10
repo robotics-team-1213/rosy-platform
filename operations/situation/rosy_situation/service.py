@@ -136,6 +136,8 @@ class Situation:
         self._profile_task = None
         self._case_task = None
         self._case_seen: dict[str, float] = {}
+        self._case_boundary: dict[str, object] = {}
+        self._case_attempts: dict[str, tuple] = {}
         self._profile_retry_at = 0.0
 
     def owner_mode(self) -> str:
@@ -304,6 +306,18 @@ class Situation:
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
                 case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                boundary_revision = None
+                if case.get("kind") == "stuck":
+                    boundary = (((case.get("context") or {}).get("robot_inquiry") or {}).get("lane_boundary") or {})
+                    revision = boundary.get("revision")
+                    valid = (boundary.get("state") == "confirmed" and type(revision) is int and revision >= 0)
+                    # First inquiry establishes context; later queries need confirmed geometry change.
+                    if pid in self._case_boundary and (not valid or revision == self._case_boundary[pid]):
+                        continue
+                    boundary_revision = revision if type(revision) is int and revision >= 0 else None
+                    previous, attempts = self._case_attempts.get(pid, (boundary_revision, 0))
+                    if previous == boundary_revision and attempts >= 3:
+                        continue
                 if self.owner_mode() != "available":
                     return
                 for member in [case, *(case.get("members") or {}).values()]:
@@ -318,13 +332,20 @@ class Situation:
                             member["views"].pop("rosy_cam", None)
                 if self.owner_mode() != "available":
                     return
+                if case.get("kind") == "stuck":
+                    previous, attempts = self._case_attempts.get(pid, (boundary_revision, 0))
+                    self._case_attempts[pid] = (boundary_revision, attempts + 1 if previous == boundary_revision else 1)
                 proposal = self.vlm.judge(case, self.wall())
                 if proposal is not None and self.owner_mode() == "available":
                     self.fleet.call("/api/fleet/ai/proposals", proposal)
                     self._log("proposals", proposal)
+                    if case.get("kind") == "stuck":
+                        self._case_boundary[pid] = boundary_revision
                 break
         if len(self._case_seen) > 256:
             self._case_seen = {pid: at for pid, at in self._case_seen.items() if now - at < 60.0}
+            self._case_boundary = {pid: value for pid, value in self._case_boundary.items() if pid in self._case_seen}
+            self._case_attempts = {pid: value for pid, value in self._case_attempts.items() if pid in self._case_seen}
 
 
 def main() -> None:

@@ -7,8 +7,10 @@ console.py 의 gather/scatter 를 그대로 드러내는 읽기와 위임이다.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
+import math
 import time
 from functools import partial
 from typing import Callable, Literal, Optional
@@ -228,24 +230,44 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "observed_age_s": board.observed_age_s()}
 
     @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_evidence(robot_id: str, stuck_id: str = Query(
-            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")) -> dict:
+    async def line_stuck_evidence(robot_id: str, response: Response, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False) -> dict:
+        response.headers["Cache-Control"] = "no-store"
         # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
         # memory until the stuck closes. A failed read is not kept: the next read asks again.
         if not board.is_open(robot_id, stuck_id):
             raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
                                                          "message": f"{robot_id} has no open stuck {stuck_id}"})
-        shown = board.preview(robot_id, stuck_id)
+        shown = None if live else board.preview(robot_id, stuck_id)
         if shown is None:
             fetch = getattr(console.clients().get(robot_id), "front_frame", None)
             try:
                 if fetch is None:
                     raise RobotApiError(robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "no camera client")
-                jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+                started = time.monotonic()
+                jpeg, status = await asyncio.wait_for(fetch(overlay=False) if live else fetch(), timeout=3.0)
             except (RobotApiError, httpx.HTTPError, OSError, asyncio.TimeoutError) as exc:
                 raise HTTPException(status_code=404, detail={
                     "code": "STUCK_PREVIEW_UNAVAILABLE",
                     "message": getattr(exc, "code", type(exc).__name__)}) from exc
+            if not board.is_open(robot_id, stuck_id):
+                raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN", "message": f"{stuck_id} closed"})
+            if live:
+                captured = status.get("captured_at")
+                age = status.get("age_ms")
+                if (isinstance(captured, (int, float)) and not isinstance(captured, bool)
+                        and math.isfinite(captured)):
+                    age_s = time.time() - captured
+                else:
+                    age_s = (age / 1000.0 + time.monotonic() - started
+                             if isinstance(age, (int, float)) and not isinstance(age, bool) else float("nan"))
+                if not jpeg or not math.isfinite(age_s) or not 0 <= age_s <= 3.0:
+                    raise HTTPException(status_code=404, detail={"code": "STUCK_PREVIEW_UNAVAILABLE",
+                                                                 "message": "current raw frame age unknown or stale"})
+                return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": status.get("sequence"),
+                        "source": status.get("source"), "media_type": "image/jpeg", "live": True,
+                        "captured_at": captured, "age_s": round(age_s, 3),
+                        "jpeg_base64": base64.b64encode(jpeg).decode("ascii")}
             board.keep_preview(robot_id, stuck_id, jpeg, status)
             shown = board.preview(robot_id, stuck_id)
             if shown is None:   # the stuck closed while the robot answered

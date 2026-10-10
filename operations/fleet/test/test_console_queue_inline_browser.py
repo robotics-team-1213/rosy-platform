@@ -293,24 +293,40 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
 
 
 def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
-    """D-577 8: the stuck row carries the one camera picture Fleet holds for that stuck, with its frame and
-    age; the five answers stay on screen at rail scroll 0 (D-540 7) because the picture sits below them."""
+    """D-623: a fresh decoded frame stays below the answers; historical/expired frames disappear."""
     from playwright.sync_api import sync_playwright
 
     preview = {"robot_id": "rosy_01", "stuck_id": "stuck-abc", "sequence": 812, "source": "front",
-               "media_type": "image/jpeg", "age_s": 0.4, "jpeg_base64": "/9j/2Q=="}
-    api = {**API, "/api/fleet/robots/rosy_01/line-stuck/evidence": preview}
+               "media_type": "image/jpeg", "age_s": 0.4, "live": True}
+    api = {**API}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [], size=(1024, 768))
+        preview["jpeg_base64"] = page.evaluate("""() => {
+          const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
+          return canvas.toDataURL('image/jpeg').split(',')[1];
+        }""")
+        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = preview
+        page.reload()
         page.clock.run_for(1500)
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
         image = slot.locator(".stuck-evidence img")
+        page.wait_for_function("""() => {
+          const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
+        }""")
         assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:
             box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
             assert box and box["y"] + box["height"] <= 768, (decision, box)
         _shot(page, "console-stuck-evidence-1024x768.png")
+        preview["age_s"] = 4
+        page.clock.run_for(3000)
+        from playwright.sync_api import expect
+        expect(image).to_have_count(0)
+        expect(slot.locator(".stuck-evidence figcaption")).to_contain_text("현재 영상 만료")
+        preview.update(live=False, age_s=0.4)
+        page.clock.run_for(3000)
+        expect(image).to_have_count(0)
         assert not errors
         browser.close()
 

@@ -11,6 +11,7 @@ import sys
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 _ROOTS = {
+    "fleet": SRC.parent / "operations" / "fleet",
     "core_api_web": SRC.parent / "middleware" / "core" / "api_web",
     "core_features": SRC.parent / "middleware" / "core" / "services",
     "core_common": SRC.parent / "contracts" / "foundation",

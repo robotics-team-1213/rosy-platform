@@ -93,6 +93,8 @@ def test_loop_logs_each_stuck_heading_change_without_sending_realign(caplog):
         asyncio.run(loop.run_once())
     assert len([r for r in caplog.records if "stuck heading" in r.message]) == 1
     assert not any(call[0] == "line_stuck_decision" and call[2] == "REALIGN" for call in robot.calls)
+    from fleet.stuck.closed_loop import context
+    assert context(loop._rows["rosy_01"])["heading_review"]["turn_deg"] == 20.0
     loop.heading_review = lambda _rid: {"status": "pose_untrusted"}
     with caplog.at_level("INFO", logger="fleet.stuck.loop"):
         asyncio.run(loop.run_once())
@@ -108,3 +110,16 @@ def test_heading_observer_failure_does_not_interrupt_existing_resolver():
     loop.heading_review = broken
     asyncio.run(loop.run_once())
     assert ("line_stuck_decision", "stuck-abc", "BACK_AND_RETRY") in robot.calls
+
+
+def test_board_exposes_direction_and_discards_unavailable_observer():
+    _loop, board, _robot = _setup()
+    board.observe([{"robot_id": "rosy_01", "online": True, "state": _robot._state}])
+    board.heading_review = lambda _rid: {"status": "heading_compared", "turn_deg": 20.0}
+    assert board.view("rosy_01")["heading_review"]["turn_deg"] == 20.0
+
+    def unavailable(_rid):
+        raise RuntimeError("camera missing")
+
+    board.heading_review = unavailable
+    assert board.view("rosy_01")["heading_review"] == {"status": "observer_unavailable"}

@@ -7,14 +7,14 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
-html { min-width: 320px; background: var(--ground-deep); }
+html { min-width: 320px; background: var(--surface-recessed); }
 
 body {
   margin: 0;
   min-height: 100dvh;
   overflow-x: hidden;
-  color: var(--ink);
-  background: var(--ground);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
   font-family: var(--body);
   font-size: var(--text-body);
 }
@@ -225,12 +225,12 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   font-size: var(--text-label);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-flag);
-  border: 1px solid var(--line-14);
+  border: 1px solid var(--border-default);
   color: var(--nominal-quiet);
   min-width: 7.5em;
   text-align: center;
 }
-[data-drive-motion][data-kind=drive] { color: var(--nominal); border-color: var(--line-30); }
+[data-drive-motion][data-kind=drive] { color: var(--nominal); border-color: var(--border-strong); }
 [data-drive-motion][data-kind=pivot] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
 
 [data-drive-hud] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
@@ -355,7 +355,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   width: min(26vw, 13rem);
   aspect-ratio: 1;
   border-radius: 50%;
-  border: 2px solid var(--line-30);
+  border: 2px solid var(--border-strong);
   background:
     linear-gradient(var(--line-14), var(--line-14)) center / 1px 100% no-repeat,
     linear-gradient(var(--line-14), var(--line-14)) center / 100% 1px no-repeat,
@@ -403,7 +403,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   display: grid;
   gap: var(--space-2);
   background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
-  border: 1px solid var(--line-30);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
   z-index: 25;
   backdrop-filter: blur(6px);
@@ -430,7 +430,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   display: grid;
   gap: var(--space-2);
   background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
-  border: 1px solid var(--line-30);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
   z-index: 25;
   backdrop-filter: blur(6px);
@@ -443,7 +443,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   justify-content: space-between;
   gap: var(--space-2);
   padding-block: var(--space-1);
-  border-top: 1px solid var(--line-14);
+  border-top: 1px solid var(--border-default);
 }
 [data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
 [data-recording-status] { color: var(--status-warn); }
@@ -546,7 +546,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   position: relative;
   align-items: center;
   padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
 }
 
 /* ---- 영상 키우기(D-363 §5): 주행 중 머리를 얇게 ---- */
@@ -733,13 +733,13 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 [data-screen="arm"] label { display: block; margin-block: var(--space-3); }
 [data-screen="arm"] input, [data-screen="arm"] select { display: flex; width: 100%; }
 [data-screen="arm"] h2, [data-screen="arm"] h3 { margin: 0; }
-.arm-head p { margin: var(--space-1) 0 0; color: var(--ink-quiet); }
+.arm-head p { margin: var(--space-1) 0 0; color: var(--text-secondary); }
 .sim-jog { display: flex; gap: var(--space-2); margin-block: var(--space-2); }
 .sim-jog ui-button { flex: 1 1 0; }
 [data-sim-readback] { overflow: auto; max-height: 20rem; margin: 0; padding: var(--space-3);
-  font-family: var(--mono); font-size: var(--text-label); background: var(--ground-deep);
-  border: 1px solid var(--line-10); border-radius: var(--radius-panel); }
-.arm-hint { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
+  font-family: var(--mono); font-size: var(--text-label); background: var(--surface-recessed);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
+.arm-hint { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
 
 /* D-411 B·C 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
    오른손 gripper), 아래 취소·시연 기록. 좁은 화면은 한 줄로 쌓인다. */
@@ -748,12 +748,12 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-view { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
 .arm-camera { margin: 0; display: grid; gap: var(--space-1); }
 .arm-camera[hidden] { display: none; }
-.arm-camera img { width: 100%; height: auto; border-radius: var(--radius-panel); background: var(--ground-deep); }
-.arm-camera figcaption { font-size: var(--text-label); color: var(--ink-quiet); }
+.arm-camera img { width: 100%; height: auto; border-radius: var(--radius-panel); background: var(--surface-recessed); }
+.arm-camera figcaption { font-size: var(--text-label); color: var(--text-secondary); }
 .arm-controls { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
 .arm-controls > section {
   display: grid; gap: var(--space-3); align-content: start; min-width: 0;
-  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--line-10);
+  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
 }
 .arm-controls > section[data-control="joint_jog"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -761,8 +761,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-pad-box, .arm-buttons { display: grid; gap: var(--space-2); align-content: start; min-width: 0; }
 .arm-axes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 [data-screen="arm"] .arm-axes label { margin: 0; font-size: var(--text-label); }
-.arm-readout { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink-quiet); }
-[data-control-unsupported], [data-controls-empty] { margin: 0; color: var(--ink-quiet); }
+.arm-readout { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); }
+[data-control-unsupported], [data-controls-empty] { margin: 0; color: var(--text-secondary); }
 .arm-controls > section[data-control-unsupported] { border-style: dashed; }
 .arm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 
@@ -778,7 +778,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 [data-arm-pad] {
   position: relative; justify-self: center;
   width: min(100%, 15rem); aspect-ratio: 1; border-radius: 50%;
-  border: 2px solid var(--line-30);
+  border: 2px solid var(--border-strong);
   background:
     linear-gradient(var(--line-14), var(--line-14)) center / 1px 100% no-repeat,
     linear-gradient(var(--line-14), var(--line-14)) center / 100% 1px no-repeat,
@@ -800,7 +800,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 }
 [data-arm-pad].active [data-arm-pad-knob] { background: var(--ink); }
 [data-arm-pad-label] {
-  position: absolute; z-index: 1; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink);
+  position: absolute; z-index: 1; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-primary);
   padding: 0 var(--space-1); border-radius: var(--radius-flag);
   background: color-mix(in srgb, var(--ground-deep) 80%, transparent);
   pointer-events: none; white-space: nowrap;
@@ -848,7 +848,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   display: grid; gap: var(--space-1); margin: var(--space-2) var(--space-3);
   padding: var(--space-1) var(--space-3); pointer-events: none;
   background: color-mix(in srgb, var(--ground-deep) 72%, transparent); border-radius: var(--radius-panel);
-  font-size: var(--text-label); color: var(--ink-quiet);
+  font-size: var(--text-label); color: var(--text-secondary);
 }
 
 /* 보정 중 띠(D-321 부록): 영상 위쪽 가운데의 경고 판. 판만 칠하고, 사유 글자색은 공용 경고 상태 요소가 정한다. */
@@ -897,7 +897,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
     bottom: var(--space-1);
     left: 0;
     right: 0;
-    color: var(--ink-quiet);
+    color: var(--text-secondary);
     font-size: var(--text-label);
     text-align: center;
     pointer-events: none;
