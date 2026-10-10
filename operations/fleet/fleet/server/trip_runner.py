@@ -156,31 +156,10 @@ class TripRunner(TripAdmission, TripProgress):
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-<<<<<<< HEAD
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps)
             pose_observed_at = self._clock()
-=======
-            pose, enable = await self._pose_checks(robot_id, graph, plan["segments"], start=True)
-            pose_observed_at = self._clock()
-            start_at = (row.get("request") or {}).get("start_at")
-            if start_at is not None:
-                distance = math.dist((pose.x, pose.y), graph.place_xy(start_at))
-                if distance > ARRIVED_M:
-                    raise TripError(422, "TRIP_START_PLACE_MISMATCH",
-                                    {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
-                if body is None:
-                    raise TripError(422, "TRIP_BODY_UNKNOWN", {"kind": caps.kind})
-                if not plan["segments"]:
-                    raise TripError(422, "TRIP_NO_ROUTE")
-                first = graph.arcs[arc_id(plan["segments"][0])]
-                offset = first.project(pose.x, pose.y)[0]
-                margin = first.width_m / 2 - offset - body.half_width_m
-                if margin < 0:
-                    raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
-                                    {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
->>>>>>> refs/integration/a864f6/latest-one-lap-current
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
