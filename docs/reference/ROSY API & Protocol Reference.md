@@ -1527,6 +1527,8 @@ v1.202 / D-619: `evidence.assessment`를 선택 추가한다. 공통 계약은 `
 
 로봇 문의는 기존 사건 스트림을 쓴다. CORE의 `nav.line_stuck_opened`/`nav.line_stuck_asked`에 선택 `inquiry {version:"situation-inquiry-v1", domain:"mobility", task:"lane_follow_recovery", problem_id, goal, requested_output:"assessment_and_direction", attempts, observations:{cause, detail, lane_visible, front_clear, scan_age_s, geometry_known, rear_state, preview_seq, trail_m, trail_age_s}, execution_authority:"CORE_recheck_required"}`가 온다. problem_id는 그 stuck_id이며 신원은 인증된 FleetAgent 연결에서 정한다. Fleet은 발생 문의와 사건의 원래 ts를 case context의 `robot_inquiry`/`inquiry_observed_at`로 전달한다. 관찰은 그 사건 시점의 snapshot이며 새 scan 증거가 아니다. 이전 로봇은 두 필드가 null이다. 로봇 문의 → Fleet case → AI proposal/assessment → Fleet verdict → 기존 `POST /api/v1/line-follow/stuck/decision` → CORE 사건/outcome을 같은 stuck_id로 추적한다. OFF/비상정지 상태에서 문의를 만들기 위해 추종 모드를 강제로 무장하지 않으며, 문의 자체가 새로운 이동 권한을 주지 않는다.
 
+`inquiry_observed_at`은 기존 사건의 ISO-8601 UTC 문자열이다. VLM evidence에는 실제 `model_options`도 기록하고 프로필은 `<model>@<digest12>:<prompt_id>:<options_sha8>`로 설정을 구분한다. exact prompt와 options가 같아도 모델 설명의 정확성은 독립 검증이 필요하다.
+
 모델에는 문제 종류·목표 로봇·센서/지도 상태·최근 실제 처리 결과·영상 메타데이터를 전달한다. 임의 operator_report/requested_outcome을 포함한 요청은 사용자 보고·가설로 명시하며 측정 사실로 승인하지 않는다. 최근 history는 최대 3건만 입력하고 맥락 JSON이 12,000자 또는 전체 프롬프트가 20,000자를 넘으면 VLM 판단을 보류한다. JSON을 중간에서 잘라 보내지 않는다. Qwen 응답은 JSON Schema로 필수 assessment를 제한한다. proposal evidence의 `prompt {id, sha256, text}`는 모델이 받은 정확한 요청문이고 `inference_s`는 실제 모델 호출 이후 파싱까지의 측정 시간이다. JPEG·lease·credential은 prompt 기록에서 제외한다. 기존 API의 권한과 CORE 실행 검사는 그대로 유지한다.
 
 | 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |
