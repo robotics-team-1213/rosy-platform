@@ -10,7 +10,9 @@ import pytest
 
 from fleet.localization.map_pose import MapPose
 from fleet.routing.execute import ends_at_place, plan_body
+from fleet.routing.graph import build_graph
 from fleet.routing.trip import PlanRequest, plan_trip
+from fleet.site_map import SiteMap
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
@@ -64,10 +66,10 @@ class Fleet:
         self.p[robot_id].pose = MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, anchor_age_s)
 
 
-def _setup(ids=("a", "b"), **config):
+def _setup(ids=("a", "b"), site=None, **config):
     fleet = Fleet(ids)
     store = SiteMapStore(None, clock=lambda: fleet.now)
-    store.import_if_empty(demo_site(), source="test")
+    store.import_if_empty(site or demo_site(), source="test")
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(**config))
@@ -134,7 +136,13 @@ def test_each_robot_runs_its_own_trip_and_busy_means_that_robot():
 
 
 def test_two_finite_laps_return_to_their_own_start_and_stop():
-    runner, store, fleet = _setup()
+    site = demo_site().body()
+    graph = build_graph(SiteMap.model_validate(site), version=1)
+    west = graph.arcs["west:fwd"]
+    start_s = next(place for place in site["places"] if place["id"] == "start_s")
+    s = west.project(start_s["x"], start_s["y"])[1]
+    start_s["x"], start_s["y"] = west.point_at(s)[:2]  # a body-safe start for the round trip
+    runner, store, fleet = _setup(site=SiteMap.model_validate(site))
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N),
           repeat=False, start_at="start_n")
     _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S),
