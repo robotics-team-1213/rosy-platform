@@ -227,7 +227,7 @@ def test_pinky_pro_turns_the_blind_floor_off():
 def test_pinky_cruise_increases_without_widening_the_tracking_arc():
     raw = yaml.safe_load((REPO / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"))
     robot = yaml.safe_load((REPO / "middleware/apps/device/pinky/profile/config/core.yaml").read_text(encoding="utf-8"))
-    _deep_merge(raw, robot)
+    raw = _deep_merge(raw, robot)
     config = _line_follow_config(raw["line_follow"])
     assert config.cruise_speed == pytest.approx(0.10)
     assert config.max_linear == pytest.approx(0.10)
