@@ -39,7 +39,7 @@ from typing import Callable, Iterable, Optional
 
 from fastapi import HTTPException
 
-from fleet.localization.lane_compliance import (ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
+from fleet.localization.lane_compliance import (OFF_MAP, ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
                                                 LaneComplianceTracker, ReturnTracker, map_bounds)
 from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
