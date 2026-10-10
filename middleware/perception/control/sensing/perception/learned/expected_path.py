@@ -142,10 +142,13 @@ class ExpectedPath:
             self._remember(pose, stamp)
             return self._view("dropped")
         self._remember(pose, stamp)
-        # A missing frame breaks a run of new headings. Those frames were not consecutive.
+        # A missing frame breaks a run of new headings, and an uncommitted streak.
+        # Those frames were not consecutive.
         self._replace = 0
         self._replace_heading = None
         if not self._committed:
+            self._streak = 0
+            self._streak_heading = None
             return self._view("dropped" if self._dropped else None)
         if self._loss_pose is None:
             self._loss_pose = self._pose

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from core_common.robot_body import NOMINAL_BODY
 
+from .learned.expected_path import ExpectedPath
+
 #: The newest drivable way steers while its frame is at most this old (odometry moves its target;
 #: one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
 WAY_MAX_AGE_S = 1.5
@@ -21,9 +23,25 @@ CROSSWALK_MIN_PX = 150
 WALL_MAX_AGE_S = 0.5
 
 
+def _path_of(steer, half):
+    path = getattr(steer, "_expected_path", None)
+    if path is None:
+        path = ExpectedPath(half)
+        steer._expected_path = path
+    return path
+
+
+def _remember_path(last, view):
+    last["expected_path_state"] = view["state"]
+    last["expected_path_s_m"] = view["s_m"]
+    path_m = view["path_m"]
+    last["expected_path_m"] = None if path_m is None else [[float(point[0]), float(point[1])] for point in path_m]
+
+
 def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall):
     """(error, confidence) or None for this frame, and whether the drivable path decided it.
     `last` is the keeper's keep_debug dict (updated in place); pose_at(stamp) is odometry."""
+    path = _path_of(steer, half)
     bars = worker.used_crosswalk
     if last.get('crosswalk') is not None or (bars is not None and int(bars[CROSSWALK_NEAR_ROW:].sum()) >= CROSSWALK_MIN_PX):
         steer.crosswalk(pose_at(stamp))
@@ -32,19 +50,39 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall)
     if latest is not None:
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
+        source = pose_at(way_stamp)
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
-                                               pose_at(way_stamp), pose_at(stamp), **extra)
+                                               source, pose_at(stamp), **extra)
+        if source is not None:
+            # near_centre_m is the way frame's body point, so the hypothesis uses that pose.
+            # The stamp is this frame's, so a later hold cannot look like time running backwards.
+            _remember_path(last, path.update(source, stamp, info))
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)
         return (None if error is None else (error, confidence)), True
-    if steer._in_crosswalk(pose_at(stamp)):
-        # bars (not drivable) fill the near view at a crosswalk: straight across (CORE D-573 gate)
+    pose = pose_at(stamp)
+    if steer._in_crosswalk(pose):
+        # bars (not drivable) fill the near view at a crosswalk: straight across (CORE D-573 gate).
+        # That crossing is not a straight corridor, so the next empty frame must not extend it.
+        if pose is not None:
+            _remember_path(last, path.update(pose, stamp, {
+                "strategy": "drivable_crosswalk_straight", "ahead_m": 0.0,
+                "near_centre_m": (0.0, 0.0), "straddle": None, "reason": None}))
         last.update(strategy='drivable_crosswalk_straight', reason=None, error=0.0, confidence=0.6)
         return (0.0, 0.6), True
-    # No fresh way: hold. The tape keeper on the boundary strips must not steer in between
+    # No fresh way. A committed straight corridor is republished from odometry.
+    # Otherwise the tape keeper must not steer in between
     # (its corners and one-sided targets fought the way, 8kcn 20261009T234748Z).
+    held = path.hold(pose, stamp) if pose is not None else None
     steer.lost(stamp)
+    if held is not None and held["error"] is not None:
+        _remember_path(last, held)
+        target = held["target_m"]
+        last.update(strategy='expected_path_held', reason=None,
+                    error=round(held["error"], 3), confidence=held["confidence"],
+                    target_m=None if target is None else [float(target[0]), float(target[1])])
+        return (held["error"], held["confidence"]), True
     last.update(strategy='none', reason='drivable_way_stale', error=None, confidence=None, target_m=None)
     return None, False
 

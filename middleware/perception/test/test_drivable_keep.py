@@ -62,6 +62,10 @@ def test_a_missing_way_after_commit_holds_instead_of_the_tape_keeper():
     assert len(last["expected_path_m"]) == 2
     assert last["expected_path_s_m"] == pytest.approx(0.0)
     assert last.get("reason") != "drivable_way_stale"
+    # Past the steer's 1.5 s latch forget, still inside the 2.5 s path budget.
+    later, later_decided = _step(steer, ways, last, 3.0)
+    assert later_decided is True and later is not None
+    assert last["strategy"] == "expected_path_held"
 
 
 def test_a_missing_way_before_commit_stays_stale():
