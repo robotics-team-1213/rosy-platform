@@ -2778,6 +2778,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
 
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
