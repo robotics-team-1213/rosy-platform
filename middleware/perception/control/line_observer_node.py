@@ -113,6 +113,9 @@ class LineObserverNode(Node):
         self.declare_parameter('learned_paint_max_age_s', 0.9, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dxy_m', 0.10, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dyaw_rad', 0.40, _READ_ONLY)
+        # D-588: drop learned lane pixels the model put on a wall; a model without a wall class is
+        # not used (denoise fallback) while this is on.
+        self.declare_parameter('learned_paint_floor_gate', True, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
@@ -397,8 +400,9 @@ class LineObserverNode(Node):
         threads = int(self.get_parameter('learned_paint_threads').value)
         if every_n < 1 or threads < 1:
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
+        floor_gate = bool(self.get_parameter('learned_paint_floor_gate').value)
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
-            folder, threads=threads, allow_spinning=False)) if pointer else None
+            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning, target=target)
@@ -570,6 +574,8 @@ class LineObserverNode(Node):
                                                       if self._paint_worker is not None else None),
                               paint_drivable=(self._paint_worker.used_drivable
                                               if self._paint_worker is not None else None),
+                              paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
+                                                if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
