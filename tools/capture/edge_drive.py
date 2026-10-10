@@ -5,10 +5,12 @@
             short MANUAL teleop (|lin| <= 0.08 m/s, |ang| <= 0.6 rad/s, <= 4 s), then IDLE
             and save the front frame (OUT.jpg) and the raw driver frame (OUT_raw.jpg);
             SECS 0 only saves the frames
-      drive [--max-s 45] [--rearm 3]
+      drive [--max-s 45] [--rearm 3] [--continuous-test]
             start a recording, CAMERA_LINE under a 1 s hold deadman until a stop reason,
             3 s without motion or --max-s, then line-follow OFF and stop the recording;
             a deadman release (link stall) re-arms up to --rearm times in the same recording
+            --continuous-test: supervised foreground test, no time/no-motion cutoff;
+            keep observing CORE holds, never re-arm; Ctrl+C or dashboard OFF ends it
       rec start|stop
       cam-watch SECONDS EVERY OUT_DIR
             raw driver frame every EVERY s with road-band clipping in OUT_DIR/exposure.jsonl
@@ -33,6 +35,7 @@ import json
 import math
 import os
 import socket
+import signal
 import ssl
 import sys
 import threading
@@ -307,6 +310,7 @@ def _disarm(holds):
 def cmd_drive(core, args):
     """A link stall longer than the 1 s deadman releases line-follow (driver_released); that
     stop stands, and the drive re-arms at most --rearm times inside the same recording."""
+    continuous = getattr(args, "continuous_test", False)
     started, holds, rearms = False, None, 0
     try:
         rec_start(core)
@@ -315,8 +319,8 @@ def cmd_drive(core, args):
             raise SystemExit("line-follow refused")
         started = True
         t0, still_since = time.time(), None
-        while time.time() - t0 < args.max_s:
-            _, lf = core.call("GET", "/line-follow", timeout=0.8)
+        while continuous or time.time() - t0 < args.max_s:
+            status, lf = core.call("GET", "/line-follow", timeout=0.8)
             hs = holds.status
             lf = lf if isinstance(lf, dict) else {}
             lin, ang = lf.get("linear") or 0.0, lf.get("angular") or 0.0
@@ -324,7 +328,10 @@ def cmd_drive(core, args):
             log(f"t={time.time() - t0:4.1f} hold={hs} state={lf.get('state')} reason={reason} v={lin:.3f} "
                 f"w={ang:.3f} conf={lf.get('confidence') or 0:.2f} gap={lf.get('body_gap_m')} stuck={bool(lf.get('stuck'))}")
             released = hs != 200 or "driver_released" in reason
-            if released and rearms < getattr(args, "rearm", 0):
+            if continuous and (status != 200 or lf.get("mode") != "CAMERA_LINE"):
+                log("test session ended or status unavailable -> stop")
+                break
+            if released and not continuous and rearms < getattr(args, "rearm", 0):
                 rearms += 1
                 _disarm(holds)
                 log(f"deadman released (link stall) -> re-arm {rearms}/{args.rearm}")
@@ -337,12 +344,12 @@ def cmd_drive(core, args):
             if released:
                 log("hold refused -> stop")
                 break
-            if lf.get("stuck") or any(k in reason for k in STOP_REASONS):
+            if not continuous and (lf.get("stuck") or any(k in reason for k in STOP_REASONS)):
                 log("stop reason -> stop")
                 break
             if abs(lin) < 1e-3 and abs(ang) < 1e-3:
                 still_since = still_since or time.time()
-                if time.time() - still_since > 3.0 and time.time() - t0 > 3.0:
+                if not continuous and time.time() - still_since > 3.0 and time.time() - t0 > 3.0:
                     log("not moving for 3 s -> stop")
                     break
             else:
@@ -411,6 +418,8 @@ def main(argv=None):
     p.add_argument("--max-s", type=float, default=45.0)
     p.add_argument("--rearm", type=int, default=3,
                    help="re-arm CAMERA_LINE this many times after a deadman release (link stall)")
+    p.add_argument("--continuous-test", action="store_true",
+                   help="supervised foreground test until Ctrl+C/dashboard OFF; retain CORE holds, never re-arm")
     p.set_defaults(fn=cmd_drive)
     p = sub.add_parser("rec")
     p.add_argument("action", choices=("start", "stop"))
@@ -421,6 +430,12 @@ def main(argv=None):
     p.add_argument("out_dir")
     p.set_defaults(fn=cmd_cam_watch)
     args = ap.parse_args(argv)
+    if getattr(args, "continuous_test", False):
+        def interrupt(signum, frame):
+            raise KeyboardInterrupt
+        for name in ("SIGTERM", "SIGHUP"):
+            if hasattr(signal, name):
+                signal.signal(getattr(signal, name), interrupt)
     token_file = args.token_file or os.environ.get(TOKEN_ENV)
     if not token_file:
         ap.error(f"pass --token-file or set {TOKEN_ENV}")
