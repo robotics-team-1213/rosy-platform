@@ -3109,7 +3109,7 @@
 - 증거: 원격 RED 5건으로 누락을 재현, 원격 통합 373 passed / 3 skipped. C 램프 시각표 포함 최종 시험은 별도 로그에 기록한다.
 - Gate: SOURCE. 정식 착지·푸시·사이트/로봇 payload 적용·실제 두 대 LED 식별·추종 주행은 미확인.
 
-## 2026-10-10 ? uncommitted ? feat: shared situation direction (D-619)
+## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 
 - Change: D-619 uses raw front frames, calibrated ceiling metadata, task intent/current mode and sensor age; optional shared assessment validation preserves legacy proposals and D-577 authority. Qwen exact prompt and image hashes are recorded; no corner or arm acceptance claimed.
 - Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
