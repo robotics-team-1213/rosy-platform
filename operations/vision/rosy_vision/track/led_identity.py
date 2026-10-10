@@ -33,7 +33,7 @@ from typing import Mapping, Sequence
 import cv2
 import numpy as np
 
-PROCESSOR_REVISION = "led-identity/3"
+PROCESSOR_REVISION = "led-identity/4"
 #: D-472 4: Fleet's window is at most 6 s; a little slack for clock rounding.
 MAX_WINDOW_S = 6.5
 #: Frames kept per challenge (6 s at 10 fps); a faster camera stops sampling, then reads as frames missing.
@@ -122,6 +122,16 @@ def decide(samples: Sequence[Sample], *, not_before: float, not_after: float, no
         if found is not None:
             matches.append((chain, found))
             evidence["candidates"].append(found)
+    if not matches:
+        for chain in chains:
+            if len(chain) != len(window):
+                continue
+            found = _steady(chain, config, require_off_after=True)
+            if found is not None:
+                matches.append((chain, found))
+                evidence["mode"] = "steady"
+                evidence["off_on_off"] = True
+                evidence["candidates"].append(found)
     if not matches and len(chains) == 1 and all(len(s.blobs) == 1 for s in window):
         found = _steady(chains[0], config)
         if found is not None:
@@ -197,16 +207,20 @@ def _blink(chain, config: LedConfig) -> dict | None:
     return None
 
 
-def _steady(chain, config: LedConfig) -> dict | None:
+def _steady(chain, config: LedConfig, *, require_off_after: bool = False) -> dict | None:
     """D-596 3: an off frame, then ``steady_min_on`` on frames in a row; None otherwise."""
-    run, seen_off = 0, False
+    run, seen_off, found = 0, False, None
     for t, _b, share in chain:
         if share <= config.off_fraction:
+            if found is not None:
+                return found
             seen_off, run = True, 0
         elif share >= config.on_fraction and seen_off:
             run += 1
             if run >= config.steady_min_on:
-                return {"on_at": round(t, 3), "on_frames": run, "frames": len(chain)}
+                found = {"on_at": round(t, 3), "on_frames": run, "frames": len(chain)}
+                if not require_off_after:
+                    return found
         else:
             run = 0
     return None
