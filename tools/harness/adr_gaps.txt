@@ -31,3 +31,4 @@ D-603 reserved by another session (refs/adr/D-603), not yet on main; remove when
 D-604 reserved by another session (refs/adr/D-604), not yet on main; remove when it lands
 D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
 D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands
+D-608 reserved by another session (refs/adr/D-608), not yet on main; remove when it lands
