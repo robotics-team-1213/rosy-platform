@@ -88,6 +88,23 @@ def test_only_ai_observer_may_post_facts(tmp_path):
         assert client.post("/api/fleet/ai/heartbeat", headers=_auth(token), json={}).status_code == 403
 
 
+def test_incident_context_is_accepted_only_as_shadow(tmp_path):
+    app, robot, _ = _app(tmp_path)
+    client = TestClient(app)
+    _beat(client)
+    fact = _fact(kind="incident_context", robot_ids=["rosy_01"],
+                 value={"cause_draft": "unknown", "status": "needs_review",
+                        "support": [{"source": "core", "field": "line_stuck.cause", "value": "no_motion"}],
+                        "missing": ["interpreted_front_image"]},
+                 evidence={"stuck_id": "s1", "camera_frame_interpreted": False},
+                 source="analyzer:incident_context@1", ttl_s=3.0)
+    response = client.post("/api/fleet/ai/facts", headers=_auth(AI), json={"facts": [fact]})
+    assert response.status_code == 200, response.text
+    live = client.get("/api/fleet/ai", headers=_auth(AI)).json()["facts"]
+    assert live[0]["stage"] == "shadow"
+    assert not [call for call in robot.calls if call[0] in MOTION_CALLS]
+
+
 @pytest.mark.parametrize("fact", [
     _fact(value="WAIT"),
     _fact(value={"answer": "back_and_retry"}),
