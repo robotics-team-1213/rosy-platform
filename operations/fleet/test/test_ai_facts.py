@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.server import ai_facts
+from fleet.stuck import ai_facts
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService

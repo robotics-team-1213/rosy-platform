@@ -22,7 +22,7 @@ from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError

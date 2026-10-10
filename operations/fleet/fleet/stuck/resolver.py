@@ -298,7 +298,7 @@ class StuckResolver:
             # CORE's gate still needs its own crosswalk_clear_s of clear scans; CORE re-checks the RESUME and
             # its D-573 gate (Fleet map zone) looks again. A second stuck goes to a human.
             return Answer(rid, sid, "RESUME", "XW")
-        from fleet.server.stuck_lane_lost import ai_answer
+        from fleet.stuck.lane_lost import ai_answer
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
         if proposed is not None:
@@ -351,7 +351,7 @@ class StuckResolver:
         if cause == "obstacle_ahead" and not peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))
         if cause in LOST_LIKE:
-            from fleet.server.stuck_lane_lost import lane_lost_hold
+            from fleet.stuck.lane_lost import lane_lost_hold
 
             # no_motion (2026-10-10, any zero-command reason >= stuck_report_s): R6 = R3's back-off
             # and look again under R3's preconditions; CORE re-checks the rear (D-407 §4).

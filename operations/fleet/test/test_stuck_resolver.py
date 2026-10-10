@@ -6,7 +6,7 @@ import pytest
 
 from fleet.meet.place import pose_on, project
 from site_map_fixture import painted_track, painted_without_crosswalks
-from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
+from fleet.stuck.resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
 def _row(robot_id="rosy_01", stuck=None, *, mode="CAMERA_LINE", pose=(0.0, 0.0, 0.0),
@@ -435,7 +435,7 @@ def test_rejoin_never_moves_or_resumes_from_a_lapsed_own_pose(where):
 @pytest.mark.parametrize("peer_pose", [(0.20, 0.03, 3.14), (0.80, 0.0, 3.14), (-0.20, 0.0, 0.0),
                                        (0.20, 0.30, 3.14), None])
 def test_the_shared_peer_ahead_matches_the_resolvers_r1(peer_pose):
-    from fleet.server.stuck_resolver import peer_ahead
+    from fleet.stuck.resolver import peer_ahead
 
     me = _row("rosy_01", _stuck(local=False), pose=(0.0, 0.0, 0.0))
     peer = _row("rosy_02", None, pose=peer_pose)

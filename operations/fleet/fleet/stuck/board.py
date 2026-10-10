@@ -20,8 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from .sqlite_policy import configure_connection
-from .stuck_resolver import ResolverConfig, peer_ahead
+from fleet.server.sqlite_policy import configure_connection
+from .resolver import ResolverConfig, peer_ahead
 
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",

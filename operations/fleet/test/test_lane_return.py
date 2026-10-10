@@ -115,7 +115,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
 
 
 def test_resolver_resumes_a_stuck_at_a_mapped_crosswalk_once():
-    from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
+    from fleet.stuck.resolver import Answer, ResolverConfig, StuckResolver
     resolver = StuckResolver(ResolverConfig())
     resolver.at_crosswalk = lambda rid: rid == "r1"
     row = {"robot_id": "r1", "online": True, "state": {"line_follow": {

@@ -14,7 +14,7 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -412,7 +412,7 @@ def test_resolved_by_comes_from_the_last_non_escalate_answer(tmp_path, answers, 
     ((0.80, 0.00, 3.14), 0),        # beyond reach
 ])
 def test_peer_ahead_at_open_uses_the_resolver_judgement(tmp_path, peer_pose, expected):
-    from fleet.server.stuck_resolver import ResolverConfig, peer_ahead
+    from fleet.stuck.resolver import ResolverConfig, peer_ahead
 
     board, log, _ = _episode_board(tmp_path)
     me = _online(pose=(0.0, 0.0, 0.0), stuck={**STUCK, "local_enabled": True})
