@@ -93,6 +93,47 @@ def test_available_model_reads_one_case_and_posts_its_answer_without_logging_ima
     assert all("secret-image" not in path.read_text() for path in (tmp_path / "state" / "logs").glob("*"))
 
 
+def test_ai_cycle_reads_signed_vision_frame_into_case_without_logging_lease(tmp_path):
+    class Cases(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/ai/problems":
+                return {"problems": [{"problem_id": "s-1"}]}
+            if path == "/api/fleet/ai/case/s-1":
+                return {"problem_id": "s-1", "views": {"front": {"jpeg_b64": "front"},
+                        "rosy_cam": {"frame_path": "/api/vision/sources/ceiling/frame", "lease": "secret-lease"}}}
+            return super().call(path, body)
+
+        def frame(self, path, lease):
+            assert (path, lease) == ("/api/vision/sources/ceiling/frame", "secret-lease")
+            self.calls.append(("frame", None))
+            return {"frame_id": "ceiling:7", "captured_at": 100.0, "jpeg_b64": "secret-image"}
+
+    class Model:
+        def judge(self, case, _now):
+            assert case["views"]["rosy_cam"]["jpeg_b64"] == "secret-image"
+            return None
+
+    fleet = Cases()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", vlm=Model())
+    situation._ai_cycle()
+    assert fleet.paths().count("frame") == 1
+    assert not any("secret-lease" in path.read_text() or "secret-image" in path.read_text()
+                   for path in (tmp_path / "state" / "logs").glob("*"))
+
+
+def test_vision_frame_lease_cannot_be_sent_to_an_arbitrary_path():
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    for path in ("https://elsewhere.example/image", "/api/vision/sources/cam/frame?to=elsewhere",
+                 "/api/fleet/state", "/api/vision/sources/../frame"):
+        try:
+            fleet.frame(path, "secret-lease")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(path)
+
+
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):
     fleet = FakeFleet(events=[{"audit_id": 5, "type": "nav.pose"}, {"audit_id": 7, "type": "nav.pose"}])
     _service(tmp_path, fleet).step()

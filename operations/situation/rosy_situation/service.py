@@ -22,8 +22,10 @@ Run (stdlib only; systemd unit ``deploy/ai_pc/rosy-situation.service``, installe
 from __future__ import annotations
 
 import json
+import base64
 import logging
 import os
+import re
 import ssl
 import time
 import urllib.error
@@ -62,6 +64,27 @@ class Fleet:
                                                   "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
             return json.loads(response.read())
+
+    def frame(self, path: str, lease: str) -> dict:
+        if not isinstance(path, str) or not re.fullmatch(r"/api/vision/sources/[A-Za-z0-9_-]+/frame", path):
+            raise ValueError("invalid Vision frame path")
+        if not isinstance(lease, str) or not lease:
+            raise ValueError("missing Vision frame lease")
+        request = urllib.request.Request(self._url + path, headers={"Authorization": f"Bearer {lease}"})
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, request, fp, code, msg, headers, newurl):
+                return None
+
+        opener = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=self._ssl))
+        with opener.open(request, timeout=TIMEOUT_S) as response:
+            if response.headers.get_content_type() != "image/jpeg":
+                raise ValueError("Vision response is not JPEG")
+            jpeg = response.read(2_000_001)
+            if not jpeg or len(jpeg) > 2_000_000:
+                raise ValueError("Vision frame size invalid")
+            return {"frame_id": f"{path.split('/')[4]}:{response.headers['X-Frame-Seq']}",
+                    "captured_at": float(response.headers["X-Frame-Captured-At"]),
+                    "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
 
 
 class Situation:
@@ -245,6 +268,13 @@ class Situation:
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
                 case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                view = (case.get("views") or {}).get("rosy_cam") or {}
+                if view.get("frame_path") and self.owner_mode() == "available":
+                    try:
+                        case["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                    except (OSError, ValueError, KeyError) as exc:
+                        _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
+                        case["views"].pop("rosy_cam", None)
                 proposal = self.vlm.judge(case, self.wall())
                 if proposal is not None and self.owner_mode() == "available":
                     self.fleet.call("/api/fleet/ai/proposals", proposal)
