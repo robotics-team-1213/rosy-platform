@@ -105,6 +105,7 @@ function markLocked(reason = "auth") {
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
   el("incident-export").disabled = true;
+  el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
   showSignedOut({fold: false, refused: reason === "auth"});
   applyRoleToControls(null, operatorControls());
@@ -231,6 +232,7 @@ function incidentReviewForm(report, path) {
   form.addEventListener("submit", pageScope.guard(async event => {
     event.preventDefault();
     save.disabled = true;
+    save.setAttribute("reason", "검토 기록을 저장하고 있습니다");
     try {
       await call(path, {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({root_cause: select.value, note: note.value})});
@@ -239,6 +241,7 @@ function incidentReviewForm(report, path) {
     } catch (error) {
       log(`사건 검토 기록 실패: ${error.message}`, "bad");
       save.disabled = false;
+      save.removeAttribute("reason");
     }
   }));
   return form;
@@ -257,6 +260,8 @@ async function refreshIncidents() {
     incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
     el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
+    if (el("incident-export").disabled) el("incident-export").setAttribute("reason", "내보낼 사건이 없습니다");
+    else el("incident-export").removeAttribute("reason");
     const list = el("incident-list");
     list.replaceChildren();
     for (const report of incidentReports) {
@@ -269,7 +274,7 @@ async function refreshIncidents() {
       detail.append(summary);
       incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "진행 중"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
       incidentLine(detail, `CORE: 단계 ${core.phase_at_open || "미확인"}, 정지 ${core.held_s_max ?? "미확인"}초, 재시도 ${core.attempts_max ?? "미확인"}`);
-      incidentLine(detail, `Fleet: 위치 ${fleet.pose_state || "미확인"}, 관측 나이 ${fleet.pose_age_s ?? "미확인"}초, 해결 ${fleet.resolved_by || "미확인"}`);
+      incidentLine(detail, `Fleet: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"}, 관측 나이 ${fleet.pose_age_s ?? "미확인"}초, 해결 ${fleet.resolved_by || "미확인"}`);
       const cam = report.evidence.rosy_cam;
       incidentLine(detail, cam ? `Rosy Cam: ${cam.source_id}, seq ${cam.seq}, 촬영 ${new Date(cam.captured_at * 1000).toLocaleString()}`
         : "Rosy Cam: 사건 시작 ±5초 관측 없음");
@@ -286,7 +291,7 @@ async function refreshIncidents() {
       }
       incidentLine(detail, ai.length ? `AI 참고: ${ai.map(f => `${f.kind} (${f.stage}, ${Math.round(f.confidence * 100)}%)`).join(" · ")}`
         : "AI 참고: 사건 시작 ±5초 사실 없음");
-      incidentLine(detail, report.actions.length ? `조치: ${report.actions.map(a => `${a.decision} ${a.accepted === 1 ? "수락" : a.accepted === 0 ? "거절" : "결과 미확인"}`).join(" · ")}`
+      incidentLine(detail, report.actions.length ? `조치: ${report.actions.map(a => `${a.decision} ${a.accepted === 1 ? "수락됨" : a.accepted === 0 ? "거절됨" : "결과 미확인"}`).join(" · ")}`
         : "조치: 기록 없음");
       const latest = report.reviews.at(-1);
       incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause]} · ${latest.note || "메모 없음"} (${latest.principal_id})`
@@ -1080,6 +1085,7 @@ function useToken(token) {
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
   el("incident-export").disabled = true;
+  el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
   if (auth.token) {
     sessionStorage.setItem("rosy-console-token", auth.token);
