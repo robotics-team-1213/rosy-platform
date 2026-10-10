@@ -200,7 +200,9 @@ def person_advisory_from(evidence: DetectionEvidence, now: float, *,
                          label: str = "person", min_confidence: float = 0.5,
                          max_age_s: float = 1.0,
                          registry: Optional[ModelRegistry] = None) -> Optional[PersonAdvisory]:
-    """D-137 T2→SAF-006 주입 고리. 신선한 라벨 검출만 자문이 된다.
+    """D-137 T2→SAF-006 주입 고리. 신선한 person 검출만 자문이 된다.
+
+    D-602: 라벨은 person이다. person_feet는 클래스가 아니므로 자문이 되지 않는다.
 
     stale evidence·빈 detections·낮은 confidence는 전부 None이다 — 자문 없음이
     곧 프로필 복귀다. `registry`가 있으면 아는 revision+입력 제원만 통과한다.
