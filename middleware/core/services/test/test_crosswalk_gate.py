@@ -571,12 +571,29 @@ def test_a_bad_scan_at_4_9_s_restarts_the_five_second_window(bad):
     assert go is not None and go - bad_t >= 5.0 - 0.05 - 1e-6
 
 
-def test_clear_window_is_configurable():
-    s = Sim(crosswalk_clear_s=2.0, crosswalk_look_min_scans=16)
+@pytest.mark.parametrize("clear_s,min_scans", [(2.0, 16), (3.0, 24)])
+def test_clear_window_is_configurable(clear_s, min_scans):
+    s = Sim(crosswalk_clear_s=clear_s, crosswalk_look_min_scans=min_scans)
     s.to_stop()
     stop_t = s.t
-    go = _go_after(s, 4.0)
-    assert go is not None and 2.0 <= go - stop_t <= 2.6
+    go = _go_after(s, clear_s + 2.0)
+    assert go is not None and clear_s <= go - stop_t <= clear_s + 0.6
+
+
+@pytest.mark.parametrize("bad", ["person", "unknown"])
+def test_three_second_site_window_restarts_after_occupied_or_unknown_scan(bad):
+    s = Sim(crosswalk_clear_s=3.0, crosswalk_look_min_scans=24)
+    s.to_stop()
+    assert _go_after(s, 2.9) is None
+    if bad == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    else:
+        s.no_return = lambda a: abs(a) < 0.3
+    s.run(0.1)
+    s.objects, s.no_return = [], None
+    bad_t = s.t
+    go = _go_after(s, 6.0)
+    assert go is not None and go - bad_t >= 3.0 - 0.05 - 1e-6
 
 
 def test_no_human_report_while_the_area_is_clearing():

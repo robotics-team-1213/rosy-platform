@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
+- 2026-10-10 · 008d62b301 · feat(fleet): reassess stuck heading
 - 2026-10-10 · uncommitted · test(fleet): 정확한 카드 주행 컨트롤 선택
 - 2026-10-10 · uncommitted · fix(fleet): remove implicit legacy map-pose trust
 - 2026-10-10 · uncommitted · refactor(fleet): isolate stuck peer pose checks
-- 2026-10-10 · uncommitted · fix(fleet): 이름 있는 차선 중간 장소에서 유한 trip 정지
-- 2026-10-10 · uncommitted · fix(trip): free 경로 이탈 때 목표 취소

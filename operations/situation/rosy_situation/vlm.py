@@ -28,7 +28,7 @@ TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
 #: D-610 4: the words the model may choose per problem kind (existing CORE / Fleet commands only).
-WORDS = {"stuck": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "REALIGN", "MANUAL"),
+WORDS = {"stuck": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "MANUAL"),
          "stalled": ("WAIT", "LINE_OFF", "STOP"),
          "pose_lost": ("WAIT", "IDENTIFY", "STOP"),
          "deadlock": ("REPLAN", "WAIT"),

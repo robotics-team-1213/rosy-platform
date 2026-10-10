@@ -87,6 +87,7 @@ class LaneComplianceMonitor:
         self._input: dict[str, tuple[str, str]] = {}            # (pose_source, heading_source), for logs
         self._trackers: dict[str, LaneComplianceTracker] = {}
         self._latest: dict[str, dict] = {}
+        self._heading_samples: dict[str, MapPose] = {}
 
     def knows(self, robot_id: str) -> bool:
         return robot_id in set(self._robot_ids())
@@ -96,6 +97,7 @@ class LaneComplianceMonitor:
         for gone in set(self._trackers) - set(roster):
             self._trackers.pop(gone, None)
             self._latest.pop(gone, None)
+            self._heading_samples.pop(gone, None)
             self._track_from.pop(gone, None)
             self._track_yaw.pop(gone, None)
             self._input.pop(gone, None)
@@ -138,6 +140,7 @@ class LaneComplianceMonitor:
                                       "moving": robot_id in movers,
                                       "map_version": active[0] if active is not None else None,
                                       "at": self._wall()}
+            self._heading_samples[robot_id] = pose
 
         if cues and self.config.return_cue and self._clients is not None:
             await asyncio.gather(*(self._send_cue(robot_id, back, now) for robot_id, back in cues),
@@ -265,6 +268,22 @@ class LaneComplianceMonitor:
 
     def view(self, robot_id: str) -> Optional[dict]:
         return self._latest.get(robot_id)
+
+    def stuck_heading(self, robot_id: str) -> dict:
+        """D-607: reassess direction from coherent map evidence without issuing a manoeuvre."""
+        from fleet.localization.stuck_heading import reassess
+
+        active = self._site_maps.active()
+        pose = self._poses.arbitrated_pose(robot_id)
+        review = reassess(pose, self.view(robot_id), now=self._wall(),
+                          map_id=active[1].map_id if active is not None else None,
+                          map_version=active[0] if active is not None else None)
+        sample = self._heading_samples.get(robot_id)
+        # A camera anchor or operator pin can change the map pose without a new odom stamp.
+        if review["status"] == "heading_compared" and (sample is None or any(
+                getattr(sample, key) != getattr(pose, key) for key in ("x", "y", "yaw", "map_id", "odom_stamp"))):
+            return {"status": "lane_sample_untrusted"}
+        return review
 
 
 def install_lane_compliance_routes(app, *, monitor: LaneComplianceMonitor, read_guard) -> None:

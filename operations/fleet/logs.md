@@ -3091,3 +3091,15 @@
 - Change: 경로 보기 버튼을 정확한 접근성 이름으로 선택하고 반복 출발 자리도 이름으로 찾아, 한 바퀴 폼이 추가돼도 부분 문자열·select 순서에 기대지 않는다.
 - Evidence: 모델 PC 실제 Chromium 카드 주행 시험 10 passed; known_failures NEW 0. 실패한 CI fleet-1of3의 중복 버튼 선택과 반복 출발 선택을 재현하고 수정했다.
 - Gate: SOURCE / 원격 브라우저 시험. 로봇 물리 주행 증거는 아니다.
+
+## 2026-10-10 · 008d62b301 · feat(fleet): reassess stuck heading
+
+- Change: 전체 대상의 하단 차선 통과·한 바퀴·원위치 정지를 계획의 완료 조건으로 기록했다. 열린 막힘마다 최신 신뢰 자세와 차로 방향을 비교하고 변화 시 로그를 남긴다. 같은 odom 시각에 새 지도 기준점이 들어와도 이전 차로 판단을 섞지 않으며 관찰 오류는 기존 resolver를 막지 않는다. 순수 자세 비교는 localization에 두고 명령 규칙은 변경하지 않았다.
+- Evidence: 신규 기능 원격 RED(모듈 누락), 관련 시험 61개 GREEN. 독립 검토의 재앵커·관찰 오류 4건은 별도 원격 RED로 재현하고 수정했다. 최종 관련·구조 시험은 현재 후보에서 다시 확인한다. 검토자 lap_review는 008d62b301의 소스 수정 승인; REALIGN 실행·현장 완주 승인은 아니다.
+- Gate: SOURCE. REALIGN 전달·trip 중 조작 점유 검증·공통 장치 배포·하단 실제 통과·전체 한 바퀴는 미완료다. 방향 로그는 5도 변화 단위 요약이며 전체 영상/표본을 대신하지 않는다.
+
+## 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
+
+- Change: D-618 separates ai_observer case reads from AI-first enrollment; removes unsupported REALIGN from the VLM table. API Reference specifies request correlation, image/model evidence, queued admission, Fleet verdict and CORE outcome, with three contract examples.
+- Evidence: remote situation / AI facts / AI-first contracts 97 passed; known_failures 0 NEW. Live heartbeat reports Qwen model digest and both enrolled Fleet resolver robots; no corner inference or motion acceptance is claimed.
+- Gate: SOURCE / remote API contracts; field judgement and lane-follow acceptance remain pending.

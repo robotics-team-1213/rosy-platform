@@ -17,6 +17,11 @@ D-574의 모든 방향 회전 여유 + 5 cm 조건은 직선 이동에도 적용
 
 ### Verification (2026-10-10)
 
+사례 조회와 실행 등록은 분리한다. 열린 lane-stuck은 AI-first 등록 없이도 `ai_observer`가 조회할 수 있다. `fleet.ai_first.robots`는 이번 시험에서 비워 두고 D-610의 활성화 수용 조건을 우회하지 않는다. 제안 접수·실행은 기존 D-577 등록과 센서 검사에 따른다. 지원하지 않는 `REALIGN`을 영상 모델 선택지에서 제거한다. 요청 ID·증거·접수·최종 판정·CORE 결과 규약과 상황별 예시는 API Reference에 둔다.
+
+- AI PC 소유자가 이번 영상 판단 시험을 승인했다. 실제 Qwen 프로필 `qwen3-vl:8b-instruct@0533d74300e4:d610-v1`, heartbeat `present`, 두 로봇의 Fleet resolver/acting 등록을 API로 확인했다. 이는 모델 적재·연결 증거이며 아직 코너 판단·명령 수락 증거는 아니다.
+- 사례 조회·영상 선택지·역할·제안 접수/만료·기존 실행 검사 원격 계약 시험 97개 통과, NEW 0. 시험 모델 응답은 실제 Qwen 판단과 구분한다.
+
 - 기존 도구·몸체 정지·막힘 복구 원격 시험 170개 통과, NEW 0.
 - 현장 입회 아래 rosy_41 제한 후진 두 단계의 오돔 변위 약 0.122 m, 회전 약 0.594 rad. 차체 전방 여유는 약 0.017 m에서 0.175 m로 증가했다. 이후 차선 시험은 `camera_line_not_visible` / `camera_reselection_required`로 끝났다. 이는 복구 이동 증거이며 차선 주행 성공은 아니다.
 - rosy_40은 후진 띠 여유 0, CORE 차선 시험도 `obstacle_ahead` / 차체 여유 0으로 정지했다. 시험 종료 후 두 대 모두 OFF/IDLE, 속도 0을 확인했다.
