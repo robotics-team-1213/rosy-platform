@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.189
+**Version:** v1.190
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2650,6 +2650,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.190 | 2026-10-10 | Additive (D-511 개정 1, feat/fleet-lane-return): Fleet `GET /api/fleet/robots/{robot_id}/lane-compliance`와 `/api/fleet/state` 행 `lane_compliance`에 `return` `{state: ON_LANE|ON_LINE|OFF_LANE|OFF_MAP|WRONG_WAY, since, raw, edge_id, offset_m, side, bearing_deg, lane_heading_deg, turn_deg, entry, crosswalk, crosswalk_ahead}`(첫 판정 전 null). 설정 `fleet.lane_compliance` 새 키 `line_half_width_m`·`off_map_pad_m`·`off_map_unseen_s`·`return_persist_s`·`wrong_way_min_m`·`entry_ahead_m`·`crosswalk_ahead_m`·`return_cue`(기본 true). 켜져 있으면 Fleet이 로봇에 `POST /api/v1/line-follow/lane-cue`를 2 Hz로 보낸다(그 경로가 없는 CORE는 404, 60 s 뒤 다시). 콘솔 예외 한 줄 |
 | v1.189 | 2026-10-10 | Additive (D-589 S1, feat/rosy-cam-recognition-tuning): `OverheadDetectionsPayload` 선택 필드 `tuning` `{state off/waiting/tuning/locked/paused/unsupported, score 0–1 또는 null, ev 실제 EV 또는 null, locked}`, `GET /api/fleet/tracking` `sources[].tuning`(lease 안, 아니면 null). `rosy-overhead/1` hello 뒤 텍스트 메시지 두 가지(공유 벡터 `overhead-ingest.v1.json` `messages.camera_example`·`camera_state_example`): 하향 `camera {seq, ev(보정 지수), ae_lock, awb_lock, max_exposure_us, antibanding}`, 상향 `camera_state {seq, applied{…, mode vision/local/disabled/thermal_hold}, supported{ev_min, ev_max, ev_step, …}, exposure_us, iso, thermal}`. `site-cameras.yaml` source 키 `auto_tune`(기본 true; Fleet은 읽고 무시). 표시 전용, 로봇 명령·envelope 1.0 변화 없음 |
 | v1.188 | 2026-10-10 | Additive (D-577 개정 2026-10-10 AI PC 판단, feat/ai-pc-judge): 새 `POST /api/fleet/ai/proposals`(`ai_observer`; 사용자 결정 "AI PC 제안 → Fleet 검증 후 실행": Fleet이 봉투를 검증해 CORE에 결정으로 보내거나 규칙으로 되돌아감, `fleet_ai_proposals` 감사, `GET /api/fleet/ai` `proposals[]`). AI 사실 종류 `rear_blocked`·`path_blocked_by_robot`(분석기 `analyzer:stuck_scene@1`). 현장 설정 `fleet.stuck_resolver.ai_facts_acting`(로봇 id 목록, 기본 빈 목록)의 로봇에서 이 두 종류는 `stage: acting`이 되고, 살아 있는 동안 판단기의 후진 답(R2·R3·R6)을 R5 `WAIT` + 사람(`<cause>_hold:ai:<kind>`)으로 바꾼다. 다른 답은 만들지 않는다. 로봇 API 변경 없음. |
 | v1.187 | 2026-10-10 | Behavioural + Additive (D-407·D-577 개정 2026-10-10, feat/stuck-5s-fleet-ai): CORE 설정 `line_follow.stuck_report_s`(기본 5.0, 0 = 끔, [0, 60]). 활성 차선 모드에서 결정이 그 시간 동안 0 이고 다른 막힘 원인이 없으면 막힘 `cause: no_motion`·`detail` = HOLD 사유를 열고 로컬 후진 없이 관제 답만 기다린다(`nav.line_stuck_asked` `reason: no_motion`). Fleet 판단기: `no_motion` 에 R6 `BACK_AND_RETRY`(R3 조건) 또는 R5 `WAIT` + 사람(`no_motion_hold:<이유>`); R3/R6 뒤 띠는 LEGACY odom 자세를 받지 않는다(`peer_unknown`); 현장 설정 `fleet.stuck_resolver.enrolled_robots`. 콘솔 원인 표시 `no_motion`. envelope 1.0 변경 없음 |

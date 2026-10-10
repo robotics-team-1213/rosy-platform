@@ -334,6 +334,10 @@ class HttpRobotClient:
         """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
         return await self._post("/api/v1/line-follow/advice", body)
 
+    async def line_follow_lane_cue(self, body: dict) -> dict:
+        """D-511 rev 1: Fleet's lane return cue ``LaneCueRequest``; an old CORE answers 404."""
+        return await self._post("/api/v1/line-follow/lane-cue", body)
+
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None) -> dict:

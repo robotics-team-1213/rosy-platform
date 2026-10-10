@@ -3031,6 +3031,12 @@
 - Evidence: AI PC remote pytest red first (X:/DevTemp/feat-d577-ai-pc-situation-skeleton/red.txt, collection errors), then test_ai_facts + situation tests + node web units 26 passed, including an in-process real Fleet over HTTP.
 - Gate: SOURCE. Shadow only. Installing on the AI PC waits for the owner's consent.
 
+## 2026-10-10 · uncommitted · feat(fleet): D-511 rev 1 return loop
+
+- Change: lane monitor `return` (ON_LANE/ON_LINE/OFF_LANE/OFF_MAP/WRONG_WAY, debounced) from the Rosy Cam map pose + site map; `POST /api/v1/line-follow/lane-cue` to robots at 2 Hz with side/bearing/turn and a `fleet_map` crosswalk zone; resolver RESUME (`XW`) for a lost-like stuck at a mapped crosswalk; console one line. API v1.189.
+- Evidence: offline replay of Fleet D-594 paths p5-p10 (X:/DevTemp/fleet-lane-return/replay.py); remote pytest lane/resolver/console suites green.
+- Gate: SOURCE. Robot consumer on feat/core-fleet-lane-cue (Safety-Review).
+
 ## 2026-10-10 · uncommitted · feat(situation): D-577 (d) 교착·livelock·정체 분석기와 교착 행 조치
 
 - Change: `operations/situation/rosy_situation/deadlock.py` `TrafficWatch` (`analyzer:traffic_watch@1`) reads Fleet's `/traffic` table and robot states over time and posts shadow facts of the existing kinds `wait_cycle_confirmed` (3 snapshots, all still; `fleet_agrees` flags Fleet's `wait_cycle` vs the table's own waits), `wait_cycle_stale_input` (offline, state > 2 s, unplaced, UNKNOWN unit), `waiting_but_moving` (> 0.05 m in 2 s), `livelock` (cycle re-formed 3x in 60 s, or 20 s moving/commanded without 0.05 m route progress), `stalled` (running trip with authority, 20 s still; held units, zones and who waits) and `unknown_occupancy_long` (30 s). `Analyzer` appends them after its proposals, so no proposal or Fleet rule reads them (no `ACTING_KINDS` change); a traffic fact Fleet would refuse (command word, > 16 ids) is dropped so it cannot sink a batch carrying an acting `rear_blocked`. Review fixes: a one-snapshot cycle flicker is not a re-formation, unknown start pose is not "still", AI facts shown once per kind (newest). The console wait-cycle row now opens (`decision: deadlock`) on Fleet's resolver decision per cycle robot, the AI facts from `GET /api/fleet/ai` (read only while a cycle is shown) and three actions on existing routes: `바뀐 경로로 계속` (`/trips/{id}/confirm-replan`, named operator), `운행 취소` (`/trips/{id}/cancel`, open), `로봇 카드 열기`. Labels: `RESOLVER_DECISION_LABEL`, `AI_FACT_LABEL` in `site-map-model.js`. No API change.

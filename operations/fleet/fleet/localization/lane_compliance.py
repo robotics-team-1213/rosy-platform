@@ -33,6 +33,8 @@ from core_common.robot_body import NOMINAL_BODY
 OK, WARN, ACT, UNKNOWN = "OK", "WARN", "ACT", "UNKNOWN"
 #: D-424 URDF nominal. ponytail: one body for every robot; per-kind bodies when a second kind drives.
 BODY_HALF_WIDTH_M = NOMINAL_BODY.half_width_m
+#: D-424 URDF nominal: base_footprint to the body front (m), for the crosswalk hint distance.
+BODY_FRONT_M = NOMINAL_BODY.front_x_m
 
 
 @dataclass(frozen=True)
@@ -56,8 +58,35 @@ class LaneComplianceConfig:
     #: A D-472 LED track must move this far before its direction is taken as the heading (m).
     #: Sized above overhead blob jitter; provisional until measured on ceiling_north.
     track_heading_min_m: float = 0.05
+    #: D-511 rev 1 (return loop). Half the painted tape width (m): the body is on the line while
+    #: it overlaps the tape, measured on map_v2_fleet paint (2.5 cm tape).
+    line_half_width_m: float = 0.0125
+    #: The mapped area is the lanes' bounding box grown by this (m); outside it is OFF_MAP.
+    off_map_pad_m: float = 0.15
+    #: A moving robot Fleet cannot place for this long is OFF_MAP (not seen) (s).
+    off_map_unseen_s: float = 3.0
+    #: A return state must hold this long before it is reported (debounce) (s).
+    return_persist_s: float = 1.0
+    #: WRONG_WAY also needs this much travel against the lane while it holds (m).
+    wrong_way_min_m: float = 0.10
+    #: The re-entry point is this far ahead of the nearest lane point, along the lane (m).
+    entry_ahead_m: float = 0.10
+    #: A crosswalk this far ahead along the lane goes into the cue as ``crosswalk_ahead`` (m).
+    crosswalk_ahead_m: float = 0.6
+    #: Ceiling pose error bound for the zone (m): D-587 calibration residual p90 0.018 m + marker
+    #: height 0.02-0.03 m -> 0.012-0.019 m at the bottom road (validation 2026-10-10).
+    crosswalk_uncertainty_m: float = 0.035
+    #: Send the return cue (``POST /line-follow/lane-cue``) to the robot; off = observe only.
+    return_cue: bool = True
 
     def __post_init__(self) -> None:
+        if not isinstance(self.return_cue, bool):
+            raise ValueError("fleet.lane_compliance.return_cue must be true or false")
+        for name in ("line_half_width_m", "off_map_pad_m", "off_map_unseen_s", "return_persist_s",
+                     "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m", "crosswalk_uncertainty_m"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 <= value <= 10.0:
+                raise ValueError(f"fleet.lane_compliance.{name} must be a number within [0, 10]")
         for name in ("warn_margin_m", "act_timeout_s", "heading_gate_deg", "moving_min_m",
                      "moving_min_deg", "track_heading_min_m") + (
                          ("max_lateral_m",) if self.max_lateral_m is not None else ()):
@@ -175,3 +204,163 @@ class LaneComplianceTracker:
 
     def judge(self, pose, graph) -> LaneCompliance:
         return self.update(sample(pose, graph, self.body_half_width_m, self.config))
+
+
+# --- D-511 rev 1: the return loop (user, 2026-10-10) --------------------------------------------
+#: Where the body is against the map. ``UNSEEN`` is "no judgement yet" and is never sent.
+ON_LANE, ON_LINE, OFF_LANE, OFF_MAP, WRONG_WAY, UNSEEN = (
+    "ON_LANE", "ON_LINE", "OFF_LANE", "OFF_MAP", "WRONG_WAY", "UNSEEN")
+
+
+@dataclass(frozen=True)
+class ReturnSample:
+    """One raw (undebounced) classification. Angles in degrees. ``side`` is where the lane centre
+    is, seen from the robot (``left``/``right``); None when on the lane."""
+
+    state: str
+    edge_id: Optional[str] = None
+    offset_m: Optional[float] = None
+    side: Optional[str] = None
+    bearing_deg: Optional[float] = None       # to the re-entry point, robot frame (left +)
+    lane_heading_deg: Optional[float] = None  # allowed direction of the nearest lane, map frame
+    turn_deg: Optional[float] = None          # lane direction minus robot heading (left +)
+    entry: Optional[tuple] = None             # re-entry point (x, y), map frame
+    crosswalk: Optional[str] = None
+    #: D-491/D-573 zone ``{id, near_m, far_m, uncertainty_m, source}`` of the crosswalk ahead (or under
+    #: the body) along the lane from base_footprint; None when none is near.
+    crosswalk_ahead: Optional[dict] = None
+
+
+def map_bounds(graph, pad_m: float) -> Optional[tuple]:
+    """The lanes' bounding box grown by ``pad_m``: (x0, y0, x1, y1), or None without lanes."""
+    points = [p for arc in graph.arcs.values() for p in arc.polyline] if graph is not None else []
+    if not points:
+        return None
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    return min(xs) - pad_m, min(ys) - pad_m, max(xs) + pad_m, max(ys) + pad_m
+
+
+def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], graph, crosswalks=(),
+             config: LaneComplianceConfig = LaneComplianceConfig(),
+             body_half_width_m: float = BODY_HALF_WIDTH_M, bounds=None,
+             body_front_m: float = BODY_FRONT_M) -> ReturnSample:
+    """Raw state of one map position. ``yaw`` is the body heading (None: unknown), ``travel`` the
+    direction of the last ``track_heading_min_m`` of motion (None: no motion yet). WRONG_WAY reads
+    ``travel`` only: a robot turning in place to come back is not going the wrong way yet.
+    ``crosswalks`` are ``(id, polygon)`` pairs: inside one the robot crosses on purpose (D-573),
+    so it is never ON_LINE or OFF_LANE there."""
+    from fleet.site_map import _inside
+    arcs = list(graph.arcs.values()) if graph is not None else []
+    if bounds is None:
+        bounds = map_bounds(graph, config.off_map_pad_m)
+    if not arcs or bounds is None or not (bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]):
+        return ReturnSample(OFF_MAP)
+    projected = [(arc, *arc.project(x, y)) for arc in arcs]
+    arc, dist, s, tangent = min(projected, key=lambda item: item[1])
+    px, py, _ = arc.point_at(s)
+    left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
+    offset = math.copysign(dist, left)
+    half = arc.width_m / 2.0
+    crossing = next((cid for cid, polygon in crosswalks if _inside((x, y), list(polygon))), None)
+    if crossing is not None or dist + body_half_width_m <= half - config.line_half_width_m:
+        state = ON_LANE
+    elif dist - body_half_width_m < half + config.line_half_width_m:
+        state = ON_LINE
+    else:
+        state = OFF_LANE
+    if travel is not None and state != OFF_LANE:
+        # Every lane under the body runs against the travel: wrong way. At a junction a lane
+        # within 90 deg is always under the body, so turning there is not.
+        under = [t for a, d, _, t in projected if d - body_half_width_m < a.width_m / 2.0]
+        if under and min(abs(_wrap(t - travel)) for t in under) > math.radians(180.0 - config.heading_gate_deg):
+            state = WRONG_WAY
+    ex, ey, _ = arc.point_at(s + config.entry_ahead_m)
+    heading = yaw if yaw is not None else travel
+    bearing = turn = side = None
+    if heading is not None:
+        bearing = math.degrees(_wrap(math.atan2(ey - y, ex - x) - heading))
+        turn = math.degrees(_wrap(tangent - heading))
+    if state in (ON_LINE, OFF_LANE):
+        if bearing is not None:
+            side = "left" if bearing > 0 else "right"
+        else:   # no heading: assume it goes the lane's way; the centre is across the offset
+            side = "right" if offset > 0 else "left"
+    ahead = (crosswalk_ahead(arc, s, crosswalks, config.crosswalk_ahead_m, body_front_m,
+                             config.crosswalk_uncertainty_m)
+             if crosswalks and state in (ON_LANE, ON_LINE) else None)
+    return ReturnSample(state, arc.edge_id, round(offset, 4), side,
+                        None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
+                        None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead)
+
+
+#: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.
+XW_STEP_M = 0.01
+
+
+def crosswalk_ahead(arc, s: float, crosswalks, horizon_m: float, behind_m: float,
+                    uncertainty_m: float) -> Optional[dict]:
+    """D-491/D-573 zone from the map: the first crosswalk polygon the lane centreline is in between
+    ``behind_m`` behind and ``horizon_m`` ahead of base_footprint, as ``{id, near_m, far_m,
+    uncertainty_m, source}`` along the lane from base_footprint (near < 0 once inside).
+    ponytail: walks this arc only; a crosswalk past the arc's end shows once on the next arc."""
+    from fleet.site_map import _inside
+    for cid, polygon in crosswalks:
+        polygon = list(polygon)
+        hit = None
+        along = s - behind_m
+        while along <= min(s + horizon_m, arc.length_m) + 1e-9:
+            x, y, _ = arc.point_at(max(along, 0.0))
+            inside = _inside((x, y), polygon)
+            if inside and hit is None:
+                hit = along
+            elif not inside and hit is not None:
+                break
+            along += XW_STEP_M
+        if hit is not None and hit - s <= horizon_m and min(along, arc.length_m) - s > 0.0:  # base not past it
+            return {"id": cid, "near_m": round(hit - s, 3), "far_m": round(min(along, arc.length_m) - s, 3),
+                    "uncertainty_m": uncertainty_m, "source": "fleet_map"}
+    return None
+
+
+class ReturnTracker:
+    """One robot's debounced return state. Feed ``update`` in time order; ``x`` None means Fleet
+    cannot place the robot this tick. ``state`` changes only after ``return_persist_s`` (and, for
+    WRONG_WAY, ``wrong_way_min_m`` of travel) in the new raw state."""
+
+    def __init__(self, config: LaneComplianceConfig = LaneComplianceConfig(),
+                 body_half_width_m: float = BODY_HALF_WIDTH_M) -> None:
+        self.config = config
+        self.body_half_width_m = body_half_width_m
+        self._last_xy: Optional[tuple[float, float]] = None   # last point a motion step began at
+        self.travel: Optional[float] = None
+        self._seen_at: Optional[float] = None
+        self._candidate: Optional[tuple] = None               # (state, since_t, since_xy)
+        self.state = UNSEEN
+        self.since: Optional[float] = None
+
+    def _set(self, state: str, t: float) -> None:
+        if state != self.state:
+            self.state, self.since = state, t
+
+    def update(self, t: float, x: Optional[float], y: Optional[float], yaw: Optional[float],
+               graph, crosswalks=(), moving: bool = True, bounds=None) -> ReturnSample:
+        cfg = self.config
+        if x is None or y is None:
+            self._candidate = None
+            if moving and self._seen_at is not None and t - self._seen_at >= cfg.off_map_unseen_s:
+                self._set(OFF_MAP, t)
+            return ReturnSample(UNSEEN)
+        self._seen_at = t
+        last = self._last_xy
+        if last is None or math.hypot(x - last[0], y - last[1]) >= cfg.track_heading_min_m:
+            if last is not None:   # ponytail: last 5 cm step is the travel; fit a heading if noisy
+                self.travel = math.atan2(y - last[1], x - last[0])
+            self._last_xy = (x, y)
+        raw = classify(x, y, yaw, self.travel, graph, crosswalks, cfg, self.body_half_width_m, bounds)
+        if self._candidate is None or self._candidate[0] != raw.state:
+            self._candidate = (raw.state, t, (x, y))
+        state, since_t, (sx, sy) = self._candidate
+        if (t - since_t >= cfg.return_persist_s
+                and (state != WRONG_WAY or math.hypot(x - sx, y - sy) >= cfg.wrong_way_min_m)):
+            self._set(state, t)
+        return raw
