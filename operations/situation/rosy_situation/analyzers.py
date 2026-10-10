@@ -60,7 +60,8 @@ def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
     rid = str(trip["robot_id"])
     pose = trip.get("pose") or {}
     evidence = {"trip_id": trip.get("trip_id"), "map_version": trip.get("map_version"),
-                "pose_source": pose.get("source"), "pose_age_s": pose.get("age_s")}
+                "pose_source": pose.get("source"), "pose_age_s": pose.get("age_s"),
+                "segment_index": trip.get("segment_index")}
     value = {"status": "UNKNOWN", "reason": "route_or_pose_unavailable"}
     confidence = 0.0
     try:
@@ -70,8 +71,12 @@ def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
             if not all(math.isfinite(v) for v in (x, y)):
                 raise ValueError("nonfinite pose")
             edges = {edge["id"]: edge for edge in route_map["map"]["edges"]}
+            index = int(trip["segment_index"])
+            segments = trip["plan"]["segments"]
+            if index < 0 or index >= len(segments):
+                raise ValueError("invalid segment index")
             closest = None
-            for segment in trip["plan"]["segments"]:
+            for segment in segments[max(0, index - 1):index + 2]:
                 edge = edges[segment["edge_id"]]
                 distance = _route_distance(x, y, segment, edge)
                 if math.isfinite(distance) and (closest is None or distance < closest[0]):
