@@ -87,6 +87,13 @@ class Rosy(Node):
             read_only=True,
             description='false = no-motion mode (D-192); set at launch only',
         ))
+        # Opt-in start-up wheel probe (5 rpm, 0.4 s, a few mm). Off by default:
+        # it moves the wheels on every service start, auto-restart and activation.
+        self.declare_parameter('motor_motion_check', False, ParameterDescriptor(
+            read_only=True,
+            description='true = spin wheels briefly at start to detect a stalled motor',
+        ))
+        self.motor_motion_check = self.get_parameter('motor_motion_check').value is True
         drive_enabled = self.get_parameter('drive_enabled').value
         if not isinstance(drive_enabled, bool):
             raise ValueError('drive_enabled must be a boolean')
@@ -212,7 +219,7 @@ class Rosy(Node):
                 )
 
             self.get_logger().info('3b. Verifying motor health and torque...')
-            faults = self.driver.verify_motors(self.drive_enabled, self.drive_enabled)
+            faults = self.driver.verify_motors(self.drive_enabled, self.drive_enabled and self.motor_motion_check)
             if faults:
                 self.get_logger().warn(
                     'Motor check failed, rebooting motors once: ' + '; '.join(faults))
@@ -223,7 +230,8 @@ class Rosy(Node):
                     faults.append('re-initialization after reboot failed')
                 else:
                     time.sleep(1.0)
-                    faults = self.driver.verify_motors(self.drive_enabled, self.drive_enabled)
+                    faults = self.driver.verify_motors(
+                        self.drive_enabled, self.drive_enabled and self.motor_motion_check)
             if faults:
                 message = 'motor start verification failed: ' + '; '.join(faults)
                 self.get_logger().error(message + '. Exiting non-zero for systemd restart.')

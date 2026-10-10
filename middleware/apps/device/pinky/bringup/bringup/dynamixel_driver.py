@@ -55,10 +55,15 @@ HARDWARE_ERROR_BITS = (
 )
 # Start-up motion probe: ~5 rpm for 0.4 s is about 8 ticks/ms of 4096 per turn,
 # a few millimetres of wheel travel. A free wheel moves well past the minimum.
+# Opt-in only (motor_motion_check): it moves the wheels. Off by default.
 PROBE_RPM = 5.0
 PROBE_SECONDS = 0.4
 PROBE_MIN_TICKS = 20
 CURRENT_MA_PER_UNIT = 2.69
+# Always-on, no-motion stall heuristic: a motor holding zero velocity should
+# draw little current. Only a gross fault trips it; a stall that draws ~100 mA
+# (8kcn ID 1) is caught by the hardware-error register or the opt-in probe.
+IDLE_CURRENT_MAX_MA = 250.0
 
 
 def describe_hardware_error(value):
@@ -223,8 +228,9 @@ class DynamixelDriver:
     def verify_motors(self, expect_torque, check_motion):
         """Return fault strings for motors that are not really ready; [] means healthy.
 
-        Reads each motor's hardware-error status and torque flag. With
-        check_motion it also spins both wheels at PROBE_RPM for PROBE_SECONDS
+        Always reads each motor's hardware-error status, torque flag, position
+        and idle current (no wheel motion). Only with check_motion (opt-in, it
+        moves the wheels) does it also spin both wheels at PROBE_RPM for PROBE_SECONDS
         and requires the position to move (a latched overload stalls at
         constant position while the current climbs), then stops them.
         """
@@ -240,6 +246,22 @@ class DynamixelDriver:
             torque = self._read_register(read1, dxl_id, self.ADDR_TORQUE_ENABLE)
             if torque != int(bool(expect_torque)):
                 faults.append(f'ID {dxl_id}: torque enable is {torque}, expected {int(bool(expect_torque))}')
+        if faults:
+            return faults
+        # No-motion checks (goal is zero here): position and present current readable and sane.
+        for dxl_id in self.DXL_IDS:
+            if self._read_register(self.packetHandler.read4ByteTxRx, dxl_id,
+                                   self.ADDR_PRESENT_POSITION) is None:
+                faults.append(f'ID {dxl_id}: present position unreadable')
+            current = self._read_register(self.packetHandler.read2ByteTxRx, dxl_id,
+                                          self.ADDR_PRESENT_CURRENT)
+            if current is None:
+                faults.append(f'ID {dxl_id}: present current unreadable')
+                continue
+            milliamps = abs(current - 65536 if current >= 32768 else current) * CURRENT_MA_PER_UNIT
+            if milliamps > IDLE_CURRENT_MAX_MA:
+                faults.append(
+                    f'ID {dxl_id}: {milliamps:.0f} mA at zero velocity (> {IDLE_CURRENT_MAX_MA:.0f} mA), stall or load suspected')
         if faults or not check_motion:
             return faults
 

@@ -88,7 +88,7 @@ def test_stalled_motor_fails_start_after_one_reboot_retry(world, monkeypatch):
     # 8kcn: ID 1 latched overload, position fixed while current rose, yet start "succeeded".
     world.stall_on_goal.add(1)
     with pytest.raises(RuntimeError, match=r"ID 1: stalled"):
-        _node(world, monkeypatch)
+        _node(world, monkeypatch, motor_motion_check=True)
     assert sum(1 for event in world.sdk_events if event[0] == "reboot" and event[1] == 1) == 2
     assert not any("started successfully" in text for _level, text in world.logs)
     assert any(level == "error" and "motor start verification failed" in text for level, text in world.logs)
@@ -121,4 +121,25 @@ def test_persistent_hardware_error_is_reported_with_its_name(world, monkeypatch)
 
     monkeypatch.setattr(importlib.import_module("dynamixel_sdk").PacketHandler, "reboot", always_latched)
     with pytest.raises(RuntimeError, match=r"hardware error 0x20 \(overload\)"):
+        _node(world, monkeypatch)
+
+
+def _goals(world):
+    return [event for event in world.sdk_events if event[0] == "goal"]
+
+
+def test_motion_probe_is_off_by_default_and_wheels_do_not_move(world, monkeypatch):
+    node = _node(world, monkeypatch)
+    assert node.is_initialized
+    # Only the confirmed zero goals; nothing but zeros reached the wheels.
+    assert all(param == b"\0\0\0\0" for goals in _goals(world) for _id, param in goals[1])
+
+
+def test_stall_without_probe_is_not_detected_but_idle_current_is(world, monkeypatch):
+    world.stall_on_goal.add(1)
+    assert _node(world, monkeypatch).is_initialized  # needs the opt-in probe
+    sys.modules.pop("bringup.bringup", None)
+    world.parameters.clear()
+    world.read2_value = 200  # 538 mA at zero velocity
+    with pytest.raises(RuntimeError, match=r"ID 1: 538 mA at zero velocity"):
         _node(world, monkeypatch)

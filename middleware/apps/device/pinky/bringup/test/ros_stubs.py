@@ -191,7 +191,7 @@ def install_sdk(monkeypatch, world: World, module) -> None:
 
         def read2ByteTxRx(self, _port, motor_id, address):
             events.append(("read2", motor_id, address))
-            return 40, 0, 0
+            return getattr(world, "read2_value", 40), 0, 0
 
         def write1ByteTxRx(self, _port, motor_id, address, value):
             events.append(("write1", motor_id, address, value))
