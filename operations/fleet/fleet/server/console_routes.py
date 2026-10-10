@@ -14,7 +14,7 @@ from functools import partial
 from typing import Callable, Literal, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Query, Request, Response
+from fastapi import Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
@@ -263,7 +263,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
 
     @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
               tags=["line-stuck"])
-    def review_traffic_fact(fact_row: int, body: IncidentReviewRequest,
+    def review_traffic_fact(body: IncidentReviewRequest,
+                            fact_row: int = Path(ge=1, le=2**63 - 1),
                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         if not board.review_traffic_fact(fact_row, principal_id=principal.principal_id,
                                          root_cause=body.root_cause, note=body.note):
