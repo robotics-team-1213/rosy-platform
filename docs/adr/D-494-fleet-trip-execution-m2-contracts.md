@@ -179,3 +179,4 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 
 - 2026-10-10 (fix/marker-loss-auto-relocalize, 적용): 6항 앵커 나이 한도와 회복(2회 일치)에서, 앵커 뒤 odom 길이 0.02 m 이하이고 회전이 2° 이하인 **서 있는 로봇**은 sighting 사이가 `max_anchor_age_s`보다 길어도 일치 횟수를 0으로 돌리지 않는다. 일치하는 sighting 두 번이면 `LOCALIZED`로 돌아온다. 현장 2026-10-10 `rosy_40`(주차, 마커가 8프레임에 1번 읽힘)은 그동안 `LOCALIZED`로 돌아오지 못했다. 움직인 로봇, 점프, odom 초기화(앵커를 버림) 규칙은 그대로다.
 - [D-541](D-541-core-fleet-trip-lease.md) (2026-10-09, Proposed): 5항 trip 루프는 시작 전에 CORE trip lease를 열고 주기마다 늘리며, lease를 잃으면 명령 없이 `stopped(lease_lost)`로 끝나고 다시 열지 않는다. [D-540](D-540-fleet-console-structure-v2.md)(Proposed): 5항 "표시"의 자리는 관제 로봇 카드와 현장 지도 읽기 표시, 재계획 확인은 예외 큐 항목이다.
+- 2026-10-10 (fix/trip-offroute-stop, 적용): 5항의 `free` 이탈 판정을 좁혀, `MapPose`가 `LOCALIZED`인 채 계획 경로 폭의 절반을 벗어나면 진행 중인 CORE 목표를 즉시 취소하고 `stopped(pose)`로 끝낸다. 위치 자체를 잃은 `free` 로봇의 기존 deadman 규칙은 유지한다.

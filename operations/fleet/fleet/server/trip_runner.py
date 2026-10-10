@@ -419,7 +419,7 @@ class TripRunner(TripAdmission, TripProgress):
                 return
             if off is not None:
                 await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
-                                                           **pose_diagnostics(pose)}, halt_free=False)
+                                                           **pose_diagnostics(pose)})
                 return
             if live.view["state"] == "started":
                 live.view["state"] = "running"

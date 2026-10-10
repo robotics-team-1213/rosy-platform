@@ -726,6 +726,7 @@ def test_off_lane_beyond_half_the_width_stops_the_trip():
     _ticks(runner, ports)
     view = runner.view("p1")
     assert view["state"] == "stopped" and view["detail"]["off_lane_m"] == pytest.approx(0.11)
+    assert ports.canceled == ["rosy_60"] and view["detail"]["stop_sent"] is True
 
 
 def test_no_progress_for_stall_s_stops_and_holds_the_robot():
