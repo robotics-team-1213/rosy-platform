@@ -104,3 +104,9 @@
 - 결정: 기기 기본 꺼짐 — Pi 탐색 비용 미측정, CORE 결정 중계(lane B) 전, 기기 그래프에 `safety/pickup` 발행자 없음. 근거는 sensing logs 같은 날 항목.
 - 증거: `src/runtime/sensing/test/test_loc_assist_launch.py`, `test/test_line_follow_runtime.py`, `test/test_control_launch_boundary.py`, `test/test_nav2_hardware_slice.py` 통과.
 - gate 변화: 없음.
+
+## 2026-10-11 · 291d03a9f · refactor: Nav2 Drive planning holder 이전
+
+- 변경: D-626 control/drive/planning/nav2로 이동. navigation package/CMake/launch/config/map/RViz와 standalone/composed nav_cmd_vel 후보 경로를 유지했다. Docker 소스·manifest·물리 folder identity를 정렬했다.
+- 증거: Nav2/native/structure 원격 440 성공, 최종 전체 architecture/harness/Safety 272 성공, 독립 source 리뷰. known_failures 0 NEW/0 known. logs는 이동 커밋에서 R100 보존.
+- gate 변화: 없음. 실제 Jazzy colcon·launch·ARM64·장치 수용은 미확인.

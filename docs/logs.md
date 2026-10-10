@@ -7703,3 +7703,9 @@ osy-d395-s1d\`.
 - 변경: 후속 실행 요청에 따라 D-625 M3–M6의 package 보존 이전을 D-626으로 기록했다. 최신 main을 작업 브랜치에 병합하고 Safety/설치 보존 조건을 독립 리뷰로 확인했다.
 - 증거: 이전 전 3927f9a33의 모델 PC 원격 architecture/도구 계약 104 성공 표시·exit 0, known_failures 0 NEW/0 known. API Safety 1개·OMX Safety 5개와 Pinky deadman·Nav2 후보 출력·Docker 목적지 보존 조건을 리뷰했다. 변경 후 최종 리뷰와 시험은 각 이전 후보에서 기록한다.
 - gate 변화: 없음. 이전 실행 범위의 계약이며 실제 패키지 설치·장치·현장 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
+
+- 변경: 네 실제 holder 이전 및 참조·manifest·CI·설치 경로 정렬 후, CORE 도킹/군집 조립과 line-follow 배선을 drive 하위로 분리했다. 현재 책임 구조·후속 알고리즘 경계·독립 Safety 승인과 검증 결과를 문서화했다.
+- 증거: 원격 CORE/실제 Python 설치 2575 성공·10 skip, feature 1675 성공, structure/harness/Safety 272 성공, OMX 532 성공·3 skip. 각 성공 실행 known_failures 0 NEW/0 known. docs/validation/d626-holder-migration-2026-10-11/result.md 참조.
+- gate 변화: 없음. SOURCE·Python 설치 근거이며 새 Jazzy/ARM64/장치/현장·CI·main 착지·push·배포는 미확인 또는 미실행.

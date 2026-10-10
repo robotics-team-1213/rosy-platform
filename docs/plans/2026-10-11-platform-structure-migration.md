@@ -95,3 +95,18 @@ World State 소비자와 예측 replay 입력 계약을 먼저 연결한다. 이
 | drive-nav2 | 49 | 51 | 현재 manifest에는 없음; 최종 writer 계약은 별도 |
 
 preview 전후 전체 tracked byte hash와 Git status/index가 같음을 확인했다. 제품 이동 0건이다. 결과와 원격 로그는 X 관리 세션 `2026-10-11--001305--core-responsibility-plan--66d72e`의 `evidence/structure-preview`, `logs/structure-move-{red,green,final}`에 보관한다. 자동 참조 치환·Windows 실제 이동·실제 패키지 설치·ARM64 이미지·장치·현장 수용은 검증하지 않았다.
+
+## 2026-10-11 실행 결과 — CORE Drive 우선
+
+위 준비 결과 이후 사용자 실행 요청에 따라 D-626 M3–M6의 네 holder를 실제 작업 브랜치에서 이전했다. 이어 CORE drive 우선 요청에 따라 D-627로 M7의 첫 조립 단위를 먼저 수행했다. API/OMX Safety와 Pinky/Nav2 및 CORE 조립은 각각 독립 source 리뷰를 통과했다. 현재 배치에는 `layout_target`을 쓰고 `d427_target`은 frozen ownership identity로 유지한다.
+
+| 단계 | 현재 결과 |
+|---|---|
+| M3–M6 | 소스 이전·참조/CI/packaging/harness 갱신·관련 원격 회귀 완료 |
+| M7 첫 조립 | CORE `drive/line_follow.py`, `drive/docking.py` 분리, 공개 service/import 호환 및 listener 순서 유지 |
+| Python 설치 | CORE/API/Pinky bringup/OMX adapter 실제 Linux wheel build/install 및 package/entrypoint/share 확인 완료 |
+| M7 나머지·M8·M9 | 알고리즘 추출·인지 정리·world/prediction 확장은 미실행 |
+| Jazzy/ARM64/장치/현장 | 새 후보에 대해 미확인; source 시험으로 대체하지 않음 |
+| main/원격/배포 | topic commit만 생성. 착지·push·운용 활성화 미실행 |
+
+CORE 전체 후보 `5faad3583`의 원격 2575 성공·10 skip, feature 1675 성공, architecture/harness/Safety 272 성공, OMX 532 성공·3 skip을 확인했다. 각 성공 실행의 known_failures는 0 NEW/0 known이며 중간 RED/경로 오류도 보존했다. [실제 책임 구조](../reference/core-drive-responsibilities.md), [세부 결과](../validation/d626-holder-migration-2026-10-11/result.md), [Drive 우선 계획](2026-10-11-core-drive-composition-first.md)을 참조한다.

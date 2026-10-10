@@ -76,3 +76,9 @@
 - 변경: `rosy_gz.urdf.xacro`에 URDF IR 링크 셋의 아래 방향 한 줄 `gpu_lidar`(`ir/left|mid|right`)를 더했다. Gazebo LiDAR `max_angle`을 `π − 2π/640`으로 바꿔 시작 빔이 겹치지 않게 했다(D-468 `return_scan_view`가 겹친 스캔을 거부했다). 장치 URDF는 그대로다.
 - 증거: `gz_sim test/test_sim_sensors.py`, 모델 PC xacro 전개와 스캔 증분 0.0098175 확인.
 - gate 변화: 없음.
+
+## 2026-10-11 · 7b0a8d965 · refactor: Pinky description 장치 holder 이전
+
+- 변경: D-626 devices/pinky/description으로 이동하며 URDF/mesh/launch/CMake/package bytes를 유지했다. 소비자와 설치 소스 경로를 정렬했다.
+- 증거: Pinky 원격 885 성공·2 skip 중 URDF surface/collision geometry 계약 포함, 독립 source 리뷰. logs는 R100 보존 뒤 추가, known_failures 0 NEW/0 known.
+- gate 변화: 없음. 새 ROS 렌더/Gazebo/ARM64/실물 geometry 수용은 미확인.

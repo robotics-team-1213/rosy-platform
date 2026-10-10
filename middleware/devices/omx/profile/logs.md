@@ -25,3 +25,9 @@
 - 변경: `config/core.yaml`(빈 매핑). D-196 추가 2026-10-01 부터 패키지가 있는 로봇은 이 층을 반드시 싣는다. OMX 는 더할 로봇 사실이 없다.
 - 증거: `load_config` with ROSY_ROBOT=omx → line_follow.lidar_forward_deg 0.0 (`test_pinky_lidar_forward_device.py`).
 - gate 변화: 없음.
+
+## 2026-10-11 · 1691d395c · refactor: OMX profile 장치 holder 이전 검증
+
+- 변경: D-626 devices/omx/profile으로 이동하며 disabled defaults·package/share 이름을 유지했다. source profile 탐색과 gate command를 현재 경로로 정렬했다.
+- 증거: 원격 adapter/profile 및 caller 532 성공·3 skip, 독립 source 리뷰와 known_failures 0 NEW/0 known. 최초 logs 이동은 R100이다.
+- gate 변화: 없음. 새 vendor/device/현장 수용은 미확인.

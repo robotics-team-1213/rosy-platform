@@ -9,3 +9,9 @@
 5. 문서/로그에 수행 단위와 증거를 남기고 generate/lint 한다. 잔여 주행 알고리즘 추출, 곡률·문제 복구 개선, Arm/world 확장은 기존 후속 계획을 유지한다.
 
 완료 기준: Drive 조립의 실제 폴더와 caller가 분리되고 기존 동작 회귀/설치 검증이 통과하며 source-only Safety 승인이 기록된다. 전체 CORE 주행 설계를 구현 완료했다고 선언하지 않는다.
+
+## 실행 결과
+
+기준 `ca7335b07`의 원격 characterization 257 성공을 확보했고, `1691d395c`에서 Drive 조립을 추출했다. `5faad3583`의 전체 CORE와 실제 Python package 설치 시험은 2575 성공·10 skip, 새 실패 0이다. Feature 전체 1675 성공 및 architecture/harness/Safety 272 성공도 확인했다. 도킹 lock/callback·mode 선점·Nav2 취소·E-stop 순서와 line-follow 기하/복구 배선은 독립 source Safety 승인을 받았다.
+
+이 계획의 첫 조립 단위는 완료다. 기존 장치·ROS evidence를 새 후보의 수용으로 확대하지 않았다. [현재 구조](../reference/core-drive-responsibilities.md), [검증과 남은 항목](../validation/d626-holder-migration-2026-10-11/result.md)을 따른다.
