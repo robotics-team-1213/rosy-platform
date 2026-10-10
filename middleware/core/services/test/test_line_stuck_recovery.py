@@ -60,6 +60,12 @@ def test_opens_once_per_stuck_with_unique_id_and_asks_console():
     assert opened[0]["front_clearance_m"] == 0.18 and opened[0]["rear_clearance_m"] == 0.30
     asked = bus.named("nav.line_stuck_asked")
     assert asked[0]["local_fallback_s"] == 15.0 and machine.phase == ASKING
+    inquiry = opened[0]["inquiry"]
+    assert inquiry["version"] == "situation-inquiry-v1" and inquiry["problem_id"] == "stuck-1"
+    assert inquiry["observations"]["scan_age_s"] == 0.05
+    assert inquiry["requested_output"] == "assessment_and_direction"
+    assert inquiry["execution_authority"] == "CORE_recheck_required"
+    assert asked[0]["inquiry"] == inquiry
     machine.answer(2.0, "stuck-1", "RESUME", "operator")
     machine.step(_inp(10.0, cause="lane_lost"))
     assert machine.stuck_id == "stuck-2"

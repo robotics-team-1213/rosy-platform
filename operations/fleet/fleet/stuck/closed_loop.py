@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Mapping, Optional
 
 from fleet.stuck.ai_first import problem_key
@@ -24,8 +25,18 @@ def context(row: Mapping, stuck: Optional[Mapping] = None) -> dict:
     state = row.get("state") or {}
     line_follow = state.get("line_follow") or {}
     stuck = stuck if stuck is not None else line_follow.get("stuck") or {}
+    observed = row.get("_state_mono")
+    age = row.get("state_age_s") if observed is None else round(max(0.0, time.monotonic() - observed), 3)
     return {"cause": stuck.get("cause"), "detail": stuck.get("detail"), "phase": stuck.get("phase"),
             "attempts": stuck.get("attempts"), "rear_state": stuck.get("rear_state"),
+            "state_age_s": age,
+            "robot_inquiry": stuck.get("inquiry"),
+            "inquiry_observed_at": stuck.get("inquiry_observed_at"),
+            "current_mode": state.get("mode"),
+            "task_intent": {"task": "lane_follow_recovery", "trip_active": bool(row.get("trip")),
+                            "goal": "recover the intended lane direction without overriding CORE safety"},
+            "clearance_at_open_m": {k: stuck.get(k) for k in ("front_clearance_m", "rear_clearance_m",
+                                                       "turn_clearance_m", "rear_blind_m")},
             "line_follow": {k: line_follow.get(k) for k in ("mode", "state", "reason")},
             "crosswalk": line_follow.get("crosswalk"), "map_pose": row.get("map_pose"),
             "localization": state.get("localization"), "trip": bool(row.get("trip")),

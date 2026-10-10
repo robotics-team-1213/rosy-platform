@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · uncommitted · fix: nominal body selection
 - 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 표시
 - 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
-- 2026-10-09 · uncommitted · fix: route context 시험 파일명 중복 해소

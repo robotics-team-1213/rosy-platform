@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat: AI PC local Qwen inference
 - 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 램프
 - 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
 - 2026-10-09 · uncommitted · fix(site): 비밀을 설정 디렉터리 밖으로, Vision은 카메라 파일만 (D-524 보안 검토)
 - 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
-- 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
