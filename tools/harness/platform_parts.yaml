@@ -174,7 +174,8 @@ roots:
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
     concern: control
-  - path: middleware/core/navigation
+  - path: middleware/control/drive/planning/nav2
+    layout_target: middleware/control/drive/planning/nav2
     part: middleware
     d427_target: middleware/core/navigation
     legacy: src/runtime/navigation

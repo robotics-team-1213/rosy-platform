@@ -47,8 +47,11 @@
 !middleware/devices/omx/profile/
 !middleware/devices/omx/profile/**
 !middleware/core/
-!middleware/core/navigation/
-!middleware/core/navigation/**
+!middleware/control/
+!middleware/control/drive/
+!middleware/control/drive/planning/
+!middleware/control/drive/planning/nav2/
+!middleware/control/drive/planning/nav2/**
 !middleware/devices/pinky/description/
 !middleware/devices/pinky/description/**
 **/__pycache__/

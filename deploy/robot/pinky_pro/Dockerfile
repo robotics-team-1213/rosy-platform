@@ -138,7 +138,7 @@ COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/devices/pinky/description /opt/rosy_ws/src/sim/description
 COPY middleware/devices/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
-COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
+COPY middleware/control/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing

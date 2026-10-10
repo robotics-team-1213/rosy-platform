@@ -74,7 +74,7 @@ modules:
     functional_kind: host-contract
     functional: [integrations/simulation/gazebo/test/test_gz_package_contract.py, integrations/simulation/gazebo/test/test_world_to_map.py, integrations/simulation/gazebo/test/test_world_profiles.py]
   - name: navigation
-    path: middleware/core/navigation
+    path: middleware/control/drive/planning/nav2
     tests: [test/test_nav2_hardware_slice.py, test/test_footprint_profiles.py, test/test_nav2_profile_limits.py, test/test_nav2_bandwidth_contracts.py, test/test_flask_launch_removed.py]
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
