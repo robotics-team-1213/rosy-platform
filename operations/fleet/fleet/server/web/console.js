@@ -836,11 +836,8 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render,
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator", namedReason, openCard: (robotId) => {
-    roster.openCard(robotId);
-    render();
-    document.querySelector(`article[data-robot-id="${CSS.escape(robotId)}"]`)?.scrollIntoView({ block: "nearest" });
-  } });
+  isOperator: () => auth.role === "operator", namedReason,
+  openCard: (robotId) => { roster.openCard(robotId); render(); } });
 
 // D-415 — 로그 지우기
 pageScope.listen(el("log-clear"), "click", () => {

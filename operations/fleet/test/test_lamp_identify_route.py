@@ -61,3 +61,24 @@ def test_a_parked_robot_is_asked_too():
     answer = _client(robot, moving=False).post("/api/fleet/robots/rosy_26/identify")
     assert answer.status_code == 200 and answer.json()["state"] == "pending_visual_confirmation"
     assert robot.colors == ["blue"]  # D-596 7: Fleet names blue first
+
+
+def test_both_construction_paths_look_for_the_robot_at_fleet_map_pose():
+    """D-596 amendment 2026-10-10: the identity service built by create_app and the one
+    install_console_routes builds on its own both take the expected place from Fleet's map pose."""
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+
+    app = create_app(FleetConsole([], []))
+    assert app.state.identity.map_pose == app.state.map_pose.arbitrated_pose
+
+    bridged = lambda robot_id: SimpleNamespace(x=0.962, y=-0.011, state="DEGRADED", dead_reckon_m=1.2)
+    own = FastAPI()
+    own.state.map_pose = SimpleNamespace(arbitrated_pose=bridged)
+    nobody = lambda: None
+    install_console_routes(own, console=Console(Robot()), sightings=None, require_viewer=nobody,
+                           read_guard=[], operator_guard=[], require_operator=nobody,
+                           require_named_operator=nobody,
+                           tracking=SimpleNamespace(sources=(), robot_state=lambda _rid: {}))
+    assert own.state.identity.map_pose is bridged
+    assert own.state.identity.triggers.expected("rosy_26", bridged("rosy_26"))[:2] == (0.962, -0.011)

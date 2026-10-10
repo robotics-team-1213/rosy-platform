@@ -75,6 +75,9 @@ CROSSWALK_HOLD_M = 0.35
 NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
 EXIT_NEAR_M = 0.05
+#: the bottom rows and centre half-width (px) that tell a line under the body
+STRADDLE_ROWS = 12
+STRADDLE_HALF_PX = 12
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -100,7 +103,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, both=False, exit_point_m={},
+    out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False, exit_point_m={},
                exit_reach_m={}, near_centre_m=None, edges_m=[])
     if not rows.size:
         return out
@@ -109,6 +112,13 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     if float(_row_x([rows.max()], ground, x_offset)[0]) > float(_row_x([height - 1], ground, x_offset)[0]) + NEAR_GAP_M:
         out["reason"] = "way_beyond_line"
         return out
+    # A line under the robot: the bottom rows' middle is not way but one side is (the body straddles
+    # a line; 9dfk sat on the ring's island line, IR lane_departure, 20261010T032022Z_rosy_41).
+    bottom = way[height - STRADDLE_ROWS:]
+    mid = int(round(ground.principal_x))
+    if bottom.any() and not bottom[:, mid - STRADDLE_HALF_PX:mid + STRADDLE_HALF_PX].any():
+        left, right = bottom[:, :mid].sum(), bottom[:, mid:].sum()
+        out["straddle"] = "left" if left > right else "right"
     first = np.argmax(way[rows], axis=1)
     last = width - 1 - np.argmax(way[rows, ::-1], axis=1)
     xs = _row_x(rows, ground, x_offset)
@@ -311,6 +321,12 @@ class DrivableSteer:
             side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
+        if info.get("straddle") is not None and not self._in_crosswalk(current_pose):
+            # off the line first: turn toward the way (CORE creeps back while its IR sees the line,
+            # D-344 §12 amendment 3), then the normal rules
+            self._smoothed = self._pivot = None
+            error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
+            return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
         if self._in_crosswalk(current_pose):
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
             # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
