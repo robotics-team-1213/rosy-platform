@@ -108,6 +108,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         progress_watch_enabled=_flag(raw, "progress_watch_enabled", defaults.progress_watch_enabled),
         no_progress_yaw_deg=float(raw.get("no_progress_yaw_deg", defaults.no_progress_yaw_deg)),
         no_progress_creep_enabled=_flag(raw, "no_progress_creep_enabled", defaults.no_progress_creep_enabled),
+        stuck_realign_enabled=_flag(raw, "stuck_realign_enabled", defaults.stuck_realign_enabled),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
         recovery_back_speed=float(raw.get("recovery_back_speed", defaults.recovery_back_speed)),
         recovery_rear_clear_m=float(raw.get("recovery_rear_clear_m", defaults.recovery_rear_clear_m)),

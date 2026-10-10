@@ -183,6 +183,8 @@ class LineFollowConfig:
     progress_watch_enabled: bool = False  # D-607 no_progress/dithering; on only once Fleet answers them (P1)
     no_progress_yaw_deg: float = 30.0  # 2026-10-10: no_progress/dithering also need |net yaw| below this
     no_progress_creep_enabled: bool = False  # 20 s creep (< recovery_restuck_m in recovery_restuck_s) too
+    # D-607 8: take Fleet's REALIGN (PIVOT on a turn spot, KTURN) on an open stuck. Off; Safety-Review.
+    stuck_realign_enabled: bool = False
     recovery_back_m: float = 0.08
     recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
@@ -404,6 +406,9 @@ class LineFollowConfig:
             raise ValueError("crosswalk_gate_enabled must be a boolean")
         if type(self.fleet_lane_cue_enabled) is not bool:
             raise ValueError("fleet_lane_cue_enabled must be a boolean")
+        if type(self.stuck_realign_enabled) is not bool or (
+                self.stuck_realign_enabled and self.obstacle_mode != "path"):
+            raise ValueError("stuck_realign_enabled must be a boolean and needs obstacle_mode path (D-422)")
         if self.fleet_lane_cue_enabled and self.obstacle_mode != "path":
             raise ValueError("fleet_lane_cue_enabled needs obstacle_mode path (D-422 measures the cue's twist)")
         if not (_finite(self.crosswalk_clear_s) and 0.5 <= self.crosswalk_clear_s <= 60.0):

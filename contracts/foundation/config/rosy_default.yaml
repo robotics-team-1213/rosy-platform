@@ -193,6 +193,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   progress_watch_enabled: false
   no_progress_yaw_deg: 30.0
   no_progress_creep_enabled: false  # also < recovery_restuck_m in recovery_restuck_s (stops slow movers)
+  stuck_realign_enabled: false     # D-607 8: Fleet REALIGN (PIVOT on a turn spot, KTURN); Safety-Review
   recovery_back_m: 0.08            # one back-off (<= 0.20)
   recovery_back_speed: 0.03        # m/s ceiling; actual = min(safety.manual_linear, this)
   recovery_rear_clear_m: 0.06      # rear clearance from the body rear, before and during

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter, Depends
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -93,16 +93,33 @@ class LineFollowModeRequest(BaseModel):
     hold_s: Optional[float] = Field(default=None, gt=0, le=2.0)
 
 
+class StuckRealign(BaseModel):
+    """D-607 8 REALIGN body. ``turn_spot``: Fleet's map turn spot (D-607 8, a PIVOT needs it).
+    ``basis`` is audit and display only; CORE never permits on it."""
+
+    kind: str = Field(max_length=16)
+    angle_rad: float
+    back_m: Optional[float] = None
+    back_radius_m: Optional[float] = None
+    fwd_radius_m: Optional[float] = None
+    pose_stamp: float
+    attempt: Literal[1, 2]
+    turn_spot: bool = False
+    basis: Optional[dict] = None
+
+
 class LineStuckDecisionRequest(BaseModel):
     """D-407 §2: the console's answer to one open stuck, bound to its id.
 
     YIELD (D-453) is one checked segment: turn `yield_turn_rad`, then creep `yield_m`.
+    REALIGN (D-607 8) carries `realign`; CORE checks its ranges itself (409 `realign_*`, not 422).
     """
 
     stuck_id: str = Field(min_length=1, max_length=64)
-    decision: str = Field(pattern="^(WAIT|RESUME|BACK_AND_RETRY|MANUAL|ABORT|YIELD)$")
+    decision: str = Field(pattern="^(WAIT|RESUME|BACK_AND_RETRY|MANUAL|ABORT|YIELD|REALIGN)$")
     yield_m: Optional[float] = None
     yield_turn_rad: Optional[float] = None
+    realign: Optional[StuckRealign] = None
 
 
 def _status(svc: CoreServicesLike) -> dict:
@@ -345,14 +362,16 @@ def set_lane_cue(body: LaneCueRequest, auth: AuthContext = Depends(lane_cue_seat
 def decide_line_stuck(body: LineStuckDecisionRequest,
                       auth: AuthContext = Depends(require_grant(STUCK_DECIDE)),
                       svc: CoreServicesLike = Depends(get_services)):
-    """D-407 §2 / D-453: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT | YIELD."""
+    """D-407 §2 / D-453 / D-607 8: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT | YIELD | REALIGN."""
     if body.decision == "MANUAL" and auth.role == "stuck_resolver":
         raise ApiError("FORBIDDEN", 403, "MANUAL is a human decision (D-438)")
     if body.decision == "YIELD" and (body.yield_m is None or body.yield_turn_rad is None):
         raise ApiError("VALIDATION_ERROR", 400, "YIELD needs yield_m and yield_turn_rad")
     if body.decision != "YIELD" and (body.yield_m is not None or body.yield_turn_rad is not None):
         raise ApiError("VALIDATION_ERROR", 400, "yield_m and yield_turn_rad belong to YIELD")
-    if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL", "YIELD"):
+    if body.decision != "REALIGN" and body.realign is not None:
+        raise ApiError("VALIDATION_ERROR", 400, "realign belongs to REALIGN")
+    if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL", "YIELD", "REALIGN"):
         # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
         # calibration lease like POST /mode does; checked before the stuck is consumed.
         # WAIT holds and ABORT goes to IDLE, so they stay open like e-stop.
@@ -365,7 +384,8 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
     try:
         outcome = svc.line_follow.stuck_decision(
             body.stuck_id, body.decision, by=auth.role, principal_ref=auth.principal_ref,
-            yield_m=body.yield_m, yield_turn_rad=body.yield_turn_rad)
+            yield_m=body.yield_m, yield_turn_rad=body.yield_turn_rad,
+            **({"realign": body.realign.model_dump()} if body.realign else {}))
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     # D-511 / D-430 review 5: an answered stuck releases a latched lane-cue HOLD (off-map, lost cue).

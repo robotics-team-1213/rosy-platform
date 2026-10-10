@@ -351,12 +351,12 @@ class StuckRecoveryMixin:
         if action.kind == "back":
             update.update(state="RECOVERING", reason="stuck_back_off",
                           linear=action.linear, angular=0.0)
-        elif action.kind == "yield":
-            update.update(state="RECOVERING", reason="stuck_yield",
+        elif action.kind in ("yield", "realign"):  # D-607 REALIGN: stuck/realign/
+            update.update(state="RECOVERING", reason=f"stuck_{action.kind}",
                           linear=action.linear, angular=action.angular)
         elif decision.linear != 0.0 or decision.angular != 0.0 or action.kind == "resume":
             phase = (self._recovery.phase or "resumed").lower()
             update.update(state="HOLD", reason=f"stuck_{phase}", linear=0.0, angular=0.0)
         self._status = self._status.model_copy(update=update)
-        angular = action.angular if action.kind == "yield" else 0.0
+        angular = action.angular if action.kind in ("yield", "realign") else 0.0
         return dataclasses.replace(decision, linear=action.linear, angular=angular)
