@@ -18,7 +18,7 @@ async function update(){
   const cols=Math.min(4,Math.ceil(Math.sqrt(session.sources.length*1280/600))),rows=Math.ceil(session.sources.length/cols);
   const robots=session.sources.filter(s=>s.kind==='robot'),footer=Math.max(80,Math.ceil(robots.length/2)*22+20);
   canvas.height=Math.max(720,40+rows*240+footer);const w=1280/cols,h=(canvas.height-40-footer)/rows;
-  ctx.fillStyle='#101923';ctx.fillRect(0,0,1280,720);text(new Date(now*1000).toISOString(),12,26);
+  ctx.fillStyle='#101923';ctx.fillRect(0,0,canvas.width,canvas.height);text(new Date(now*1000).toISOString(),12,26);
   state.textContent=session.ended_at?'녹화 종료':now-session.updated_at>3?'기록 연결 지연':'이 PC에 녹화 중';
   await Promise.all(session.sources.map(async(source,i)=>{
    const x=(i%cols)*w,y=40+Math.floor(i/cols)*h,frame=source.latest;
@@ -39,7 +39,7 @@ async function update(){
    const confirmed=p&&['MARKER','OK','OFFSET'].includes(row.status);
    text(source.robot_id+': '+(confirmed?`지도 X ${p.x.toFixed(2)} / Y ${p.y.toFixed(2)} m`:`지도 위치 미확인 · ${row?.status||'연결 없음'}`),12+(i%2)*640,60+rows*h+Math.floor(i/2)*22,confirmed?'#f3f5f7':'#ffb45e');
   });
- }catch{state.textContent='기록 연결 끊김';ctx.fillStyle='#101923';ctx.fillRect(0,0,1280,720);text('기록 연결 끊김 · 마지막 영상을 현재 영상으로 표시하지 않습니다.',24,100,'#ffb45e')}
+ }catch{state.textContent='기록 연결 끊김';ctx.fillStyle='#101923';ctx.fillRect(0,0,canvas.width,canvas.height);text('기록 연결 끊김 · 마지막 영상을 현재 영상으로 표시하지 않습니다.',24,100,'#ffb45e')}
  setTimeout(update,500);
 }
 update();

@@ -24,6 +24,7 @@ import signal
 import sqlite3
 import ssl
 import subprocess
+import tempfile
 import threading
 import time
 import webbrowser
@@ -357,26 +358,38 @@ def render(session, out, fps=2.):
     manifest = renderer.manifest
     if manifest["ended_at"] is None:
         raise ValueError("stop the session before exporting")
-    if Path(out).exists():
+    out = Path(out).resolve()
+    sidecar = Path(str(out) + ".json")
+    if out.exists() or sidecar.exists():
         raise FileExistsError("output already exists")
     start, end = manifest["started_at"], manifest["ended_at"]
     count = max(1, math.ceil((end - start) * fps))
-    process = subprocess.Popen(["ffmpeg", "-n", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", "rgb24",
-                                "-video_size", f"{renderer.size[0]}x{renderer.size[1]}", "-framerate", str(fps), "-i", "pipe:0", "-an",
-                                "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
+    fd, name = tempfile.mkstemp(prefix=".multi-record-", suffix=".mp4", dir=out.parent)
+    os.close(fd)
+    temp = Path(name)
+    process = None
     try:
+        process = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", "rgb24",
+                                    "-video_size", f"{renderer.size[0]}x{renderer.size[1]}", "-framerate", str(fps), "-i", "pipe:0", "-an",
+                                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(temp)], stdin=subprocess.PIPE)
         for i in range(count):
             process.stdin.write(renderer.frame(start + i / fps).tobytes())
         process.stdin.close()
         if process.wait() != 0:
             raise OSError("video encoder failed")
+        with temp.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        os.link(temp, out)  # Publish only complete video, atomically and without overwriting.
+        with sidecar.open("x", encoding="utf-8") as stream:
+            json.dump({"frames": count, "fps": fps, "sha256": digest, "started_at": start,
+                       "ended_at": end, "alignment": "source UTC where available, otherwise labelled receipt time"}, stream)
     except BaseException:
-        process.kill()
-        process.wait()
+        if process:
+            process.kill()
+            process.wait()
         raise
-    digest = hashlib.sha256(Path(out).read_bytes()).hexdigest()
-    Path(str(out) + ".json").write_text(json.dumps({"frames": count, "fps": fps, "sha256": digest,
-           "started_at": start, "ended_at": end, "alignment": "source UTC where available, otherwise labelled receipt time"}), encoding="utf-8")
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 class LocalWall(SimpleHTTPRequestHandler):
