@@ -171,6 +171,8 @@ class StuckResolver:
         self._plans: dict[str, _YieldPlan] = {}
         self._sent_yield: dict[str, tuple] = {}
         self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
+        #: D-573 개정 2026-10-10: robot_id -> on / at a mapped crosswalk (the lane monitor's view).
+        self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -285,6 +287,12 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
             return self._next_segment(row, rows)
+        if (stuck.get("cause") in LOST_LIKE and "XW" not in chain.retired and chain.resume_id is None
+                and self.at_crosswalk(rid)):
+            # D-573 개정 2026-10-10 (user): a crosswalk is a stop, then a crossing, never a WAIT dead end.
+            # The stuck already stood stuck_report_s (> crosswalk_look_s); CORE re-checks the RESUME and
+            # its D-573 gate (Fleet map zone) looks again. A second stuck goes to a human.
+            return Answer(rid, sid, "RESUME", "XW")
         from fleet.server.stuck_lane_lost import ai_answer
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
