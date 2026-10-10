@@ -141,3 +141,13 @@
 - CORE는 WRONG_WAY에서 `turn_spot`이 true일 때만 제자리 회전한다. 아니면 래치 HOLD `fleet_wrong_way`이고 Fleet(D-577 REALIGN)이 푼다. 역방향으로 계속 달리지도, 차로 안에서 돌지도 않는다.
 - 사용자 결정(D-607 개정 메모, 선택 (b)): 링 진입 네 자리 (−0.213, 0.221)·(−0.519, 0.201)·(−0.524, −0.242)·(−0.214, −0.264)를 회전 자리로 쓴다. 회전 원 가장자리가 칠한 선을 테이프 폭 0.025 m까지 넘을 수 있고(실측 1–2 cm), 회전 중에는 D-344 §12 IR 가운데 면제에 기댄다. 허용 오차는 D-607의 0.018 m다. 값은 `deploy/site/fleet-site.yaml.example`에 있고 현장에는 설치 도우미로 넣는다. `line_follow.fleet_lane_cue_enabled`는 Safety-Review와 Gazebo 시나리오를 통과할 때까지 false다.
 - 교착 해소와 IR 가운데 면제는 [D-607](D-607-stuck-deadlock-realign.md)(Proposed)이 정한다. IR 가운데 면제도 회전 자리에서만이다. 이 개정은 lane-cue 쪽 규칙만 적는다.
+
+### 개정 5 — 회전 자리 회전은 카메라를 잃어도 끝낸다 (2026-10-10, D-607 개정 1)
+
+사용자 지시(2026-10-10): "그럼 그 문제를 해결해 줄래". Gazebo에서 175–180° 역주행 회전이 끝나지 않았다. 카메라가 45–57°에서 선을 잃고, 회전은 카메라가 FOLLOW일 때만 나갔다.
+
+1. 회전 자리(`turn_spot`)의 WRONG_WAY 회전은 **시작할 때만** 카메라 FOLLOW, LOST 래치, NOMINAL 지면 조건이 필요하다.
+2. 한 틱이라도 돈 뒤에는 카메라를 잃거나 LOST가 되어도 계속 돈다. 그동안 다음이 계속 적용된다: D-344 §12 IR 가운데 면제(회전 자리에서만), 매 틱 D-422 회전 원 몸 정지, odom yaw 목표와 부호 고정, 예산 |각도|+30°·시간 |각도|/속도+2 s(넘으면 래치 HOLD `fleet_turn_unconfirmed`), Fleet 신호 신선도(`fleet_cue_lost`), 막힘 중 물러서기, D-517 권한과 D-573 게이트. D-468·D-407 복귀와 교차로 게이트는 그 틱에 끼지 않는다. 카메라가 그 자리에서 교차로를 보는 것은 막지 않고, 걸린 교차로 지시(armed·unexpected·aborted), arc, 횡단보도 구역만 막는다(래치 `fleet_turn_interrupted`).
+3. 회전이 10° 안으로 끝나면 카메라가 2 s 안에 다시 차선을 따라야 달린다. 그동안은 HOLD `fleet_turn_reacquire`이고, 넘으면 래치 HOLD `fleet_turn_no_lane`으로 Fleet을 기다린다.
+4. 회전 자리 밖 WRONG_WAY는 바뀌지 않는다(래치 HOLD `fleet_wrong_way`).
+5. 회전 기계는 카메라와 무관한 `odom_pivot.OdomPivot` 하나다. D-607 P3 REALIGN 회전이 이것을 다시 쓴다.
