@@ -131,7 +131,7 @@ Fleet 쪽 답(WAIT + 사람, AI는 WAIT/ABORT만)은 D-607(Proposed, `D-607-stuc
 2. **의도한 대기는 세지 않는다.** D-494 교차로(`junction_*`), D-517 권한(`authority_*`), D-573 횡단보도(`crosswalk_*`) 사유가 붙은 틱, D-525 신호·D-517 M4 교통 게이트가 0으로 만든 틱, OFF, odom 없음은 창을 지운다. URDF 몸이 없거나 `stuck_report_s: 0`이면 열지 않는다.
 3. **열리면.** `no_motion`과 같은 경로다. 곧바로 `WAITING_CONSOLE`(`nav.line_stuck_asked` `reason` = 원인), 로컬 후진 대체 없음, `detail` = 마지막 HOLD/전략 사유. 답이 오기 전까지 CORE는 원래 결정대로 움직인다(보고만). 수락된 답은 다른 원인과 같다(WAIT면 HOLD). D-468 로컬 복귀가 틱을 가진 동안에도 열리고, 그러면 D-468은 기존 규칙대로 틱을 돌려준다.
 4. **닫힘.** 5 s 창에서 몸 길이(0.118 m) 이상 가면 `cleared`로 닫힌다. RESUME·`recovered`는 창을 지운다.
-5. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 게이트, CORE 단일 `/cmd_vel`(D-2). 로직은 ROS 없는 `line_follow/recovery/stuck/progress_watch.py`에 있다. API Ref v1.198.
+5. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 게이트, CORE 단일 `/cmd_vel`(D-2). 로직은 ROS 없는 `line_follow/recovery/stuck/progress_watch.py`에 있다. API Ref v1.201.
 
 **왜.** 2026-10-10 실주행 확정 막힘 39건(1448 s) 가운데 20건(683 s)을 `no_motion`이 놓쳤다. 명령이 0이 아니었기 때문이다(TRACKING 중 흔들림, HOLD/가장자리 번갈음, 후진·재시도 반복). 분석은 `X:\DevTemp\steer-review\deadlock\`.
 

@@ -60,3 +60,38 @@ def test_lamp_identify_without_a_color_uses_the_robot_s_configured_colour(monkey
         with pytest.raises(ApiError):
             host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, unset)
     assert [json.loads(w[1])["action"] for w in writes] == ["identify_blue", "identify_amber", "identify_blue", "identify_amber", "identify_amber"]
+
+
+@pytest.mark.parametrize("answer, state, reason", [
+    (None, "pending", None),
+    ({"state": "done"}, "shown", None),
+    ({"state": "failed", "reason": "CAUTION_ACTIVE"}, "refused", "CAUTION_ACTIVE"),
+    ({"state": "failed"}, "refused", "FAILED"),                    # a payload before the reason
+    ({"state": "unavailable", "reason": "no such thing"}, "refused", "UNAVAILABLE"),
+])
+def test_the_identify_result_says_shown_or_refused_with_the_face_reason(monkeypatch, tmp_path, answer, state, reason):
+    """D-596 rev 2026-10-10: Fleet asks CORE whether rosy-face blinked or refused, and why."""
+    result_path = tmp_path / "hw-test.json"
+    monkeypatch.setattr(host_hardware, "_test_paths", lambda _svc: (str(tmp_path / "req"), str(result_path), "c"))
+    monkeypatch.setattr(host_hardware, "_write_private", lambda *args: None)
+    monkeypatch.setattr(host_hardware, "_last_test", {})
+    monkeypatch.setattr(host_hardware, "_last_identify", {})
+    auth = SimpleNamespace(token_id="fleet")
+    started = host_hardware.host_lamp_identify(LampIdentifyRequest(color="blue"), auth, object())
+    if answer is not None:
+        result_path.write_text(json.dumps({"schema": 1, "request_id": started["request_id"], "action": "identify_blue",
+                                           "detail": "x", "finished_at": "2026-10-10T00:00:00+00:00", **answer}),
+                               encoding="utf-8")
+    got = host_hardware.host_lamp_identify_result(started["request_id"], auth, object())
+    assert (got["state"], got["reason"]) == (state, reason)
+    with pytest.raises(ApiError) as unknown:
+        host_hardware.host_lamp_identify_result("0" * 16, auth, object())
+    assert unknown.value.http_status == 404
+
+
+def test_an_unanswered_identify_expires(monkeypatch, tmp_path):
+    monkeypatch.setattr(host_hardware, "_test_paths", lambda _svc: (str(tmp_path / "req"), str(tmp_path / "none"), "c"))
+    asked = host_hardware.time.monotonic() - host_hardware.IDENTIFY_RESULT_WAIT_S - 1
+    monkeypatch.setattr(host_hardware, "_last_identify", {str(tmp_path / "req"): ("ab" * 8, asked)})
+    got = host_hardware.host_lamp_identify_result("ab" * 8, SimpleNamespace(token_id="fleet"), object())
+    assert got["state"] == "expired"
