@@ -12,7 +12,7 @@ import math
 from typing import Optional
 
 from core_features.line_follow.crosswalk_gate import CrosswalkGate, zone_of
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, MAX_TURN_RAD, MAX_UNCERTAINTY_M, _angle
+from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, MAX_LATERAL_M, MAX_TURN_RAD, _angle
 
 #: Distinct crosswalks one epoch may hold; more is ``unknown`` (fail closed, never a silent drop).
 MAX_SEEN = 64
@@ -32,7 +32,8 @@ class CrosswalkReportMixin:
         both ends by the frame's crosswalk along-track bound: [x_min + u, x_max - u] ahead of its pose."""
         ev, u = self._return_evidence, evidence.crosswalk_uncertainty_m
         self._crosswalk_place(ev.epoch)   # place this frame's zone now, while the pose trail holds its stamp
-        if not evidence.boundaries or evidence.uncertainty_m is None or evidence.uncertainty_m > MAX_UNCERTAINTY_M:
+        # D-573 6 개정 2: the lane lateral bound does not place the span; only D-491's corridor cap applies.
+        if not evidence.boundaries or evidence.uncertainty_m is None or evidence.uncertainty_m > MAX_LATERAL_M:
             return
         start = min(b.observed_x_min_m for b in evidence.boundaries) + (u or 0.0)
         end = max(b.observed_x_max_m for b in evidence.boundaries) - (u or 0.0)
