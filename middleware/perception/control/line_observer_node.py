@@ -739,11 +739,14 @@ class LineObserverNode(Node):
                                         range_max=msg.range_max))
         gap = PINKY_PRO.translation_gap(view.points, pad_m=0.0)
         # nearest wall beside the robot on each side, within 0.35 m ahead (exit sides, D-597 amendment 2)
-        side = {'left': None, 'right': None}
+        # A wall, not a post: returns within 0.20 m laterally spanning >= 0.10 m along x (the signal
+        # posts at the ring entries are a few cm wide and stand beside the road, 9dfk 20261010T010701Z_rosy_41).
+        near = {'left': [], 'right': []}
         for x, y in view.points:
-            if 0.0 <= x <= 0.35 and abs(y) >= PINKY_PRO.half_width_m:
-                key = 'left' if y > 0 else 'right'
-                side[key] = abs(y) if side[key] is None else min(side[key], abs(y))
+            if 0.0 <= x <= 0.35 and PINKY_PRO.half_width_m <= abs(y) <= 0.20:
+                near['left' if y > 0 else 'right'].append((x, abs(y)))
+        side = {k: (min(p[1] for p in v) if v and max(p[0] for p in v) - min(p[0] for p in v) >= 0.10 else None)
+                for k, v in near.items()}
         self._wall_ahead = (None if gap is None else PINKY_PRO.front_x_m + gap,
                             float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side)
 
