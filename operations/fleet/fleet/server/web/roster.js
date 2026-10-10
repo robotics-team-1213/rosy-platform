@@ -8,7 +8,7 @@ import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
-import { localizationTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
+import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
@@ -237,9 +237,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       relay.dataset.evidence = evidence.evidence;
       head.appendChild(relay);
     }
-    const loc = view.stateUnavailable ? null : localizationTag(robot.localization);
+    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
+    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     if (loc) {
-      // D-395: 위치 확정 상태. 서버 문구를 그대로 쓰고 열거값은 title에만 둔다.
+      // 위치 칩 하나: Fleet 지도 위치가 먼저, CORE 위치 상태는 보고할 때만(D-395). 열거값은 title에만.
       const locTag = tag(loc.text, loc.cls);
       locTag.title = loc.title;
       locTag.dataset.localization = "";

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  localizationTag, localizationUrgent, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
+  localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
 } from "../../fleet/server/web/localization-badge.js";
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
@@ -63,4 +63,23 @@ test("the map draws the robot's own pose only when it is a LOCALIZED map pose, n
   assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: { state: "LOCALIZED", pose_frame: "map" } } }), pose);
   assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: null } }), pose);  // pre-D-395 Nav2 robot
   assert.equal(robotMapPose({ state: null }), null);
+});
+
+test("the card's position chip speaks what places the robot, and a missing CORE block is not a fault", () => {
+  const legacy = row({ state: null, pose_frame: null, legacy: true, trusted: false, label: "위치 상태 미보고" });
+  const guide = (pose) => ({ robot_id: "rosy_01", pose });
+  // Fleet's site map pose first, even when CORE reports nothing (lane following without Nav2).
+  assert.deepEqual(positionTag(legacy, guide({ x: 0.69, y: -0.44, state: "LOCALIZED", source: "sighting" })),
+    { text: "지도 위치 확정 · 카메라", cls: "", title: "Fleet map pose: LOCALIZED · sighting" });
+  assert.equal(positionTag(row(), guide({ x: 1, y: 2, state: "DEGRADED", source: "bridged" })).text, "지도 위치 추정 · odom 이음");
+  // No Fleet pose: CORE's own state when CORE reports one.
+  assert.deepEqual(positionTag(row(), guide(null)), localizationTag(row()));
+  // Neither: plain words, no warn chip.
+  assert.deepEqual(positionTag(legacy, guide(null)),
+    { text: "지도 위치 없음", cls: "", title: "Fleet map pose: none · CORE localization: null" });
+  assert.equal(positionTag(legacy, undefined).cls, "");
+  assert.equal(positionTag(null, undefined), null);
+  // A person must decide: still critical.
+  assert.equal(positionTag(row({ needs_human: true, trusted: false, label: "위치 확인 필요" }),
+    guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" })).cls, "crit");
 });
