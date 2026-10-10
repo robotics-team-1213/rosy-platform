@@ -170,13 +170,14 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        1781,
-        "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
-        "re-judged 2026-10-10) + D-608 incident reports "
-        "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
-        "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
-        "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
-        "+150 allowance measured from 1781",
+        2785,
+        "accept: measured at 2785 on 2026-10-10 after the named reports seam in "
+        "docs/plans/2026-10-10-fleet-stuck-subpackage.md was applied: LineStuckAnswerLog and _resolution "
+        "are in reports.py, board.py keeps memory state. D-610 separates AI policy, case transport, "
+        "problem watch, outcome tracking and episode storage into existing small owner files; "
+        "resolver.py remains pure. Independent review by integration_review: agree on this boundary, "
+        "no new size unit or budget change. Next growth separates ai_facts HTTP routes from its journal "
+        "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,

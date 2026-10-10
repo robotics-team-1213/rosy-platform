@@ -250,6 +250,7 @@ class TrafficService:
             self._occupancy = {}
             self._view["signals"] = self._signal_view(None)
             self._unknown_since, self._tried, self._cycle = {}, {}, (frozenset(), 0)
+            self.ai_replan((), {}, self._clock())
             return
         state = self._state
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
@@ -315,8 +316,8 @@ class TrafficService:
                    if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
         decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
                                     pending, self._unknown_since, now,
-                                    ai_pick=self.ai_replan(cycle, avoidable, now)
-                                    if cycle and self._cycle[1] >= handover.CYCLE_PERIODS else None)
+                                    ai_pick=self.ai_replan(cycle if cycle and self._cycle[1] >= handover.CYCLE_PERIODS
+                                                          else (), avoidable, now))
         decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
         for robot_id, row in decisions.items():
             if row["decision"] == "replan":

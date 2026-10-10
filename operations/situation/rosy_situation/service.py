@@ -275,13 +275,18 @@ class Situation:
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
                 case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
-                view = (case.get("views") or {}).get("rosy_cam") or {}
-                if view.get("frame_path") and self.owner_mode() == "available":
-                    try:
-                        case["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
-                    except (OSError, ValueError, KeyError) as exc:
-                        _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
-                        case["views"].pop("rosy_cam", None)
+                if self.owner_mode() != "available":
+                    return
+                for member in [case, *(case.get("members") or {}).values()]:
+                    view = (member.get("views") or {}).get("rosy_cam") or {}
+                    if view.get("frame_path"):
+                        try:
+                            member["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                        except (OSError, ValueError, KeyError) as exc:
+                            _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
+                            member["views"].pop("rosy_cam", None)
+                if self.owner_mode() != "available":
+                    return
                 proposal = self.vlm.judge(case, self.wall())
                 if proposal is not None and self.owner_mode() == "available":
                     self.fleet.call("/api/fleet/ai/proposals", proposal)
