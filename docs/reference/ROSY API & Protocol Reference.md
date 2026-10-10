@@ -1529,6 +1529,8 @@ v1.202 / D-619: `evidence.assessment`를 선택 추가한다. 공통 계약은 `
 
 `inquiry_observed_at`은 기존 사건의 ISO-8601 UTC 문자열이다. VLM evidence에는 실제 `model_options`도 기록하고 프로필은 `<model>@<digest12>:<prompt_id>:<options_sha8>`로 설정을 구분한다. exact prompt와 options가 같아도 모델 설명의 정확성은 독립 검증이 필요하다.
 
+v5는 작업 보고가 영상 해석을 왜곡하지 않도록 영상별 개별 관찰 뒤 작업 맥락으로 판단한다. 전체 호출이 하나의 6초 제한을 공유하며 하나라도 실패하면 proposal을 만들지 않는다. `evidence.prompt.calls[]`에 모든 실제 호출의 text/model_options와 관찰 단계의 robot_id/view를 기록한다. 최종 `assessment.observations`는 원본 프레임별 개별 관찰을 그대로 연결한다. 2초/3초 신선도 admission은 유지하며, 판단의 반환과 명령 수락은 별개다.
+
 모델에는 문제 종류·목표 로봇·센서/지도 상태·최근 실제 처리 결과·영상 메타데이터를 전달한다. 임의 operator_report/requested_outcome을 포함한 요청은 사용자 보고·가설로 명시하며 측정 사실로 승인하지 않는다. 최근 history는 최대 3건만 입력하고 맥락 JSON이 12,000자 또는 전체 프롬프트가 20,000자를 넘으면 VLM 판단을 보류한다. JSON을 중간에서 잘라 보내지 않는다. Qwen 응답은 JSON Schema로 필수 assessment를 제한한다. proposal evidence의 `prompt {id, sha256, text}`는 모델이 받은 정확한 요청문이고 `inference_s`는 실제 모델 호출 이후 파싱까지의 측정 시간이다. JPEG·lease·credential은 prompt 기록에서 제외한다. 기존 API의 권한과 CORE 실행 검사는 그대로 유지한다.
 
 | 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |

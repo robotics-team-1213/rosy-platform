@@ -154,3 +154,24 @@ def test_each_image_is_observed_without_task_priors_before_context_judgement():
     assert len(proposal["evidence"]["prompt"]["calls"]) == 3
     assert {row["description"] for row in proposal["evidence"]["assessment"]["observations"]} == {
         "A wall meets the carpeted floor."}
+
+
+def test_observation_pipeline_uses_one_total_deadline(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr('rosy_situation.vlm.time.monotonic', lambda: elapsed[0])
+    calls = []
+    def post(url, body, timeout):
+        calls.append(body)
+        elapsed[0] = 7.0
+        return {'message': {'content': '{"observation":"A wall is visible."}'}}
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 1
+
+
+def test_invalid_independent_observation_drops_the_whole_proposal():
+    calls = []
+    def post(url, body, timeout):
+        calls.append(body)
+        return {'message': {'content': '{"observation":"", "verified":true}'}}
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert len(calls) == 1

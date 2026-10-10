@@ -43,7 +43,6 @@ ceiling camera crop and front camera per robot. The robot's local safety (body s
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
 {{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it,
 "assessment": {{"type": one of {types}, "direction": one of {directions},
-"observations": {{"front": concrete visual observation, "rosy_cam": concrete visual observation}},
 "uncertainties": [what the images cannot confirm]}}}}. Observations concern the chosen robot only.
 The direction is advisory, not permission to move. Never claim body clearance, depth, grasp success,
 or action completion from pixels or overlays. Do not identify a robot in the ceiling view without evidence.
@@ -76,11 +75,14 @@ Prefer WAIT when the pictures do not show the way clear. Problem and context:
 
 
 def response_schema(words, robots, deadlock=False):
+    assessment = model_assessment_schema(VIEWS)
+    del assessment["properties"]["observations"]
+    assessment["required"].remove("observations")
     properties = {"decision": {"type": "string", "enum": list(words)},
                   "reason": {"type": "string", "minLength": 1, "maxLength": 64},
                   "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                   "seen": {"type": "string", "maxLength": 200},
-                  "assessment": model_assessment_schema(VIEWS)}
+                  "assessment": assessment}
     required = list(properties)
     if deadlock:
         properties.update(robot_id={"type": "string", "enum": list(robots)},
@@ -200,6 +202,8 @@ class Vlm:
             prompt += ("\nNo images in this reasoning call. Independent per-view model observations (unverified): "
                        + json.dumps(descriptions, ensure_ascii=False)
                        + ". Use these observations without transferring objects between views.")
+            if len(prompt) > 20000:
+                return None
             remaining = TIMEOUT_S - (time.monotonic() - started)
             if remaining <= 0:
                 raise TimeoutError("VLM judgement deadline")
