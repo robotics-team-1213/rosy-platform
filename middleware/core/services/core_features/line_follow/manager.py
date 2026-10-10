@@ -80,6 +80,7 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
         self._init_authority()  # D-517 4 (authority.py)
         self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
         self._init_lane_cue()  # D-511 rev 1/2 (lane_cue.py)
+        self._cue_spot_turning = False
         self._init_crosswalk_report()  # D-573 6 (crosswalk_report.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
@@ -482,6 +483,9 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
                 decision = self._tick_locked(current)
                 # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
                 self._feed_return_trail(current)
+                if self._cue_spot_turning:  # D-511 rev 5: a turn-spot pivot; only D-517 4 / D-573 lower it
+                    self._still_since = None
+                    return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if decision is self._arc_out:  # D-520: the arc owns this tick (no D-468/D-476/D-407,
                     self._still_since = None
                     # no junction gate); D-517 4 and D-573 only ever lower it
@@ -504,6 +508,7 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
                     self._clear_since = None
 
     def _tick_locked(self, current: float) -> LineFollowDecision:
+        self._cue_spot_turning = False
         if self._mode is LineFollowMode.OFF:
             return self._stop_decision("OFF", "mode_off")
         if self._hold_until is not None and current > self._hold_until:
@@ -574,13 +579,19 @@ class LineFollowManager(LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, Authori
                 return self._obstacle_hold(current)
         self._blocked_since = None
         self._escalated = False
+        # D-511 rev 5: a turn-spot pivot that already turned runs through camera loss and LOST, with the
+        # IR centre exemption (D-344 §12, turn spots only); the body stop ran above, the gates run after.
+        spot = cue is not None and cue[0] == "turn" and self._lane_cue_spot_running()
         if guard is not None:
             # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
             if guard == "stale":
                 return self._stop_decision("HOLD", "lane_guard_stale")
-            if guard == "centre" and not self._camera_turning_in_place(cap):
+            if guard == "centre" and not spot and not self._camera_turning_in_place(cap):
                 # D-344 §12 개정: a camera turn in place sweeps the IR row ~0.03 m; it does not cross.
                 return self._stop_decision("HOLD", "lane_departure")
+        if spot:
+            self._cue_spot_turning = True
+            return self._lane_cue_turn(cue)
         if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
                       if self._mode is LineFollowMode.CAMERA_LINE

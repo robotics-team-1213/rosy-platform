@@ -361,3 +361,71 @@ def test_wrong_way_without_an_angle_is_latched_too():
     rig = Rig()
     rig.cue("WRONG_WAY", 1)
     assert rig.step().linear == 0 and rig.m._cue_latch == "fleet_wrong_way"
+
+
+# ---- D-511 rev 5: a turn-spot pivot completes through camera loss ------------------------------
+
+def _start_spot_pivot(rig, turn=-170.0):
+    rig.cue("WRONG_WAY", 1, turn_deg=turn)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=turn)
+    d = rig.step()
+    assert d.linear == 0 and d.angular != 0
+    return 3
+
+
+def _turn_on(rig, seq, *, camera, ir_error=None, until=None):
+    """Odom follows the command at 0.05 rad per tick; returns the last decision."""
+    sign = -1.0
+    for seq in range(seq, seq + 80):
+        rig.yaw += sign * 0.05
+        rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
+        d = rig.step(camera=camera, ir_error=ir_error)
+        if d.angular == 0 or (until and until(d)):
+            return d, seq + 1
+    return d, seq + 1
+
+
+def test_spot_pivot_runs_through_camera_loss_and_the_ir_centre_then_needs_the_lane_back():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    d, seq = _turn_on(rig, seq, camera=False, ir_error=0.0)      # no camera, line under the IR centre
+    assert d.angular == 0 and rig.m.status().reason == "fleet_turn_reacquire"
+    assert math.degrees(abs(rig.yaw)) >= 155.0                   # it finished the turn
+    rig.wait(2.5, camera=False)
+    assert rig.step(camera=False).linear == 0 and rig.m._cue_latch == "fleet_turn_no_lane"
+
+
+def test_spot_pivot_drives_on_when_the_camera_finds_the_lane_after_the_turn():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    d, seq = _turn_on(rig, seq, camera=False)
+    assert rig.m.status().reason == "fleet_turn_reacquire"
+    rig.cue("ON_LANE", seq)
+    assert rig.step(camera=True).linear > 0
+
+
+def test_off_lane_pivot_off_a_spot_keeps_the_camera_and_ir_rules():
+    rig = Rig()
+    rig.cue("OFF_LANE", 1, bearing_deg=90.0)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("OFF_LANE", 2, bearing_deg=90.0)
+    assert rig.step().angular > 0                                   # turning toward the lane
+    rig.cue("OFF_LANE", 3, bearing_deg=90.0)
+    d = rig.step(camera=False)
+    assert d.angular == 0                                           # not a turn spot: camera needed
+
+
+def test_a_camera_junction_does_not_stop_a_spot_pivot_but_an_armed_instruction_does():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    rig.m._junction = {"state": "waiting", "expires_at": 1e9}       # junction seen, no instruction
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
+    assert rig.step(camera=False).angular != 0
+    rig.m._junction = {"state": "armed", "action": "left", "place_id": "P", "expires_at": 1e9}
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", seq + 1, turn_deg=-170.0)
+    assert rig.step(camera=False).angular == 0 and rig.m._cue_latch == "fleet_turn_interrupted"
