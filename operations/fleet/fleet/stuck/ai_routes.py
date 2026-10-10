@@ -71,7 +71,9 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         return {"problems": _problems(), "ai_first": first.view()}
 
     @app.get("/api/fleet/ai/case/{problem_id}", dependencies=read_guard, tags=["ai"])
-    async def ai_case(problem_id: str) -> dict:
+    async def ai_case(problem_id: str, principal=Depends(authorize)) -> dict:
+        if principal.role != "ai_observer":
+            raise HTTPException(status_code=403, detail={"code": "AI_CASE_FORBIDDEN"})
         problem = next((p for p in _problems() if p["problem_id"] == problem_id), None)
         if problem is None or loop is None:
             raise HTTPException(status_code=404, detail={"code": "AI_CASE_NOT_OPEN", "message": problem_id})
