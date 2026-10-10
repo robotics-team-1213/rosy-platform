@@ -217,7 +217,7 @@ async function refreshIncidents() {
     list.replaceChildren();
     for (const report of incidentReports) {
       const item = document.createElement("li");
-      item.className = "stuck-item";
+      item.className = `stuck-item incident-row${report.closed_at ? " closed" : ""}`;
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
       const core = report.evidence.core, fleet = report.evidence.fleet;
