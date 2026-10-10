@@ -2705,7 +2705,7 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (1366, 768), (390, 844)])
 def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, height):
-    """D-359 US-008 capture: "포함 로봇" sat below the checkbox row (centred on a wrapped list at
+    """D-359 US-008 capture: the member label (now "팔로워") sat below the checkbox row (centred on a wrapped list at
     1366/390; at wide widths it could flow into the previous row). The label shares the first
     row of the member list and stands to its left."""
     from playwright.sync_api import sync_playwright
@@ -2714,7 +2714,8 @@ def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, hei
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 3")
+        # Follower boxes leave the leader out: three robots, two boxes.
+        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 2")
         boxes = page.evaluate("""() => {
           const r = (n) => n.getBoundingClientRect().toJSON();
           return {label: r(document.querySelector('.member-label')),
