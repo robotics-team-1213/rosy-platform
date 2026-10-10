@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import base64
 import logging
+import math
 import os
 import re
 import ssl
@@ -79,11 +80,17 @@ class Fleet:
         with opener.open(request, timeout=TIMEOUT_S) as response:
             if response.headers.get_content_type() != "image/jpeg":
                 raise ValueError("Vision response is not JPEG")
+            if response.headers.get("X-Frame-Rectified") != "map-crop":
+                raise ValueError("Vision frame is not a map crop")
+            seq = response.headers.get("X-Frame-Seq")
+            captured_at = float(response.headers.get("X-Frame-Captured-At") or "nan")
+            if not seq or not seq.isdigit() or not math.isfinite(captured_at):
+                raise ValueError("Vision frame headers invalid")
             jpeg = response.read(2_000_001)
             if not jpeg or len(jpeg) > 2_000_000:
                 raise ValueError("Vision frame size invalid")
-            return {"frame_id": f"{path.split('/')[4]}:{response.headers['X-Frame-Seq']}",
-                    "captured_at": float(response.headers["X-Frame-Captured-At"]),
+            return {"frame_id": f"{path.split('/')[4]}:{seq}",
+                    "captured_at": captured_at,
                     "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
 
 

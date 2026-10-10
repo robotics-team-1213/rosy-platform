@@ -6,6 +6,7 @@ import io
 import json
 import urllib.error
 from concurrent.futures import Future
+from email.message import Message
 
 from rosy_situation import service
 from rosy_situation.service import Situation
@@ -132,6 +133,45 @@ def test_vision_frame_lease_cannot_be_sent_to_an_arbitrary_path():
             pass
         else:
             raise AssertionError(path)
+
+
+def test_signed_vision_frame_requires_map_crop_and_exact_headers(monkeypatch):
+    headers = Message()
+    for key, value in (("Content-Type", "image/jpeg"), ("X-Frame-Rectified", "map-crop"),
+                       ("X-Frame-Seq", "7"), ("X-Frame-Captured-At", "100.5")):
+        headers[key] = value
+
+    class Reply:
+        def __init__(self):
+            self.headers = headers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _limit):
+            return b"\xff\xd8frame\xff\xd9"
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "https://fleet.example/api/vision/sources/ceiling/frame"
+            assert request.headers["Authorization"] == "Bearer secret-lease"
+            return Reply()
+
+    monkeypatch.setattr(service.urllib.request, "build_opener", lambda *_handlers: Opener())
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    frame = fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    assert frame == {"frame_id": "ceiling:7", "captured_at": 100.5,
+                     "jpeg_b64": "/9hmcmFtZf/Z"}
+    headers.replace_header("X-Frame-Rectified", "false")
+    try:
+        fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("raw Vision frame accepted")
 
 
 def test_model_unload_removes_advertised_profile(tmp_path):
