@@ -27,3 +27,14 @@
 두 로봇은 온라인 IDLE, 열린 trip 0이다. `rosy_40`은 `junction_turn:false`, `rosy_41`은 `E_mid`에서 약 0.754 m 떨어져 있다. 사용자는 현장 감독과 출발 위치 준비가 가능하다고 확인했다. 시험 PC의 Gazebo 자원은 부족하다. 설치·능력·출발 자세·SIM·독립 물리 관측은 각각 확인해야 한다.
 
 **FIELD HOLD:** AI 사실은 shadow다. 기존 Fleet 중심 기준 정지와 공칭 반폭 검사는 회전 자세, 위치 오차, 정지 거리까지 포함한 실제 차체 이탈 방지 증거가 아니다. 두 로봇의 물리적 한 바퀴 복귀·정지와 무이탈은 미확인이다. 노트북에서 pytest·Chromium·Gazebo는 실행하지 않았다.
+
+## 재개 후 전달 준비 (2026-10-10 09:54 UTC)
+
+- commit `016ca6b6d09ccff0c8b8ab5045761e96e0276fe7`은 원격 AI PC에서 310 passed, NEW 0·KNOWN 0을 확인하고 공유 main에 fast-forward 착지했다. 로그는 `X:/DevTemp/land/feat-one-lap-current/run-1-1.txt`이다. 이전 같은 이름의 로그는 덮어쓰였으므로 앞선 회차의 수치와 혼동하지 않는다.
+- 통합 검증 기록의 네 해시는 실제 Git commit임을 대조하고 명시적으로 표기했다. 같은 시각 main에 추가된 exact-line 예외 4개는 그 문구 수정으로 오래된 항목이 되었다. 독립 검토자 `lap_review`는 그 4개만 삭제하는 수정을 승인했다. 다른 104개 예외와 검사 규칙은 유지했다. 위 310개 원격 시험에 secret boundary·public provenance 검사가 포함된다.
+- commit `ca8068c81d98`의 push 전 검사는 최초 묶음에서 위 문서 표기 문제로 NEW 1을 검출했고, 후속 두 묶음은 각각 5,663 passed·215 skipped 및 4,802 passed·375 skipped, NEW 0·KNOWN 0이었다. Fleet 및 나머지 묶음은 진행 중이다. `ca8068c81`에서 `016ca6b6d`까지 최종 tree 차이는 검증 문서의 표기뿐이며 제품 소스는 같다. 로그는 `X:/DevTemp/remote-pytest/ca8068c81d98/run-{1,2,3}.txt`이다. 원래 실패한 로그를 녹색으로 바꾸거나 건너뜀을 통과로 세지 않는다.
+- AI PC의 기존 `~/rosy-platform`은 Git 저장소가 아닌 운영 소스 복사본이다. 이를 보존하고 `~/rosy-situation/repo`에 별도 Git 배포 저장소를 준비했다. 후보 commit `016ca6b6d09ccff0c8b8ab5045761e96e0276fe7`은 분리 worktree에 적재했으며 source tree `13301b9c26cddb6b0d9b82fdcff52c043911979a`, 전달 bundle SHA256 `03db3b31d14f172909eb2385fdb94d52ae9d937b71a532408f210ae4bdf459a1`을 대조했다. 해당 AI PC에서 service v0.3.0과 `build_commit: 016ca6b6d09c`를 읽었다. 상시 유닛은 재시작하지 않았고 합성 사실은 Fleet에 올리지 않았다. 근거는 `X:/DevTemp/one-lap/ai-git-stage-proof.txt`다.
+- 최신 현장 읽기에서 AI 상시 서비스는 여전히 v0.2.0/shared/present, 열린 trip은 0이며 두 로봇은 IDLE·line-follow OFF였다. `rosy_40`은 `junction_turn:false`, W_mid에서 약 0.517 m였고, `rosy_41`은 지도 자세 DEGRADED, anchor age 약 79.7 s, E_mid에서 약 2.231 m였다. 미보고 sensor_health는 건강함을 뜻하지 않는다. 주행·모드·E-Stop 명령은 보내지 않았다. 근거는 `X:/DevTemp/one-lap/readiness-idle-current.txt`, `motion-diagnostics-current.txt`다.
+- 한 바퀴 후보의 착지·push 승인은 유지된다. 이후 main에 포함된 전체 통합의 기록에는 별도로 로컬 착지만 승인되고 push는 제외된 것으로 명시되어 있다. 그 추가 공개 범위와 최종 후보 검사를 확인한 뒤 원격 main 및 CI·설치 SHA를 검증한다. source staging은 상시 배포나 현장 수용이 아니다.
+
+남은 검증: 최종 공개 후보의 push 관문·CI, 현장 Fleet/CORE 이미지, AI 상시 v0.3.0과 heartbeat build_commit, Gazebo 동시 한 바퀴, 기기 회전 능력·신선한 출발 자세, 두 로봇의 물리적 한 바퀴 복귀·정지와 차체 경계 무이탈. 목표는 계속 미완료이며 AI 경로 사실은 shadow다.
