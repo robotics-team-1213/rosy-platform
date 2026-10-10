@@ -838,6 +838,7 @@ def test_d577_ai_back_off_holds_for_an_untrusted_peer_pose_and_resume_is_never_a
     no_motion = _trusted(_ai_row(_proposal(), _stuck(cause="no_motion"), wait=False))
     assert _judged(None, no_motion, peer)[0] == "peer_unknown"
     legacy = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
+    del legacy["state"]["localization"]                      # LEGACY: no localization block (D-395)
     assert _judged(None, legacy, peer)[0] == "crosswalk_unknown"   # no map pose near a mapped crosswalk   # R6's waiver is not the AI's
     for cause in ("obstacle_ahead", "lane_lost", "no_motion"):   # the rules never RESUME a stuck
         assert _judged(None, _ai_row(_proposal("RESUME"), _stuck(cause=cause), wait=False)) == (
