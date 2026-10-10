@@ -73,6 +73,9 @@ class LaneComplianceConfig:
     entry_ahead_m: float = 0.10
     #: A crosswalk this far ahead along the lane goes into the cue as ``crosswalk_ahead`` (m).
     crosswalk_ahead_m: float = 0.6
+    #: Ceiling pose error bound for the zone (m): D-587 calibration residual p90 0.018 m + marker
+    #: height 0.02-0.03 m -> 0.012-0.019 m at the bottom road (validation 2026-10-10).
+    crosswalk_uncertainty_m: float = 0.035
     #: Send the return cue (``POST /line-follow/lane-cue``) to the robot; off = observe only.
     return_cue: bool = True
 
@@ -80,7 +83,7 @@ class LaneComplianceConfig:
         if not isinstance(self.return_cue, bool):
             raise ValueError("fleet.lane_compliance.return_cue must be true or false")
         for name in ("line_half_width_m", "off_map_pad_m", "off_map_unseen_s", "return_persist_s",
-                     "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m"):
+                     "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m", "crosswalk_uncertainty_m"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 <= value <= 10.0:
                 raise ValueError(f"fleet.lane_compliance.{name} must be a number within [0, 10]")
@@ -223,8 +226,8 @@ class ReturnSample:
     turn_deg: Optional[float] = None          # lane direction minus robot heading (left +)
     entry: Optional[tuple] = None             # re-entry point (x, y), map frame
     crosswalk: Optional[str] = None
-    #: D-573 hint: ``{id, distance_m, length_m}`` of the next crosswalk along the lane, the body
-    #: front to its near edge (0 inside) and its length along the lane; None when none is near.
+    #: D-491/D-573 zone ``{id, near_m, far_m, uncertainty_m, source}`` of the crosswalk ahead (or under
+    #: the body) along the lane from base_footprint; None when none is near.
     crosswalk_ahead: Optional[dict] = None
 
 
@@ -282,43 +285,40 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
             side = "left" if bearing > 0 else "right"
         else:   # no heading: assume it goes the lane's way; the centre is across the offset
             side = "right" if offset > 0 else "left"
-    ahead = (crosswalk_ahead(arc, s, crosswalks, config.crosswalk_ahead_m, body_front_m)
-             if state in (ON_LANE, ON_LINE) else None)
+    ahead = (crosswalk_ahead(arc, s, crosswalks, config.crosswalk_ahead_m, body_front_m,
+                             config.crosswalk_uncertainty_m)
+             if crosswalks and state in (ON_LANE, ON_LINE) else None)
     return ReturnSample(state, arc.edge_id, round(offset, 4), side,
                         None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
                         None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead)
 
 
-#: Walk step along the lane for the crosswalk hint (m); the hint is this coarse.
+#: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.
 XW_STEP_M = 0.01
 
 
-def crosswalk_ahead(arc, s: float, crosswalks, horizon_m: float, front_m: float) -> Optional[dict]:
-    """The first crosswalk polygon the lane centreline enters within ``horizon_m`` past the body
-    front (``s + front_m``): ``{id, distance_m, length_m}``. ponytail: walks this arc only, so a
-    crosswalk past the arc's end shows up once the robot is on the next arc."""
+def crosswalk_ahead(arc, s: float, crosswalks, horizon_m: float, behind_m: float,
+                    uncertainty_m: float) -> Optional[dict]:
+    """D-491/D-573 zone from the map: the first crosswalk polygon the lane centreline is in between
+    ``behind_m`` behind and ``horizon_m`` ahead of base_footprint, as ``{id, near_m, far_m,
+    uncertainty_m, source}`` along the lane from base_footprint (near < 0 once inside).
+    ponytail: walks this arc only; a crosswalk past the arc's end shows once on the next arc."""
     from fleet.site_map import _inside
-    if not crosswalks:
-        return None
-    start = s + front_m
-    steps = int(horizon_m / XW_STEP_M) + 1
     for cid, polygon in crosswalks:
         polygon = list(polygon)
         hit = None
-        for k in range(-int(front_m * 2 / XW_STEP_M), steps):   # from the body rear: inside counts
-            along = start + k * XW_STEP_M
-            if along > arc.length_m:
-                break
+        along = s - behind_m
+        while along <= min(s + horizon_m, arc.length_m) + 1e-9:
             x, y, _ = arc.point_at(max(along, 0.0))
             inside = _inside((x, y), polygon)
             if inside and hit is None:
                 hit = along
             elif not inside and hit is not None:
-                return {"id": cid, "distance_m": round(max(0.0, hit - start), 3),
-                        "length_m": round(along - hit, 3)}
-        if hit is not None:
-            return {"id": cid, "distance_m": round(max(0.0, hit - start), 3),
-                    "length_m": round(arc.length_m - hit, 3)}
+                break
+            along += XW_STEP_M
+        if hit is not None and hit - s <= horizon_m and min(along, arc.length_m) - s > 0.0:  # base not past it
+            return {"id": cid, "near_m": round(hit - s, 3), "far_m": round(min(along, arc.length_m) - s, 3),
+                    "uncertainty_m": uncertainty_m, "source": "fleet_map"}
     return None
 
 

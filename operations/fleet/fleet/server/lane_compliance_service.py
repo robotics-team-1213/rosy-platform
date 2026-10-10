@@ -47,6 +47,9 @@ from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE
 PERIOD_S = 0.5
 #: D-511 rev 1: a cue lives this long on CORE; the 2 Hz monitor renews it twice within.
 CUE_TTL_S = 1.0
+#: The near bar this close ahead of base_footprint counts as "at the crosswalk": body front
+#: 0.06 m (URDF) + the IR row and the zone uncertainty, rounded up.
+AT_CROSSWALK_M = 0.15
 #: A robot whose CORE has no lane-cue route (404) is asked again after this long.
 CUE_RETRY_S = 60.0
 
@@ -141,7 +144,17 @@ class LaneComplianceMonitor:
         return {"state": tracker.state, "since": tracker.since, "raw": raw.state,
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
-                "crosswalk": raw.crosswalk, "crosswalk_ahead": raw.crosswalk_ahead}
+                "crosswalk": raw.crosswalk,
+                # D-491/D-573: the zone's odom anchor is the robot pose this old (CORE back-dates it)
+                "crosswalk_ahead": None if raw.crosswalk_ahead is None else {
+                    **raw.crosswalk_ahead, "pose_age_s": round(max(0.0, getattr(pose, "age_s", 0.0) or 0.0), 3)}}
+
+    def at_crosswalk(self, robot_id: str) -> bool:
+        """D-573 개정: the robot's body is on a mapped crosswalk or its front at the near bar."""
+        back = (self._latest.get(robot_id) or {}).get("return") or {}
+        ahead = back.get("crosswalk_ahead") or {}
+        return back.get("crosswalk") is not None or (
+            ahead.get("near_m") is not None and ahead["near_m"] <= AT_CROSSWALK_M)
 
     async def _send_cue(self, robot_id: str, back: dict, now: float) -> None:
         state = back["state"]

@@ -35,7 +35,8 @@ def test_classify_states_and_side():
 
 def test_crosswalk_is_on_lane_and_hinted_ahead():
     ahead = classify(0.7, 0.0, 0.0, 0.0, GRAPH, CW).crosswalk_ahead
-    assert ahead["id"] == "cw" and 0.1 < ahead["distance_m"] < 0.3 and abs(ahead["length_m"] - 0.12) < 0.02
+    assert ahead["id"] == "cw" and abs(ahead["near_m"] - 0.3) < 0.02 and abs(ahead["far_m"] - 0.42) < 0.02
+    assert ahead["source"] == "fleet_map" and ahead["uncertainty_m"] > 0
     inside = classify(1.06, 0.07, 0.0, 0.0, GRAPH, CW)      # off-centre inside a crosswalk
     assert inside.state == ON_LANE and inside.crosswalk == "cw"
     assert classify(0.7, 0.0, math.pi, math.pi, GRAPH, CW).crosswalk_ahead is None  # wrong way: no hint
@@ -105,3 +106,18 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
         clock[0] += 0.5
     states = [b["state"] for b in client.sent]
     assert states.count(ON_LANE) == 1 and states[-1] == ON_LANE
+
+
+def test_resolver_resumes_a_stuck_at_a_mapped_crosswalk_once():
+    from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
+    resolver = StuckResolver(ResolverConfig())
+    resolver.at_crosswalk = lambda rid: rid == "r1"
+    row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
+        "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": "no_motion"}}}}
+    [answer] = resolver.step(0.0, [row])
+    assert isinstance(answer, Answer) and (answer.decision, answer.rule) == ("RESUME", "XW")
+    resolver.sent(answer, 0.0)
+    resolver.result(answer, code=None)
+    row["state"]["line_follow"]["stuck"] = {"stuck_id": "s2", "cause": "no_motion"}
+    [again] = resolver.step(1.0, [row])
+    assert getattr(again, "reason", None) == "restuck_after_resume"   # a human, not a WAIT loop
