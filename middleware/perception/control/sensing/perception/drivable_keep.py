@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from core_common.robot_body import NOMINAL_BODY
 
+from .drivable_preview import way_runs
+
 #: The newest drivable way steers while its frame is at most this old (odometry moves its target;
 #: one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
 WAY_MAX_AGE_S = 1.5
@@ -66,6 +68,7 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)
+        last['drivable_way'] = way_runs(way, stamp - way_stamp)   # the preview draws what steered (sampled)
         return (None if error is None else (error, confidence)), True
     if steer._in_crosswalk(pose_at(stamp)):
         # bars (not drivable) fill the near view at a crosswalk: straight across (CORE D-573 gate)
