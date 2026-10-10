@@ -3120,3 +3120,8 @@
 - Change: Each image is observed independently before task context reasoning; exact per-call prompts/options remain recorded. The shared 6-second deadline also rejects late final replies. Fleet retains timestamped route intent without granting motion authority.
 - Evidence: Remote focused contracts 108 passed, known_failures 0 NEW. AI PC replay with local Qwen3-VL took 4.03/3.94 seconds and separated wall/front observations from ceiling objects in two cases; classification accuracy and execution freshness are unverified.
 - Gate: SOURCE / remote contracts / offline replay. D-577 freshness, enrollment and CORE authority remain unchanged; no autonomous corner or arm acceptance.
+## 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
+
+- Change: Integrated automatic-leader console selection. Lane convoy candidates are online open-repeat-trip robots; rank fresh LOCALIZED guide poses in the active map, otherwise robot number. Both callers share selection; formation capability admission is preserved.
+- Evidence: Node suite 274 passed; remote focused Python contracts 62 passed, known_failures 0 NEW. Independent led_review approved source and fleet size 51061.
+- Gate: SOURCE / remote contracts; deployment and physical convoy acceptance remain separate.
