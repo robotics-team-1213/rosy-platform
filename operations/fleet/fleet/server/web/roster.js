@@ -63,9 +63,9 @@ function blockWith(button, reason) {
 
 // D-596: why a camera LED check did not name the robot (Vision/Fleet reason codes).
 const IDENTIFY_REASON = {
-  none: "점멸이 보이지 않음", multiple: "같은 점멸이 둘 이상", frames_missing: "카메라 프레임이 빠짐",
+  none: "식별 조명이 보이지 않음", multiple: "같은 식별 조명이 둘 이상", frames_missing: "카메라 프레임이 빠짐",
   stale: "카메라 영상이 오래됨", calibration_changed: "보정이 바뀜", track_lost: "트랙을 놓침",
-  overlap: "다른 로봇과 겹침", not_accepted: "로봇이 거절함", lamp_refused: "로봇이 점멸을 거절함",
+  overlap: "다른 로봇과 겹침", not_accepted: "로봇이 거절함", lamp_refused: "로봇이 식별 조명을 거절함",
 };
 // D-596 rev 2026-10-10: rosy-face's reason for refusing the blink (CORE GET /host/lamp/identify/{id}).
 const LAMP_REASON = {
@@ -553,7 +553,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         // The robot face says CALL <id> for the same window. The map chip names who was called.
         view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 };
         render();
-        log(`${robot.robot_id} LED 확인 중 · ${started.color === "blue" ? "파랑" : "주황"} 점멸 · 얼굴에 이름 표시`, "info");
+        log(`${robot.robot_id} LED 확인 중 · ${started.color === "blue" ? "파랑" : "주황"} 식별 조명 · 얼굴에 이름 표시`, "info");
         await new Promise((done) => setTimeout(done, 8500));  // 6 s window + Vision's verdict
         if (!life.current()) return;
         const readback = await call("/api/fleet/tracking/identity", { signals: [life.signal] });

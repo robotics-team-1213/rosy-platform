@@ -91,7 +91,7 @@
 ## 최근 기록
 
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
+- 2026-10-10 · aa37d8cb6 · fix(fleet): 일정 시간 점등과 주기 재식별
 - 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
 - 2026-10-10 · 008d62b301 · feat(fleet): reassess stuck heading
 - 2026-10-10 · uncommitted · test(fleet): 정확한 카드 주행 컨트롤 선택
-- 2026-10-10 · uncommitted · fix(fleet): remove implicit legacy map-pose trust

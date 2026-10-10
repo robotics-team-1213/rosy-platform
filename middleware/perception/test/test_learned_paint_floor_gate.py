@@ -168,3 +168,29 @@ def test_model_without_wall_class_is_refused_with_the_gate(tmp_path):
     with pytest.raises(ManifestError, match="wall"):
         LaneSegModel.open(folder, session_factory=factory, floor_gate=True)
     assert LaneSegModel.open(folder, session_factory=factory).floor_gate is False
+
+
+@pytest.mark.parametrize("has_way", [True, False])
+def test_drivable_model_without_wall_loads_but_cannot_use_ungated_lane_fallback(tmp_path, has_way):
+    classes = (ClassSpec(0, "background", "background"),
+               ClassSpec(1, "lane_line", "lane_marking"),
+               ClassSpec(2, "drivable", "drivable"))
+    labels = np.zeros((H, W), np.int64)
+    labels[100:, 80:90] = labels[100:, 230:240] = LANE
+    if has_way:
+        labels[100:, 90:230] = 2
+    folder = _model_dir(tmp_path, classes)
+    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels, 3), floor_gate=True)
+    frame = np.zeros((H, W, 3), np.uint8)
+    assert model.floor_gate is True
+    if has_way:
+        mask, kind, info, _ = model.infer_drivable(frame)
+        assert kind == "drivable" and info["reason"] == "ok"
+        assert mask[100:, 90:230].all() and not mask[:100].any()
+    else:
+        with pytest.raises(NoWallClass):
+            model.infer_drivable(frame)
+    with pytest.raises(NoWallClass):
+        model.infer_mask(frame)
+    with pytest.raises(NoWallClass):
+        model.infer_with_mask(frame)

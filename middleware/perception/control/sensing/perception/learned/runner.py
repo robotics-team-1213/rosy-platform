@@ -89,9 +89,9 @@ class LaneSegModel:
              threads: int = 2, allow_spinning: bool = True, floor_gate: bool = False) -> "LaneSegModel":
         manifest = load_manifest(folder)
         verify_files(manifest)
-        if floor_gate and not any(c.role == "wall" for c in manifest.classes):
-            # D-588 fail closed: no wall class, no gated paint (the keeper uses its fallback).
-            raise ManifestError("floor gate needs a wall role class; this model has none")
+        if floor_gate and not any(c.role in ("wall", "drivable") for c in manifest.classes):
+            # Drivable has its own region validation; lane-mask fallback still requires a wall class.
+            raise ManifestError("floor gate needs a wall or drivable role class; this model has neither")
         factory = session_factory or (lambda p, t: _OrtSession(p, t, allow_spinning))
         try:
             if session_factory is None and manifest.backend == "ncnn":
