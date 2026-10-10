@@ -8,6 +8,18 @@ TYPES = ("geometry", "obstruction", "visibility_limited", "target_missing", "tar
 DIRECTIONS = ("hold", "reobserve", "recover", "replan", "human_review", "continue")
 
 
+def model_assessment_schema(sources):
+    """The same vocabulary and bounds for constrained model output."""
+    text = {"type": "string", "minLength": 1, "maxLength": 300}
+    return {"type": "object", "additionalProperties": False,
+            "required": ["type", "direction", "observations", "uncertainties"], "properties": {
+                "type": {"type": "string", "enum": list(TYPES)},
+                "direction": {"type": "string", "enum": list(DIRECTIONS)},
+                "observations": {"type": "object", "additionalProperties": False,
+                                 "required": list(sources), "properties": {source: text for source in sources}},
+                "uncertainties": {"type": "array", "maxItems": 8, "items": text}}}
+
+
 def _text(value, limit=300):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise ValueError("bounded nonempty observation text required")
