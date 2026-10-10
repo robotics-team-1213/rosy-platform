@@ -60,13 +60,19 @@ def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
     rid = str(trip["robot_id"])
     pose = trip.get("pose") or {}
     evidence = {"trip_id": trip.get("trip_id"), "map_version": trip.get("map_version"),
-                "pose_source": pose.get("source"), "pose_age_s": pose.get("age_s"),
+                "pose_source": pose.get("source"), "pose_age_s": None,
                 "segment_index": trip.get("segment_index")}
     value = {"status": "UNKNOWN", "reason": "route_or_pose_unavailable"}
     confidence = 0.0
     try:
+        age, updated = float(pose["age_s"]), float(trip["pose_observed_at"])
+        # Fleet and AI PC use wall time; allow only 0.5 s clock skew, never replay a frozen trip.
+        if not all(math.isfinite(v) for v in (now, age, updated)) or age < 0 or updated > now + 0.5:
+            raise ValueError("invalid pose timestamp")
+        age += max(0.0, now - updated)
+        evidence["pose_age_s"] = age
         if (route_map and route_map.get("version") == trip.get("map_version")
-                and pose.get("state") == "LOCALIZED" and float(pose["age_s"]) <= 1.5):
+                and pose.get("state") == "LOCALIZED" and age <= 1.5):
             x, y = float(pose["x"]), float(pose["y"])
             body_half_width = float(trip["body_half_width_m"])
             if not all(math.isfinite(v) for v in (x, y, body_half_width)) or body_half_width <= 0:

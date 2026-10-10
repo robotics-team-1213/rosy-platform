@@ -4,7 +4,7 @@
 
 | 항목 | 읽은 값 | 출발 판정 |
 |---|---|---|
-| Fleet 설치 | `rosy-site-fleet:d81cfad3555cddb8b0b24eeccc69e7ade5eb5371`, 컨테이너 healthy | Git의 이번 후보 `c785edc7f`는 설치 SHA의 조상이 아니다. 유한 한 바퀴 변경 미설치 |
+| Fleet 설치 | `rosy-site-fleet`, installed commit `d81cfad3555cddb8b0b24eeccc69e7ade5eb5371`, 컨테이너 healthy | Git의 이번 후보 `c785edc7f`는 설치 SHA의 조상이 아니다. 유한 한 바퀴 변경 미설치 |
 | 지도·trip | `map_v2_fleet` v5, 열린 trip 0 | 기존 지도는 사용 가능, 실주행 없음 |
 | AI PC | `rosy-situation` v0.2.0, `owner_mode:shared`, heartbeat present, facts 0 | 후보 v0.3.0의 `trip_route_check` 미설치 |
 | `rosy_40` | 온라인, IDLE, line-follow OFF, 지도 자세 `LOCALIZED` (-1.3300, 0.0025), `W_mid`까지 0.0352 m, 차로 WARN/몸체 여유 0.0016 m | 출발 장소 0.05 m 거리만 충족. `junction_turn:false`, 자세 yaw 약 -1.539 rad, sighting anchor age 2.13 s는 현재 시작 제한 2 s보다 큼. 방향·능력 근거 재확인 필요 |

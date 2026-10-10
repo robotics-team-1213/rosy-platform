@@ -400,3 +400,8 @@ def resolve_body(geometry: Optional[Mapping[str, Any]] = None, *, source: str = 
 PINKY_PRO = from_geometry(PINKY_PRO_GEOMETRY)
 #: D-424 URDF nominal body for a caller that names no robot kind (one kind drives today).
 NOMINAL_BODY = PINKY_PRO
+
+
+def nominal_body_for(kind: str) -> Optional[RobotBody]:
+    """Select the advertised kind's nominal body; an unknown kind has no geometry."""
+    return PINKY_PRO if kind == "pinky_pro" else None
