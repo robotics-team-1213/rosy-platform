@@ -241,7 +241,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_834,
+        51_061,
+        "split: independently re-judged at 51061 on 2026-10-10 by led_review: lane convoy uses fresh same-map Fleet guide poses and its own repeat-trip admission, while formation capability gates remain unchanged;  the formation console chooses the leader in the existing formation and motion-readiness owners, furthest along a shared map heading, otherwise the smaller robot number, then arms the existing map goal or opens the existing lane trip. card-trip.js uses the same choice for an open repeat trip. No new command path. console.js stays under the 1175 ceiling. Existing observe/server/UI split obligations and +150 remain. Previous verdict: "
         "split: independently re-judged at 50834 on 2026-10-10 by snapshot_review, excluding registered traffic, localization and stuck units; trip admission, AI wiring, drift diagnostics and UI retain their existing owners. Existing observe/server/UI split obligations and +150 remain. Previous verdict: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
         "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
         "D-511 rev 3-6 (+179) - 1707. +150 allowance measured from 49802. Previously "

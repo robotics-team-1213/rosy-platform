@@ -91,8 +91,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
 - 2026-10-10 · 79402f1f2 · fix: observation-first situation context
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · aa37d8cb6 · fix(fleet): 일정 시간 점등과 주기 재식별
-- 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
