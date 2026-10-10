@@ -706,8 +706,12 @@ SIZE_VERDICTS = {
         "D-600 (584) merged, plus the hold-stops-fill guard. (independent re-judge 2026-10-10, critic: agree - 5 over on one MOG2 owner; next growth first moves BackgroundStore to track/background_store.py with a re-export, then suspect/ghost healing). ROS-free, host-testable (X5)",
     ),
     "vision/rosy_vision/ingest.py": (
-        671,
-        "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
+        825,
+        "accept: re-judged 2026-10-10 at 825 (author's record, D-589 S1) when the camera/camera_state "
+        "text messages joined: they ride the same per-source connection and are kept per connection "
+        "like the frame; parsing lives in protocol.py and the tuning logic in track/tuning.py. The "
+        "next growth first moves the preview/proposal HTTP reads into their own module. Before: "
+        "one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
         "lifecycle, latest-frame store and the direct preview/proposal reads share one connection map); "
         "crossed 600 on 2026-10-01 when D-341 paired-credential admission and revoke closing joined the "
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
