@@ -13,10 +13,8 @@ the result afterwards. Per state:
   ``PIVOT_DONE_DEG``; the lane is 0.185 m and the Pinky sweep radius 0.088 m, so the pivot fits
   (URDF). Without ``turn_deg`` (Fleet has no heading): HOLD.
 - OFF_MAP: HOLD ``fleet_off_map`` until Fleet says otherwise (Fleet raises it to the operator).
-- ``crosswalk_ahead``: one ``fleet_map`` zone in the D-491 zone list, anchored at the odom pose
-  ``pose_age_s`` before the cue arrived (the ceiling pose's age), so the IR rest (D-491) and the
-  stop, look, cross gate (D-573) engage even when the camera zone is unstable (user, 2026-10-10:
-  zones come from both Fleet's map and the camera).
+- ``guide`` (D-511 rev 2): the lane shape ahead from Fleet's map, kept in ``lane_cue`` for the
+  keep (line_observer) to use as a prior; this module does not steer from it.
 """
 from __future__ import annotations
 
@@ -49,7 +47,6 @@ class LaneCueMixin:
                     and cue["seq"] <= old["seq"]):
                 return False, "stale"
             self._cue, self._cue_until = dict(cue), now + float(cue["ttl_s"])
-            self._add_fleet_zone(cue.get("crosswalk_ahead"), now)
             return True, None
 
     def lane_cue_status(self, now: Optional[float] = None) -> Optional[dict]:
@@ -60,17 +57,6 @@ class LaneCueMixin:
 
     def _fresh_cue(self, now: float) -> Optional[dict]:
         return self._cue if self._cue is not None and now < self._cue_until else None
-
-    def _add_fleet_zone(self, ahead, now: float) -> None:
-        """Replace this run's Fleet zone; the anchor is the odom sample nearest the ceiling pose time."""
-        if not ahead or self._fresh_pose(now) is None:
-            return
-        at = now - float(ahead.get("pose_age_s") or 0.0)
-        anchor = min(self._return_evidence.trail.samples, key=lambda p: abs(p.received_at - at))
-        self._crosswalks.add_fleet(dict(
-            epoch=self._return_evidence.epoch, stamp_ns=anchor.stamp_ns, near=float(ahead["near_m"]),
-            far=float(ahead["far_m"]), uncertainty=float(ahead["uncertainty_m"]), received_at=now,
-            anchor=anchor, left=None, right=None, source="fleet_map", id=ahead["id"]))
 
     def _lane_cue_guard(self, now: float, guard: Optional[str]) -> Optional[str]:
         """IR first: only an IR that sees nothing (clear) or is off takes the cue's side."""

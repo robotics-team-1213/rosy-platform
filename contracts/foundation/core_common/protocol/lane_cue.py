@@ -4,7 +4,8 @@
 the unexpired one as ``lane_cue``. Fleet judges it from the ceiling camera (Rosy Cam) map pose and
 the site map; it is a hint, never a permission: CORE reads it only while its own CAMERA_LINE keep
 drives (``fleet_lane_cue_enabled``) and the IR guard, the body stop and the D-573 crosswalk gate
-still win. Angles in degrees, robot frame left +.
+still win. Crosswalk zones do not travel here: they reach CORE as the D-517 authority
+``crosswalks[]`` (D-573). Angles in degrees, robot frame left +.
 """
 from __future__ import annotations
 
@@ -16,17 +17,17 @@ from pydantic import BaseModel, ConfigDict, Field
 MAX_CUE_TTL_S = 2.0
 
 
-class CrosswalkAhead(BaseModel):
-    """D-491/D-573 zone from Fleet's map: near/far edge along the lane from base_footprint at the
-    robot pose ``pose_age_s`` ago (near < 0 once inside); ``uncertainty_m`` is the ceiling pose bound."""
+class LaneGuide(BaseModel):
+    """D-511 rev 2: the lane just ahead, from Fleet's map. A prior for the keep, never a command."""
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(min_length=1, max_length=128)
-    near_m: float = Field(ge=-1, le=5, allow_inf_nan=False)
-    far_m: float = Field(ge=-1, le=6, allow_inf_nan=False)
-    uncertainty_m: float = Field(gt=0, le=0.2, allow_inf_nan=False)
-    source: Literal["fleet_map"] = "fleet_map"
-    pose_age_s: float = Field(0.0, ge=0, le=5, allow_inf_nan=False)
+    ahead_m: float = Field(gt=0, le=2, allow_inf_nan=False)
+    #: Lane direction ``ahead_m`` along the lane minus the robot heading (robot frame, left +).
+    heading_ahead_deg: Optional[float] = Field(None, ge=-180, le=180, allow_inf_nan=False)
+    curvature_1pm: float = Field(ge=-50, le=50, allow_inf_nan=False)
+    to_end_m: float = Field(ge=0, le=50, allow_inf_nan=False)
+    next_place_id: str = Field(min_length=1, max_length=128)
+    ring: bool
 
 
 class LaneCueRequest(BaseModel):
@@ -46,4 +47,4 @@ class LaneCueRequest(BaseModel):
     lane_heading_deg: Optional[float] = Field(None, ge=-180, le=180, allow_inf_nan=False)
     offset_m: Optional[float] = Field(None, ge=-10, le=10, allow_inf_nan=False)
     edge_id: Optional[str] = Field(None, max_length=128)
-    crosswalk_ahead: Optional[CrosswalkAhead] = None
+    guide: Optional[LaneGuide] = None
