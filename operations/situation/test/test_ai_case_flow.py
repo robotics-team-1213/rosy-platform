@@ -82,7 +82,10 @@ def test_deadlock_case_service_vlm_and_fleet_replan_are_connected(tmp_path):
                     "frame_id": f"{path.split('/')[4]}:cam"}
 
     def chat(_url, body, _timeout):
-        assert len(body["messages"][0]["images"]) == 4
+        if body["format"]["required"] == ["observation"]:
+            assert len(body["messages"][0]["images"]) == 1
+            return {"message": {"content": json.dumps({"observation": "A robot and floor boundaries are visible."})}}
+        assert "images" not in body["messages"][0]
         return {"message": {"content": json.dumps({"decision": "REPLAN", "robot_id": "b",
             "blocked_edges": ["y"], "confidence": 0.8,
             "assessment": {"type": "resource_conflict", "direction": "replan", "observations": {
