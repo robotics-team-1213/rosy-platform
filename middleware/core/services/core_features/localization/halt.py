@@ -47,7 +47,7 @@ def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, comman
     def on_localized() -> None:
         nav.cancel(source=SOURCE)
         if mission is not None:
-            mission.end("localized")
+            mission.localized()
 
     assist = LocalizationAssist(
         events, robot_id=robot_id, on_localized=on_localized,

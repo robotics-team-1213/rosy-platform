@@ -153,7 +153,7 @@ class TripRunner(TripAdmission, TripProgress):
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-            pose, enable = await self._pose_checks(robot_id, graph, plan["segments"], start=True)
+            pose, enable, turns = await self._start_pose(robot_id, graph, plan["segments"], principal_id)
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
@@ -190,6 +190,8 @@ class TripRunner(TripAdmission, TripProgress):
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
                     "lease": lease, "stop_moved": moved}
+            if turns:  # D-603: the alignment turns CORE made before this start
+                view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
