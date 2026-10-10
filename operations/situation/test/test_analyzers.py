@@ -69,7 +69,7 @@ def test_facts_pass_fleet_validation():
 
 
 def test_trip_route_fact_checks_only_the_planned_edge_and_reports_stale_as_unknown():
-    from fleet.server.ai_facts import AiFact
+    from fleet.stuck.ai_facts import AiFact
 
     route_map = {"version": 5, "map": {"edges": [{"id": "east", "polyline": [[0, 0], [1, 0]],
                                                  "width_m": 0.2}]}}
