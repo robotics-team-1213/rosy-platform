@@ -7685,3 +7685,9 @@ osy-d395-s1d\`.
 - 변경: 목표 트리·계획 개정의 검증 결과를 기록했다. 코드와 실제 디렉터리는 변경하지 않았다.
 - 증거: 해당 후보 커밋의 모델 PC 원격 network/harness 문서 계약 121 성공 표시·exit 0, known_failures 0 NEW/0 known. 문서 링크·목표 책임 depth≤5와 기존 append-only journal의 Git blob 보존을 확인했다.
 - gate 변화: 없음. 패키징·장치·물리 수용은 확인하지 않았고 기존 gate를 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
+
+- 변경: 사용자 요청에 따라 최대 5단계 책임 구조 방향을 D-625로 기록하고, 네 holder 이전표와 M0–M9 계획·참조 수정·Safety 리뷰·복구 절차를 먼저 작성했다. 도구 시험을 구현 전에 준비한다.
+- 증거: 기존 d427 mover/scanner·platform manifest 소비자 검토, API safety.py와 OMX owner/stop의 Safety 태그 확인. 도구 RED/GREEN은 후속 커밋에서 원격 검증한다.
+- gate 변화: 없음. 실제 제품 파일 이동·책임 추출·장치 활성화·main 착지·push는 수행하지 않는다.
