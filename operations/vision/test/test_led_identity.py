@@ -139,6 +139,14 @@ def test_two_timed_steady_lights_are_ambiguous():
     assert (result["state"], result["reason"]) == ("ambiguous", "multiple")
 
 
+def test_a_legacy_blink_and_a_timed_light_are_both_counted():
+    def lit(t):
+        return {**({LEFT: BLUE} if _blinking(t) else {}),
+                **({RIGHT: BLUE} if 1.0 <= t < 3.0 else {})}
+    result = _decide(_samples(lit))
+    assert (result["state"], result["reason"]) == ("ambiguous", "multiple")
+
+
 def test_timed_light_needs_a_continuous_blob_and_both_transitions():
     lit = lambda t: {LEFT: BLUE} if 1.0 <= t < 3.0 else {}
     assert _decide(_samples(lit, hidden=lambda t: (LEFT,) if 2.0 <= t < 3.0 else ())) ["reason"] == "none"
