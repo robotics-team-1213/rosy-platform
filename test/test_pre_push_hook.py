@@ -18,6 +18,16 @@ SCRIPT = ROOT / "tools" / "hooks" / "pre-push"
 BASH = shutil.which("bash")
 
 
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+@pytest.mark.parametrize("owed", ["first.py\nsecond.py", "first.py\r\nsecond.py\r"])
+def test_owed_suites_accept_windows_python_line_endings(owed):
+    line = next(line for line in SCRIPT.read_text(encoding="utf-8").splitlines()
+                if "mapfile -t OWED_SUITES" in line)
+    result = subprocess.run([BASH, "-c", line + '\nprintf "%s\\0" "${OWED_SUITES[@]}"'],
+                            env={**os.environ, "OWED": owed}, capture_output=True, check=True)
+    assert result.stdout == b"first.py\0second.py\0"
+
+
 @pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
 def test_hook_clears_repository_environment_before_foreign_repo_fixtures(tmp_path):
     # Exercise the actual hook initialization against disposable real Git repos.

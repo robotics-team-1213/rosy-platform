@@ -102,7 +102,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         form.locator("select").first.select_option("B")
         go = form.locator('ui-button[data-trip-start="rosy_02"]')
         assert go.get_attribute("reason") == "먼저 경로를 계산하세요"
-        form.locator("ui-button", has_text="경로 보기").click()
+        form.get_by_role("button", name="경로 보기", exact=True).click()
         _settle(page, posts, "/api/fleet/robots/rosy_02/trip")
         assert ("/api/fleet/robots/rosy_02/trip", json.dumps({"to": "B"}, separators=(",", ":"))) in posts
         expect(form).to_contain_text("1개 차로 · 2.10 m · 약 14 s · 지도 v4 · 실행하지 않음")
@@ -114,7 +114,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         assert _card(page, "rosy_02").locator(".card-trip").count() == 0
 
         form = _open_form(page, "rosy_02")
-        form.locator("select").nth(1).select_option("B")
+        form.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("B")
         form.locator('ui-button[data-trip-repeat="rosy_02"]').click()
         _settle(page, posts, "/api/fleet/trips/p2/start", 2)
         body = [json.loads(data) for path, data in posts if path == "/api/fleet/robots/rosy_02/trip"][-1]
