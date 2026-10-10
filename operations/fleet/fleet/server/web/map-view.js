@@ -20,8 +20,7 @@ import { noRobotServesGrid } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
-// A map label is the robot's short id: "rosy_012" reads "012" (the full id stays on the card and in chips
-// that already carry it).
+// Map label: the short id ("rosy_012" -> "012").
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -112,9 +111,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   let placedChips = [], pendingChips = [], markerBoxes = [], optionalChips = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-  // Many robots (10, 100): a chip that is not `important` (selected, exception, warn/crit tone) never shifts
-  // to make room; it is drawn at its own spot only if that spot is still free after every important chip,
-  // else hidden (declutter). Important chips keep the shift-and-stack rule above.
+  // Declutter: a chip not `important` (and without tone) never shifts; it shows only where still free.
   function drawChip(ctx, grid, cx, cy, text, tone, important = true) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
@@ -599,8 +596,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
-  // An id label always shows for the selected robot, a called one and a robot with an exception (view.attention,
-  // the queue's own rule, set by console.js before draw).
+  // Selected, pinning, called and 최우선 robots (view.attention, set by console.js) always keep their label.
   function labelImportant(robotId) {
     return view.selected === robotId || view.pinning === robotId || activeCall(robotId) || Boolean(view.attention?.has(robotId));
   }

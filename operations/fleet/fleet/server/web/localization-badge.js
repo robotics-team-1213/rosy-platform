@@ -56,11 +56,8 @@ export function sitePoseText(guideRow) {
   return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}`;
 }
 
-/** The card's one position chip (field check 2026-10-10: "위치 상태 미보고" read as a fault on a lane-following
- * robot whose CORE runs without Nav2). What places the robot speaks first: Fleet's site map pose (D-536 guide
- * row, D-494 3: 확정/추정 · 카메라/odom 이음); CORE's own localization only when CORE reports one; else plainly
- * "지도 위치 없음", neutral, because a missing CORE block is not a fault. A person-needed state stays critical.
- * The words come from SITE_POSE_STATE/SITE_POSE_SOURCE above (one source with sitePoseText). */
+/** The card's one position chip (2026-10-10: "위치 상태 미보고" read as a fault). Fleet's site map pose first, CORE's
+ * localization only when CORE reports one, else a neutral "지도 위치 없음"; needs_human stays critical. */
 export function positionTag(loc, guideRow) {
   if (loc?.needs_human) return localizationTag(loc);
   const pose = guideRow?.pose;

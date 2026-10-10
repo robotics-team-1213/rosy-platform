@@ -304,10 +304,8 @@ function render() {
   tripReplan.render();
 
   formation.fillLeaders();
-  // The map labels a robot with a 최우선 (crit) exception always; the rest only where they fit (declutter).
-  // Warn-only causes are often fleet-wide (one cause on 90 robots) and would force every label back on.
-  view.attention = new Set(view.robots.filter((robot) => roster.attentionItems(robot)
-    .some((item) => item.severity === "crit")).map((robot) => robot.robot_id));
+  // Map labels always show for 최우선 robots (warn causes are often fleet-wide); the rest declutter.
+  view.attention = new Set(view.robots.filter((r) => roster.attentionItems(r).some((i) => i.severity === "crit")).map((r) => r.robot_id));
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
   const hint = el("hint");
@@ -773,15 +771,11 @@ bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), l
 // D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
 const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
 const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
-// D-540 6 (user decision 2026-10-10): 전체 주행 취소는 멈춤이라 확인 없이 바로 나가고(quiet), 이름 없는 운영자에게도
-// 열려 있다. 비상 정지와 달리 래치를 걸지 않는다. 보낸 사실과 대수는 버튼 옆 한 줄로 바로 말한다.
-let cancelAllBusy = false;
+// D-540 6 (user decision 2026-10-10): a stop — no confirm, any operator, no latch; the line says it was sent.
 pageScope.listen(el("cancel-all"), "click", async () => {
-  if (auth.locked || cancelAllBusy) return;
+  if (auth.locked) return;
   const life = pageScope.capture();
-  cancelAllBusy = true;
-  const count = view.robots.length;
-  cancelAllNotice(`전체 주행 취소를 보냈습니다 · ${count}대 · 응답 기다리는 중`);
+  cancelAllNotice(`전체 주행 취소를 보냈습니다 · ${view.robots.length}대 · 응답 기다리는 중`);
   try {
     const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [life.signal] });
     if (!life.current()) return;
@@ -811,8 +805,6 @@ pageScope.listen(el("cancel-all"), "click", async () => {
       ? "주행 취소 결과 확인 불가 — Fleet 연결과 로봇 상태를 다시 확인하세요."
       : `주행 취소 요청 거절 — ${err.message}`);
     log(`전체 주행 취소 실패 — ${err.message}`, "bad");
-  } finally {
-    cancelAllBusy = false;
   }
 });
 

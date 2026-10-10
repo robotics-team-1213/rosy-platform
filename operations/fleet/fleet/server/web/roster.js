@@ -87,7 +87,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     if (nav === "ARRIVED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "ok" };
     if (nav === "FAILED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "crit" };
-    // IDLE 항법은 "대기"라서 모드 태그의 "대기"와 겹친다. 카드에서는 목표가 없다고 말한다.
+    // Navigation IDLE would repeat the mode tag's "대기".
     return { text: nav === "IDLE" ? "목표 없음" : enumLabel(NAVIGATION_LABEL, nav), cls: "" };
   }
 
@@ -170,8 +170,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     head.append(robotName);
     if (displayName !== robot.robot_id) head.append(nodeWithText("small", "hint", `Fleet ID ${robot.robot_id}`));
     head.append(spacer);
-    // D-359 US-009 / D-540 6 — 모드 글은 공용 표, 열거값은 title에만 둔다. 차선 추종이 켜져 있으면 그것이
-    // 로봇을 움직이는 모드라서 CORE 모드(대개 IDLE "대기") 대신 차선 추종 방식을 말한다.
+    // D-540 6: mode words from the shared table (enum in title); lane following, when on, is the mode shown.
     const lane = state.line_follow || {};
     const laneOn = lane.mode === "CAMERA_LINE" || lane.mode === "IR_LINE";
     const modeTag = tag(

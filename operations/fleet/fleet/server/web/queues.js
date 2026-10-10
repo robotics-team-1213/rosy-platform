@@ -20,9 +20,7 @@ export function queueRowText(text, named) {
   return named ? text : text.replace(/^:\s*/, "");
 }
 
-/** Many robots: warn rows with the same cause become one row ("배터리 근거 확인 불가 · 9대 (…)") so one fleet-wide
- * cause does not bury the rest. Decision rows never group; a cause on one robot stays its own row. The group
- * keeps the first row's place. Critical rows are not passed here (they stay one per robot, first). */
+/** One warn cause on several robots is one row (decision rows never group; crit rows are not passed here). */
 export function groupRows(rows, min = 2) {
   const same = new Map();
   for (const row of rows) if (!row.decision) same.set(row.text, [...(same.get(row.text) || []), row]);
@@ -30,10 +28,9 @@ export function groupRows(rows, min = 2) {
   for (const row of rows) {
     const group = row.decision ? null : same.get(row.text);
     if (!group || group.length < min) { out.push(row); continue; }
-    if (done.has(row.text)) continue;
+    if (!done.has(row.text)) out.push({ severity: row.severity, text: row.text, robotId: "",
+      group: group.map((r) => r.robotId), key: `group|${row.text}` });
     done.add(row.text);
-    out.push({ severity: row.severity, text: row.text, robotId: "", group: group.map((r) => r.robotId),
-               key: `group|${row.text}` });
   }
   return out;
 }
@@ -180,16 +177,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
   function attentionKey(robot) {
     return view.stateUnavailable ? "" : attentionItems(robot).map((item) => item.text.replace(/\d+/g, "#")).join("|");
   }
-  // D-252: 큐 머리는 ui-triage. <b>는 범주+로봇 수다. D-540 3: 로봇 이름은 행에서 한 번만 쓴다 — 머리에
-  // 이름을 다시 늘어놓으면 "rosy_03 / rosy_03: 판단 요청"처럼 두 번 읽힌다(2026-10-10 walkthrough).
+  // D-252 ui-triage head: category + robot count. D-540 3: names only in the rows (title keeps them).
   function setTriageHead(id, label, rows) {
     const head = el(id);
     if (!head) return;
     const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
     head.querySelector("b").textContent = `${label} ${names.size}`;
-    const small = head.querySelector("small");
-    small.textContent = "";
-    small.title = [...names].join(" · ");
+    Object.assign(head.querySelector("small"), { textContent: "", title: [...names].join(" · ") });
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
@@ -235,8 +229,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     }
   }
 
-  // One row for one cause on many robots; the list of every robot opens under it (native disclosure, kept
-  // across polls because the row is kept by key).
+  // A grouped row opens (native disclosure, kept by key across polls) to every robot's name.
   function groupRow(li, row) {
     if (!li || li.dataset.group !== "1") {
       li = document.createElement("li");
