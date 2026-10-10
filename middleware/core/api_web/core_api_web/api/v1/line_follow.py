@@ -347,7 +347,9 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         # calibration lease like POST /mode does; checked before the stuck is consumed.
         # WAIT holds and ABORT goes to IDLE, so they stay open like e-stop.
         require_calibration_owner(svc, auth, "line-follow stuck decision")
-    if body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD") and (
+    # Only WAIT holds. ABORT/MANUAL change the mode, which EMERGENCY refuses (only
+    # release leaves it), so refuse them here before the stuck is consumed.
+    if body.decision != "WAIT" and (
             svc.safety.estop or svc.modes.is_emergency):
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     try:

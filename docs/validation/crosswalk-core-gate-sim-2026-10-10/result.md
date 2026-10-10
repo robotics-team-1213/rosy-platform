@@ -83,3 +83,19 @@
 - 하지 않은 것(MINOR): LaserScan 헤더 시각으로 스캔 나이 재기, 곡선에서 출구 띠를 몸 방향으로 두기.
 
 원시 기록: [`evidence/xgate_runs4.tgz`](evidence/xgate_runs4.tgz).
+
+## D-573 개정 3 (`feat/crosswalk-clear-5s` `80b3858c3`): 5 s 계속 비면 건넘
+
+- 같은 하네스를 작업공간 `~/rosy_xclear_ws`, ROS 도메인 67, `GZ_PARTITION rosy_xclear`, CORE 8667, Fleet 8668로 격리했다(`xgate_*.sh`의 `xgate`→`xclear` 치환본, `SIGMA=0.0035`). 모델 PC는 `remote_pytest.py --pick sim`이 골랐다.
+- 하네스만 고침(저장소 아님): D-601 `TRIP_LANE_CAMERA_UNAVAILABLE` 때문에 작업공간 `lap_fleet.py`에 `TripConfig(lane_camera_check=False)`를 넣었다(SIM에는 앞 카메라 미리보기가 없다).
+- 설정은 기본값(`crosswalk_clear_s` 5.0, `crosswalk_look_min_scans` 40, `crosswalk_report_s` 10).
+
+| 회 | 보행자 | `looking` 시작 → `crossing` (sim s) | 끝 |
+|---|---|---|---|
+| empty_01 | 없음 | 266.2 → 271.7 (5.5 s) | 지나감, 막힘 없음 |
+| empty_02 | 없음 | 360.0 → 365.3 (5.3 s) | 지나감, 막힘 없음 |
+| legs_01 | 다리 0.60 m | 297.2 → 건너지 않음, 297.6 `person_present` | 섬(보행자까지 0.094 m), 307.4 `crosswalk_blocked` |
+| fig150_01 | 인형 0.15 m | 328.0 → 건너지 않음, 328.3 `person_present` | 섬(0.096 m), 338.1 `crosswalk_blocked` |
+
+- `looking` 시작에서 건넘까지 5 s를 넘는 부분은 완전히 선 것을 odom으로 확인하는 시간이다. 출발 직후 `camera_line_not_visible`·`stuck_back_off`는 기준선에도 있는 선 놓침이고 게이트와 관계없다.
+- 원시 기록: [`evidence/xclear_runs.tgz`](evidence/xclear_runs.tgz).

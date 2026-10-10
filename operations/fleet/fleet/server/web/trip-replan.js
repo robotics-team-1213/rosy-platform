@@ -31,8 +31,9 @@ export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named 
     if ((fact.robot_ids || []).includes(robotId) && !(newest.get(key)?.observed_at > fact.observed_at)) newest.set(key, fact);
   }
   const facts = [...newest.values()];
-  lines.push(...(facts.length ? facts.map((fact) => `AI 참고 · ${AI_FACT_LABEL[fact.kind] || fact.kind} · `
-    + `${fact.robot_ids.join(", ")} · 신뢰도 ${Math.round(fact.confidence * 100)}%`) : ["AI 사실 없음"]));
+  lines.push(...(facts.length ? facts.map((fact) => `AI 참고 · ${AI_FACT_LABEL[fact.kind] || fact.kind}`
+    + `${fact.kind === "wait_cycle_confirmed" && fact.value?.fleet_agrees === false ? " (Fleet 순환과 불일치)" : ""}`
+    + ` · ${fact.robot_ids.join(", ")} · 신뢰도 ${Math.round(fact.confidence * 100)}%`) : ["AI 사실 없음"]));
   const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : "";
   const held = trip?.hold?.reason === "replan" && trip.hold.plan;
   return { lines, confirmReason: lock || named || (!trip ? "열린 운행이 없습니다" : held ? "" : "확인할 바뀐 경로가 없습니다"),
