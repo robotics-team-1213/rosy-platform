@@ -107,7 +107,7 @@ def test_progress_closes_it_as_cleared():
     m, events = _manager()
     _drive(m, 0.0, 6.0)
     assert m.status().stuck is not None
-    _drive(m, 6.0, 10.0, x=lambda t: 0.03 * (t - 6.0))
+    _drive(m, 6.0, 12.0, x=lambda t: 0.03 * (t - 6.0))                  # a body length in 5 s
     assert [c["reason"] for c in events.named("nav.line_stuck_closed")] == ["cleared"]
     assert m.status().stuck is None
 
@@ -163,3 +163,19 @@ def test_watch_needs_a_full_window_and_a_turn_is_progress():
         if t < 5.0:
             assert w.cause(t, 5.0, 0.059, 0.5236, 20.0, 0.30) is None    # less odom than the window
     assert w.cause(5.0, 5.0, 0.059, 0.5236, 20.0, 0.30) is None          # 1 rad turned: moving
+
+
+def test_a_d468_owned_tick_still_opens_it():
+    """D-468 owns the tick (8kcn space_or_floor_unconfirmed, 2026-10-10): D-407 is not stepped, yet the stuck opens."""
+    m, events = _manager()
+    t = 0.0
+    while t < 6.0:
+        stamp = round(t * 1e9)
+        m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                              received_at=t)
+        m.note_issued(0.03 if t < 1.0 else 0.0, 0.0, t)                # one push, then D-468 holds
+        t = round(t + 0.05, 6)
+    with m._lock:
+        m._local_owned_tick(6.0)
+    assert [o["cause"] for o in events.named("nav.line_stuck_opened")] == ["no_progress"]
+    assert m.status().stuck.cause == "no_progress"

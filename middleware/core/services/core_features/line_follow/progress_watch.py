@@ -13,16 +13,15 @@ def _flips(values, eps):
 
 class ProgressWatch:
     def __init__(self):
-        self._s, self._key, self.cause_now, self.reason = deque(), None, None, None
+        self.reset()
 
     def reset(self, key=None):
-        self._s.clear()
-        self._key, self.cause_now, self.reason = key, None, None
+        self._s, self._key, self.cause_now, self.reason = deque(), key, None, None
 
     def note(self, t, key, x, y, yaw, v, w, reason, keep_s):
-        s = self._s
-        if key != self._key or (s and t <= s[-1][0]):
+        if key != self._key or (self._s and t <= self._s[-1][0]):
             self.reset(key)  # new odom run or clock step: travel across it is unknown
+        s = self._s
         u = yaw if not s else s[-1][3] + math.remainder(yaw - s[-1][3], math.tau)  # unwrapped yaw
         s.append((t, x, y, u, v, w))
         while len(s) > 1 and s[1][0] <= t - keep_s:
@@ -40,10 +39,11 @@ class ProgressWatch:
     def cause(self, now, win_s, max_m, max_yaw, drift_s, drift_m):
         """None | "no_progress" | "dithering"; once fired it holds until odom shows progress again."""
         still, drift = self._still(now, win_s, max_m, max_yaw), self._still(now, drift_s, drift_m, math.inf)
-        self.cause_now = self.cause_now if still or drift else None
-        if self.cause_now is None and (still or drift):
+        stuck = (still or drift) and self._still(now, win_s, 2 * max_m, math.inf)  # a body length per window: progress
+        self.cause_now = self.cause_now if stuck else None
+        if self.cause_now is None and stuck:
             win = [p for p in self._s if p[0] > now - (win_s if still else drift_s)]
-            if sum(abs(p[4]) > V_EPS or abs(p[5]) > W_EPS for p in win) >= SHARE * len(win) > 0:
+            if sum(abs(p[4]) > V_EPS or abs(p[5]) > W_EPS for p in win) >= (1 if still else SHARE * len(win) or 1):
                 flips = _flips((p[4] for p in win), V_EPS) + _flips((p[5] for p in win), W_EPS)
                 self.cause_now = "dithering" if still and flips >= 2 else "no_progress"
         return self.cause_now

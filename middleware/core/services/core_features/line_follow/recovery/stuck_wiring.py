@@ -19,7 +19,7 @@ from core_features.line_follow.clearance import (Point, body_clearances, body_en
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
 from core_features.line_follow.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
-from core_features.line_follow.recovery.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck_recovery import REPORT_ONLY, ForwardTrail, StuckInput, StuckRecovery
 
 #: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
 #: the fail-closed default: no console link, a calibration session, a zero linear limit.
@@ -165,6 +165,14 @@ class StuckRecoveryMixin:
         self._trail.clear()
         self._still_since = None
         self._progress.reset()
+
+    def _local_owned_tick(self, now: float) -> None:
+        """D-468 owns the tick: no_motion restarts, but D-607 no_progress/dithering still opens (D-468 then hands back)."""
+        self._still_since = None
+        inp = self._stuck_input(now)
+        if self._recovery.stuck_id is None and inp.cause in REPORT_ONLY:
+            self._recovery.step(inp)
+            self._status = self._status.model_copy(update={"stuck": self._stuck_status(now)})
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
                        principal_ref: Optional[str] = None, now: Optional[float] = None,

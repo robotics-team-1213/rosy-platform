@@ -485,7 +485,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                         current, self._junction_gate(current, decision)))
                 local = self._apply_lane_return(current, decision)
                 if local is not None:
-                    self._still_since = None  # D-468 owns the tick: no_motion restarts
+                    self._local_owned_tick(current)  # D-468 owns the tick: no_motion restarts (stuck_wiring)
                 return self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
                     current, local if local is not None else self._apply_recovery(current, decision))))
             finally:
