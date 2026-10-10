@@ -14,6 +14,7 @@ from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
 from core_features.line_follow.crosswalk_report import CrosswalkReportMixin
+from core_features.line_follow.lane_cue import LaneCueMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
@@ -32,7 +33,7 @@ from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recover
 
 
 class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
-                        ArcMixin, CrosswalkGateMixin, CrosswalkReportMixin):
+                        ArcMixin, CrosswalkGateMixin, CrosswalkReportMixin, LaneCueMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -79,6 +80,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._init_authority()  # D-517 4 (authority.py)
         self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
         self._init_crosswalk_report()  # D-573 6 (crosswalk_report.py)
+        self._init_lane_cue()  # D-511 rev 1 (lane_cue.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -269,6 +271,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             return self._status.model_copy(update={'crosswalk': None if zone is None else LineCrosswalkStatus(**zone),
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
+                                                   'lane_cue': self._fresh_cue(self._clock()),
                                                    'route_context': self._route_context_current,
                                                    'route_context_published_at_s':
                                                    self._route_context_published_at_s})
@@ -561,6 +564,12 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             if guard == "centre" and not self._camera_turning_in_place(cap):
                 # D-344 §12 개정: a camera turn in place sweeps the IR row ~0.03 m; it does not cross.
                 return self._stop_decision("HOLD", "lane_departure")
+        if self._mode is LineFollowMode.CAMERA_LINE and self._config.fleet_lane_cue_enabled:
+            # D-511 rev 1: after the obstacle, stale-IR and centre stops; IR edges still win.
+            override = self._lane_cue_override(current, cap)
+            if override is not None:
+                return override
+            guard = self._lane_cue_guard(current, guard)
         if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
                       if self._mode is LineFollowMode.CAMERA_LINE
