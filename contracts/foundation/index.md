@@ -37,6 +37,7 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 181b569b5 · fix(discovery): 빈 검색 캐시 재사용
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · uncommitted · fix: nominal body selection

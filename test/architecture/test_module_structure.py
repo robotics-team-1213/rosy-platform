@@ -179,8 +179,11 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        2800,
-        "accept: measured at 2800 on 2026-10-10 after the named reports seam in "
+        2952,
+        "accept: independently re-judged at 2952 on 2026-10-10 by review_fleet_corner: D-619 adds "
+        "30 net lines above 6512cb70f for shared assessment validation, raw frame provenance, inquiry "
+        "and timestamped task context in existing owners. No new size unit; +150 allowance unchanged. "
+        "Previously measured at 2800 on 2026-10-10 after the named reports seam in "
         "docs/plans/2026-10-10-fleet-stuck-subpackage.md was applied: LineStuckAnswerLog and _resolution "
         "are in reports.py, board.py keeps memory state. D-610 separates AI policy, case transport, "
         "problem watch, outcome tracking and episode storage into existing small owner files; "
