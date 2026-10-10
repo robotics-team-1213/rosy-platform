@@ -51,7 +51,7 @@ def _real(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def geometry_error(profile, intervals, *, overridden=()):
+def geometry_error(profile, intervals, *, overridden=(), override_bounds=None):
     """(pitch_rad, height_m, roll_rad, detector_px) error bounds of the ground from ``profile``, or None.
 
     ``intervals`` are the accepted camera_profile record's (None = no record, the URDF
@@ -65,10 +65,14 @@ def geometry_error(profile, intervals, *, overridden=()):
     A stated systematic is added to each band, whatever the steps. A band that is not positive,
     or a fit_step or systematic that is not three non-negative reals, is refused. The ground ignores roll, so a
     record's fitted roll is error too. An operator override of pitch or height states no
-    error: None.
+    error: None, unless ``override_bounds`` {pitch_uncertainty_rad, height_uncertainty_m} states the
+    accepted record's bands with it (user 2026-10-10: crosswalk zones must reach CORE on NOMINAL
+    ground with accepted calibration overrides, D-491 amendment); roll keeps the profile's bound.
     """
     if {"pitch_rad", "height_m"} & set(overridden):
-        return None
+        if not override_bounds:
+            return None
+        profile, intervals = {**profile, **override_bounds}, None
     px = profile.get("detector_lateral_px")
     if not (_real(px) and px > 0):
         return None
@@ -165,8 +169,25 @@ def projection_uncertainty_m(ground, error, segments):
     return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
+#: base_link x where the along-track crosswalk error is stated on frames without a zone
+CROSSWALK_REFERENCE_X_M = 0.25
+
+
+def crosswalk_along_uncertainty_m(ground, error, x_m):
+    """D-573 6 amendment: worst-case along-track error (m) of a floor point x_m ahead of the lens:
+    height band / tan(theta) + (pitch band + detector rows / f) * h / sin^2(theta), theta the ray's
+    depression. Linear sum of the three, not 1-sigma (8kcn record: 0.022 m at 0.16 m, 0.058 m at
+    0.33 m). None without a stated geometry error."""
+    if error is None or not x_m > 0:
+        return None
+    pitch_e, height_e, _roll_e, px = error
+    theta = math.atan2(ground.height_m, x_m)
+    lever = ground.height_m / math.sin(theta) ** 2
+    return min(height_e / math.tan(theta) + (pitch_e + px / ground.focal_px) * lever, 1.0)
+
+
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
-                        paint_half_width_m=PAINT_HALF_WIDTH_M):
+                        paint_half_width_m=PAINT_HALF_WIDTH_M, crosswalk_uncertainty=False):
     paint_half_width_m = paint_half_width(paint_half_width_m)
     if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO"):
         return None
@@ -214,4 +235,10 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
     if keeper.get("crosswalk") is not None:  # D-491 §4: CORE decides whether it may rest the IR guard
         near, far = keeper["crosswalk"]
         payload["crosswalk"] = dict(near_m=float(near), far_m=float(far))
+    if crosswalk_uncertainty:
+        # every frame the detector ran: at the zone's far edge, else at the lookahead the zone would be
+        far = keeper["crosswalk"][1] if keeper.get("crosswalk") is not None else CROSSWALK_REFERENCE_X_M
+        payload["crosswalk_uncertainty_m"] = crosswalk_along_uncertainty_m(
+            ground, (0., 0., 0., GAZEBO_DETECTOR_LATERAL_PX) if source == "GAZEBO" else geometry_bounds,
+            float(far) - camera_x)
     return payload

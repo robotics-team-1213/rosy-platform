@@ -27,12 +27,13 @@ class Clock:
 
 
 class Robot:
-    def __init__(self, color="amber"):
-        self.calls, self.color = [], color
+    def __init__(self, color="amber", prefix="req"):
+        self.calls, self.color, self.prefix = [], color, prefix
 
-    async def identify_lamp(self, color=None):
+    async def identify_lamp(self, color=None, quiet=False):
         self.calls.append(color)
-        return {"accepted": True, "request_id": f"req-{len(self.calls)}", "color": color or self.color}
+        self.quiet = quiet
+        return {"accepted": True, "request_id": f"{self.prefix}-{len(self.calls)}", "color": color or self.color}
 
 
 def _setup(config=IdentityConfig()):
@@ -73,27 +74,56 @@ def _confirm(clock, tracking, identity, robot_id="rosy_60"):
     return started, _verdict(identity, started["request_id"])
 
 
-def test_one_moving_unconfirmed_robot_at_a_time_in_its_own_colour():
+def test_a_standing_robot_is_asked_in_blue():
+    """D-596 1: no IDENTIFY_NOT_MOVING; the robot is never told to move. D-596 7: blue first."""
     clock, tracking, identity, robots = _setup()
-    with pytest.raises(IdentityError) as parked:
-        asyncio.run(identity.request("rosy_60"))
-    assert parked.value.code == "IDENTIFY_NOT_MOVING" and robots["rosy_60"].calls == []
     with pytest.raises(IdentityError) as unknown:
         asyncio.run(identity.request("rosy_99"))
     assert unknown.value.status_code == 404
-    _moving(tracking, clock, "rosy_26", "rosy_60")
-    started = asyncio.run(identity.request("rosy_60"))
-    assert robots["rosy_60"].calls == [None]  # the robot picks its configured colour
-    assert started["color"] == "amber" and started["not_after"] - clock.now == 6.0
+    started = asyncio.run(identity.request("rosy_60"))  # no state at all: parked
+    assert robots["rosy_60"].calls == ["blue"] and robots["rosy_60"].quiet is False  # operator: chirps
+    assert started["color"] == "blue" and started["not_after"] - clock.now == 6.0
     assert tracking.config_for(AUTH)["identity_challenge"] == {
-        "request_id": "req-1", "color": "amber", "not_before": 1000.0, "not_after": 1006.0}
-    with pytest.raises(IdentityError) as busy:
-        asyncio.run(identity.request("rosy_26"))
-    assert busy.value.code == "IDENTIFY_BUSY" and robots["rosy_26"].calls == []
+        "request_id": "req-1", "color": "blue", "not_before": 1000.0, "not_after": 1006.0}
+    with pytest.raises(IdentityError) as again:
+        asyncio.run(identity.request("rosy_60"))
+    assert again.value.code == "IDENTIFY_BUSY" and robots["rosy_60"].calls == ["blue"]
     clock.now += 8.1  # window + grace over without a verdict
-    assert tracking.config_for(AUTH)["identity_challenge"] is None
-    _moving(tracking, clock, "rosy_26")
-    assert asyncio.run(identity.request("rosy_26"))["color"] == "blue"
+    assert tracking.config_for(AUTH)["identity_challenges"] == []
+
+
+def test_two_robots_on_one_source_blink_in_parallel_in_different_colours():
+    """D-596 1: one request per colour per source; the second robot is asked for the free colour."""
+    clock, tracking, identity, robots = _setup()
+    robots["rosy_26"] = Robot("amber", prefix="b26")
+    first = asyncio.run(identity.request("rosy_60"))
+    second = asyncio.run(identity.request("rosy_26"))   # an operator gets amber while blue is busy
+    assert (first["color"], second["color"]) == ("blue", "amber")
+    assert robots["rosy_26"].calls == ["amber"]
+    challenges = tracking.config_for(AUTH)["identity_challenges"]
+    assert [(c["request_id"], c["color"]) for c in challenges] == [("req-1", "blue"), ("b26-1", "amber")]
+    assert {p["robot_id"] for p in identity.snapshot()["pendings"]} == {"rosy_60", "rosy_26"}
+    clock.now += 6.2
+    _detections(tracking, clock, (1.05, 1.0), (2.0, 1.0))
+    assert _verdict(identity, "req-1")["robot_id"] == "rosy_60"
+    assert identity.confirmed_track_pose("rosy_60")["state"] == "CONFIRMED"
+    assert [p["robot_id"] for p in identity.snapshot()["pendings"]] == ["rosy_26"]
+
+
+def test_a_third_colour_request_on_a_busy_source_is_refused():
+    clock, tracking, identity, robots = _setup()
+    robots["rosy_70"] = Robot("blue")
+    tracking.sources = (SightingSource(source_id="ceiling_north", token="tok-north",
+                                       robot_ids=("rosy_26", "rosy_60", "rosy_70"), map_id="map_v2_fleet",
+                                       calibration_revision="cal-1", corner_marker_ids=None),)
+    asyncio.run(identity.request("rosy_60"))
+    with pytest.raises(IdentityError) as same:
+        asyncio.run(identity.request("rosy_26", "blue"))
+    assert same.value.code == "IDENTIFY_BUSY" and robots["rosy_26"].calls == []
+    asyncio.run(identity.request("rosy_26"))
+    with pytest.raises(IdentityError) as full:
+        asyncio.run(identity.request("rosy_70"))
+    assert full.value.code == "IDENTIFY_BUSY" and robots["rosy_70"].calls == []
 
 
 def test_a_matched_verdict_binds_the_continuing_track_for_d511_only():
@@ -156,19 +186,19 @@ def test_verdicts_that_do_not_fit_bind_nothing():
     assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
 
 
-def test_window_is_capped_at_six_seconds_and_auto_is_off_by_default():
+def test_window_is_capped_at_six_seconds_and_auto_is_on_by_default():
     with pytest.raises(ValueError):
         IdentityConfig(window_s=7.0)
     with pytest.raises(ValueError):
         IdentityConfig.from_mapping({"window": 3})
-    assert IdentityConfig().auto_request is False
-    clock, tracking, identity, robots = _setup()
+    assert IdentityConfig().auto_request is True and IdentityConfig().auto_min_interval_s == 30.0
+    clock, tracking, identity, robots = _setup(IdentityConfig(auto_request=False))
     _moving(tracking, clock, "rosy_26")
-    assert asyncio.run(identity.tick()) is None and robots["rosy_26"].calls == []
-    clock, tracking, identity, robots = _setup(IdentityConfig(auto_request=True))
-    _moving(tracking, clock, "rosy_60")
-    assert asyncio.run(identity.tick())["robot_id"] == "rosy_60"
-    assert robots["rosy_26"].calls == []  # parked: not asked
+    assert asyncio.run(identity.tick()) == [] and robots["rosy_26"].calls == []
+    clock, tracking, identity, robots = _setup()
+    _moving(tracking, clock, "rosy_26", "rosy_60")
+    assert asyncio.run(identity.tick()) == []  # moving alone is no trigger any more (D-596 2)
+    assert robots["rosy_26"].calls == robots["rosy_60"].calls == []
 
 
 def test_verdict_and_readback_routes():
@@ -218,3 +248,34 @@ def test_a_future_stamped_track_reports_its_negative_age():
     _confirm(clock, tracking, identity)
     clock.now -= 0.2                       # the site clock is behind the detection stamp
     assert identity.confirmed_track_pose("rosy_60")["age_s"] == pytest.approx(-0.2)
+
+
+class Error404(Exception):
+    status = 404
+
+
+def test_a_refused_blink_ends_the_window_with_the_robot_s_reason():
+    """D-596 rev 2026-10-10: CORE says rosy-face refused (caution); Fleet closes the window with that
+    reason instead of a silent ``none``. A CORE without the route (404) keeps the old behaviour."""
+    clock, tracking, identity, robots = _setup()
+    answers = {"rosy_60": [{"state": "pending"}, {"state": "refused", "reason": "CAUTION_ACTIVE"}]}
+
+    async def result(robot_id, request_id):
+        answer = answers[robot_id]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer.pop(0)
+    robots["rosy_60"].identify_lamp_result = lambda request_id: result("rosy_60", request_id)
+    robots["rosy_26"].identify_lamp_result = lambda request_id: result("rosy_26", request_id)
+    answers["rosy_26"] = Error404()
+    asyncio.run(identity.request("rosy_60"))
+    asyncio.run(identity.request("rosy_26"))
+    asyncio.run(identity.poll_lamps())                        # pending: the window stays open
+    assert {p["robot_id"] for p in identity.snapshot()["pendings"]} == {"rosy_60", "rosy_26"}
+    asyncio.run(identity.poll_lamps())                        # refused: closed with the reason
+    assert [p["robot_id"] for p in identity.snapshot()["pendings"]] == ["rosy_26"]
+    row = identity.confirmed_track_pose("rosy_60")
+    assert row["state"] == "UNKNOWN" and row["reason"] == "lamp_refused"
+    assert identity.snapshot()["robots"][1]["last"]["lamp_reason"] == "CAUTION_ACTIVE"
+    asyncio.run(identity.poll_lamps())                        # old CORE: asked once, window untouched
+    assert identity._pending["rosy_26"].lamp == "unsupported"

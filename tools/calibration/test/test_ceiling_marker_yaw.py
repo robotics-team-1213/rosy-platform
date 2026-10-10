@@ -51,3 +51,29 @@ def test_travel_direction_follows_time_not_the_axis_sign():
 def test_refuses_a_drive_it_cannot_trust(rows, message):
     with pytest.raises(EstimateError, match=message):
         estimate(rows)
+
+
+def test_offline_frames_in_capture_order(tmp_path, monkeypatch):
+    """--frames: every recorded JPEG goes through frame_sample with its size and mtime."""
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    import os
+
+    import ceiling_marker_yaw as tool
+
+    for i in range(3):
+        path = tmp_path / f"{i:03d}.jpg"
+        cv2.imwrite(str(path), np.zeros((72, 128), np.uint8))
+        os.utime(path, (1000.0 + i, 1000.0 + i))
+    (tmp_path / "bad.jpg").write_bytes(b"not a jpeg")
+    seen = []
+
+    def fake(record, jpeg, size, captured_at, *, source, marker, heading_edge):
+        seen.append((size, captured_at, source, marker, heading_edge))
+        return None if captured_at == 1001.0 else (captured_at, 0.0, 0.0, 0.0)
+
+    monkeypatch.setattr(tool, "frame_sample", fake)
+    rows = tool.collect_offline(str(tmp_path), {"map_id": "m"}, source="ceiling_north", marker=41,
+                                heading_edge=(0, 1))
+    assert [r[0] for r in rows] == [1000.0, 1002.0]
+    assert seen[0] == ((128, 72), 1000.0, "ceiling_north", 41, (0, 1)) and len(seen) == 3

@@ -37,9 +37,46 @@ sealed interface ServerMessage {
         val rxFps: Double,
         val dropped: Long,
     ) : ServerMessage
+
+    /**
+     * D-589 5: Vision asks for these camera settings. The phone clamps them to its allow-list and the device
+     * ([io.github.livsbittt.rosy.cam.camera.RecognitionTuning]); [antibanding] is "60hz" or "auto".
+     */
+    data class Camera(
+        val seq: Long,
+        val ev: Int,
+        val aeLock: Boolean,
+        val awbLock: Boolean,
+        val maxExposureUs: Long?,
+        val antibanding: String,
+    ) : ServerMessage
+
+    /** A `camera` message that failed strict parsing; logged and ignored, never a link error. */
+    data class BadCamera(val reason: String) : ServerMessage
     data class Unknown(val type: String) : ServerMessage
     data class Invalid(val reason: String) : ServerMessage
 }
+
+/** D-589 5: `camera_state.applied`, the settings the camera really runs with, and why ([mode]). */
+data class CameraApplied(
+    val ev: Int,
+    val aeLock: Boolean,
+    val awbLock: Boolean,
+    val maxExposureUs: Long?,
+    val antibanding: String,
+    val mode: String,
+)
+
+/** D-589 5: `camera_state.supported`, what this camera can do. [maxExposureUs] is the shortest reachable cap. */
+data class CameraSupported(
+    val evMin: Int,
+    val evMax: Int,
+    val evStep: Double,
+    val aeLock: Boolean,
+    val awbLock: Boolean,
+    val maxExposureUs: Long?,
+    val antibanding60hz: Boolean,
+)
 
 /** rosy-overhead/1 text messages (design section 3). Uses org.json, which Android ships. */
 object Protocol {
@@ -115,6 +152,7 @@ object Protocol {
         return when (val type = obj.optString("type")) {
             "config" -> parseConfig(obj)
             "status" -> parseStatus(obj)
+            "camera" -> parseCamera(obj)
             else -> ServerMessage.Unknown(type)
         }
     }
@@ -142,6 +180,71 @@ object Protocol {
     } catch (e: JSONException) {
         ServerMessage.Invalid("status")
     }
+
+    /**
+     * D-589 5, strict: every key present, booleans as JSON booleans, whole JSON numbers, `max_exposure_us` a
+     * positive number or null, `antibanding` "60hz" or "auto". Extra keys are ignored.
+     */
+    private fun parseCamera(obj: JSONObject): ServerMessage {
+        val seq = wholeNumber(obj, "seq")?.takeIf { it >= 0 } ?: return ServerMessage.BadCamera("seq")
+        val ev = wholeNumber(obj, "ev")?.takeIf { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }?.toInt()
+            ?: return ServerMessage.BadCamera("ev")
+        val aeLock = obj.opt("ae_lock") as? Boolean ?: return ServerMessage.BadCamera("ae_lock")
+        val awbLock = obj.opt("awb_lock") as? Boolean ?: return ServerMessage.BadCamera("awb_lock")
+        if (!obj.has("max_exposure_us")) return ServerMessage.BadCamera("max_exposure_us")
+        val maxExposureUs = if (obj.isNull("max_exposure_us")) null else
+            wholeNumber(obj, "max_exposure_us")?.takeIf { it > 0 } ?: return ServerMessage.BadCamera("max_exposure_us")
+        val antibanding = (obj.opt("antibanding") as? String)?.takeIf { it in ANTIBANDING }
+            ?: return ServerMessage.BadCamera("antibanding")
+        return ServerMessage.Camera(seq, ev, aeLock, awbLock, maxExposureUs, antibanding)
+    }
+
+    private val ANTIBANDING = setOf("60hz", "auto")
+
+    /** A JSON number (never a numeric string) with no fraction; null otherwise. */
+    private fun wholeNumber(obj: JSONObject, key: String): Long? {
+        val n = obj.opt(key) as? Number ?: return null
+        val d = n.toDouble()
+        if (d.isNaN() || d != Math.floor(d) || Math.abs(d) > 9.0e15) return null
+        return d.toLong()
+    }
+
+    /** D-589 5: uplink `camera_state`; [thermal] is PowerManager.THERMAL_STATUS_* or -1. */
+    fun cameraState(
+        seq: Long,
+        applied: CameraApplied,
+        supported: CameraSupported,
+        exposureUs: Long?,
+        iso: Int?,
+        thermal: Int,
+    ): String = JSONObject()
+        .put("type", "camera_state")
+        .put("seq", seq)
+        .put(
+            "applied",
+            JSONObject()
+                .put("ev", applied.ev)
+                .put("ae_lock", applied.aeLock)
+                .put("awb_lock", applied.awbLock)
+                .put("max_exposure_us", applied.maxExposureUs ?: JSONObject.NULL)
+                .put("antibanding", applied.antibanding)
+                .put("mode", applied.mode),
+        )
+        .put(
+            "supported",
+            JSONObject()
+                .put("ev_min", supported.evMin)
+                .put("ev_max", supported.evMax)
+                .put("ev_step", supported.evStep)
+                .put("ae_lock", supported.aeLock)
+                .put("awb_lock", supported.awbLock)
+                .put("max_exposure_us", supported.maxExposureUs ?: JSONObject.NULL)
+                .put("antibanding_60hz", supported.antibanding60hz),
+        )
+        .put("exposure_us", exposureUs ?: JSONObject.NULL)
+        .put("iso", iso ?: JSONObject.NULL)
+        .put("thermal", thermal)
+        .toString()
 
     /** Integer field that must be a whole number; null when missing or fractional. */
     private fun intField(obj: JSONObject, key: String): Int? {

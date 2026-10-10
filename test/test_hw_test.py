@@ -124,7 +124,7 @@ def _run(root: Path, system: FakeSystem) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-@pytest.mark.parametrize("action", ["identify_blue", "identify_amber"])
+@pytest.mark.parametrize("action", ["identify_blue", "identify_amber", "identify_amber_quiet"])
 def test_identity_request_only_hands_off_to_the_face_owner(tmp_path, action):
     root = _root(tmp_path, env="ROSY_LAMP_ENABLED=true")
     _request(root, action)
@@ -145,6 +145,21 @@ def test_identity_request_uses_face_owner_even_when_normal_lamp_is_off(tmp_path)
     assert _run(root, owner)["state"] == "done"
     assert owner.handoffs == [("identify_blue", "00112233445566778899aabb")]
     assert owner.lamps == []
+
+
+@pytest.mark.parametrize("reason, kept", [("CAUTION_ACTIVE", "CAUTION_ACTIVE"), ("bad reason", None), (None, None)])
+def test_an_identity_refusal_passes_the_face_reason_on_to_core(tmp_path, reason, kept):
+    """D-596 rev 2026-10-10: rosy-face's refusal code reaches hw-test.json for CORE's GET."""
+    root = _root(tmp_path, env="ROSY_LAMP_ENABLED=true")
+    _request(root, "identify_blue")
+    answer = {"schema": 1, "request_id": "00112233445566778899aabb", "action": "identify_blue",
+              "state": "failed", "detail": "거절"}
+    if reason is not None:
+        answer["reason"] = reason
+    (root / hw.HANDOFF_RESULT).parent.mkdir(parents=True)
+    (root / hw.HANDOFF_RESULT).write_text(json.dumps(answer), encoding="utf-8")
+    result = _run(root, FakeSystem(root, display="active", answer=("failed", "거절")))
+    assert result["state"] == "failed" and result.get("reason") == kept
 
 
 def test_identity_request_does_not_handoff_to_retired_display(tmp_path):

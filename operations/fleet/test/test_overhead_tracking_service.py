@@ -386,9 +386,11 @@ def test_duplicate_robot_targets_source_ids_or_tokens_are_refused(sources):
 def test_config_returns_the_approved_record_and_relearn_counter():
     service, _ = _service()
     assert service.config_for(AUTH) == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                        "calibration": None, "relearn_seq": 0, "robot_markers": {}}
+                                        "calibration": None, "relearn_seq": 0, "robot_markers": {},
+                                        "occupied": []}
     record = service.approve(dict(APPROVAL), approved_by="operator-1")
-    assert service.request_relearn("ceiling_north") == {"source_id": "ceiling_north", "relearn_seq": 1}
+    assert service.request_relearn("ceiling_north") == {"source_id": "ceiling_north", "relearn_seq": 1,
+                                                        "occupied": 0, "unlocated": ["rosy_01", "rosy_02"]}
     config = service.config_for(AUTH)
     assert config["calibration"] == record and config["relearn_seq"] == 1
     assert record["approved_by"] == "operator-1" and record["map_id"] == "map_v2_fleet"
@@ -433,6 +435,17 @@ def test_fps_counts_accepted_payloads_over_three_seconds():
     assert service.snapshot()["sources"][0]["fps"] == 2.0
 
 
+def test_source_row_carries_the_camera_tuning_while_fresh():
+    service, clock = _service()
+    service.accept(AUTH, _payload(calibration_revision="cal-v3"))
+    assert service.snapshot()["sources"][0]["tuning"] is None
+    tuning = CASES["ok_with_tuning"]["payload"]["tuning"]
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", captured_at=NOW - 0.05, tuning=tuning))
+    assert service.snapshot()["sources"][0]["tuning"] == tuning
+    clock.now += 1.1
+    assert service.snapshot()["sources"][0]["tuning"] is None
+
+
 def test_approved_revision_is_the_record_on_the_source_map_until_revoked():
     """D-587 2: the sighting service asks this for an approved_record sighting."""
     service, _ = _service()
@@ -444,3 +457,89 @@ def test_approved_revision_is_the_record_on_the_source_map_until_revoked():
     assert service.approved_revision(_source(map_id="other_map")) is None
     service.revoke("ceiling_north", principal_id="op")
     assert service.approved_revision(source) is None
+
+
+# D-600: robot regions Vision must not learn into its background.
+LOCALIZED = {"pose_frame": "map", "state": "LOCALIZED"}
+
+
+def _map_pose(x, y, *, state="LOCALIZED", map_id="map_v2_fleet", bridge=0.0, anchor="sighting"):
+    from types import SimpleNamespace
+    return SimpleNamespace(x=x, y=y, state=state, map_id=map_id, dead_reckon_m=bridge, anchor_source=anchor)
+
+
+def _regions(service):
+    regions, unlocated = service.occupied(service.sources[0])
+    return {row["robot_id"]: (row["x"], row["y"], round(row["radius_m"], 4), row["basis"]) for row in regions}, unlocated
+
+
+def test_occupied_takes_marker_then_map_pose_then_own_pose():
+    clock = _Clock()
+    service = TrackingService([_source(robot_ids=("rosy_01", "rosy_02", "rosy_03", "rosy_04"),
+                                       robot_markers=(("rosy_01", 7),))],
+                              calibrations=TrackingCalibrationStore(), clock=clock)
+    poses = {"rosy_01": _map_pose(9.0, 9.0), "rosy_02": _map_pose(2.0, 1.0, anchor="operator_pin", bridge=0.1)}
+    service.map_pose = poses.get
+    service.observe_states(_robots(rosy_01=_state(8.0, 8.0, localization=LOCALIZED),
+                                   rosy_03=_state(3.0, 1.5, localization=LOCALIZED)))
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", detections=[
+        {"x": 1, "y": 1, "footprint_m": .165, "score": 1, "marker_id": 7}]))
+    regions, unlocated = _regions(service)
+    assert regions == {"rosy_01": (1.0, 1.0, 0.1126, "marker"),
+                       "rosy_02": (2.0, 1.0, 0.2126, "operator_pin"),
+                       "rosy_03": (3.0, 1.5, 0.1626, "own_pose")}
+    assert unlocated == ["rosy_04"]
+
+
+@pytest.mark.parametrize("pose", [
+    _map_pose(2.0, 1.0, state="UNKNOWN"), _map_pose(2.0, 1.0, map_id="other_map"), _map_pose(None, None)])
+def test_an_unknown_or_foreign_map_pose_is_no_region(pose):
+    service, _ = _service()
+    service.map_pose = {"rosy_01": pose}.get
+    service.observe_states(_robots(rosy_02=_state(3.0, 1.5)))   # no LOCALIZED: not trusted either
+    assert _regions(service) == ({}, ["rosy_01", "rosy_02"])
+
+
+def test_a_long_odom_bridge_widens_the_region_up_to_a_cap():
+    service, _ = _service()
+    service.map_pose = {"rosy_01": _map_pose(2.0, 1.0, bridge=5.0)}.get
+    assert _regions(service)[0]["rosy_01"][2] == round(0.0826 + 0.03 + 0.3, 4)
+
+
+def test_unassigned_markers_and_last_ok_blobs_are_regions_until_they_age_out():
+    clock = _Clock()
+    service = TrackingService([_source()], calibrations=TrackingCalibrationStore(), clock=clock)
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", detections=[
+        {"x": 1, "y": 1, "footprint_m": .165, "score": 1, "marker_id": 9},
+        {"x": 2, "y": 1, "footprint_m": .2, "score": .3}]))
+    clock.now += 5.0   # a relearn: Vision now sends LEARNING frames without detections
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", captured_at=clock.now - 0.1,
+                                  status="LEARNING", detections=[]))
+    rows = service.occupied(service.sources[0])[0]
+    assert [(row["x"], row["basis"]) for row in rows] == [(2, "blob")]   # the marker's lease is over
+    assert rows[0]["radius_m"] == pytest.approx(0.13)
+    clock.now += 60.0
+    assert service.occupied(service.sources[0])[0] == []
+
+
+def test_fresh_unknown_floor_is_in_the_snapshot_and_the_config_names_regions():
+    clock = _Clock()
+    service = TrackingService([_source()], calibrations=TrackingCalibrationStore(), clock=clock)
+    service.map_pose = {"rosy_01": _map_pose(2.0, 1.0)}.get
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", detections=[],
+                                  unknown_floor=[{"x": 1.2, "y": 0.4, "radius_m": 0.12}]))
+    assert service.snapshot()["sources"][0]["unknown_floor"] == [{"x": 1.2, "y": 0.4, "radius_m": 0.12}]
+    assert [row["robot_id"] for row in service.config_for(AUTH)["occupied"]] == ["rosy_01"]
+    assert service.request_relearn("ceiling_north")["unlocated"] == ["rosy_02"]
+    clock.now += 1.1
+    assert service.snapshot()["sources"][0]["unknown_floor"] == []
+
+
+def test_source_row_carries_tuning_and_unknown_floor_together():
+    """D-589 x D-600: one payload carries both optional fields and the row passes both."""
+    service, _ = _service()
+    tuning = CASES["ok_with_tuning"]["payload"]["tuning"]
+    area = {"x": 1.0, "y": 0.5, "radius_m": 0.1}
+    service.accept(AUTH, _payload(calibration_revision="cal-v3", tuning=tuning, unknown_floor=[area]))
+    row = service.snapshot()["sources"][0]
+    assert row["tuning"] == tuning and row["unknown_floor"] == [area]

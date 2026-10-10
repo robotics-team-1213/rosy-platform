@@ -1,0 +1,4 @@
+H_62db9403_n1_lat0 /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 1 false 0 true
+I_62db9403_n1comp_lat300 /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 1 true 300 true
+J_28e8454d_n1_lat0 /srv/rosy/store/models/accepted/lane-seg-20261006-28e8454d 1 false 0 true
+K_62db9403_n4comp_lat0 /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 4 true 0 true

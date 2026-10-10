@@ -42,3 +42,9 @@ def test_the_scan_reaches_the_gate_only_when_enabled(enabled):
         return
     assert scan.range_min == 0.15 and len(scan.rays) == 360
     assert scan.rays[1][1] is None                  # no return stays unknown
+
+
+def test_removed_look_key_refuses_start_naming_the_new_key():
+    with pytest.raises(ValueError, match="crosswalk_look_s.*crosswalk_clear_s"):
+        _line_follow_config(dict(BODY, crosswalk_look_s=1.0))
+    assert _line_follow_config(dict(BODY, crosswalk_clear_s=6.0)).crosswalk_clear_s == 6.0

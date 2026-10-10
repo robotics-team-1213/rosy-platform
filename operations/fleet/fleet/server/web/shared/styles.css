@@ -243,6 +243,12 @@ main {
 /* 늦게 들어오는 카메라 교정 설명이 배지를 늘려 지도를 아래로 밀지 않게 한다. */
 #map-tag { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-head .spacer { flex: 1; }
+/* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
+.trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
+.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--ink-quiet); }
+.trail-control > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.trail-robots { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); } .trail-panel .hint { margin: 0; font-size: var(--text-micro); }
 @media (width < 40rem) {
   .map-head { flex-wrap: wrap; }
   #map-tag { flex: 1 1 100%; }
@@ -408,6 +414,7 @@ main {
 /* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */
@@ -597,6 +604,11 @@ main {
 .formation-form .member-list input { width: auto; flex: none; }
 .member-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-list input:disabled + * { opacity: var(--disabled-opacity); }
+.queue-group > summary { cursor: pointer; } .queue-group > p { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
+/* Many robots (10, 100): the follower boxes are a bounded list like a multi-select; 로봇 찾기 narrows it. */
+.member-list { max-height: 12rem; overflow-y: auto; } .member-list label[hidden] { display: none; }
+.robot-filter { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); align-items: center;
+  margin-top: var(--space-2); font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
@@ -657,6 +669,10 @@ main {
 .stuck-resolver { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
 .stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); }
 .stuck-facts dd.stuck-fact-unknown { color: var(--ink-quiet); }
+/* D-577 8: the stuck's one evidence picture, below the answers so they stay at rail scroll 0 (D-540 7). */
+.stuck-evidence { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.stuck-evidence img { display: block; max-width: 100%; max-height: 120px; width: auto; object-fit: contain; border-radius: var(--radius-button); }
+.stuck-evidence figcaption { font-size: var(--text-label); color: var(--ink-quiet); }
 .stuck-actions, .stuck-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .stuck-actions ui-button, .stuck-confirm-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
 .stuck-confirm { padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
@@ -665,6 +681,15 @@ main {
 /* D-202 — 거부는 채운다(경보 글자 대신 위험 채움 + 종이 잉크). */
 .stuck-result[data-kind="bad"] { color: var(--ink-on-crit); background: var(--status-crit);
   padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
+
+.incident-panel .robot-head { margin-bottom: var(--space-2); }
+.incident-row.closed { border-left-color: var(--line-30); }
+.incident-row summary { cursor: pointer; min-height: var(--target-secondary); font-weight: 600; }
+.incident-row summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); }
+.incident-row p { margin: var(--space-2) 0; font-size: var(--text-label); }
+.incident-row form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--space-2); }
+.incident-row form > * { min-width: 0; }
+@media (width < 40rem) { .incident-row form { grid-template-columns: minmax(0, 1fr); } }
 
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);

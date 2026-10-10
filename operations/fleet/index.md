@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-10 · uncommitted · feat(fleet): D-587 approved_record sighting 수용
-- 2026-10-10 · uncommitted · uiux(fleet): 좁은 지도 패널에서 전체 지도 가독성 확대
-- 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
-- 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
-- 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
+- 2026-10-10 · uncommitted · uiux(console): position chip, map id labels, grouped queue causes, 전체 주행 취소 without confirm
+- 2026-10-10 · uncommitted · uiux(console): walkthrough fixes — leader/follower appointment, lane-follow words, 100 robots
+- 2026-10-10 · uncommitted · feat(situation): D-577 (d) 교착·livelock·정체 분석기와 교착 행 조치
+- 2026-10-10 · uncommitted · feat(fleet): D-511 rev 1 return loop
+- 2026-10-10 · uncommitted · feat(situation): D-577 (c) rosy-situation 골격과 Fleet ai_observer 사실(shadow)

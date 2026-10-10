@@ -19,16 +19,17 @@ def _blinking(t: float) -> bool:
 def _frame(lit: dict) -> np.ndarray:
     image = np.full((240, 320, 3), 90, np.uint8)
     for blob, color in lit.items():
-        x, y = int(blob.x_px) + 22, int(blob.y_px)  # the rear lamp sits in the ring
-        image[y - 4:y + 4, x - 6:x + 6] = color
+        # The rear lamp sits in the ring; its lit area is ~1.3 r^2 (site 2026-10-10: ~800 px at r 25).
+        x, y = int(blob.x_px) + 22, int(blob.y_px)
+        image[y - 8:y + 8, x - 10:x + 10] = color
     return image
 
 
 def _samples(lit_at, *, blobs=(LEFT, RIGHT), color="blue", drop=(), revision=lambda t: "rev-1",
-             hidden=lambda t: ()):
+             hidden=lambda t: (), fps=FPS):
     out = []
-    for i in range(int(6.0 * FPS) + 1):
-        t = i / FPS
+    for i in range(int(6.0 * fps) + 1):
+        t = i / fps
         if any(a <= t < b for a, b in drop):
             continue
         present = tuple(b for b in blobs if b not in hidden(t))
@@ -89,3 +90,69 @@ def test_thresholds_are_config():
     assert decide(samples, not_before=0.0, not_after=6.0, now=6.0, config=strict)["reason"] == "none"
     with pytest.raises(KeyError):
         sample_frame(_frame({}), captured_at=0.0, calibration_revision="r", blobs=(LEFT,), color="red")
+
+
+# D-596 3: a 2-3 fps camera with a dropped frame still decodes; a one-frame flicker does not.
+
+def test_one_dropped_frame_at_two_fps_still_matches():
+    lit = lambda t: {LEFT: BLUE} if _blinking(t) else {}
+    for drop in ((2.4, 2.6), (2.9, 3.1)):  # inside the off phase, and the first frame back on
+        result = _decide(_samples(lit, fps=2.0, drop=[drop]))
+        assert result["state"] == "matched", (drop, result)
+        assert result["evidence"]["max_gap_s"] == pytest.approx(1.0)
+    old = LedConfig(min_off_s=0.5, max_off_s=1.8, max_gap_s=0.7)  # D-472 start values
+    assert decide(_samples(lit, fps=2.0, drop=[(2.9, 3.1)]), not_before=0.0, not_after=6.0, now=6.0,
+                  config=old)["state"] == "ambiguous"
+
+
+def test_a_hole_over_max_gap_is_frames_missing():
+    lit = lambda t: {LEFT: BLUE} if _blinking(t) else {}
+    assert _decide(_samples(lit, drop=[(1.9, 2.8)]))["reason"] == "frames_missing"  # 1.33 s hole
+
+
+def test_a_one_frame_flicker_is_not_a_blink():
+    flicker = lambda t: {LEFT: BLUE} if 1.0 <= t < 3.0 and not 1.9 < t < 2.1 else {}
+    assert _decide(_samples(flicker))["reason"] == "none"  # off 0.67 s < min_off_s 0.8 s
+
+
+def test_steady_colour_tags_the_single_anonymous_blob():
+    on_late = lambda t: {LEFT: BLUE} if t >= 1.0 else {}   # turned on, never seen off again
+    single = _decide(_samples(on_late, blobs=(LEFT,)))
+    assert single["state"] == "matched" and single["evidence"]["mode"] == "steady"
+    assert (single["x"], single["y"]) == (LEFT.map_x, LEFT.map_y)
+    assert _decide(_samples(on_late))["reason"] == "none"                     # two blobs: no tag
+    assert _decide(_samples(lambda t: {LEFT: BLUE}, blobs=(LEFT,)))["reason"] == "none"  # never off
+    blink = _decide(_samples(lambda t: {LEFT: BLUE} if _blinking(t) else {}, blobs=(LEFT,)))
+    assert blink["state"] == "matched" and "mode" not in blink["evidence"]  # the blink wins
+
+
+def test_a_caution_lamp_decodes_like_the_amber_identify():
+    """D-596 7: caution is amber 1 s on / 1 s off, so Vision alone cannot tell it from an amber identify.
+    Fleet therefore never asks amber automatically and gates the verdict on the asked robot's place."""
+    caution = lambda t: {RIGHT: AMBER} if int(t) % 2 == 0 else {}
+    decoy = _decide(_samples(caution, color="amber"))
+    assert decoy["state"] == "matched" and (decoy["x"], decoy["y"]) == (RIGHT.map_x, RIGHT.map_y)
+    assert _decide(_samples(caution, color="blue"))["reason"] == "none"
+
+
+def test_a_dim_floor_glow_beside_the_robot_is_read():
+    """led-identity/3, site ceiling_north 2026-10-10 11:23 (rosy_40 asked blue): the lamp lights the
+    floor ~1.8 blob radii from the robot centre, pale (HSV ~120/85/135). The /2 ring (to 1.6 r) and
+    floors (S 110, V 150) read 0.0005 on vs 0.0 off and answered "none"."""
+    glow = (135, 90, 90)                                          # BGR of HSV (120, 85, 135)
+
+    def frame(on: bool) -> np.ndarray:
+        image = np.full((240, 320, 3), 90, np.uint8)
+        if on:
+            x, y = int(LEFT.x_px + 1.8 * LEFT.radius_px), int(LEFT.y_px)
+            image[y - 7:y + 7, x - 9:x + 9] = glow
+        return image
+
+    samples = [sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                            blobs=(LEFT, RIGHT), color="blue") for i in range(19)]
+    result = _decide(samples)
+    assert result["state"] == "matched" and (result["x"], result["y"]) == (LEFT.map_x, LEFT.map_y)
+    old = LedConfig(min_saturation=110, min_value=150, ring_outer=1.6)
+    assert decide([sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                                blobs=(LEFT, RIGHT), color="blue", config=old) for i in range(19)],
+                  not_before=0.0, not_after=6.0, now=6.0, config=old)["reason"] == "none"

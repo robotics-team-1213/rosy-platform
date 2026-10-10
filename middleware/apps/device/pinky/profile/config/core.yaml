@@ -44,6 +44,15 @@ line_follow:
   # D-591 4: one echo is spread over the whole cone; at +-15 deg a wall beside a bend read as
   # a point inside the body width straight ahead. +-5 deg keeps the echo on the path.
   obstacle_ultrasonic_half_angle_deg: 5.0
+  # D-573 amendment (user decision 2026-10-10 "지금 켜기"): the crosswalk gate (stop, look, cross)
+  # is on for Pinky Pro; it needs obstacle_mode: path (above) and the D-597 camera crosswalk zone.
+  crosswalk_gate_enabled: true
+  # D-511 rev 1 (user 2026-10-10): Fleet tells the robot it is off the lane / map / wrong way.
+  fleet_lane_cue_enabled: false  # inert until D-430 Safety-Review (coordinator 2026-10-10)
+  # D-344 §12 amendment (2026-10-10): a drivable pivot or sharp arc (D-597 amendment 2) commands
+  # under 0.01 m/s; the side IR steer-away only fought it (9dfk on a ring-entry speed bump).
+  ir_guard_min_linear: 0.01
+  ir_guard_back_speed: 0.02
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

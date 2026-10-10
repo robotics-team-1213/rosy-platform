@@ -43,6 +43,8 @@ CONSUMERS = {
     "tools/sync_rosy_fast.sh": r"--base-paths \$COLCON_ROOTS\b",
     "deploy/robot/pinky_pro/image/build-native-payload.sh":
         r'(--base-paths "\$\{COLCON_ROOTS\[@\]\}"|--from-paths "\$\{ROSDEP_ROOTS\[@\]\}")',
+    # D-553 addendum 3: the payload-builder image preinstalls rosdep's apt set for the roots.
+    "deploy/robot/pinky_pro/image/payload-builder/make-builder-image.sh": r'--from-paths "\$\{roots\[@\]\}"',
     # The roots arrive from build-image.sh (--colcon-roots); rosdep runs over the resolver's
     # closure of them. test_image_customization_contract.py runs the copy block.
     "deploy/robot/pinky_pro/image/customize-rootfs.sh": r'--from-paths "\$\{ROSDEP_SOURCE_PATHS\[@\]\}"',

@@ -78,7 +78,17 @@ def test_camera_not_seeing_and_clock_ahead_are_explained_with_the_fix():
                      tracking_row={"robot_id": "rosy_26", "status": "NO_POSE"}, camera_ok="ceiling_north")
     assert _codes(record) == ["CAMERA_NOT_SEEING", "ODOM_CLOCK_AHEAD"] and record["pose"] is None
     assert record["findings"][0]["action"] == {"kind": "relearn", "source_id": "ceiling_north"}
+    assert "LED" not in record["findings"][0]["text"]  # nothing anonymous to blink at
     assert _codes(_record(_pose(None, None, None, state="UNKNOWN"))) == ["POSE_UNKNOWN"]
+
+
+def test_camera_not_seeing_with_an_anonymous_blob_suggests_led_identify():
+    """D-596: a blob no robot is matched to is named by the LED, standing or not."""
+    record = _record(_pose(None, None, None, state="UNKNOWN"), anonymous_seen=True,
+                     tracking_row={"robot_id": "rosy_26", "status": "NO_POSE"}, camera_ok="ceiling_north")
+    (finding,) = record["findings"]
+    assert finding["code"] == "CAMERA_NOT_SEEING" and "LED로 찾기" in finding["text"]
+    assert finding["action"] == {"kind": "identify", "robot_id": "rosy_26"}
 
 
 def test_an_offline_robot_has_no_guide_and_off_map_is_said():
@@ -123,7 +133,8 @@ class _Maps:
 class _Tracking:
     def snapshot(self):
         return {"sources": [{"source_id": "ceiling_north", "status": "OK"}],
-                "robots": [{"robot_id": "rosy_60", "status": "NO_POSE"}]}
+                "robots": [{"robot_id": "rosy_60", "status": "NO_POSE"}],
+                "unknown": [{"x": 1.0, "y": 1.0, "marker_id": None}]}
 
 
 def test_the_service_builds_one_record_per_robot_and_keeps_the_still_clock():
@@ -139,6 +150,7 @@ def test_the_service_builds_one_record_per_robot_and_keeps_the_still_clock():
     assert first["map_version"] == 3 and first["camera"] == "ceiling_north"
     rows = {r["robot_id"]: r for r in first["robots"]}
     assert _codes(rows["rosy_26"]) == [] and _codes(rows["rosy_60"]) == ["CAMERA_NOT_SEEING"]
+    assert rows["rosy_60"]["findings"][0]["action"]["kind"] == "identify"  # D-596: a blob is anonymous
     assert rows["rosy_60"]["worst"] == "warn" and rows["rosy_26"]["worst"] is None
     now[0] += 11.0
     rows = {r["robot_id"]: r for r in asyncio.run(service.view())["robots"]}

@@ -1020,7 +1020,7 @@ class LineStuckStatus(BaseModel):
     """D-407 open lane stuck: the console answers it by ``stuck_id``."""
 
     stuck_id: str
-    cause: str                            # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4)
+    cause: str                # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4) | no_motion
     phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
     held_s: float = 0.0
     attempts: int = 0
@@ -1029,7 +1029,7 @@ class LineStuckStatus(BaseModel):
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
-    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost
+    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; no_motion: HOLD reason
     detail: Optional[str] = None
 
 
@@ -1071,9 +1071,18 @@ class LineFollowStatus(BaseModel):
     arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
     route_context: Optional[RouteContext] = None
     route_context_published_at_s: Optional[float] = None
-    # D-573 6: key only while the gate is on (null outside a zone); absent = not watched (D-577 R3).
+    lane_cue: Optional[dict] = None  # D-511 rev 1: the unexpired Fleet lane cue (LaneCueRequest)
+    # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
     crosswalk: Optional[LineCrosswalkStatus] = None
     crosswalk_reported: bool = Field(default=False, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _crosswalk_key_means_reported(cls, data):
+        # A parsed copy (Fleet hub snapshot, D-555) keeps the key: absent stays "not watched" (D-577 R3).
+        if isinstance(data, dict) and "crosswalk" in data and "crosswalk_reported" not in data:
+            data = {**data, "crosswalk_reported": True}
+        return data
 
     @model_serializer(mode="wrap")
     def _omit_unreported_crosswalk(self, handler):

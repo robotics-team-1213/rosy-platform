@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
-- 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
-- 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
-- 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167
-- 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
-- 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
+- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
+- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
+- 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
+- 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
+- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.184로 다시 매김
