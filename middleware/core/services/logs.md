@@ -919,3 +919,9 @@
 - 변경: 선행 각속도 clip을 제거하고 최종 설정·수동 cap에서 선속도도 비례 축소한다.
 - 증거: test_line_follow_obstacle_path.py의 양방향 큰 오차·설정 상한·수동 상한·override 회귀. 수정 전 원격 시험 6 failed.
 - gate 변화: SOURCE. 독립 검토 snapshot-review /root/snapshot_review; 최종 원격 시험과 DEVICE 수용은 별도.
+
+## 2026-10-10 · uncommitted · feat: robot situation inquiry
+
+- Change: Existing stuck opened/asked events carry situation-inquiry-v1 goal, frame reference, scan age and attempts; no new motion authority.
+- Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
+- Gate: SOURCE; deployment and model accuracy are separate evidence.

@@ -28,7 +28,7 @@ DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",
                 "local_enabled", "ask_remaining_s", "last_answer", "decisions")
 _OPENED_KEYS = ("front_clearance_m", "rear_clearance_m", "rear_state", "turn_clearance_m",
-                "rear_blind_m", "preview_seq", "inquiry")
+                "rear_blind_m", "preview_seq", "inquiry", "inquiry_observed_at")
 
 _LOG = logging.getLogger(__name__)
 
@@ -239,6 +239,7 @@ class LineStuckBoard:
             data = body.get("data") or {}
             if body.get("type") == "nav.line_stuck_opened" and data.get("stuck_id") == stuck_id:
                 found.update({k: data.get(k) for k in _OPENED_KEYS})
+                found["inquiry_observed_at"] = body.get("ts")
                 found["opened_event"] = True
                 break
         return found

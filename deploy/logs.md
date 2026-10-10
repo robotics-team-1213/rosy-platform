@@ -2657,3 +2657,9 @@
 - 증거: `test_rosy_face.py` 혼합 설치 시험.
 - gate 변화: SOURCE.
 - 결정: D-583
+
+## 2026-10-10 · uncommitted · feat: AI PC local Qwen inference
+
+- Change: User-authorized loopback Ollama service with shared tested model digest, f16 KV cache and bounded single-model concurrency; model-PC relay retired after local GPU check.
+- Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
+- Gate: SOURCE; deployment and model accuracy are separate evidence.

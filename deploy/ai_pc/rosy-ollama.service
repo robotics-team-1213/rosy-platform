@@ -1,0 +1,23 @@
+[Unit]
+Description=ROSY AI PC vision inference (loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_MODELS=%h/rosy-models/ollama/models
+Environment=OLLAMA_CONTEXT_LENGTH=8192
+Environment=OLLAMA_FLASH_ATTENTION=1
+Environment=OLLAMA_KV_CACHE_TYPE=f16
+Environment=OLLAMA_KEEP_ALIVE=15m
+Environment=OLLAMA_NUM_PARALLEL=1
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+EnvironmentFile=-%h/.config/rosy/ollama.env
+ExecStart=%h/rosy-models/ollama/dist/bin/ollama serve
+Restart=on-failure
+RestartSec=5
+MemoryMax=12G
+Nice=10
+
+[Install]
+WantedBy=default.target
