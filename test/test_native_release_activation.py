@@ -509,3 +509,53 @@ def test_a_precheck_that_hangs_times_out_as_failed(monkeypatch):
     monkeypatch.setenv(native_release.PRECHECK_ENV, f'"{python}" -c "import time; time.sleep(30)"')
     with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: precheck could not run"):
         native_release._env_precheck()()
+
+
+class UnitRecorder:
+    def __init__(self, *, fail_start_once: bool = False) -> None:
+        self.calls: list[tuple[str, tuple[str, ...]]] = []
+        self.fail_start_once = fail_start_once
+
+    def __call__(self, action: str, units: tuple[str, ...]) -> None:
+        self.calls.append((action, units))
+        if action == "start" and self.fail_start_once:
+            self.fail_start_once = False
+            raise RuntimeError("camera did not stay active")
+
+
+def test_camera_only_activation_switches_and_restarts_only_the_camera(native_case):
+    # D-553 addendum 4: CORE and the rest of the runtime keep running.
+    manager_type, root, key, _private, first, second, links = native_case
+    runtime, units = RuntimeRecorder(), UnitRecorder()
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links, units=units)
+    manager.activate(first.name)
+
+    outcome = manager.activate(second.name, ("rosy-camera.service",))
+
+    assert outcome == {"ok": True, "release_id": second.name, "previous": first.name,
+                       "restarted": ["rosy-camera.service"]}
+    assert links.values == {"current": second.name, "previous": first.name}
+    assert runtime.actions == ["stop", "start"]  # only the first, full activation
+    assert units.calls == [("stop", ("rosy-camera.service",)), ("start", ("rosy-camera.service",))]
+
+
+def test_a_camera_only_activation_that_fails_rolls_back_the_camera(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    units = UnitRecorder(fail_start_once=True)
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links, units=units)
+    manager.activate(first.name)
+
+    with pytest.raises(RuntimeError, match="rolled back"):
+        manager.activate(second.name, ("rosy-camera.service",))
+
+    assert links.values["current"] == first.name
+    assert [action for action, _ in units.calls] == ["stop", "start", "stop", "start"]
+
+
+def test_only_the_camera_may_restart_alone(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    runtime = RuntimeRecorder()
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links, units=UnitRecorder())
+    with pytest.raises(ValueError, match="NATIVE_RESTART_UNIT"):
+        manager.activate(first.name, ("rosy-core.service",))
+    assert runtime.actions == [] and links.values["current"] is None

@@ -44,7 +44,7 @@ from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
-from .sensing.perception.learned.drivable_keep import keep_step, scan_summary
+from .sensing.perception.drivable_keep import keep_step, scan_summary
 from .sensing.perception.learned.drivable_steer import DrivableSteer
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug

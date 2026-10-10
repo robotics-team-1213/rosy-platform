@@ -13,7 +13,7 @@ from fleet.server.line_stuck import LineStuckBoard
 from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import StuckResolverLoop
 from fleet.swarm.robots import RobotEndpoint
-from site_map_fixture import painted_track
+from site_map_fixture import painted_track, painted_without_crosswalks
 
 NO_MOTION = {"stuck_id": "stuck-nm", "cause": "no_motion", "detail": "lane_departure",
              "phase": "WAITING_CONSOLE", "held_s": 0.2, "attempts": 0, "max_attempts": 2,
@@ -33,7 +33,7 @@ def _row(state):
 
 
 def test_no_motion_backs_off_under_r3_preconditions_as_r6():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     assert r.step(0.0, [_row(_state())]) == [Answer("rosy_41", "stuck-nm", "BACK_AND_RETRY", "R6")]
 
 
@@ -53,7 +53,7 @@ def _loop():
     console = FleetConsole([RobotEndpoint("rosy_41", "http://127.0.0.1:8080", "rest-token")], [robot])
     board = LineStuckBoard(clock=FakeClock())
     loop = StuckResolverLoop(SharedGather(console, board, max_age_s=0.0), board,
-                             StuckResolver(ResolverConfig(), painted=painted_track),
+                             StuckResolver(ResolverConfig(), painted=painted_without_crosswalks),
                              clients=lambda: {"rosy_41": robot}, clock=FakeClock())
     return loop, board, robot
 
@@ -79,7 +79,7 @@ def test_site_config_names_enrolled_robots(tmp_path):
 
 def test_no_motion_backs_off_with_an_online_legacy_peer_and_holds_for_a_peer_seen_behind():
     """Both robots online without a localization report (today): R6, CORE re-checks the rear."""
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     me = _row(_state())
     me["state"]["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
     peer = {"robot_id": "rosy_40", "online": True,
@@ -88,6 +88,6 @@ def test_no_motion_backs_off_with_an_online_legacy_peer_and_holds_for_a_peer_see
     trusted = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
     me["state"]["localization"] = trusted
     peer["state"]["localization"] = trusted
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     assert r.step(0.0, [me, peer]) == [
         Answer("rosy_41", "stuck-nm", "WAIT", "R5", escalate="no_motion_hold:peer_behind")]

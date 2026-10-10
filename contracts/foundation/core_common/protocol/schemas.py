@@ -1071,8 +1071,7 @@ class LineFollowStatus(BaseModel):
     arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
     route_context: Optional[RouteContext] = None
     route_context_published_at_s: Optional[float] = None
-    lane_cue: Optional[dict] = None  # D-511 rev 1: the unexpired Fleet lane cue (LaneCueRequest)
-    # D-573 6: key only while the gate is on (null outside a zone); absent = not watched (D-577 R3).
+    # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
     crosswalk: Optional[LineCrosswalkStatus] = None
     crosswalk_reported: bool = Field(default=False, exclude=True)
 
