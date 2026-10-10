@@ -16,6 +16,7 @@ import socket
 from typing import Any, Callable, Optional
 
 from core_common.face_screen import DRIVE_EVERY_S, DRIVE_HOLD_S, drive_due  # noqa: F401 - D-433
+from core_common.robot_state import drive_signal
 
 #: Any routable address works — the probe never sends a packet, it only asks the
 #: OS which local interface would carry one. Google's resolver is a stable
@@ -192,6 +193,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         drive = {key: value for key, value in drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y).items()
                  if key != "kind"}
     line_follow = snapshot.line_follow
+    stuck = line_follow.stuck
     return {
         "schema": 1,
         "written_at": written_at,
@@ -209,6 +211,9 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "line_follow_state": line_follow.state,
         "caution": face_cautions(snapshot),
         "recovery": face_recovery(line_follow),
+        "signal": drive_signal(
+            None if stuck is None else stuck.phase,
+            line_follow.reason, line_follow.angular, line_follow.junction),
         "drive": drive,
         "wake": wake,
     }

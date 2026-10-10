@@ -126,7 +126,9 @@ class VisionLeaseSigner:
 
     def issue(self, *, principal_id: str, source_id: str, now: int | None = None,
               ttl_s: int = 60,
-              rectification: Mapping[str, object] | None = None) -> str:
+              rectification: Mapping[str, object] | None = None,
+              crop_map: tuple[float, float, float] | None = None,
+              crop_map_id: str | None = None, crop_revision: str | None = None) -> str:
         current = int(time.time()) if now is None else now
         if not isinstance(principal_id, str) or not principal_id or len(principal_id) > 96:
             raise ValueError("invalid preview principal")
@@ -138,6 +140,13 @@ class VisionLeaseSigner:
                    "scope": "frame:read", "iat": current, "exp": current + ttl_s}
         if rectification is not None:
             payload["rectification"] = PreviewRectification.from_mapping(rectification).as_dict()
+        if crop_map is not None:
+            if payload.get("rectification", {}).get("mode") != "map":
+                raise ValueError("map crop requires map rectification")
+            payload["crop_map"] = _valid_crop_map(crop_map)
+            payload["crop_map_id"] = crop_map_id
+            payload["crop_revision"] = crop_revision
+            _valid_crop_binding(payload)
         body = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
         signature = _b64(hmac.new(self._key, body.encode("ascii"), hashlib.sha256).digest())
         return f"{body}.{signature}"
@@ -168,7 +177,30 @@ class VisionLeaseSigner:
                 PreviewRectification.from_mapping(payload["rectification"])
             except (TypeError, ValueError) as exc:
                 raise VisionLeaseError("invalid rectification settings") from exc
+        if "crop_map" in payload:
+            try:
+                if payload.get("rectification", {}).get("mode") != "map":
+                    raise ValueError("map crop requires map rectification")
+                _valid_crop_map(payload["crop_map"])
+                _valid_crop_binding(payload)
+            except (TypeError, ValueError) as exc:
+                raise VisionLeaseError("invalid map crop") from exc
         return payload
+
+
+def _valid_crop_map(value: object) -> list[float]:
+    if not isinstance(value, (tuple, list)) or len(value) != 3:
+        raise ValueError("map crop needs x, y and radius")
+    x, y, radius = value
+    return [_bounded(x, "crop x", -1000.0, 1000.0), _bounded(y, "crop y", -1000.0, 1000.0),
+            _bounded(radius, "crop radius", 0.1, 2.0)]
+
+
+def _valid_crop_binding(payload: Mapping[str, object]) -> None:
+    for key in ("crop_map_id", "crop_revision"):
+        value = payload.get(key)
+        if not isinstance(value, str) or not value or len(value) > 128 or any(c.isspace() for c in value):
+            raise ValueError("map crop needs map and calibration revision")
 
 
 def _b64(value: bytes) -> str:

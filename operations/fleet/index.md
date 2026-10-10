@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · refactor(fleet): isolate stuck peer pose checks
+- 2026-10-10 · uncommitted · fix(fleet): 이름 있는 차선 중간 장소에서 유한 trip 정지
+- 2026-10-10 · uncommitted · fix(trip): free 경로 이탈 때 목표 취소
 - 2026-10-10 · uncommitted · uiux(console): position chip, map id labels, grouped queue causes, 전체 주행 취소 without confirm
 - 2026-10-10 · uncommitted · uiux(console): walkthrough fixes — leader/follower appointment, lane-follow words, 100 robots
-- 2026-10-10 · uncommitted · feat(situation): D-577 (d) 교착·livelock·정체 분석기와 교착 행 조치
-- 2026-10-10 · uncommitted · feat(fleet): D-511 rev 1 return loop
-- 2026-10-10 · uncommitted · feat(situation): D-577 (c) rosy-situation 골격과 Fleet ai_observer 사실(shadow)

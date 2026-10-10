@@ -90,6 +90,9 @@ class TrafficService:
         #: replan given; the last wait cycle and how many periods in a row it was seen
         self._unknown_since: dict[str, float] = {}
         self._tried: dict[str, tuple[str, list]] = {}
+        #: D-610 7: ``(cycle, avoidable, now) -> (robot, edges) | None`` from the AI PC (app.py sets it).
+        self.ai_replan = lambda _cycle, _avoidable, _now: None
+        self.avoidable: dict = {}
         self._cycle: tuple[frozenset, int] = (frozenset(), 0)
         #: robot id -> (route id, trim, front in route metres, clock) of its last accepted front
         self._front: dict[str, tuple[str, float, float, float]] = {}
@@ -248,6 +251,7 @@ class TrafficService:
             self._occupancy = {}
             self._view["signals"] = self._signal_view(None)
             self._unknown_since, self._tried, self._cycle = {}, {}, (frozenset(), 0)
+            self.ai_replan((), {}, self._clock())
             return
         state = self._state
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
@@ -307,12 +311,16 @@ class TrafficService:
             if index < len(live.segments) - 1 and live.segments[index]["edge_id"] not in edges:
                 avoidable[robot_id] = edges  # the unit lies past its next place: plan around it from there
         cycle = self._view["wait_cycle"]
+        self.avoidable = avoidable                            # D-610 7: the AI PC's deadlock case reads it
         seen = frozenset(cycle or ())
         self._cycle = (seen, self._cycle[1] + 1 if seen and seen == self._cycle[0] else int(bool(seen)))
         pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
                    if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
-        decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
-                                    pending, self._unknown_since, now)
+        ai_pick = self.ai_replan(cycle if cycle and self._cycle[1] >= handover.CYCLE_PERIODS
+                                else (), avoidable, now)
+        periods = 0 if getattr(self.ai_replan, "waiting", False) else self._cycle[1]
+        decisions = handover.decide(cycle, periods, avoidable, {r: t[1] for r, t in self._tried.items()},
+                                    pending, self._unknown_since, now, ai_pick=ai_pick)
         decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
         for robot_id, row in decisions.items():
             if row["decision"] == "replan":

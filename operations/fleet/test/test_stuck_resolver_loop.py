@@ -13,7 +13,8 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
-from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.reports import LineStuckAnswerLog
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import PRINCIPAL_ID, StuckResolverLoop
 from site_map_fixture import painted_track

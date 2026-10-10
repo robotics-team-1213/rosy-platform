@@ -55,6 +55,11 @@ def generate_launch_description():
             description='false = no-motion mode: torque off, no cmd_vel '
                         'subscription, motor/ready stays false (D-192)',
         ),
+        DeclareLaunchArgument(
+            'motor_motion_check', default_value='false',
+            description='true = spin both wheels ~5 rpm for 0.4 s at start to detect a '
+                        'stalled motor. Moves the wheels; keep false unless the robot is clear.',
+        ),
         DeclareLaunchArgument('enable_lidar', default_value='true',
                               description='Enable the serial LiDAR driver'),
         # Operator override (m). 0 keeps the URDF nominal of the parameter files
@@ -122,6 +127,9 @@ def generate_launch_description():
                     'cmd_vel_timeout_s': LaunchConfiguration('cmd_vel_timeout_s'),
                     'drive_enabled': ParameterValue(
                         LaunchConfiguration('drive_enabled'), value_type=bool
+                    ),
+                    'motor_motion_check': ParameterValue(
+                        LaunchConfiguration('motor_motion_check'), value_type=bool
                     ),
                     'frame_prefix': frame_prefix,
                     'motor_device': LaunchConfiguration('motor_device'),

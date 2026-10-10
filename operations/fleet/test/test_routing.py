@@ -463,7 +463,7 @@ def test_start_places_part_way_along_a_lane_are_goals_and_vias():
     assert plan.segments[0][2] > 0 and plan.segments[-1][3] < graph.arcs["east:fwd"].length_m  # part-way ends
     end = graph.arcs["east:fwd"].point_at(plan.segments[-1][3])
     assert math.dist(end[:2], (0.83, -0.50)) < 2 * graph.arcs["east:fwd"].width_m
-    assert plan.actions[-1] == (None, "stop", 0.0)
+    assert plan.actions[-1] == ("start_n", "stop", 0.0)
     one = plan_trip(graph, PlanRequest(1, start, "start_s"), CFG)
     assert [e for e, *_ in one.segments] == ["east", "ring_n", "west"]
     far = {"id": "far", "name": "far", "x": 5.0, "y": 5.0, "yaw": 0.0, "kind": "start"}

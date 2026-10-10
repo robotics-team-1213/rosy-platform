@@ -1,0 +1,7 @@
+# Fleet site config (--site-config) for a Fleet that drives camera SIM launches
+# (map_v2_fleet_lane / map_v2_fleet_real and the d495_real-style harness copies).
+# Those launches run sim_jpeg_relay.py (Gazebo camera -> camera/preview/compressed),
+# so CORE's /api/v1/vision/front/status is live and D-601 checks it as on a device.
+fleet:
+  trip:
+    lane_camera_check: true

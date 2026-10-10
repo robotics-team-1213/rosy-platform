@@ -27,6 +27,7 @@ CONSOLE_ASSETS = {
     "console.js": ("console.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
     "install.js": ("install.js", "application/javascript"),
+    "host-services.js": ("host-services.js", "application/javascript"),
     "peer-picker.js": ("peer-picker.js", "application/javascript"),
     "address-drift.js": ("shared/address-drift.js", "application/javascript"),
     "state-age.js": ("state-age.js", "application/javascript"),

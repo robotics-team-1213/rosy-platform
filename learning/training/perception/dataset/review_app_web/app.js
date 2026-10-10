@@ -288,7 +288,7 @@ function renderBoxes() {
 }
 function quickClasses() {
   const row=$('object-quick-classes'); row.replaceChildren();
-  const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person_feet:'person-feet',obstacle:'obstacle'};
+  const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person:'person',obstacle:'obstacle'};
   for (const cls of workspace.object_class_set.classes) {
     const button=document.createElement('button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
     button.type='button'; button.value=cls.name; button.className='review-class-chip';

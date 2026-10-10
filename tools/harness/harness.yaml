@@ -12,6 +12,10 @@ status: STATUS.md
 # sim2real gap registry (linted) and its generated table.
 sim2real_gaps: tools/harness/sim2real_gaps.yaml
 sim2real_table: docs/reference/sim2real-gaps.md
+
+# Perception blind-spot registry (linted) and its generated table.
+perception_gaps: tools/harness/perception_gaps.yaml
+perception_table: docs/reference/perception-gaps.md
 stale_after_commits: 5
 
 # D-73: `tests` feeds generated index.md. `functional` is the module's own

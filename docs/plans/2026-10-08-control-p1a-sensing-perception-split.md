@@ -35,7 +35,15 @@
 - `SIZE_UNITS`에 `perception/control/sensing/perception/learned`를 더한다. 학습 모델 백엔드(manifest, runner, paint worker, drivable way와 조향, shadow, slots)다. 판정은 `accept`, 기준선 2270, 허용 +150이다.
 - 부모 단위 `perception/control/sensing/perception`은 learned 줄을 뺀 9895로 다시 판정한다. 12004 판정의 독립 검토가 "다음 증가 때 learned를 따로 단위로 둔다"고 적은 조건을 따른 것이다.
 - 계기: D-597 개정 3(`a85739fcb`)이 부모를 12165로 늘려 12004+150을 넘었다. import 경로, colcon 패키지, CORE 명령 소유는 바뀌지 않는다.
-- 2026-10-10 D-615: `learned`를 2657로 다시 판정한다. 늘어난 줄은 `learned/expected_path.py`(확정된 직선 구간을 오돔으로 옮겨 다시 낸다)다. 부모 `perception/control/sensing/perception`은 10053이다. 늘어난 줄은 `drivable_keep.py`와 `lane_debug.py`다. 허용은 그대로 +150이다.
+
+### 2026-10-10 추가: drivable 단위
+
+- `SIZE_UNITS`에 `perception/control/sensing/perception/drivable`을 더한다. drivable 길에서 keep 조향을 만드는 코드다. `drivable_steer.py`(조향 법칙, 548줄, `learned/`에서 옮김), `drivable_keep.py`(프레임 단위 keep 단계, 112줄), `drivable_preview.py`(조향한 길을 그리는 카메라 미리보기, 148줄)와 `__init__.py`다. 판정은 `accept`, 기준선 810, 허용 +150이다.
+- `drivable_steer.py`는 `learned/`의 어떤 모듈도 import 하지 않는다. 길 마스크는 `learned/paint_worker.py`가 넘기고, `learned/drivable_paint.py`(길 마스크 만들기)는 `learned`에 남는다.
+- `learned` 단위는 1982로, 부모 `perception/control/sensing/perception`은 9934로 다시 판정한다. 계기: 독립 재판정이 `learned`가 2520(2270+150 초과)이고 대부분 `drivable_steer.py`(393→548)라고 적었다.
+- 주행 맥락, 지도 모서리 호 같은 새 조향 기능은 `drivable/`에 둔다. `drivable_steer.py`가 600줄에 닿기 전에 나눈다.
+- 오늘 통합 검증에서 605줄에 닿은 파일의 순수 지면 투영과 중심 추종 계산을 `drivable/target.py`로 분리했다. 조향 파일은 기존 import 이름을 유지하고, 판단·차체 교정·CORE 명령 소유는 그대로다. 원격 drivable 회귀시험과 크기 관문으로 확인한다.
+- import 경로는 `control.sensing.perception.drivable.*`로 바뀐다. colcon 패키지(`find_packages`), ROS 노드, CORE 명령 소유는 바뀌지 않는다.
 
 ## 순서와 검증
 

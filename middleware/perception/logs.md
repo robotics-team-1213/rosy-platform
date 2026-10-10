@@ -1399,3 +1399,20 @@
 - 변경: 읽기 전용 `learned_paint_target`(기본 `lane_marking`, `drivable`). `drivable`이면 paint worker가 `infer_drivable`을 불러 `learned/drivable_paint.py`가 D-566 영역(성장 제한 없음, ignore 역할은 도로)에서 로봇 아래 도로부터 위로 이어지는 길을 만들고, 갈래가 나뉘면 가장 오른쪽(D-384 2항)을 따른다. 길 양쪽 바깥에 선 폭 띠를 그려 keeper 페인트로 준다. drivable 없음·근거리 2% 미만이면 같은 추론의 lane_marking. 매니페스트 `input.crop` 지원(자르기·background로 되돌리기). keep_debug `paint_source_used: learned_drivable`, `paint_target_requested`, `paint_drivable`. 운영자 overlay 허용 키와 `--paint-target` CLI 플래그, CORE readback은 `learned_drivable`을 `learned`로 보고.
 - 증거: `test_learned_drivable_paint.py`(직선·갈래 우측·횡단보도·덮개 부족·크롭·keeper 종단 오차가 테이프 경로와 0.05 안), overlay·CLI·readback 시험. 원격 pytest 통과(현장 PC).
 - gate 변화: SOURCE. 장치 기본은 꺼짐이다. Pi 지연, 실프레임 재생, 실물은 별도다.
+
+## 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
+- 변경: `EvidenceModes`. `paint_source: learned`에서 마스크가 있으면 그 마스크, 없으면 바로 `denoise_fallback`. 반사 제거로 내려간 뒤 학습으로 돌아가려면 신선한 마스크 2프레임. 밝기 문턱은 폴백이 아님. 카메라 공백·keep 이탈은 래치를 비운다. drivable 길이 늦을 때의 정지는 D-597 그대로. keep_debug에 `evidence_mode`와 `evidence_rows`(횡단보도 보고, 정지선, 장애물 metric/hold, 신호 hsv).
+- 증거: 모델 PC `rosy@100.98.162.71`에서 `test_evidence_mode.py`와 `test_lane_paint_source.py` 33 passed, 1 skipped. `known_failures` NEW 0.
+- gate 변화: 없음. 장치 기본 `threshold` 유지.
+
+## 2026-10-10 · 928b3dc23 · test(control): 떼어 낸 카메라 콜백이 D-611 래치를 갖는다
+- 변경: 제품 동작은 그대로. `test_learned_paint_motion`의 가짜 노드에 `EvidenceModes`. `test_line_observer_wiring`이 소스에서 떼어 실행하는 `_on_camera` 가짜에 래치 리셋. `known_failures`에서 이제 통과하는 keep 콜백 한 줄을 뺌.
+- 증거: 모델 PC `rosy@100.98.162.71`, 커밋 `928b3dc23`, `middleware/perception/test/` 2950 passed, 112 skipped, 62 subtests, 156.97s. `known_failures` NEW 0. 직전 `d226f7f42`는 같은 스위트 8 failed, 2942 passed (가짜 노드에 `_drop_learned_paint`와 `_evidence_modes`가 없음).
+- gate 변화: 없음. 장치 기본 `threshold` 유지. 로봇 주행은 돌리지 않음.
+- 결정: D-611
+- 교훈: 노드 메서드를 AST로 떼어 실행하는 시험은 새 헬퍼를 가짜 노드에 직접 달아야 한다.
+
+## 2026-10-10 · 8dd17ab69 · uiux(preview): 카메라 미리보기가 조향에 쓴 drivable 길을 그린다
+- 변경: keep_debug가 `paint_source_used: learned_drivable`(또는 `paint_target_requested: drivable`)이면 `follow_preview`가 옛 차선 후보·경계·영역 상자·도로 표시(STOP/CROSSWALK)를 그리지 않고 `drivable_preview.draw_drivable`로 조향에 쓴 길(초록), 나머지(어둡게), 고른 출구, 목표점과 추종 호, ahead_m, 경로 사전 방향(guide_deg), 머리줄 `DRIVABLE · 전략 · e · source`, 아래 띠에 결정 사슬 1 PERCEPTION·2 STEERING과 STOPPED BY 머리글을 그린다. `keep_step`이 조향한 길을 4 px 간격 run length로 keep_debug `drivable_way`에 싣는다(추론 추가 없음, 600 run 초과면 8 px, 그래도 넘으면 생략: CORE lane_perception 16 kB 상한). 대시보드 카메라 패널은 `GET /api/v1/line-follow`로 3 CORE 관문·4 막힘·5 Fleet/AI 줄과 STOPPED BY 머리글을 보인다(`core_ui_logic.lineDecisionChain`). CORE 상태는 로봇 ROS 그래프에 없어 영상에는 1·2줄만 있다. Fleet/AI 판단 계층(ai/rule)과 lane_cue는 CORE 상태에 없어 "not reported"로 적는다.
+- 증거: `test_drivable_preview.py`, `shared/web/test/test_line_decision_chain.py`, `test_panel_copy_evidence_browser.py::test_camera_decision_chain_names_the_layer_that_stops`. 원격 pytest(모델 PC) 영향 범위 4422 통과, 실패 2건은 known_failures. 브라우저 시험은 모델 PC Chromium에서 181 통과, 실패 7건은 main 9ad37190e에서도 같은 7건. 기록 프레임 전후 그림 X:\DevTemp\preview-drivable\*_pair.jpg.
+- gate 변화: SOURCE. 장치 반영은 아직 없다.

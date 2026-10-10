@@ -1,0 +1,165 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "cues": {
+   "sent": 44,
+   "turn_spot_true": 3,
+   "signs": {
+    "+": 5,
+    "-": 2
+   },
+   "refused": [
+    {
+     "accepted": false,
+     "reason": "pose_stale"
+    }
+   ]
+  },
+  "pivots_started": 1,
+  "latched": [],
+  "start_err_gt_deg": -168.9,
+  "pivot_last_view": {
+   "turned_deg": 163.9,
+   "remaining_deg": 10.1,
+   "ticks": 136
+  },
+  "pivot_duration_sim_s": 6.89,
+  "end_reason": "tracking",
+  "end_err_odom_deg": -1.1,
+  "end_err_gt_deg": -1.1,
+  "odom_turned_deg": 167.8,
+  "pivot_xy_drift_m": 0.0006,
+  "pivot_cmds": 340,
+  "pivot_sign_changes": 0,
+  "reasons_during_pivot": [
+   "fleet_wrong_way_turn"
+  ],
+  "reacquire_hold_seen": false,
+  "after_reacquire": [
+   "TRACKING",
+   "tracking"
+  ],
+  "reacquire_s": 0.0,
+  "after": [
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "HOLD",
+    "camera_line_not_visible"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "HOLD",
+    "junction_waiting"
+   ],
+   [
+    "LOST",
+    "camera_reselection_required"
+   ],
+   [
+    "HOLD",
+    "junction_waiting"
+   ],
+   [
+    "LOST",
+    "camera_reselection_required"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   261.835,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   264.723,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   264.844,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   266.077,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   272.967,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   274.049,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   274.172,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   274.526,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   280.289,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  [
+   281.257,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   283.928,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/spot3_x180",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.214,
+   -0.264,
+   3.5779249665883754
+  ],
+  "lane": 0.4363323129985824,
+  "spot": 3,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": false,
+  "seed": 53,
+  "spot_xy": [
+   -0.214,
+   -0.264
+  ],
+  "lane_deg": 25.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

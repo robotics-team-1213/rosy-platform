@@ -629,6 +629,7 @@ export function actionIcon(button, name) {
     "traffic-light": "M8 2h8v20H8zM12 6h.01M12 12h.01M12 18h.01",
     sign: "M5 3h14v11H5zM12 14v7M7 21h10",
     "person-feet": "M7 4c-2 2-2 5-1 7l3 1 1-7zM14 10c-1 2-1 5 1 7l3-1c1-3 0-5-2-7zM5 15l5 1M14 20l5-1",
+    person: "M12 3a2 2 0 1 0 .01 0M8 22l1.5-7L7 11l5-2 5 2-2.5 4L16 22",
     obstacle: "M12 3 21 20H3zM12 9v5M12 17h.01",
     next: "M4 12h16m-7-7 7 7-7 7",
     list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",

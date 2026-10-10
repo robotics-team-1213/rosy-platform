@@ -1,0 +1,74 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "pivot_started": true,
+  "turned_at_drop_deg": 51.8,
+  "latch_reason": "fleet_cue_lost",
+  "status_reason_at_latch": "fleet_cue_lost",
+  "latch_after_last_cue_sim_s": 0.97,
+  "latch_after_last_cue_wall_s": 1.1,
+  "max_turned_deg": 75.7,
+  "budget_deg": 150.0,
+  "travel_after_latch_m": 0.0,
+  "yaw_after_latch_deg": 0.0,
+  "nonzero_cmd_after_latch": 0,
+  "still_latched_at_end": true
+ },
+ "timeline": [
+  [
+   1159.454,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   1162.348,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1164.146,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   1167.067,
+   "HOLD",
+   "fleet_cue_lost"
+  ]
+ ],
+ "scenario": "s2",
+ "args": {
+  "scenario": "s2",
+  "out": "runs/drop_spot1",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.8,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.519,
+   0.201,
+   0.767944870877505
+  ],
+  "lane": -2.3736477827122884,
+  "spot": 1,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_proc": "image_bridge",
+  "camloss_at": 60.0,
+  "prejudged": false,
+  "exact180": false,
+  "box": false,
+  "seed": 22,
+  "spot_xy": [
+   -0.519,
+   0.201
+  ],
+  "lane_deg": -136.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

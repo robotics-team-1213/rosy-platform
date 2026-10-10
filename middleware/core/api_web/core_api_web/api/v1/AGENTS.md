@@ -23,6 +23,7 @@ REST routers under `/api/v1/*` (API Ref §5). One module per domain; `routes.py`
 | `safety.py` | SAF-001 stop/release, SAF-004 limits, SAF-005 battery policy |
 | `navigation.py` | NAV-001~004/006 goals, NAV-005 SLAM session, `/localization/initialpose` |
 | `map.py` | MAP-003 occupancy and costmap snapshots (`svc.maps`) |
+| `motion.py` | D-603 `POST/GET/DELETE /motion/rotate_to`: bounded in-place turn (lease owner or named operator) |
 | `waypoints.py` | WPT-002 waypoint CRUD (`svc.waypoints`) |
 | `docking.py` | DNC-003/005 dock registry, teach, dock/undock |
 | `swarm.py` | SWM-002 follow/cancel/state. 501 when the capability does not declare `swarm.follow` |

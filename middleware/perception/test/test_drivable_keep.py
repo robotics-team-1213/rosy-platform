@@ -5,8 +5,8 @@ frame after a crosswalk crossing, still return no steering.
 """
 import pytest
 
-from control.sensing.perception.drivable_keep import keep_step
-from control.sensing.perception.learned.drivable_steer import DrivableSteer
+from control.sensing.perception.drivable.drivable_keep import keep_step
+from control.sensing.perception.drivable.drivable_steer import DrivableSteer
 from test_drivable_steer import G, HALF, XO, _lane
 
 
@@ -14,11 +14,12 @@ class _Ways:
     def __init__(self, way):
         self.way = way
         self.used_crosswalk = None
+        self.stamp = 0.0
 
     def latest_way(self, _age):
         if self.way is None:
             return None
-        return self.way, 0.0
+        return self.way, self.stamp
 
 
 def _pose(_stamp):
@@ -36,9 +37,20 @@ def _commit_centre():
     info = None
     for index in range(3):
         stamp = index * 0.1
+        ways.stamp = stamp
         error, confidence, info = solo.update(way, stamp, G, XO, HALF, _pose(stamp), _pose(stamp))
         step, decided = _step(steer, ways, last, stamp)
     return steer, ways, last, step, decided, error, confidence, info
+
+
+def test_cached_way_cannot_commit_three_frames_of_evidence():
+    steer, ways, last = DrivableSteer(), _Ways(_lane(HALF, -HALF)), {}
+    for stamp in (0.0, 0.1, 0.2):
+        _step(steer, ways, last, stamp)
+    assert last["expected_path_state"] is None
+    ways.way = None
+    step, decided = _step(steer, ways, last, 0.3)
+    assert step is None and decided is False
 
 
 def test_a_fresh_centre_way_returns_the_steer_error_and_a_live_path():
@@ -76,6 +88,18 @@ def test_a_missing_way_before_commit_stays_stale():
     step, decided = _step(steer, ways, last, 0.2)
     assert step is None and decided is False
     assert last["reason"] == "drivable_way_stale"
+
+
+@pytest.mark.parametrize("rejection", ["off_route", "no_source_pose"])
+def test_rejected_way_drops_the_path_before_a_missing_frame(rejection):
+    steer, ways, last, *_rest = _commit_centre()
+    pose_at = _pose if rejection == "off_route" else lambda _stamp: None
+    guide = (0.0, 0.3, True, 0.0, 0.3, 0.0) if rejection == "off_route" else None
+    keep_step(steer, ways, last, G, XO, HALF, pose_at, 0.3, None, guide)
+    assert last["expected_path_state"] == "dropped"
+    ways.way = None
+    step, decided = _step(steer, ways, last, 0.4)
+    assert step is None and decided is False
 
 
 def test_crosswalk_straight_then_a_missing_way_does_not_hold():

@@ -469,7 +469,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
     if (drift) {
-      const text = `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
+      const text = drift.origin === "server"
+        ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}).`
+        : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
         + " 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).";
       ctx.save();
       ctx.font = font(13);
@@ -827,9 +829,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         life.check();
       }
       view.traffic = traffic;
-      // D-577 (d): the AI facts (shadow) beside a wait-cycle row; read only while a cycle is shown.
-      view.trafficAi = traffic.wait_cycle?.length
-        ? (await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null))?.facts || [] : [];
+      // D-613: route observations also reach the queue while a trip runs without a wait cycle.
+      const ai = traffic.wait_cycle?.length || view.trafficTrips.length
+        ? await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null) : null;
+      life.check();
+      view.trafficAi = ai?.facts || [];
     } catch (err) {
       if (err.name === "AbortError") return;
       if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;

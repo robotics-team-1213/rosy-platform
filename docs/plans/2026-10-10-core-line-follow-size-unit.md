@@ -20,3 +20,21 @@ D-573 6항 보고 개정이 `line_follow/crosswalk_report.py`(121줄)와 관리�
 판정 상태: 2026-10-10 읽기 전용 critic 에이전트가 2,957줄로 독립 재판정했다(accept).
 
 검증: `test/architecture/test_module_structure.py`의 실제 측정, `rosy_harness.py lint`. 크기 단위 재분류는 SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
+
+## 2026-10-10 추가 — `line_follow/cue` 단위 (D-511 lane cue)
+
+D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되었다. 독립 재판정은 3,357줄 수용을 거절하고 분리를 요구했다.
+
+- 새 Python 하위 패키지 `core_features/line_follow/cue/`를 만들고 `SIZE_UNITS`에 더한다. 세는 파일은 `lane_cue.py`(320, `LaneCueMixin`), `odom_pivot.py`(55, 카메라와 무관한 순수 제자리 회전), `__init__.py`(1)이고 합계 376줄이다.
+- 같은 도메인 규칙을 따른다. `LaneCueMixin`은 `LineFollowManager`의 잠금과 세대 아래에서 돈다. 자기 잠금, 스레드, 저장소, 발행자가 없다.
+- manager가 이 단위에 닿는 곳:
+  - `_init_lane_cue`를 시작할 때와 모드를 바꿀 때 부른다.
+  - `_lane_cue_plan`, `_lane_cue_turn`, `_lane_cue_view`, `_lane_cue_spot_running`을 부른다.
+  - `_cue_latch`와 `_cue_spot_turning`을 읽는다(상태는 mixin의 `_init_lane_cue`가 가진다).
+  - 계획 튜플(`hold` | `side` | `turn`)을 해석하고, `cue_left`/`cue_right` 조향 가지를 가진다.
+
+  상태와 계산은 이 단위에 있으므로 `manager.py` 763 판정의 약속(lane cue를 manager 밖에 둔다)을 지킨다.
+- D-607 P3 REALIGN은 `recovery/stuck/realign/`에서 `cue.odom_pivot`을 가져다 쓴다. 방향은 stuck → cue 한쪽뿐이다.
+- 로컬 main을 합친 뒤 부모 단위는 3,018줄이다(2,957 + main의 증가 + manager의 cue 연결). 부모 판정을 같은 변경에서 3,018로 다시 정한다.
+
+판정 상태: 2026-10-10 읽기 전용 critic이 독립 재판정했다. 결과는 AGREE-WITH-CONDITIONS이고 실측(cue 376, 부모 3,018, manager 792)이 정확하다고 확인했다. 조건(기록, 결합 설명, 120자 넘는 줄, `_cue_spot_turning` 상태 위치, REALIGN 경로)은 같은 브랜치에서 반영했다. 검증은 `test/architecture/test_module_structure.py`의 실측이다.

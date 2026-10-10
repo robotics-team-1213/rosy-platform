@@ -55,13 +55,14 @@
 - 막지 않는 조건: 그 호스트의 새벽 재부팅 창(설정의 `HH:MM-HH:MM`, 기본은 예약 시각 앞 10분·뒤 20분)에는 점검도 행동도 하지 않는다. 도우미 재부팅은 10분 뒤라서, 10분 뒤가 창 안이면 재부팅을 보내지 않는다. 부팅 1시간 안에는 재부팅하지 않는다. 응답이 없으면 기록만 한다. 커널이 멈춘 경우는 하드웨어 워치독이, 네트워크만 끊긴 경우는 아래 호스트 로컬 층이 맡는다.
 - 로봇은 이 가드에 CORE 포트 연결 확인으로만 들어온다. 로봇 회복은 D-412 자동 갱신과 `rosy-*` 유닛이 맡고, 가드는 로봇을 다시 시작하거나 재부팅하지 않는다. 움직이는 로봇을 밖에서 끄면 안전하지 않다.
 - 감사: 모든 행동은 `/var/lib/rosy-host-guard/actions.jsonl`에 한 줄씩(시각, 호스트, 행동, 이유) 남고 journal에도 남는다. 호스트별 현재 상태는 `status.json`이다.
-- Fleet 보고: 새 쓰기 API는 만들지 않는다. D-524의 `GET /api/fleet/hosts`에 읽기 전용 `guard` 필드로 `status.json`을 붙인다(아래 D-524 개정 제안). Fleet 컨테이너는 `/var/lib/rosy-host-guard`를 읽기 전용으로 마운트한다. 그 전까지는 journal과 파일이 보고다.
+- 해석된 `health` 응답은 그 호스트 항목의 `resources`로 남긴다. 필드는 `avail_pct`, `swap_pct`, `load`, `cores`, `uptime_s`, `down`이다. 응답이 없거나 해석에 실패하면 `resources`는 null이다. 새벽 창은 `check_pc`를 부르지 않으므로 이전 `resources`가 `state=quiet`와 함께 남을 수 있다.
+- Fleet 보고: 새 쓰기 API는 만들지 않는다. `GET /api/fleet/hosts`가 읽기 전용 `guard`(`/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `rosy-host-state`의 `status.json`)를 붙인다. 없거나 객체가 아니면 null이다. Fleet 컨테이너는 두 디렉터리를 읽기 전용으로 마운트한다. 가드 SSH 개인키는 마운트하지 않는다.
 - 관제 PC 자신: 모델 PC가 같은 스크립트로 관제 PC를 역방향으로 본다(설정 파일만 다름, 관제 PC의 D-524 도우미가 `site` 역할로 실행). 관제 PC에도 모델 PC와 같은 하드웨어 워치독과 `kernel.panic`을 둔다.
 - 호스트 로컬 층: `fix/ssh-self-recovery` 브랜치의 `rosy-ssh-watchdog`(두 로봇에는 이미 설치됨. 2분마다 sshd·tailscale·게이트웨이 확인, ssh → tailscaled → NetworkManager → 재부팅, 부팅 10분 유예, 시간당 재부팅 1회)이 가드 아래 층이다. 이 ADR은 그 파일을 소유하지 않는다. 가드는 연결이 끊긴 호스트를 고치려 하지 않으므로 두 층이 같은 호스트를 동시에 재부팅하려 다투지 않는다.
 
 **4. `WatchdogSec=`와 `sd_notify`는 로봇 Host Agent부터 쓴다.** Host Agent는 root로 도는 오래 사는 Python 프로세스이고, 막히면 CORE의 lane 명령이 멈춘다. `serve_forever` 루프에서 `NOTIFY_SOCKET`(AF_UNIX, 이미 허용됨)에 `WATCHDOG=1`을 보내는 몇 줄로 끝나므로 비용이 작다. `Type=notify`, `WatchdogSec=30s`로 한다. 로봇 이미지 변경이라 별도 브랜치에서 D-412 릴리스로 낸다. 사이트 스택(`rosy-site-stack.service`)은 `docker compose up -d` oneshot이라 `WatchdogSec`가 뜻이 없다. 컨테이너 healthcheck와 `restart=unless-stopped`가 이미 그 일을 하고, 가드가 바깥을 본다. 모델·AI PC 사용자 유닛은 대부분 남의 서버(ollama, 학습)라 `sd_notify`를 넣을 곳이 없다. 대신 `Restart=on-failure`와 가드의 사다리를 쓴다.
 
-**5. D-524 개정 제안(D-524 파일은 이 브랜치에서 고치지 않는다).**
+**5. D-524 개정 제안.** 처음에는 D-524 파일을 고치지 않았다. 2026-10-10 `feat/host-health-read`가 아래 GET 필드와 `resources` 저장을 구현하면서, D-524의 "관제 화면 버튼은 범위 밖"만 설치 작업 한 줄로 고쳤다. 두 ADR은 Proposed다.
 
 - 역할을 환경 변수 대신 `/etc/rosy/host-control/role`에서도 읽는다. sudo는 환경을 지우므로 강제 명령에서 `ROSY_HOST_CONTROL_ROLE`이 전달되지 않는다. 호출자가 역할을 고르면 다른 역할의 유닛 집합을 쓸 수 있으니 파일이 맞다.
 - `model` 역할에 사용자 유닛을 넣는다: `rosy-ollama`, `rosy-review-v12`, `rosy-review-v13`, `rosy-dataset-review`, `rosy-edge-review`, `rosy-tensorboard`(`restart-unit`만, 학습 유닛 제외).

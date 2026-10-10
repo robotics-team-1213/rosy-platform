@@ -193,6 +193,19 @@ def test_trip_returns_a_plan_records_it_and_never_drives(tmp_path):
     assert point.status_code == 200 and point.json()["actions"][-1]["place_id"] is None
 
 
+def test_one_lap_plan_requires_the_robot_at_its_selected_return_place(tmp_path):
+    client, _tasks, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+    url = "/api/fleet/robots/rosy_60/trip"
+    body = {"to": "NW", "via": ["SE"], "repeat": False, "start_at": "NW"}
+    refused = client.post(url, json=body, headers=OPERATOR)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "TRIP_START_PLACE_MISMATCH"
+    assert store.plans()[0]["result"]["error"] == "TRIP_START_PLACE_MISMATCH"
+    invalid = client.post(url, json={**body, "repeat": True}, headers=OPERATOR)
+    assert invalid.status_code == 422
+
+
 @pytest.mark.parametrize(("body", "code"), [
     ({"to": "nowhere"}, "TRIP_UNKNOWN_PLACE"),
     ({"to": {"x": 5.0, "y": 5.0}}, "TRIP_OFF_MAP"),

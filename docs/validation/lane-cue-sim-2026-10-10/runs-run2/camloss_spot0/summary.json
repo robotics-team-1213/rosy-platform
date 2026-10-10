@@ -1,0 +1,158 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "camloss": 356.809,
+  "camloss_end": 359.231,
+  "cues": {
+   "sent": 52,
+   "turn_spot_true": 10,
+   "signs": {
+    "+": 6,
+    "-": 4
+   },
+   "refused": [
+    {
+     "accepted": false,
+     "reason": "pose_stale"
+    }
+   ]
+  },
+  "pivots_started": 1,
+  "latched": [
+   "fleet_turn_unconfirmed"
+  ],
+  "start_err_gt_deg": -156.9,
+  "pivot_last_view": {
+   "turned_deg": 131.9,
+   "remaining_deg": 48.1,
+   "ticks": 112
+  },
+  "pivot_duration_sim_s": 7.84,
+  "end_reason": "junction_waiting",
+  "end_err_odom_deg": 66.3,
+  "end_err_gt_deg": 66.4,
+  "odom_turned_deg": -136.8,
+  "pivot_xy_drift_m": 0.0002,
+  "pivot_cmds": 280,
+  "pivot_sign_changes": 0,
+  "reasons_during_pivot": [
+   "fleet_wrong_way_turn",
+   "junction_waiting"
+  ],
+  "reacquire_hold_seen": false,
+  "after_reacquire": [
+   "HOLD",
+   "junction_waiting"
+  ],
+  "reacquire_s": 0.0,
+  "after": [
+   [
+    "HOLD",
+    "junction_waiting"
+   ],
+   [
+    "LOST",
+    "camera_reselection_required"
+   ],
+   [
+    "HOLD",
+    "junction_waiting"
+   ],
+   [
+    "LOST",
+    "camera_reselection_required"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   349.861,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   352.76,
+   "WAITING",
+   "no_observation"
+  ],
+  [
+   352.877,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   353.588,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   354.203,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   357.157,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   359.437,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   362.043,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   367.948,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  [
+   368.955,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   371.672,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/camloss_spot0",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.213,
+   0.221,
+   5.811946409141117
+  ],
+  "lane": 2.670353755551324,
+  "spot": 0,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 2.5,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": false,
+  "seed": 70,
+  "spot_xy": [
+   -0.213,
+   0.221
+  ],
+  "lane_deg": 153.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

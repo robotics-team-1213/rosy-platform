@@ -33,6 +33,9 @@ the readiness HOLD, the speed clip and the bound control policy. Kinds:
   obstacle hold. Ends at a stop line (traffic policy evidence) or the bounds.
 - `to_square`: refused `unsupported`. Without a map frame CORE has no lane route
   to a square; a straight crawl on a bearing would leave the lanes (follow-up).
+- `rotate_to` (D-603, `start_rotate_to`, not a `POST /localization/mission` kind): a bounded
+  turn to an odom heading (`rotate_to.py`, safety-tagged) with the `rotate_in_place` clearance
+  guards, from any localization state; LOCALIZED neither refuses nor ends it.
 
 Every mission ends on done, timeout, an obstacle, E-stop, LOCALIZED, odometry or
 LiDAR going stale (every kind), or a cancel (any mode change out of NAVIGATION, line follow
@@ -56,9 +59,11 @@ from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist
 from core_features.line_follow.clearance import front_sector
 from core_features.line_follow.model import LineFollowMode
+from core_features.localization.rotate_to import RotateGoal, rotate_goal, turn_rate
 
 ROTATE, NUDGE, LANE, SQUARE = "rotate_in_place", "nudge_forward", "lane_to_stopline", "to_square"
 KINDS = (ROTATE, NUDGE, LANE, SQUARE)
+ROTATE_TO = "rotate_to"  # D-603: started only by start_rotate_to (POST /motion/rotate_to)
 UNSUPPORTED = {SQUARE: "to_square needs a lane route to the square without a map frame; "
                        "not implemented (D-395 P2-7 follow-up), use lane_to_stopline"}
 #: End reasons that count as a completed mission; every other reason is `aborted`.
@@ -67,9 +72,10 @@ _log = logging.getLogger(__name__)
 
 
 class MissionRefused(Exception):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, detail: Optional[dict] = None) -> None:
         super().__init__(message)
         self.code = code
+        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,11 @@ class MissionConfig:
     # of 21 s turns). See the D-424 ADR.
     rotate_coverage_debounce_ticks: int = 8
     nudge_min_m: float = 0.02
+    # D-603 rotate_to: rad/s per rad of error, the wheels' deadband floor, and how far past the asked
+    # turn (odom, summed both ways) the turn may go before it aborts ("overturn").
+    rotate_to_gain: float = 1.5
+    rotate_to_min_angular: float = 0.15
+    rotate_to_overturn_deg: float = 30.0
     stop_line_m: float = 0.12            # the traffic policy's stop distance
     max_time_s: float = 120.0
     max_distance_m: float = 1.0
@@ -118,8 +129,9 @@ def mission_config(raw: Optional[Mapping[str, Any]]) -> MissionConfig:
         raise ValueError("localization_mission values must be finite")
     if (min(config.rotate_margin_m, config.rotate_stop_margin_m, config.nudge_min_m) < 0.0
             or config.rotate_stop_margin_m > config.rotate_margin_m or config.nudge_linear <= 0.0
-            or config.rotate_coverage_debounce_ticks < 1):
-        raise ValueError("localization_mission margins must be >= 0 and nudge_linear > 0")
+            or config.rotate_coverage_debounce_ticks < 1
+            or min(config.rotate_to_gain, config.rotate_to_min_angular, config.rotate_to_overturn_deg) <= 0.0):
+        raise ValueError("localization_mission margins must be >= 0, nudge_linear and rotate_to_* > 0")
     return config
 
 
@@ -133,10 +145,17 @@ class _Run:
     travelled_m: float = 0.0
     turned_rad: float = 0.0
     gap_ticks: int = 0          # consecutive ticks a running turn saw only an evidence gap
+    goal: Optional[RotateGoal] = None   # D-603 rotate_to
+    signed_rad: float = 0.0             # D-603: signed odom turn since the start
 
 
 def _wrap(angle: float) -> float:
     return math.atan2(math.sin(angle), math.cos(angle))
+
+
+def _err_deg(run: _Run) -> float:
+    """D-603: what is left of the asked turn by odometry (signed, degrees)."""
+    return round(math.degrees(run.goal.delta_rad - run.signed_rad), 1)
 
 
 class LocalizationMission:
@@ -175,6 +194,7 @@ class LocalizationMission:
             if run is not None and previous is not None:
                 run.travelled_m += math.hypot(x - previous[0], y - previous[1])
                 run.turned_rad += abs(_wrap(yaw - previous[2]))
+                run.signed_rad += _wrap(yaw - previous[2])
             self._odom, self._odom_at = (float(x), float(y), float(yaw)), self._clock()
 
     def observe_scan(self, sample) -> None:
@@ -252,9 +272,48 @@ class LocalizationMission:
             run = self._run
             if run is None:
                 return dict(self._last)
-            return {"kind": run.kind, "state": "running", "reason": None,
+            body = {"kind": run.kind, "state": "running", "reason": None,
                     "elapsed_s": round(self._clock() - run.started_at, 2),
                     "travelled_m": round(run.travelled_m, 3), "turned_rad": round(run.turned_rad, 3)}
+            if run.goal is not None:
+                body["err_deg"] = _err_deg(run)
+            return body
+
+    def start_rotate_to(self, **request: Any) -> dict:
+        """D-603: start a bounded turn to an odom heading (`rotate_to.rotate_goal` keywords), or raise
+        `ValueError` (400) / `MissionRefused` (409, upper-case codes). The caller checked who asks."""
+        with self._lock:
+            now = self._clock()
+            if self._safety.estop or self._modes.is_emergency:
+                raise MissionRefused("EMERGENCY_ACTIVE", "release the emergency stop first")
+            if self._run is not None:
+                raise MissionRefused("MOTION_BUSY", f"mission {self._run.kind} is running")
+            reason = self._busy() or (None if self._modes.mode is Mode.IDLE
+                                      else f"mode is {self._modes.mode.value}")
+            if reason:
+                raise MissionRefused("MOTION_BUSY", reason)
+            if self._odom is None or now - self._odom_at > self.config.sensor_stale_s:
+                raise MissionRefused("ODOMETRY_STALE", "no fresh odometry to close the turn on")
+            goal = rotate_goal(self._odom[2], **request)
+            blocked, _room = self._judge(ROTATE, now)
+            if blocked is not None:
+                raise MissionRefused("ROTATE_CLEARANCE", blocked, self._clearance(now))
+            self._command.clear_navigation()
+            ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE)
+            if not ok:
+                raise MissionRefused("MOTION_BUSY", why)
+            self._state.set_mode(RobotMode.NAVIGATION)
+            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal)
+            self._run = run
+            self._last = {"kind": ROTATE_TO, "state": "running", "reason": None}
+            self._announce("started", run, None, now)
+            return self.status()
+
+    def localized(self) -> None:
+        """LOCALIZED ends a search mission (it found the pose); a D-603 turn goes on."""
+        with self._lock:
+            if self._run is not None and self._run.kind != ROTATE_TO:
+                self.end("localized")
 
     # --- run --------------------------------------------------------------------
 
@@ -272,6 +331,12 @@ class LocalizationMission:
             if reason is None:
                 if run.kind == ROTATE:
                     self._command.set_nav_twist(Twist(0.0, self.config.rotate_angular))
+                elif run.kind == ROTATE_TO:
+                    cfg = self.config
+                    rate = turn_rate(run.goal, run.signed_rad, gain=cfg.rotate_to_gain,
+                                     min_rate=cfg.rotate_to_min_angular)
+                    if rate is not None:  # None was "done" in _end_reason this very tick
+                        self._command.set_nav_twist(Twist(0.0, rate))
                 elif run.kind == NUDGE:
                     self._command.set_nav_twist(Twist(self.config.nudge_linear, 0.0))
                 return
@@ -282,7 +347,7 @@ class LocalizationMission:
         if self._safety.estop or self._modes.is_emergency:
             return "estop"
         status = self._loc.status()
-        if status is not None and status.state is LocState.LOCALIZED:
+        if run.kind != ROTATE_TO and status is not None and status.state is LocState.LOCALIZED:
             return "localized"
         if self._modes.mode is not Mode.NAVIGATION:
             return "cancelled"
@@ -292,8 +357,13 @@ class LocalizationMission:
             return "odometry_stale"
         if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
             return "obstacle_sensor_stale"
-        if run.kind == ROTATE:
-            if run.turned_rad >= cfg.rotate_max_rad:
+        if run.kind == ROTATE_TO:
+            if turn_rate(run.goal, run.signed_rad, gain=1.0, min_rate=0.0) is None:
+                return "done"
+            if run.turned_rad > abs(run.goal.delta_rad) + math.radians(cfg.rotate_to_overturn_deg):
+                return "overturn"
+        if run.kind in (ROTATE, ROTATE_TO):
+            if run.kind == ROTATE and run.turned_rad >= cfg.rotate_max_rad:
                 return "done"
             # H1: something entering the sweep during the turn ends it at once; an evidence gap
             # (one flickering scan) only after rotate_coverage_debounce_ticks in a row.
@@ -335,6 +405,8 @@ class LocalizationMission:
             self._command.clear_navigation()
             state = "done" if reason in DONE_REASONS else "aborted"
             self._last = {"kind": run.kind, "state": state, "reason": reason}
+            if run.goal is not None:
+                self._last["final_err_deg"] = _err_deg(run)
             self._announce(state, run, reason, self._clock())
 
     def _on_mode_change(self, old: Mode, new: Mode) -> None:
@@ -399,6 +471,23 @@ class LocalizationMission:
             return (f"front clearance {gap + body.lidar_to_front_m:.3f} m <= stop "
                     f"{stop + body.lidar_to_front_m:.3f} m (from the LiDAR)", 0.0)
         return None, gap - stop
+
+    def _clearance(self, now: float) -> dict:
+        """D-603 409 ROTATE_CLEARANCE detail: nearest seen return and the clearance a turn needs
+        (base_footprint with the URDF body, else from the LiDAR); nearest None = nothing judged."""
+        cfg = self.config
+        if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
+            return {"nearest_m": None, "need_m": None}
+        body = self._body()
+        if body is None:
+            nearest = self._front[1][1] if self._front[0] is self._scan[0] else None
+            return {"nearest_m": None if nearest is None else round(nearest, 3), "need_m": cfg.rotate_clearance_m}
+        config = self._line_follow.config
+        view = body.scan_view(self._scan[0], forward_deg=config.lidar_forward_deg,
+                              self_mask=config.lidar_self_mask)
+        nearest = min((math.hypot(x, y) for x, y in view.points), default=None)
+        return {"nearest_m": None if nearest is None else round(nearest, 3),
+                "need_m": round(body.rotation_clear_m(cfg.rotate_margin_m), 3)}
 
     def _blocked(self, kind: str, now: float) -> Optional[str]:
         """Pre-D-424 rule (no URDF body): why the LiDAR does not show this kind's path clear."""

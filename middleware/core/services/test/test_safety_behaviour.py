@@ -114,6 +114,16 @@ def _packet(observed_at=1000.0, confidence=0.8, detections=None):
     }
 
 
+def test_person_feet_does_not_tighten_limits():
+    """D-602: a person_feet box is not a person advisory."""
+    safety = SafetyManager(SpeedLimits(), BatteryPolicy())
+    feed = PersonAdvisoryFeed(safety, clock=lambda: 1000.1, seat_clock=lambda: NOW)
+    profile = safety.clip(5.0, 5.0, now=NOW)
+    feet = _packet(detections=[Detection(label="person_feet", x=0.4, y=0.3, w=0.2, h=0.4, confidence=0.9)])
+    assert feed.ingest(feet)["advisory"] is False
+    assert safety.clip(5.0, 5.0, now=NOW) == pytest.approx(profile)
+
+
 def test_learned_inputs_only_tighten_limits():
     """Behavioural. D-430 §3 invariant 4 / §4 perception rule: a learned person
     advisory can only lower the cap below the default profile; stale, invalid or

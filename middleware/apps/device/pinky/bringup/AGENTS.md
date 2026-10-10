@@ -59,6 +59,8 @@ Launch arguments: `namespace`, `enable_battery`, `enable_lidar`, `use_sim_time`,
 
 `drive_enabled:=false` is the D-192 no-motion mode: torque stays off, `cmd_vel` is not subscribed, `motor/ready` stays false; odometry, joint states and TF still publish. `rosy-io.service` defaults to it (`ROSY_IO_DRIVE_ENABLED=false`).
 
+Motor start verification (2026-10-10, fix/rosy-io-restart-after-activation; no ADR number reserved): after init, `DynamixelDriver.verify_motors` always checks each motor's hardware-error register, torque flag, readable position and idle current (`IDLE_CURRENT_MAX_MA`, no wheel motion). A fault reboots the motors once, then `bringup` raises and exits non-zero (`rosy-io` `Restart=always` + StartLimit retries). Only `motor_motion_check:=true` (default false) adds a 5 rpm, 0.4 s wheel probe; it moves the wheels on every start, auto-restart and activation, so enabling it is a safety decision for the site. The idle-current heuristic catches gross faults only; a ~100 mA stall without a latched error needs the probe.
+
 ## Dependencies
 
 ### Internal

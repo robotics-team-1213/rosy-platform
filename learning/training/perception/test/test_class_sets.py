@@ -37,10 +37,11 @@ def test_bad_names_are_refused():
             class_sets.from_data_yaml(raw, 'detect')
 
 
-def test_legacy_object_set_is_the_d423_list():
+def test_legacy_object_set_is_the_d602_list():
     legacy = class_sets.legacy_object_set()
     assert tuple(c['name'] for c in legacy['classes']) == OBJECT_CLASSES
-    assert legacy['source']['kind'] == 'd423_v1'
+    assert 'person_feet' not in OBJECT_CLASSES
+    assert legacy['source']['kind'] == 'd602_v1'
 
 
 def generation(store):

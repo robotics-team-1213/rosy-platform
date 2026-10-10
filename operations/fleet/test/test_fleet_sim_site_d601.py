@@ -1,5 +1,6 @@
-"""D-601 B in SIM: every Fleet that drives Gazebo robots loads the shared SIM site config, whose
-``fleet.trip.lane_camera_check: false`` keeps lane plans from being refused for the missing preview."""
+"""D-601 in SIM: every Fleet that drives Gazebo robots loads one of two shared SIM site configs.
+No-camera SIM (gz_multi) keeps ``lane_camera_check: false`` so lane plans are not refused for the
+missing preview; camera SIM launches run sim_jpeg_relay.py and check the preview as on a device."""
 
 from __future__ import annotations
 
@@ -21,22 +22,36 @@ from fakes import FakeRobot
 from test_site_map_trip import LANE_GRAPH, OPERATOR, _on_ring_s
 
 REPO = Path(__file__).resolve().parents[3]
-SIM_SITE = "integrations/simulation/gazebo/config/fleet_sim_site.yaml"
-# Every place that starts a Fleet against Gazebo SIM robots.
-SIM_FLEETS = (
-    "tools/run_fleet_sim.sh",
-    "tools/validation/fleet_gazebo/run.py",
-    "tools/sim/d395_s1_bench.py",
-    "docs/validation/d407-gazebo-console-rerun-2026-10-02/evidence/console.sh",
-    "docs/validation/lane-trip-lap-sim-2026-10-08/evidence/lap_fleet.py",
-    "docs/validation/lane-west-bend-candidate-2026-10-09/evidence/lap_fleet.py",
+SIM_SITE = "integrations/simulation/gazebo/config/fleet_sim_site.yaml"  # no camera
+SIM_CAMERA_SITE = "integrations/simulation/gazebo/config/fleet_sim_camera_site.yaml"
+# Every place that starts a Fleet against Gazebo SIM robots -> the shared config it loads.
+SIM_FLEETS = {
+    "tools/run_fleet_sim.sh": SIM_SITE,  # gz_multi start_camera:=false
+    "tools/validation/fleet_gazebo/run.py": SIM_SITE,  # gz_multi
+    "tools/sim/d395_s1_bench.py": SIM_SITE,  # gz_multi
+    "docs/validation/d407-gazebo-console-rerun-2026-10-02/evidence/console.sh": SIM_CAMERA_SITE,
+    "docs/validation/lane-trip-lap-sim-2026-10-08/evidence/lap_fleet.py": SIM_CAMERA_SITE,
+    "docs/validation/lane-west-bend-candidate-2026-10-09/evidence/lap_fleet.py": SIM_CAMERA_SITE,
+}
+# Camera SIM launches that publish CORE's front preview through the relay.
+CAMERA_LAUNCHES = (
+    "integrations/simulation/gazebo/launch/map_v2_fleet_lane.launch.py",
+    "integrations/simulation/gazebo/launch/map_v2_fleet_real.launch.py",
+    "docs/validation/d495-junction-sim-2026-10-07/evidence/d495_real.launch.py",
+    "docs/validation/lane-west-bend-candidate-2026-10-09/evidence/closed_loop.launch.py",
+    "docs/validation/d407-gazebo-console-rerun-2026-10-02/evidence/run_sim.sh",
 )
 
 
-def test_every_sim_fleet_loads_the_shared_sim_site_config():
-    config = _trip_config(SimpleNamespace(site_config=REPO / SIM_SITE))
-    assert config.lane_camera_check is False
-    missing = [p for p in SIM_FLEETS if Path(SIM_SITE).name not in (REPO / p).read_text(encoding="utf-8")]
+def test_every_sim_fleet_loads_the_shared_sim_site_config_for_its_camera():
+    assert _trip_config(SimpleNamespace(site_config=REPO / SIM_SITE)).lane_camera_check is False
+    assert _trip_config(SimpleNamespace(site_config=REPO / SIM_CAMERA_SITE)).lane_camera_check is True
+    wrong = [p for p, site in SIM_FLEETS.items() if Path(site).name not in (REPO / p).read_text(encoding="utf-8")]
+    assert wrong == []
+
+
+def test_camera_sim_launches_publish_the_front_preview():
+    missing = [p for p in CAMERA_LAUNCHES if "sim_jpeg_relay" not in (REPO / p).read_text(encoding="utf-8")]
     assert missing == []
 
 

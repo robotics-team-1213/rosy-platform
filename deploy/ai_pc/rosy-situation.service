@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/rosy-platform/operations/situation
+# deploy-situation.sh <commit> (README 「상황 서비스」): one detached worktree per commit, `current` = live
+WorkingDirectory=%h/rosy-situation/current/operations/situation
 # FLEET_URL, FLEET_TOKEN_FILE (ai_observer token), FLEET_CA; optional ROSY_SITUATION_STATE,
 # ROSY_SITUATION_OWNER_MODE (file only the owner writes: available | shared | owner_busy; missing = owner_busy)
 EnvironmentFile=%h/.config/rosy/situation.env

@@ -11,7 +11,7 @@ from core_features.line_follow import crosswalk_gate as gate_module
 from core_features.line_follow.crosswalk_gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 
 RANGE_MIN = 0.15     # D-573 Context 4: the Pinky LiDAR range_min
 NEAR, FAR = 0.50, 0.70
@@ -605,3 +605,23 @@ def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
 
     assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
     assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
+
+
+def test_a_bare_reported_flag_without_the_key_stays_unknown():
+    """rosy-b3 review: an input flag alone must not become null = positively outside a zone."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert "crosswalk" not in LineFollowStatus.model_validate({"crosswalk_reported": True}).model_dump()
+
+
+def test_state_snapshot_round_trips_an_unknown_crosswalk_and_refuses_a_malformed_one():
+    import pydantic
+    from core_common.protocol.schemas import StateSnapshot
+
+    unknown = {"state": "unknown", "reason": "not_watched", "source": "camera"}
+    snap = StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": unknown}})
+    again = StateSnapshot.model_validate(snap.model_dump(mode="json"))
+    assert again.model_dump(mode="json")["line_follow"]["crosswalk"]["state"] == "unknown"
+    for bad in ("outside", {"zone_id": "z1"}, 3):
+        with pytest.raises(pydantic.ValidationError):
+            StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": bad}})

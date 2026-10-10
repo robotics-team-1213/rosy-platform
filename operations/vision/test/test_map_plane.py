@@ -116,6 +116,30 @@ def test_map_plane_response_headers():
     assert image.shape[:2] == (520, 920)
 
 
+def test_ai_map_crop_lease_returns_only_the_robot_neighborhood():
+    server = _server()
+    server.report_calibration(SOURCE, RECORD, MAP)
+    token = server.preview_signer.issue(principal_id="ai-case", source_id=SOURCE,
+                                        rectification={"mode": "map"}, crop_map=(0.0, 0.0, 0.5),
+                                        crop_map_id=MAP, crop_revision=RECORD["calibration_revision"])
+    response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
+    assert response.status_code == 200
+    assert response.headers["X-Frame-Rectified"] == "map-crop"
+    image = cv2.imdecode(np.frombuffer(response.body, np.uint8), cv2.IMREAD_COLOR)
+    assert image.shape[:2] == (400, 400)
+
+
+@pytest.mark.parametrize("changed", [{"map_id": "other"}, {"calibration_revision": "next"}])
+def test_ai_crop_lease_cannot_follow_a_map_or_calibration_switch(changed):
+    server = _server()
+    token = server.preview_signer.issue(principal_id="ai-case", source_id=SOURCE,
+                                        rectification={"mode": "map"}, crop_map=(0.0, 0.0, 0.5),
+                                        crop_map_id=MAP, crop_revision=RECORD["calibration_revision"])
+    server.report_calibration(SOURCE, {**RECORD, **changed}, changed.get("map_id", MAP))
+    response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
+    assert response.status_code == 409 and response.headers["X-Frame-State"] == "plane-unavailable"
+
+
 @pytest.mark.parametrize("record, lens", [
     (None, LENS),                                                     # no record
     (RECORD, {**LENS, "focal_mm": 2.2}),                              # lens changed

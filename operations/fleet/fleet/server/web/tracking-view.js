@@ -2,7 +2,8 @@
 // 표시 전용 — 목표·교통정리·미션에 넘기지 않는다.
 
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
-  trackingDriftSample, calibrationDriftVerdict, rememberTrackingPoses, CALIBRATION_DRIFT_POLLS,
+  trackingDriftSample, calibrationDriftVerdict, effectiveDriftVerdict, rememberTrackingPoses,
+  CALIBRATION_DRIFT_POLLS,
 } from "./tracking-layer.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
@@ -26,12 +27,13 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     const changed = JSON.stringify(next) !== JSON.stringify(view.cameraTracking);
     view.cameraTracking = next;
     // 교정 낡음 표본은 실제 폴링 응답마다 한 번만 쌓는다. 수명 만료 show(null)은 연속을
-    // 끊지 않는다 — 만료는 데이터 신선도이지 교정 상태가 아니기 때문이다.
+    // 끊지 않는다 — 만료는 데이터 신선도이지 교정 상태가 아니기 때문이다. 최종 판정은
+    // 로봇 표본 우선, 없으면 서버 자동 검사 판정(관측 0/0대 현장)으로 내린다.
     if (body) {
       driftHistory.push(trackingDriftSample(next, previousPoses));
       driftHistory = driftHistory.slice(-CALIBRATION_DRIFT_POLLS);
       previousPoses = rememberTrackingPoses(next);
-      view.trackingDrift = calibrationDriftVerdict(driftHistory);
+      view.trackingDrift = effectiveDriftVerdict(calibrationDriftVerdict(driftHistory), body.sources);
     }
     legend.hidden = !(next.robots.length || next.unknown.length);
     if (positions && positionBody) {

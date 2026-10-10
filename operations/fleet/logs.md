@@ -2350,6 +2350,12 @@
 - 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
 - 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다
 
+## 2026-10-07 · uncommitted · feat(fleet): 로봇 관측 없이 카메라 교정 낡음을 서버가 자동 검사
+- 변경: Fleet이 승인 추적 교정(`tracking_calibrations`)과 Vision D-375 맞춤 제안을 주기(기본 60 s, `--calibration-drift-interval-s`, 0이면 끔, `--vision-url` 필요) 비교해 출처별 `calibration_drift` 판정을 `GET /api/fleet/tracking` 출처 행에 싣는다(`server/tracking_drift.py` — 순수 판정 `calibration_drift_verdict`, `CalibrationDriftWatch`, `VisionMapProposalReader`). 판정은 승인 `track_bounds_m` 네 모서리를 승인 교정으로 화소로 보낸 뒤 제안 `image_to_map`으로 다시 map 미터로 보내 최대 이동(0.3 m 초과)과 선형부 상대 회전(3° 초과)으로 stale를 정한다. 수락(accepted) 제안만 근거고, Vision 사용 중(429, 수동 맞춤 실행)·거부 제안·크기 바뀐 프레임은 그 회차를 건너뛰어 마지막 판정을 유지하며, 새 승인·철회는 그 출처의 판정을 지운다. 콘솔 조감도는 로봇 표본 판정을 우선하고 없으면(관측 0/0대) 서버 판정 stale로 실영상 대신 미터 눈금과 "카메라 교정 어긋남(자동 검사)" 경고를 보인다(tracking-layer `serverCalibrationDrift`·`effectiveDriftVerdict`, tracking-view·map-view 분기). `tracking.py` `drift_provider`, app.py 감시 루프와 "감시는 추적 서비스 필요" 검사, D-457 경계 허용 목록에 `server/tracking_drift.py` 추가. 표시 전용 — 관측·목표·주행 경로에 쓰지 않는다.
+- 증거: `test_tracking_drift.py` 신규 21 passed(항등·이동·회전·경계·거부 제안·감시 수명·리더 429/404/401/422/500·라우트 탑재·앱 검증·lifespan 실행/종료), node `tracking-layer.test.mjs` 14 passed(신규 2: 서버 판정 읽기·표본 우선), 콘솔 브라우저 신규 2 + 기존 낡음 1 passed(ROSY_RUN_BROWSER_TESTS=1). 변이 증명: stale 조건 or→and 5적, 감시 리비전 초기화 무력화 1적, snapshot 탑재 제거 1적, `effectiveDriftVerdict` 서버 폴백 제거 node 1적·브라우저 TimeoutError, 각 복원 초록. `operations/fleet/test` 최종 2485 passed·124 skipped, known_failures 0 NEW
+- gate 변화: 없음. 서버 판정은 표시 경로만 바꾼다
+- 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강, D-375 제안 엔드포인트 재사용)
+- 교훈: 로봇이 카메라에 안 보이는 현장에서 교정 낡음의 유일한 독립 증거는 바닥 페인트 맞춤 제안이다. 프레임 모서리가 아니라 트랙 모서리로 재야 한다 — 기울어진 카메라의 프레임 가장자리는 지평선 근처에서 소리 없이 수십 미터 튄다
 ## 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
 - 변경: 기존 표시 보정·preview lease·평면 변환을 재사용해 현장 지도에 직사각형 카메라 영상과 미터 좌표를 표시한다. 같은 지도 ID·렌즈·영상 크기·신선도를 확인하고, 카메라 변경 시 이전 영상을 비운다. 좌표 확인과 운행 선택은 분리하며 확인 중 경로 계산·시작·재개를 잠근다. 새 API·패키지는 없음
 - 증거: node 153 passed; 관련 Python 148 passed·26 skipped; Chromium 관련 5 passed, 최종 좌표 확인 회귀 1 passed; known_failures 0 NEW. 저장된 현장 영상으로 실제 화면 1440·390·320 px에서 직사각형 지도·좌표 확인, 가로 넘침 없음. 독립 소스 검토 PASS
@@ -3053,3 +3059,22 @@
 - Change: the card's position chip says Fleet's site map pose first (지도 위치 확정/추정 · 카메라/odom 이음), CORE localization only when CORE reports one, else a neutral 지도 위치 없음 (no warn for a missing CORE block; the D-587 marker-yaw reason is not known to Fleet, so not shown). Map markers carry short ids with declutter (hidden on overlap except selected/called/최우선). The same warn cause on several robots is one expandable queue row; 최우선 rows stay one per robot and first; queue heads count instead of repeating names (D-540 3). 전체 주행 취소 runs at once without a confirm (D-540 6, user decision), quiet, any operator, "전체 주행 취소를 보냈습니다 · N대"; dialog contract pins console.js at 3.
 - Evidence: model/AI PC remote runs: operations/fleet/test 3326 passed; guard suites only the perception size verdict listed in known_failures; browser suites equal clean main 8d7b5939f (11 known failures) plus new tests passing (labels/grouping, cancel-all immediate, 100 robots).
 - Gate: SOURCE. Console only; 전체 주행 취소 calls the unchanged /api/fleet/cancel-all.
+
+## 2026-10-10 · uncommitted · fix(trip): free 경로 이탈 때 목표 취소
+
+- Change: Fleet의 0.5초 trip 감독에서 `LOCALIZED` 자세가 계획 경로 폭의 절반을 벗어나면 free 구간의 진행 중인 CORE 목표를 취소한다. 위치 상실 시 기존 deadman 정책은 유지한다.
+- Evidence: `test_trip_runner.py` 경로 이탈 사례에서 목표 취소와 `stop_sent`를 확인한다.
+- Gate: SOURCE; 실기기 정지 거리와 도착은 별도 검증이다.
+
+## 2026-10-10 · uncommitted · fix(fleet): 이름 있는 차선 중간 장소에서 유한 trip 정지
+
+- Change: 유한 trip의 마지막 이름 있는 중간 장소를 계획 action과 실행 place에 보존해 Fleet이 그 장소의 `stop_after_m` 정지를 보낸다. 반복 lap의 중간 장소는 기존처럼 통과하고, 좌표만 지정한 중간 종료는 계속 거절한다 (D-613).
+- Evidence: 원격 `test_lane_traffic.py`, `test_routing.py`, `test_trip_runner.py`, `test_site_map_trip.py` 183 passed; `known_failures.py` NEW 0, KNOWN 0 (`X:/DevTemp/one-lap-midstop-2/run-1.txt`).
+- Gate: SOURCE. 실제 두 로봇 동시 한 바퀴·정지 거리·차체 여유는 ROS-SIM·DEVICE·FIELD 별도.
+
+## 2026-10-10 · uncommitted · refactor(fleet): isolate stuck peer pose checks
+
+- Change: move trusted map pose and front/back peer-band helpers from stuck_resolver.py into stuck_peer_pose.py; preserve the resolver import surface and decisions.
+- Evidence: focused stuck resolver/API tests 137 passed; structure size checks 2 passed. Main at 5d93a9255 had both size failures before this split.
+- Gate: SOURCE and host tests only; no field robot action or changed motion contract.
+

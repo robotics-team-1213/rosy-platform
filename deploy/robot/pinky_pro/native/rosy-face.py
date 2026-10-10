@@ -739,10 +739,15 @@ class FaceDisplay:
         if robot_state is not None:
             args = (state, (core or {}).get("robot_mode") or view.get("robot_mode"),
                     (core or {}).get("nav_state") or view.get("nav_state"))
+            recovery = (core or {}).get("recovery")
+            signal = (core or {}).get("signal")
             try:
-                lamp = robot_state.lamp_pattern(*args, (core or {}).get("recovery"))
-            except TypeError:  # a core_common from before D-546 takes three arguments
-                lamp = robot_state.lamp_pattern(*args)
+                lamp = robot_state.lamp_pattern(*args, recovery, signal)
+            except TypeError:  # before the turn signal, then before D-546's recovery argument
+                try:
+                    lamp = robot_state.lamp_pattern(*args, recovery)
+                except TypeError:
+                    lamp = robot_state.lamp_pattern(*args)
         bar = None if not screen or screen["kind"] != "face" else (
             screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok", None, None)
         return types.SimpleNamespace(
