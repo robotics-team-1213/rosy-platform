@@ -237,8 +237,8 @@ def cmd_nudge(core, args):
 
 
 def _recording_state(core):
-    _, b = core.call("GET", "/recordings/active")
-    return ((b if isinstance(b, dict) else {}).get("active") or {})
+    status, b = core.call("GET", "/recordings/active")
+    return ((b if status == 200 and isinstance(b, dict) else {}).get("active") or {})
 
 
 def rec_start(core):
@@ -246,12 +246,19 @@ def rec_start(core):
     log("recording start", s, b if s != 201 else (b or {}).get("id"))
     if s != 201:
         sys.exit(f"recording refused: {s} {b}")
+    recording_id = b.get("id") if isinstance(b, dict) else None
+    if not isinstance(recording_id, str) or not recording_id:
+        sys.exit("recording start returned no id")
     for _ in range(40):
         st = _recording_state(core)
-        if st.get("state") == "recording":
-            log("recording", st.get("id"))
-            return st.get("id")
+        if st.get("id") and st["id"] != recording_id:
+            sys.exit("recording replaced before ready")
+        if st.get("state") == "recording" and st.get("id") == recording_id:
+            log("recording", recording_id)
+            return recording_id
         time.sleep(0.5)
+    if _recording_state(core).get("id") == recording_id:
+        core.call("POST", "/recordings/active/stop")
     sys.exit("recorder never reached 'recording'")
 
 
