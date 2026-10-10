@@ -156,7 +156,10 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (!head) return;
     const names = [...new Set([...list.querySelectorAll("li b")].map((b) => b.textContent))];
     head.querySelector("b").textContent = `${label} ${names.length}`;
-    head.querySelector("small").textContent = names.join(" · ");
+    // Many robots: the head names six and counts the rest; every name stays in title and in the rows.
+    const small = head.querySelector("small");
+    small.textContent = names.length > 6 ? `${names.slice(0, 6).join(" · ")} 외 ${names.length - 6}대` : names.join(" · ");
+    small.title = names.length > 6 ? names.join(" · ") : "";
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most

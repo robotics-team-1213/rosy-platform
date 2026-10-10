@@ -19,6 +19,8 @@ function formatFormationCause([code, robot]) {
 }
 // D-540 6: 비활성 사유는 블록 한 줄(#formation-why)이고 꺼진 버튼은 모두 "위 사유"다.
 const ABOVE = "위 사유";
+// Many robots: name a few, count the rest (the form and the cards carry every id).
+const fewIds = (ids, n = 5) => ids.length > n ? `${ids.slice(0, n).join(", ")} 외 ${ids.length - n}대` : ids.join(", ");
 const AFTER_OPEN = "대형 변경·재개·해제는 대형을 시작한 뒤에 씁니다";
 
 export function createFormation({ scope, el, view, log, call, render, namedReason = () => "" }) {
@@ -76,6 +78,18 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       if (ids.includes(current)) select.value = current;
     }
     syncPendingSummary();
+    filterRobots();
+  }
+
+  // 로봇이 많으면(10대, 100대) 고르기가 긴 목록이 된다. 찾기 칸 하나가 이 묶음의 모든 로봇 고르기를 거른다.
+  // 고른 값은 숨기지 않는다(선택이 화면에서 사라지면 무엇을 보내는지 모른다).
+  function filterRobots() {
+    const text = el("formation-filter").value.trim().toLowerCase();
+    const hit = (id) => !text || id.toLowerCase().includes(text);
+    for (const select of document.querySelectorAll(".formation select[data-robot-picker]")) {
+      for (const option of select.options) option.hidden = !hit(option.value) && option.value !== select.value;
+    }
+    for (const label of el("formation-members").children) label.hidden = !hit(label.title);
   }
 
   const followers = () => [...el("formation-members").querySelectorAll("input:checked")].map((b) => b.value);
@@ -94,7 +108,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       "formation-start": Boolean(reason), "formation-reform": true, "formation-resume": true, "formation-stop": true,
     });
     el("formation-detail").textContent = reason ? ""
-      : `리더 ${leader} · 팔로워 ${members.length}대(${members.join(", ")}) · ${shapeLabel(shape)} · 간격 ${spacing} m`;
+      : `리더 ${leader} · 팔로워 ${members.length}대(${fewIds(members)}) · ${shapeLabel(shape)} · 간격 ${spacing} m`;
   }
 
   function renderFormation(status) {
@@ -132,7 +146,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     const items = [
       ["리더", status.leader],
       ["모양", `${shapeLabel(status.formation)} · 간격 ${status.spacing} m`],
-      ["팔로워", slots.length ? slots.join(", ") : "—"],
+      ["팔로워", slots.length ? fewIds(slots, 6) : "—"],
     ];
     if (relay) {
       items.push(["릴레이", relay.paused ? "일시정지" : `${relay.leader_rx_hz} Hz`
@@ -234,7 +248,8 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     scope.listen(el("formation-stop"), "click", () =>
       formationCall("/api/fleet/formation/stop", null, "해제"));
 
-    // D-252: 폼이 바뀌면 대기 요약을 갱신한다. 무장 중에는 서버 상태가 주인이므로 건드리지 않는다.
+    scope.listen(el("formation-filter"), "input", filterRobots);
+    // D-252: 폼이 바뀌면 대기 요약을 갱신한다. 대형 중에는 서버 상태가 주인이므로 건드리지 않는다.
     for (const id of ["formation-leader", "formation-shape", "formation-spacing", "formation-members"]) {
       scope.listen(el(id), "change", syncPendingSummary);
       scope.listen(el(id), "input", syncPendingSummary);
