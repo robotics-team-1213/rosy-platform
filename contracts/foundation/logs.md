@@ -600,8 +600,20 @@
 - 증거: 원격 회귀시험에서 선택 함수 부재를 재현했다. 수정 후 원격 재검증 대기.
 - gate 변화: 없음. 실기기 차체 이탈 방지 증거가 아니다.
 
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
 ## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 
 - Change: Shared situation-v1 validates mobility/manipulation observations bound to caller-owned frames; model verification remains unverified.
 - Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
 - Gate: SOURCE; live Fleet image and physical acceptance remain separate.
+
+## 2026-10-10 · 181b569b5 · fix(discovery): 빈 검색 캐시 재사용
+
+- 변경: 최초 광고 수집 이후에는 빈 캐시도 바로 반환해 저장된 TLS 호스트의 LAN 조회로 넘어간다. 매 요청의 3초 대기를 제거하며 최초 경쟁 광고 수집, 충돌 거절과 TLS 신원 검증은 유지한다.
+- 증거: 현장 Fleet 두 호스트의 주소 해석 3.007초를 재현했다. 원격 RED에서 빈 warm cache 시험이 3초 지연으로 실패했고, 수정 후 발견·TLS 역할·Fleet transport·등록 TLS 시험 77건이 통과했다. known_failures 신규 실패 0건.
+- gate 변화: SOURCE. 현장 새 payload 적용과 연속주행은 아직 확인하지 않았다.

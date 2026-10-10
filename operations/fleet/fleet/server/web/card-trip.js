@@ -9,6 +9,7 @@ import {
   repeatTripReason, startTrip,
   trafficCardLine, tripRefusalText, tripStartReason,
 } from "/console/assets/site-map-model.js";
+import { chooseConvoyLeader } from "./motion-readiness.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 
 export { endedTripText, openTrip };
@@ -235,7 +236,12 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     if (!bound) { bound = true; bindConvoy(); }
     const follower = el("convoy-follower"), leader = el("convoy-leader");
     const leaders = convoyLeaders(view.trafficTrips, null);
-    const lead = placeOptions(leader, leaders.map((id) => ({ id })), leader.value, (row) => row.id);
+    const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.version);
+    if (leader.dataset.leaderOverride && !leaders.includes(leader.dataset.leaderOverride)) {
+      delete leader.dataset.leaderOverride;
+    }
+    const preferred = leader.dataset.leaderOverride || choice.id || leader.value;
+    const lead = placeOptions(leader, leaders.map((id) => ({ id })), preferred, (row) => row.id);
     const free = view.robots.map((robot) => robot.robot_id).filter((id) => id !== lead && !openTrip(view, id));
     const chosen = placeOptions(follower, free.map((id) => ({ id })), follower.value, (row) => row.id);
     const starts = places().filter((place) => place.kind === "start");
@@ -251,7 +257,15 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
   }
 
   function bindConvoy() {
-    for (const id of ["convoy-leader", "convoy-follower", "convoy-start"]) scope.listen(el(id), "change", syncConvoy);
+    scope.listen(el("convoy-leader"), "change", () => {
+      const leaders = convoyLeaders(view.trafficTrips, null);
+      const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.version);
+      const leader = el("convoy-leader");
+      if (leader.value && leader.value !== choice.id) leader.dataset.leaderOverride = leader.value;
+      else delete leader.dataset.leaderOverride;
+      syncConvoy();
+    });
+    for (const id of ["convoy-follower", "convoy-start"]) scope.listen(el(id), "change", syncConvoy);
     scope.listen(el("convoy-go"), "click", () => {
       const id = el("convoy-follower").value, leader = el("convoy-leader").value, start = el("convoy-start").value;
       send(id, convoy, async () => {
@@ -261,5 +275,11 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     });
   }
 
-  return { toggle, section, syncConvoy };
+  function focus(robotId) {
+    form = {
+      robotId, to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
+    };
+  }
+
+  return { toggle, section, syncConvoy, focus };
 }

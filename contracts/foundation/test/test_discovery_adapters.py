@@ -139,17 +139,19 @@ def test_remove_during_resolution_never_resurrects_and_cap_is_bounded(monkeypatc
         assert all(item.instance != 'removed' for item in cache.snapshot('_rosy-dock._tcp'))
 
 
-def test_warm_cache_reads_do_not_create_new_browsers(monkeypatch):
+@pytest.mark.parametrize('present', [True, False])
+def test_warm_cache_reads_do_not_create_new_browsers(monkeypatch, present):
     monkeypatch.setitem(sys.modules, 'zeroconf', SimpleNamespace(
         Zeroconf=lambda: SimpleNamespace(close=lambda: None),
         ServiceBrowser=lambda *a: SimpleNamespace(cancel=lambda: None)))
     with discover.DiscoveryCache() as cache:
         cache.browse('_rosy-dock._tcp')
         cache._started['_rosy-dock._tcp'] = time.monotonic() - 4
-        cache._records[('_rosy-dock._tcp', 'dock')] = discover.DiscoveredDevice(
-            'dock', '_rosy-dock._tcp', 'actual.local', 8091)
+        if present:
+            cache._records[('_rosy-dock._tcp', 'dock')] = discover.DiscoveredDevice(
+                'dock', '_rosy-dock._tcp', 'actual.local', 8091)
         before = time.monotonic()
-        assert len(cache.wait('_rosy-dock._tcp', timeout_s=3)) == 1
+        assert len(cache.wait('_rosy-dock._tcp', timeout_s=3)) == int(present)
         assert time.monotonic() - before < .1
         assert len(cache._browsers) == 1
 

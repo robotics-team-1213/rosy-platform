@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROSY · 함께 녹화</title>
+<style>
+body{margin:0;background:#101923;color:#f3f5f7;font:16px system-ui,sans-serif}header{padding:16px 24px;display:flex;gap:20px;align-items:center}h1{font-size:20px;margin:0}#state{margin-left:auto;color:#91d2dd}canvas{width:100%;height:auto;display:block}p{margin:12px 24px;color:#b8c4ce}a{color:#91d2dd}
+</style>
+<header><h1>카메라 · 위치 함께 녹화</h1><span id="state" role="status">연결 중</span></header>
+<canvas id="wall" width="1280" height="720" aria-label="선택한 카메라 영상과 로봇 위치"></canvas>
+<p>원본 JPEG · 위치 기록 · 분석 DB를 이 PC에 저장합니다. <a href="session.json">세션 정보</a> · 지도 위치 미확인은 별도로 표시합니다.</p>
+<script>
+const canvas=document.querySelector('#wall'),ctx=canvas.getContext('2d'),state=document.querySelector('#state');
+const images=new Map();
+function text(value,x,y,color='#f3f5f7'){ctx.fillStyle=color;ctx.font='18px system-ui';ctx.fillText(value,x,y)}
+async function update(){
+ try{
+  const response=await fetch('session.json',{cache:'no-store'});if(!response.ok)throw Error('session');
+  const session=await response.json();const now=session.ended_at||Date.now()/1000;
+  const cols=Math.min(4,Math.ceil(Math.sqrt(session.sources.length*1280/600))),rows=Math.ceil(session.sources.length/cols);
+  const robots=session.sources.filter(s=>s.kind==='robot'),footer=Math.max(80,Math.ceil(robots.length/2)*22+20);
+  canvas.height=Math.max(720,40+rows*240+footer);const w=1280/cols,h=(canvas.height-40-footer)/rows;
+  ctx.fillStyle='#101923';ctx.fillRect(0,0,canvas.width,canvas.height);text(new Date(now*1000).toISOString(),12,26);
+  state.textContent=session.ended_at?'녹화 종료':now-session.updated_at>3?'기록 연결 지연':'이 PC에 녹화 중';
+  await Promise.all(session.sources.map(async(source,i)=>{
+   const x=(i%cols)*w,y=40+Math.floor(i/cols)*h,frame=source.latest;
+   const live=source.status==='live'&&frame&&now-frame.received_at<=session.max_age_s;
+   text(source.id+(live?' · '+frame.clock:' · 영상 없음 / 지연'),x+10,y+20,live?'#91d2dd':'#ffb45e');
+   if(!live)return;
+   try{
+    let cached=images.get(source.id);if(!cached||cached.file!==frame.file){
+     const image=new Image();image.src=frame.file;await image.decode();cached={file:frame.file,image};images.set(source.id,cached);
+    }
+    const image=cached.image,angle=(frame.rotation_deg||0)*Math.PI/180,swap=Math.abs(Math.sin(angle))>.5;
+    const iw=swap?image.height:image.width,ih=swap?image.width:image.height,scale=Math.min((w-20)/iw,(h-35)/ih);
+    ctx.save();ctx.translate(x+w/2,y+30+(h-35)/2);ctx.rotate(angle);ctx.drawImage(image,-image.width*scale/2,-image.height*scale/2,image.width*scale,image.height*scale);ctx.restore();
+   }catch{ text('영상 읽기 실패',x+10,y+60,'#ffb45e'); }
+  }));
+  const position=session.positions,tracking=position&&Math.abs(now-position.received_at)<=2&&Math.abs(now-position.tracking.ts)<=2?position.tracking:null;
+  robots.forEach((source,i)=>{const row=tracking?.robots.find(r=>r.robot_id===source.robot_id),p=row?.camera;
+   const confirmed=p&&['MARKER','OK','OFFSET'].includes(row.status);
+   text(source.robot_id+': '+(confirmed?`지도 X ${p.x.toFixed(2)} / Y ${p.y.toFixed(2)} m`:`지도 위치 미확인 · ${row?.status||'연결 없음'}`),12+(i%2)*640,60+rows*h+Math.floor(i/2)*22,confirmed?'#f3f5f7':'#ffb45e');
+  });
+ }catch{state.textContent='기록 연결 끊김';ctx.fillStyle='#101923';ctx.fillRect(0,0,canvas.width,canvas.height);text('기록 연결 끊김 · 마지막 영상을 현재 영상으로 표시하지 않습니다.',24,100,'#ffb45e')}
+ setTimeout(update,500);
+}
+update();
+</script></html>
