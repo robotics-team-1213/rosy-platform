@@ -24,7 +24,8 @@ class Front:
     async def front_frame(self, *, overlay=True):
         assert overlay is False
         self.sequence += 1
-        return JPEG, {"source": "front", "sequence": self.sequence, "age_ms": 100}
+        return JPEG, {"source": "front", "sequence": self.sequence, "age_ms": 100,
+                      "captured_at": WALL - 4 + self.sequence}
 
 
 def routes(first, line, clients, loop=None, deadlock=lambda: None):
@@ -52,7 +53,7 @@ def test_stuck_ai_retry_reads_new_front_without_replacing_operator_preview(enrol
     two = client.get("/api/fleet/ai/case/s1").json()
     assert one["views"]["front"]["frame_id"] == "front:1"
     assert two["views"]["front"]["frame_id"] == "front:2"
-    assert two["views"]["front"]["captured_at"] == WALL + 7.9
+    assert two["views"]["front"]["captured_at"] == WALL - 2
     assert first.on("a") == bool(enrolled)
 
 
@@ -97,3 +98,30 @@ def test_deadlock_case_service_vlm_and_fleet_replan_are_connected(tmp_path):
     assert board.proposal["robot_id"] == "b" and board.proposal["body"] == {"blocked_edges": ["y"]}
     assert board.proposal["evidence"]["views"]["rosy_cam"]["frame_id"] == "b:cam"
     assert replan(("a", "b"), {"b": ["y"]}, 1.0) == ("b", ("y",))
+
+
+def test_live_case_context_uses_cached_state_age_and_open_time_clearance(monkeypatch):
+    monkeypatch.setattr("fleet.stuck.closed_loop.time.monotonic", lambda: 10.0)
+    first = AiFirst(())
+    first.wall = lambda: WALL
+    line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1",
+                                            "front_clearance_m": 0.2, "cause": "lane_lost"}])
+    loop = SimpleNamespace(problems=None, _rows={"a": {"_state_mono": 8.0,
+                           "state": {"mode": "EMERGENCY", "line_follow": {"mode": "OFF"}}}})
+    case = routes(first, line, {"a": Front()}, loop).get("/api/fleet/ai/case/s1").json()
+    assert case["context"]["state_age_s"] == 2.0
+    assert case["context"]["current_mode"] == "EMERGENCY"
+    assert case["context"]["cause"] == "lane_lost"
+    assert case["context"]["clearance_at_open_m"]["front_clearance_m"] == 0.2
+    assert "clearance_m" not in case["context"]
+
+
+def test_unknown_front_capture_stamp_is_not_reconstructed_as_fresh():
+    class MissingStamp:
+        async def front_frame(self, *, overlay=True):
+            return JPEG, {"source": "front", "sequence": 1, "age_ms": 0}
+    first = AiFirst(())
+    first.wall = lambda: WALL
+    line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1"}])
+    case = routes(first, line, {"a": MissingStamp()}).get("/api/fleet/ai/case/s1").json()
+    assert "front" not in case["views"]
