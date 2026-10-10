@@ -72,7 +72,7 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
 
     def _problems() -> list[dict]:
         out = [{"problem_id": row["stuck_id"], "kind": "stuck", "robot_id": row["robot_id"]}
-               for row in line_stuck.pending() if first.on(row["robot_id"]) and row.get("stuck_id")]
+               for row in line_stuck.pending() if row.get("stuck_id")]
         if loop is not None and loop.problems is not None:
             out += [{"problem_id": p["problem_id"], "kind": p["kind"], "robot_id": p["robot_id"]}
                     for p in loop.problems.open.values()]

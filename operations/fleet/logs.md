@@ -3098,6 +3098,12 @@
 - Evidence: 신규 기능 원격 RED(모듈 누락), 관련 시험 61개 GREEN. 독립 검토의 재앵커·관찰 오류 4건은 별도 원격 RED로 재현하고 수정했다. 최종 관련·구조 시험은 현재 후보에서 다시 확인한다. 검토자 lap_review는 008d62b301의 소스 수정 승인; REALIGN 실행·현장 완주 승인은 아니다.
 - Gate: SOURCE. REALIGN 전달·trip 중 조작 점유 검증·공통 장치 배포·하단 실제 통과·전체 한 바퀴는 미완료다. 방향 로그는 5도 변화 단위 요약이며 전체 영상/표본을 대신하지 않는다.
 
+## 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
+
+- Change: D-618 separates ai_observer case reads from AI-first enrollment; removes unsupported REALIGN from the VLM table. API Reference specifies request correlation, image/model evidence, queued admission, Fleet verdict and CORE outcome, with three contract examples.
+- Evidence: remote situation / AI facts / AI-first contracts 97 passed; known_failures 0 NEW. Live heartbeat reports Qwen model digest and both enrolled Fleet resolver robots; no corner inference or motion acceptance is claimed.
+- Gate: SOURCE / remote API contracts; field judgement and lane-follow acceptance remain pending.
+
 ## 2026-10-10 · aa37d8cb6 · fix(fleet): 일정 시간 점등과 주기 재식별
 - 변경: 기존 CORE 요청으로 1초 꺼짐 뒤 2초 연속 점등. 완전한 파랑 꺼짐-켜짐-꺼짐 증거는 예상 자리 밖에서도 이름을 붙인다. 미확인 로봇은 30초마다 source별 한 대씩 재요청하며 초기 신원 미상도 포함한다. 지도 기준점과 주행 권한은 변경하지 않는다.
 - 증거: 원격 RED 5건으로 누락을 재현, 원격 통합 373 passed / 3 skipped. C 램프 시각표 포함 최종 시험은 별도 로그에 기록한다.
