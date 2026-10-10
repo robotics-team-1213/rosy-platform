@@ -758,6 +758,28 @@ def test_robot_markers_are_still_reported_while_a_tune_pauses_the_background():
     assert len(detector.calls) == 1  # only the frame before the tune started ran the detector
 
 
+def test_fleet_robot_regions_reach_the_detector_and_unknown_floor_rides_the_payload(make_worker):
+    """D-600: ``occupied`` is handed over before the step; ``unknown_floor`` goes out with OK only."""
+    class _Masking(_Detector):
+        unknown_floor = ((1.2, 0.4, 0.12),)
+
+        def set_occupied(self, regions):
+            self.regions = regions
+
+    detector = _Masking()
+    worker, client = make_worker(configs=[{**CONFIG, "occupied": [{"x": 1.0, "y": 0.5, "radius_m": 0.12}]}],
+                                 detector=detector)
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.process(_frame(), MARKERS))
+    assert detector.regions == [{"x": 1.0, "y": 0.5, "radius_m": 0.12}]
+    sent = client.published[-1].model_dump(mode="json")
+    assert sent["unknown_floor"] == [{"x": 1.2, "y": 0.4, "radius_m": 0.12}]
+    learning = build_payload(source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="r",
+                             processor_revision="background-blob/1", captured_at=1.0, seq=0,
+                             result=DetectorResult((), "LEARNING"), unknown_floor=((1.0, 1.0, 0.1),))
+    assert "unknown_floor" not in learning.model_dump(mode="json")
+
+
 class _HoldingDetector(_Detector):
     def __init__(self):
         super().__init__()

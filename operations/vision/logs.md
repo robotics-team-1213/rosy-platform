@@ -406,6 +406,11 @@
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
 
+## 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
+- 변경: 모든 학습(운영자 재학습·재시작·장면 변화)이 Fleet `occupied` 로봇 자리를 빼고 배운다(`track/robot_mask.py`). 이전 배경(어둡지 않은 곳) 또는 inpainting한 모르는 바닥으로 바꾸고, 모르는 바닥은 연속 3프레임 비고 어두운 픽셀 12 px 밖일 때 채운다(5 s에 한 번). 저장본이 모르는 바닥 지도를 같이 저장한다. 페이로드에 `unknown_floor`.
+- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTemp\bg-relearn\replay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
+- gate 변화: SOURCE. 현장 배포·재학습 확인 전
+
 ## 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
 
 - 변경: `track/led_identity.py` `led-identity/2` — `min_off_s` 0.8, `max_off_s` 2.2, `max_gap_s` 1.1, 익명 blob 하나일 때 정색 표시(`evidence.mode: steady`). 추적 워커가 `identity_challenges`의 요청마다 판정하고, 열린 창 끝까지 `BackgroundBlobDetector.hold`로 배경을 얼린다(학습 프레임·장면 변경 재학습·유령 치유 없음, 박힌 로봇의 추정은 램프가 켜져도 유지)
@@ -448,4 +453,9 @@
 ## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
 - 변경: main의 D-596(LED 확인 2–3 fps, 색마다 동시 요청, 확인 창 동안 배경 얼림)·D-595(승인 기록 우선 순서)와 D-589를 합쳤다. `TrackWorker._detect`는 D-589 카메라 변경·맞춤 정지와 D-596 `hold`를 함께 받는다. 맞춤 정지 중에도 배경만 멈추고 마커는 낸다. LED 확인 창이 열린 동안에는 튜너에 측정을 넘기지 않아 맞춤 단계·다시 맞추기 판정이 일어나지 않는다(노출이 바뀌면 점멸이 가려진다). 요청 재송신은 그대로다. 배경 얼림(`hold`)은 카메라 재학습 뒤 학습도 창 뒤로 미룬다. main이 v1.184·v1.185를 가져가 D-589는 API Reference v1.186이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 다섯 파일)
 - 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 확인 창 중 맞춤 멈춤 시험 `test_no_tune_step_is_judged_while_an_led_identify_window_is_open`
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
+- 변경: main의 D-600(Fleet `occupied` 로봇 자리를 빼고 배경 학습, 모르는 바닥 `unknown_floor`와 채우기)과 D-589를 합쳤다. 검출 payload는 D-600 `unknown_floor`와 D-589 `tuning`을 함께 싣고, Fleet `tracking.py` source 행도 둘 다 넘긴다. 매 단계 `set_occupied`를 먼저 하고, D-589 맞춤 정지·잠금 뒤 한 번 재학습·카메라 지문과 D-596 `hold`를 그대로 넘긴다. 그래서 잠금 뒤 재학습도 로봇 자리를 뺀 학습이다. D-539 저장본은 모르는 바닥 지도와 카메라 지문을 함께 저장하고(채울 때 다시 쓰는 저장본도 지문 유지) 같은 지문에서만 재생한다. 카메라가 바뀌어 다시 배울 때는 이전 배경(`_previous`)을 로봇 자리 채우기에 쓰지 않는다. 노출이 달라 그 배경이 맞지 않기 때문이며, 그 자리는 inpainting과 모르는 바닥 채우기로 간다. main이 v1.186을 가져가 D-589는 API Reference v1.187이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 여섯 곳)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다
 - gate 변화: 없음

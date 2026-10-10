@@ -147,3 +147,11 @@ test("pose memory keeps matched poses for the next poll's stillness check", () =
   assert.deepEqual(Object.fromEntries(poses), { rosy_01: { x: 1, y: 2 } });
   assert.equal(rememberTrackingPoses(null).size, 0);
 });
+
+test("D-600 unknown floor of every source is carried only when there is some", () => {
+  const out = classifyTracking(body({ sources: [
+    { source_id: "a", unknown_floor: [{ x: 1, y: 2, radius_m: 0.12 }, { x: "bad", y: 0, radius_m: 1 }] },
+    { source_id: "b", unknown_floor: [{ x: 3, y: 1, radius_m: 0 }] }, { source_id: "c" }] }));
+  assert.deepEqual(out.unknownFloor, [{ x: 1, y: 2, radiusM: 0.12 }]);
+  assert.equal("unknownFloor" in classifyTracking(body()), false);
+});

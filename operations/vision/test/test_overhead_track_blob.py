@@ -685,3 +685,15 @@ def test_no_learning_frame_is_taken_in_a_held_window():
     assert detector._learned == 0
     assert detector.detect(Frame(_floor(), 5.5), CAL).status == "LEARNING"
     assert detector._learned == 1
+
+
+def test_a_camera_change_does_not_fill_robot_regions_from_the_old_exposure():
+    """D-589 x D-600: the background of other camera settings is not a source for masked learning."""
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.reset()  # SCENE_CHANGED or operator relearn: the previous background may fill
+    assert detector._previous is not None
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(OTHER)
+    assert detector._previous is None

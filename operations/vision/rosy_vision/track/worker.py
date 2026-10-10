@@ -25,6 +25,9 @@ D-587: with a ``sightings`` publisher, identified robot markers projected throug
 record are also sent as sightings (marker_sightings.py), after the detections, except for the
 robots VisionWorker already sighted from this frame's measured calibration.
 
+D-600: Fleet's ``occupied`` robot regions go to the detector before each step (``set_occupied``);
+its ``unknown_floor`` rides the payload.
+
 D-589: each step also measures the frame (tuning.Scorer, on the detection thread) and drives
 the per-source Tuner on the event loop; its ``camera`` messages go to the phone over the
 ingest connection (never awaited inline) and its status rides on the detections payload as
@@ -52,7 +55,7 @@ import cv2
 import httpx
 import numpy as np
 
-from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload
+from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload, UnknownFloor
 from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
 from rosy_vision.track.calibration import from_markers, from_record
@@ -84,7 +87,8 @@ def decode_jpeg(jpeg: bytes) -> np.ndarray | None:
 
 def build_payload(*, source_id: str, map_id: str, calibration_revision: str | None,
                   processor_revision: str, captured_at: float, seq: int,
-                  result: DetectorResult, tuning: dict | None = None) -> OverheadDetectionsPayload:
+                  result: DetectorResult, tuning: dict | None = None,
+                  unknown_floor=()) -> OverheadDetectionsPayload:
     detections = () if result.status != "OK" else tuple(
         OverheadDetection(x=round(d.x, 4), y=round(d.y, 4), footprint_m=round(d.footprint_m, 4),
                           score=round(d.score, 3), marker_id=d.marker_id)
@@ -92,7 +96,10 @@ def build_payload(*, source_id: str, map_id: str, calibration_revision: str | No
     return OverheadDetectionsPayload(
         source_id=source_id, map_id=map_id, calibration_revision=calibration_revision,
         processor_revision=processor_revision, captured_at=captured_at, seq=seq,
-        status=result.status, detections=detections, tuning=tuning)
+        status=result.status, detections=detections,
+        unknown_floor=() if result.status != "OK" else tuple(
+            UnknownFloor(x=round(x, 3), y=round(y, 3), radius_m=round(min(r, 2.0), 3)) for x, y, r in unknown_floor),
+        tuning=tuning)
 
 
 class _FailureLog:
@@ -225,6 +232,8 @@ class TrackWorker:
         challenges = _challenges(config, self.led_config)
         # D-596 1: the background stays frozen through every open window (a standing robot blinks).
         hold = max((c["not_after"] for c in challenges), default=None)
+        if hasattr(self.detector, "set_occupied"):  # D-600: before the step, never during it
+            self.detector.set_occupied(config.get("occupied"))
         link_of = getattr(self.ingest, "camera_link", None)
         link, camera_state = (None, None) if link_of is None else link_of(self.camera.source_id)
         # D-589: decided from the last tuner step (one frame earlier); the phone applies a new
@@ -255,7 +264,8 @@ class TrackWorker:
             source_id=self.camera.source_id, map_id=self.camera.map_id,
             calibration_revision=None if calibration is None else calibration.revision,
             processor_revision=self.detector.processor_revision, captured_at=frame.captured_at,
-            seq=self._seq, result=result, tuning=status if self._send_tuning else None)
+            seq=self._seq, result=result, tuning=status if self._send_tuning else None,
+            unknown_floor=getattr(self.detector, "unknown_floor", ()))
         self._seq = (self._seq + 1) % _SEQ_MODULUS
         try:
             try:

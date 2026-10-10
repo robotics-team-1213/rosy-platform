@@ -214,7 +214,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_521,
+        51_672,
+        "split: re-judged at 51672 on 2026-10-10 after merging D-600 over main 51521 (+151; self-judged). The robot "
+        "regions for Vision's background learn are TrackingService.occupied in the existing D-457 owner "
+        "(server/tracking.py, map pose wired at the app root), the unknown-floor hatch in map-view.js and "
+        "tracking-layer.js, relearn copy in tracking-relearn.js; most new lines are tests. No new owner and "
+        "no robot command path. Previously "
         "split: re-judged at 51521 on 2026-10-10 after merging D-596 over main 51209 (+312; self-judged, "
         "NEEDS the independent re-judge). One new pure module fleet/server/identity_triggers.py (automatic "
         "LED identify rules), parallel per-colour requests in server/identity.py, the guide finding and the "
@@ -693,6 +698,14 @@ SIZE_VERDICTS = {
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
+    ),
+    "vision/rosy_vision/track/background_blob.py": (
+        605,
+        "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
+        "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
+        "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
+        "D-600 (584) merged, plus the hold-stops-fill guard. Self-judged; next growth moves the suspect/ghost "
+        "healing into its own module. ROS-free, host-testable (X5)",
     ),
     "vision/rosy_vision/ingest.py": (
         825,
