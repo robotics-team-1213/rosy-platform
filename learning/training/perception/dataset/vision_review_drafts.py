@@ -11,9 +11,9 @@ from pathlib import Path
 from class_sets import from_data_yaml
 
 MODEL = 'qwen3-vl:8b-instruct'
-CLASSES = ('robot', 'obstacle_box', 'cone', 'traffic_light', 'sign', 'person_feet', 'obstacle')
+CLASSES = ('robot', 'obstacle_box', 'cone', 'traffic_light', 'sign', 'person', 'obstacle')
 PROMPT = ("Review this robot camera image. Return only visible physical object boxes. "
-          "Use one label from robot, obstacle_box, cone, traffic_light, sign, person_feet, obstacle. "
+          "Use one label from robot, obstacle_box, cone, traffic_light, sign, person, obstacle. "
           "Use obstacle only for a freestanding unclassified object physically in the travel corridor. "
           "Exclude walls, fixed poles outside the corridor, floor markings, shadows, camera parts, "
           "and distant objects outside the corridor. If unsure, omit the box. "
@@ -24,7 +24,7 @@ VERIFY_PROMPT = ("Review robot camera image independently. Report only compact, 
                  "Blue rectangles and stripes on the left wall are paint or tape, never objects. "
                  "White floor stripes are markings. Fixed walls, poles, rails and frames at the edge "
                  "are background. If no separate floor object, return empty boxes. Use only robot, "
-                 "obstacle_box, cone, traffic_light, sign, person_feet, obstacle. Coordinates are "
+                 "obstacle_box, cone, traffic_light, sign, person, obstacle. Coordinates are "
                  "0..1000 normalized integers. Do not infer unseen parts.")
 SCHEMA = {'type': 'object', 'properties': {'boxes': {'type': 'array', 'maxItems': 30,
     'items': {'type': 'object', 'properties': {
