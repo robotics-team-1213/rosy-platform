@@ -105,7 +105,7 @@ class Core:
 
     def clone(self):
         """A second client on its own connection (one HTTPSConnection is not thread-safe)."""
-        return Core(self.host, self.token, self.port, self.context)
+        return Core(self.host, self.token, self.port, self.context, self.tls_host)
 
     def raw_frame(self, timeout=5.0):
         """First JPEG of the driver MJPEG stream (no overlay); None when not available."""
@@ -311,9 +311,9 @@ def cmd_drive(core, args):
     """A link stall longer than the 1 s deadman releases line-follow (driver_released); that
     stop stands, and the drive re-arms at most --rearm times inside the same recording."""
     continuous = getattr(args, "continuous_test", False)
-    started, holds, rearms = False, None, 0
+    started, holds, rearms, recording_id = False, None, 0, None
     try:
-        rec_start(core)
+        recording_id = rec_start(core)
         holds = _arm(core)
         if holds is None:
             raise SystemExit("line-follow refused")
@@ -331,6 +331,11 @@ def cmd_drive(core, args):
             if continuous and (status != 200 or lf.get("mode") != "CAMERA_LINE"):
                 log("test session ended or status unavailable -> stop")
                 break
+            if continuous:
+                recording = _recording_state(core)
+                if recording.get("state") != "recording" or recording.get("id") != recording_id:
+                    log("test recording ended or unavailable -> stop")
+                    break
             if released and not continuous and rearms < getattr(args, "rearm", 0):
                 rearms += 1
                 _disarm(holds)
@@ -359,7 +364,8 @@ def cmd_drive(core, args):
         _disarm(holds)
         if started:
             log("line-follow OFF", core.call("PUT", "/line-follow/mode", {"mode": "OFF"})[0])
-        rec_stop(core)
+        if recording_id and _recording_state(core).get("id") == recording_id:
+            rec_stop(core)
 
 
 def cmd_cam_watch(core, args):
