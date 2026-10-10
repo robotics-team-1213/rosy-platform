@@ -1,5 +1,6 @@
 """D-597 amendment 2: keep steers to the centre of the drivable way; closed ahead, it turns in
 place toward the side the way leaves the view."""
+import math
 from types import SimpleNamespace
 
 import numpy as np
@@ -78,3 +79,14 @@ def test_a_wall_beside_the_robot_is_no_exit_and_open_sides_keep_right():
     assert blocked["exit"] != "left", blocked
     both = _lane(0.5, -0.5, x_max=0.33)
     assert way_target(both, G, XO, HALF)["seen_exit"] in ("right", None)
+
+
+def test_a_bend_inner_edge_does_not_block_the_arc_but_a_line_across_does():
+    from control.sensing.perception.learned.drivable_steer import _crosses
+    # left bend: inner edge points on a circle of radius 0.3 - 0.08 around (0, 0.3); the arc to a
+    # target on the lane centre circle (radius 0.3) keeps 0.08 m from it
+    inner = [(0.22 * math.sin(a), 0.3 - 0.22 * math.cos(a)) for a in np.linspace(0.0, 1.2, 30)]
+    target = (0.3 * math.sin(0.8), 0.3 - 0.3 * math.cos(0.8))
+    assert _crosses(inner, *target) is None
+    across = [(0.15, y) for y in np.linspace(-0.1, 0.1, 20)]
+    assert _crosses(across, 0.25, 0.0) is not None

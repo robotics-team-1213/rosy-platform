@@ -165,18 +165,29 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
 
 
 def _crosses(points, tx, ty):
-    """Lateral offset (at the crossing) of the first remembered boundary point the straight path
-    from the robot to (tx, ty) passes within CROSS_TOL_M of, or None."""
-    length = math.hypot(tx, ty)
-    if length < 1e-6:
+    """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
+    robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord
+    would cut the inside of every bend."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6 or not points:
         return None
-    ux, uy = tx / length, ty / length
-    best = None
-    for x, y in points:
-        along = x * ux + y * uy
-        if 0.03 < along < length and abs(-x * uy + y * ux) < CROSS_TOL_M and (best is None or along < best[0]):
-            best = (along, y)
-    return None if best is None else best[1]
+    k = 2.0 * ty / d2                                    # signed curvature, left +
+    pts = np.asarray(points, float)
+    if abs(k) < 1e-6:
+        along, across = pts[:, 0], np.abs(pts[:, 1])
+        length = tx
+    else:
+        r = 1.0 / k                                       # circle centre (0, r)
+        dist = np.hypot(pts[:, 0], pts[:, 1] - r)
+        across = np.abs(dist - abs(r))
+        ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
+        along = ang * abs(r)
+        length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
+    hit = (along > 0.03) & (along < length) & (across < CROSS_TOL_M)
+    if not hit.any():
+        return None
+    first = int(np.argmin(np.where(hit, along, np.inf)))
+    return float(pts[first, 1])
 
 
 def _to_world(point, pose):
