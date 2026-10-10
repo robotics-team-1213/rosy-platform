@@ -47,6 +47,8 @@
 
 ## 2026-10-10 진행 상태
 
+- **AI 경로 경고 연결:** `feat/one-lap-current`에서 열린 trip이 있으면 교착이 없어도 AI 사실을 조회해 예외 큐에 차체 허용 경계 초과 거리를 표시한다. 로봇·trip·지도 버전·유효 시간과 최신 판정을 대조하며, 새 정상/판단 불가 사실과 trip 종료로 오래된 경고를 지운다. 관련 관제 Node 시험 26개가 통과했다. 이는 운영자 표시이며 Fleet·CORE의 실제 보정·정지 수용은 계속 열려 있다.
+
 - **SOURCE:** `feat/one-lap-console`에 관제 유한 1회 경로, `start_at`의 계획·시작 자세 확인, Fleet free 구간 이탈 시 목표 취소, AI PC의 진행 구간별 그림자 판정을 구현했다. 두 로봇은 각각 별도 trip을 선택·시작한다.
 - **원격 시험:** 모델 PC에서 Fleet 관련 시험과 AI/Fleet 사실 시험 37개가 통과했다. 각 실행의 `known_failures.py` 결과는 NEW 0, KNOWN 0이다 (`X:/DevTemp/one-lap*/run-1.txt`). 관제 경로 Node 시험 5개도 통과했다. 이는 현장 설치나 실제 주행 증거가 아니다.
 - **설치·현장:** 최신 읽기는 [검증 기록](../validation/two-robot-one-lap-2026-10-10/result.md)에 남겼다. 설치 Fleet commit `b45e9a36c17659e0bc64f3cc67474c08dacb5629`, AI PC v0.2.0, 열린 trip 0개다. `rosy_40`의 `junction_turn:false`는 현재 차로 trip 시작을 차단한다. `rosy_40`의 지도 자세는 `W_mid`에서 약 0.071 m, `rosy_41`은 `E_mid`에서 멀어 선택 출발지 0.05 m 조건을 만족하지 않는다. 실기기 주행 명령은 보내지 않았다.

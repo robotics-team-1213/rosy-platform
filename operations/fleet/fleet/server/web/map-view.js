@@ -827,9 +827,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         life.check();
       }
       view.traffic = traffic;
-      // D-577 (d): the AI facts (shadow) beside a wait-cycle row; read only while a cycle is shown.
-      view.trafficAi = traffic.wait_cycle?.length
-        ? (await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null))?.facts || [] : [];
+      // D-613: route observations also reach the queue while a trip runs without a wait cycle.
+      const ai = traffic.wait_cycle?.length || view.trafficTrips.length
+        ? await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null) : null;
+      life.check();
+      view.trafficAi = ai?.facts || [];
     } catch (err) {
       if (err.name === "AbortError") return;
       if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;

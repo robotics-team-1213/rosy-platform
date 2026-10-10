@@ -12,6 +12,7 @@ D-517의 `repeat: true`는 계속 도는 운행이다. 현장 `map_v2_fleet` v5�
 2. `start_at`은 선택 필드다. 있을 때는 유한 trip이고, `to`와 같으며, 다른 `via`가 있어야 한다. 계획 때와 시작 직전에 `LOCALIZED` 지도 자세가 그 장소에서 0.05 m 이내여야 한다. 아니면 `TRIP_START_PLACE_MISMATCH`로 거절한다. D-517의 구역 규칙이 최종 정지를 다른 곳으로 옮겨야 하면 `TRIP_START_PLACE_MOVED`로 거절한다. 필드가 없는 기존 요청은 그대로 동작한다.
    - 시작 직전 선택된 첫 경로 구간의 중심선 거리와 D-424 Pinky Pro 공칭 몸 반폭 합이 그 구간 반폭을 넘으면 `TRIP_START_BODY_OUTSIDE_ROUTE`로 거절한다. 지원하는 차체 치수가 없거나 이동할 계획 구간이 없으면 각각 `TRIP_BODY_UNKNOWN`, `TRIP_NO_ROUTE`로 거절한다. 이 검사는 시작 명령을 보내기 전에 실행한다.
 3. Fleet과 CORE가 주행·안전 권한을 갖는다. AI PC의 계획 경로 이탈 분석은 별도 그림자 사실로 검증한 뒤 연결하며 직접 로봇을 움직이지 않는다. 현장 설치 전에는 `rosy_40`의 `junction_turn:false`와 두 로봇의 주행·정지 근거를 해결해야 한다. 능력 광고를 강제로 참으로 바꾸지 않는다.
+   - 관제는 교착 여부와 관계없이 열린 trip이 있으면 기존 `/api/fleet/ai`를 조회한다. 같은 로봇·trip·지도 버전의 최신 `trip_route_check`가 유효 시간 안의 `OFF_ROUTE`일 때 예외 큐에 허용 경계 초과 거리를 경고한다. 새 `ON_ROUTE`·`UNKNOWN`, 만료, trip 종료는 경고를 지운다. 이 표시는 주행 명령을 만들지 않는다.
 
 ### Consequences and evidence
 
