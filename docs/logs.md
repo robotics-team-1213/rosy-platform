@@ -7667,3 +7667,9 @@ osy-d395-s1d\`.
 - 변경: root AGENTS·제품·계약·실제 폴더를 대조해 ROSY 정체성, 의미 기반 3단계 목표 트리, 세계 상태/행동 예측/학습·평가 경계를 플랫폼 설계/계획에 기록했다. CORE 공통 운용·Drive/Arm Control·Safety·복구·곡률 책임은 별도 상세 설계/계획과 연결했다. 네 문서 모두 Proposed다.
 - 증거: 문서 링크·경로 확인, harness generate와 lint(0 errors, 25 freshness warnings). 원격 문서 계약 시험 결과는 검증 뒤 이어 기록한다.
 - gate 변화: 없음. Proposed 문서뿐이며 코드 이동·Safety 정책 변경·장치 주행·main 착지·push는 하지 않았다.
+
+## 2026-10-11 · be92428a1 · docs: 플랫폼·CORE 구조 계획의 원격 문서 계약 검증
+
+- 변경: 위 설계/계획 커밋의 원격 검증 결과를 기록했다. 제품 코드·계약·설정 변경은 없다.
+- 증거: 커밋 be92428a1을 모델 PC에 보내 `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 실행, 121 성공 표시·exit 0. known_failures는 0 NEW/0 known. 네 문서 교차 링크·시험 경로 확인 및 append-only 기준 log의 커밋 blob 보존을 확인했다.
+- gate 변화: 없음. 원격 실행의 기존 상태/검증 branch 경고는 독립 실물 수용이 아니다. 설계 문서의 목표 폴더·Prediction·world model 학습/추론은 구현·설치하지 않았다.
