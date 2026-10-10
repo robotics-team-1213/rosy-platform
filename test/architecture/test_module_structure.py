@@ -170,11 +170,10 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        1608,
-        "accept: pure move per docs/plans/2026-10-10-fleet-stuck-subpackage.md (D-607 P0); independent "
-        "re-judge pending. server/line_stuck.py -> board.py, stuck_resolver.py -> resolver.py, "
-        "stuck_resolver_loop.py -> loop.py, stuck_lane_lost.py -> lane_lost.py, ai_facts.py (1602) + __init__.py 6, "
-        "out of the fleet package count; no shim, no behaviour change. +150 allowance measured from 1608",
+        1617,
+        "accept: pure move per docs/plans/2026-10-10-fleet-stuck-subpackage.md (D-607 P0), 1608 at the move "
+        "(git -M 98-99%, import lines only, no shim); +9 D-577 남은 항목 4 R1 trusted poses (e297b05f8). "
+        "Independent re-judge 2026-10-10, critic: agree. +150 allowance measured from 1617",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,
@@ -227,10 +226,9 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         51_085,
-        "split: measured at 51085 on 2026-10-10 after the fleet/fleet/stuck move (1608 lines left for its own "
-        "SIZE_UNITS entry, pure move per docs/plans/2026-10-10-fleet-stuck-subpackage.md, D-607 P0; independent "
-        "re-judge pending); 52687 on main before the move. Next lane_compliance growth registers "
-        "fleet/fleet/localization (1567) as a SIZE_UNITS entry. +150 allowance measured from 51085. Previously "
+        "split: re-judged at 51085 on 2026-10-10 (independent re-judge, critic: agree), 52687 on main minus "
+        "1602 moved to fleet/fleet/stuck (D-607 P0). Next lane_compliance growth registers "
+        "fleet/fleet/localization (1567). +150 allowance measured from 51085. Previously "
         "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
         "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
