@@ -27,7 +27,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `teach_service.py`, `teach_routes.py` | D-494 6 주행 가르치기 — 한 대의 map pose를 0.5 s마다 기록하고, 멈추면 RDP 선과 끝 장소 후보를 돌려주며, 확정·주소 만들기는 초안에만 쓴다(`/api/fleet/teach*`). 로봇에 아무것도 보내지 않는다. 순수 규칙은 `fleet/routing/teach.py` |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `password_session.py` | D-519 관제 콘솔 아이디·비밀번호 로그인 — `PasswordSessions`(tasks DB `fleet_console_sessions`, 쿠키 SHA-256만, 유휴 12 h·기억 30 d·절대 30 d, 계정 변경 시 무효), `/api/fleet/auth/login`·`logout`·`session`. 계정과 scrypt 해시는 `site_users.py` |
-| `host_control_routes.py` | D-524 Service Control(서비스 제어) — `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host}/control`. POST는 이름 있는 운영자만. 재부팅은 10분 예약이고, 유닛 정지·재시작은 허용 목록만(사이트 유닛은 재시작만). 세 호스트 모두 강제 명령 SSH 키(Fleet 전용 마운트 `/run/rosy-fleet-host-control/`)로 부른다. 프로세스 이름과 셸은 받지 않는다. 설정이 없거나 site-users·로그인이 없으면 503 |
+| `host_control_routes.py` | D-524 Service Control(서비스 제어) — `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host}/control`. GET은 목록에 더해 가드 `status.json`(`guard`)과 관제 PC 드리프트(`drift`)를 읽기만 한다. 없거나 깨지면 null이다. POST는 이름 있는 운영자만. 재부팅은 10분 예약이고, 유닛 정지·재시작은 허용 목록만(사이트 유닛은 재시작만). 세 호스트 모두 강제 명령 SSH 키(Fleet 전용 마운트 `/run/rosy-fleet-host-control/`)로 부른다. 프로세스 이름과 셸은 받지 않는다. 설정이 없거나 site-users·로그인이 없으면 POST는 503 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
 | `web/` | 관제 UI (index.html, tokens.css, styles.css, console.js) (see `web/AGENTS.md`) |
 

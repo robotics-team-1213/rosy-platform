@@ -261,6 +261,34 @@ def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path):
     listed = client.get("/api/fleet/hosts")
     assert listed.status_code == 200
     assert {row["host"] for row in listed.json()["hosts"]} == {"site", "ai", "model"}
+    assert listed.json()["guard"] is None and listed.json()["drift"] is None
+
+
+def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    guard = tmp_path / "guard.json"
+    guard.write_text('{"model": {"state": "ok", "resources": {"avail_pct": 41, "load": 1.5, "cores": 8}}}',
+                     encoding="utf-8")
+    (tmp_path / "drift.json").write_text("[1]", encoding="utf-8")
+    monkeypatch.setattr(routes, "GUARD_STATUS", guard)
+    monkeypatch.setattr(routes, "DRIFT_STATUS", tmp_path / "drift.json")
+    body = _client(UnavailableHostHelper()).get("/api/fleet/hosts").json()
+    assert body["guard"]["model"]["resources"]["avail_pct"] == 41
+    assert body["drift"] is None
+
+
+def test_install_task_shows_host_headroom_and_has_no_process_kill():
+    web = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+    page = (web / "install.html").read_text(encoding="utf-8")
+    script = (web / "host-services.js").read_text(encoding="utf-8")
+    install = (web / "install.js").read_text(encoding="utf-8")
+    assets = (web.parent / "static_routes.py").read_text(encoding="utf-8")
+    assert 'id="host-services"' in page and "호스트 서비스" in page
+    assert "pkill" not in script and "kill" not in script
+    assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
+    assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
+    assert '"host-services.js"' in assets
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):

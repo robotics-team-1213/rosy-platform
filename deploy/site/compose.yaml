@@ -76,6 +76,9 @@ services:
       # D-524 Service Control key, targets, known_hosts: Fleet only, outside the config dir
       # that Vision also mounts. Docker creates it empty when absent; Fleet then answers 503.
       - /etc/rosy/fleet-host-control:/run/rosy-fleet-host-control:ro
+      # D-530 read-only reports. Absent dirs come up empty; the hosts route then returns null.
+      - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
+      - /var/lib/rosy-host-state:/var/lib/rosy-host-state:ro
       # NSS queries host Avahi; directory bind follows socket replacement after daemon restart.
       - type: bind
         source: /run/avahi-daemon
