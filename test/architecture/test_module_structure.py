@@ -1010,7 +1010,7 @@ SIZE_VERDICTS = {
         "Re-judge on growth past +150.",
     ),
     "perception/control/sensing/perception": (
-        10_149,
+        10_152,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1025,8 +1025,8 @@ SIZE_VERDICTS = {
         "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
         "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891). Re-judged at 9895 on 2026-10-10: learned/ (2270) left this unit "
         "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named. Re-judged at "
-        "10149 on 2026-10-10 for the drivable camera preview (drivable_preview.py: the steered way, target, "
-        "exit and decision-chain rows drawn from keep_debug; follow_preview and drivable_keep +3 each), "
+        "10152 on 2026-10-10 for the drivable camera preview (drivable_preview.py: the steered way, target, "
+        "exit and decision-chain rows drawn from keep_debug; follow_preview, drivable_keep and road +3 each), "
         "camera evidence drawing that belongs in this unit; the split plan is unchanged.",
     ),
     "control": (
