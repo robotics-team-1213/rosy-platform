@@ -41,6 +41,12 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "dc4ef1a90f3f8c28db9eccbf7b9288980eb297fe":  # git commit revision
+        "Independent lap_review retrospective source review on 2026-10-10: safety.py AST identical "
+        "to first parent ff1f70b3c (already carries independent Safety-Review APPROVE WITH NOTES); "
+        "merge resolution only updates comment API version v1.195 to v1.196. Admin-only latch "
+        "release and docking cancellation unchanged. See docs/validation/one-lap-route-review-"
+        "2026-10-10/result.md; no device acceptance.",
     "f14e20e2fc52ff0fb9e8d7267dbeb0f7e6596d70":  # git commit revision
         "Independently reviewed on 2026-10-09: D-526 follow-up moves the TRUSTED map-pose check verbatim "
         "into tether_routes so the safety-tagged tether_watch imports no decision module; still fail-closed "
