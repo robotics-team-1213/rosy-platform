@@ -16,7 +16,7 @@ run() { if command -v systemd-run >/dev/null; then systemd-run --user --scope -p
 if [ -n "${AVAIL_GB:-}" ]; then
   until [ "$($py "$AVAIL_GB")" -ge "${NEED_GB:-8}" ]; do echo "waiting for memory"; sleep 30; done
 fi
-run "$py" "$ds/ceiling_pose.py" detect --rec "$ceiling" --marker-id "$marker" --heading-edge "${HEADING_EDGE:-0,1}"
+run "$py" "$here/ceiling_poses.py" --rec "$ceiling" --marker-id "$marker" --heading-edge "${HEADING_EDGE:-0,1}"
 run "$py" "$ds/map_projected_drivable.py" derive --session "$session" --ceiling "$ceiling" --robot "$robot" \
   ${CALIBRATION_ROOT:+--calibration-root "$CALIBRATION_ROOT"} --out "$out" --clock-offset-s auto \
   --session-name "$(basename "$session")" --tool-commit "$commit" "$@"
