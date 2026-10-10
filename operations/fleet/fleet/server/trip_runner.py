@@ -231,7 +231,7 @@ class TripRunner:
             mode = await self._call(self._junction.line_follow_mode(robot_id), "TRIP_LINE_FOLLOW_NOT_ACTIVE")
             if mode not in LINE_MODES:
                 raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
-        pose = await self._pose(robot_id)
+        pose = await self.map_pose(robot_id)
         anchor_age = getattr(pose, "anchor_age_s", None)
         if pose is None or pose.state != LOCALIZED or anchor_age is None or (
                 anchor_age > self.config.start_anchor_age_s and not self._still_on_pin(pose)):
@@ -400,7 +400,7 @@ class TripRunner:
             except Exception:
                 _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
-        pose = await self._pose(robot_id)
+        pose = await self.map_pose(robot_id)
         if not live.open:
             return
         live.see(pose)
@@ -813,7 +813,8 @@ class TripRunner:
             raise TripError(422, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
         return active[2]
 
-    async def _pose(self, robot_id: str) -> Optional[MapPose]:
+    async def map_pose(self, robot_id: str) -> Optional[MapPose]:
+        """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
         refresh = getattr(self._poses, "refresh", None)
         try:
             if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)

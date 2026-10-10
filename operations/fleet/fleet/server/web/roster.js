@@ -221,7 +221,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       relay.dataset.evidence = evidence.evidence;
       head.appendChild(relay);
     }
-    const loc = view.stateUnavailable ? null : localizationTag(robot.localization);
+    const loc = view.stateUnavailable ? null : localizationTag(robot.localization,
+      (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id));
     if (loc) {
       // D-395: 위치 확정 상태. 서버 문구를 그대로 쓰고 열거값은 title에만 둔다.
       const locTag = tag(loc.text, loc.cls);
@@ -404,7 +405,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
     blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : !view.map ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
+        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
     pin.addEventListener("click", scope.guard(() => {
       view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
       if (view.pinning) {
