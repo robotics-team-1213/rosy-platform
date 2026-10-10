@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from .lane import LaneObservation
+from .drivable_preview import drivable
 from .follow_preview import draw_follow_evidence
 
 
@@ -128,7 +129,7 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
         cv2.circle(preview, (max(0, min(width - 1, lane_x)), int(height * .55)), 4, cyan, 2)
         cv2.putText(preview, 'PAINT', (max(2, min(width - 45, lane_x + 7)), int(height * .55) - 5),
                     cv2.FONT_HERSHEY_SIMPLEX, .32, cyan, 1, cv2.LINE_AA)
-    for marking, label, colour in (
+    for marking, label, colour in () if drivable(keep) else (   # legacy markings: not what drivable keep steers by
         (observation.crosswalk, "CROSSWALK", (255, 190, 0)),
         (observation.stop_line, "STOP", (40, 70, 255)),
     ):

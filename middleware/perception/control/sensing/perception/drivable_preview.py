@@ -85,7 +85,7 @@ def chain_rows(keep):
         return (f"STOPPED BY: PERCEPTION - {source} (not the drivable way)", RED), rows
     if stopped:
         return (f"STOPPED BY: STEERING - {keep.get('reason') or 'no target'}", RED), rows
-    return ('CAMERA STEERS | CORE gates, stuck, Fleet: dashboard rows 3-5', WHITE), rows
+    return ('CAMERA STEERS - stops by CORE/stuck/Fleet: dashboard', WHITE), rows
 
 
 def draw_drivable(image, *, scale, keep):
@@ -104,7 +104,7 @@ def draw_drivable(image, *, scale, keep):
 
     mask = way_mask(keep.get('drivable_way') or {})
     if mask is not None:
-        mask = cv2.resize(mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST) > 0
+        mask = cv2.resize(mask.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR) > .5
         image[~mask] = (image[~mask] * .5).astype(np.uint8)   # not the way: dimmed
         image[mask] = (image[mask] * .65 + np.array(GREEN) * .35).astype(np.uint8)
     steer = keep.get('drivable_steer') or {}
@@ -113,21 +113,24 @@ def draw_drivable(image, *, scale, keep):
         if p is not None:
             chosen = side == steer.get('exit')
             cv2.drawMarker(image, p, AMBER if chosen else MUTED, cv2.MARKER_DIAMOND, 12, 2 if chosen else 1)
-            text(f"EXIT {side.upper()}" + ('' if chosen else ' (not taken)'), (p[0] - 20, p[1] - 8),
+            text(f"EXIT {side.upper()}" + ('' if chosen else ' (not taken)'), (min(max(2, p[0] - 20), w - 90), p[1] - 8),
                  AMBER if chosen else MUTED, .3)
     target = keep.get('target_m')
     if isinstance(target, (list, tuple)) and len(target) == 2 and all(isinstance(v, (int, float)) for v in target):
         x, y = target
         radius = (x * x + y * y) / (2 * y) if abs(y) > 1e-4 else None   # pure-pursuit circle tangent at the robot
+        turn = None if radius is None else math.atan2(x, abs(radius) - abs(y))
         arc = [px(x * t, y * t) if radius is None else
-               px(radius * math.sin(t * math.atan2(x, radius - y)), radius * (1 - math.cos(t * math.atan2(x, radius - y))))
-               for t in np.linspace(0, 1, 16)]
-        arc = [p for p in arc if p is not None and 0 <= p[1] < h]
-        if len(arc) > 1:
-            cv2.polylines(image, [np.array(arc, np.int32)], False, MAGENTA, 2)
-        if arc:
-            cv2.circle(image, arc[-1], 6, MAGENTA, 2)
-            text(f"TARGET ahead {_num(steer.get('ahead_m'), '.2f')}m", (arc[-1][0] + 8, arc[-1][1] - 8), MAGENTA, .32)
+               px(abs(radius) * math.sin(t * turn), radius * (1 - math.cos(t * turn))) for t in np.linspace(0, 1, 16)]
+        seen = [p for p in arc if p is not None and 0 <= p[1] < h - 59]   # above the bottom band
+        if len(seen) > 1:
+            cv2.polylines(image, [np.array(seen, np.int32)], False, MAGENTA, 2)
+        if seen:
+            end = seen[-1]
+            if seen[-1] == arc[-1]:
+                cv2.circle(image, end, 6, MAGENTA, 2)
+            text(f"TARGET{'' if seen[-1] == arc[-1] else ' (below view)'} ahead {_num(steer.get('ahead_m'), '.2f')}m",
+                 (min(max(2, end[0] + 8), w - 150), max(70, end[1] - 8)), MAGENTA, .32)
     if isinstance(steer.get('guide_deg'), (int, float)):   # the route prior's heading (line/lane_guide), left +
         a = math.radians(steer['guide_deg'])
         base = (w - 22, 74)
@@ -135,9 +138,8 @@ def draw_drivable(image, *, scale, keep):
                         tipLength=.4)
         text('GUIDE', (w - 44, 98), AMBER, .28)
     cv2.rectangle(image, (0, 29), (w - 1, 50), BG, -1)
-    revision = str(keep.get('paint_model_revision') or '')[-8:]
     text(f"DRIVABLE | {keep.get('strategy') or 'none'} | e={_num(keep.get('error'), '+.2f')}"
-         f" | {keep.get('paint_source_used')} {revision}", (5, 45), GREEN, .36)
+         f" | {keep.get('paint_source_used')}", (5, 45), GREEN, .36)
     text('legacy lanes/regions hidden: not used for steering', (5, 62), MUTED, .27)
     (headline, colour), rows = chain_rows(keep)
     cv2.rectangle(image, (0, h - 59), (w - 1, h - 1), BG, -1)

@@ -86,3 +86,12 @@ def test_keep_step_puts_the_steered_way_into_keep_debug():
     last = {}
     assert keep_step(steer, worker, last, None, 0.03, 0.0925, lambda _s: None, 1.0, None) == ((0.1, 0.9), True)
     assert last['drivable_way']['age_s'] == 0.25 and (way_mask(last['drivable_way']) == (_way()[2::4, 2::4] > 0)).all()
+
+
+def test_the_target_is_marked_where_it_lies_on_either_side():
+    for target in ([0.25, -0.05], [0.22, 0.06]):
+        image = np.full((240, 320, 3), 100, np.uint8)
+        draw_follow_evidence(image, scale=1.0, keep=_keep(target_m=target))
+        col, row = (int(round(v)) for v in floor_px(PROJECTION, *target))
+        patch = image[row - 8:row + 9, col - 8:col + 9].reshape(-1, 3).astype(int)
+        assert ((patch[:, 0] > 180) & (patch[:, 2] > 180) & (patch[:, 1] < 100)).any(), target   # magenta ring
