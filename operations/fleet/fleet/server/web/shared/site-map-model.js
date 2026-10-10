@@ -18,6 +18,8 @@ export const AI_FACT_LABEL = {
 export const TRIP_ERROR_LABEL = {
   TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
   TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',
+  TRIP_BODY_UNKNOWN: '로봇 차체 폭을 확인할 수 없어 출발할 수 없습니다',
+  TRIP_START_BODY_OUTSIDE_ROUTE: '로봇 차체가 첫 차로 경계를 넘었습니다 · 위치를 조정하세요',
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
   TRIP_OFF_MAP: '찍은 점에서 차로 폭 두 배 안에 차로가 없습니다',

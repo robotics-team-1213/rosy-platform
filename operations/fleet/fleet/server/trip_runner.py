@@ -163,6 +163,16 @@ class TripRunner(TripAdmission, TripProgress):
                 if distance > ARRIVED_M:
                     raise TripError(422, "TRIP_START_PLACE_MISMATCH",
                                     {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
+                if caps.kind != "pinky_pro":
+                    raise TripError(422, "TRIP_BODY_UNKNOWN", {"kind": caps.kind})
+                if not plan["segments"]:
+                    raise TripError(422, "TRIP_NO_ROUTE")
+                first = graph.arcs[arc_id(plan["segments"][0])]
+                offset = first.project(pose.x, pose.y)[0]
+                margin = first.width_m / 2 - offset - NOMINAL_BODY.half_width_m
+                if margin < 0:
+                    raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
+                                    {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
