@@ -39,10 +39,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent / 'd495-junction-sim-2026-10-07' / 'evidence'))
 from d495_sim_probe import Probe, gz, wrap  # noqa: E402  (rclpy recorder, CORE API, gz services)
 
-# Inner road of map_v2_fleet: east segment straight x=0.327, y 0.20..0.38, lane order runs -y. The
-# nearest wall return there is 0.26-0.29 m from base_link; on every perimeter road it is 0.06-0.09 m,
-# inside the rotation circle + margin (0.1026 m), so a pivot there is held by D-422 (run s3 --pose
-# -1.2696,0.243,-90 --lane 90 for that case).
+# Inner road of map_v2_fleet: east segment straight x=0.327, y 0.20..0.38, lane order runs -y; the
+# nearest wall return there is 0.26-0.29 m. On the perimeter roads (s3 --pose -1.2696,0.243,-90
+# --lane 90) the wall is ~0.12 m from base_link: D-422 measured a 0.04 m rotation gap with the C1
+# sigma (run_sim.sh SIGMA), but the shipped SIM sigma 0.02 m / 0.03 m resolution puts it inside.
 INNER = '0.327,0.20,90'                # facing +y against the lane; the curve starts at y 0.38
 PERIOD_S, TTL_S = 0.5, 1.0            # Fleet lane_compliance_service PERIOD_S, CUE_TTL_S
 ROT_R, MARGIN = 0.08257, 0.02         # pinky body_rotation_radius_m, obstacle_body_margin_m

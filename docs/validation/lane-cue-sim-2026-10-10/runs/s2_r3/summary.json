@@ -1,0 +1,87 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "pivot_started": true,
+  "turned_at_drop_deg": 52.8,
+  "latch_reason": "fleet_cue_lost",
+  "latch_after_last_cue_sim_s": 1.09,
+  "latch_after_last_cue_wall_s": 1.16,
+  "max_turned_deg": 71.2,
+  "budget_deg": 150.0,
+  "travel_after_latch_m": 0.0,
+  "yaw_after_latch_deg": 0.0,
+  "nonzero_cmd_after_latch": 0,
+  "still_latched_at_end": true
+ },
+ "timeline": [
+  [
+   277.297,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   280.193,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   283.236,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   285.909,
+   "HOLD",
+   "stuck_settling"
+  ],
+  [
+   286.889,
+   "HOLD",
+   "stuck_resumed"
+  ],
+  [
+   287.014,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   287.983,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   290.75,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   290.879,
+   "HOLD",
+   "fleet_cue_lost"
+  ]
+ ],
+ "scenario": "s2",
+ "args": {
+  "scenario": "s2",
+  "out": "runs/s2_r3",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.4,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.27,
+   -1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "exact180": false,
+  "box": false,
+  "seed": 23,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}
