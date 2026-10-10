@@ -57,6 +57,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # decision API via core_client; the pure state machine lives in core_features/test.
     "middleware/core/gateway/test/test_line_follow_stuck.py",
     "middleware/core/gateway/test/test_line_follow_stuck_api.py",
+    # landed on main 2026-10-10 without its entry: stuck detection when commanded motion is zero.
+    "middleware/core/gateway/test/test_line_follow_stuck_no_motion.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
     "middleware/core/gateway/test/test_operational_journey.py",
     "middleware/core/gateway/test/test_power.py",
