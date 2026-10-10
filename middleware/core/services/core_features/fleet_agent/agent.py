@@ -7,9 +7,10 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
+from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload
 from core_common.link_retry import retry_delay
 from .discovery import locate_fleet, approved_profile, DiscoveryConflict, DiscoveryUnavailable
+from .heartbeat import HeartbeatLoop
 
 logger = logging.getLogger("fleet_agent")
 
@@ -82,7 +83,7 @@ def heartbeat_reply_timeout_s(fleet_cfg: dict) -> float:
     return value
 
 
-class FleetAgent:
+class FleetAgent(HeartbeatLoop):
     def __init__(self, state_manager, event_bus, config: dict, identity) -> None:
         self.state = state_manager
         self.events = event_bus
@@ -516,34 +517,6 @@ class FleetAgent:
         # cap buffer to prevent memory leak
         if len(self._event_buffer) > 1000:
             self._event_buffer = self._event_buffer[-1000:]
-
-    async def _heartbeat_loop(self, ws) -> str:
-        import websockets
-        while self.enabled:
-            try:
-                snap = self.state.snapshot()
-                hb = HeartbeatPayload(state_snapshot=snap,
-                                      junction_signal_request=self.junction_signal_request())
-                env = Envelope(type=EnvelopeType.HEARTBEAT, payload=hb.model_dump(mode="json"))
-                # One heartbeat outstanding at a time: clear before sending so only the
-                # reply to this one can wake us.
-                self._hb_reply.clear()
-                # One deadline over send and reply: a send held in drain also aborts.
-                await asyncio.wait_for(self._send_heartbeat(ws, env), timeout=self.reply_timeout_s)
-            except asyncio.TimeoutError:
-                logger.warning("Fleet hub did not answer a heartbeat within %.1f s; aborting",
-                               self.reply_timeout_s)
-                self.connected = False
-                await self._abort(ws)
-                return f"no heartbeat reply within {self.reply_timeout_s:g} s"
-            except websockets.exceptions.WebSocketException as exc:
-                return f"send failed ({exc})"
-            except Exception as exc:
-                logger.error("heartbeat loop error: %s", exc)
-                return f"error ({exc})"
-            self._answered += 1
-            await asyncio.sleep(self.heartbeat_period_s)
-        return "agent disabled"
 
     async def _send_heartbeat(self, ws, env: Envelope) -> None:
         await self._send(ws, env)

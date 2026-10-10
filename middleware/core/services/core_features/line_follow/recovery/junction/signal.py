@@ -4,7 +4,7 @@ import uuid
 
 from core_common.protocol.schemas import JunctionSignalAnswer
 
-_LOG = logging.getLogger("line_follow.junction_signal")
+_LOG = logging.getLogger(__name__)
 WAIT_S, REPLY_FRESH_S = 3.0, 2.0
 
 

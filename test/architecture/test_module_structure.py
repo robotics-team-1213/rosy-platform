@@ -145,12 +145,6 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
         "at 604 (bend diagnostic)",
     ),
-    "fleet/fleet/traffic/lane_traffic.py": (
-        612,
-        "accept: measured at 612 on 2026-10-10 (independent re-judge 2026-10-10, critic: agree on accept; the lane-traffic seam is already applied - next growth moves the D-525 signal methods _green..._signal_view (lane_traffic.py:333-459, ~125 lines) to traffic/signal_service.py). D-525 rev 6 "
-        "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
-        "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. Re-judge on further growth",
-    ),
     "fleet/fleet/localization": (
         1_707,
         "split: judged at 1707 on 2026-10-10 when it left the fleet package total "
@@ -160,8 +154,8 @@ SIZE_VERDICTS = {
         "call (test_boundaries); the service loops stay in fleet/server. Re-judge after +150.",
     ),
     "fleet/fleet/traffic": (
-        1884,
-        "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
+        2051,
+        "split: independently reviewed by adr_record on 2026-10-10 at 2051. The previous next-growth obligation is applied: the 11 D-525/D-620 signal methods move unchanged into traffic/signal_service.py (154); lane_traffic.py falls from 637 to 490. The mixin shares the existing traffic table, clock and writer; no new grant, transport or process. The lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains; next separate signal state/lifecycle growth must extract its own service rather than add another owner to the table. The package +150 allowance remains; no file budget changes. Previous verdict: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
         "AI PC demand controller, stdlib only) and demand mode in signal_phase.py and lane_traffic.py. The named "
         "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
         "+150 allowance measured from 1884. "
@@ -781,8 +775,8 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_375,
-        "accept: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
+        1_388,
+        "accept: independently reviewed by adr_record at 1388 on 2026-10-10: D-620 adds two optional junction status fields, an optional correlated heartbeat request and strict JunctionSignalAnswer validation in the canonical protocol contract. No I/O or decision policy is added; moving this one answer elsewhere would split the public protocol source and add imports. Keep the zero-growth file allowance; re-review every further growth, and split by protocol message family with preserved public imports if runtime logic or a second contract owner appears. Previous verdict: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
         "LineFollowStatus so a parsed copy (Fleet hub snapshot, D-555) keeps the crosswalk key; same owner, "
         "no new type. Previously "
         "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "
@@ -1030,8 +1024,8 @@ SIZE_VERDICTS = {
         "recovery/stuck/realign/ by its own dated addendum. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
-        959,
-        "split: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
+        1137,
+        "split: independently reviewed by adr_record at 1137 on 2026-10-10: D-620 keeps the Fleet episode/correlation policy in signal.py (90), separate from gate.py (569), approach.py (263) and bend.py (213). The existing manager lock/generation, CORE admission and final publisher are unchanged; the new mixin has no transport, thread or motion writer. The docs/plans/2026-10-07-line-follow-recovery-subpackage.md junction split remains applied. Package +150 remains; before gate.py reaches 600 move the bounded turn state out of that file. Re-review at package +150 or a new owner. Previous verdict: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
         "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
         "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2; merging main brought D-520's "
