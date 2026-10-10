@@ -65,7 +65,12 @@ function blockWith(button, reason) {
 const IDENTIFY_REASON = {
   none: "점멸이 보이지 않음", multiple: "같은 점멸이 둘 이상", frames_missing: "카메라 프레임이 빠짐",
   stale: "카메라 영상이 오래됨", calibration_changed: "보정이 바뀜", track_lost: "트랙을 놓침",
-  overlap: "다른 로봇과 겹침", not_accepted: "로봇이 거절함",
+  overlap: "다른 로봇과 겹침", not_accepted: "로봇이 거절함", lamp_refused: "로봇이 점멸을 거절함",
+};
+// D-596 rev 2026-10-10: rosy-face's reason for refusing the blink (CORE GET /host/lamp/identify/{id}).
+const LAMP_REASON = {
+  CAUTION_ACTIVE: "주의 표시 중(HOLD 등)", ESTOP: "E-Stop", STATE_DISPLAY: "상태 표시 중",
+  CORE_UNAVAILABLE: "CORE 인계 없음", LAMP_UNAVAILABLE: "램프 없음",
 };
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
@@ -538,7 +543,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const readback = await call("/api/fleet/tracking/identity", { signals: [life.signal] });
         const row = (readback.robots || []).find((item) => item.robot_id === robot.robot_id);
         if (row?.state === "CONFIRMED") log(`${robot.robot_id} LED 확인됨 · 카메라 트랙에 이름을 붙였습니다`, "good");
-        else log(`${robot.robot_id} LED 확인 실패 · ${IDENTIFY_REASON[row?.reason] || row?.reason || "판정 없음"}`, "bad");
+        else {
+          const lamp = row?.last?.lamp_reason;
+          const why = lamp ? ` · ${LAMP_REASON[lamp] || lamp}` : "";
+          log(`${robot.robot_id} LED 확인 실패 · ${IDENTIFY_REASON[row?.reason] || row?.reason || "판정 없음"}${why}`, "bad");
+        }
       } catch (error) {
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }

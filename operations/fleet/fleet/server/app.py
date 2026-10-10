@@ -337,7 +337,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
                       if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
-        identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
+        identity_task = asyncio.create_task(identity.run())  # also polls CORE's blink answers (D-596)
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
