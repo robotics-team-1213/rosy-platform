@@ -268,7 +268,9 @@ async function refreshIncidents() {
       const cam = report.evidence.rosy_cam;
       incidentLine(detail, cam ? `Rosy Cam: ${cam.source_id}, seq ${cam.seq}, 촬영 ${new Date(cam.captured_at * 1000).toLocaleString()}`
         : "Rosy Cam: 사건 시작 ±5초 관측 없음");
-      incidentLine(detail, "Pinky 앞 카메라: 사건 종료 후 이미지는 보존되지 않음");
+      incidentLine(detail, report.closed_at
+        ? "Pinky 앞 카메라: 사건 종료 후 이미지는 보존되지 않음"
+        : "Pinky 앞 카메라: 진행 중 한 장은 위 개입 목록에서 확인 · 종료 후 이미지는 보존되지 않음");
       const ai = report.evidence.ai_facts || [];
       incidentLine(detail, ai.length ? `AI 참고: ${ai.map(f => `${f.kind} (${f.stage}, ${Math.round(f.confidence * 100)}%)`).join(" · ")}`
         : "AI 참고: 사건 시작 ±5초 사실 없음");
@@ -326,14 +328,18 @@ async function refreshIncidents() {
   }
 }
 pageScope.listen(el("incident-refresh"), "click", refreshIncidents);
-pageScope.listen(el("incident-export"), "click", () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({reports: incidentReports,
-    traffic_reports: incidentTrafficReports}, null, 2)], {type: "application/json"}));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "rosy-incidents.json";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+pageScope.listen(el("incident-export"), "click", async () => {
+  try {
+    const payload = await call("/api/fleet/incidents?limit=100");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rosy-incidents.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    if (error.name !== "AbortError") log(`사건 JSON 내보내기 실패: ${error.message}`, "bad");
+  }
 });
 
 async function refreshDispatchControl(life = pageScope.capture()) {
