@@ -78,7 +78,12 @@ def _trip(runner, store, fleet, robot_id, arc_id, s, to="start_n", via=("start_s
     graph = store.active()[2]
     arc = graph.arcs[arc_id]
     fleet.at(robot_id, arc, s)
-    plan = plan_trip(graph, PlanRequest(store.active()[0], arc.point_at(s), to, via=tuple(via)), store.routing_config)
+    pose = arc.point_at(s)
+    if start_at is not None:
+        x, y = graph.place_xy(start_at)
+        pose = x, y, pose[2]
+        fleet.p[robot_id].pose = MapPose(x, y, pose[2], "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+    plan = plan_trip(graph, PlanRequest(store.active()[0], pose, to, via=tuple(via)), store.routing_config)
     plan_id = plan_id or robot_id
     request = {"to": to, "via": list(via), "repeat": repeat}
     if start_at is not None:
