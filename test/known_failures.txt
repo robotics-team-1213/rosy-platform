@@ -6,6 +6,5 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
-middleware/perception/test/test_line_observer_wiring.py::test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires  # fails on clean main 66bde0895 (2026-10-10), not D-589
 test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # fails on clean main e66eb4b16 (2026-10-10): fleet 52550 > 51848+150 and fleet/fleet/server/web/console.js 993 > 832+150; fleet re-judge lands with feat/d577-chain-supervision
 test/test_robot_literals.py::test_robot_literals_stay_in_their_family  # fails on clean main e6ffe9c2e (2026-10-10): D-597 drivable_steer.py not in the literal family set; owner to register
