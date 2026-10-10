@@ -1,0 +1,237 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "camloss": 1068.356,
+  "camloss_end": 1070.762,
+  "cues": {
+   "sent": 52,
+   "turn_spot_true": 3,
+   "signs": {
+    "+": 6,
+    "-": 0
+   },
+   "refused": [
+    {
+     "accepted": false,
+     "reason": "pose_stale"
+    }
+   ]
+  },
+  "pivots_started": 1,
+  "latched": [],
+  "start_err_gt_deg": -156.5,
+  "pivot_last_view": {
+   "turned_deg": 145.9,
+   "remaining_deg": 11.1,
+   "ticks": 124
+  },
+  "pivot_duration_sim_s": 6.26,
+  "end_reason": "tracking",
+  "end_err_odom_deg": -6.8,
+  "end_err_gt_deg": -6.2,
+  "odom_turned_deg": 149.7,
+  "pivot_xy_drift_m": 0.0006,
+  "pivot_cmds": 310,
+  "pivot_sign_changes": 0,
+  "reasons_during_pivot": [
+   "fleet_wrong_way_turn"
+  ],
+  "reacquire_hold_seen": false,
+  "after_reacquire": [
+   "TRACKING",
+   "tracking"
+  ],
+  "reacquire_s": 0.0,
+  "after": [
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   1061.313,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   1064.2,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   1064.328,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1065.555,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   1071.811,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1075.664,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1077.027,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1077.878,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1078.776,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1079.574,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1080.413,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1081.146,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1082.084,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1082.781,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1083.885,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1084.488,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1085.554,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1086.202,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1087.126,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1087.716,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1088.786,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1089.391,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1090.384,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1091.134,
+   "TRACKING",
+   "lane_edge_right"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/camimg_spot1",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.519,
+   0.201,
+   0.767944870877505
+  ],
+  "lane": -2.3736477827122884,
+  "spot": 1,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 2.5,
+  "camloss_proc": "image_bridge",
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": false,
+  "box": false,
+  "seed": 111,
+  "spot_xy": [
+   -0.519,
+   0.201
+  ],
+  "lane_deg": -136.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

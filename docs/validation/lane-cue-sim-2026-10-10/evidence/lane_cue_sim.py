@@ -316,14 +316,15 @@ def s2(p, a):
     p.cue_fn = None
     drop_wall = time.time()
     p.action('fleet_drop', turned_deg=round(turned(p.last()), 1), reason=p.last().get('reason'))
-    latched = p.wait(lambda r: r['wall'] > drop_wall and r.get('reason') in LATCHES, 6, 'latch')
+    latched = p.wait(lambda r: r['wall'] > drop_wall and latch_of(r), 6, 'latch')
     p.sleep(10.0)
     end = time.time()
     rows = rows_of(p)
     c = sm['checks']
     c['pivot_started'] = started is not None
     c['turned_at_drop_deg'] = round(turned(mid), 1) if mid else None
-    c['latch_reason'] = latched and latched.get('reason')
+    c['latch_reason'] = latched and latch_of(latched)
+    c['status_reason_at_latch'] = latched and latched.get('reason')
     lp = p.last_post or drop_wall
     s_lp, s_l = sim_at(rows, lp), (latched or {}).get('sim_t')
     c['latch_after_last_cue_sim_s'] = None if s_l is None or s_lp is None else round(s_l - s_lp, 2)
@@ -334,7 +335,7 @@ def s2(p, a):
         c['travel_after_latch_m'], c['yaw_after_latch_deg'] = disp(rows, latched['wall'] + 0.3, end)
         sim0, sim1 = sim_at(rows, latched['wall'] + 0.3), sim_at(rows, end)
         c['nonzero_cmd_after_latch'] = sum(1 for x in cmds(p, sim0, sim1 or 1e12) if abs(x['ang']) > 1e-6 or abs(x['lin']) > 1e-6)
-        c['still_latched_at_end'] = p.last().get('reason') in LATCHES
+        c['still_latched_at_end'] = latch_of(p.last()) is not None
     sm['timeline'] = reasons(rows)
     ok = (c['pivot_started'] and c['latch_reason'] in ('fleet_cue_lost', 'fleet_turn_unconfirmed')
           and c['latch_after_last_cue_sim_s'] is not None and c['latch_after_last_cue_sim_s'] <= TTL_S + PERIOD_S + 0.2
@@ -349,9 +350,11 @@ class FleetWrongWay:
     state follows raw after return_persist_s 1.0, detail fields (turn_deg, turn_spot) only while
     reported == raw. turn_spot: the MapPose within ``tol`` of the spot (Fleet turn_spot_tolerance_m)."""
 
-    def __init__(self, p, lane, noise, exact180, spot=None, tol=0.018):
+    def __init__(self, p, lane, noise, exact180, spot=None, tol=0.018, prejudged=False):
         self.p, self.lane, self.noise, self.exact, self.spot, self.tol = p, lane, noise, exact180, spot, tol
         self.state = self.cand = None
+        if prejudged:   # Fleet already reports WRONG_WAY (it watched the robot before the run started)
+            self.state, self.cand = 'WRONG_WAY', ('WRONG_WAY', 0.0)
 
     def __call__(self, s):
         wall, _, gt, stamp = s
@@ -378,7 +381,11 @@ def is_turn(r):
 
 
 def latch_of(r):
-    return r.get('reason') if r and r.get('reason') in LATCHES else None
+    """The lane-cue latch: lane_cue.latch (62c674c05+), else the HOLD reason. The junction gate can
+    rewrite the reason of a latched HOLD (e.g. fleet_cue_lost shows as junction_waiting)."""
+    if not r:
+        return None
+    return (r.get('lane_cue') or {}).get('latch') or (r.get('reason') if r.get('reason') in LATCHES else None)
 
 
 def cue_events(p, action):
@@ -403,7 +410,7 @@ def pivot_rows(rows):
 def s3(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose, box=a.box)
-    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol)
+    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol, a.prejudged)
     p.cue_fn = ff
     p.sleep(20.0 if a.box else 30.0)                                    # whole episode, incl. any stuck
     p.cue_fn = None
@@ -465,7 +472,7 @@ def s3(p, a):
 def s4(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose, box=True)
-    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False, a.spot_xy, a.spot_tol)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False, a.spot_xy, a.spot_tol, a.prejudged)
     stuck = p.wait(lambda r: r.get('stuck') is not None, 25, 'stuck open')
     st_wall = time.time()
     p.cue_fn = lambda s: dict(state='ON_LINE', pose_stamp=s[3], side='left', offset_m=-0.08)   # side cues
@@ -493,8 +500,10 @@ def s4(p, a):
     return sm
 
 
-def observer_pids():
-    """line_observer_node processes of this GZ_PARTITION (camera loss = SIGSTOP the observer)."""
+def observer_pids(name=b'image_bridge'):
+    """Processes of this GZ_PARTITION whose command line holds ``name``. Camera loss = SIGSTOP the
+    Gazebo image bridge (frames stop, IR stays fresh); b'line_observer_node' also stops the IR guard
+    observation (line_observer carries the IR calibration), which holds lane_guard_stale."""
     tag, out = f"GZ_PARTITION={os.environ.get('GZ_PARTITION', '')}".encode(), []
     for d in os.listdir('/proc'):
         if not d.isdigit():
@@ -503,7 +512,7 @@ def observer_pids():
             cmd, env = open(f'/proc/{d}/cmdline', 'rb').read(), open(f'/proc/{d}/environ', 'rb').read()
         except OSError:
             continue
-        if b'line_observer_node' in cmd and tag in env.split(bytes(1)):
+        if name in cmd and tag in env.split(bytes(1)):
             out.append(int(d))
     return out
 
@@ -516,11 +525,11 @@ def s5(p, a):
     """Turn-spot WRONG_WAY: one pivot to <= 10 deg (odom), then the camera re-acquires (no latch)."""
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose)
-    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol, a.prejudged)
     c = sm['checks']
     if a.camloss:
         r = p.wait(lambda r: (pivot_of(r) or {}).get('turned_deg', 0) >= a.camloss_at, 20, 'camloss point')
-        pids = observer_pids()
+        pids = observer_pids(a.camloss_proc.encode())
         for pid in pids:
             os.kill(pid, signal.SIGSTOP)
         c['camloss'] = p.action('camera_stop', pids=pids, pivot=pivot_of(r or {}))['sim_t']
@@ -655,7 +664,9 @@ def main():
     ap.add_argument('--spot-tol', type=float, default=0.018, help='Fleet turn_spot_tolerance_m (FleetWrongWay)')
     ap.add_argument('--yaw-off', type=float, default=0.0, help='--spot: facing = ring + 180 + this (deg)')
     ap.add_argument('--camloss', type=float, default=0.0, help='s5: SIGSTOP line_observer this long (s)')
+    ap.add_argument('--camloss-proc', default='image_bridge', help='s5: process to SIGSTOP (image_bridge | line_observer_node)')
     ap.add_argument('--camloss-at', type=float, default=60.0, help='s5: ... once the pivot turned this (deg)')
+    ap.add_argument('--prejudged', action='store_true', help='Fleet reports WRONG_WAY from the first cue')
     ap.add_argument('--exact180', action='store_true')
     ap.add_argument('--box', action='store_true')
     ap.add_argument('--seed', type=int, default=1)
