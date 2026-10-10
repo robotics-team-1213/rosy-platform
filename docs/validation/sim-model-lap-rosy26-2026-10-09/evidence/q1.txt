@@ -1,0 +1,6 @@
+B_threshold_arcon threshold 2 false 0 true
+C_28e8454d_n4comp_lat300 /srv/rosy/store/models/accepted/lane-seg-20261006-28e8454d 4 true 300 true
+D_62db9403_n4comp_lat300 /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 4 true 300 true
+E_v11_n4comp_lat300 /home/rosy/rosy_d567_ws/model_candidates/v11 4 true 300 true
+F_62db9403_n2nocomp_lat300 /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 2 false 300 true
+G_62db9403_n4comp_lat300_arcoff /home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403 4 true 300 false
