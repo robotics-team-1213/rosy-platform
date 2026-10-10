@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional
 
-from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
+from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band, peer_ahead
 from fleet.site_map import _inside, _point_segment
 
 #: D-573 1 / D-577 1: R3 holds within this of a site-map crosswalk. Robot URDF rear 0.076 m + the

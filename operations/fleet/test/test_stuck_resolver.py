@@ -718,9 +718,16 @@ def _ai_row(proposal=None, stuck=None, wait=True):
     return row
 
 
+def _trusted(row):
+    """A trusted, fresh Fleet map pose: the site map's crosswalks can be measured (D-573 1)."""
+    row["state"]["localization"] = _frame("map")
+    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
+    return row
+
+
 def test_d577_valid_ai_proposal_is_forwarded():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
-    assert r.step(0.0, [_ai_row(_proposal())]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")]
+    assert r.step(0.0, [_trusted(_ai_row(_proposal()))]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")]
     assert [v["verdict"] for v in r.ai_verdicts] == ["forwarded"]
     wait = StuckResolver(ResolverConfig(), painted=painted_track)
     assert wait.step(0.0, [_ai_row(_proposal("WAIT", reason="rear_blocked"))]) == [
@@ -797,8 +804,10 @@ def test_d577_ai_moving_words_need_every_r3_precondition(decision, stuck, extra,
 
 def test_d577_ai_back_off_holds_for_an_untrusted_peer_pose_and_resume_is_never_an_ai_word():
     peer = _row("rosy_02", pose=(0.2, 0.0, 0.0))             # LEGACY odom pose: not a map pose
-    no_motion = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
-    assert _judged(None, no_motion, peer)[0] == "peer_unknown"   # R6's waiver is not the AI's
+    no_motion = _trusted(_ai_row(_proposal(), _stuck(cause="no_motion"), wait=False))
+    assert _judged(None, no_motion, peer)[0] == "peer_unknown"
+    legacy = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
+    assert _judged(None, legacy, peer)[0] == "crosswalk_unknown"   # no map pose near a mapped crosswalk   # R6's waiver is not the AI's
     for cause in ("obstacle_ahead", "lane_lost", "no_motion"):   # the rules never RESUME a stuck
         assert _judged(None, _ai_row(_proposal("RESUME"), _stuck(cause=cause), wait=False)) == (
             "word_not_allowed", [])

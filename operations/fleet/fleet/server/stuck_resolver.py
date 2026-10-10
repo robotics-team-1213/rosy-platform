@@ -296,10 +296,7 @@ class StuckResolver:
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
         if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
-            # XW removed after independent Safety-Review 2026-10-10: a RESUME here could cross with no look for
-            # people (CORE gate off) or override a "person present" hold. Stop and hand it to a person, trip or
-            # not, before any AI proposal or rule. RESUME at a crosswalk needs CORE-armed Fleet-map zones that
-            # report looked-and-clear, trip robots excluded, and its own Safety-Review.
+            # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
             return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
