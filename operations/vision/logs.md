@@ -475,8 +475,8 @@
 - 증거: 원격 회귀 테스트; 실제 천장 영상 수용은 미확인.
 - Gate: SOURCE, DEVICE/FIELD 미완료.
 
-## 2026-10-10 LED sampling restores calibrated image position
+## 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
 - Symptom: LED sampling inverted a height-corrected robot point as a floor point; edge-of-image samples were displaced.
 - Change: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
-- Regression: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote verification follows.
+- Regression: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
 
