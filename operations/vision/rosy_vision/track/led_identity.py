@@ -119,19 +119,14 @@ def decide(samples: Sequence[Sample], *, not_before: float, not_after: float, no
     chains = _chains(window, config.max_step_px)
     for chain in chains:
         found = _blink(chain, config)
+        if found is None and len(chain) == len(window):
+            found = _steady(chain, config, require_off_after=True)
+            if found is not None:
+                evidence["mode"] = "steady"
+                evidence["off_on_off"] = True
         if found is not None:
             matches.append((chain, found))
             evidence["candidates"].append(found)
-    if not matches:
-        for chain in chains:
-            if len(chain) != len(window):
-                continue
-            found = _steady(chain, config, require_off_after=True)
-            if found is not None:
-                matches.append((chain, found))
-                evidence["mode"] = "steady"
-                evidence["off_on_off"] = True
-                evidence["candidates"].append(found)
     if not matches and len(chains) == 1 and all(len(s.blobs) == 1 for s in window):
         found = _steady(chains[0], config)
         if found is not None:
