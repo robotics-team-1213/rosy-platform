@@ -37,7 +37,9 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = 
                 or not 0.0 <= age <= config.pose_max_age_s):
             return "pose"
     behind = peer_behind(row, rows, config)
-    if behind is None:
+    if behind is None and rule != "R6":
+        # D-577 개정 2026-10-10: a no_motion stuck (R6) is not held for an unknown peer pose; CORE's
+        # D-407 body re-check (rear clearance, blind band, trail) before and during the back-off decides.
         return "peer_unknown"
     if behind:
         return "peer_behind"
