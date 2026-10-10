@@ -39,8 +39,9 @@ from typing import Callable, Iterable, Optional
 
 from fastapi import HTTPException
 
-from fleet.localization.lane_compliance import (ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
+from fleet.localization.lane_compliance import (OFF_MAP, ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
                                                 LaneComplianceTracker, ReturnTracker, map_bounds)
+from fleet.localization.lap_context import build_lap, context as lap_context
 from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
@@ -50,7 +51,10 @@ CUE_TTL_S = 1.0
 #: The near bar this close ahead of base_footprint counts as "at the crosswalk": body front
 #: 0.06 m (URDF) + the IR row and the zone uncertainty, rounded up.
 AT_CROSSWALK_M = 0.15
-#: A robot whose CORE has no lane-cue route (404) is asked again after this long.
+#: D-430 review 1: 404 (no route), 500 (route without wiring), 403 (not the site seat), 501: the
+#: robot cannot take the cue; it is asked again after this long.
+UNSUPPORTED = (400, 403, 404, 422, 500, 501)   # 400/422: an older strict lane-cue schema
+#: A robot whose CORE cannot take the cue is asked again after this long.
 CUE_RETRY_S = 60.0
 
 logger = logging.getLogger("fleet.lane_compliance")
@@ -59,13 +63,19 @@ logger = logging.getLogger("fleet.lane_compliance")
 class LaneComplianceMonitor:
     def __init__(self, robot_ids: Callable[[], Iterable[str]], *, poses, site_maps,
                  config: LaneComplianceConfig = LaneComplianceConfig(), identity=None,
-                 wall: Callable[[], float] = time.time, clients: Optional[Callable] = None) -> None:
+                 wall: Callable[[], float] = time.time, clients: Optional[Callable] = None,
+                 stuck_open: Optional[Callable[[str], bool]] = None) -> None:
         self.config = config
         self._clients = clients          # () -> {robot_id: HttpRobotClient}; None = observe only
+        #: robot -> an open CORE stuck (D-407): its answer owns the robot, the cue stands down.
+        self._stuck_open = stuck_open or (lambda robot_id: False)
         self._returns: dict[str, ReturnTracker] = {}
+        self._lap: tuple = (None, None)          # (map version, Lap) for the rev 6 context
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
-        self._cue_mute: dict[str, float] = {}    # robot -> wall time a 404 CORE is asked again
+        self._cue_mute: dict[str, float] = {}    # robot -> wall time an unsupported CORE is asked again
+        self._cue_refused: dict[str, Optional[str]] = {}   # robot -> last refusal reason (log once)
+        self._last_stamp: dict[str, float] = {}  # robot -> last odom stamp sent (an OFF_MAP cue reuses it)
         self._epoch = f"{int(wall() * 1000):x}"
         self._robot_ids = robot_ids
         self._poses = poses              # MapPoseService: moved / refresh / arbitrated_pose
@@ -101,6 +111,9 @@ class LaneComplianceMonitor:
         crosswalks = ([(c.id, [tuple(p) for p in c.polygon]) for c in getattr(active[1], "crosswalks", ())]
                       if active is not None else [])
         bounds = map_bounds(graph, cfg.off_map_pad_m)
+        version = active[0] if active is not None else None
+        if cfg.guide_context and self._lap[0] != version:
+            self._lap = (version, build_lap(graph, cfg.lap_arcs, crosswalks, cfg.turn_spots))
         now = self._wall()
         cues = []
         for robot_id in roster:
@@ -147,7 +160,12 @@ class LaneComplianceMonitor:
         current = tracker.state == raw.state   # detail fields belong to the reported state only
         detail = ("edge_id", "offset_m", "side", "bearing_deg", "lane_heading_deg", "turn_deg")
         return {"state": tracker.state, "since": tracker.since, "raw": raw.state, "moving": moving,
+                "pose_stamp": getattr(pose, "odom_stamp", None) if placed else None,
                 "guide": raw.guide if current else None,
+                "turn_spot": raw.turn_spot if current else False,
+                "context": (lap_context(self._lap[1], raw.arc_id, raw.s_m, raw.offset_m,
+                                        getattr(pose, "age_s", None), getattr(pose, "anchor_age_s", None))
+                            if current and self.config.guide_context else None),
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
                 "crosswalk": raw.crosswalk,
@@ -166,30 +184,54 @@ class LaneComplianceMonitor:
         state = back["state"]
         if back["raw"] == UNSEEN and state != OFF_MAP:
             return                     # not judged now: CORE's cue expires, the robot drives as today
+        if back["pose_stamp"] is None and state != OFF_MAP:
+            return                     # D-430 review 7: CORE measures a turn from the odom at pose_stamp
         if (state == ON_LANE and not back["moving"]
                 and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
             return                     # still on the lane: nothing to guide, nothing to clear
         if self._cue_mute.get(robot_id, 0.0) > now:
             return
+        if state != OFF_MAP and self._stuck_open(robot_id):
+            return                     # D-577 REALIGN / a human answers the stuck; one channel at a time
         send = getattr((self._clients() or {}).get(robot_id), "line_follow_lane_cue", None)
         if send is None:
             return
         self._cue_seq += 1
         body = {"cue_id": f"{robot_id}-{self._epoch}-{self._cue_seq}", "fleet_epoch": self._epoch,
                 "seq": self._cue_seq, "ttl_s": CUE_TTL_S,
+                # OFF_MAP: CORE holds without odom alignment (re-review 1), any positive stamp will do.
+                "pose_stamp": back["pose_stamp"] or self._last_stamp.get(robot_id) or now,
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
-                                        "offset_m", "edge_id", "guide")}}
+                                        "offset_m", "edge_id", "guide")},
+                # rev 4: only when true, so a CORE without the field (strict schema) never sees it.
+                **({"turn_spot": True} if back["turn_spot"] else {}),
+                # rev 6: only with guide_context on, so a CORE without the field never sees it.
+                **({"context": back["context"]} if back["context"] is not None else {})}
         # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
-            await asyncio.wait_for(send(body), PERIOD_S)
+            reply = await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch
-            if getattr(exc, "status", None) == 404:
+            status = getattr(exc, "status", None)
+            if status in UNSUPPORTED:
                 self._cue_mute[robot_id] = now + CUE_RETRY_S
-                logger.info("lane cue %s: CORE has no /line-follow/lane-cue; again in %.0f s",
-                            robot_id, CUE_RETRY_S)
+                logger.info("lane cue %s: CORE answered %s (no lane cue, wiring or seat); again in %.0f s",
+                            robot_id, status, CUE_RETRY_S)
             else:
                 logger.debug("lane cue %s failed: %s", robot_id, exc)
             return
+        if isinstance(reply, dict) and reply.get("accepted") is False:
+            # D-430 re-review 1: a refused cue did not take effect; say why and try again next tick
+            # ("disabled": that robot's CORE does not read cues, asked again after CUE_RETRY_S).
+            reason = reply.get("reason")
+            if reason == "disabled":
+                self._cue_mute[robot_id] = now + CUE_RETRY_S
+            if self._cue_refused.get(robot_id) != reason:
+                logger.warning("lane cue %s: %s refused (%s)", robot_id, state, reason)
+            self._cue_refused[robot_id] = reason
+            return
+        self._cue_refused.pop(robot_id, None)
+        if back["pose_stamp"] is not None:
+            self._last_stamp[robot_id] = back["pose_stamp"]
         if self._cue_sent.get(robot_id) != state:
             logger.info("lane cue %s: %s side=%s turn=%s", robot_id, state, back["side"], back["turn_deg"])
         self._cue_sent[robot_id] = state

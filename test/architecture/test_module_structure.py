@@ -83,6 +83,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md,
+#: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow",
@@ -95,6 +97,7 @@ SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
+              "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "perception/control/sensing/perception",
               "perception/control/sensing/perception/learned",
@@ -147,6 +150,14 @@ SIZE_VERDICTS = {
         "accept: measured at 612 on 2026-10-10 (independent re-judge 2026-10-10, critic: agree on accept; the lane-traffic seam is already applied - next growth moves the D-525 signal methods _green..._signal_view (lane_traffic.py:333-459, ~125 lines) to traffic/signal_service.py). D-525 rev 6 "
         "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
         "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. Re-judge on further growth",
+    ),
+    "fleet/fleet/localization": (
+        1_707,
+        "split: judged at 1707 on 2026-10-10 when it left the fleet package total "
+        "(docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): the pure "
+        "position/lane judgement of Fleet - D-395 arbiter (arbiter, cues, trust, service_logic, pose_request), "
+        "D-494 3 map_pose, D-511 lane_compliance and lap_context (rev 6). No transport, asyncio or robot "
+        "call (test_boundaries); the service loops stay in fleet/server. Re-judge after +150.",
     ),
     "fleet/fleet/traffic": (
         1884,
@@ -232,7 +243,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_324,
+        49_802,
+        "split: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
+        "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
+        "D-511 rev 3-6 (+179) - 1707. +150 allowance measured from 49802. Previously "
         "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
         "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
         "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "
