@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 181b569b5 · fix(discovery): 빈 검색 캐시 재사용
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 - 2026-10-10 · uncommitted · fix: nominal body selection
 - 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 표시
 - 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
-- 2026-10-09 · uncommitted · fix: route context 시험 파일명 중복 해소
