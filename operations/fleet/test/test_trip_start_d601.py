@@ -133,7 +133,7 @@ def test_d_the_planner_refusal_carries_the_heading_error_and_the_distance_off():
     x, y, yaw = _arc(store, "ring_s:fwd").point_at(0.1)
     with pytest.raises(PlanError) as err:
         snap_start(graph, x, y, yaw + math.pi, store.routing_config)
-    assert err.value.code == "TRIP_HEADING_CONFLICT" and abs(err.value.detail["heading_err_deg"]) > 120
+    assert err.value.code == "TRIP_HEADING_CONFLICT" and abs(err.value.detail["heading_err_deg"]) > store.routing_config.heading_tol_deg
     with pytest.raises(PlanError) as err:
         snap_start(graph, 50.0, 50.0, yaw, store.routing_config)
     assert err.value.code == "TRIP_START_OFF_MAP" and err.value.detail["off_lane_m"] > 10
