@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 
 import pytest
@@ -152,6 +153,27 @@ def test_two_finite_laps_return_to_their_own_start_and_stop():
         fleet.at(robot_id, live.arc(tail), live.segments[tail]["s_to"])
         _ticks(runner, fleet)
         assert runner.view(robot_id)["state"] == "arrived"
+    assert runner.open_trips() == []
+
+
+def test_finite_lap_refuses_start_when_body_is_outside_the_first_lane():
+    runner, store, fleet = _setup(ids=("a",))
+    graph = store.active()[2]
+    x, y = graph.place_xy("start_n")
+    arc = graph.arcs["east:fwd"]
+    yaw = arc.project(x, y)[2]
+    plan = plan_trip(graph, PlanRequest(store.active()[0], (x, y, yaw), "start_n", via=("start_s",)),
+                     store.routing_config)
+    store.record_plan(plan_id="a", robot_id="a", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "start_n", "via": ["start_s"], "repeat": False, "start_at": "start_n"},
+                      result={"plan": plan_body(plan)})
+    fleet.p["a"].pose = MapPose(x - 0.04 * math.sin(yaw), y + 0.04 * math.cos(yaw), yaw,
+                                "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+
+    with pytest.raises(TripError) as err:
+        run(runner.start("a", "bob"))
+    assert err.value.code == "TRIP_START_BODY_OUTSIDE_ROUTE"
+    assert err.value.detail["body_margin_m"] < 0
     assert runner.open_trips() == []
 
 
