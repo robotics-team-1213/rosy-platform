@@ -106,3 +106,74 @@ def test_default_off_and_mode_off_do_not_request_or_apply_answers():
     rig.m.set_mode(LineFollowMode.OFF)
     assert rig.m.junction_signal_request() is None
     assert not answer(rig, request, "green", True)
+    assert not rig.m.junction_signal_answer({})
+
+
+def test_a_camera_gap_at_the_same_stopped_junction_does_not_erase_a_red_reply():
+    rig, request = waiting()
+    answer(rig, request, 'red')
+    for _ in range(100):
+        decision, status = rig.step(junction=False)
+        assert decision.linear == decision.angular == 0
+    assert rig.m.junction_signal_request() == request
+    assert status.junction.pending_action is None
+
+
+def test_completed_turn_is_not_run_again_on_repeated_sightings():
+    rig, request = waiting()
+    answer(rig, request, 'green', True)
+    for _ in range(400):
+        _, status = rig.step(junction=True, move=True)
+        if status.junction.state == 'idle':
+            break
+    assert status.junction.state == 'idle'
+    seq = status.junction.seq
+    for _ in range(70):
+        rig.step(junction=True)
+        assert rig.m.status().junction.seq == seq
+        assert rig.m.junction_signal_request() is None
+
+
+def test_agent_sends_the_query_and_delivers_the_correlated_heartbeat_answer():
+    import asyncio
+    from types import SimpleNamespace
+    from core_common.protocol.schemas import Envelope, EnvelopeType, StateSnapshot
+    from core_features.fleet_agent.agent import FleetAgent
+
+    async def check():
+        request = 'a' * 32
+        queue, received = asyncio.Queue(), asyncio.Event()
+        sent, replies = [], []
+        agent = FleetAgent(SimpleNamespace(snapshot=lambda: StateSnapshot(robot_id='robot')),
+                           None, {}, SimpleNamespace(robot_id='robot'))
+        agent.enabled = True
+        agent._hb_reply = asyncio.Event()
+        agent.junction_signal_request = lambda: request
+
+        def receive(reply):
+            replies.append(reply)
+            received.set()
+        agent.junction_signal_answer = receive
+
+        class Socket:
+            async def send(self, raw):
+                env = Envelope.model_validate_json(raw)
+                sent.append(env.payload)
+                await queue.put(Envelope(type=EnvelopeType.HEARTBEAT, payload={'junction_signal': dict(
+                    request_id=request, lamp='red', may_enter=False, reason='test')}).model_dump_json())
+
+            async def recv(self):
+                return await queue.get()
+
+        ws = Socket()
+        tasks = [asyncio.create_task(agent._reader_loop(ws)), asyncio.create_task(agent._heartbeat_loop(ws))]
+        try:
+            await asyncio.wait_for(received.wait(), 1.)
+            assert sent[0]['junction_signal_request'] == request
+            assert replies[0]['request_id'] == request and replies[0]['lamp'] == 'red'
+        finally:
+            agent.enabled = False
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+    asyncio.run(check())

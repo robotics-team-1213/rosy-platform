@@ -28,7 +28,8 @@ class JunctionSignalMixin:
         try:
             answer = JunctionSignalAnswer.model_validate(payload)
         except ValueError:
-            if isinstance(payload, dict) and payload.get('request_id') == self.junction_signal_request():
+            request = self.junction_signal_request()
+            if request is not None and isinstance(payload, dict) and payload.get('request_id') == request:
                 self.junction_signal_answer(dict(request_id=payload['request_id'], lamp='unknown',
                                                  may_enter=False, reason='invalid_reply'))
             return False
@@ -48,7 +49,7 @@ class JunctionSignalMixin:
         if s is not None:
             if seen:
                 s['last_seen'] = now
-            elif now-s['last_seen'] > self._config.lost_after_s:
+            elif self._junction is None and now-s['last_seen'] > self._config.lost_after_s:
                 self._junction_signal = None
 
     def _signal_gate(self, j, now):

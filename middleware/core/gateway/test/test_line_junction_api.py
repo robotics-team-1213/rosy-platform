@@ -53,7 +53,8 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
     snapshot = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]
     assert snapshot["junction"] == {"pending_action": "left", "place_id": "J2",
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
-                                    "reason": None, "pivot_basis": None}
+                                    "reason": None, "pivot_basis": None,
+                                    "signal_request_id": None, "signal_state": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
