@@ -271,7 +271,7 @@ class LaneComplianceMonitor:
 
     def stuck_heading(self, robot_id: str) -> dict:
         """D-607: reassess direction from coherent map evidence without issuing a manoeuvre."""
-        from fleet.stuck.heading import reassess
+        from fleet.localization.stuck_heading import reassess
 
         active = self._site_maps.active()
         pose = self._poses.arbitrated_pose(robot_id)

@@ -3085,3 +3085,9 @@
 - Change: 사용자 결정에 따라 위치 미보고를 UNKNOWN/untrusted로 처리한다. LOCALIZED + map만 교통·bays·교착 해결기의 원시 지도 자세로 쓴다. 30 s null 뒤 캐시 좌표를 버려도 신뢰는 복원하지 않는다. 목표 admission은 현재 상태를 먼저 읽는다. 화면은 map_id만 있는 raw pose를 지도에 그리지 않고 Fleet MapPose 출처와 CORE 상태를 구분한다.
 - Evidence: AI PC 원격 집중 시험 193개 및 enrollment/formation/priority/task 호출부 시험 116개 통과; known_failures 비교 0 NEW. node localization-badge 10개 통과. 전체 Fleet 첫 실행의 위치 생략 fixture 실패 6개를 수정했으며 최종 통합 게이트는 착지 도구에서 다시 검사한다.
 - Gate: SOURCE. 설치 이미지·현장 화면은 이 변경으로 아직 검증하지 않았다. 물리 주행이나 LED 신원 확인을 지시하지 않았다.
+
+## 2026-10-10 · 008d62b301 · feat(fleet): reassess stuck heading
+
+- Change: 전체 대상의 하단 차선 통과·한 바퀴·원위치 정지를 계획의 완료 조건으로 기록했다. 열린 막힘마다 최신 신뢰 자세와 차로 방향을 비교하고 변화 시 로그를 남긴다. 같은 odom 시각에 새 지도 기준점이 들어와도 이전 차로 판단을 섞지 않으며 관찰 오류는 기존 resolver를 막지 않는다. 순수 자세 비교는 localization에 두고 명령 규칙은 변경하지 않았다.
+- Evidence: 신규 기능 원격 RED(모듈 누락), 관련 시험 61개 GREEN. 독립 검토의 재앵커·관찰 오류 4건은 별도 원격 RED로 재현하고 수정했다. 최종 관련·구조 시험은 현재 후보에서 다시 확인한다. 검토자 lap_review는 008d62b301의 소스 수정 승인; REALIGN 실행·현장 완주 승인은 아니다.
+- Gate: SOURCE. REALIGN 전달·trip 중 조작 점유 검증·공통 장치 배포·하단 실제 통과·전체 한 바퀴는 미완료다. 방향 로그는 5도 변화 단위 요약이며 전체 영상/표본을 대신하지 않는다.

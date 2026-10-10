@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from fleet.localization.map_pose import MapPose
-from fleet.stuck.heading import reassess
+from fleet.localization.stuck_heading import reassess
 from fleet.server.lane_compliance_service import LaneComplianceMonitor
 from test_stuck_resolver_loop import _setup
 

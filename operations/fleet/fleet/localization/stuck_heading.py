@@ -1,4 +1,4 @@
-"""D-607 heading evidence; manoeuvre geometry is checked separately before REALIGN."""
+"""D-607 pure heading evidence; manoeuvre geometry is checked separately before REALIGN."""
 
 import math
 
