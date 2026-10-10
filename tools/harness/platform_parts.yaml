@@ -674,6 +674,7 @@ safety_modules:
   - middleware/core/services/core_features/docking/charging.py
   - middleware/core/services/core_features/line_follow/body_stop.py
   - middleware/core/services/core_features/line_follow/clearance.py
+  - middleware/core/services/core_features/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api_web/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
@@ -719,6 +720,8 @@ safety_anchors:
   - {symbol: core_features.command.arbitration._ALLOWED}
   - {symbol: core_features.line_follow.body_stop.BodyStopMixin}
   - {symbol: core_features.line_follow.clearance.body_path_gap}
+  - {symbol: core_features.localization.rotate_to.rotate_goal}
+  - {symbol: core_features.localization.rotate_to.turn_rate}
   - {symbol: core_api_web.api.v1.safety.safety_release}
   - {symbol: core_api_web.api.v1.safety.safety_limits}
   - {symbol: core_common.robot_body.RobotBody}
