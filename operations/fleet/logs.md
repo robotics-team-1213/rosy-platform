@@ -3077,3 +3077,4 @@
 - Change: move trusted map pose and front/back peer-band helpers from stuck_resolver.py into stuck_peer_pose.py; preserve the resolver import surface and decisions.
 - Evidence: focused stuck resolver/API tests 137 passed; structure size checks 2 passed. Main at 5d93a9255 had both size failures before this split.
 - Gate: SOURCE and host tests only; no field robot action or changed motion contract.
+
