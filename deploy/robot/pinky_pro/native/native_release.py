@@ -16,8 +16,8 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
-import time
 import sys
+import time
 from typing import Callable, Protocol
 
 
@@ -56,6 +56,11 @@ IO_SETTLE_S = 20.0
 # Every unit with PartOf=rosy-runtime.target (pinned by a test).
 RUNTIME_STOP_UNITS = (RUNTIME_TARGET, "rosy-core.service", "rosy-io.service", "rosy-camera.service",
                       "rosy-host-agent.service", "rosy-ssh-pairing.service")
+# D-553 addendum 4: units an activation may restart alone, CORE and the rest
+# keeping their processes. The caller (tools/release/ship.py) asks for it only
+# when every changed payload file is camera perception code no other unit loads.
+RESTARTABLE_ALONE = {"rosy-camera.service"}
+UNIT_SETTLE_S = 3.0
 
 
 def _runtime_id(path: Path) -> str | None:
@@ -141,6 +146,7 @@ class NativeReleaseManager:
         runtime: Callable[[str], None] | None = None,
         links: LinkStore | None = None,
         precheck: Callable[[], None] | None = None,
+        units: Callable[[str, tuple[str, ...]], None] | None = None,
         io_active: Callable[[], bool] | None = None,
         io_settle_s: float = IO_SETTLE_S,
     ) -> None:
@@ -157,6 +163,7 @@ class NativeReleaseManager:
         # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
         # after verification and right before the runtime stops; raising refuses.
         self.precheck = precheck
+        self._units = units or self._systemctl_units
         # rosy-io is Type=simple: "systemctl start" returns before bringup has
         # opened the motors. Real runs probe systemd; injected runtimes opt out.
         self.io_active = io_active or (self._io_is_active if runtime is None else (lambda: False))
@@ -174,6 +181,17 @@ class NativeReleaseManager:
             check=True,
             timeout=120,
         )
+
+    @staticmethod
+    def _systemctl_units(action: str, units: tuple[str, ...]) -> None:
+        subprocess.run(["systemctl", action, *units], check=True, timeout=120)
+        if action == "start":
+            # Type=simple returns at fork; a unit that dies on start (bad import,
+            # failed ExecCondition) shows as inactive within a few seconds.
+            # ponytail: unit liveness only, like the full path's camera; a node
+            # that dies inside a still-running ros2 launch is not seen here.
+            time.sleep(UNIT_SETTLE_S)
+            subprocess.run(["systemctl", "is-active", "--quiet", *units], check=True, timeout=30)
 
     @staticmethod
     def _io_is_active() -> bool:
@@ -331,7 +349,15 @@ class NativeReleaseManager:
         self._set_link(self.current, old_current)
         self._set_link(self.previous, candidate)
 
-    def activate(self, release_id: str) -> dict:
+    def activate(self, release_id: str, restart_units: tuple[str, ...] = ()) -> dict:
+        restart_units = tuple(restart_units)
+        if not set(restart_units) <= RESTARTABLE_ALONE:
+            raise ValueError(f"NATIVE_RESTART_UNIT: only {sorted(RESTARTABLE_ALONE)} may restart alone")
+        if restart_units:
+            def runtime(action: str) -> None:
+                self._units(action, restart_units)
+        else:
+            runtime = self._runtime
         with self._locked():
             self.verify(release_id)
             self.check_python_runtime(release_id)
@@ -345,8 +371,8 @@ class NativeReleaseManager:
                 operation="activate", candidate=release_id,
                 old_current=old_current, old_previous=old_previous, phase="prepared",
             )
-            expect_io = self.io_active()
-            self._runtime("stop")
+            expect_io = not restart_units and self.io_active()
+            runtime("stop")
             self._set_link(self.previous, old_current)
             self._set_link(self.current, release_id)
             self._write_journal(
@@ -354,7 +380,7 @@ class NativeReleaseManager:
                 old_current=old_current, old_previous=old_previous, phase="switched",
             )
             try:
-                self._runtime("start")
+                runtime("start")
                 if expect_io:
                     # 2026.10.10-100 on 8kcn: bringup died 7 s after start and
                     # nothing noticed. Wait past that window, then require I/O.
@@ -362,14 +388,17 @@ class NativeReleaseManager:
                     if not self.io_active():
                         raise RuntimeError("NATIVE_IO_NOT_ACTIVE: rosy-io.service is not active after start")
             except Exception as exc:
-                self._runtime("stop")
+                runtime("stop")
                 self._restore(old_current, release_id)
                 if old_current is not None:
-                    self._runtime("start")
+                    runtime("start")
                 self.journal.unlink(missing_ok=True)
                 raise RuntimeError("candidate failed health check and was rolled back") from exc
             self.journal.unlink(missing_ok=True)
-            return {"ok": True, "release_id": release_id, "previous": old_current}
+            outcome = {"ok": True, "release_id": release_id, "previous": old_current}
+            if restart_units:
+                outcome["restarted"] = list(restart_units)
+            return outcome
 
     def rollback(self) -> dict:
         with self._locked():
@@ -465,6 +494,8 @@ def _main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     activate = sub.add_parser("activate")
     activate.add_argument("--release-id", required=True)
+    activate.add_argument("--restart-unit", action="append", default=[],
+                          help="restart only this unit (D-553 addendum 4: rosy-camera.service)")
     verify = sub.add_parser("verify")
     verify.add_argument("--release-id", required=True)
     sub.add_parser("rollback")
@@ -473,7 +504,7 @@ def _main(argv: list[str] | None = None) -> int:
     manager = NativeReleaseManager(root=args.root, public_key=args.public_key, precheck=_env_precheck())
     try:
         if args.command == "activate":
-            result = manager.activate(args.release_id)
+            result = manager.activate(args.release_id, tuple(args.restart_unit))
         elif args.command == "verify":
             manifest = manager.verify(args.release_id)
             result = {"ok": True, "release_id": manifest["release_id"]}

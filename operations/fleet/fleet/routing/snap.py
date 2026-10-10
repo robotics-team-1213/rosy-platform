@@ -32,17 +32,20 @@ def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConf
     along an excluded arc still starts on it.
     """
     best: tuple[bool, float, str, float] | None = None
-    near = False
+    near, off = None, math.inf  # D-601 D: the best heading error on a lane here, else the distance off
     for arc in graph.arcs.values():
         dist, s_m, tangent = arc.project(x, y)
         if dist > arc.width_m / 2:
+            off = min(off, dist - arc.width_m / 2)
             continue
-        near = True
+        err = math.degrees(wrap(yaw - tangent))
+        near = err if near is None or abs(err) < abs(near) else near
         key = (allowed is not None and not allowed(arc), dist, arc.id)
         if heading_ok(yaw, tangent, config) and (best is None or key < best[:3]):
             best = (*key, s_m)
     if best is None:
-        raise PlanError("TRIP_HEADING_CONFLICT" if near else "TRIP_START_OFF_MAP")
+        raise (PlanError("TRIP_HEADING_CONFLICT", {"heading_err_deg": round(near, 1)}) if near is not None
+               else PlanError("TRIP_START_OFF_MAP", {"off_lane_m": round(off, 3) if off < math.inf else None}))
     return best[2], best[3]
 
 

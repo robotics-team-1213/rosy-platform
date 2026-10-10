@@ -151,7 +151,7 @@ def test_an_hour_of_normal_traffic_says_nothing_and_the_same_input_gives_the_sam
 
 
 def test_every_kind_passes_fleet_validation_and_carries_no_command_word():
-    from fleet.server.ai_facts import AiFact
+    from fleet.stuck.ai_facts import AiFact
 
     watch, facts = TrafficWatch(), []
     for t in range(40):

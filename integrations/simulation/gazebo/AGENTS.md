@@ -46,6 +46,7 @@ ros2 launch gz_sim gz_multi.launch.py robots:=3 mode:=slam headless:=true
 - One Gazebo server; per-robot RSP, spawn, and ros_gz bridge with namespaced `cmd_vel`.
 - Do not assume mapper `scan_topic` is namespaced — override per robot if needed.
 - `CMakeLists.txt` exits on aarch64. Pi images do not ship Gazebo.
+- A Fleet that drives SIM robots passes `--site-config integrations/simulation/gazebo/config/fleet_sim_site.yaml` (in-process harnesses: `TripConfig.from_mapping` of its `fleet.trip`). SIM CORE has no front preview, so without it D-601 refuses every lane plan `TRIP_LANE_CAMERA_UNAVAILABLE`. New SIM Fleet scripts use this file and join `SIM_FLEETS` in `operations/fleet/test/test_fleet_sim_site_d601.py`.
 
 ### Testing Requirements
 

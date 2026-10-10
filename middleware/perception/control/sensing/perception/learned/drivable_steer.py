@@ -209,6 +209,26 @@ def _crosses(points, tx, ty):
     return float(pts[first, 1])
 
 
+#: CORE line-follow law the error is shaped for (rosy_default.yaml line_follow; robot overlays):
+#: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
+CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.04
+
+
+def pursuit_error(tx, ty, confidence):
+    """The keep error whose CORE command drives the pure-pursuit arc to (tx, ty): curvature
+    k = 2y/(x^2+y^2) and w/v = k under CORE's law (CORE keeps the curvature when it caps w).
+    error = -y/half made CORE turn 5-30x tighter than the road (independent review: actual radius
+    0.025 m vs road 0.25 m in turns), cutting corners onto lines (user 2026-10-10)."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6:
+        return 0.0
+    k = 2.0 * ty / d2
+    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
+    kc = abs(k) * speed
+    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0 else 1.0
+    return float(-math.copysign(min(1.0, error), k))
+
+
 def _to_world(point, pose):
     x, y, yaw = pose
     return (x + math.cos(yaw) * point[0] - math.sin(yaw) * point[1], y + math.sin(yaw) * point[0] + math.cos(yaw) * point[1])
@@ -343,8 +363,11 @@ class DrivableSteer:
             self._pivot_yaw = None
         elif self._pivot_yaw is not None and current_pose is not None and abs(
                 math.atan2(math.sin(current_pose[2] - self._pivot_yaw), math.cos(current_pose[2] - self._pivot_yaw))) > PIVOT_MAX_RAD:
-            self._smoothed = None
-            return None, None, dict(info, strategy="none", reason="pivot_limit")
+            # Budget spent: drop the turn and its memories and carry on with what is in front (a
+            # sticky stop here held 9dfk LOST for good, 20261010T040459Z_rosy_41).
+            self._pivot = self._side = self._memory = self._pivot_yaw = None
+            side = info["exit"] = None
+            info["pivot_limit"] = True
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
@@ -360,7 +383,7 @@ class DrivableSteer:
         # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
         # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
-        error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
+        error = pursuit_error(tx, self._smoothed, confidence)
         return error, confidence, dict(info, strategy=strategy, target_now_m=(round(tx, 3), round(self._smoothed, 3)))
 

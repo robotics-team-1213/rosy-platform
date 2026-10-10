@@ -176,6 +176,22 @@ def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
         run(client.line_follow_mode("CAMERA_LINE"))
 
 
+def test_d601_the_trip_start_puts_camera_line_and_reads_the_front_camera_status():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content) if request.content else None))
+        if request.url.path.endswith("/front/status"):
+            return httpx.Response(200, json={"available": False, "stale": True})
+        return httpx.Response(200, json={"mode": "CAMERA_LINE", "state": "TRACKING"})
+
+    client = _client(handler)
+    assert run(client.line_follow_trip_start())["mode"] == "CAMERA_LINE"
+    assert run(client.front_status()) == {"available": False, "stale": True}
+    assert seen == [("PUT", "/api/v1/line-follow/mode", {"mode": "CAMERA_LINE"}),
+                    ("GET", "/api/v1/vision/front/status", None)]
+
+
 def test_line_stuck_decision_posts_the_id_and_answer_and_keeps_cores_refusal():
     seen = {}
 

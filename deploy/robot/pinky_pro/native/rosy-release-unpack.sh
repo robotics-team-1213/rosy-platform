@@ -117,7 +117,11 @@ if [[ -n "$DELTA" ]]; then
     || { echo "DELTA_BASE_MISSING: base release $BASE_ID is not on this device; push a full release" >&2; exit 1; }
   [[ "$(sha256sum "$BASE/SHA256SUMS" | awk '{print $1}')" == "$BASE_SUMS" ]] \
     || { echo "DELTA_BASE_MISMATCH: $BASE_ID on this device is not the release the delta was built on" >&2; exit 1; }
-  cp -a -- "$BASE/." "$TMP/"
+  # D-553 addendum 4: hard links, not a copy of the ~90 MB base (47 s on the SD
+  # card). Releases are never written in place: tar unlinks a path before it
+  # extracts the delta's file there, so the base keeps its own content, and
+  # the chown/chmod below are no-ops on the base's already-normalized inodes.
+  cp -al -- "$BASE/." "$TMP/"
   rm -f -- "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig" "$TMP/manifest.json"
 fi
 

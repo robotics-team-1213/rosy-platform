@@ -258,7 +258,12 @@ class IdentityService:
         predicted = self._predicted(robot_id)
         if predicted is None and pending.color == "amber":
             return self._unknown(robot_id, "no_prediction", source.source_id)
-        if predicted is not None and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]:
+        # D-596 amendment (a), user decision 2026-10-10: a blue blink names the robot anywhere on the
+        # source, because a source has one blue request at a time and only an identify blinks blue on/off.
+        # Amber (the caution lamp's pattern) and the weaker steady colour stay inside the expected place.
+        blink_anywhere = pending.color == "blue" and (body.get("evidence") or {}).get("mode") != "steady"
+        if (predicted is not None and not blink_anywhere
+                and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]):
             return self._unknown(robot_id, "far_from_robot", source.source_id)
         now = self._clock()
         found = self._continue(latest, x, y)
