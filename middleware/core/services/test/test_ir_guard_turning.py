@@ -22,3 +22,9 @@ def test_turning_in_place_keeps_the_camera_turn():
 def test_moving_or_setting_off_still_steers_away():
     assert turn(rig(ir_guard_min_linear=0.01), ir_error=-0.8, confidence=0.9).angular < 0.0
     assert turn(rig(), ir_error=-0.8, confidence=0.37).angular < 0.0
+
+
+def test_turning_in_place_over_a_line_under_the_centre_sensor_does_not_hold():
+    decision = turn(rig(ir_guard_min_linear=0.01), ir_error=0.0, confidence=0.37)
+    assert decision.angular > 0.0
+    assert turn(rig(ir_guard_min_linear=0.01), ir_error=0.0, confidence=0.9).angular == 0.0
