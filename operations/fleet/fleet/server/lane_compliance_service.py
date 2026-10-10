@@ -17,6 +17,15 @@ WARN/ACT counts. `pose_source` says
 which input produced the sample (`map_pose` | `led_track`); `pose_state` stays the map pose state.
 The latest result per robot is read by `GET /api/fleet/state` rows (`lane_compliance`) and
 `GET /api/fleet/robots/{id}/lane-compliance`.
+
+D-511 rev 1 (return loop, user 2026-10-10): the same input pose (LOCALIZED or DEGRADED) also feeds
+a `ReturnTracker`; `return` is ON_LANE | ON_LINE | OFF_LANE | OFF_MAP | WRONG_WAY (debounced) with
+the side and bearing back to the lane, the lane direction and a D-573 `crosswalk_ahead` hint. With
+`return_cue` on, every tick a robot is not ON_LANE or has a crosswalk ahead (and once on the tick
+it is back) Fleet sends it `POST /api/v1/line-follow/lane-cue` (`ttl_s` 1.0). The cue moves
+nothing by itself: CORE reads it only while its own CAMERA_LINE keep drives, and its IR, body stop
+and crosswalk gate still win. A CORE without the route answers 404 and is asked again after
+`CUE_RETRY_S`.
 """
 
 from __future__ import annotations
@@ -30,12 +39,19 @@ from typing import Callable, Iterable, Optional
 
 from fastapi import HTTPException
 
-from fleet.localization.lane_compliance import (UNKNOWN, LaneComplianceConfig,
-                                                LaneComplianceTracker)
-from fleet.localization.map_pose import LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
+from fleet.localization.lane_compliance import (ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
+                                                LaneComplianceTracker, ReturnTracker, map_bounds)
+from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
 PERIOD_S = 0.5
+#: D-511 rev 1: a cue lives this long on CORE; the 2 Hz monitor renews it twice within.
+CUE_TTL_S = 1.0
+#: The near bar this close ahead of base_footprint counts as "at the crosswalk": body front
+#: 0.06 m (URDF) + the IR row and the zone uncertainty, rounded up.
+AT_CROSSWALK_M = 0.15
+#: A robot whose CORE has no lane-cue route (404) is asked again after this long.
+CUE_RETRY_S = 60.0
 
 logger = logging.getLogger("fleet.lane_compliance")
 
@@ -43,8 +59,14 @@ logger = logging.getLogger("fleet.lane_compliance")
 class LaneComplianceMonitor:
     def __init__(self, robot_ids: Callable[[], Iterable[str]], *, poses, site_maps,
                  config: LaneComplianceConfig = LaneComplianceConfig(), identity=None,
-                 wall: Callable[[], float] = time.time) -> None:
+                 wall: Callable[[], float] = time.time, clients: Optional[Callable] = None) -> None:
         self.config = config
+        self._clients = clients          # () -> {robot_id: HttpRobotClient}; None = observe only
+        self._returns: dict[str, ReturnTracker] = {}
+        self._cue_seq = 0
+        self._cue_sent: dict[str, str] = {}      # last state sent per robot
+        self._cue_mute: dict[str, float] = {}    # robot -> wall time a 404 CORE is asked again
+        self._epoch = f"{int(wall() * 1000):x}"
         self._robot_ids = robot_ids
         self._poses = poses              # MapPoseService: moved / refresh / arbitrated_pose
         self._site_maps = site_maps      # SiteMapStore: active() -> (version, map, graph, painted)
@@ -67,6 +89,7 @@ class LaneComplianceMonitor:
             self._track_from.pop(gone, None)
             self._track_yaw.pop(gone, None)
             self._input.pop(gone, None)
+            self._returns.pop(gone, None)
         cfg = self.config
         movers = [r for r in roster if self._poses.moved(r, cfg.moving_min_m, cfg.moving_min_deg)]
         # A failed or slow read (cut at one period) leaves the last odom, which goes UNKNOWN
@@ -75,6 +98,11 @@ class LaneComplianceMonitor:
                                for r in movers), return_exceptions=True)
         active = self._site_maps.active()
         graph = active[2] if active is not None else None
+        crosswalks = ([(c.id, [tuple(p) for p in c.polygon]) for c in getattr(active[1], "crosswalks", ())]
+                      if active is not None else [])
+        bounds = map_bounds(graph, cfg.off_map_pad_m)
+        now = self._wall()
+        cues = []
         for robot_id in roster:
             arbitrated = self._poses.arbitrated_pose(robot_id)
             pose, source, heading = self._input_pose(robot_id, arbitrated, robot_id in movers)
@@ -88,11 +116,74 @@ class LaneComplianceMonitor:
                             " (LED track without a motion heading yet: nearest arc, no heading gate)"
                             if heading == "none" else "")
             result = tracker.judge(pose, graph)
+            back = self._return(robot_id, pose, robot_id in movers, graph, crosswalks, bounds, now)
+            if back is not None:
+                cues.append((robot_id, back))
             self._latest[robot_id] = {**asdict(result), "pose_state": getattr(arbitrated, "state", UNKNOWN),
+                                      "return": back,
                                       "pose_source": source, "heading_source": heading,
                                       "moving": robot_id in movers,
                                       "map_version": active[0] if active is not None else None,
                                       "at": self._wall()}
+
+        if cues and self.config.return_cue and self._clients is not None:
+            await asyncio.gather(*(self._send_cue(robot_id, back, now) for robot_id, back in cues),
+                                 return_exceptions=True)
+
+    def _return(self, robot_id: str, pose, moving: bool, graph, crosswalks, bounds, now: float):
+        """D-511 rev 1: the robot's debounced return state, or None before the first judgement."""
+        tracker = self._returns.setdefault(robot_id, ReturnTracker(self.config))
+        placed = (pose is not None and getattr(pose, "state", None) in (LOCALIZED, DEGRADED)
+                  and pose.x is not None and pose.y is not None and graph is not None)
+        raw = tracker.update(now, pose.x if placed else None, pose.y if placed else None,
+                             pose.yaw if placed else None, graph, crosswalks, moving, bounds)
+        if tracker.state == UNSEEN:
+            return None
+        current = tracker.state == raw.state   # detail fields belong to the reported state only
+        detail = ("edge_id", "offset_m", "side", "bearing_deg", "lane_heading_deg", "turn_deg")
+        return {"state": tracker.state, "since": tracker.since, "raw": raw.state,
+                **{k: getattr(raw, k) if current else None for k in detail},
+                "entry": list(raw.entry) if current and raw.entry else None,
+                "crosswalk": raw.crosswalk,
+                # D-491/D-573: the zone's odom anchor is the robot pose this old (CORE back-dates it)
+                "crosswalk_ahead": None if raw.crosswalk_ahead is None else {
+                    **raw.crosswalk_ahead, "pose_age_s": round(max(0.0, getattr(pose, "age_s", 0.0) or 0.0), 3)}}
+
+    def at_crosswalk(self, robot_id: str) -> bool:
+        """D-573 개정: the robot's body is on a mapped crosswalk or its front at the near bar."""
+        back = (self._latest.get(robot_id) or {}).get("return") or {}
+        ahead = back.get("crosswalk_ahead") or {}
+        return back.get("crosswalk") is not None or (
+            ahead.get("near_m") is not None and ahead["near_m"] <= AT_CROSSWALK_M)
+
+    async def _send_cue(self, robot_id: str, back: dict, now: float) -> None:
+        state = back["state"]
+        if (state == ON_LANE and back["crosswalk_ahead"] is None
+                and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
+            return                     # on the lane: nothing to clear, no crosswalk to name
+        if self._cue_mute.get(robot_id, 0.0) > now:
+            return
+        send = getattr((self._clients() or {}).get(robot_id), "line_follow_lane_cue", None)
+        if send is None:
+            return
+        self._cue_seq += 1
+        body = {"cue_id": f"{robot_id}-{self._epoch}-{self._cue_seq}", "fleet_epoch": self._epoch,
+                "seq": self._cue_seq, "ttl_s": CUE_TTL_S,
+                **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
+                                        "offset_m", "edge_id", "crosswalk_ahead")}}
+        try:
+            await asyncio.wait_for(send(body), PERIOD_S)
+        except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch
+            if getattr(exc, "status", None) == 404:
+                self._cue_mute[robot_id] = now + CUE_RETRY_S
+                logger.info("lane cue %s: CORE has no /line-follow/lane-cue; again in %.0f s",
+                            robot_id, CUE_RETRY_S)
+            else:
+                logger.debug("lane cue %s failed: %s", robot_id, exc)
+            return
+        if self._cue_sent.get(robot_id) != state:
+            logger.info("lane cue %s: %s side=%s turn=%s", robot_id, state, back["side"], back["turn_deg"])
+        self._cue_sent[robot_id] = state
 
     def _input_pose(self, robot_id: str, arbitrated, moving: bool) -> tuple:
         """(pose to judge, pose_source, heading_source): the map pose, else a fresh LED track."""

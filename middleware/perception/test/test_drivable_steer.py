@@ -105,3 +105,11 @@ def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
     assert steer.update(closed, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))[2]["strategy"] == "drivable_pivot_left"
     assert steer.update(closed, 2, G, XO, HALF, (0.0, 0.0, 1.9), (0.0, 0.0, 1.9))[2]["reason"] == "pivot_limit"
+
+
+def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
+    beyond = np.zeros((240, 320), bool)
+    beyond[115:160, 100:220] = True                      # floor only beyond a gap
+    error, confidence, debug = DrivableSteer().update(beyond, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
+                                                      wall_ahead_m=None, side_clear_m={"left": None, "right": None})
+    assert error is None and debug["reason"] == "way_beyond_line"
