@@ -476,6 +476,19 @@ def test_moved_roots_leave_nothing_behind():
     assert problems == [], problems
 
 
+def test_later_layout_move_preserves_ownership_and_still_rejects_pending_legacy():
+    root = {"path": "middleware/core/api", "d427_target": "middleware/core/api_web",
+            "layout_target": "middleware/core/api", "part": "middleware", "legacy": "src/runtime/api_web"}
+    assert _state(root, [root]) == "moved"
+    assert _legacy_report([root], [], lambda _: "", set()) == []
+    pending = {**root, "path": "middleware/core/not_yet_moved"}
+    assert _state(pending, [pending]) == "pending"
+    assert _legacy_report([pending], [], lambda _: "", set()) == [
+        "middleware/core/not_yet_moved: legacy only on moved or partly moved roots, not pending",
+    ]
+    assert root["d427_target"] == "middleware/core/api_web"
+
+
 def test_legacy_scan_catches_every_form_and_respects_exemptions():
     roots = [
         {"path": "ops/fleet", "part": "operations", "d427_target": "ops/fleet", "legacy": "src/old/fleet"},
