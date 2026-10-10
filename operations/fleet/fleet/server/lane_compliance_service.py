@@ -50,7 +50,10 @@ CUE_TTL_S = 1.0
 #: The near bar this close ahead of base_footprint counts as "at the crosswalk": body front
 #: 0.06 m (URDF) + the IR row and the zone uncertainty, rounded up.
 AT_CROSSWALK_M = 0.15
-#: A robot whose CORE has no lane-cue route (404) is asked again after this long.
+#: D-430 review 1: 404 (no route), 500 (route without wiring), 403 (not the site seat), 501: the
+#: robot cannot take the cue; it is asked again after this long.
+UNSUPPORTED = (403, 404, 500, 501)
+#: A robot whose CORE cannot take the cue is asked again after this long.
 CUE_RETRY_S = 60.0
 
 logger = logging.getLogger("fleet.lane_compliance")
@@ -65,7 +68,8 @@ class LaneComplianceMonitor:
         self._returns: dict[str, ReturnTracker] = {}
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
-        self._cue_mute: dict[str, float] = {}    # robot -> wall time a 404 CORE is asked again
+        self._cue_mute: dict[str, float] = {}    # robot -> wall time an unsupported CORE is asked again
+        self._last_stamp: dict[str, float] = {}  # robot -> last odom stamp sent (an OFF_MAP cue reuses it)
         self._epoch = f"{int(wall() * 1000):x}"
         self._robot_ids = robot_ids
         self._poses = poses              # MapPoseService: moved / refresh / arbitrated_pose
@@ -147,6 +151,7 @@ class LaneComplianceMonitor:
         current = tracker.state == raw.state   # detail fields belong to the reported state only
         detail = ("edge_id", "offset_m", "side", "bearing_deg", "lane_heading_deg", "turn_deg")
         return {"state": tracker.state, "since": tracker.since, "raw": raw.state, "moving": moving,
+                "pose_stamp": getattr(pose, "odom_stamp", None) if placed else None,
                 "guide": raw.guide if current else None,
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
@@ -166,6 +171,8 @@ class LaneComplianceMonitor:
         state = back["state"]
         if back["raw"] == UNSEEN and state != OFF_MAP:
             return                     # not judged now: CORE's cue expires, the robot drives as today
+        if back["pose_stamp"] is None and state != OFF_MAP:
+            return                     # D-430 review 7: CORE measures a turn from the odom at pose_stamp
         if (state == ON_LANE and not back["moving"]
                 and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
             return                     # still on the lane: nothing to guide, nothing to clear
@@ -177,19 +184,23 @@ class LaneComplianceMonitor:
         self._cue_seq += 1
         body = {"cue_id": f"{robot_id}-{self._epoch}-{self._cue_seq}", "fleet_epoch": self._epoch,
                 "seq": self._cue_seq, "ttl_s": CUE_TTL_S,
+                "pose_stamp": back["pose_stamp"] or self._last_stamp.get(robot_id),
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
                                         "offset_m", "edge_id", "guide")}}
         # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
             await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch
-            if getattr(exc, "status", None) == 404:
+            status = getattr(exc, "status", None)
+            if status in UNSUPPORTED:
                 self._cue_mute[robot_id] = now + CUE_RETRY_S
-                logger.info("lane cue %s: CORE has no /line-follow/lane-cue; again in %.0f s",
-                            robot_id, CUE_RETRY_S)
+                logger.info("lane cue %s: CORE answered %s (no lane cue, wiring or seat); again in %.0f s",
+                            robot_id, status, CUE_RETRY_S)
             else:
                 logger.debug("lane cue %s failed: %s", robot_id, exc)
             return
+        if back["pose_stamp"] is not None:
+            self._last_stamp[robot_id] = back["pose_stamp"]
         if self._cue_sent.get(robot_id) != state:
             logger.info("lane cue %s: %s side=%s turn=%s", robot_id, state, back["side"], back["turn_deg"])
         self._cue_sent[robot_id] = state

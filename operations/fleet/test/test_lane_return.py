@@ -96,7 +96,7 @@ class Client:
 def test_monitor_sends_cue_off_lane_and_clears_once():
     clock = [100.0]
     client = Client()
-    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m"))
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
                                     config=LaneComplianceConfig(off_map_pad_m=0.5),
                                     wall=lambda: clock[0], clients=lambda: {"r1": client})
@@ -105,8 +105,9 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
         clock[0] += 0.5
     assert monitor.view("r1")["return"]["state"] == OFF_LANE
     assert client.sent and client.sent[-1]["state"] == OFF_LANE and client.sent[-1]["side"] == "left"
+    assert client.sent[-1]["pose_stamp"] == 5.0
     assert client.sent[-1]["ttl_s"] <= 1.0 and "guide" in client.sent[-1] and "crosswalk_ahead" not in client.sent[-1]
-    poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m")
+    poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=6.0)
     for _ in range(6):
         asyncio.run(monitor.tick())
         clock[0] += 0.5
