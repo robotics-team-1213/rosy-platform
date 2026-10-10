@@ -134,3 +134,8 @@ def test_route_guide_picks_the_side_and_turns_at_a_blind_corner():
     both = _lane(0.5, -0.5, x_max=0.15) | _lane(0.03, -0.03, x_max=0.33)
     debug = DrivableSteer().update(both, 1, G, XO, HALF, guide_deg=-70.0)[2]
     assert debug["exit"] in ("right", None)
+
+
+def test_facing_against_the_route_reorients_in_place():
+    error, confidence, debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=-170.0)
+    assert debug["strategy"] == "drivable_reorient_right" and error > 0 and confidence == PIVOT_CONFIDENCE

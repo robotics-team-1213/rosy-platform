@@ -71,6 +71,8 @@ CROSS_MIN_ALONG_M = 0.06
 PIVOT_MAX_RAD = 1.75
 #: a route prior within this of straight ahead means "keep going" (no exit turn)
 GUIDE_STRAIGHT_DEG = 25.0
+#: beyond this the robot faces against the lane: reorient in place first
+GUIDE_REVERSE_DEG = 100.0
 #: after a crosswalk zone is seen, no pivot or exit turn for this much travel
 CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
@@ -320,13 +322,22 @@ class DrivableSteer:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
             # the map knows which way the road goes where the camera sees two openings or none.
             info["guide_deg"] = round(guide_deg, 1)
+            if abs(guide_deg) > GUIDE_REVERSE_DEG:
+                # facing against the lane: turn in place toward its direction (user 2026-10-10: when
+                # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
+                # S-curve top and drove the loop backwards)
+                self._smoothed = self._pivot = self._side = None
+                error = -PIVOT_ERROR if guide_deg > 0 else PIVOT_ERROR
+                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if guide_deg > 0 else "right"))
             want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG else ("left" if guide_deg > 0 else "right")
             if want is None:
                 side = info["exit"] = None if ahead >= PIVOT_AHEAD_M else side
-            elif want in info["exit_reach_m"] or (side is None and ahead < LOOKAHEAD_M):
+            elif want in info["exit_reach_m"] or ahead < LOOKAHEAD_M:
                 side = info["exit"] = want
                 if want not in info["exit_point_m"]:
                     info["exit_point_m"][want] = (0.12, 0.12 if want == "left" else -0.12)
+            elif side is not None and side != want:
+                side = info["exit"] = None      # an opening against the route is not taken
             self._side = side if side is not None else self._side
         if side is not None and current_pose is not None and _crosses(
                 seen, *_to_current(info["exit_point_m"][side], source_pose, current_pose)) is not None:
