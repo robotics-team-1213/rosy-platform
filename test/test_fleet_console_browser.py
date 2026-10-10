@@ -2757,10 +2757,7 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
 
     probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation',
         '#log']
-      .map((sel) => { const node = document.querySelector(sel);
-        // Layout position, not scroll position: focusing a rail field scrolls the rail (D-540 one rail scroll).
-        const rail = node.closest('.console-secondary');
-        return [sel, Math.round(node.getBoundingClientRect().top + window.scrollY + (rail ? rail.scrollTop : 0))]; }))"""
+      .map((sel) => [sel, Math.round(document.querySelector(sel).getBoundingClientRect().top + window.scrollY)]))"""
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
