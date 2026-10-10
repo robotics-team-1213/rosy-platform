@@ -9,3 +9,4 @@
 middleware/execution/local::test_size_verdicts_are_well_formed_and_current  # same failure as test/architecture/test_module_structure.py size verdict when collected from that root (perception 12004 > 11737+150, D-597)
 middleware/perception/test/test_line_observer_wiring.py::test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires  # fails on clean main 66bde0895 (2026-10-10), not D-589
 test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # fails on clean main edf14018c (2026-10-10): perception/control/line_observer_node.py 773 > 608+150; owner to re-judge
+test/test_robot_literals.py::test_robot_literals_stay_in_their_family  # fails on clean main e6ffe9c2e (2026-10-10): D-597 drivable_steer.py not in the literal family set; owner to register
