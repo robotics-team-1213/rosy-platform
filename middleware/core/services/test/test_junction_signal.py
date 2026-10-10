@@ -118,6 +118,7 @@ def test_red_still_cancels_a_rotation_zeroed_by_crosswalk():
     request = rig.m.junction_signal_request()
     zones = [Zone((rig.m._return_evidence.epoch, 'odom'), 0., 0., 0., .08, .3)]
     rig.m._crosswalk_zones = lambda: zones
+    rig.m.observe_crosswalk_scan((), range_min=.15, received_at=rig.now)
     assert answer(rig, request, 'green', True)
     for _ in range(20):
         decision, _ = rig.step(junction=True)
@@ -125,6 +126,7 @@ def test_red_still_cancels_a_rotation_zeroed_by_crosswalk():
         if rig.m._junction.get('sub') == 'rotating':
             break
     assert rig.m._junction['sub'] == 'rotating'
+    assert rig.m._xwalk.zone is not None
     assert answer(rig, request, 'red')
     zones.clear()
     rig.m._xwalk.reset()
