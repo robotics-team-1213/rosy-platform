@@ -126,6 +126,25 @@ def test_steady_colour_tags_the_single_anonymous_blob():
     assert blink["state"] == "matched" and "mode" not in blink["evidence"]  # the blink wins
 
 
+def test_timed_steady_light_identifies_one_of_two_robots():
+    result = _decide(_samples(lambda t: {LEFT: BLUE} if 1.0 <= t < 3.0 else {}))
+    assert result["state"] == "matched"
+    assert (result["x"], result["y"]) == (LEFT.map_x, LEFT.map_y)
+    assert result["evidence"]["mode"] == "steady"
+    assert result["evidence"]["off_on_off"] is True
+
+
+def test_two_timed_steady_lights_are_ambiguous():
+    result = _decide(_samples(lambda t: {LEFT: BLUE, RIGHT: BLUE} if 1.0 <= t < 3.0 else {}))
+    assert (result["state"], result["reason"]) == ("ambiguous", "multiple")
+
+
+def test_timed_light_needs_a_continuous_blob_and_both_transitions():
+    lit = lambda t: {LEFT: BLUE} if 1.0 <= t < 3.0 else {}
+    assert _decide(_samples(lit, hidden=lambda t: (LEFT,) if 2.0 <= t < 3.0 else ())) ["reason"] == "none"
+    assert _decide(_samples(lambda t: {LEFT: BLUE} if t >= 1.0 else {}))["reason"] == "none"
+
+
 def test_a_caution_lamp_decodes_like_the_amber_identify():
     """D-596 7: caution is amber 1 s on / 1 s off, so Vision alone cannot tell it from an amber identify.
     Fleet therefore never asks amber automatically and gates the verdict on the asked robot's place."""
