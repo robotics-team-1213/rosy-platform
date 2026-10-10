@@ -298,4 +298,4 @@ def test_case_context_carries_task_safety_and_unknown_measurements():
     assert value['task_intent']['task'] == 'lane_follow_recovery'
     assert value['task_intent']['trip_active'] is False
     assert value['state_age_s'] == 0.7
-    assert value['clearance_m']['front_clearance_m'] is None
+    assert value['clearance_at_open_m']['front_clearance_m'] is None
