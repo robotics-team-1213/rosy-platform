@@ -81,3 +81,18 @@ def test_crosswalk_class_beside_the_lane_or_a_speck_is_not_ours():
     speck = np.zeros((ROWS, COLS), np.uint8)
     paint(speck, 0.15, 0.155, -0.09, 0.09)                   # two rows: a stray label
     assert crosswalk_class_extent(speck, X, Y) is None
+
+
+def test_class_extent_counts_only_the_cells_the_camera_sees():
+    import numpy as np
+    from control.sensing.perception.crosswalk_stripes import crosswalk_class_extent
+    x = np.arange(0.10, 0.40, 0.0025)
+    y = np.arange(-0.10, 0.1001, 0.005)
+    grid = np.zeros((len(x), len(y)), np.uint8)
+    seen = np.zeros_like(grid, bool)
+    seen[:, np.abs(y) <= 0.02] = True                  # near the robot only the middle is in view
+    grid[(x >= 0.15) & (x <= 0.25)] = 1
+    grid[:, np.abs(y) > 0.02] = 0
+    assert crosswalk_class_extent(grid, x, y) is None
+    near, far = crosswalk_class_extent(grid, x, y, seen)
+    assert 0.14 <= near <= 0.16 and 0.24 <= far <= 0.26
