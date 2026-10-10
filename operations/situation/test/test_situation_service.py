@@ -134,6 +134,33 @@ def test_vision_frame_lease_cannot_be_sent_to_an_arbitrary_path():
             raise AssertionError(path)
 
 
+def test_model_unload_removes_advertised_profile(tmp_path):
+    class Model:
+        loaded = True
+
+        def profile(self):
+            return "model@digest" if self.loaded else None
+
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    fleet, clock, model = FakeFleet(), Clock(), Model()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          vlm=model, executor=Immediate())
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile == "model@digest"
+    model.loaded = False
+    clock.now += 30
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile is None
+
+
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):
     fleet = FakeFleet(events=[{"audit_id": 5, "type": "nav.pose"}, {"audit_id": 7, "type": "nav.pose"}])
     _service(tmp_path, fleet).step()

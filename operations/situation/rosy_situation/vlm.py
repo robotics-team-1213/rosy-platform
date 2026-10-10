@@ -12,9 +12,11 @@ sha256 only.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import logging
+import math
 import re
 import urllib.request
 from typing import Callable, Optional
@@ -80,7 +82,7 @@ class Vlm:
         profile = self.profile()
         if profile is None:
             return None
-        context = json.dumps({k: case.get(k) for k in ("kind", "robot_id", "problem_id", "context")},
+        context = json.dumps({k: case.get(k) for k in ("kind", "robot_id", "problem_id", "context", "history")},
                              separators=(",", ":"), default=str)[:6000]
         images = [views[v]["jpeg_b64"] for v in VIEWS]
         try:
@@ -90,7 +92,10 @@ class Vlm:
                               "images": images}]}, TIMEOUT_S)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
             decision = str(answer["decision"]).upper()
-            confidence = min(1.0, max(0.0, float(answer.get("confidence", 0.0))))
+            confidence = float(answer.get("confidence", 0.0))
+            if not math.isfinite(confidence):
+                return None
+            confidence = min(1.0, max(0.0, confidence))
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             _LOG.warning("vlm judgement dropped: %s", exc)
             return None
@@ -98,12 +103,15 @@ class Vlm:
             _LOG.warning("vlm word %r not allowed for %s", decision, case.get("kind"))
             return None
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
-        evidence = {"views": {v: {"frame_id": views[v].get("frame_id"), "captured_at": views[v].get("captured_at"),
-                                  "age_s": round(now - float(views[v].get("captured_at") or 0.0), 3),
-                                  "sha256": hashlib.sha256(base64.b64decode(views[v]["jpeg_b64"])).hexdigest()}
-                            for v in VIEWS},
-                    "map_pose": (case.get("context") or {}).get("map_pose"),
-                    "seen": str(answer.get("seen") or "")[:200]}
+        try:
+            evidence = {"views": {v: {"frame_id": views[v].get("frame_id"), "captured_at": views[v].get("captured_at"),
+                                      "age_s": round(now - float(views[v].get("captured_at") or 0.0), 3),
+                                      "sha256": hashlib.sha256(base64.b64decode(views[v]["jpeg_b64"], validate=True)).hexdigest()}
+                                for v in VIEWS},
+                        "map_pose": (case.get("context") or {}).get("map_pose"),
+                        "seen": str(answer.get("seen") or "")[:200]}
+        except (ValueError, TypeError, KeyError, binascii.Error):
+            return None
         return {"robot_id": case.get("robot_id"), "stuck_id": case.get("stuck_id") or case.get("problem_id"),
                 "decision": decision, "reason": reason[:64] or "vlm", "confidence": confidence,
                 "evidence": evidence, "source": f"vlm:{profile}", "observed_at": now, "ttl_s": TTL_S}

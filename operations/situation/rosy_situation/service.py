@@ -239,24 +239,24 @@ class Situation:
         """Poll one model job without delaying Fleet reads, heartbeat or the rule fallback."""
         if self.vlm is None or mode != "available":
             return
-        if self._profile_task is not None and self._profile_task.done():
-            try:
-                self._profile = self._profile_task.result()
-            except (OSError, ValueError) as exc:
-                _LOG.warning("vlm profile unavailable: %s", exc)
-            self._profile_task = None
-            if self._profile is None:
-                self._profile_retry_at = self.clock() + 30.0
-        if self._profile is None:
-            if self._profile_task is None and self.clock() >= self._profile_retry_at:
-                self._profile_task = self._executor.submit(self.vlm.profile)
-            return
         if self._case_task is not None and self._case_task.done():
             try:
                 self._case_task.result()
             except Exception as exc:  # noqa: BLE001 - a bad case or model response must not stop Fleet polling
                 _LOG.warning("vlm case failed: %s", type(exc).__name__)
             self._case_task = None
+        if self._profile_task is not None and self._profile_task.done():
+            try:
+                self._profile = self._profile_task.result()
+            except (OSError, ValueError) as exc:
+                _LOG.warning("vlm profile unavailable: %s", exc)
+                self._profile = None
+            self._profile_task = None
+            self._profile_retry_at = self.clock() + 30.0
+        if self._profile is None or self.clock() >= self._profile_retry_at:
+            if self._profile_task is None and self._case_task is None and self.clock() >= self._profile_retry_at:
+                self._profile_task = self._executor.submit(self.vlm.profile)
+            return
         if self._case_task is None:
             self._case_task = self._executor.submit(self._ai_cycle)
 

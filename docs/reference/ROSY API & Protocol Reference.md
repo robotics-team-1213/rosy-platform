@@ -1481,6 +1481,8 @@ credential. No browser or Fleet process connects to ROS/DDS.
 
 The tokenless camera exception applies only to the two Fleet preview endpoints above. Caddy determines the immediate peer's private address and overwrites a private proxy header for those paths; it strips client-supplied copies on all other Fleet paths. Fleet and Vision are not published outside the site backend network. The issued lease is still required at Vision, source scoped, and expires after 60 seconds. Robot state, commands, enrollment, and other Fleet APIs still require their existing credentials.
 
+D-610 AI case reads use a separate 10-second Vision lease: `GET /api/fleet/ai/case/{problem_id}` (role `ai_observer`) may return `views.rosy_cam: {frame_path, lease}` only for a fresh sighting and a `LOCALIZED` pose on the same map. The lease signs `rectification: {mode: "map"}` and `crop_map: [x, y, radius_m]` (radius 0.1–2.0 m; AI case uses 1.0 m). The AI PC requests `frame_path` with that lease from Vision directly. The reply carries the cropped JPEG and the ordinary frame headers with `X-Frame-Rectified: map-crop`; missing or mismatched map calibration returns 409 `plane-unavailable`. Fleet does not relay or persist the Rosy Cam JPEG. The front view remains an in-memory case JPEG.
+
 Lease request body accepts `{ "source_id": "ceiling-north" }` for the original
 JPEG or an optional `rectification` object:
 

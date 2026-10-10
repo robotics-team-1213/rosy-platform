@@ -62,3 +62,13 @@ def test_model_profile_requires_a_running_model_with_a_digest():
     assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d610-v1"
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
+
+
+def test_vlm_uses_recent_outcomes_and_drops_nonfinite_confidence_or_bad_image():
+    post, calls = _post({"decision": "WAIT", "confidence": 0.5})
+    case = {**_case(), "history": [{"decision": "RESUME", "outcome": "failed"}]}
+    assert Vlm(post=post, get=RUNNING).judge(case, 100.0) is not None
+    assert "failed" in calls[-1][1]["messages"][0]["content"]
+    assert Vlm(post=_post({"decision": "WAIT", "confidence": float("nan")})[0], get=RUNNING).judge(case, 100.0) is None
+    bad = {**case, "views": {**case["views"], "front": {**case["views"]["front"], "jpeg_b64": "!"}}}
+    assert Vlm(post=post, get=RUNNING).judge(bad, 100.0) is None
