@@ -174,7 +174,8 @@ class MapPoseService:
         if tracker is None:
             return None
         pose = tracker.pose(self._wall(), self.active_map_id())
-        return {"state": pose.state, "age_s": pose.age_s, "sourced": tracker.sourced}
+        return {"state": pose.state, "age_s": pose.age_s, "sourced": tracker.sourced,
+                "x": pose.x, "y": pose.y, "yaw": pose.yaw}   # D-577 남은 항목 4: peer bands on the map pose
 
 
 def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None:
