@@ -752,7 +752,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_366,
+        1_375,
+        "accept: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
+        "LineFollowStatus so a parsed copy (Fleet hub snapshot, D-555) keeps the crosswalk key; same owner, "
+        "no new type. Previously "
         "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "
         "re-judged at 1360 (independent read-only critic: LineCrosswalkStatus lives in protocol/line_crosswalk.py; "
         "here one re-export, LineStuckStatus.detail, LineFollowStatus.crosswalk/crosswalk_reported and the "
@@ -931,8 +934,11 @@ SIZE_VERDICTS = {
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "core/services/core_features/line_follow/manager.py": (
-        605,
-        "accept: one line-follow decision and loss owner; recovery already lives in separate "
+        763,
+        "accept: re-judged at 763 on 2026-10-10 for the site deploy (self-judged; NEEDS the independent re-judge): "
+        "growth from D-573 6 crosswalk gate report, drivable boundary memory and the restored lane-cue wiring "
+        "(f20de97ca); still one line-follow decision/loss owner, no new writer. Next growth moves the lane-cue "
+        "and crosswalk-report state into their own mixins. Previously accept at 605: one line-follow decision and loss owner; recovery already lives in separate "
         "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",

@@ -10,7 +10,7 @@ the result afterwards. Per state:
   ``left``/``right`` reading wins. OFF_LANE with the re-entry point more than
   ``PIVOT_BEARING_DEG`` off the nose turns in place toward it first.
 - WRONG_WAY: turn in place toward the lane's direction (``turn_deg``) until within
-  ``PIVOT_DONE_DEG``; the lane is 0.185 m and the Pinky sweep radius 0.088 m, so the pivot fits
+  ``PIVOT_DONE_DEG``; the lane is 0.185 m and the URDF body sweep radius 0.088 m, so the pivot fits
   (URDF). Without ``turn_deg`` (Fleet has no heading): HOLD.
 - OFF_MAP: HOLD ``fleet_off_map`` until Fleet says otherwise (Fleet raises it to the operator).
 - ``guide`` (D-511 rev 2): the lane shape ahead from Fleet's map, kept in ``lane_cue`` for the

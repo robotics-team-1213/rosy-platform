@@ -292,12 +292,6 @@ class StuckResolver:
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
-        if (stuck.get("cause") in LOST_LIKE and "XW" not in chain.retired and chain.resume_id is None
-                and self.at_crosswalk(rid)):
-            # D-573 개정 2026-10-10 (user): a crosswalk is a stop, then a crossing, never a WAIT dead end.
-            # CORE's gate still needs its own crosswalk_clear_s of clear scans; CORE re-checks the RESUME and
-            # its D-573 gate (Fleet map zone) looks again. A second stuck goes to a human.
-            return Answer(rid, sid, "RESUME", "XW")
         from fleet.stuck.lane_lost import ai_answer
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
