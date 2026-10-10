@@ -236,7 +236,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     if (!bound) { bound = true; bindConvoy(); }
     const follower = el("convoy-follower"), leader = el("convoy-leader");
     const leaders = convoyLeaders(view.trafficTrips, null);
-    const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.map?.map_id);
+    const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.version);
     if (leader.dataset.leaderOverride && !leaders.includes(leader.dataset.leaderOverride)) {
       delete leader.dataset.leaderOverride;
     }
@@ -259,7 +259,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
   function bindConvoy() {
     scope.listen(el("convoy-leader"), "change", () => {
       const leaders = convoyLeaders(view.trafficTrips, null);
-      const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.map?.map_id);
+      const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.version);
       const leader = el("convoy-leader");
       if (leader.value && leader.value !== choice.id) leader.dataset.leaderOverride = leader.value;
       else delete leader.dataset.leaderOverride;

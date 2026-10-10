@@ -57,16 +57,14 @@ test('the leader is the robot furthest along a shared heading', () => {
 test('lane convoy ranks open repeat leaders without requiring formation support', () => {
   const robots = [lead('rosy_40', { can: false }), lead('rosy_41', { can: false }), lead('rosy_1')];
   const leaders = ['rosy_41', 'rosy_40'];
-  const guide = { robots: robots.map((robot, i) => ({ robot_id: robot.robot_id,
-    pose: { state: 'LOCALIZED', map_id: 'floor', age_s: 0.1, x: i, y: 0, yaw: 0 } })) };
-  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_41', by: 'ahead' });
-  guide.robots[1].pose.map_id = 'other';
-  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_40', by: 'number' });
-  guide.robots[1].pose.map_id = 'floor';
+  const guide = { map_version: 5, robots: robots.map((robot, i) => ({ robot_id: robot.robot_id,
+    pose: { state: 'LOCALIZED', age_s: 0.1, x: i, y: 0, yaw: 0 } })) };
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 5), { id: 'rosy_41', by: 'ahead' });
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 6), { id: 'rosy_40', by: 'number' });
   guide.robots[1].pose.age_s = 3;
-  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_40', by: 'number' });
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 5), { id: 'rosy_40', by: 'number' });
   robots[0].online = false;
-  assert.equal(chooseConvoyLeader(robots, leaders, guide, 'floor').id, 'rosy_41');
+  assert.equal(chooseConvoyLeader(robots, leaders, guide, 5).id, 'rosy_41');
   assert.deepEqual(chooseLeader(robots.slice(0, 2)), { id: '', by: '' });
 });
 

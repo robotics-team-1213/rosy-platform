@@ -96,11 +96,12 @@ export function chooseLeader(robots, poseOf = robotMapPose, eligible = canLead) 
 }
 
 // Lane trips have their own admission; swarm capabilities belong to formation sessions.
-export function chooseConvoyLeader(robots, leaders, guide, mapId) {
+export function chooseConvoyLeader(robots, leaders, guide, mapVersion) {
   const candidates = (robots || []).filter(robot => robot.online && leaders.includes(robot.robot_id));
   const poses = candidates.map(robot => (guide?.robots || []).find(row => row.robot_id === robot.robot_id)?.pose);
-  const located = Boolean(mapId) && poses.every(pose => pose?.state === 'LOCALIZED'
-    && pose.map_id === mapId && Number.isFinite(pose.age_s) && pose.age_s >= 0 && pose.age_s <= 2
+  const located = Number.isInteger(mapVersion) && mapVersion > 0 && guide?.map_version === mapVersion
+    && poses.every(pose => pose?.state === 'LOCALIZED'
+    && Number.isFinite(pose.age_s) && pose.age_s >= 0 && pose.age_s <= 2
     && [pose.x, pose.y, pose.yaw].every(Number.isFinite));
   return chooseLeader(candidates, robot => located ? poses[candidates.indexOf(robot)] : null, () => true);
 }
