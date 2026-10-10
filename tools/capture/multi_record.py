@@ -420,7 +420,8 @@ def record(config, out, duration, port, open_browser=True):
     wall = f"http://127.0.0.1:{server.server_port}/"
     print(json.dumps({"wall": wall, "session": str(session.out)}), flush=True)
     if open_browser:
-        webbrowser.open(wall)
+        # Some desktop browser launchers wait for their window to close.
+        threading.Thread(target=webbrowser.open, args=(wall,), daemon=True).start()
     threads = []
     try:
         for source in config["sources"]:
