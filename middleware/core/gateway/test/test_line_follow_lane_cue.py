@@ -264,9 +264,11 @@ def test_a_turn_near_180_keeps_its_sign_and_ends_on_progress(signs):
         rig.yaw = math.remainder(rig.yaw + first * 0.05, 2 * math.pi)
         rig.cue("WRONG_WAY", seq, turn_deg=signs[seq % 3])
         d = rig.step()
-        if d.linear > 0:
+        if rig.m.status().reason == "fleet_turn_reacquire":
             break
-    assert d.linear > 0 and (seq - 2) * 0.05 >= math.radians(165), (seq, rig.m.status().reason)
+    assert (seq - 2) * 0.05 >= math.radians(165), (seq, rig.m.status().reason)
+    rig.cue("ON_LANE", seq + 1, turn_deg=2.0)                        # Fleet sees it along the lane
+    assert rig.step().linear > 0
 
 
 def test_pivot_is_zeroed_by_the_authority_and_its_deadline_latches_without_restart():
@@ -304,19 +306,20 @@ def test_no_pivot_start_while_a_junction_or_crosswalk_owns_the_heading(owner):
 
 
 def test_no_pivot_while_lost_or_on_nominal_ground():
+    """An OFF_LANE pivot (not a turn spot) keeps the camera rules; a turn-spot pivot does not (run 2)."""
     rig = Rig()
     rig.m._lost_latched = True
-    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.cue("OFF_LANE", 1, bearing_deg=-90.0)
     rig.step()
     rig.wait(0.5)
-    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    rig.cue("OFF_LANE", 2, bearing_deg=-90.0)
     d = rig.step(ir_error=-0.9)                                      # IR sees a line: LOST stays latched
     assert d.angular == 0 and rig.m.status().state == "LOST"
     rig = Rig()
-    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.cue("OFF_LANE", 1, bearing_deg=-90.0)
     rig.step(ground="NOMINAL")
     rig.wait(0.5)
-    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    rig.cue("OFF_LANE", 2, bearing_deg=-90.0)
     d = rig.step(ground="NOMINAL")
     assert d.angular == 0 and rig.m.status().reason == "nominal_ground_requires_driver"
 
@@ -427,7 +430,7 @@ def test_off_lane_pivot_off_a_spot_keeps_the_camera_and_ir_rules():
 def test_a_camera_junction_does_not_stop_a_spot_pivot_but_an_armed_instruction_does():
     rig = Rig()
     seq = _start_spot_pivot(rig)
-    rig.m._junction = {"state": "waiting", "expires_at": 1e9}       # junction seen, no instruction
+    rig.m._junction = {"state": "waiting", "action": None, "place_id": None, "expires_at": 1e9}       # junction seen, no instruction
     rig.yaw -= 0.05
     rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
     assert rig.step(camera=False).angular != 0
@@ -539,6 +542,6 @@ def test_off_map_latches_even_with_a_stuck_open_and_the_latch_names_the_hold():
     rig.cue("OFF_MAP", 1)
     assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")
     rig.m._recovery.status = lambda now: None
-    rig.m._junction = {"state": "waiting", "expires_at": 1e9}
+    rig.m._junction = {"state": "waiting", "action": None, "place_id": None, "expires_at": 1e9}
     rig.step()
     assert rig.m.status().reason == "fleet_off_map"
