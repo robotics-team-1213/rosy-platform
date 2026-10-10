@@ -361,7 +361,9 @@ def _literals_with_another_job(tree: ast.AST) -> set[str]:
         func = node.func
         called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
         first = node.args[0]
-        if called in _NAMESPACED_FIRST_ARG and isinstance(first, ast.Constant):
+        logger_name = (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+                       and func.value.id == "logging" and called == "getLogger")
+        if (called in _NAMESPACED_FIRST_ARG or logger_name) and isinstance(first, ast.Constant):
             if isinstance(first.value, str):
                 spoken_for.add(first.value)
         named_first = isinstance(first, ast.Constant) and isinstance(first.value, str)
@@ -379,6 +381,11 @@ def _literals_with_another_job(tree: ast.AST) -> set[str]:
                 if isinstance(keyword.value.value, str):
                     spoken_for.add(keyword.value.value)
     return spoken_for
+
+
+def test_logging_namespace_does_not_hide_an_unknown_event_wrapper():
+    tree = ast.parse('logging.getLogger("core.services"); notify("unknown.event")')
+    assert _literals_with_another_job(tree) == {"core.services"}
 
 
 def emit_sites() -> tuple[list[Emit], list[str]]:
