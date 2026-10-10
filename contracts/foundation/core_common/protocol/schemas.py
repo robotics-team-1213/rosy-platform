@@ -1078,9 +1078,9 @@ class LineFollowStatus(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _crosswalk_key_means_reported(cls, data):
-        # A parsed copy (Fleet hub snapshot, D-555) keeps the key: absent stays "not watched" (D-577 R3).
-        if isinstance(data, dict) and "crosswalk" in data and "crosswalk_reported" not in data:
-            data = {**data, "crosswalk_reported": True}
+        # Only the key says "reported" (hub copy, D-555); a bare flag is not null=outside (D-577 R3).
+        if isinstance(data, dict):
+            data = {**data, "crosswalk_reported": "crosswalk" in data}
         return data
 
     @model_serializer(mode="wrap")

@@ -227,6 +227,9 @@ class SiteHub:
         try:
             payload = HeartbeatPayload.model_validate(envelope.payload)
         except Exception:
+            if session is not None and session.robot_id is not None:
+                # A refused heartbeat ends the last good one's freshness: the gather reads REST (D-447).
+                self.registry.record(session.robot_id).last_heartbeat_monotonic = None
             return _error("SESSION_NOT_PAIRED", "hello first")
         robot_id = payload.state_snapshot.robot_id
         if session is not None and session.robot_id is None:

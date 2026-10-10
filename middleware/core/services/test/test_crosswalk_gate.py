@@ -545,3 +545,23 @@ def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
 
     assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
     assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
+
+
+def test_a_bare_reported_flag_without_the_key_stays_unknown():
+    """rosy-b3 review: an input flag alone must not become null = positively outside a zone."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert "crosswalk" not in LineFollowStatus.model_validate({"crosswalk_reported": True}).model_dump()
+
+
+def test_state_snapshot_round_trips_an_unknown_crosswalk_and_refuses_a_malformed_one():
+    import pydantic
+    from core_common.protocol.schemas import StateSnapshot
+
+    unknown = {"state": "unknown", "reason": "not_watched", "source": "camera"}
+    snap = StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": unknown}})
+    again = StateSnapshot.model_validate(snap.model_dump(mode="json"))
+    assert again.model_dump(mode="json")["line_follow"]["crosswalk"]["state"] == "unknown"
+    for bad in ("outside", {"zone_id": "z1"}, 3):
+        with pytest.raises(pydantic.ValidationError):
+            StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": bad}})
