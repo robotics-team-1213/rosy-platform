@@ -1857,6 +1857,8 @@ AI PC의 `ai_observer`는 열린 trip 중 `GET /api/fleet/trips`와 필요할 �
 
 열린 Pinky Pro trip view는 `body_half_width_m`(m, D-424 URDF 공칭)을 싣는다. AI PC의 `trip_route_check`는 계획 선분의 `width_m/2 - body_half_width_m`를 `limit_m`으로 사용해 몸체 가장자리가 계획 구간 밖이면 `OFF_ROUTE`로 보고한다. 반폭이 없거나 유효하지 않으면 `UNKNOWN`이며 중심점 판정으로 대체하지 않는다. AI PC와 Fleet이 같은 지도 자세를 읽으므로 이 사실만으로 실제 차체 경계 침범이 없었다고 증명하지 않는다.
 
+trip view의 `pose_observed_at`은 Fleet이 자세를 읽은 wall timestamp(Unix seconds)다. AI는 `pose.age_s + max(0, 관측 시각 - pose_observed_at)`이 1.5 s를 넘거나 나이·시각이 없거나 유효하지 않으면 `UNKNOWN`으로 판단한다. 미래 시각은 최대 0.5 s의 시계 차이만 허용한다. trip 저장 시각 `updated_at`은 자세 관측 시각을 대신하지 않는다. AI snapshot 관측 시각은 HTTP 읽기가 끝난 시각이다.
+
 ## 10.9 Site Fleet LAN discovery
 
 The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full

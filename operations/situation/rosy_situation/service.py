@@ -188,6 +188,7 @@ class Situation:
         self.cursor = int(events.get("next_cursor", self.cursor))
         self._cursor_file.write_text(json.dumps({"after_id": self.cursor}))
         self.input_lag_s = round(self.clock() - started, 3)
+        snapshot["observed_at"] = self.wall()
         return snapshot, stuck_event
 
     def _flush(self) -> None:

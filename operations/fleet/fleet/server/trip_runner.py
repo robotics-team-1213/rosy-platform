@@ -22,7 +22,7 @@ from typing import Awaitable, Callable, Iterable, Optional
 
 import httpx
 
-from core_common.robot_body import NOMINAL_BODY
+from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
@@ -150,6 +150,7 @@ class TripRunner(TripAdmission, TripProgress):
             graph = self._graph_for(plan["map_version"])
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
                                            plan["actions"][-1]["place_id"])
+            body = nominal_body_for(caps.kind)
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             engaged = self._engaged(robot_id)
@@ -158,6 +159,7 @@ class TripRunner(TripAdmission, TripProgress):
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps)
+            pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
@@ -193,7 +195,8 @@ class TripRunner(TripAdmission, TripProgress):
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
-                    "body_half_width_m": NOMINAL_BODY.half_width_m if caps.kind == "pinky_pro" else None,
+                    "body_half_width_m": body.half_width_m if body is not None else None,
+                    "pose_observed_at": pose_observed_at,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
                     "lease": lease, "stop_moved": moved}
@@ -407,6 +410,7 @@ class TripRunner(TripAdmission, TripProgress):
         if not live.open:
             return
         live.see(pose)
+        live.view["pose_observed_at"] = self._clock()
         if pose is None or pose.state != LOCALIZED:
             await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
                                                        **pose_diagnostics(pose)}, halt_free=False)

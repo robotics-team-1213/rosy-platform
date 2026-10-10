@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import math
 
-from core_common.robot_body import NOMINAL_BODY
+from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
 from fleet.localization.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
@@ -88,13 +88,14 @@ class TripAdmission:
             if distance > ARRIVED_M:
                 raise TripError(422, "TRIP_START_PLACE_MISMATCH",
                                 {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
-            if caps.kind != "pinky_pro":
+            body = nominal_body_for(caps.kind)
+            if body is None:
                 raise TripError(422, "TRIP_BODY_UNKNOWN", {"kind": caps.kind})
             if not segments:
                 raise TripError(422, "TRIP_NO_ROUTE")
             first = graph.arcs[arc_id(segments[0])]
             offset = first.project(pose.x, pose.y)[0]
-            margin = first.width_m / 2 - offset - NOMINAL_BODY.half_width_m
+            margin = first.width_m / 2 - offset - body.half_width_m
             if margin < 0:
                 raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
                                 {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
