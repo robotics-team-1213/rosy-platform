@@ -11,10 +11,14 @@ the D-517 authority cap it afterwards like any decision. Per state:
   least ``SIDE_MIN_OFFSET_M`` on the same side twice in a row, the side takes the IR edge branch
   toward the lane centre (``cue_left``/``cue_right``, no back-creep). An IR reading wins. Bringing a
   robot that is outside the lane back across the paint is D-468's job, not this cue's.
-- WRONG_WAY (``turn_deg``) and OFF_LANE with the re-entry point more than ``PIVOT_BEARING_DEG`` off the
-  nose: after two cues of the same sign at least ``DEBOUNCE_S`` apart, turn in place to an odom yaw
+- WRONG_WAY: the turn circle (``robot_body`` 0.08257 m + 0.010 m pad = 0.0926 m) is wider than the
+  0.080 m inner lane half width, so a U-turn never fits in the lane. Off a Fleet ``turn_spot`` (or
+  without ``turn_deg``) WRONG_WAY is a latched HOLD ``fleet_wrong_way`` for Fleet: the robot neither
+  keeps driving the wrong way nor turns in the lane.
+- WRONG_WAY on a ``turn_spot`` (``turn_deg``) and OFF_LANE with the re-entry point more than
+  ``PIVOT_BEARING_DEG`` off the nose: after two cues of the same sign at least ``DEBOUNCE_S`` apart, turn in place to an odom yaw
   target = odom yaw at the cue's ``pose_stamp`` + the angle. The pivot is bounded on CORE: turned
-  angle <= |angle| + ``BUDGET_PAD_DEG`` and time <= |angle| / rate + ``TIME_PAD_S``, else a latched
+  angle <= |angle| + 30 deg and time <= |angle| / rate + 2 s (``odom_pivot``), else a latched
   HOLD ``fleet_turn_unconfirmed``. No pivot starts while a junction instruction, an arc or a crosswalk
   zone is live.
 - OFF_MAP, a pivot whose cue expired, and an unconfirmed pivot: a latched HOLD. It is released only by a
@@ -29,6 +33,14 @@ except OFF_MAP: a HOLD needs no odom alignment, and OFF_MAP is sent exactly when
 robot (re-review 1). A pivot's sign is locked at its start and its progress is the signed odom turn
 since then, so a turn near 180 deg ends on progress, not on a wrapped angle (re-review 3). A junction
 left ``aborted`` keeps pivots off until the mode changes. Enabling needs ``obstacle_mode: path``.
+D-511 rev 5 (user, 2026-10-10 "그럼 그 문제를 해결해 줄래"; D-607 amendment 1): a WRONG_WAY pivot on a turn
+spot needs the camera FOLLOW only to start. Once it turned one tick it runs through camera loss and
+LOST, with the IR centre exemption (D-344 §12, turn spots only), the D-422 body stop on the rotation
+circle every tick, the odom budget and deadline (``odom_pivot.OdomPivot``, camera independent, for
+D-607 P3 to reuse), Fleet freshness, the stuck stand-down and the D-517/D-573 gates. A junction the
+camera sees there does not stop it; an armed junction instruction, an arc or a crosswalk zone does.
+After it ends the camera must follow the lane again within ``REACQUIRE_S`` before the keep drives,
+else a latched HOLD ``fleet_turn_no_lane`` for Fleet.
 While a D-407 stuck record is open the cue stands down (no pivot, no side steering; a latch still
 holds): the stuck answer is the one channel then.
 """
@@ -39,14 +51,14 @@ from typing import Optional
 
 from core_common.protocol.line_authority import STAMP_TOL_S
 from core_features.line_follow.model import LineFollowDecision
+from core_features.line_follow.odom_pivot import OdomPivot
 
 #: OFF_LANE: re-entry point further than this off the nose -> turn in place first (deg).
 PIVOT_BEARING_DEG = 45.0
 #: A WRONG_WAY smaller than this is left to the keep; a pivot ends within it (deg).
 PIVOT_DONE_DEG = 30.0
-#: A pivot may turn |angle| + this before it is unconfirmed (deg); and take |angle|/rate + this (s).
-BUDGET_PAD_DEG = 30.0
-TIME_PAD_S = 2.0
+#: After a turn-spot pivot the camera must follow the lane again within this (s), else HOLD for Fleet.
+REACQUIRE_S = 2.0
 #: Two same-sign pivot cues this far apart before a pivot starts (s).
 DEBOUNCE_S = 0.5
 #: Side cues act only beyond this lateral offset (m): Rosy Cam +-2-4 cm plus ~6 cm of latency travel.
@@ -61,10 +73,6 @@ STREAK_GAP_S = 1.0
 NORMAL = ("ON_LANE", "ON_LINE")
 
 
-def _wrap(a: float) -> float:
-    return (a + math.pi) % (2.0 * math.pi) - math.pi
-
-
 class LaneCueMixin:
     """LineFollowManager glue (manager lock throughout)."""
 
@@ -76,6 +84,8 @@ class LaneCueMixin:
         self._cue_streak: dict = {}                # pivot: (sign, first_at, count); side: (side, count)
         self._pivot: Optional[dict] = None
         self._cue_latch: Optional[str] = None
+        self._pivot_spot, self._pivot_reason = False, None
+        self._cue_reacquire_until: Optional[float] = None
 
     # ---- input --------------------------------------------------------------------------------
 
@@ -154,6 +164,7 @@ class LaneCueMixin:
             if self._cue_latch is not None:
                 self._cue_event("unlatched", self._cue or {}, principal_ref, latch=self._cue_latch)
             self._cue_latch, self._pivot, self._cue_streak = None, None, {}
+            self._cue_reacquire_until = None
 
     def _cue_event(self, action: str, cue: dict, principal_ref: Optional[str], latch: Optional[str] = None,
                    angle_deg: Optional[float] = None) -> None:
@@ -172,9 +183,8 @@ class LaneCueMixin:
         if cue is None and self._cue_latch is None and self._pivot is None:
             return None
         return {**(cue or {}), "expires_in_s": None if cue is None else round(self._cue_until - now, 3),
-                "latch": self._cue_latch, "pivot": None if self._pivot is None else {
-                    "turned_deg": round(math.degrees(self._pivot["turned"]), 1),
-                    "remaining_deg": round(math.degrees(self._pivot["remaining"]), 1)}}
+                "latch": self._cue_latch, "pivot": None if self._pivot is None else self._pivot.view(),
+                "reacquire": self._cue_reacquire_until is not None}
 
     def lane_cue_status(self, now: Optional[float] = None) -> Optional[dict]:
         now = self._clock() if now is None else float(now)
@@ -190,11 +200,22 @@ class LaneCueMixin:
         self._pivot = None
         return ("hold", reason)
 
-    def _lane_cue_busy(self, now: float) -> bool:
-        """A junction instruction, an arc or a crosswalk zone owns the robot's heading now."""
-        arc = self._arc_status()
-        return (self._junction_status().state != "idle" or (arc is not None and arc.state == "running")
-                or self._xwalk.zone is not None)
+    def _lane_cue_busy(self, now: float, spot: bool = False) -> bool:
+        """A junction instruction, an arc or a crosswalk zone owns the robot's heading now. At a turn
+        spot the camera's junction is expected there: only an armed junction instruction counts."""
+        arc, junction = self._arc_status(), self._junction_status()
+        armed = (junction.pending_action is not None and junction.state in ("armed", "unexpected", "aborted")
+                 if spot else junction.state != "idle")
+        return armed or (arc is not None and arc.state == "running") or self._xwalk.zone is not None
+
+    def _lane_cue_spot_running(self) -> bool:
+        """A turn-spot pivot that already turned at least one tick (the camera was needed to start)."""
+        return self._pivot is not None and self._pivot_spot and self._pivot.ticks > 0
+
+    def _camera_follows(self, now: float) -> bool:
+        o, at = self._observation, self._received_at
+        return (o is not None and at is not None and o.visible and o.source is self._mode
+                and o.confidence >= self._config.min_confidence and 0.0 <= now - at <= self._config.stale_after_s)
 
     def _lane_cue_plan(self, now: float, cap: float):
         """None (the keep drives), ("hold", reason), ("turn", angular, reason) or ("side", side)."""
@@ -203,11 +224,13 @@ class LaneCueMixin:
         if self._recovery.status(now) is not None:
             # An open D-407 stuck: its answer (Fleet's REALIGN, a human) owns the robot. No pivot or
             # side steering until it closes; a running pivot is dropped, not latched.
-            self._pivot, self._cue_streak = None, {}
+            self._pivot, self._cue_streak, self._cue_reacquire_until = None, {}, None
             return None
+        if self._cue_reacquire_until is not None:
+            return self._reacquire(now)
         cue = self._fresh_cue(now)
         if self._pivot is not None:
-            if self._lane_cue_busy(now):
+            if self._lane_cue_busy(now, spot=self._pivot_spot):
                 return self._latch("fleet_turn_interrupted", now)   # a junction/arc/zone took over
             return self._pivot_step(now, cue, cap)
         if cue is None:
@@ -216,11 +239,11 @@ class LaneCueMixin:
             return self._latch("fleet_off_map", now)
         angle = self._cue_angle(cue)
         streak = self._cue_streak.get("pivot")
+        if cue["state"] == "WRONG_WAY" and not (cue.get("turn_spot") and angle is not None):
+            return self._latch("fleet_wrong_way", now)      # rev 4: no in-lane U-turn; Fleet decides
         if angle is not None:
-            if cue["state"] == "WRONG_WAY" and cue.get("turn_deg") is None:
-                return ("hold", "fleet_wrong_way")
             if (streak and streak[2] >= 2 and now - streak[1] >= DEBOUNCE_S and self._cue_yaw0 is not None
-                    and not self._lane_cue_busy(now)):
+                    and not self._lane_cue_busy(now, spot=cue["state"] == "WRONG_WAY")):
                 return self._pivot_start(now, streak[0] * abs(angle), cap)
             return None
         side = self._cue_streak.get("side")
@@ -234,43 +257,47 @@ class LaneCueMixin:
         key = None if pose is None else (self._return_evidence.epoch, pose.frame)
         if pose is None or rate <= 0.0 or self._cue_yaw0[0] != key:
             return None                                     # the cue's odom run is not this one
-        angle = math.radians(angle_deg)
-        sign = 1.0 if angle > 0 else -1.0
-        # Signed progress since the start; the cue's pose already turned _wrap(now - then) of it.
-        done = sign * _wrap(pose.yaw - self._cue_yaw0[1])
-        self._pivot = dict(key=key, sign=sign, last=pose.yaw, turned=0.0, total=abs(angle),
-                           progress=done, remaining=abs(angle) - done,
-                           budget=abs(angle) + math.radians(BUDGET_PAD_DEG),
-                           deadline=now + abs(angle) / rate + TIME_PAD_S,
-                           reason="fleet_wrong_way_turn" if self._cue["state"] == "WRONG_WAY" else "fleet_off_lane_turn")
+        self._pivot = OdomPivot(key=key, yaw_at_order=self._cue_yaw0[1], yaw_now=pose.yaw,
+                                angle_rad=math.radians(angle_deg), rate=rate, now=now)
+        self._pivot_spot = self._cue["state"] == "WRONG_WAY"   # rev 4: WRONG_WAY pivots only on a turn spot
+        self._pivot_reason = "fleet_wrong_way_turn" if self._pivot_spot else "fleet_off_lane_turn"
         self._cue_event("pivot", self._cue, None, angle_deg=round(angle_deg, 1))
         return self._pivot_step(now, self._cue, cap)
 
     def _pivot_step(self, now: float, cue: Optional[dict], cap: float):
-        p, pose = self._pivot, self._fresh_pose(now)
         if cue is None:
             return self._latch("fleet_cue_lost", now)                    # Fleet vanished mid-pivot
-        if pose is None or (self._return_evidence.epoch, pose.frame) != p["key"]:
-            return self._latch("fleet_turn_unconfirmed", now)            # odom gone: cannot measure
-        step = _wrap(pose.yaw - p["last"])                              # one tick: never near 180
-        p["turned"] += abs(step)
-        p["progress"] += p["sign"] * step
-        p["last"] = pose.yaw
-        p["remaining"] = p["total"] - p["progress"]
-        if p["remaining"] <= math.radians(PIVOT_DONE_DEG) / 3:            # within 10 deg: done
-            self._pivot = None
-            self._cue_streak["pivot"] = None
-            return None
-        if p["turned"] > p["budget"] or now > p["deadline"]:
+        pose = self._fresh_pose(now)
+        key = None if pose is None else (self._return_evidence.epoch, pose.frame)
+        verdict, sign = self._pivot.step(now, pose, key)
+        if verdict == "fail":
             return self._latch("fleet_turn_unconfirmed", now)
+        if verdict == "done":
+            spot = self._pivot_spot
+            self._pivot, self._cue_streak["pivot"] = None, None
+            if spot:   # rev 5: the camera must follow the lane again before the keep drives
+                self._cue_reacquire_until = now + REACQUIRE_S
+                return self._reacquire(now)
+            return None
         rate = min(self._config.ir_guard_turn, self._config.max_angular, cap)
         if rate <= 0.0:
             return ("hold", "angular_limit_zero")
-        return ("turn", p["sign"] * rate, p["reason"])
+        return ("turn", sign * rate, self._pivot_reason)
+
+    def _reacquire(self, now: float):
+        if self._camera_follows(now):
+            self._cue_reacquire_until = None
+            return None
+        if now > self._cue_reacquire_until:
+            self._cue_reacquire_until = None
+            return self._latch("fleet_turn_no_lane", now)
+        return ("hold", "fleet_turn_reacquire")
 
     def _lane_cue_turn(self, plan) -> LineFollowDecision:
         """The pivot decision, after every earlier gate of the tick passed."""
         _, angular, reason = plan
+        if self._pivot is not None:
+            self._pivot.ticks += 1
         self._status = self._status.model_copy(update={
             "mode": self._mode.value, "state": "TRACKING", "linear": 0.0, "angular": angular,
             "reason": reason, "clearance_m": self._clearance, **self._gap_status})

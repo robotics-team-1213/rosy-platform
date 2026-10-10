@@ -62,7 +62,7 @@ class Rig:
     def cue(self, state, seq, epoch="e", **extra):
         body = {"cue_id": f"c{seq}", "fleet_epoch": epoch, "seq": seq, "ttl_s": 1.0, "pose_stamp": WALL + self.fed,
                 "state": state, "side": None, "bearing_deg": None, "turn_deg": None, "lane_heading_deg": None,
-                "offset_m": None, "edge_id": None, "guide": None, **extra}
+                "offset_m": None, "edge_id": None, "guide": None, "turn_spot": True, **extra}
         return self.m.set_lane_cue(body, now=self.t)
 
 
@@ -344,3 +344,149 @@ def test_the_cue_stands_down_while_a_stuck_is_open():
     assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")   # latch unchanged
     rig.m._recovery.status = lambda now: open_stuck
     assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")
+
+
+def test_wrong_way_off_a_turn_spot_is_a_latched_hold_never_a_pivot():
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0, turn_spot=False)
+    d = rig.step()
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "fleet_wrong_way"
+    rig.wait(3.0)
+    assert rig.step().linear == 0 and rig.m._pivot is None             # still held, Fleet silent
+    rig.cue("ON_LANE", 2)
+    assert rig.step().linear > 0
+
+
+def test_wrong_way_without_an_angle_is_latched_too():
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1)
+    assert rig.step().linear == 0 and rig.m._cue_latch == "fleet_wrong_way"
+
+
+# ---- D-511 rev 5: a turn-spot pivot completes through camera loss ------------------------------
+
+def _start_spot_pivot(rig, turn=-170.0):
+    rig.cue("WRONG_WAY", 1, turn_deg=turn)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=turn)
+    d = rig.step()
+    assert d.linear == 0 and d.angular != 0
+    return 3
+
+
+def _turn_on(rig, seq, *, camera, ir_error=None, until=None):
+    """Odom follows the command at 0.05 rad per tick; returns the last decision."""
+    sign = -1.0
+    for seq in range(seq, seq + 80):
+        rig.yaw += sign * 0.05
+        rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
+        d = rig.step(camera=camera, ir_error=ir_error)
+        if d.angular == 0 or (until and until(d)):
+            return d, seq + 1
+    return d, seq + 1
+
+
+def test_spot_pivot_runs_through_camera_loss_and_the_ir_centre_then_needs_the_lane_back():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    d, seq = _turn_on(rig, seq, camera=False, ir_error=0.0)      # no camera, line under the IR centre
+    assert d.angular == 0 and rig.m.status().reason == "fleet_turn_reacquire"
+    assert math.degrees(abs(rig.yaw)) >= 155.0                   # it finished the turn
+    rig.wait(2.5, camera=False)
+    assert rig.step(camera=False).linear == 0 and rig.m._cue_latch == "fleet_turn_no_lane"
+
+
+def test_spot_pivot_drives_on_when_the_camera_finds_the_lane_after_the_turn():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    d, seq = _turn_on(rig, seq, camera=False)
+    assert rig.m.status().reason == "fleet_turn_reacquire"
+    rig.cue("ON_LANE", seq)
+    assert rig.step(camera=True).linear > 0
+
+
+def test_off_lane_pivot_off_a_spot_keeps_the_camera_and_ir_rules():
+    rig = Rig()
+    rig.cue("OFF_LANE", 1, bearing_deg=90.0)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("OFF_LANE", 2, bearing_deg=90.0)
+    assert rig.step().angular > 0                                   # turning toward the lane
+    rig.cue("OFF_LANE", 3, bearing_deg=90.0)
+    d = rig.step(0.4, camera=False)
+    assert d.angular == 0                                           # not a turn spot: camera needed
+
+
+def test_a_camera_junction_does_not_stop_a_spot_pivot_but_an_armed_instruction_does():
+    rig = Rig()
+    seq = _start_spot_pivot(rig)
+    rig.m._junction = {"state": "waiting", "expires_at": 1e9}       # junction seen, no instruction
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
+    assert rig.step(camera=False).angular != 0
+    rig.m._junction = {"state": "armed", "action": "left", "place_id": "P", "expires_at": 1e9}
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", seq + 1, turn_deg=-170.0)
+    assert rig.step(camera=False).angular == 0 and rig.m._cue_latch == "fleet_turn_interrupted"
+
+
+def test_a_running_spot_pivot_is_still_body_stopped_every_tick():
+    rig = Rig(**PINKY)
+    points = []
+
+    def step(**feed):
+        rig.t += 0.1
+        rig.feed(**feed)
+        rig.m.observe_body_points(points, range_min=0.05, received_at=rig.t)
+        rig.m.observe_scan_points(points, received_at=rig.t)
+        return rig.m.tick(rig.t + 0.01)
+
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    assert step().angular != 0                                      # started, nothing near
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", 3, turn_deg=-170.0)
+    assert step(camera=False).angular != 0                          # runs without the camera
+    points[:] = [(0.0, 0.075 + 0.002 * k) for k in range(3)]        # a foot beside the body
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", 4, turn_deg=-170.0)
+    d = step(camera=False)
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "obstacle_ahead"
+
+
+def test_get_line_follow_shows_the_lane_cue(core_client):
+    client, svc = core_client()
+    lf = svc.line_follow
+    lf._config = replace(lf.config, fleet_lane_cue_enabled=True, obstacle_mode="path")
+    clock = {"t": 10.0}
+    lf.bind_clock(lambda: clock["t"])
+    lf._wall = lambda: WALL + clock["t"]
+    stamp = round(clock["t"] * 1e9)
+    lf.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                           received_at=clock["t"])
+    site = _token(svc, "site", "operator", "pair-physical", "site:rosy-site")
+    body = {"cue_id": "c1", "fleet_epoch": "e", "seq": 1, "ttl_s": 1.0, "pose_stamp": WALL + clock["t"],
+            "state": "ON_LINE", "side": "left", "offset_m": -0.06}
+    assert client.post("/api/v1/line-follow/lane-cue", json=body, headers=site).json() == {
+        "accepted": True, "reason": None}
+    shown = client.get("/api/v1/line-follow", headers={"Authorization": "Bearer rosy-dev-viewer"}).json()
+    assert shown["lane_cue"]["state"] == "ON_LINE" and shown["lane_cue"]["side"] == "left"
+
+
+def test_the_lap_context_is_validated_kept_and_shown():
+    from core_common.protocol.lane_cue import LaneCueRequest
+    rig = Rig()
+    ctx = {"route": "lap", "segment_id": "east_out:fwd", "s_m": 3.1, "lap_m": 7.38, "heading_deg": -1.0,
+           "ahead_m": 0.25, "heading_ahead_deg": 0.0, "offset_m": 0.01,
+           "next": {"kind": "crosswalk", "ds_m": 0.3, "action": "stop_look", "ref": "cw_south"},
+           "pose_age_s": 0.1, "anchor_age_s": 0.4}
+    body = LaneCueRequest(cue_id="c1", fleet_epoch="e", seq=1, ttl_s=1.0, pose_stamp=WALL + rig.fed,
+                          state="ON_LANE", context=ctx).model_dump()
+    assert rig.m.set_lane_cue(body, now=rig.t)[0]
+    assert rig.m.status().lane_cue["context"]["next"]["kind"] == "crosswalk"
+    with pytest.raises(ValueError):
+        LaneCueRequest(cue_id="c1", fleet_epoch="e", seq=1, ttl_s=1.0, pose_stamp=1.0, state="ON_LANE",
+                       context={**ctx, "extra": 1})
