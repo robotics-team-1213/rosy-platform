@@ -200,18 +200,19 @@ def test_stale_ultrasonic_is_ignored():
     assert status.state == "TRACKING" and status.clearance_source is None
 
 
-def test_blind_floor_off_lets_lane_follow_pass_a_wall_at_d591_gap():
+@pytest.mark.parametrize("cruise", [0.04, 0.10])
+def test_blind_floor_off_lets_lane_follow_pass_a_wall_at_d591_gap(cruise):
     """D-591: with obstacle_blind_floor off and no reaction time the stop gap is margin +
     braking (~0.02 m at cruise), so a wall 0.048 m off the body (8kcn, 2026-10-10) no longer
     holds; a return under 0.02 m still stops."""
     near = _wall(0.048 + LIDAR_TO_FRONT)
     floored = _step(_manager(), near, range_min=0.15)[1]
     assert floored.reason == "obstacle_ahead"
-    m = _manager(obstacle_blind_floor=False, obstacle_latency_s=0.0)
+    m = _manager(cruise_speed=cruise, obstacle_blind_floor=False, obstacle_latency_s=0.0)
     status = _step(m, near, range_min=0.15)[1]
     assert status.state == "TRACKING"
-    assert status.stop_gap_m == pytest.approx(0.02 + 0.04 ** 2 / (2 * 0.5), abs=1e-4)
-    touching = _step(_manager(obstacle_blind_floor=False, obstacle_latency_s=0.0),
+    assert status.stop_gap_m == pytest.approx(0.02 + cruise ** 2 / (2 * 0.5), abs=1e-4)
+    touching = _step(_manager(cruise_speed=cruise, obstacle_blind_floor=False, obstacle_latency_s=0.0),
                      _wall(0.015 + LIDAR_TO_FRONT), range_min=0.15)[1]
     assert touching.reason == "obstacle_ahead"
 
@@ -221,6 +222,22 @@ def test_pinky_pro_turns_the_blind_floor_off():
     assert raw["line_follow"]["obstacle_blind_floor"] is False
     assert raw["line_follow"]["obstacle_latency_s"] == 0.0
     assert raw["line_follow"]["obstacle_ultrasonic_half_angle_deg"] == 5.0
+
+
+def test_pinky_cruise_increases_without_widening_the_tracking_arc():
+    raw = yaml.safe_load((REPO / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"))
+    robot = yaml.safe_load((REPO / "middleware/apps/device/pinky/profile/config/core.yaml").read_text(encoding="utf-8"))
+    _deep_merge(raw, robot)
+    config = _line_follow_config(raw["line_follow"])
+    assert config.cruise_speed == pytest.approx(0.10)
+    assert config.max_linear == pytest.approx(0.10)
+    assert config.steering_gain / config.cruise_speed == pytest.approx(0.8 / 0.04)
+    manager = _manager(**{key: getattr(config, key) for key in
+                         ("cruise_speed", "max_linear", "steering_gain")})
+    straight, _ = _step(manager, [])
+    curve, _ = _step(manager, [], error=0.1)
+    assert straight.linear == pytest.approx(0.10)
+    assert curve.angular / curve.linear == pytest.approx(-0.8 * 0.1 / (0.04 * (1 - 0.65 * 0.1)))
 
 
 def test_narrow_ultrasonic_cone_keeps_a_side_echo_off_the_path():
