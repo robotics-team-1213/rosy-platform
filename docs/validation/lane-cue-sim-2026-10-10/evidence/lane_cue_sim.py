@@ -382,9 +382,12 @@ def cue_events(p, action):
 
 
 def pivot_rows(rows):
-    """First and last status row of the pivot (reason fleet_*_turn), or (None, None)."""
-    on = [r for r in rows if is_turn(r)]
-    return (on[0], on[-1]) if on else (None, None)
+    """First and last status row of the first pivot (reason fleet_*_turn), or (None, None)."""
+    i = next((k for k, r in enumerate(rows) if is_turn(r)), None)
+    if i is None:
+        return None, None
+    j = next((k for k in range(i, len(rows)) if not is_turn(rows[k])), len(rows))
+    return rows[i], rows[j - 1]
 
 
 def s3(p, a):
@@ -440,6 +443,8 @@ def s3(p, a):
     c['yaw_err_gt_deg'] = round(deg(wrap(g1[2] - a.lane)), 1)
     c['start_err_gt_deg'] = round(deg(wrap(g0[2] - a.lane)), 1)
     c['pivots_started'] = len(cue_events(p, 'pivot'))
+    c['halt_turned_deg'] = round(deg(wrap(a1['odom'][2] - o0[2])), 1)   # first pivot, last turning row
+    c['all_reasons_after_first_pivot'] = [t[1:] for t in reasons(rows, a1['wall'])][:10]
     sm['timeline'] = reasons(rows)
     ok = (not c['latched'] and c['pivot_sign_changes'] == 0 and abs(c['yaw_err_odom_deg']) <= 10
           and abs(c['odom_turned_deg']) >= 150 and c['pivot_duration_sim_s'] >= 2.0 and c['pivots_started'] == 1)
