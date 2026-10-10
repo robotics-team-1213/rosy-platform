@@ -3053,3 +3053,15 @@
 - Change: the card's position chip says Fleet's site map pose first (지도 위치 확정/추정 · 카메라/odom 이음), CORE localization only when CORE reports one, else a neutral 지도 위치 없음 (no warn for a missing CORE block; the D-587 marker-yaw reason is not known to Fleet, so not shown). Map markers carry short ids with declutter (hidden on overlap except selected/called/최우선). The same warn cause on several robots is one expandable queue row; 최우선 rows stay one per robot and first; queue heads count instead of repeating names (D-540 3). 전체 주행 취소 runs at once without a confirm (D-540 6, user decision), quiet, any operator, "전체 주행 취소를 보냈습니다 · N대"; dialog contract pins console.js at 3.
 - Evidence: model/AI PC remote runs: operations/fleet/test 3326 passed; guard suites only the perception size verdict listed in known_failures; browser suites equal clean main 8d7b5939f (11 known failures) plus new tests passing (labels/grouping, cancel-all immediate, 100 robots).
 - Gate: SOURCE. Console only; 전체 주행 취소 calls the unchanged /api/fleet/cancel-all.
+
+## 2026-10-10 · uncommitted · fix(trip): free 경로 이탈 때 목표 취소
+
+- Change: Fleet의 0.5초 trip 감독에서 `LOCALIZED` 자세가 계획 경로 폭의 절반을 벗어나면 free 구간의 진행 중인 CORE 목표를 취소한다. 위치 상실 시 기존 deadman 정책은 유지한다.
+- Evidence: `test_trip_runner.py` 경로 이탈 사례에서 목표 취소와 `stop_sent`를 확인한다.
+- Gate: SOURCE; 실기기 정지 거리와 도착은 별도 검증이다.
+
+## 2026-10-10 · uncommitted · fix(fleet): 이름 있는 차선 중간 장소에서 유한 trip 정지
+
+- Change: 유한 trip의 마지막 이름 있는 중간 장소를 계획 action과 실행 place에 보존해 Fleet이 그 장소의 `stop_after_m` 정지를 보낸다. 반복 lap의 중간 장소는 기존처럼 통과하고, 좌표만 지정한 중간 종료는 계속 거절한다 (D-613).
+- Evidence: 원격 `test_lane_traffic.py`, `test_routing.py`, `test_trip_runner.py`, `test_site_map_trip.py` 183 passed; `known_failures.py` NEW 0, KNOWN 0 (`X:/DevTemp/one-lap-midstop-2/run-1.txt`).
+- Gate: SOURCE. 실제 두 로봇 동시 한 바퀴·정지 거리·차체 여유는 ROS-SIM·DEVICE·FIELD 별도.

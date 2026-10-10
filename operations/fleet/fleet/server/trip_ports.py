@@ -560,7 +560,9 @@ class LiveTrip:
         return self.graph.arcs[arc_id(self.segments[index])]
 
     def place(self, index: int) -> Optional[str]:
-        return ends_at_place(self.graph, self.segments[index])
+        place = ends_at_place(self.graph, self.segments[index])
+        return (place if place is not None or self.view["repeat"] or index != len(self.segments) - 1
+                else self.view["plan"]["actions"][-1]["place_id"])
 
     def progress(self, index: int, s: float) -> float:
         """Metres along the whole plan."""

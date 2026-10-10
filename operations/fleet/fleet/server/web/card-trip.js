@@ -5,7 +5,8 @@
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import {
-  convoyLeaders, loopCapacityText, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip,
+  convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody,
+  repeatTripReason, startTrip,
   trafficCardLine, tripRefusalText, tripStartReason,
 } from "/console/assets/site-map-model.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
@@ -104,7 +105,8 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     button.setAttribute("aria-expanded", String(open));
     setReason(button, open ? "" : gate(robot));
     button.addEventListener("click", scope.guard(() => {
-      form = open ? null : { robotId: robot.robot_id, to: "", start: "", plan: null, busy: false, note: null };
+      form = open ? null : { robotId: robot.robot_id, to: "", start: "", lapStart: "", via: "", plan: null,
+        lapPlan: null, busy: false, note: null };
       render();
     }));
     return button;
@@ -175,7 +177,45 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     laps.className = "robot-actions";
     laps.append(repeat);
 
-    box.append(to.wrap, once, summary, start.wrap, laps);
+    const stops = places().filter(place => place.kind === "start" || place.kind === "stop");
+    const lapStart = pick("한 바퀴 출발·복귀", (value) => { mine.lapStart = value; mine.lapPlan = null; render(); });
+    mine.lapStart = placeOptions(lapStart.select, stops, mine.lapStart);
+    const lapVia = pick("한 바퀴 경유", (value) => { mine.via = value; mine.lapPlan = null; render(); });
+    mine.via = placeOptions(lapVia.select, stops, mine.via);
+    const lapReason = lock || oneLapReason({ active, running, start: mine.lapStart, via: mine.via });
+    const lapPreview = quietButton("한 바퀴 경로 보기");
+    setReason(lapPreview, lapReason);
+    lapPreview.addEventListener("click", scope.guard(async () => {
+      const life = scope.capture();
+      mine.busy = true;
+      mine.lapPlan = null;
+      mine.note = null;
+      render();
+      try {
+        mine.lapPlan = await planTrip(call, id, oneLapBody(active?.map, mine.lapStart, mine.via));
+        life.check();
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        mine.note = `한 바퀴 계획 거절 · ${tripRefusalText(err)}`;
+      } finally {
+        if (life.current()) { mine.busy = false; render(); }
+      }
+    }));
+    const lapGo = primaryButton("한 바퀴 시작");
+    lapGo.dataset.tripLapOnce = id;
+    setReason(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
+    lapGo.addEventListener("click", scope.guard(() => {
+      const plan = mine.lapPlan;
+      if (plan) send(id, mine, () => startTrip(call, plan.plan_id), "한 바퀴를 시작했습니다");
+    }));
+    const lapActions = document.createElement("div");
+    lapActions.className = "robot-actions";
+    lapActions.append(lapPreview, lapGo);
+    const lapSummary = line("hint", mine.lapPlan ? `${planSummaryText(mine.lapPlan)} · 실행하지 않음`
+      : "출발 장소에 있는 로봇만 계획할 수 있습니다");
+    lapSummary.setAttribute("role", "status");
+
+    box.append(to.wrap, once, summary, lapStart.wrap, lapVia.wrap, lapActions, lapSummary, start.wrap, laps);
     const loops = loopCapacityText(view.traffic);  // D-517 3: "고리 2/3대"
     if (loops) box.append(line("hint", loops));
     if (mine.note) {

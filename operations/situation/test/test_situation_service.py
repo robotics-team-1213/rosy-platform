@@ -51,11 +51,30 @@ def _fact(n):
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):
     fleet = FakeFleet(events=[{"audit_id": 5, "type": "nav.pose"}, {"audit_id": 7, "type": "nav.pose"}])
     _service(tmp_path, fleet).step()
-    assert fleet.paths()[:5] == ["/api/fleet/ai/heartbeat", "/api/fleet/state", "/api/fleet/traffic",
-                                 "/api/fleet/line-stuck", "/api/fleet/events"]
+    assert fleet.paths()[:6] == ["/api/fleet/ai/heartbeat", "/api/fleet/state", "/api/fleet/traffic",
+                                 "/api/fleet/line-stuck", "/api/fleet/trips", "/api/fleet/events"]
     again = FakeFleet()
     _service(tmp_path, again).step()
     assert any(p.startswith("/api/fleet/events?after_id=7&") for p, _ in again.calls)
+
+
+def test_open_trip_reads_the_route_map_once_and_passes_it_to_the_analyzer(tmp_path):
+    class RouteFleet(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/trips":
+                self.calls.append((path, body))
+                return {"open": [{"robot_id": "r", "map_version": 5}]}
+            if path == "/api/fleet/site-map/active":
+                self.calls.append((path, body))
+                return {"version": 5, "map": {"edges": []}}
+            return super().call(path, body)
+
+    fleet, seen = RouteFleet(), []
+    situation = _service(tmp_path, fleet, analyzers=lambda snapshot: seen.append(snapshot) or [])
+    situation.step()
+    situation.step()
+    assert len(seen) == 2 and seen[1]["route_map"]["version"] == 5
+    assert fleet.paths().count("/api/fleet/site-map/active") == 1
 
 
 def test_a_stuck_event_brings_the_next_read_forward(tmp_path):

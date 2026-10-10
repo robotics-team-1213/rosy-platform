@@ -73,14 +73,23 @@ def _setup(ids=("a", "b"), **config):
     return runner, store, fleet
 
 
-def _trip(runner, store, fleet, robot_id, arc_id, s, to="start_n", via=("start_s",), repeat=True, plan_id=None):
+def _trip(runner, store, fleet, robot_id, arc_id, s, to="start_n", via=("start_s",), repeat=True,
+          plan_id=None, start_at=None):
     graph = store.active()[2]
     arc = graph.arcs[arc_id]
     fleet.at(robot_id, arc, s)
-    plan = plan_trip(graph, PlanRequest(store.active()[0], arc.point_at(s), to, via=tuple(via)), store.routing_config)
+    pose = arc.point_at(s)
+    if start_at is not None:
+        x, y = graph.place_xy(start_at)
+        pose = x, y, pose[2]
+        fleet.p[robot_id].pose = MapPose(x, y, pose[2], "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+    plan = plan_trip(graph, PlanRequest(store.active()[0], pose, to, via=tuple(via)), store.routing_config)
     plan_id = plan_id or robot_id
+    request = {"to": to, "via": list(via), "repeat": repeat}
+    if start_at is not None:
+        request["start_at"] = start_at
     store.record_plan(plan_id=plan_id, robot_id=robot_id, principal_id="bob", map_version=plan.map_version,
-                      request={"to": to, "via": list(via), "repeat": repeat}, result={"plan": plan_body(plan)})
+                      request=request, result={"plan": plan_body(plan)})
     return run(runner.start(plan_id, "bob"))
 
 
@@ -121,6 +130,29 @@ def test_each_robot_runs_its_own_trip_and_busy_means_that_robot():
     assert any(u["state"] == "OCCUPIED" and u["holders"] == ["a"] for u in view["units"])
     run(runner.cancel("a", "bob"))  # an operator stop ends that robot's trip only
     assert runner.view("a")["state"] == "canceled" and runner.view("b")["state"] == "running"
+
+
+def test_two_finite_laps_return_to_their_own_start_and_stop():
+    runner, store, fleet = _setup()
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N),
+          repeat=False, start_at="start_n")
+    _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S),
+          to="start_s", via=("start_n",), repeat=False, start_at="start_s")
+    assert {trip["robot_id"] for trip in runner.open_trips()} == {"a", "b"}
+    for robot_id, stop in (("a", "start_n"), ("b", "start_s")):
+        view = runner.view(robot_id)
+        assert view["repeat"] is False and view["plan"]["actions"][-1]["place_id"] == stop
+        assert view["plan"]["actions"][-1]["action"] == "stop"
+    _ticks(runner, fleet)
+    assert runner.view("a")["state"] == runner.view("b")["state"] == "running"
+    for robot_id, stop in (("a", "start_n"), ("b", "start_s")):
+        live, tail = _to_tail(runner, store, fleet, robot_id)
+        _ticks(runner, fleet)
+        assert fleet.p[robot_id].sent[-1][0:2] == ("stop", stop)
+        fleet.at(robot_id, live.arc(tail), live.segments[tail]["s_to"])
+        _ticks(runner, fleet)
+        assert runner.view(robot_id)["state"] == "arrived"
+    assert runner.open_trips() == []
 
 
 def test_a_slow_robot_never_holds_another_back():

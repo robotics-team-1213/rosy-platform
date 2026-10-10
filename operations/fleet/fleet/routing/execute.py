@@ -129,7 +129,8 @@ def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig)
 
 
 def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, junction_turn: bool,
-                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False) -> Optional[dict]:
+                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False,
+                final_place: Optional[str] = None) -> Optional[dict]:
     """None when the robot can drive every segment; otherwise ``TRIP_MODE_UNSUPPORTED`` detail.
 
     Any lane segment needs ``junction_turn`` (CORE's junction gate runs only with live keep-mode
@@ -149,7 +150,7 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
             continue
         if not junction_turn:
             return {"edge_id": segment["edge_id"], "reason": "JUNCTION_TURN_UNSUPPORTED"}
-        if i + 1 == len(segments) and not repeat and ends_at_place(graph, segment) is None:
+        if i + 1 == len(segments) and not repeat and ends_at_place(graph, segment) is None and final_place is None:
             return {"edge_id": segment["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
         if lane_action(graph, segments, i, config) == STOP:
             continue  # the last place, or a hand-over
@@ -183,7 +184,7 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
     body = plan_body(plan)
     refused = unsupported(active[2], body["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
                           junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg,
-                          repeat=bool(request.get("repeat")))
+                          repeat=bool(request.get("repeat")), final_place=body["actions"][-1]["place_id"])
     if refused is not None:
         return None, {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
     return body, None

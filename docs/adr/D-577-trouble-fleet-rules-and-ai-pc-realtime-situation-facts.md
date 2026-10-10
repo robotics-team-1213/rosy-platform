@@ -144,3 +144,6 @@
 ### 개정 (2026-10-10): 사건 원인 초안의 맥락
 
 AI PC는 열린 차선 정지마다 한 번 `GET /api/fleet/site-map/active`, `GET /api/fleet/sightings`를 읽고 기존 state 및 line-stuck 센서 필드와 함께 `incident_context` 사실을 남긴다. 이 사실은 `analyzer:incident_context@1`의 shadow 출력이며 CORE 원인을 검증된 근본 원인으로 승격하지 않는다. `value.cause_draft`는 `line_marking|obstacle|unknown`, `support[]`에는 CORE·신선한 Rosy Cam 관측 메타데이터·신뢰할 수 있는 지도 위치·센서값을 출처별로, `missing[]`에는 빠진 증거를 넣는다. `no_motion`이면서 전방 거리 센서가 0.3 m 이하일 때만 낮은 신뢰도의 `obstacle` 초안을 낸다. 지도 위치는 `localization.trusted=true`, `legacy=false`인 경우에만 비교한다. 프레임은 요청하거나 해석하지 않으며 `camera_frame_interpreted=false`와 `interpreted_front_image` 부족을 명시한다. 사람의 append-only 검토는 D-608 보고서에서 별도로 남긴다. 이 사실은 resolver의 acting kind나 motion proposal 입력이 아니다. 영상 모델과 실제 이미지 해석은 기존 V0·V1 및 소유자 동의 관문을 유지한다.
+### 개정 (2026-10-10): 한 바퀴 trip 경로 그림자 판정
+
+AI PC `rosy-situation`은 열린 Fleet trip과 그 계획 구간, 활성 지도를 읽고 계획에 포함된 구간의 중심선까지 거리를 자체 계산한다. 새 `trip_route_check` 사실은 `ON_ROUTE`·`OFF_ROUTE`·`UNKNOWN`, 편차·차로 반폭, trip ID·지도 버전·자세 출처/나이를 기록한다. 지도 버전 불일치나 1.5 s 넘게 오래된 자세는 `UNKNOWN`이다. 이는 **Fleet과 같은 지도 자세를 입력받는 별도 계산**이며 독립 카메라/물리 참값이 아니다. AI 사실은 그림자 기록·관제 표시만 한다. Fleet의 D-494 경로 이탈 정지와 CORE 몸체 정지는 AI PC가 없어도 동작해야 하며, 이 사실은 `ACTING_KINDS`에 넣지 않는다. 실제 경로 무이탈의 증명은 독립 현장 영상·차체 경계·정지 거리 확인이 필요하다.

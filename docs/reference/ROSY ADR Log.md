@@ -593,3 +593,4 @@
 | D-608 | Fleet 사건 보고서는 대기 순환 후보와 지속 교착, CORE 라인 정지를 구별하고 Pinky·Fleet·Rosy Cam·AI 증거와 운영자 검토를 출처별로 누적하여 폐루프 학습 입력으로 내보낸다 | Proposed (2026-10-10, SOURCE·시험 PC·FIELD 별도) |
 | D-609 | 경로 계획부터 실행 완료 증거까지 하나의 Fleet trip 파이프라인으로 잇는다: plan_id/trip_id, 별도 시작 승인, lane/free 구간 지시, 재계획 보류, arrived와 Nav2·CORE·물리 완료 증거 구분 | Accepted (2026-10-10, 사용자 요청; SOURCE 계약·구현 연결, 종료 증거·DEVICE·FIELD 별도) |
 | D-607 | 막힘을 더 넓게 찾고 차로 안에서는 돌지 않는다: CORE 새 원인 `no_progress`·`dithering`(Fleet R8 `WAIT`+사람), Fleet 규칙만 고르는 `REALIGN`(PIVOT·KTURN; 신뢰 지도 자세·조작표·자세 불확실성; CORE 회전 원 0.0926+0.02·뒤 띠 0.06·2회 재확인; AI 제안 불가), 앞뒤 막힘 R7 제한 회전, 역주행은 회전 자리에서만(D-511 WRONG_WAY 개정), trip 로봇은 WAIT만, lane cue는 막힘 중 물러남 | Proposed (2026-10-10; P1–P5 단계별 Safety-Review, CORE 계약 rosy-e1 확인 대기) |
+| D-613 | 관제에서 고른 출발·복귀 장소와 경유 장소의 유한 한 바퀴 trip: `start_at`으로 계획·시작 때 0.05 m 근접성 재검사, 구역 정지 이동 거절, 두 로봇 별도 trip·Fleet/CORE 권한 유지 | Proposed (2026-10-10, SOURCE 후보; 시험·DEVICE·FIELD 별도) |

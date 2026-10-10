@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.198
+**Version:** v1.199
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1822,6 +1822,14 @@ delivery does not depend on CORE retrying a sent event.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
+### D-613 유한 한 바퀴 `start_at` (v1.199)
+
+`to`가 차선 중간의 이름 있는 `start` 또는 `stop` 장소이면 마지막 `actions[].place_id`에 그 장소 ID가 남고 Fleet이 마지막 차선에서 `stop_after_m` 정지를 보낸다. 좌표만 지정해 차선 중간에서 끝나는 lane trip은 기존 `LANE_END_NOT_A_PLACE`로 거절한다. 반복 lap의 중간 장소 통과는 정지 명령으로 바뀌지 않는다.
+
+`POST /api/fleet/robots/{robot_id}/trip`의 선택 필드 `start_at: place_id`는 관제에서 고른 출발·복귀 장소다. 이 필드는 `repeat: false`, `to: start_at`, 하나 이상의 다른 `via` 장소와 함께 사용한다. 잘못된 조합은 422 유효성 오류다. Fleet은 계획 시 현재 `LOCALIZED` 지도 자세가 그 장소에서 0.05 m 이내인지 검사하고, `POST /api/fleet/trips/{plan_id}/start`에서 새 자세로 다시 검사한다. 멀면 422 `TRIP_START_PLACE_MISMATCH`와 `{place, distance_m, limit_m}`를 반환하며 출발하지 않는다. D-517 구역 규칙이 정지를 다른 장소로 옮겨야 하는 경로는 시작 시 422 `TRIP_START_PLACE_MOVED`로 거절한다. 필드가 없는 기존 trip의 동작은 같다. CORE API와 envelope 1.0은 바뀌지 않는다.
+
+AI PC의 `ai_observer`는 열린 trip 중 `GET /api/fleet/trips`와 필요할 때 `GET /api/fleet/site-map/active`를 읽고 `POST /api/fleet/ai/facts`에 `kind: "trip_route_check"`를 보낼 수 있다(D-577 개정, v1.199). `value`는 `{status: "ON_ROUTE"|"OFF_ROUTE"|"UNKNOWN", offset_m?, limit_m?, reason?}`이고 `evidence`는 `trip_id`, `map_version`, `pose_source`, `pose_age_s`, 가능한 경우 `edge_id`를 담는다. 이 사실은 `shadow`이며 Fleet의 정지 권한이나 CORE 안전 명령을 대체하지 않는다.
+
 ## 10.9 Site Fleet LAN discovery
 
 The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full
@@ -2655,6 +2663,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.199 | 2026-10-10 | Additive (D-613): Fleet `/trip` 선택 필드 `start_at`로 관제의 유한 한 바퀴 출발·복귀 장소를 지정한다. 계획과 시작에서 0.05 m 근접성 검사, 구역 정지 이동 거절. CORE API와 envelope 1.0 변경 없음. 현장 주행 수용 별도 |
 | v1.198 | 2026-10-10 | Additive (D-596 개정 2026-10-10 사용자 결정, feat/core-lamp-identify-result): CORE `GET /host/lamp/identify/{request_id}` `{state: pending\|shown\|refused\|expired, reason}` — rosy-face가 식별 점멸을 거절한 이유(`CAUTION_ACTIVE` 등)를 CORE가 Fleet에 알린다(rosy-hw-test `hw-test.json`에 `reason`, 다음 payload부터). Fleet은 열린 요청마다 1 s에 한 번 묻고 `refused`면 창을 닫고 `GET /api/fleet/tracking/identity`의 `reason: "lamp_refused"`, `last.lamp_reason`으로 보인다. 404(이전 CORE)면 그 요청은 다시 묻지 않고 지금처럼 Vision 판정을 기다린다. |
 | v1.197 | 2026-10-10 | Additive (D-604, feat/core-line-camera-capability): `GET /api/v1/system/capabilities` 최상위 선택 필드 `line_follow.camera {available, age_ms, source}` — line-follow 서비스가 있을 때만. `GET /vision/front/status`와 같은 미리보기 저장소에서 계산한다(`available`·`age_ms` 같은 값, `source`는 미리보기 라벨이 `GAZEBO`면 `GAZEBO`, 다른 라벨이면 `DEVICE`, 프레임이 없으면 `NONE`). `drive_modes`의 `lane`은 그대로 서비스 존재만 뜻한다. Fleet `/trip` 계획의 D-601 차선 카메라 검사는 이 필드가 있으면 로봇을 따로 부르지 않고 이 값을 쓰고(`detail`에 `source` 추가), 없거나(이전 CORE) Fleet이 쥔 능력 값이 두 번의 갱신 주기보다 오래됐으면 지금처럼 `front/status`를 부른다. 사이트 스위치 `fleet.trip.lane_camera_check`는 그대로. envelope 1.0 유지 |
 | v1.196 | 2026-10-10 | 동작 변경 (SAF-001·D-502, fix/battery-estop-latch-release, Safety-Review 대상): EMERGENCY 에서 `POST /api/v1/mode` 는 IDLE 을 포함해 어느 목표든 409 `MODE_CONFLICT` 다. 전에는 IDLE 이 EMERGENCY 를 래치가 걸린 채로 떠났고, 그 뒤 `POST /safety/release` 가 409 "not in EMERGENCY" 로 막혔다 (8kcn 2026-10-10 battery_policy). line-follow 멈춤 답은 WAIT 말고는 E-Stop 래치·EMERGENCY 에서 멈춤을 소비하기 전에 409 `EMERGENCY_ACTIVE` 다(ABORT·MANUAL 포함). `POST /safety/release` 는 래치가 IDLE 에 남은 상태(이전 CORE)도 Admin 에게 푼다. 해제 경로는 `POST /safety/release` 하나다 |

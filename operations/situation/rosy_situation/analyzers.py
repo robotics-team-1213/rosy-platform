@@ -25,12 +25,72 @@ from rosy_situation.deadlock import TrafficWatch
 
 VERSION = "1"
 SOURCE = f"analyzer:stuck_scene@{VERSION}"
+ROUTE_SOURCE = "analyzer:trip_route@1"
 TTL_S = 3.0
 MOVED_M = 0.05            # same as D-577 (d) stalled / waiting_but_moving
 STALL_S = 20.0            # D-577 (d) stalled
 REFUSAL_KEEP_S = 120.0
 # Fleet resolver R1 band (ResolverConfig): reach 0.30 + peer radius 0.083, half width 0.15.
 BAND_AHEAD_M, BAND_HALF_M = 0.383, 0.15
+
+
+def _route_distance(x: float, y: float, segment: dict, edge: dict) -> float:
+    """Distance to only the planned portion of one directed map edge."""
+    points = edge["polyline"] if segment["forward"] else list(reversed(edge["polyline"]))
+    lo, hi = float(segment["s_from"]), float(segment["s_to"])
+    travelled, nearest = 0.0, math.inf
+    for p, q in zip(points, points[1:]):
+        length = math.dist(p, q)
+        if length <= 0.0:
+            continue
+        a, b = max(lo, travelled), min(hi, travelled + length)
+        if b > a:
+            ax = p[0] + (q[0] - p[0]) * (a - travelled) / length
+            ay = p[1] + (q[1] - p[1]) * (a - travelled) / length
+            bx = p[0] + (q[0] - p[0]) * (b - travelled) / length
+            by = p[1] + (q[1] - p[1]) * (b - travelled) / length
+            dx, dy = bx - ax, by - ay
+            t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy)))
+            nearest = min(nearest, math.hypot(x - ax - t * dx, y - ay - t * dy))
+        travelled += length
+    return nearest
+
+
+def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
+    rid = str(trip["robot_id"])
+    pose = trip.get("pose") or {}
+    evidence = {"trip_id": trip.get("trip_id"), "map_version": trip.get("map_version"),
+                "pose_source": pose.get("source"), "pose_age_s": pose.get("age_s"),
+                "segment_index": trip.get("segment_index")}
+    value = {"status": "UNKNOWN", "reason": "route_or_pose_unavailable"}
+    confidence = 0.0
+    try:
+        if (route_map and route_map.get("version") == trip.get("map_version")
+                and pose.get("state") == "LOCALIZED" and float(pose["age_s"]) <= 1.5):
+            x, y = float(pose["x"]), float(pose["y"])
+            if not all(math.isfinite(v) for v in (x, y)):
+                raise ValueError("nonfinite pose")
+            edges = {edge["id"]: edge for edge in route_map["map"]["edges"]}
+            index = int(trip["segment_index"])
+            segments = trip["plan"]["segments"]
+            if index < 0 or index >= len(segments):
+                raise ValueError("invalid segment index")
+            closest = None
+            for segment in segments[max(0, index - 1):index + 2]:
+                edge = edges[segment["edge_id"]]
+                distance = _route_distance(x, y, segment, edge)
+                if math.isfinite(distance) and (closest is None or distance < closest[0]):
+                    closest = distance, float(edge["width_m"]) / 2, segment["edge_id"]
+            if closest is not None:
+                distance, limit, edge_id = closest
+                value = {"status": "OFF_ROUTE" if distance > limit else "ON_ROUTE",
+                         "offset_m": round(distance, 3), "limit_m": round(limit, 3)}
+                evidence["edge_id"] = edge_id
+                confidence = 0.8
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        pass
+    return {"kind": "trip_route_check", "robot_ids": [rid], "value": value, "confidence": confidence,
+            "evidence": evidence, "source": ROUTE_SOURCE, "observed_at": now, "ttl_s": TTL_S}
 
 
 def _pose(row: dict) -> Optional[tuple[float, float, float]]:
@@ -144,4 +204,6 @@ class Analyzer:
         # After the proposals: the traffic facts are shadow and never shape a proposal. A robot stalled
         # in both views is said once (the line-follow one, which knows the HOLD reason).
         said = {(f["kind"], f["robot_ids"][0]) for f in facts}
-        return facts + [f for f in self._traffic(snapshot) if (f["kind"], f["robot_ids"][0]) not in said]
+        routes = [_route_fact(trip, snapshot.get("route_map"), now)
+                  for trip in (snapshot.get("trips") or {}).get("open") or [] if trip.get("robot_id")]
+        return facts + [f for f in self._traffic(snapshot) if (f["kind"], f["robot_ids"][0]) not in said] + routes
