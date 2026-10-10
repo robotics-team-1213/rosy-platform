@@ -83,6 +83,7 @@ REQUEST_KEYS = {"action", "request_id", "requested_at", "by"}
 MAX_REQUEST_BYTES = 1024
 MAX_BY = 128
 REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
+REASON = re.compile(r"[A-Z][A-Z_]{0,39}")
 #: A request older than this (a path unit started late, a leftover file) starts nothing.
 REQUEST_MAX_AGE_S = 60.0
 #: D-472 4: an identity blink must end within 6 s of the Fleet request. CORE's request may be
@@ -164,8 +165,10 @@ def lamp_owned(text: str) -> bool:
     return rosy_display_env.flag(rosy_display_env.parse_env(text), rosy_display_env.LAMP_KEY)[0]
 
 
-def read_handoff_result(path: Path, request_id: str) -> Optional[tuple[str, str]]:
-    """The boot display's answer for ``request_id``, strictly, or None (not yet, or not trusted)."""
+def read_handoff_result(path: Path, request_id: str, *, with_reason: bool = False) -> Optional[tuple]:
+    """The boot display's answer for ``request_id``, strictly, or None (not yet, or not trusted).
+
+    ``with_reason`` adds rosy-face's identify refusal code (D-596 rev 2026-10-10), or None."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
         | getattr(os, "O_CLOEXEC", 0)
     try:
@@ -190,7 +193,10 @@ def read_handoff_result(path: Path, request_id: str) -> Optional[tuple[str, str]
     state, detail = data.get("state"), data.get("detail")
     if state not in HANDOFF_STATES or not isinstance(detail, str):
         return None
-    return state, detail[:MAX_DETAIL]
+    if not with_reason:
+        return state, detail[:MAX_DETAIL]
+    reason = data.get("reason")
+    return state, detail[:MAX_DETAIL], reason if isinstance(reason, str) and REASON.fullmatch(reason) else None
 
 
 class System:
@@ -409,6 +415,11 @@ def main(argv: Optional[list[str]] = None, *, system: Optional[System] = None,
     result = {"schema": SCHEMA, "request_id": request["request_id"], "action": request["action"],
               "state": state, "detail": detail, "started_at": started,
               "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    if request["action"].startswith("identify_"):
+        # D-596 rev 2026-10-10: CORE hands rosy-face's refusal reason on to Fleet.
+        answer = read_handoff_result(system.path(HANDOFF_RESULT), request["request_id"], with_reason=True)
+        if answer is not None and answer[2] is not None:
+            result["reason"] = answer[2]
     write_atomic(args.root / RESULT, json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n",
                  0o640, group(CORE_GROUP))
     print(json.dumps({"hw_test": request["action"], "state": state}), flush=True)

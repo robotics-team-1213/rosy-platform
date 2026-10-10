@@ -1037,14 +1037,22 @@ SIZE_VERDICTS = {
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
+    "perception/control/sensing/perception/learned/drivable_steer.py": (
+        626,
+        "accept: one owner (the drivable-way steer: centre-line curvature, route guide, creep, and the "
+        "D-615 expected-path latch split). Crossed 600 on the robot tree when the curvature target and "
+        "the expected-path coast shared this module. Next growth moves the creep and guide context out. "
+        "docs/plans/2026-10-08-control-p1a-sensing-perception-split.md",
+    ),
     "perception/control/sensing/perception/learned": (
-        2_270,
+        2_836,
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "
         "when D-597 amendment 3 (a85739fcb, boundary memory on the pure-pursuit arc) took the parent "
-        "past 12004+150. Import path, colcon package and CORE command ownership do not change. "
-        "Re-judge on growth past +150.",
+        "past 12004+150. Re-judged at 2836 on 2026-10-10 where D-615 expected_path.py meets the "
+        "centre-line curvature steer. Import path, colcon package and CORE command ownership do not "
+        "change. Re-judge on growth past +150.",
     ),
     "perception/control/sensing/perception": (
         10_152,
@@ -1225,8 +1233,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1265,
-        "accept: re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        1268,
+        "accept: re-judged at 1268 on 2026-10-10 for D-596 rev 2026-10-10: the identify refusal now names its reason "
+        "(CAUTION_ACTIVE, ESTOP, ...) for CORE to hand to Fleet; it stays with the one process that owns the lamp. "
+        "Previously re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
         "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
         "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
         "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "

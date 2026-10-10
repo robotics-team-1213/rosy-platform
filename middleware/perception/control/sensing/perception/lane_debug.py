@@ -116,6 +116,23 @@ def _mark_target(panel_and_size, last, view):
     return panel
 
 
+def _mark_expected_path(panel, view, points, size):
+    """The held corridor on the bird's-eye panel. Paint is not required: a missing
+    frame still has a path, and the panel would otherwise stay black."""
+    if view is None or not points or len(points) < 2:
+        return panel
+    grid = max(int(view.rows), int(view.cols))
+    if size < grid:
+        size = grid
+    try:
+        start = _bev_pixel(view, size, float(points[0][0]), float(points[0][1]))
+        end = _bev_pixel(view, size, float(points[1][0]), float(points[1][1]))
+    except (TypeError, ValueError, IndexError):
+        return panel
+    cv2.line(panel, start, end, _YELLOW, 2, cv2.LINE_8)
+    return panel
+
+
 def _mark_robot(panel_and_size, view):
     """The robot itself, a white triangle pointing forward (+x) at the
     bird's-eye origin -- so the panel reads as "what's around me", not just
@@ -197,7 +214,8 @@ def render_debug(frame, follower, observation, *, mode, pose=None, graph=None,
         bev_img = _mark_target(bev_panel_and_size, bev_last, view)
         bev_img = _mark_robot((bev_img, bev_panel_and_size[1]), view)
     else:
-        bev_img = np.zeros((PANEL_H, PANEL_W, 3), np.uint8)
+        bev_img = bev_panel_and_size[0]
+    _mark_expected_path(bev_img, view, last.get("expected_path_m"), bev_panel_and_size[1])
     top = np.hstack([_camera(frame, bright_threshold), bev_img])
     tier = last.get("tier") or getattr(follower, "state", "-")
     bottom = np.hstack([_status(mode, tier, bev_last.get("junction"), observation,

@@ -7620,3 +7620,9 @@ osy-d395-s1d\`.
 - 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
 - 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
 - gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-10 · uncommitted · docs(isaac): D-606 모델 PC Isaac Lab 환경 준비
+
+- 변경: 5.1/v2.3.2 버전 핀, 별도 후보 환경, RAM·의존성·ROS·물리 정지·RL 비교 게이트를 ADR로 결정했다.
+- 증거: 모델 PC 읽기 점검에서 CUDA와 Jazzy 확인, 물리 RAM 15 GiB와 Isaac venv pip check 실패 확인. docs/validation/model-pc-isaac-rl-2026-10-10/result.md.
+- gate 변화: 없음. RL 실행·ROS-SIM은 HOLD; 실물·현장 별도.

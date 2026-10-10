@@ -93,7 +93,9 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
                                         "confidence": 0.7, "value": {"fleet_agrees": False},
                                         "evidence": {"fleet_wait_cycle": None}}},
                "actions": [], "reviews": []}
-    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic]},
+    traffic2 = {**traffic, "id": "ai_fact:18",
+                "evidence": {"ai_fact": {**traffic["evidence"]["ai_fact"], "fact_row": 18}}}
+    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic, traffic2]},
            "/api/fleet/enrollment/robots": {"robots": [{"robot_id": "rosy_01", "hostname": "rosy-pinky-demo"}]},
            "/api/fleet/discovery": {"scanner_online": True, "devices": []}}
     answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True}),
@@ -103,6 +105,7 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         item = page.locator("#incident-list li")
         expect(item).to_have_count(1)
         expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
+        expect(item.locator("summary")).to_contain_text("앞 물체로 멈춤")
         item.locator("summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
         expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
@@ -114,7 +117,8 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         item.locator("button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
-        fact = page.locator("#incident-traffic-list li")
+        expect(page.locator("#incident-traffic-list li")).to_have_count(2)
+        fact = page.locator("#incident-traffic-list li").first
         fact.locator("summary").click()
         expect(fact).to_contain_text("AI 단독 대기 순환 판단")
         fact.locator("select").select_option("traffic_wait")

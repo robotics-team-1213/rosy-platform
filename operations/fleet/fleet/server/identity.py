@@ -89,6 +89,7 @@ class _Pending:
     not_before: float
     not_after: float
     reason: str = "operator"
+    lamp: Optional[str] = None  # D-596 rev 2026-10-10: CORE's answer once final (shown, expired, unsupported)
 
 
 @dataclass
@@ -186,8 +187,33 @@ class IdentityService:
                     "not_after": pending.not_after, "sources": list(sources),
                     "state": "pending_visual_confirmation", "trigger": reason}
 
+    async def poll_lamps(self) -> None:
+        """D-596 rev 2026-10-10: ask CORE whether rosy-face blinked; a refusal ends the window with its
+        reason instead of a silent ``none``. Once per tick per open request; a CORE without the
+        route (404) is not asked again for that request."""
+        clients = self._clients()
+        for pending in self._open():
+            client = clients.get(pending.robot_id)
+            if pending.lamp is not None or not hasattr(client, "identify_lamp_result"):
+                continue
+            try:
+                answer = await client.identify_lamp_result(pending.request_id)
+            except Exception as exc:  # down or slow: asked again next tick while the window is open
+                if getattr(exc, "status", None) == 404:
+                    pending.lamp = "unsupported"
+                continue
+            state = answer.get("state") if isinstance(answer, Mapping) else None
+            if state in ("shown", "expired"):
+                pending.lamp = state
+            elif state == "refused" and self._pending.get(pending.robot_id) is pending:
+                del self._pending[pending.robot_id]
+                self._last[pending.robot_id] = {"state": "UNKNOWN", "reason": "lamp_refused",
+                                                "lamp_reason": answer.get("reason"), "at": self._clock(),
+                                                "trigger": pending.reason}
+
     async def tick(self) -> list[dict]:
         """D-596 2: ask every robot the trigger rules name (colours permitting); the started requests."""
+        await self.poll_lamps()
         if not self.config.auto_request or self.tracking is None:
             return []
         now = self._clock()

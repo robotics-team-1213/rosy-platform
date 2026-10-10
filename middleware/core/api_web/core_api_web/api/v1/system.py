@@ -262,6 +262,15 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                           svc, "line_advice", None) is not None,
                                       trip_lease=getattr(svc, "trip_lease", None) is not None,
                                       goal_lease=True if "free" in drive_modes else None)
+    # `line_follow.camera` (D-604, v1.197 additive): the line camera's health from the same
+    # preview store `GET /vision/front/status` reads, so Fleet's lane admission needs no extra call.
+    # `drive_modes` keeps meaning "the service exists"; source GAZEBO is the SIM preview label.
+    if svc.line_follow is not None:
+        preview = svc.vision.status()
+        label = preview["source"]
+        data["line_follow"] = {"camera": {
+            "available": preview["available"] is True, "age_ms": preview["age_ms"],
+            "source": "NONE" if label is None else "GAZEBO" if label == "GAZEBO" else "DEVICE"}}
     # `fleet_link_provisioning` (D-555 3, v1.161 additive): PUT/DELETE /fleet/link exists (TLS
     # listener only). Top level, not in `controls`: a robot without a drive pairs too.
     data["fleet_link_provisioning"] = getattr(svc, "fleet_agent", None) is not None
