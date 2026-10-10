@@ -338,8 +338,8 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             "robot_id": robot_id, "mode": "IDLE", "navigation": "IDLE", "map_id": "m1",
             "pose": {"x": spot[0], "y": spot[1], "yaw": 0.0}, "safety": {"estop": False},
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}, "line_follow": lane})
-        if i >= 2:  # eight robots without power evidence: one warn cause
-            robot.power_health_value = None
+        if i >= 2:  # eight robots whose power answer fails the schema: one warn cause on eight robots
+            robot.power_health_value = {"battery": {"percent": 80}}
         else:
             robot.power_health_value = _health(time.monotonic)
         robots.append(robot)
