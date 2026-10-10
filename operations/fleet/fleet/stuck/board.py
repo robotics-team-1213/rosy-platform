@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from fleet.server.sqlite_policy import configure_connection
-from .resolver import ResolverConfig, peer_ahead
+from .lane_lost import peer_ahead
+from .resolver import ResolverConfig
 
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",

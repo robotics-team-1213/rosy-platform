@@ -332,15 +332,16 @@ class StuckResolver:
 
     def _rule(self, row, stuck, rows, chain) -> Optional[tuple[str, str]]:
         cause = stuck.get("cause")
+        peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
+        if peer is None:  # D-577 남은 항목 4: no trusted map pose; neither R1 nor a blind back-off
+            return ("R5", "WAIT", "peer_unknown")
         if row.get("trip"):
             # D-517 5 (M4): a trip robot gets only the stopping R1 WAIT. A back-off, yield or resume could
             # take its body into a block the table already released behind it or never granted (D-494 14);
             # CORE's own site-evidence retrace (D-507 6) stays local. Anything else goes to a human.
-            peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
             return ("R1", "WAIT") if peer and "R1" not in chain.retired else None
         can_back = (bool(stuck.get("local_enabled"))
                     and int(stuck.get("attempts") or 0) < int(stuck.get("max_attempts") or 0))
-        peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
         if peer and "meet" not in chain.retired:
             meet = self._meet(row, rows)
             if meet is not None:
@@ -511,7 +512,7 @@ class StuckResolver:
                 return ("meet", "WAIT")
             return ("meet", "YIELD", move[0], move[1])
         if mine.trusted and mine.direction == plan.direction:
-            if self._peer_ahead(row, rows):
+            if self._peer_ahead(row, rows) is not False:   # an unknown peer is present: never a blind RESUME
                 return ("meet", "WAIT")
             return ("meet", "RESUME")
         line = painted.line(plan.edge_id)
@@ -567,15 +568,10 @@ class StuckResolver:
                 kept[line.id] = chosen
         self._pins = kept
 
-    def _peer_ahead(self, row, rows) -> bool:
-        return bool(peer_ahead(row, rows, self.config))
+    def _peer_ahead(self, row, rows) -> Optional[bool]:
+        from fleet.stuck.lane_lost import peer_ahead
 
-
-def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
-    """R1's judgement: an online peer inside the front band. None = this robot has no pose.
-
-    Shared with the Fleet stuck-episode log, so the recorded value is what R1 would see."""
-    return _peer_in_band(row, rows, config, 1.0)
+        return peer_ahead(row, rows, self.config)
 
 
 def _peer_in_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
