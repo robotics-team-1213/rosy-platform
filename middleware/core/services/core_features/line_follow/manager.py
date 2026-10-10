@@ -80,8 +80,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
         self._init_arc()  # D-520 (arc/lane_arc.py)
         self._init_authority()  # D-517 4 (authority.py)
         self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
-        self._init_lane_cue()  # D-511 rev 1/2 (lane_cue.py)
-        self._cue_spot_turning = False
+        self._init_lane_cue()  # D-511 (cue/lane_cue.py)
         self._init_crosswalk_report()  # D-573 6 (crosswalk_report.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:

@@ -430,7 +430,8 @@ def test_off_lane_pivot_off_a_spot_keeps_the_camera_and_ir_rules():
 def test_a_camera_junction_does_not_stop_a_spot_pivot_but_an_armed_instruction_does():
     rig = Rig()
     seq = _start_spot_pivot(rig)
-    rig.m._junction = {"state": "waiting", "action": None, "place_id": None, "expires_at": 1e9}       # junction seen, no instruction
+    # a junction the camera sees, no instruction
+    rig.m._junction = {"state": "waiting", "action": None, "place_id": None, "expires_at": 1e9}
     rig.yaw -= 0.05
     rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
     assert rig.step(camera=False).angular != 0
