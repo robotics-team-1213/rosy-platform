@@ -133,6 +133,8 @@ class LineFollowConfig:
     # 한쪽 IR 경계 비키기를 하지 않는다. 제자리 회전은 몸을 옆으로 옮기지 못해 비키기가 회전과 싸우기만
     # 한다(과속방지턱 위 9dfk). 가운데 이탈 정지는 그대로다. 0 이면 끈다.
     ir_guard_min_linear: float = 0.0
+    # 같은 개정 2: 그때 IR 줄 밑에 선이 있으면 이 속도로 뒤로 물러나며 돈다(뒤가 비었을 때만). 0 이면 제자리.
+    ir_guard_back_speed: float = 0.0
     # D-491: 감시가 쉬어도 되는 알려진 횡단보도 구간. ir_row_x_m 은 IR 센서 줄의 x(URDF ir_*_link,
     # base_footprint 앞)이고 없으면 쉬지 않는다. 구간 길이 상한과, 영상 시각부터 움직인 odom 거리에
     # 대한 오차 비율(여유 = 투영 불확실도 + 비율 × 이동 거리). 둘 다 실측 뒤 다시 정한다.
@@ -328,6 +330,8 @@ class LineFollowConfig:
             raise ValueError("ir_guard_speed_scale must be in [0, 1]")
         if not 0.0 <= self.ir_guard_min_linear < 1.0:
             raise ValueError("ir_guard_min_linear must be in [0, 1)")
+        if not 0.0 <= self.ir_guard_back_speed <= 0.05:
+            raise ValueError("ir_guard_back_speed must be in [0, 0.05]")
         if self.ir_row_x_m is not None and not (_finite(self.ir_row_x_m) and abs(self.ir_row_x_m) <= 0.2):
             raise ValueError("ir_row_x_m must be a finite base_footprint x within 0.2 m")
         if not (_finite(self.crosswalk_zone_max_m) and 0.0 < self.crosswalk_zone_max_m <= 0.5):
