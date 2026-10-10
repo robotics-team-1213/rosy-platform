@@ -24,12 +24,13 @@ def rig(hold_s=None, **config):
 
 
 def step(r, t, x, *, y=0.0, yaw=0.0, ir_error=None, crosswalk=None, ground="CALIBRATED",
-         uncertainty=0.005, ir_calibrated=True):
+         uncertainty=0.005, ir_calibrated=True, crosswalk_uncertainty=None):
     clock, manager = r
     clock[0] = t
     manager.observe_return_pose(stamp_ns=round(t * 1e9), source_now_ns=round(t * 1e9),
                                 frame="odom", x=x, y=y, yaw=yaw, received_at=t)
     raw = dict(stamp=t, geometry_id="rig-a", ground_source=ground, uncertainty_m=uncertainty,
+               crosswalk_uncertainty_m=crosswalk_uncertainty,
                boundaries=[dict(side="left", slope=0.0, intercept_m=0.09, observed_x_min_m=0.1,
                                 observed_x_max_m=0.4),
                            dict(side="right", slope=0.0, intercept_m=-0.09, observed_x_min_m=0.1,

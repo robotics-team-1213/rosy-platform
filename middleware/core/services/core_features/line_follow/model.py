@@ -143,6 +143,9 @@ class LineFollowConfig:
     crosswalk_odom_error_fraction: float = 0.05
     # 카메라가 잰 횡단보도 끝 거리의 앞뒤 오차 비율(9dfk 실측 2026-10-07: 0.3 m에서 약 1.5 cm).
     crosswalk_range_error_fraction: float = 0.05
+    # D-573 6 개정: 한 프레임이 밝힌 횡단보도 앞뒤 최악 오차(crosswalk_uncertainty_m)의 상한. 8kcn 승인
+    # 기록(높이 ±5 mm, pitch ±0.25°, 3 px)으로 잰 검출 범위 끝(0.33 m)의 값. 유도는 D-573 6항 보고 개정.
+    crosswalk_max_uncertainty_m: float = 0.058
     # D-573 crosswalk gate (crosswalk_gate.py): stop before a camera crosswalk zone, look with the
     # LiDAR, cross only after crosswalk_look_s of empty scans (>= crosswalk_look_min_scans: 10 Hz
     # x 1 s x 0.8). No timeout: after crosswalk_report_s a D-407 crosswalk_blocked stuck asks a human.
@@ -151,6 +154,8 @@ class LineFollowConfig:
     # camera zone cannot tell a waiting strip from the track wall beside it (map_v2_fleet: wall
     # 0.13 m from the lane centre); site strips come from the Fleet map approach[] (D-573 1). Off.
     crosswalk_gate_enabled: bool = False
+    # D-511 rev 1: read Fleet's lane cue (POST /line-follow/lane-cue) in the CAMERA_LINE keep. Off.
+    fleet_lane_cue_enabled: bool = False
     crosswalk_look_s: float = 1.0
     crosswalk_look_min_scans: int = 8
     crosswalk_report_s: float = 10.0
@@ -340,6 +345,8 @@ class LineFollowConfig:
             raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
         if not (_finite(self.crosswalk_range_error_fraction) and 0.0 <= self.crosswalk_range_error_fraction <= 0.5):
             raise ValueError("crosswalk_range_error_fraction must be in [0, 0.5]")
+        if not (_finite(self.crosswalk_max_uncertainty_m) and 0.0 < self.crosswalk_max_uncertainty_m <= 0.5):
+            raise ValueError("crosswalk_max_uncertainty_m must be in (0, 0.5]")
         self._check_crosswalk_gate()
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
@@ -391,6 +398,8 @@ class LineFollowConfig:
     def _check_crosswalk_gate(self) -> None:
         if type(self.crosswalk_gate_enabled) is not bool:
             raise ValueError("crosswalk_gate_enabled must be a boolean")
+        if type(self.fleet_lane_cue_enabled) is not bool:
+            raise ValueError("fleet_lane_cue_enabled must be a boolean")
         if not (_finite(self.crosswalk_look_s) and 0.5 <= self.crosswalk_look_s <= 5.0):
             raise ValueError("crosswalk_look_s must be in [0.5, 5]")
         if type(self.crosswalk_look_min_scans) is not int or not 1 <= self.crosswalk_look_min_scans <= 100:

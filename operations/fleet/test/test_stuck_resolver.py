@@ -5,7 +5,7 @@ import math
 import pytest
 
 from fleet.meet.place import pose_on, project
-from site_map_fixture import painted_track
+from site_map_fixture import painted_track, painted_without_crosswalks
 from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
@@ -103,7 +103,7 @@ def test_r1_ignores_a_peer_behind_or_beside_and_unknown_poses():
 
 
 def test_r3_backs_off_on_lane_lost():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     assert r.step(0.0, [_row(stuck=_stuck(cause="lane_lost"))]) == [
         Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
@@ -489,7 +489,7 @@ def _hold(reason):
 
 
 def test_d577_r3_needs_every_precondition():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     me = _row(stuck=_lost())
     me["map_pose"] = {"state": "LOCALIZED", "age_s": 0.5}
     assert r.step(0.0, [me]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
@@ -505,7 +505,7 @@ def test_d577_peer_behind_holds_instead_of_backing_off():
 @pytest.mark.parametrize("legacy", ["me", "peer"])
 def test_d577_legacy_odom_pose_never_clears_the_rear_band(legacy):
     """D-577 남은 항목 1: a robot without `localization` reports odom, not the painted map."""
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0),
               localization=None if legacy == "me" else _frame("map"))
     peer = _row("rosy_02", None, pose=(-3.0, 0.0, 0.0),
@@ -539,14 +539,14 @@ def test_d577_each_false_precondition_is_r5(stuck, extra, reason):
 
 
 def test_d577_unknown_map_pose_leaves_the_rear_to_core():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     row = _row(stuck=_lost())
     row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
     assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
 
 def test_d577_r5_is_once_per_stuck_and_spends_no_budget():
-    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_track)
+    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_without_crosswalks)
     first = r.step(0.0, [_row(stuck=_lost(local=False))])
     assert first == _hold("local_disabled")
     r.sent(first[0], 0.0)
@@ -559,7 +559,7 @@ def test_d577_r5_is_once_per_stuck_and_spends_no_budget():
 
 
 def test_d577_r5_still_stops_after_the_rule_budget():
-    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_track)
+    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_without_crosswalks)
     back = r.step(0.0, [_row(stuck=_lost())])[0]
     r.sent(back, 0.0)
     r.step(1.0, [_row(stuck=None)])
@@ -568,7 +568,7 @@ def test_d577_r5_still_stops_after_the_rule_budget():
 
 
 def test_d577_refused_back_off_holds_and_goes_to_a_human():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     back = r.step(0.0, [_row(stuck=_lost())])[0]
     r.sent(back, 0.0)
     assert r.result(back, code="STUCK_DECISION_REFUSED") is None
@@ -636,7 +636,7 @@ def test_d577_lost_map_pose_holds():
 
 
 def test_d577_no_map_pose_source_leaves_r3():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     row = _clear(_row(stuck=_lost()))
     row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
     assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
@@ -662,7 +662,7 @@ def test_d577_unknown_peer_pose_holds(peer_kw):
 
 
 def test_d577_own_untrusted_pose_with_a_peer_online_holds():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     me = _clear(_row(stuck=_lost(), localization={"state": "SUSPECT", "pose_frame": "map",
                                                    "confidence": 0.3}))
     peer = _row("rosy_02", None, pose=(2.0, 0.0, 0.0), localization=_frame("map"))
@@ -749,3 +749,76 @@ def test_d577_no_ai_proposal_in_time_falls_back_to_the_rules():
     assert r.step(4.0, [_ai_row()]) == []
     assert r.step(5.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
     assert r.ai_verdicts == []
+
+
+# ---- D-573 6 개정 2026-10-10: CORE reports crosswalk null / zone / unknown with the gate off ----
+
+def test_d573_core_unknown_crosswalk_holds_as_unknown():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost())
+    row["state"]["line_follow"]["crosswalk"] = {"state": "unknown", "source": "camera", "reason": "pose_stale"}
+    assert r.step(0.0, [row]) == _hold("crosswalk_unknown")
+
+
+@pytest.mark.parametrize("state", ["inside", "ahead"])
+def test_d573_core_zone_holds_as_crosswalk(state):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost())
+    row["state"]["line_follow"]["crosswalk"] = {"state": state, "source": "camera"}
+    assert r.step(0.0, [row]) == _hold("crosswalk")
+
+
+def test_d573_core_null_crosswalk_with_every_other_precondition_opens_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    me["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
+    peer = _row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map"))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+# ---- D-577 남은 항목 2: a failed R5 send is resent as R5, never replaced by R3 ----
+
+def test_d577_failed_r5_send_is_resent_as_the_same_r5_even_if_r3_now_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    behind = _row("rosy_02", None, pose=(-0.20, 0.03, 0.0), localization=_frame("map"))
+    first = r.step(0.0, [me, behind])
+    assert first == _hold("peer_behind")
+    r.sent(first[0], 0.0)
+    assert r.result(first[0], code="ROBOT_UNREACHABLE") is None        # one transport resend
+    gone = _row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map"))
+    assert r.step(1.0, [me, gone]) == first                            # not R3
+
+
+# ---- D-573 1 / review 2026-10-10: the site-map crosswalk is the reference for R3 ----
+# painted_track() carries map_v2_fleet's two lane_graph crosswalks; one spans x 0.309..0.429, y -0.582..-0.438.
+
+def _clear_trusted(pose):
+    row = _clear(_row(stuck=_lost(), pose=pose, localization=_frame("map")))
+    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
+    return row
+
+
+@pytest.mark.parametrize("pose", [(0.37, -0.50, 0.0),       # on it
+                                  (0.37, -0.20, 0.0)])     # 0.24 m beside it: within body + back-off reach
+def test_d573_map_crosswalk_near_the_trusted_pose_holds_even_with_core_null(pose):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_clear_trusted(pose)]) == _hold("crosswalk")
+
+
+def test_d573_map_crosswalk_far_from_the_trusted_pose_leaves_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_clear_trusted((0.0, 0.0, 0.0))]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d573_map_with_crosswalks_and_no_trusted_pose_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    legacy = _clear(_row(stuck=_lost()))                          # no localization: odom, not the map
+    assert r.step(0.0, [legacy]) == _hold("crosswalk_unknown")
+
+
+def test_d573_map_with_crosswalks_and_an_unsourced_unknown_pose_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
+    assert r.step(0.0, [row]) == _hold("crosswalk_unknown")

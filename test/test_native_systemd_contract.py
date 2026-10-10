@@ -94,7 +94,7 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
         "DeviceAllow=/dev/video0 rw", "rosy-core.service",
         "ros2 launch bringup bringup_robot.launch.py",
         "cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S}",
-        "Conflicts=rosy-navigation.service", "Restart=on-failure",
+        "Conflicts=rosy-navigation.service", "Restart=always",
     ):
         assert directive in unit
     assert "privileged" not in unit.lower()

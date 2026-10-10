@@ -527,3 +527,22 @@ def test_d577_r5_wait_transport_failure_is_resent_once_then_escalated():
     asyncio.run(loop.run_once())
     assert _decisions(robot) == ["WAIT", "WAIT"]
     assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"
+
+
+def test_d577_r5_cut_off_by_a_fleet_stop_still_raises_the_human_row():
+    """D-577 남은 항목 3: Fleet stops (task cancel) while the R5 WAIT is in flight."""
+    robot = _HangingRobot("rosy_01", state=_state_9dfk())
+    loop, board, _ = _setup(state=_state_9dfk(), resolver_robot=robot)
+
+    async def scenario():
+        task = asyncio.create_task(loop.run_once())
+        for _ in range(200):
+            if robot.calls:
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asyncio.run(asyncio.wait_for(scenario(), 5))
+    assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"
+    assert board.answers()[-1]["decision"] == "ESCALATE"

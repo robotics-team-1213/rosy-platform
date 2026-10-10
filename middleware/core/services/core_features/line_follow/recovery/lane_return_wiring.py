@@ -44,6 +44,7 @@ class LaneReturnMixin(LaneReturnDecisionMixin, PoseRequestMixin):
             if accepted:
                 self._crosswalks.observe(observation.containment, epoch=self._return_evidence.epoch,
                                          received_at=received_at)
+                self._crosswalk_watch(observation.containment)  # D-573 6 (crosswalk_report.py)
         if accepted:  # D-476 arming streak: consecutive accepted confident frames
             confident = observation.visible and observation.confidence >= self._config.bridge_arm_confidence
             self._confident_frames = self._confident_frames+1 if confident else 0
