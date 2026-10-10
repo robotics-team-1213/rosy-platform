@@ -1,7 +1,7 @@
 # 오늘 워크트리 통합 검증
 
 날짜: 2026-10-10. 작업 브랜치: `fix/today-worktree-integration`.
-기준 main: `9f6a76e294b0e010575ce77375df889bc6ade2d8`.
+기준 main commit: `9f6a76e294b0e010575ce77375df889bc6ade2d8`.
 사용자 승인 범위는 커밋과 로컬 main 착지이며, 원격 push는 포함하지 않는다.
 
 ## 독립 소스 검토
@@ -22,14 +22,14 @@ D-616 연속 시험 도구는 기존 heartbeat·hold lease·종료 cleanup을 �
 
 같은 독립 검토자가 아래 exact commit diff를 재검토하고 `safety_review.py`의 retrospective EXEMPT 등록을 승인했다.
 
-- `8ff5c68d36c83fe9c6916a992a567420f013a949`: 안전 manager의 docstring만 변경한다. 실행 로직은 같고 D-602 person 클래스 계약 및 person_feet 거절 회귀가 일치한다.
-- `1168199f168a9eec93747b45ee91c91670da9d1c`: 알려진 pinky_pro만 기존 공칭 차체를 선택하며 알 수 없는 기종은 None이다. 자세 관측 시각과 누적 age가 만료·잘못된 근거를 거절한다. 기존 followup 스냅샷 검토를 exact diff로 재확인했다.
+- commit `8ff5c68d36c83fe9c6916a992a567420f013a949`: 안전 manager의 docstring만 변경한다. 실행 로직은 같고 D-602 person 클래스 계약 및 person_feet 거절 회귀가 일치한다.
+- commit `1168199f168a9eec93747b45ee91c91670da9d1c`: 알려진 pinky_pro만 기존 공칭 차체를 선택하며 알 수 없는 기종은 None이다. 자세 관측 시각과 누적 age가 만료·잘못된 근거를 거절한다. 기존 followup 스냅샷 검토를 exact diff로 재확인했다.
 
 이는 독립 정적 소스 승인이다. 실물 장치 수용을 뜻하지 않는다.
 
 ## 원격 시험 증거
 
-제품 통합 candidate `59135857e2e98faf04d26e4c55db161e1447b571`:
+제품 통합 candidate commit `59135857e2e98faf04d26e4c55db161e1447b571`:
 AI PC와 모델 PC의 네 affected 시험 묶음에서 16,599 passed, 1,029 skipped, NEW 0.
 Node 시험은 277 passed, 실패 0. lint는 오류 0이며 오래된 검증 기록 경고가 있다.
 최종 추가분은 도구와 검토 기록이다. candidate `7470505e01`의 도구·루트 시험은 5,311 passed, 756 skipped와 확인 소유 목록 누락 1건을 보고했다.
