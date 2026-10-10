@@ -167,3 +167,27 @@ def test_no_turn_circle_creeps_along_the_way_then_holds():
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=16.0, guide_here_deg=170.0,
                                    guide_pivot_ok=False)[2]
     assert debug.get("reason") != "wrong_way_hold", debug     # a polyline joint, the lane ahead agrees
+
+
+def test_driving_context_rules(monkeypatch):
+    # (b) a side opening is not an exit where the map goes on (bend < 15 deg)
+    both = _lane(0.5, -0.5, x_max=0.15) | _lane(0.03, -0.03, x_max=0.33)
+    assert DrivableSteer().update(both, 1, G, XO, HALF, guide_deg=10.0)[2]["exit"] is None
+    # (c2) a target off the map heading for >= 2 s: HOLD and request realign
+    import control.sensing.perception.learned.drivable_steer as ds
+    clock = iter([0.0, 0.0, 3.0, 3.0, 3.0, 3.0])
+    monkeypatch.setattr(ds.time, "monotonic", lambda: next(clock, 3.0))
+    steer, lane = DrivableSteer(), _lane(HALF, -HALF)
+    steer.update(lane, 1, G, XO, HALF, guide_deg=-80.0, guide_here_deg=-80.0, guide_fresh=True)
+    error, _, debug = steer.update(lane, 2, G, XO, HALF, guide_deg=-80.0, guide_here_deg=-80.0, guide_fresh=True)
+    assert error is None and debug["reason"] == "realign", debug
+    assert debug["context"]["last"], debug
+
+
+def test_a_failed_creep_is_not_repeated_at_the_same_route_distance():
+    steer, closed = DrivableSteer(), _lane(0.06, -0.06, x_max=0.13)
+    kw = dict(guide_deg=80.0, guide_here_deg=0.0, guide_pivot_ok=False, guide_s=2.0)
+    steer.update(closed, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), **kw)
+    steer.update(np.zeros_like(closed), 2, G, XO, HALF, (0.0, 0.0, 0.0), (0.2, 0.0, 0.0), **kw)   # creep_done
+    debug = steer.update(closed, 3, G, XO, HALF, (0.2, 0.0, 0.0), (0.2, 0.0, 0.0), **dict(kw, guide_s=2.05))[2]
+    assert debug["reason"] == "repeat_failed", debug

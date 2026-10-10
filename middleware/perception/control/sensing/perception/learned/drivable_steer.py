@@ -25,6 +25,7 @@ DrivableSteer per camera frame: the newest way's target moved into the current p
 
 from __future__ import annotations
 
+import collections
 import math
 import time
 
@@ -72,6 +73,16 @@ CROSS_MIN_ALONG_M = 0.06
 PIVOT_MAX_RAD = 1.75
 #: a route prior within this of straight ahead means "keep going" (no exit turn)
 GUIDE_STRAIGHT_DEG = 25.0
+#: Driving context (architect 2026-10-10, X:/DevTemp/steer-review/context): an exit is taken only where
+#: the map bends that way >= EXIT_BEND_DEG within 0.25 m (g1: 34 opposite + 14 fake exits of 750 turn frames)
+EXIT_BEND_DEG = 15.0
+#: the chosen target off the map heading by > |bend| + REALIGN_DEG for REALIGN_S: HOLD and request realign
+#: (g6/g7 NE spoke: 378/384 and 645/647 frames misaligned)
+REALIGN_DEG, REALIGN_S = 30.0, 2.0
+#: a lost way is crept along the map tangent only below this heading error
+CREEP_HEADING_DEG = 30.0
+#: the same failed manoeuvre within this route distance is not repeated: hand to Fleet
+REPEAT_S_M = 0.1
 #: beyond this the robot faces against the lane: reorient in place first
 GUIDE_REVERSE_DEG = 90.0
 #: re-acquire creep limits (camera nearest row 0.112 m - body front 0.042 m)
@@ -270,6 +281,11 @@ class DrivableSteer:
         self._crosswalk_pose = None
         self._creep_from = self._creep_target = None
         self._lost_since = None
+        self._ctx = {}
+        self._misaligned_since = None
+        self._failed = []                                   # (route s, manoeuvre) that ended in a HOLD
+        self.decisions = collections.deque(maxlen=16)       # (t, s, strategy, outcome)
+        self._last_out = self._pending = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
@@ -291,7 +307,14 @@ class DrivableSteer:
         moved = 0.0 if pose is None or start is None else math.hypot(pose[0] - start[0], pose[1] - start[1])
         if info.get("target_m") is not None:
             self._creep_target = (info["target_m"], source_pose)
+        ctx = self._ctx
+        if ctx.get("s") is not None and any(k == "creep" and abs(ctx["s"] - fs) < REPEAT_S_M for fs, k in self._failed):
+            return None, None, dict(info, strategy="none", reason="repeat_failed")
+        if ctx.get("guide") and (not ctx.get("fresh") or abs(ctx.get("here", 0.0)) >= CREEP_HEADING_DEG):
+            return None, None, dict(info, strategy="none", reason="creep_heading")
         if self._creep_target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
+            if ctx.get("s") is not None:
+                self._failed = self._failed[-15:] + [(ctx["s"], "creep")]
             return None, None, dict(info, strategy="none", reason="creep_done")
         tx, ty = _to_current(*self._creep_target, pose)
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
@@ -315,8 +338,40 @@ class DrivableSteer:
             return False
         return True
 
-    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True, guide_here_deg=None):
+    def update(self, *args, guide_s=None, guide_fresh=True, **kw):
+        """_update with the driving context: the realign rule, a strategy switch only after two
+        consecutive frames (a HOLD applies at once), and the decision history."""
+        here = kw.get("guide_here_deg", kw.get("guide_deg"))
+        self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None)
+        error, confidence, info = self._update(*args, **kw)
+        guide = kw.get("guide_deg")
+        target = info.get("target_now_m")
+        if error is not None and guide is not None and guide_fresh and target:
+            bend = abs(guide - (guide if here is None else here))
+            off = abs(math.degrees(math.atan2(target[1], target[0])) - guide)
+            if off <= bend + REALIGN_DEG:
+                self._misaligned_since = None
+            elif self._misaligned_since is None:
+                self._misaligned_since = time.monotonic()
+            elif time.monotonic() - self._misaligned_since >= REALIGN_S:
+                error = confidence = None
+                info = dict(info, strategy="none", reason="realign", misaligned_deg=round(off, 1))
+        strategy = info["strategy"]
+        if error is not None and self._last_out is not None and strategy != self._last_out[2]["strategy"]                 and self._last_out[0] is not None and self._pending != strategy:
+            self._pending = strategy
+            error, confidence, info = self._last_out[0], self._last_out[1], dict(info, strategy=self._last_out[2]["strategy"],
+                                                                               switch_pending=strategy)
+        else:
+            self._pending = None
+        self._last_out = (error, confidence, info)
+        if not self.decisions or self.decisions[-1][2] != info["strategy"]:
+            self.decisions.append((round(time.monotonic(), 1), guide_s, info["strategy"], info.get("reason")))
+        info["context"] = dict(s=guide_s, fresh=guide_fresh, here_deg=here, ahead_deg=guide,
+                               last=list(self.decisions)[-3:])
+        return error, confidence, info
+
+    def _update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
+                wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True, guide_here_deg=None):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -363,7 +418,7 @@ class DrivableSteer:
                 self._smoothed = self._pivot = self._side = None
                 error = -PIVOT_ERROR if here > 0 else PIVOT_ERROR
                 return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
-            want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG or info.get("reorient_deferred") else (
+            want = None if abs(guide_deg) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
                 "left" if guide_deg > 0 else "right")
             if want is None:
                 # the map lane goes on: no exit turn or pivot; a way cut short (blue tape, cable)
