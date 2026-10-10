@@ -35,6 +35,7 @@
 - `SIZE_UNITS`에 `perception/control/sensing/perception/learned`를 더한다. 학습 모델 백엔드(manifest, runner, paint worker, drivable way와 조향, shadow, slots)다. 판정은 `accept`, 기준선 2270, 허용 +150이다.
 - 부모 단위 `perception/control/sensing/perception`은 learned 줄을 뺀 9895로 다시 판정한다. 12004 판정의 독립 검토가 "다음 증가 때 learned를 따로 단위로 둔다"고 적은 조건을 따른 것이다.
 - 계기: D-597 개정 3(`a85739fcb`)이 부모를 12165로 늘려 12004+150을 넘었다. import 경로, colcon 패키지, CORE 명령 소유는 바뀌지 않는다.
+- 2026-10-10 D-615: `learned`를 2657로 다시 판정한다. 늘어난 줄은 `learned/expected_path.py`(확정된 직선 구간을 오돔으로 옮겨 다시 낸다)다. 부모 `perception/control/sensing/perception`은 10053이다. 늘어난 줄은 `drivable_keep.py`와 `lane_debug.py`다. 허용은 그대로 +150이다.
 
 ### 2026-10-10 추가: drivable 단위
 
