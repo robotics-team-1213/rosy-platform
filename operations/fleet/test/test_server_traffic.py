@@ -384,6 +384,17 @@ def test_a_mover_without_localization_is_queued_without_dispatch():
     assert _goal_calls(mover) == 0
 
 
+def test_a_goal_reads_localization_before_dispatch_even_without_a_snapshot():
+    mover = _mover()
+    console = _console(mover)
+    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+    mover._state["localization"] = None
+    result = run(console.goal("rosy_01", 3.0, 0.0))
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert result["dispatch_attempted"] is False
+    assert _goal_calls(mover) == 1
+
+
 # --- D-395 S2 Finding 1: a legacy-null pose is never a trusted pose ------------------------
 
 

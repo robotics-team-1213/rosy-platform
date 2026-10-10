@@ -435,6 +435,11 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
+        state, _source = await self._gather_state(robot_id)
+        if self._clients.get(robot_id) is not client:
+            raise RuntimeError("robot connection changed during localization check")
+        self._seen.pop(robot_id, None)
+        self._remember([{"robot_id": robot_id, "state": state}])
         if self._verdict(robot_id) == trust.UNTRUSTED:
             # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
             self._claims.pop(robot_id, None)
