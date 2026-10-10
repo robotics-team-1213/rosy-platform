@@ -124,7 +124,10 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
         () => body(robotId, trip, spec.lines, "교착 조치", [
           [primaryButton("바뀐 경로로 계속"), "confirm", spec.confirmReason, () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다")],
           [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")],
-          [quietButton("로봇 카드 열기"), "card", "", () => openCard(robotId)]]));
+          [quietButton("로봇 카드 열기"), "card", "", () => {
+            openCard(robotId);
+            document.querySelector(`article[data-robot-id="${CSS.escape(robotId)}"]`)?.scrollIntoView({ block: "nearest" });
+          }]]));
     }
   }
 
