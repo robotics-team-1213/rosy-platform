@@ -90,6 +90,8 @@ class TrafficService:
         #: replan given; the last wait cycle and how many periods in a row it was seen
         self._unknown_since: dict[str, float] = {}
         self._tried: dict[str, tuple[str, list]] = {}
+        #: D-610 7: ``(cycle, avoidable, now) -> (robot, edges) | None`` from the AI PC (app.py sets it).
+        self.ai_replan = lambda _cycle, _avoidable, _now: None
         self._cycle: tuple[frozenset, int] = (frozenset(), 0)
         #: robot id -> (route id, trim, front in route metres, clock) of its last accepted front
         self._front: dict[str, tuple[str, float, float, float]] = {}
@@ -312,7 +314,9 @@ class TrafficService:
         pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
                    if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
         decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
-                                    pending, self._unknown_since, now)
+                                    pending, self._unknown_since, now,
+                                    ai_pick=self.ai_replan(cycle, avoidable, now)
+                                    if cycle and self._cycle[1] >= handover.CYCLE_PERIODS else None)
         decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
         for robot_id, row in decisions.items():
             if row["decision"] == "replan":

@@ -15,7 +15,9 @@ from typing import Awaitable, Callable, Mapping, Optional
 import httpx
 
 from fleet.server.console_routes import transport_failure
+from fleet.stuck import closed_loop
 from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.outcome import Outcomes
 from fleet.stuck.resolver import Answer, Escalate, StuckResolver
 from fleet.swarm.transport import RobotApiError
 
@@ -37,10 +39,14 @@ class StuckResolverLoop:
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
         #: D-577 개정 2026-10-10: the AI PC proposal board (`AiFactsBoard`; app.py sets it). None = no AI.
         self.ai_board = None
+        #: D-610 2·9: the closed loop and the problem record (app.py sets ``episodes``; None = not kept).
+        self.outcomes, self.episodes, self.problems = Outcomes(), None, None
+        self._rows: dict[str, dict] = {}
         self.wake = asyncio.Event()
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
         self._resolver.claim(robot_id, stuck_id)
+        closed_loop.human(self, robot_id, stuck_id)
         previous = self._board.resolver_note(robot_id, stuck_id) or {}
         self._board.note_resolver(robot_id, stuck_id, tier="human", rule=None, decision=None,
                                   escalated=previous.get("escalated") or "human_claimed")
@@ -48,6 +54,8 @@ class StuckResolverLoop:
     async def run_once(self) -> None:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
+        self._rows = {str(row["robot_id"]): row for row in robots}
+        await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         actions = self._resolver.step(now, robots)
         verdicts, self._resolver.ai_verdicts[:] = list(self._resolver.ai_verdicts), []
@@ -63,6 +71,8 @@ class StuckResolverLoop:
                 self._escalated(action)
             else:
                 await self._answer(action, now)
+        if self.problems is not None:              # D-610 4: stalled and pose_lost
+            await self.problems.run(self, now, robots)
 
     def _row(self, row: dict) -> dict:
         extra = {}
@@ -106,6 +116,7 @@ class StuckResolverLoop:
                    decision: Optional[str] = None) -> None:
         log.warning("stuck %s on %s escalated to a human: %s",
                     action.stuck_id, action.robot_id, action.reason)
+        closed_loop.human(self, action.robot_id, action.stuck_id)
         self._board.note_resolver(action.robot_id, action.stuck_id, tier="human", rule=rule,
                                   decision=decision, escalated=action.reason)
         self._board.record(robot_id=action.robot_id, stuck_id=action.stuck_id,
@@ -160,6 +171,7 @@ class StuckResolverLoop:
         self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="ai" if answer.rule == "ai" else "rule",
                                   rule=answer.rule, decision=answer.decision, escalated=None)
         escalation = self._resolver.result(answer, code=code)
+        await closed_loop.answered(self, answer, code, now)
         if escalation is not None:
             self._escalated(escalation, rule=answer.rule if answer.escalate else None,
                             decision=answer.decision if answer.escalate else None)

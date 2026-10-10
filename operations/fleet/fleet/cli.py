@@ -632,6 +632,7 @@ def run_console(args: argparse.Namespace) -> None:
                      stuck_resolver_clients=stuck_resolver_clients,
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
+                     ai_first=_ai_first(args),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -670,6 +671,21 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
+
+
+def _ai_first(args):
+    """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
+    import yaml
+
+    from fleet.stuck.ai_first import AiFirst
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        return AiFirst.from_config((site_config.get("fleet") or {}).get("ai_first"))
+    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
+        sys.exit(f"ai_first config: {exc}")
 
 
 def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
