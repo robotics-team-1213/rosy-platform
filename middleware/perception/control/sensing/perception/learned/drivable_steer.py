@@ -11,13 +11,10 @@ way_target   the way (frame-size mask, one inference) + ground plane -> the purs
              Per image row the way spans [first, last] columns; an edge on the frame border is
              unseen (open). Centre per row: both edges seen -> their middle; one seen -> that edge
              lane_half_width toward the open side; none -> the middle of the view. The pursuit
-             point is the centre line at arc length LOOKAHEAD_M (not the row at that straight-ahead
-             x). Its curvature is the centre line's heading change over that length when the line
-             bends harder than the chord; the point is rebuilt on that arc. ahead_m is how far the
-             robot's own corridor (|y| <= CORRIDOR_HALF_M) stays on the way.
+             point is the centre at arc length LOOKAHEAD_M, on the commanded curvature. ahead_m
+             is how far the robot's corridor (|y| <= CORRIDOR_HALF_M) stays on the way.
 DrivableSteer per camera frame: the newest way's target moved into the current pose by odometry
-             (the way is not re-warped). The error is the one whose CORE command holds that
-             curvature at line_follow.cruise_speed (pursuit_error), not a straight lateral offset.
+             (the way is not re-warped). The error holds that curvature at cruise_speed.
              Closed ahead (ahead_m < PIVOT_AHEAD_M) with an exit at a side of the view turns in
              place toward it (keep right when both sides are open, D-384 2): error +-PIVOT_ERROR
              at PIVOT_CONFIDENCE, which CORE's speed scale turns into ~0 linear. Released when
@@ -102,31 +99,22 @@ def _col_y(cols, rows, ground):
 
 
 def _centre_target(xs, centre, lookahead):
-    """(point, curvature, band) for the centre samples (parallel arrays).
-
-    The station is arc length `lookahead` from the robot along the centre, not the
-    sample at that straight-ahead x. Curvature (1/m, left +) is the centre line's
-    net heading change over that length when it bends the same way as, and harder
-    than, the chord to the station. The chord wins when the robot is off a
-    straighter centre and has to come back. The point lies on the arc of the
-    curvature that is commanded, so the stored target and the command match.
-    `band` masks the samples the station was taken from.
+    """(point, curvature, band). Station is arc length `lookahead` along the centre.
+    Curvature is that span's heading change when it bends with the chord and harder;
+    the chord wins for a return onto a straighter centre. The point is on that arc.
     """
-    xs = np.asarray(xs, float)
-    centre = np.asarray(centre, float)
+    xs, centre = np.asarray(xs, float), np.asarray(centre, float)
     order = np.argsort(xs)
-    usable = np.isfinite(xs[order]) & np.isfinite(centre[order]) & (xs[order] > 0.0)
-    order = order[usable]
-    band = np.zeros(xs.shape, bool)
+    keep = np.isfinite(xs[order]) & np.isfinite(centre[order]) & (xs[order] > 0.0)
+    order, band = order[keep], np.zeros(xs.shape, bool)
     if order.size == 0:
         return None, 0.0, band
     sx, sy = xs[order], centre[order]
-    px = np.concatenate(([0.0], sx))
-    py = np.concatenate(([0.0], sy))
+    px, py = np.concatenate(([0.0], sx)), np.concatenate(([0.0], sy))
     arc = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(px), np.diff(py)))))
     reach = min(float(lookahead), float(arc[-1]))
     near = np.abs(arc[1:] - reach) <= ROW_BAND_M
-    if not np.any(near):
+    if not near.any():
         near = np.zeros(sx.shape, bool)
         near[int(np.argmin(np.abs(arc[1:] - reach)))] = True
     tx, ty = float(np.median(sx[near])), float(np.median(sy[near]))
@@ -136,16 +124,11 @@ def _centre_target(xs, centre, lookahead):
     walked = heading[arc[1:] <= reach + 1e-6]
     k_path = 0.0
     if walked.size >= 2 and reach > 1e-3:
-        turn = math.atan2(math.sin(walked[-1] - walked[0]), math.cos(walked[-1] - walked[0]))
-        k_path = turn / reach
+        k_path = math.atan2(math.sin(walked[-1] - walked[0]), math.cos(walked[-1] - walked[0])) / reach
     k = k_path if abs(k_path) > abs(k_chord) and k_path * k_chord >= 0.0 else k_chord
     k = float(max(-MAX_TARGET_CURVATURE, min(MAX_TARGET_CURVATURE, k)))
-    # Travel along the commanded arc, not the straight chord out to the station.
-    length = reach
-    if abs(k) < 1e-3:
-        point = (length, ty)
-    else:
-        point = (math.sin(k * length) / k, (1.0 - math.cos(k * length)) / k)
+    point = (reach, ty) if abs(k) < 1e-3 else (
+        math.sin(k * reach) / k, (1.0 - math.cos(k * reach)) / k)
     band[order[near]] = True
     return point, k, band
 
@@ -261,9 +244,7 @@ def _crosses(points, tx, ty):
     return float(pts[first, 1])
 
 
-#: CORE line-follow law the error is shaped for (rosy_default.yaml line_follow.cruise_speed,
-#: the same numbers lane_bev.CORE_CRUISE_M_S is pinned to). A 0.04 m/s inverse here made the
-#: robot hold half the target curvature at the 0.08 m/s cruise.
+#: CORE line-follow law (rosy_default.yaml cruise 0.08). A 0.04 inverse held half the arc.
 #: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
 CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.08
 
@@ -440,7 +421,6 @@ class DrivableSteer:
         tx, ty = _to_current(target, source_pose, current_pose)
         # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
         # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
-        # Smooth the commanded curvature. Smoothing only y pulled a bend back toward a straight line.
         d2 = tx * tx + ty * ty
         curvature = 0.0 if d2 < 1e-6 else 2.0 * ty / d2
         self._smoothed = curvature if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * curvature
