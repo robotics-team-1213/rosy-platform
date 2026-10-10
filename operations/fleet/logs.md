@@ -3104,7 +3104,7 @@
 - Evidence: remote situation / AI facts / AI-first contracts 97 passed; known_failures 0 NEW. Live heartbeat reports Qwen model digest and both enrolled Fleet resolver robots; no corner inference or motion acceptance is claimed.
 - Gate: SOURCE / remote API contracts; field judgement and lane-follow acceptance remain pending.
 
-## 2026-10-10 ? uncommitted ? feat: shared situation direction (D-619)
+## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
 
 - Change: D-619 uses raw front frames, calibrated ceiling metadata, task intent/current mode and sensor age; optional shared assessment validation preserves legacy proposals and D-577 authority. Qwen exact prompt and image hashes are recorded; no corner or arm acceptance claimed.
 - Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
