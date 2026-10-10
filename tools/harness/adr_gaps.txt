@@ -41,3 +41,5 @@ D-610 reserved for AI-first problem resolution in another active branch (refs/ad
 D-611 reserved for learned paint evidence mode in another active branch (refs/adr/D-611); remove when it lands
 D-612 reserved for perception blind-spot registry in another active branch (refs/adr/D-612); remove when it lands
 D-613 reserved for Fleet finite one-lap trip in another active branch (refs/adr/D-613); remove when it lands
+D-610 reserved by another session (refs/adr/D-610, AI-first problem resolution), not yet on main; remove when it lands
+D-611 reserved by another session (refs/adr/D-611, evidence mode hold), not yet on main; remove when it lands

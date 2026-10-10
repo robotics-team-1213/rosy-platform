@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
 - 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
 - 2026-10-10 · uncommitted · docs(isaac): D-606 모델 PC Isaac Lab 환경 준비
 - 2026-10-10 · uncommitted · docs(route): D-609 계획-실행-완료 증거 파이프라인
 - 2026-10-10 · uncommitted · feat(fleet): D-601 trip 출발이 카메라 차선 주행을 켜고 출발 자세·차선 카메라를 본다
-- 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시

@@ -7638,3 +7638,9 @@ osy-d395-s1d\`.
 - 변경: `tools/capture/drivable_steer.py`(로봇 위 루프, 계산만 하는 모드/MANUAL teleop, 가장 오른쪽 갈래, RobotBody 가드)와 단위 시험, D-592 개정(호스트=로봇, 늦으면 Fleet; crop128 71edcb6d; 갈래 규칙), 검증 기록 `docs/validation/d592-drivable-steer-field-test-2026-10-10.md`.
 - 증거: 9dfk 로봇 위 추론 p50 162 ms, 프레임 나이 p50 259 ms/p95 350 ms; drive1 10.6 s·0.31 m, `drivable_low`로 선 앞 정지, 개입 없음. 원격 pytest tools/capture/test 22 passed, known_failures 0 new.
 - gate 변화: D-378 R2 첫 실물 기록만. 차선 추종 수용·로봇 런타임 조향 소스는 HOLD.
+
+## 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
+
+- 변경: 인식 맹점 목록 `tools/harness/perception_gaps.yaml`을 sim2real 목록 옆에 두었다. 한 행은 녹음 id, `device:YYYY-MM-DD`, 또는 저장소 안 기록에서 태어나고, CLOSED는 저장소에 있는 재생과 `validated_by`가 있어야 한다. candidate는 HOLD 또는 CLOSED만 된다. 첫 행은 P-01 가까운 바닥(OPEN), P-02 ignore를 길로 다시 칠함(OPEN), P-03 9dfk 구역 없음(OPEN), P-04 차선 IR은 횡단보도 선택기가 아님(HOLD)이다.
+- 증거: D-612. 행 형식은 `test/test_perception_gaps.py`가 고정한다. 원격 시험 PC 결과와 known_failures 비교는 이 커밋을 보낸 뒤의 착지 기록이다. 주행 코드와 로봇 overlay는 바꾸지 않았다.
+- gate 변화: SOURCE만. 장치 수용, 8kcn 확인, 각 행을 닫는 재생은 별도.
