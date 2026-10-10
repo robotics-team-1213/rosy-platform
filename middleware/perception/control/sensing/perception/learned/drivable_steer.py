@@ -357,7 +357,8 @@ class DrivableSteer:
                 error = confidence = None
                 info = dict(info, strategy="none", reason="realign", misaligned_deg=round(off, 1))
         strategy = info["strategy"]
-        if error is not None and self._last_out is not None and strategy != self._last_out[2]["strategy"]                 and self._last_out[0] is not None and self._pending != strategy:
+        urgent = any(k in strategy for k in ("pivot", "reorient", "off_line"))   # a closed way acts at once
+        if error is not None and not urgent and self._last_out is not None and strategy != self._last_out[2]["strategy"]                 and self._last_out[0] is not None and self._pending != strategy:
             self._pending = strategy
             error, confidence, info = self._last_out[0], self._last_out[1], dict(info, strategy=self._last_out[2]["strategy"],
                                                                                switch_pending=strategy)

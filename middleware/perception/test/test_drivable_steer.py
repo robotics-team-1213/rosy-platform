@@ -154,7 +154,7 @@ def test_map_bridges_a_cut_way_when_the_lane_goes_on_and_defers_reorient_in_a_na
 def test_no_turn_circle_creeps_along_the_way_then_holds():
     # architect 2026-10-10: off the ring-entry turn spots a pivot becomes a <= 0.07 m creep, then HOLD
     steer, way = DrivableSteer(), _lane(0.06, -0.06, x_max=0.13)   # closed, no opening in view
-    kw = dict(guide_deg=80.0, guide_pivot_ok=False)
+    kw = dict(guide_deg=80.0, guide_here_deg=0.0, guide_pivot_ok=False)
     debug = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), **kw)[2]
     assert debug["strategy"] == "drivable_creep", debug
     assert steer.update(way, 2, G, XO, HALF, (0.08, 0.0, 0.0), (0.08, 0.0, 0.0), **kw)[2]["strategy"] == "drivable_creep"
