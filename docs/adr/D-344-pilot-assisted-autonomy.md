@@ -195,7 +195,7 @@
 - ROS-SIM: 가제보 차선 월드에서 차선 따라가기 한 바퀴 + 진행 해제 시 정지 거리 녹화.
 - DEVICE: `NAVIGATE` 능력 구성 뒤 실물 녹화.
 
-- **§12 개정 (2026-10-10, 사용자 "제자리 도는 것도 생각해서 해야 해.").** 카메라 명령의 선속도가 `line_follow.ir_guard_min_linear`보다 작으면(제자리 회전·급회전, D-597 개정 2) 한쪽 IR 경계 비키기(`lane_edge_left|right`)를 하지 않고 카메라 회전을 그대로 둔다. 제자리 회전은 몸을 옆으로 옮기지 못하므로 비키기는 회전과 싸우기만 했다(9dfk가 고리 입구 과속방지턱 노란 칠 위에서 100 s 넘게 좌우로 떨었다, 녹화 20261009T235740Z_rosy_41). 가운데 이탈 정지(`lane_departure`)와 IR 끊김 정지는 그대로다. 기본값 0(끔)이고 Pinky Pro 로봇 패키지 설정은 0.01 m/s다.
+- **§12 개정 (2026-10-10, 사용자 "제자리 도는 것도 생각해서 해야 해.").** 카메라 명령의 선속도가 `line_follow.ir_guard_min_linear`보다 작으면(제자리 회전·급회전, D-597 개정 2) 한쪽 IR 경계 비키기(`lane_edge_left|right`)를 하지 않고 카메라 회전을 그대로 둔다. 제자리 회전은 몸을 옆으로 옮기지 못하므로 비키기는 회전과 싸우기만 했다(9dfk가 고리 입구 과속방지턱 노란 칠 위에서 100 s 넘게 좌우로 떨었다, 녹화 20261009T235740Z_rosy_41). 같은 날 2차: 가운데 센서가 선을 보는 이탈 정지(`lane_departure`)도 카메라 명령이 제자리 회전일 때는 하지 않는다. 제자리 회전에서 IR 줄(x 0.0295 m)은 반지름 0.03 m 호만 쓸어 선을 넘지 못하는데, 회전하다 선이 가운데 밑에 오면 정지·뒤로 물러남·재시도를 되풀이했다(9dfk 20261010T005447Z_rosy_41, 8kcn 20261010T005448Z_rosy_40: lane_departure 93·35틱). 앞으로 움직이는 명령의 이탈 정지와 IR 끊김 정지는 그대로다. 기본값 0(끔)이고 Pinky Pro 로봇 패키지 설정은 0.01 m/s다.
 
 **Related:** [D-2](D-2-cmd-vel.md), [D-12](D-12-mission-fleet.md), [D-143](D-143-ir-navigation-evidence.md),
 [D-323](D-323-rosy-pilot-teleop-app.md), [D-368](D-368-pilot-live-driver-video.md), [D-342](D-342-manual-limit-commissioning-ladder.md).

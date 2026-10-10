@@ -19,7 +19,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
@@ -46,6 +46,7 @@ from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denois
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.learned.drivable_steer import DrivableSteer
+from core_common.robot_body import PINKY_PRO
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -178,6 +179,7 @@ class LineObserverNode(Node):
         # D-597 amendment 2: with the drivable target, keep steers from the way itself.
         self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
                                 and self._paint_worker.target == 'drivable' else None)
+        self._wall_ahead = None
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -228,6 +230,8 @@ class LineObserverNode(Node):
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
+            if self._drivable_steer is not None:   # D-597 amendment 2: a wall beyond the model's view
+                self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
             self.create_subscription(
@@ -560,7 +564,9 @@ class LineObserverNode(Node):
                     error, confidence, steer = self._drivable_steer.update(
                         way, way_stamp, ground, self._lane_keeper._x_offset,
                         float(self.get_parameter('lane_half_width_m').value),
-                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp))
+                        self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp),
+                        wall_ahead_m=(self._wall_ahead[0] if self._wall_ahead is not None
+                                      and abs(image_stamp - self._wall_ahead[1]) < 0.5 else None))
                     observation = None if error is None else LaneObservation(error=error, confidence=confidence)
                     self._lane_keeper.last.update(
                         strategy=steer['strategy'], drivable_steer=steer,
@@ -725,6 +731,15 @@ class LineObserverNode(Node):
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
         self._odom_history.add(self._odom_stamp, *self._odom_pose)
+
+    def _on_scan(self, msg: LaserScan) -> None:
+        """Nearest return straight ahead in the body strip (URDF body, D-424), base_link x."""
+        view = PINKY_PRO.scan_view(dict(ranges=list(msg.ranges), angle_min=msg.angle_min,
+                                        angle_increment=msg.angle_increment, range_min=msg.range_min,
+                                        range_max=msg.range_max))
+        gap = PINKY_PRO.translation_gap(view.points, pad_m=0.0)
+        self._wall_ahead = (None if gap is None else PINKY_PRO.front_x_m + gap,
+                            float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9)
 
     def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9

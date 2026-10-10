@@ -553,7 +553,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
             if guard == "stale":
                 return self._stop_decision("HOLD", "lane_guard_stale")
-            if guard == "centre":
+            if guard == "centre" and not self._camera_turning_in_place(cap):
+                # D-344 §12 개정: a camera turn in place sweeps the IR row ~0.03 m; it does not cross.
                 return self._stop_decision("HOLD", "lane_departure")
         if self._lost_latched and not self._lost_resumed(current, guard):
             reason = ("camera_reselection_required"
@@ -657,6 +658,14 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         except Exception:  # noqa: BLE001 — 읽을 수 없으면 계단을 모른다: 멈춘다
             return True
         return not _finite(ceiling) or float(ceiling) < floor - 1e-9
+
+    def _camera_turning_in_place(self, cap: float) -> bool:
+        """D-344 §12 개정: the fresh camera command turns with linear under ir_guard_min_linear."""
+        observation = self._observation
+        if (self._config.ir_guard_min_linear <= 0.0 or observation is None or not observation.visible
+                or observation.error is None or observation.confidence < self._config.min_confidence):
+            return False
+        return self._steer(observation, None, cap)[0] < self._config.ir_guard_min_linear
 
     def _ir_guard(self, now: float) -> str:
         """stale | clear | left | right | centre — IR 이 본 경계선 위치."""
