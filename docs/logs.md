@@ -7661,3 +7661,9 @@ osy-d395-s1d\`.
 - 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
 - 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
 - gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs(learning): Pinky 맵·Fleet 강화학습 구조 초안
+
+- 변경: `docs/plans/2026-10-11-pinky-map-fleet-rl-structure-design.md`에 기존 경로를 재사용하는 환경·학습·평가 구조, CORE 후보/최종 명령 경계, 흰 선·벽 과제, 한 대 S자부터 두 대 Fleet까지의 단계와 후속 연결을 정리했다. 사용자 요청으로 시뮬레이션·RL 실행은 중지하고 구조만 준비한다.
+- 증거: D-427·D-606, 기존 PolicyArtifact validator, Isaac helper·progress, Pinky registry의 오프라인 평가 범위를 대조했다. 새 API·owner 실행 연결·trainer 구현은 없다. lint·문서 계약 시험 결과는 이 후보 커밋의 별도 검증 기록이다.
+- gate 변화: Draft 설계만. RL 환경·정책 활성화·ROS-SIM·DEVICE/FIELD 수용은 올리지 않는다.
