@@ -31,7 +31,7 @@ from typing import Iterable, Mapping, Optional
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from fleet.localization.map_pose import MapPoseConfig
 from fleet.traffic import blocks, handover, signal_phase
-from fleet.traffic.signal_service import SignalService, PRESENCE_S
+from fleet.traffic.signal_service import SignalService, PRESENCE_S as PRESENCE_S
 from fleet.routing.execute import arc_id
 from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
 
