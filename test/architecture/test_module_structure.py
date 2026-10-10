@@ -185,7 +185,8 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        1781,
+        2866,
+        "split: independently re-judged at 2866 on 2026-10-10 by snapshot_review: AI-first episodes, routes, closed loop and deadlock checks stay in the trouble-resolution owner; CORE still re-checks all answers. Preserve the next-growth reports.py extraction obligation in docs/plans/2026-10-10-fleet-stuck-subpackage.md. Re-judge after +150. Previous verdict: "
         "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
         "re-judged 2026-10-10) + D-608 incident reports "
         "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
@@ -1011,6 +1012,13 @@ SIZE_VERDICTS = {
         "or publisher; CORE CommandManager stays the final cmd_vel publisher. The +150 allowance is measured "
         "from 1292.",
     ),
+    "core/services/core_features/line_follow/recovery/stuck/realign": (
+        289,
+        "accept: independently judged at 289 on 2026-10-10 by snapshot_review: focused D-607 REALIGN "
+        "subpackage under the same manager lock, no new publisher; reuses cue odom pivot and stuck "
+        "clearance. Dated addendum: docs/plans/2026-10-07-line-follow-recovery-subpackage.md. "
+        "Re-judge after +150.",
+    ),
     "core/services/core_features/line_follow/recovery/stuck": (
         1_031,
         "accept: registered at 1031 on 2026-10-10 when D-407 stuck code left recovery "
@@ -1045,7 +1053,8 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core/services/core_features/localization": (
-        922,
+        1080,
+        "accept: independently re-judged at 1080 on 2026-10-10 by snapshot_review: D-603 rotate_to joins the existing localization mission lifecycle; clearance and final commands remain with their CORE owners. Re-judge after +150. Previous verdict: "
         "accept: independently re-judged at 922 on 2026-10-09 (read-only safety reviewer); "
         "docs/plans/2026-10-09-core-localization-size-unit.md registers assist, halt, mission, "
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
@@ -1089,7 +1098,8 @@ SIZE_VERDICTS = {
         "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
     "perception/control/sensing/perception/learned": (
-        1_982,
+        2272,
+        "accept: independently re-judged at 2272 on 2026-10-10 by snapshot_review: drivable paint and floor gating remain in the model runner/manifest owner, including the gated fallback; steering remains the separate drivable unit and CORE retains commands. Re-judge after +150. Previous verdict: "
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "

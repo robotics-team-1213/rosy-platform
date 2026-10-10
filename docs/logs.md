@@ -7632,7 +7632,7 @@ osy-d395-s1d\`.
 - 증거: 모델 PC 읽기 점검에서 CUDA와 Jazzy 확인, 물리 RAM 15 GiB와 Isaac venv pip check 실패 확인. docs/validation/model-pc-isaac-rl-2026-10-10/result.md.
 - gate 변화: 없음. RL 실행·ROS-SIM은 HOLD; 실물·현장 별도.
 
-## 2026-10-10 · feat/core-rotate-to-heading · feat(core,fleet): D-603 CORE rotate_to와 trip 출발 자동 정렬
+## 2026-10-10 — feat/core-rotate-to-heading — feat(core,fleet): D-603 CORE rotate_to와 trip 출발 자동 정렬
 
 - 변경: CORE `POST/GET/DELETE /api/v1/motion/rotate_to`(위치 미션 종류 `rotate_to`, odom 닫힌 고리, ≤ 180°·30°/s·15 s, RobotBody 여유 거절 `ROTATE_CLEARANCE`, lease 주인 또는 이름 있는 operator), 회전 법칙 `localization/rotate_to.py` 안전 태그. Fleet `fleet.trip.auto_align`(기본 false): `TRIP_START_HEADING_MISMATCH`면 회전 → 새 sighting → 다시 검사(최대 2회). API v1.194.
 - 증거: 모델 PC 원격 pytest(CORE services·gateway, Fleet trip·transport). 독립 리뷰는 ADR Review 절.

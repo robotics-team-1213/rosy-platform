@@ -22,31 +22,4 @@ D-571 reserved in another active branch (refs/adr/D-571)
 D-572 reserved in another active branch (refs/adr/D-572)
 D-571 ADR reserved on branch feat/rosy-cam-map-plane (971523db2), not yet on main; remove when it lands
 D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
-D-583 reserved in another active branch (refs/adr/D-583 by another session); remove when it lands
-D-583 reserved in another active branch (refs/adr/D-583)
-D-585 reserved on adr-model-lap for model-driven lane lap acceptance; remove when it lands
-D-586 reserved on adr-model-lap for capture_group annotated revision; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
-D-602 reserved in another active branch (refs/adr/D-602); remove when it lands
-D-603 reserved in another active branch (refs/adr/D-603); remove when it lands
-D-605 reserved in another active branch (refs/adr/D-605); remove when it lands
-D-602 reserved by another session (refs/adr/D-602), not yet on main; remove when it lands
-D-603 reserved by another session (refs/adr/D-603), not yet on main; remove when it lands
-D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
-D-602 reserved by another session (refs/adr/D-602), not yet on main; remove when it lands
-D-603 reserved by another session (refs/adr/D-603), not yet on main; remove when it lands
-D-604 reserved by another session (refs/adr/D-604), not yet on main; remove when it lands
-D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
-D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands
-D-607 ADR exists only on shared local main, not on origin/main; remove when its branch is published
-D-610 reserved for AI-first problem resolution in another active branch (refs/adr/D-610); remove when it lands
-D-611 reserved for learned paint evidence mode in another active branch (refs/adr/D-611); remove when it lands
-D-612 reserved for perception blind-spot registry in another active branch (refs/adr/D-612); remove when it lands
-D-613 reserved for Fleet finite one-lap trip in another active branch (refs/adr/D-613); remove when it lands
-D-610 reserved by another session (refs/adr/D-610, AI-first problem resolution), not yet on main; remove when it lands
-D-611 reserved by another session (refs/adr/D-611, evidence mode hold), not yet on main; remove when it lands
-D-608 reserved by another session (refs/adr/D-608), not yet on main; remove when it lands
-D-610 reserved by another session (refs/adr/D-610), not yet on main; remove when it lands
-D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands
-D-608 reserved by another session (refs/adr/D-608), not yet on main; remove when it lands
-D-609 reserved by another session (refs/adr/D-609), not yet on main; remove when it lands
