@@ -324,7 +324,7 @@ def _to_current(point, source_pose, current_pose):
 
 class DrivableSteer:
     """Keep-mode steering from the newest drivable way. Memory: the pivot and turn-side latches, the
-    last opening seen, the smoothed lateral offset, and the boundary memory (way edges seen, in
+    last opening seen, the smoothed commanded curvature, and the boundary memory (way edges seen, in
     odometry) that keeps the body off lines the camera no longer sees."""
 
     def __init__(self):
