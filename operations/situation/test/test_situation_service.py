@@ -63,6 +63,35 @@ def test_a_stuck_event_brings_the_next_read_forward(tmp_path):
     assert _service(tmp_path, fleet).step() == 0.0
 
 
+def test_open_stuck_reads_context_once_and_posts_shadow_draft(tmp_path):
+    class ContextFleet(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/line-stuck":
+                self.calls.append((path, body))
+                return {"pending": [{"robot_id": "pinky", "stuck_id": "one", "cause": "lane_lost"}]}
+            if path == "/api/fleet/state":
+                self.calls.append((path, body))
+                return {"robots": [{"robot_id": "pinky", "state": {"line_follow": {"mode": "CAMERA_LINE"}}}]}
+            if path == "/api/fleet/site-map/active":
+                self.calls.append((path, body))
+                return {"version": 3, "map": {"map_id": "site", "places": []}}
+            if path == "/api/fleet/sightings":
+                self.calls.append((path, body))
+                return {"sightings": [{"robot_id": "pinky", "source_id": "rosy-cam", "seq": 9,
+                                       "captured_at": 99.9, "age_ms": 100, "stale": False}]}
+            return super().call(path, body)
+
+    fleet = ContextFleet()
+    situation = _service(tmp_path, fleet)
+    situation.step()
+    posts = [body for path, body in fleet.calls if path == "/api/fleet/ai/facts"]
+    assert posts[0]["facts"][0]["kind"] == "incident_context"
+    assert posts[0]["facts"][0]["value"]["support"][1]["value"]["source_id"] == "rosy-cam"
+    situation.step()
+    assert fleet.paths().count("/api/fleet/site-map/active") == 1
+    assert fleet.paths().count("/api/fleet/sightings") == 1
+
+
 def test_owner_busy_or_no_owner_file_sends_the_heartbeat_only(tmp_path):
     fleet = FakeFleet()
     situation = _service(tmp_path, fleet, mode="owner_busy")

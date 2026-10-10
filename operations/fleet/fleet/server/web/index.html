@@ -143,6 +143,20 @@
           </div>
         </div>
       </section>
+      <section class="panel incident-panel" aria-labelledby="incident-heading">
+        <div class="robot-head">
+          <h2 id="incident-heading">정지·교착 사건 보고서</h2>
+          <span class="spacer"></span>
+          <ui-button kind="quiet" id="incident-refresh" type="button">새로고침</ui-button>
+          <ui-button kind="quiet" id="incident-export" type="button" disabled>JSON 내보내기</ui-button>
+        </div>
+        <p class="hint">CORE 정지, Fleet 위치·조치, Rosy Cam 관측, AI 참고 사실을 출처별로 확인합니다. 대기 순환은 위 개입 목록에서 확인합니다.</p>
+        <p id="incident-status" class="hint" role="status">관제 접속 후 사건을 불러옵니다.</p>
+        <ul id="incident-list" class="issue-list"></ul>
+        <h3>AI 상황 사실</h3>
+        <p class="hint">그림자 사실은 조치 명령이 아닙니다. Fleet 대기 순환과 다른 판단은 운영자가 확인합니다.</p>
+        <ul id="incident-traffic-list" class="issue-list"></ul>
+      </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
           <h2 id="roster-heading">등록 로봇</h2>
