@@ -126,8 +126,8 @@ def test_at_a_crosswalk_a_closed_way_goes_straight_not_around():
 def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     steer = DrivableSteer()
     closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
-    assert steer.update(closed, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))[2]["strategy"] == "drivable_pivot_left"
-    after = steer.update(closed, 2, G, XO, HALF, (0.0, 0.0, 1.9), (0.0, 0.0, 1.9))[2]
+    assert steer.update(closed, 1, G, XO, HALF, current_pose=(0.0, 0.0, 0.0))[2]["strategy"] == "drivable_pivot_left"
+    after = steer.update(closed, 2, G, XO, HALF, current_pose=(0.0, 0.0, 1.9))[2]
     assert after.get("pivot_limit") and not after["strategy"].startswith("drivable_pivot")
 
 
