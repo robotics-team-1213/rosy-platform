@@ -105,7 +105,8 @@ def test_live_case_context_uses_cached_state_age_and_open_time_clearance(monkeyp
     first = AiFirst(())
     first.wall = lambda: WALL
     line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1",
-                                            "front_clearance_m": 0.2, "cause": "lane_lost"}])
+                                            "front_clearance_m": 0.2, "cause": "lane_lost",
+                                            "inquiry": {"version": "situation-inquiry-v1", "problem_id": "s1"}}])
     loop = SimpleNamespace(problems=None, _rows={"a": {"_state_mono": 8.0,
                            "state": {"mode": "EMERGENCY", "line_follow": {"mode": "OFF"}}}})
     case = routes(first, line, {"a": Front()}, loop).get("/api/fleet/ai/case/s1").json()
@@ -114,6 +115,7 @@ def test_live_case_context_uses_cached_state_age_and_open_time_clearance(monkeyp
     assert case["context"]["cause"] == "lane_lost"
     assert case["context"]["clearance_at_open_m"]["front_clearance_m"] == 0.2
     assert "clearance_m" not in case["context"]
+    assert case["context"]["robot_inquiry"]["problem_id"] == "s1"
 
 
 def test_unknown_front_capture_stamp_is_not_reconstructed_as_fresh():

@@ -28,7 +28,7 @@ DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",
                 "local_enabled", "ask_remaining_s", "last_answer", "decisions")
 _OPENED_KEYS = ("front_clearance_m", "rear_clearance_m", "rear_state", "turn_clearance_m",
-                "rear_blind_m", "preview_seq")
+                "rear_blind_m", "preview_seq", "inquiry")
 
 _LOG = logging.getLogger(__name__)
 
