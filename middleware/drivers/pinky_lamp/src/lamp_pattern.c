@@ -164,7 +164,8 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
     }
     if (strcmp(pattern, "identify_blue") == 0 || strcmp(pattern, "identify_amber") == 0) {
         if (elapsed_ms >= 3000) return 1;
-        int on = elapsed_ms < 1000 || elapsed_ms >= 2000;
+        /* One dark baseline, then two seconds continuously lit; the owner restores the state. */
+        int on = elapsed_ms >= 1000;
         *color = on ? (strcmp(pattern, "identify_blue") == 0 ? rgb(0, 0, DIM) : rgb(DIM, DIM / 3, 0)) : 0;
         return 0;
     }

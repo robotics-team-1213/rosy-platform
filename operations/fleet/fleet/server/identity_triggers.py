@@ -30,7 +30,7 @@ ODOM_RESET_AT_M = 0.05
 ODOM_RESET_FROM_M = 0.3
 #: D-596 7: auto_min_interval_s times this, by automatic requests since the marker was last seen
 #: (30 s, 2 min, then 5 min while it stays hidden).
-BACKOFF = (1, 4, 10)
+BACKOFF = (1,)
 #: Blobs scored below this are not a robot (site 2026-10-10: 0.054 on a lane line next to the
 #: robot's last place made rosy_41 look found; robots and D-547 guesses score 0.35-1.0).
 MIN_BLOB_SCORE = 0.1
@@ -84,6 +84,8 @@ class AutoTriggers:
         for robot_id in sorted(watched):
             row = rows.get(robot_id) or {}
             self._remember(robot_id, row, states.get(robot_id), now)
+            if row and row.get("status") != "MARKER":
+                self._lost_since.setdefault(robot_id, now)
             state = states.get(robot_id)
             if (robot_id in skip or not isinstance(state, Mapping)
                     or (state.get("safety") or {}).get("estop") is not False or caution(state)):
@@ -100,6 +102,8 @@ class AutoTriggers:
                 found.append((robot_id, "split"))
             elif blobs and now - self._reset_at.get(robot_id, -math.inf) <= cfg.auto_min_interval_s:
                 found.append((robot_id, "odom_reset"))
+            elif blobs and lost is not None and now - lost >= cfg.auto_min_interval_s:
+                found.append((robot_id, "periodic"))
         return found
 
     def asked(self, robot_id: str, *, auto: bool = False) -> None:
