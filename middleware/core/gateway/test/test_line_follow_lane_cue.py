@@ -429,3 +429,48 @@ def test_a_camera_junction_does_not_stop_a_spot_pivot_but_an_armed_instruction_d
     rig.yaw -= 0.05
     rig.cue("WRONG_WAY", seq + 1, turn_deg=-170.0)
     assert rig.step(camera=False).angular == 0 and rig.m._cue_latch == "fleet_turn_interrupted"
+
+
+def test_a_running_spot_pivot_is_still_body_stopped_every_tick():
+    rig = Rig(**PINKY)
+    points = []
+
+    def step(**feed):
+        rig.t += 0.1
+        rig.feed(**feed)
+        rig.m.observe_body_points(points, range_min=0.05, received_at=rig.t)
+        rig.m.observe_scan_points(points, received_at=rig.t)
+        return rig.m.tick(rig.t + 0.01)
+
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    assert step().angular != 0                                      # started, nothing near
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", 3, turn_deg=-170.0)
+    assert step(camera=False).angular != 0                          # runs without the camera
+    points[:] = [(0.0, 0.075 + 0.002 * k) for k in range(3)]        # a foot beside the body
+    rig.yaw -= 0.05
+    rig.cue("WRONG_WAY", 4, turn_deg=-170.0)
+    d = step(camera=False)
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "obstacle_ahead"
+
+
+def test_get_line_follow_shows_the_lane_cue(core_client):
+    client, svc = core_client()
+    lf = svc.line_follow
+    lf._config = replace(lf.config, fleet_lane_cue_enabled=True, obstacle_mode="path")
+    clock = {"t": 10.0}
+    lf.bind_clock(lambda: clock["t"])
+    lf._wall = lambda: WALL + clock["t"]
+    stamp = round(clock["t"] * 1e9)
+    lf.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                           received_at=clock["t"])
+    site = _token(svc, "site", "operator", "pair-physical", "site:rosy-site")
+    body = {"cue_id": "c1", "fleet_epoch": "e", "seq": 1, "ttl_s": 1.0, "pose_stamp": WALL + clock["t"],
+            "state": "ON_LINE", "side": "left", "offset_m": -0.06}
+    assert client.post("/api/v1/line-follow/lane-cue", json=body, headers=site).json() == {
+        "accepted": True, "reason": None}
+    shown = client.get("/api/v1/line-follow", headers={"Authorization": "Bearer rosy-dev-viewer"}).json()
+    assert shown["lane_cue"]["state"] == "ON_LINE" and shown["lane_cue"]["side"] == "left"
