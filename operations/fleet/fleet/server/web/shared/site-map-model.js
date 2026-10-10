@@ -630,6 +630,9 @@ export function trafficCardLine(traffic, robotId) {
     parts.push(convoy.follows ? `대열 · ${convoy.follows} 뒤${typeof convoy.gap_m === "number" ? ` ${convoy.gap_m.toFixed(1)} m` : ""}`
       : `대열 · ${convoy.leader} 위치 모름 · 고정 블록`);
   }
+  // D-517 9: the leader's card names who laps behind it (the follower's card names the leader above).
+  const behind = (traffic.robots || []).filter((row) => row.convoy?.leader === robotId).map((row) => row.robot_id);
+  if (behind.length) parts.push(`대열 리더 · ${behind.join(", ")} 따라옴`);
   const held = (traffic.units || []).some((unit) => unit.state === "UNKNOWN" && (unit.holders || []).includes(robotId));
   const unit = waitingUnit(traffic, robotId);
   const signal = signalWait(traffic, robotId);

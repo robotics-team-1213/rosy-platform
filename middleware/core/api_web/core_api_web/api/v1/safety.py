@@ -33,7 +33,7 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 @safety_router.post("/release")
 def safety_release(auth: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
     ok_mode, reason = svc.modes.release_emergency()
-    # Desync recovery: a latch left in IDLE (before v1.195, POST /mode IDLE left
+    # Desync recovery: a latch left in IDLE (before v1.196, POST /mode IDLE left
     # EMERGENCY with the latch set) is still the administrator's to release.
     if not ok_mode:
         if not (svc.safety.estop and svc.modes.mode is Mode.IDLE):

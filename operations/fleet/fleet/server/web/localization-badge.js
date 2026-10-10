@@ -76,3 +76,20 @@ export function sitePoseText(guideRow) {
     .filter(Boolean).join("·");
   return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}`;
 }
+
+/** The card's one position chip (2026-10-10: "위치 상태 미보고" read as a fault). Fleet's site map pose first, CORE's
+ * localization only when CORE reports one, else a neutral "지도 위치 없음"; needs_human stays critical. */
+export function positionTag(loc, guideRow) {
+  if (loc?.needs_human) return localizationTag(loc);
+  const pose = guideRow?.pose;
+  if (pose && Number.isFinite(pose.x) && Number.isFinite(pose.y)) {
+    const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
+      .filter(Boolean).join(" · ");
+    return { text: words ? `지도 위치 ${words}` : "지도 위치", cls: pose.state === "LOCALIZED" ? "" : "warn",
+      title: `Fleet map pose: ${pose.state} · ${pose.source}` };
+  }
+  if (loc && !loc.legacy) return localizationTag(loc);
+  if (!loc && !guideRow) return null;  // offline or no evidence at all: the card says offline already
+  return { text: "지도 위치 없음", cls: "",
+    title: loc?.legacy ? "Fleet map pose: none · CORE localization: null" : "Fleet map pose: none" };
+}
