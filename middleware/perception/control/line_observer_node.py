@@ -7,7 +7,6 @@ the sole final ``cmd_vel`` publisher (D-143).
 
 import json
 import math
-import os
 
 import cv2
 import numpy as np
@@ -50,10 +49,7 @@ from core_common.robot_body import PINKY_PRO
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
-from .sensing.perception.paint_localizer import PaintMap
-from .sensing.perception.route_camera import RouteCameraFollower
-from .sensing.perception.route_hybrid import RouteHybridFollower
-from .sensing.perception.route_map import RouteMapFollower
+from .route_followers import build_route_follower
 
 #: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
@@ -268,20 +264,8 @@ class LineObserverNode(Node):
                 'no follower built, CAMERA_LINE will publish no observation')
             return None
         try:
-            with open(graph_path, encoding='utf-8') as handle:
-                graph = yaml.safe_load(handle)
-            x_offset = float(self.get_parameter('camera_x_offset_m').value)
-            if mode == 'route_a':
-                return RouteCameraFollower(
-                    graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset)
-            paint_map = PaintMap.from_bundle(os.path.dirname(graph_path))
-            if mode == 'route_ab':
-                return RouteHybridFollower(
-                    graph, route, start_pose=tuple(route_start),
-                    camera_x_offset_m=x_offset, paint_map=paint_map)
-            return RouteMapFollower(
-                graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset,
-                paint_map=paint_map)
+            return build_route_follower(mode, graph_path, route, route_start,
+                                        float(self.get_parameter('camera_x_offset_m').value))
         except (OSError, yaml.YAMLError, ValueError) as exc:
             self.get_logger().warning(
                 f'{mode} route modes need lane_graph_path, route and route_start '
