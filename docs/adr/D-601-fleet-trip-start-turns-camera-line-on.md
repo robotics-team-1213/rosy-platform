@@ -64,6 +64,6 @@
 
 ### Consequences
 
-- API Reference: `/trip`(B·D), `/trips/{plan_id}/start`(A·D) 행과 변경 이력 한 줄. 로봇 API는 바뀌지 않는다.
+- API Reference v1.191: `/trip`(B·D), `/trips/{plan_id}/start`(A·D) 행과 변경 이력 한 줄. 로봇 API는 바뀌지 않는다.
 - 사이트 설정 `fleet.trip.start_heading_tol_deg` 하나가 생긴다.
 - trip_runner의 시작 검사와 진행 판정은 `server/trip_admission.py`·`server/trip_progress.py`로 옮겼다(크기 판정 seam, 동작 변화 없음).
