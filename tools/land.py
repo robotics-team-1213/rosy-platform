@@ -32,6 +32,8 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
+import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -434,6 +436,7 @@ def land(args) -> int:
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
+        reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
         if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
@@ -460,6 +463,7 @@ def land(args) -> int:
             # Only module-scoped suites may skip; root test/ guards read the records themselves.
             invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
                                              for inv in invocations) if kept]
+            reusable = False  # module suites ran on an earlier candidate, not this one
             summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
@@ -478,6 +482,10 @@ def land(args) -> int:
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
             landed = out(main_co, "rev-parse", "HEAD")
+            if reusable and landed == candidate:
+                record = land_record.write(wt, candidate, main_sha, invocations,
+                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))])
+                summary.append(f"land record for pre-push: {record}")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
                              f"rounds: {round_no}", f"commits merged onto main: {count}",

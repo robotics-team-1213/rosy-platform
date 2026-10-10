@@ -78,6 +78,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
         ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
+        ir_guard_min_linear=float(raw.get("ir_guard_min_linear", defaults.ir_guard_min_linear)),
         ir_row_x_m=_optional_float(raw.get("ir_row_x_m")),
         crosswalk_zone_max_m=float(raw.get("crosswalk_zone_max_m", defaults.crosswalk_zone_max_m)),
         crosswalk_odom_error_fraction=float(raw.get(

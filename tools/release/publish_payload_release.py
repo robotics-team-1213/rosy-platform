@@ -143,8 +143,16 @@ def read_tarball_identity(tarball: Path) -> tuple[str, str]:
     with tarfile.open(tarball, "r:gz") as tar:
         for member in tar:
             name = str(PurePosixPath(member.name)).removeprefix("./")
-            if name in ("manifest.json", "source-revision.txt") and member.isreg():
+            if name in ("manifest.json", "source-revision.txt", "source-ref.txt") and member.isreg():
                 found[name] = tar.extractfile(member).read()
+            if name == ".rosy-delta-base":
+                # D-553 addendum 3: deltas are manual pushes only; a robot that
+                # auto-updates may not hold the delta's base release.
+                raise PublishError(f"{tarball.name} is a delta payload; publish only full releases")
+    if "source-ref.txt" in found and found["source-ref.txt"].decode("ascii", "replace").strip() != "main":
+        # D-553 addendum 3: branch builds are bench pushes, never the D-412 channel.
+        raise PublishError(f"{tarball.name} was built from "
+                           f"{found['source-ref.txt'].decode('ascii', 'replace').strip()!r}, not main")
     for name in ("manifest.json", "source-revision.txt"):
         if name not in found:
             raise PublishError(f"{tarball.name} has no top-level {name}")

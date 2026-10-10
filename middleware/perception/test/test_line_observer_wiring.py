@@ -102,7 +102,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
                                   ahead_m=[0.1, 0.4])))
     node = SimpleNamespace(
         get_parameter=lambda key: SimpleNamespace(value=params[key]),
-        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None,
+        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None, _drivable_steer=None,
         _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
         _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
         _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,

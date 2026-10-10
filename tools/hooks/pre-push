@@ -117,6 +117,21 @@ FAST_SUITES=(
 # only the guards and the suites mapped from the changed files (owning module,
 # direct reverse dependents, referencing tests) run: the full suite runs on
 # GitHub Actions runners (ci.yml), never here.
+# D-553 addendum 3 (user decision 2026-10-10): when every commit past origin/main was
+# landed by tools/land.py with its affected tier green (land records in
+# <git-common-dir>/rosy-land), reuse those results and run only the fast suites no
+# record ran. A missing record (hand-landed commit, --tests none) runs the gate below.
+if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream origin/main "${FAST_SUITES[@]}")"; then
+  if [ -z "$OWED" ]; then
+    echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; no suite owed"
+  else
+    echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; fast suites not in them:"
+    mapfile -t OWED_SUITES <<< "$OWED"
+    "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" -- "${OWED_SUITES[@]}"
+  fi
+  echo "[pre-push] fast gate green (land records reused)"
+  exit 0
+fi
 AFFECTED_BASE="$(git merge-base "$PUSH_SHA" origin/main 2>/dev/null || echo main)"
 # --skip: the fast suites (most of the guard set) run first; do not run them twice.
 AFFECTED_SKIP=()
