@@ -844,3 +844,9 @@
 - 변경: FastAPI 설명과 API 계약 변경 이력을 v1.202에 맞춘다.
 - 증거: 원격 계약 회귀에서 버전 불일치 재현 후 수정. 재검증 대기.
 - gate 변화: 없음. 실물 적용 증거가 아니다.
+
+## 2026-10-10 · d7f032f513 · test: D-620 API contracts verified
+
+- 변경: API v1.202 설명·변경 이력·설정 불리언 시험을 정렬했다.
+- 증거: AI PC 원격 foundation·서버 app·프로토콜·하네스·네트워크 계약 1095 passed, known_failures 0 NEW.
+- gate 변화: focused SOURCE/원격 계약만 확인. ARM64 빌드·설치·FIELD 미확인.

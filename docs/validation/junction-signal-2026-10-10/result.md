@@ -20,6 +20,10 @@
   실제 FleetAgent 송수신, paired hub 신원, 신호표 자유/점유,
   지도 신선도 및 기존 교차로/Fleet 링크/횡단보도 회귀.
 - 기본 설정은 꺼짐이다. 자체 신호 상태의 `entered`나 API 성공으로 실물 이동을 주장하지 않는다.
+- API 버전/변경 이력/설정 불리언/전체 foundation/서버 app/하네스/네트워크 계약은
+  `d7f032f513`에서 원격 **1095 passed**, known_failures **0 NEW**.
+  로그 `X:/DevTemp/junction-signal-contracts2/run-1.txt`.
+  하네스 lint는 오류 0개, 기존 모듈 검증 시점 경고 25개이며 CI/DEVICE 판정을 대신하지 않는다.
 
 ## ARTIFACT / DEVICE / FIELD
 
