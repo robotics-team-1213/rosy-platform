@@ -7620,3 +7620,9 @@ osy-d395-s1d\`.
 - 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
 - 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
 - gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
+
+- 변경: 가드가 이미 읽던 PC health(메모리 여유·스왑·부하·코어·가동·멈춘 유닛)를 status.json resources로 남긴다. GET /api/fleet/hosts가 읽기 전용 guard·drift를 붙인다(없거나 객체가 아니면 null). 설치·보정 작업 호스트 서비스가 그 수치를 보여주고, D-524의 닫힌 동작(10분 재부팅·취소·허용 유닛 재시작·정지)만 확인 뒤에 보낸다. 프로세스 종료와 로봇 재부팅은 없다. API v1.197. D-524·D-530·D-540은 Proposed인 채로 화면 문장만 고쳤다. 구현 9a9faf0e5, 시험 격리 23d5baa37.
+- 증거: AI PC 원격 pytest 143 passed, 2 warnings. known_failures 0 new, 0 known (X:/DevTemp/host-health/run-1.txt, HEAD 23d5baa37). 첫 실행은 AI PC에 있던 rosy-host-state status.json을 빈 값으로 기대해 1 failed였고, 없는 경로를 보게 고친 뒤 통과했다.
+- gate 변화: SOURCE만. 현장 가드 파일·Fleet 컨테이너 마운트·실제 재부팅은 하지 않았다. 화면은 현장 관제에 아직 없다.
