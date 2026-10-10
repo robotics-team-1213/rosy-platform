@@ -81,6 +81,8 @@ function bindControls(view) {
       ids = now.join("\n");
       box.replaceChildren(...now.map((id) => {
         const label = document.createElement("label"), input = document.createElement("input");
+        label.className = "ui-check";
+        input.className = "ui-field";
         input.type = "checkbox";
         input.checked = !view.trailHidden.has(id);
         input.addEventListener("change", () => {
