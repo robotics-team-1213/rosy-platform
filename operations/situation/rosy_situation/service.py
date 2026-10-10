@@ -11,7 +11,7 @@ robot address or token and no Fleet credential beyond ``ai_observer``.
 
 Its input (state JSON, never frames) and output facts are JSONL under ``ROSY_SITUATION_STATE`` (default
 ``~/.local/state/rosy-situation``), one file per day and kind, kept 7 days; the event cursor survives a restart.
-Analyzers are stubs in phase (c); the deadlock/livelock analyzers are phase (d), vision phase (e).
+Analyzers: ``analyzers.Analyzer`` (phase (d), the field stuck causes); vision is phase (e).
 
 Run (stdlib only; systemd unit ``deploy/ai_pc/rosy-situation.service``, installed only with owner consent)::
 
@@ -33,8 +33,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-__version__ = "0.1.0"
-PERIOD_S, HEARTBEAT_S, TIMEOUT_S = 1.0, 2.0, 2.0
+__version__ = "0.2.0"
+PERIOD_S, HEARTBEAT_S = 1.0, 2.0
+TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")
@@ -42,12 +43,12 @@ _LOG = logging.getLogger("rosy_situation")
 
 
 def analyze(snapshot: dict) -> list[dict]:
-    """Deterministic analyzers (D-577 6). Phase (c) stub: no facts. Phase (d) adds wait-cycle, livelock, stall."""
+    """No analyzers (tests of the transport alone). The service runs ``analyzers.Analyzer``."""
     return []
 
 
 class Fleet:
-    """Bearer HTTP to Fleet with a 2 s timeout per call; errors surface as OSError / HTTPError / ValueError."""
+    """Bearer HTTP to Fleet with a 4 s timeout per call; errors surface as OSError / HTTPError / ValueError."""
 
     def __init__(self, url: str, token: str, ca: Optional[str] = None) -> None:
         self._url, self._token = url.rstrip("/"), token
@@ -168,6 +169,14 @@ class Situation:
             self._log("facts", fact)
         self.queue.extend(facts)
         self._flush()
+        for proposal in getattr(self.analyzers, "proposals", ()):   # D-577 개정: Fleet validates, CORE re-checks
+            self._log("proposals", proposal)
+            try:
+                self.fleet.call("/api/fleet/ai/proposals", proposal)
+            except urllib.error.HTTPError as exc:
+                _LOG.warning("proposal refused %s: %s", exc.code, exc.read()[:200])
+            except (OSError, ValueError) as exc:
+                _LOG.warning("proposal not sent: %s", exc)
         return 0.0 if stuck_event else max(0.0, PERIOD_S - (self.clock() - started))
 
 
@@ -177,7 +186,10 @@ def main() -> None:
     ca = os.environ.get("FLEET_CA")
     state = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_STATE", "~/.local/state/rosy-situation")))
     owner = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_OWNER_MODE", "~/.config/rosy/situation-owner-mode")))
-    service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner)
+    from rosy_situation.analyzers import Analyzer
+
+    service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner,
+                        analyzers=Analyzer())
     while True:
         time.sleep(service.step())
 

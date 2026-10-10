@@ -211,7 +211,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_672,
+        51_848,
+        "split: re-judged at 51848 on 2026-10-10 after D-577 AI PC proposals/acting facts over 51672 "
+        "(+176, self-judged): proposal envelope check beside the lane-lost rules in server/stuck_lane_lost.py, "
+        "proposal store/route/audit in server/ai_facts.py, loop wiring +20; no new owner, every answer still "
+        "goes through CORE's D-407 re-check. The fleet/fleet/stuck subpackage move is still owed, see "
+        "docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 51672 on 2026-10-10 (independent re-judge 2026-10-10, critic: agree on the number - D-600/D-596/D-594/D-593/D-581 each sit in existing owners or one new module, no motion path; corrections: fleet/swarm/anchor.py is not pure (async anchor refresh and relay factory; it changes the TRAIL reference CORE follows, independently reviewed), and D-596 automatic triggers reuse the D-472 lamp identify call (no motion, E-stop excluded, backoff). Next tracking/identity/sightings/path_history growth first moves tracking*.py, identity*.py, sightings*.py, sighting_store.py and path_history.py into a fleet/fleet/observe SIZE_UNITS subpackage by a dated docs/plans plan) after merging D-600 over main 51521 (+151). The robot "
         "regions for Vision's background learn are TrackingService.occupied in the existing D-457 owner "
         "(server/tracking.py, map pose wired at the app root), the unknown-floor hatch in map-view.js and "

@@ -271,8 +271,10 @@ def test_route_modes_need_a_graph_and_a_route():
     assert params["lane_graph_path"] == ""
     assert params["route"] == []
     assert params["route_start"] == []
-    assert "RouteCameraFollower" in source and "RouteMapFollower" in source
-    assert "RouteHybridFollower" in source
+    builder = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
+    assert "build_route_follower(mode, graph_path, route, route_start," in source
+    assert "RouteCameraFollower" in builder and "RouteMapFollower" in builder
+    assert "RouteHybridFollower" in builder
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
     assert "route modes need lane_graph_path, route and route_start" in source
 
@@ -282,9 +284,9 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     lane_graph_path directory (the map_v2_fleet bundle), and the overlay
     maps route_ab to the route follower."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
-    build = source.split("def _build_route_follower", 1)[1].split("\n    def _ground", 1)[0]
+    build = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
     assert "PaintMap.from_bundle(os.path.dirname(graph_path))" in build
-    assert "RouteHybridFollower(" in build
+    assert "RouteHybridFollower if mode == 'route_ab'" in build
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
     assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
     assert "'route_ab': self._route_follower," in source
@@ -311,7 +313,7 @@ def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time
                            get_logger=lambda: SimpleNamespace(warning=warnings.append))
     namespace = {'simulation_ground_allowed': lambda **kw: (
         kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time']),
-        'yaml': yaml, 'open': open, 'RouteCameraFollower': lambda *a, **kw: built}
+        'yaml': yaml, 'build_route_follower': lambda *a, **kw: built}
     exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-admission>', 'exec'), namespace)
     follower = namespace['_build_route_follower'](node, 'route_a')
     assert (follower is built) is admitted

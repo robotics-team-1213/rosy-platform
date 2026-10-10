@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
 - 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
 - 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
 - 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
 - 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.184로 다시 매김
-- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.182로 다시 매김

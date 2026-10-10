@@ -54,6 +54,11 @@ services:
       # D-488: first active site map when the store has none (later edits live in the store).
       - --site-map-import
       - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+      # D-555: robots get the hub credential with this site name + CA (empty = hub link off).
+      - --hub-link-hostname
+      - "${ROSY_SITE_HUB_LINK_HOSTNAME:-}"
+      - --hub-link-ca
+      - "${ROSY_SITE_HUB_LINK_CA:-}"
       - --connection-mode
       - "${ROSY_FLEET_CONNECTION_MODE:-paired}"
       # D-341 2: the pairing routes exist only with the site CA (never the leaf) and a TLS host.

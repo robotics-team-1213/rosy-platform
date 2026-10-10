@@ -13,15 +13,17 @@
 
 | File | Description |
 |------|-------------|
-| `rosy_situation/service.py` | The service loop, Fleet client, queue/backpressure, JSONL input/fact logs, `analyze` stub |
+| `rosy_situation/service.py` | The service loop, Fleet client, queue/backpressure, JSONL input/fact logs |
+| `rosy_situation/analyzers.py` | `Analyzer` (`analyzer:stuck_scene@1`): `rear_blocked`, `path_blocked_by_robot`, `stalled` from the snapshot |
 | `test/test_situation_service.py` | Fake-Fleet unit tests and one in-process real Fleet test |
+| `test/test_analyzers.py` | Analyzer facts on synthetic snapshots |
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - Never add a robot address, robot token, or any Fleet write other than facts and heartbeat. No command words in facts (Fleet refuses them).
-- Analyzers are pure functions of the snapshot (phase (d)); vision is phase (e). Neither is here yet.
+- Analyzers are deterministic over the snapshot sequence (phase (d)); vision is phase (e), not here. A new fact kind is a D-577 amendment and a Fleet `FACT_KINDS` entry in the same change.
 - The unit `deploy/ai_pc/rosy-situation.service` is installed on the AI PC only with the owner's consent.
 
 ### Testing Requirements

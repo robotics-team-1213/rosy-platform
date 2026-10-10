@@ -133,6 +133,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_lanes: Optional[Mapping] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
+               ai_facts_acting: frozenset = frozenset(),
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
@@ -569,7 +570,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            tracking=tracking, identity=identity)
     from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
-                                           db_path=task_service.store.path if task_service else None)
+                                           db_path=task_service.store.path if task_service else None,
+                                           acting=ai_facts_acting)
     app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
@@ -596,6 +598,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
+        app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(
