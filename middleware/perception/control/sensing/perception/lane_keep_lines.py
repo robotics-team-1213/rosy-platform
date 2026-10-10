@@ -35,6 +35,9 @@ MAX_GAP_M = 0.06
 #: RANSAC budget.
 RANSAC_HYPOTHESES = 120
 MAX_LINES = 8
+#: Floor points sit on the BEV grid, so a band edge can fall exactly on one; this slack keeps
+#: its membership off the last bit of a dot product (numpy 1.26 on the robot and in CI vs 2.x).
+LATTICE_EPS_M = 1e-9
 #: Floor mask: rows start this far below the horizon; the carpet reference is
 #: this percentile of the row; white is this much brighter (absolute, or this
 #: fraction of the headroom to 255, whichever is larger).
@@ -172,7 +175,8 @@ def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
         rel = points - centre
         along, across = rel @ direction, rel @ normal
         lo, hi = sorted(float((end - centre) @ direction) for end in ends)
-        band = points[(np.abs(across) <= half_m) & (along >= lo) & (along <= hi)]
+        band = points[(np.abs(across) <= half_m + LATTICE_EPS_M)
+                      & (along >= lo - LATTICE_EPS_M) & (along <= hi + LATTICE_EPS_M)]
         foot = centre + np.outer((band - centre) @ direction, direction)
         seen = usable(foot + normal * half_m) & usable(foot - normal * half_m)
         whole = seen.sum() >= MIN_LINE_CELLS and np.ptp((band[seen] - centre) @ direction) >= MIN_LINE_LENGTH_M

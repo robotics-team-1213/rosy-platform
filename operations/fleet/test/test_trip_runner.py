@@ -1487,6 +1487,8 @@ def test_the_fleet_stuck_resolver_marks_a_trip_robot():
     seen = []
 
     class Resolver:
+        ai_verdicts: list = []
+
         def step(self, now, rows):
             seen.extend((row["robot_id"], row.get("trip", False)) for row in rows)
             return []
