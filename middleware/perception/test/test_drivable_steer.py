@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from control.sensing.perception.learned.drivable_steer import (
-    PIVOT_CONFIDENCE, PIVOT_ERROR, DrivableSteer, way_target)
+    CORE_CRUISE_MPS, PIVOT_CONFIDENCE, PIVOT_ERROR, DrivableSteer, _centre_target, way_target)
 
 G = SimpleNamespace(height_m=0.0575, pitch_rad=0.195, focal_px=281.6, principal_x=160.0, principal_y=120.0)
 XO, HALF = 0.033, 0.0925
@@ -114,6 +114,36 @@ def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
     error, confidence, debug = DrivableSteer().update(beyond, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
                                                       wall_ahead_m=None, side_clear_m={"left": None, "right": None})
     assert error is None and debug["reason"] == "way_beyond_line"
+
+
+def test_a_bend_ahead_sets_the_target_on_the_centreline_curvature():
+    # 0.16 m straight, then a left bend of radius 0.20. A straight-ahead slice at 0.25 m
+    # still sits near y=0.02 (chord curvature under 1/m). The centre line has already
+    # turned, so the target is the arc of that curvature.
+    xs, ys = [], []
+    for x in np.linspace(0.04, 0.16, 7):
+        xs.append(x)
+        ys.append(0.0)
+    radius = 0.20
+    for distance in np.linspace(0.02, 0.12, 6):
+        turn = distance / radius
+        xs.append(0.16 + radius * math.sin(turn))
+        ys.append(radius * (1.0 - math.cos(turn)))
+    point, curvature, _ = _centre_target(np.asarray(xs), np.asarray(ys), 0.25)
+    assert curvature > 1.2, (point, curvature)
+    assert point[1] > 0.03
+    chord = 2.0 * point[1] / (point[0] * point[0] + point[1] * point[1])
+    assert abs(chord - curvature) < 0.15
+
+
+def test_an_offset_straight_centre_comes_back_instead_of_taking_a_false_bend():
+    xs = np.linspace(0.05, 0.30, 8)
+    point, curvature, _ = _centre_target(xs, np.full(xs.shape, 0.05), 0.25)
+    assert curvature > 0.0 and point[1] > 0.03
+
+
+def test_pursuit_cruise_is_the_line_follow_cruise():
+    assert CORE_CRUISE_MPS == 0.08
 
 
 def test_pursuit_error_realises_the_arc_under_cores_law():
