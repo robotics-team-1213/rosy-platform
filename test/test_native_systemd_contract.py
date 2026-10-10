@@ -525,7 +525,7 @@ PROGRAM_SOURCES = {
         "middleware/core/gateway",
         "middleware/core/events",
         "middleware/core/services",
-        "middleware/core/api_web",
+        "middleware/core/api",
         "contracts/foundation",
         "imported-by:middleware/core/gateway:control:middleware/perception",
     ],

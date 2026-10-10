@@ -893,7 +893,7 @@ def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewpor
 def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tmp_path, monkeypatch):
     """Pilot's live tab reaches the real CORE Console assets with its own token."""
     root = HERE.parents[3]
-    for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+    for package in ("middleware/core/api", "middleware/core/gateway", "middleware/core/events",
                     "middleware/core/services", "contracts/foundation"):
         monkeypatch.syspath_prepend(str(root / package))
     from fastapi.testclient import TestClient

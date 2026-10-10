@@ -33,7 +33,7 @@ PACKAGES = (
     SRC.parent / "contracts" / "foundation" / "core_common",
     SRC.parent / "middleware" / "core" / "events" / "core_events",
     SRC.parent / "middleware" / "core" / "services" / "core_features",
-    SRC.parent / "middleware" / "core" / "api_web" / "core_api_web",
+    SRC.parent / "middleware" / "core" / "api" / "core_api_web",
 )
 
 

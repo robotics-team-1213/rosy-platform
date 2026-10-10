@@ -20,8 +20,8 @@
 !middleware/core/events/**
 !middleware/core/services/
 !middleware/core/services/**
-!middleware/core/api_web/
-!middleware/core/api_web/**
+!middleware/core/api/
+!middleware/core/api/**
 !middleware/perception/
 !middleware/perception/**
 !shared/

@@ -181,7 +181,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api_web`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
+- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
 - `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
 - `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 

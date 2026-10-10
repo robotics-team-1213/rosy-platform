@@ -39,7 +39,7 @@ ROBOT = [
     "middleware/ui/robot/test/test_surface_home_link.py",
 ]
 API_WEB = [
-    "middleware/core/api_web/test/test_d283_console_browser.py",
+    "middleware/core/api/test/test_d283_console_browser.py",
     "middleware/ui/robot/test/test_role_g2_browser.py",
     "middleware/ui/robot/test/test_calibration_chip_browser.py",
     "middleware/ui/robot/test/test_surface_viewport_budget_browser.py",
@@ -62,7 +62,7 @@ EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
 SCOPE: dict[str, list[str]] = {
     "operations/fleet/fleet/server/": FLEET,
     "middleware/ui/robot/": ROBOT,
-    "middleware/core/api_web/": API_WEB,
+    "middleware/core/api/": API_WEB,
     "middleware/ui/pilot/": PILOT,
     "middleware/apps/device/omx/adapter/": PILOT[1:],
     "operations/apps/games/": GAMES,

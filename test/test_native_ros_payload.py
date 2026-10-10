@@ -105,7 +105,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     paths = set(result.stdout.splitlines())
     for suffix in (
         "/middleware/core/gateway", "/contracts/foundation", "/middleware/core/events",
-        "/middleware/core/services", "/middleware/core/api_web", "/contracts/ros_idl",
+        "/middleware/core/services", "/middleware/core/api", "/contracts/ros_idl",
         "/middleware/drivers/pinky_adc", "/middleware/drivers/imu_bno055", "/middleware/drivers/pinky_lamp",
     ):
         assert any(path.endswith(suffix) for path in paths)

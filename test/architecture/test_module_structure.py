@@ -1510,7 +1510,7 @@ ROLE_DIR = {
     "core": ("core", "gateway"),
     "core_events": ("core", "events"),
     "core_features": ("core", "services"),
-    "core_api_web": ("core", "api_web"),
+    "core_api_web": ("core", "api"),  # D-626 holder; package identity stays core_api_web
     "core_common": ("foundation",),
     "interfaces": ("ros_idl",),
     "control": ("perception",),  # middleware/perception (D-427 wave 4e)
