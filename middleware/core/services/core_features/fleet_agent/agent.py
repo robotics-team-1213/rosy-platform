@@ -131,6 +131,7 @@ class FleetAgent:
         self._end_reason = ""
         self.junction_signal_request = lambda: None
         self.junction_signal_answer = lambda answer: False
+        self.junction_signal_refused = False
 
     @property
     def connected(self) -> bool:
@@ -197,6 +198,7 @@ class FleetAgent:
     def relink(self, fleet_cfg: dict) -> None:
         """D-555: swap `config["fleet"]` (SAF-003 reads it) and restart only this task."""
         self.stop()
+        self.junction_signal_refused = False
         self._task = self._pending = None
         self.armed, self.relinked_at = False, self._clock()
         self.config["fleet"] = fleet_cfg
@@ -311,6 +313,7 @@ class FleetAgent:
             return f"no hello reply within {HELLO_TIMEOUT_S:g} s"
         if reply.type == EnvelopeType.ERROR:
             logger.error("Fleet hub rejected hello: %s", reply.payload.get("code"))
+            self.junction_signal_refused = True
             self.enabled = False
             return None
         if reply.type != EnvelopeType.WELCOME:
@@ -441,12 +444,18 @@ class FleetAgent:
                 continue
             if env.type == EnvelopeType.ERROR:
                 code = env.payload.get("code")
+                if answers == EnvelopeType.HEARTBEAT:
+                    request = self.junction_signal_request()
+                    if request is not None:
+                        self.junction_signal_answer(dict(request_id=request, lamp='unknown',
+                                                         may_enter=False, reason='fleet_error'))
                 # The hub answers an EVENT payload it cannot validate with SESSION_NOT_PAIRED
                 # (hub.py `_event`), so a "fatal" code answering an EVENT is an event
                 # rejection, not a pairing failure. PAIRING_INVALID is fatal either way.
                 if code in SESSION_FATAL_ERRORS and (
                         answers == EnvelopeType.HEARTBEAT or code == "PAIRING_INVALID"):
                     logger.error("Fleet hub ended the session: %s", code)
+                    self.junction_signal_refused = True
                     request = self.junction_signal_request()
                     if request is not None:
                         self.junction_signal_answer(dict(request_id=request, lamp='unknown',

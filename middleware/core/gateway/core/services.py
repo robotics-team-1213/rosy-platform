@@ -562,6 +562,7 @@ class CoreServices:
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.junction_signal_request = line_follow.junction_signal_request
         fleet_agent.junction_signal_answer = line_follow.junction_signal_answer
+        line_follow.junction_signal_link_refused = lambda: fleet_agent.junction_signal_refused
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)

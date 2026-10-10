@@ -59,6 +59,19 @@ def test_wrong_episode_and_malformed_answers_cannot_open_the_gate():
     assert not answer(rig, "0" * 32, "green", True)
     assert not answer(rig, request, "green", "true")
     assert rig.m.status().junction.state == "waiting"
+    for _ in range(70):
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+    assert status.junction.signal_state == 'unknown'
+
+
+def test_rejected_pairing_never_turns_into_silence_permission():
+    rig, _request = waiting()
+    rig.m.junction_signal_link_refused = lambda: True
+    for _ in range(70):
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+    assert status.junction.signal_state == 'unknown'
 
 
 def test_late_red_before_rotation_cancels_fallback():

@@ -9,6 +9,9 @@ WAIT_S, REPLY_FRESH_S = 3.0, 2.0
 
 
 class JunctionSignalMixin:
+    def junction_signal_link_refused(self):
+        return False
+
     def _signal_before_entry(self):
         j = self._junction or {}
         return (j.get('state') == 'waiting' or (j.get('signal_owned') and (
@@ -25,6 +28,9 @@ class JunctionSignalMixin:
         try:
             answer = JunctionSignalAnswer.model_validate(payload)
         except ValueError:
+            if isinstance(payload, dict) and payload.get('request_id') == self.junction_signal_request():
+                self.junction_signal_answer(dict(request_id=payload['request_id'], lamp='unknown',
+                                                 may_enter=False, reason='invalid_reply'))
             return False
         with self._lock:
             if self.junction_signal_request() != answer.request_id:
@@ -55,6 +61,9 @@ class JunctionSignalMixin:
             _LOG.info("junction %s requesting Fleet signal; unanswered fallback after %.1fs", s['id'], WAIT_S)
         if s.get('entered'):
             return j
+        if self.junction_signal_link_refused():
+            self.junction_signal_answer(dict(request_id=s['id'], lamp='unknown',
+                                             may_enter=False, reason='link_rejected'))
         answer = s['answer']
         allowed = (answer is not None and answer.lamp == 'green' and answer.may_enter
                    and 0 <= now-s['answered_at'] <= REPLY_FRESH_S)
