@@ -549,8 +549,8 @@ class LineObserverNode(Node):
                         way, way_stamp, ground, self._lane_keeper._x_offset,
                         float(self.get_parameter('lane_half_width_m').value),
                         self._odom_history.pose_at(way_stamp), self._odom_history.pose_at(image_stamp),
-                        wall_ahead_m=(self._wall_ahead[0] if self._wall_ahead is not None
-                                      and abs(image_stamp - self._wall_ahead[1]) < 0.5 else None))
+                        **({} if self._wall_ahead is None or abs(image_stamp - self._wall_ahead[1]) >= 0.5
+                           else dict(wall_ahead_m=self._wall_ahead[0], side_clear_m=self._wall_ahead[2])))
                     observation = None if error is None else LaneObservation(error=error, confidence=confidence)
                     self._lane_keeper.last.update(
                         strategy=steer['strategy'], drivable_steer=steer,
@@ -722,8 +722,14 @@ class LineObserverNode(Node):
                                         angle_increment=msg.angle_increment, range_min=msg.range_min,
                                         range_max=msg.range_max))
         gap = PINKY_PRO.translation_gap(view.points, pad_m=0.0)
+        # nearest wall beside the robot on each side, within 0.35 m ahead (exit sides, D-597 amendment 2)
+        side = {'left': None, 'right': None}
+        for x, y in view.points:
+            if 0.0 <= x <= 0.35 and abs(y) >= PINKY_PRO.half_width_m:
+                key = 'left' if y > 0 else 'right'
+                side[key] = abs(y) if side[key] is None else min(side[key], abs(y))
         self._wall_ahead = (None if gap is None else PINKY_PRO.front_x_m + gap,
-                            float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9)
+                            float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side)
 
     def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9
