@@ -56,9 +56,11 @@ SURFACES = (
 )
 
 HANGUL = re.compile(r"[가-힣]")
-RETIRED_TERMS = re.compile(r"(?i:profile|capability)|Navigation|hardware 모드|프로필")
+RETIRED_TERMS = re.compile(r"(?i:profile|capability|line-follow)|Navigation|hardware 모드|프로필")
 ENUM_WORDS = (r"IDLE|MANUAL|NAVIGATION|DOCKING|EMERGENCY|RUNNING|HOLDING|"
-              r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE")
+              r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE|"
+              # Lane-follow modes and D-20 formation shapes (2026-10-10 console walkthrough).
+              r"CAMERA_LINE|IR_LINE|LINE_FOLLOW|TRACKING|COLUMN|GRID|CIRCLE|TRAIL")
 BARE_ENUMS = re.compile(r"(?<![A-Za-z0-9_])(" + ENUM_WORDS + r")(?![A-Za-z0-9_])")
 ENUM_ONLY = re.compile(ENUM_WORDS)  # used with fullmatch
 
