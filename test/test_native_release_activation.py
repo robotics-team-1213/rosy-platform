@@ -552,6 +552,19 @@ def test_a_camera_only_activation_that_fails_rolls_back_the_camera(native_case):
     assert [action for action, _ in units.calls] == ["stop", "start", "stop", "start"]
 
 
+def test_camera_only_activation_does_not_wait_on_rosy_io(native_case):
+    # rosy-io is not restarted on a camera-only activation, so its active check has nothing to measure.
+    manager_type, root, key, _private, first, second, links = native_case
+    probes = []
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links,
+                           units=UnitRecorder(), io_active=lambda: probes.append(1) or False,
+                           io_settle_s=0)
+    manager.activate(first.name)
+    probes.clear()
+    assert manager.activate(second.name, ("rosy-camera.service",))["ok"] is True
+    assert probes == []
+
+
 def test_only_the_camera_may_restart_alone(native_case):
     manager_type, root, key, _private, first, _second, links = native_case
     runtime = RuntimeRecorder()
