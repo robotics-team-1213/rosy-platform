@@ -60,8 +60,12 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                         route.fulfill(json=active_map)
                     else:
                         active_map_requests.append(route)
+                site_map_at, session_at = [], []
+                page.on("requestfinished", lambda request: session_at.append(time.monotonic())
+                        if request.url.endswith("/api/fleet/auth/development-session") else None)
                 if path == "/console":
-                    page.route("**/api/fleet/site-map", lambda route: route.fulfill(json={"maps": [{
+                    page.route("**/api/fleet/site-map", lambda route: site_map_at.append(time.monotonic())
+                               or route.fulfill(json={"maps": [{
                         "map_id": "site", "bounds_m": {"min_x": 0, "max_x": 2, "min_y": 0, "max_y": 2},
                         "polygon_m": [[0, 0], [2, 0], [2, 2], [0, 2]], "sources": [],
                     }]}))
@@ -96,6 +100,8 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                         request.fulfill(json=active_map)
                     expect(page.locator("#map-stage")).to_have_attribute("data-map-state", "site", timeout=10000)
                     expect(page.locator("#map-canvas")).to_have_attribute("role", "img")
+                    # Field check 2026-10-10: the map read the new token at once, not on the next 5 s poll.
+                    assert session_at and any(0 <= at - session_at[0] < 3.0 for at in site_map_at)
                     expect(page.locator("#map-tag")).to_contain_text("카메라 관측 1/1대", timeout=10000)
                     assert page.locator("ui-topbar").bounding_box()["height"] < 170
                     output = os.environ.get("ROSY_UX_EVIDENCE_DIR")

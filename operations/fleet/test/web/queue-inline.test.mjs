@@ -6,7 +6,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { cardExpanded, createRoster, mustExpand } = await import("../../fleet/server/web/roster.js");
-const { openDecisionKey } = await import("../../fleet/server/web/queues.js");
+const { openDecisionKey, queueRowText } = await import("../../fleet/server/web/queues.js");
 const { replanView } = await import("../../fleet/server/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
@@ -76,4 +76,10 @@ test("replan slot: confirm needs an operator and a plan; cancel (a stop) needs o
   assert.equal(spec.confirmReason, "다시 계산한 경로가 없습니다");
   assert.equal(spec.cancelReason, "");
   assert.match(spec.facts, /PLAN_NO_ROUTE/);
+});
+
+test("a later row of the same robot hides the name and its colon", () => {
+  // Field check 2026-10-10: ": Rosy Cam이 rosy_41를 찾지 못합니다" started with a bare colon.
+  assert.equal(queueRowText(": 교통 대기", true), ": 교통 대기");
+  assert.equal(queueRowText(": Rosy Cam이 rosy_41을 찾지 못합니다", false), "Rosy Cam이 rosy_41을 찾지 못합니다");
 });

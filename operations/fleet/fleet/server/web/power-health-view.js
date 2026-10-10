@@ -9,12 +9,18 @@ export function powerHealthView(robot, receivedAtMs, nowMs) {
   const health = robot.power_health;
   const battery = health?.battery;
   const elapsed = Math.max(0, nowMs - (receivedAtMs ?? nowMs)) / 1000;
-  if (!robot.online || !Number.isFinite(age) || age < 0 || age + elapsed > 5
-      || !battery || battery.evidence !== "fresh"
+  if (!robot.online || !Number.isFinite(age) || age < 0 || age + elapsed > 5 || !battery) {
+    // No Fleet read, or one too old (a slow or timed-out fetch): unknown, but the robot said
+    // nothing wrong, so it is not an attention item (field check 2026-10-10).
+    return { ...unknown, problem: "", safetyRelease };
+  }
+  if (battery.evidence !== "fresh"
       || !Number.isFinite(battery.sample_age_s) || battery.sample_age_s < 0
-      || !Number.isFinite(battery.stale_after_s) || battery.stale_after_s <= 0
-      || battery.sample_age_s + age + elapsed > battery.stale_after_s) {
+      || !Number.isFinite(battery.stale_after_s) || battery.stale_after_s <= 0) {
     return { ...unknown, safetyRelease };
+  }
+  if (battery.sample_age_s + age + elapsed > battery.stale_after_s) {
+    return { ...unknown, problem: "", safetyRelease };
   }
   const percent = Number.isFinite(battery.percent) && battery.percent >= 0 && battery.percent <= 100
     ? `${Math.round(battery.percent)}%` : "확인 불가";

@@ -504,3 +504,49 @@ def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
         asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
     (body,) = client.identity
     assert body["reason"] != "frames_missing" and body["evidence"]["frames"] == 14
+
+
+def test_fleet_robot_regions_reach_the_detector_and_unknown_floor_rides_the_payload(make_worker):
+    """D-600: ``occupied`` is handed over before the step; ``unknown_floor`` goes out with OK only."""
+    class _Masking(_Detector):
+        unknown_floor = ((1.2, 0.4, 0.12),)
+
+        def set_occupied(self, regions):
+            self.regions = regions
+
+    detector = _Masking()
+    worker, client = make_worker(configs=[{**CONFIG, "occupied": [{"x": 1.0, "y": 0.5, "radius_m": 0.12}]}],
+                                 detector=detector)
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.process(_frame(), MARKERS))
+    assert detector.regions == [{"x": 1.0, "y": 0.5, "radius_m": 0.12}]
+    sent = client.published[-1].model_dump(mode="json")
+    assert sent["unknown_floor"] == [{"x": 1.2, "y": 0.4, "radius_m": 0.12}]
+    learning = build_payload(source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="r",
+                             processor_revision="background-blob/1", captured_at=1.0, seq=0,
+                             result=DetectorResult((), "LEARNING"), unknown_floor=((1.0, 1.0, 0.1),))
+    assert "unknown_floor" not in learning.model_dump(mode="json")
+
+
+class _HoldingDetector(_Detector):
+    def __init__(self):
+        super().__init__()
+        self.holds = []
+
+    def hold(self, until):
+        self.holds.append(until)
+
+
+def test_two_parallel_challenges_are_each_answered_and_hold_the_background(make_worker):
+    # D-596: identity_challenges carries one open request per colour; the detector is held through both.
+    blue = {"request_id": "req-b", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    amber = {"request_id": "req-a", "color": "amber", "not_before": 101.0, "not_after": 105.0}
+    detector = _HoldingDetector()
+    worker, client = make_worker(configs=[{**CONFIG, "identity_challenge": blue,
+                                           "identity_challenges": [blue, amber, blue]}], detector=detector)
+    asyncio.run(worker.refresh_config())
+    for i in range(20):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    assert sorted(body["request_id"] for body in client.identity) == ["req-a", "req-b"]
+    assert set(detector.holds) == {105.0}
+    assert all(body["processor_revision"] == "led-identity/2" for body in client.identity)

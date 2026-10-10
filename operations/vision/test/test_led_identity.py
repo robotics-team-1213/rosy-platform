@@ -25,10 +25,10 @@ def _frame(lit: dict) -> np.ndarray:
 
 
 def _samples(lit_at, *, blobs=(LEFT, RIGHT), color="blue", drop=(), revision=lambda t: "rev-1",
-             hidden=lambda t: ()):
+             hidden=lambda t: (), fps=FPS):
     out = []
-    for i in range(int(6.0 * FPS) + 1):
-        t = i / FPS
+    for i in range(int(6.0 * fps) + 1):
+        t = i / fps
         if any(a <= t < b for a, b in drop):
             continue
         present = tuple(b for b in blobs if b not in hidden(t))
@@ -89,3 +89,46 @@ def test_thresholds_are_config():
     assert decide(samples, not_before=0.0, not_after=6.0, now=6.0, config=strict)["reason"] == "none"
     with pytest.raises(KeyError):
         sample_frame(_frame({}), captured_at=0.0, calibration_revision="r", blobs=(LEFT,), color="red")
+
+
+# D-596 3: a 2-3 fps camera with a dropped frame still decodes; a one-frame flicker does not.
+
+def test_one_dropped_frame_at_two_fps_still_matches():
+    lit = lambda t: {LEFT: BLUE} if _blinking(t) else {}
+    for drop in ((2.4, 2.6), (2.9, 3.1)):  # inside the off phase, and the first frame back on
+        result = _decide(_samples(lit, fps=2.0, drop=[drop]))
+        assert result["state"] == "matched", (drop, result)
+        assert result["evidence"]["max_gap_s"] == pytest.approx(1.0)
+    old = LedConfig(min_off_s=0.5, max_off_s=1.8, max_gap_s=0.7)  # D-472 start values
+    assert decide(_samples(lit, fps=2.0, drop=[(2.9, 3.1)]), not_before=0.0, not_after=6.0, now=6.0,
+                  config=old)["state"] == "ambiguous"
+
+
+def test_a_hole_over_max_gap_is_frames_missing():
+    lit = lambda t: {LEFT: BLUE} if _blinking(t) else {}
+    assert _decide(_samples(lit, drop=[(1.9, 2.8)]))["reason"] == "frames_missing"  # 1.33 s hole
+
+
+def test_a_one_frame_flicker_is_not_a_blink():
+    flicker = lambda t: {LEFT: BLUE} if 1.0 <= t < 3.0 and not 1.9 < t < 2.1 else {}
+    assert _decide(_samples(flicker))["reason"] == "none"  # off 0.67 s < min_off_s 0.8 s
+
+
+def test_steady_colour_tags_the_single_anonymous_blob():
+    on_late = lambda t: {LEFT: BLUE} if t >= 1.0 else {}   # turned on, never seen off again
+    single = _decide(_samples(on_late, blobs=(LEFT,)))
+    assert single["state"] == "matched" and single["evidence"]["mode"] == "steady"
+    assert (single["x"], single["y"]) == (LEFT.map_x, LEFT.map_y)
+    assert _decide(_samples(on_late))["reason"] == "none"                     # two blobs: no tag
+    assert _decide(_samples(lambda t: {LEFT: BLUE}, blobs=(LEFT,)))["reason"] == "none"  # never off
+    blink = _decide(_samples(lambda t: {LEFT: BLUE} if _blinking(t) else {}, blobs=(LEFT,)))
+    assert blink["state"] == "matched" and "mode" not in blink["evidence"]  # the blink wins
+
+
+def test_a_caution_lamp_decodes_like_the_amber_identify():
+    """D-596 7: caution is amber 1 s on / 1 s off, so Vision alone cannot tell it from an amber identify.
+    Fleet therefore never asks amber automatically and gates the verdict on the asked robot's place."""
+    caution = lambda t: {RIGHT: AMBER} if int(t) % 2 == 0 else {}
+    decoy = _decide(_samples(caution, color="amber"))
+    assert decoy["state"] == "matched" and (decoy["x"], decoy["y"]) == (RIGHT.map_x, RIGHT.map_y)
+    assert _decide(_samples(caution, color="blue"))["reason"] == "none"

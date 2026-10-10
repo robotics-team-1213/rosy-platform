@@ -73,7 +73,8 @@ FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
-             "operations/site_devices")  # site device firmware (D-427 wave 3b)
+             "operations/site_devices",  # site device firmware (D-427 wave 3b)
+             "operations/situation")  # D-577 AI PC situation service (outside the fleet package)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
@@ -213,7 +214,28 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_404,
+        51_672,
+        "split: re-judged at 51672 on 2026-10-10 after merging D-600 over main 51521 (+151; self-judged). The robot "
+        "regions for Vision's background learn are TrackingService.occupied in the existing D-457 owner "
+        "(server/tracking.py, map pose wired at the app root), the unknown-floor hatch in map-view.js and "
+        "tracking-layer.js, relearn copy in tracking-relearn.js; most new lines are tests. No new owner and "
+        "no robot command path. Previously "
+        "split: re-judged at 51521 on 2026-10-10 after merging D-596 over main 51209 (+312; self-judged, "
+        "NEEDS the independent re-judge). One new pure module fleet/server/identity_triggers.py (automatic "
+        "LED identify rules), parallel per-colour requests in server/identity.py, the guide finding and the "
+        "roster LED button; the identity binding stays observation-only, no robot command path. Previously "
+        "split: re-judged at 51209 on 2026-10-10 after merging D-594 robot path history over main 50857 (+352): "
+        "one new display/replay owner fleet/server/path_history.py (recorder, site-DB store, viewer read route; "
+        "reads the existing D-395 trust, D-494 3 map pose and D-457 tracking owners, never commands or stops a "
+        "robot), wired at the app composition root (app.py +9, console.py untouched); web/trail-view.js fetches "
+        "the record, index.html +9 and styles.css +6. Self-judged; independent re-judge pending. Previously "
+        "split: re-judged at 50857 on 2026-10-10 after D-577 (b)+(c) over main 50460 (+397; independent "
+        "read-only critic). (b) evidence picture/alert in existing owners line_stuck.py, line-stuck.js, "
+        "queues.js, console_routes.py, HttpRobotClient.front_frame; (c) one new shadow-only module "
+        "server/ai_facts.py (ai_observer facts/heartbeat, no command path). The AI PC service is "
+        "operations/situation (outside the package). Next D-577 growth (acting, plan step 6) first moves "
+        "line_stuck/stuck_*/ai_facts into a fleet/fleet/stuck SIZE_UNITS subpackage by a dated plan. See "
+        "docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "
@@ -677,6 +699,14 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
+    "vision/rosy_vision/track/background_blob.py": (
+        605,
+        "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
+        "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
+        "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
+        "D-600 (584) merged, plus the hold-stops-fill guard. Self-judged; next growth moves the suspect/ghost "
+        "healing into its own module. ROS-free, host-testable (X5)",
+    ),
     "vision/rosy_vision/ingest.py": (
         671,
         "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
@@ -1067,7 +1097,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_737,
+        12_004,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1077,7 +1107,10 @@ SIZE_VERDICTS = {
         "backend it serves and does not change the split plan. Re-judged at 11737 on 2026-10-10 "
         "for D-597 (learned/drivable_paint.py: the drivable way and its boundary paint for keep mode, "
         "plus input.crop in manifest/lane_mask/runner and the paint worker's drivable kind), which "
-        "also lives in the learned backend it serves; the split plan is unchanged.",
+        "also lives in the learned backend it serves; the split plan is unchanged. Re-judged at 12004 "
+        "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
+        "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
+        "learned backend it serves; the split plan is unchanged.",
     ),
     "control": (
         34_619,

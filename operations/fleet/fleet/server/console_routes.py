@@ -120,8 +120,11 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    # D-509: CORE battery evidence goes stale after 5 s, so refresh each second off the request
+    # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
-        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse)
+        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
+        refresh_s=1.0, max_age_s=5.0)
     lane = getattr(app.state, "lane_compliance", None)
 
     async def gathered() -> dict:
@@ -137,7 +140,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
-        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.2)
+        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.5)
                                        for row in rows if row["online"]))
         power_values = iter(power)
         for row in rows:
@@ -188,7 +191,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no robot served a map"})
         return grid
 
-    # D-472: one robot at a time (IdentityService); CORE and rosy-face keep the final safety decision.
+    # D-472/D-596: one request per colour per source (IdentityService); CORE and rosy-face keep the final safety decision.
     if identity is None:
         identity = IdentityService(console.clients, tracking=tracking)
     app.state.identity = identity
@@ -213,6 +216,32 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         # `observed_age_s` says how old it is.
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
+
+    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_evidence(robot_id: str, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")) -> dict:
+        # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
+        # memory until the stuck closes. A failed read is not kept: the next read asks again.
+        if not board.is_open(robot_id, stuck_id):
+            raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
+                                                         "message": f"{robot_id} has no open stuck {stuck_id}"})
+        shown = board.preview(robot_id, stuck_id)
+        if shown is None:
+            fetch = getattr(console.clients().get(robot_id), "front_frame", None)
+            try:
+                if fetch is None:
+                    raise RobotApiError(robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "no camera client")
+                jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+            except (RobotApiError, httpx.HTTPError, OSError, asyncio.TimeoutError) as exc:
+                raise HTTPException(status_code=404, detail={
+                    "code": "STUCK_PREVIEW_UNAVAILABLE",
+                    "message": getattr(exc, "code", type(exc).__name__)}) from exc
+            board.keep_preview(robot_id, stuck_id, jpeg, status)
+            shown = board.preview(robot_id, stuck_id)
+            if shown is None:   # the stuck closed while the robot answered
+                raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
+                                                             "message": f"{stuck_id} closed"})
+        return shown
 
     @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:

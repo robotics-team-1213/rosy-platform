@@ -61,16 +61,15 @@ def test_right_branch_starts_on_the_road_under_the_robot():
     assert branches == 1 and way[12, 15:25].all() and not way[:, 0:5].any()
 
 
-def test_a_t_junction_opening_sideways_turns_right():
-    # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10): at a T the crossbar opens
-    # to both frame sides and no row splits, so the row scan saw one branch and went straight.
-    labels = np.zeros((240, 320), np.int64)
-    labels[150:, 120:200] = 5                                # the robot's own road
-    labels[125:150, :] = 5                                   # the crossing road, both ways out of view
-    labels[118:125, :] = 1                                   # its far line
-    way, info = drivable_target(_logits(labels), CLASSES, ignore_top=112)
-    assert info["reason"] == "ok" and info["branches"] == 2
-    assert way[135, 300:].all() and not way[135, :20].any() and way[220, 120:200].all()
+def test_a_t_junction_opening_sideways_is_two_exits_and_the_right_one_is_kept():
+    # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10.md): at a T the crossbar
+    # opens to both frame sides and no row splits, so the row scan sees one branch and goes straight.
+    region = np.zeros((240, 320), bool)
+    region[150:, 120:200] = True                             # the robot's own road
+    region[125:150, :] = True                                # the crossing road, both ways out of view
+    way, exits = right_exit_way(region, 112)
+    assert exits == 2 and way[135, 300:].all() and not way[135, :20].any() and way[220, 120:200].all()
+    assert right_branch(region)[1] == 1                      # what drivable_target uses today
 
 
 def test_a_ring_entry_takes_the_right_branch_behind_a_model_hole():

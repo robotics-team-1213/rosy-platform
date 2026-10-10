@@ -58,6 +58,9 @@ from .sensing.perception.route_map import RouteMapFollower
 _READ_ONLY = ParameterDescriptor(read_only=True)
 #: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
+#: D-597 amendment 2: the newest drivable way steers while its frame is at most this old (odometry
+#: moves its target; one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
+DRIVABLE_WAY_MAX_AGE_S = 1.5
 
 
 COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
@@ -537,11 +540,10 @@ class LineObserverNode(Node):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
-                    # A drivable pivot turns toward the way it saw: keep its masks (odometry moves the target).
-                    if self._paint_worker is not None and (self._drivable_steer is None or not _spinning_in_place(cmd)):
+                    # D-597 amendment 2: the drivable way is steered from directly (odometry moves its target,
+                    # latest_way drops it after stale_s), so a gap or a pivot keeps the mask and the pivot latch.
+                    if self._paint_worker is not None and self._drivable_steer is None:
                         self._paint_worker.reset()
-                    if self._drivable_steer is not None and not _spinning_in_place(cmd):
-                        self._drivable_steer.reset()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
@@ -551,7 +553,8 @@ class LineObserverNode(Node):
                                     if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
-                latest = self._paint_worker.latest_way() if self._drivable_steer is not None else None
+                latest = (self._paint_worker.latest_way(DRIVABLE_WAY_MAX_AGE_S)
+                          if self._drivable_steer is not None else None)
                 if latest is not None:
                     way, way_stamp = latest
                     error, confidence, steer = self._drivable_steer.update(
@@ -568,7 +571,13 @@ class LineObserverNode(Node):
                     self._lane_keeper.last.pop('junction_ahead_m', None)
                     paint_used = 'learned_drivable'
                 elif self._drivable_steer is not None:
-                    self._drivable_steer.reset()
+                    # No fresh way: hold. The tape keeper on the boundary strips must not steer in
+                    # between (its corners and one-sided targets fought the way, 8kcn 20261009T234748Z).
+                    self._drivable_steer.lost(image_stamp)
+                    observation = None
+                    self._lane_keeper.last.update(strategy='none', reason='drivable_way_stale', error=None,
+                                                  confidence=None, target_m=None)
+                    self._lane_keeper.last.pop('junction_ahead_m', None)
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,

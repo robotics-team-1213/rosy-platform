@@ -588,11 +588,15 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
+    stuck_resolver_enrolled = _stuck_resolver_enrolled(args)
     if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
             for ep in endpoints if ep.resolver_token}
-        if not stuck_resolver_clients:
+        if stuck_resolver_enrolled:
+            print("stuck resolver answers enrolled robots with Fleet's credential: "
+                  + ", ".join(sorted(stuck_resolver_enrolled)), file=sys.stderr)
+        if not stuck_resolver_clients and not stuck_resolver_enrolled:
             print("note: stuck resolver on, but no robot has a resolver_token; "
                   "every stuck goes to the console (no_resolver_token)", file=sys.stderr)
         else:
@@ -624,6 +628,7 @@ def run_console(args: argparse.Namespace) -> None:
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
+                     stuck_resolver_enrolled=stuck_resolver_enrolled,
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -662,6 +667,24 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
+
+
+def _stuck_resolver_enrolled(args) -> frozenset:
+    """``fleet.stuck_resolver.enrolled_robots`` of ``--site-config``: enrolled robot ids (D-361) the
+    resolver answers with Fleet's enrolled CORE credential. Empty (default) = none, as before."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
+        ids = section.get("enrolled_robots") or []
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"stuck resolver config: {exc}")
+    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
+        sys.exit("stuck resolver config: fleet.stuck_resolver.enrolled_robots must be a list of robot ids")
+    return frozenset(ids)
 
 
 def _trip_config(args):

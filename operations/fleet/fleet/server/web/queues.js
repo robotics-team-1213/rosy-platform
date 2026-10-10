@@ -14,6 +14,12 @@ function nodeWithText(tagName, className = "", text) {
   return node;
 }
 
+/** A row's text after its robot name. Rows read "<b>rosy_41</b>: …"; a later row of the same robot hides the
+ * name, so it drops the leading ": " (field check 2026-10-10: ": Rosy Cam이 …" with no name). */
+export function queueRowText(text, named) {
+  return named ? text : text.replace(/^:\s*/, "");
+}
+
 /** D-540 3: the queue row open on its decision. The operator's last pick holds while that row lives;
  * otherwise the most urgent decision row (critical first) is open. */
 export function openDecisionKey(keys, choice) {
@@ -70,7 +76,7 @@ export function endedTripText(view, robotId) {
 // keeps holding; nothing moves on silence. Console only — no phone or messenger alert (user, 2026-10-09).
 const HUMAN_DEADLINE_S = 30;
 
-function stuckOverdue(stuck) {
+export function stuckOverdue(stuck) {
   const note = stuck && stuck.resolver;
   return Boolean(note && note.escalated && note.escalated !== "human_claimed"
     && typeof note.age_s === "number" && note.age_s >= HUMAN_DEADLINE_S);
@@ -188,7 +194,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       name.textContent = row.robotId;
       name.className = named ? "" : "sr-only";
       const text = line.querySelector(".queue-text");
-      if (text.textContent !== row.text) text.textContent = row.text;
+      const shown = queueRowText(row.text, named);
+      if (text.textContent !== shown) text.textContent = shown;
       if (row.decision) {
         line.setAttribute("aria-expanded", String(open === row.key));
         li.lastElementChild.hidden = open !== row.key;

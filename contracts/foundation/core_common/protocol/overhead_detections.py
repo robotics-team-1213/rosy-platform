@@ -4,6 +4,8 @@ Display and cross-check only (D-268). A payload carries floor positions in map m
 no image, no pixel coordinates and no robot id (Fleet pairs detections with robot
 self-reported poses). Not an input to D-395 localization, traffic, bays or missions.
 The machine source is ``test/fixtures/protocol/overhead-detections.v1.json``.
+D-600: ``unknown_floor`` (status OK only, omitted when empty) are map circles of floor the
+background has not seen yet because a robot stood there while it learned.
 """
 
 from __future__ import annotations
@@ -53,6 +55,26 @@ class OverheadDetection(BaseModel):
         return _finite(value)
 
 
+class UnknownFloor(BaseModel):
+    """D-600: one unknown-floor area, a map circle of equal floor area."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    x: float
+    y: float
+    radius_m: float = Field(gt=0.0, le=2.0)
+
+    @field_validator("x", "y", "radius_m", mode="before")
+    @classmethod
+    def _numbers_not_boolean(cls, value):
+        return _no_boolean(value)
+
+    @field_validator("x", "y", "radius_m")
+    @classmethod
+    def _numbers_finite(cls, value: float) -> float:
+        return _finite(value)
+
+
 class OverheadDetectionsPayload(BaseModel):
     """One processed frame of one camera source."""
 
@@ -66,6 +88,8 @@ class OverheadDetectionsPayload(BaseModel):
     seq: int = Field(ge=0, le=0xFFFFFFFF, strict=True)
     status: DetectorStatus
     detections: tuple[OverheadDetection, ...] = Field(default=(), max_length=MAX_DETECTIONS)
+    unknown_floor: tuple[UnknownFloor, ...] = Field(default=(), max_length=MAX_DETECTIONS,
+                                                    exclude_if=lambda value: not value)
 
     @field_validator("source_id", "map_id", "calibration_revision", "processor_revision")
     @classmethod
@@ -89,8 +113,8 @@ class OverheadDetectionsPayload(BaseModel):
         markers = [d.marker_id for d in self.detections if d.marker_id is not None]
         if len(markers) != len(set(markers)):
             raise ValueError("a marker may occur only once in one frame")
-        if self.status != "OK" and self.detections:
-            raise ValueError("detections are reported only with status OK")
+        if self.status != "OK" and (self.detections or self.unknown_floor):
+            raise ValueError("detections and unknown floor are reported only with status OK")
         if self.status == "CALIBRATION_REQUIRED" and self.calibration_revision is not None:
             raise ValueError("CALIBRATION_REQUIRED carries no calibration revision")
         if self.status != "CALIBRATION_REQUIRED" and self.calibration_revision is None:

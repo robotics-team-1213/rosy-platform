@@ -222,3 +222,26 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
         _shot(page, "console-cards-1440x900.png")
         assert not errors
         browser.close()
+
+
+def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
+    """D-577 8: the stuck row carries the one camera picture Fleet holds for that stuck, with its frame and
+    age; the five answers stay on screen at rail scroll 0 (D-540 7) because the picture sits below them."""
+    from playwright.sync_api import sync_playwright
+
+    preview = {"robot_id": "rosy_01", "stuck_id": "stuck-abc", "sequence": 812, "source": "front",
+               "media_type": "image/jpeg", "age_s": 0.4, "jpeg_base64": "/9j/2Q=="}
+    api = {**API, "/api/fleet/robots/rosy_01/line-stuck/evidence": preview}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [], size=(1024, 768))
+        page.clock.run_for(1500)
+        slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
+        image = slot.locator(".stuck-evidence img")
+        assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
+        for decision in DECISIONS:
+            box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
+            assert box and box["y"] + box["height"] <= 768, (decision, box)
+        _shot(page, "console-stuck-evidence-1024x768.png")
+        assert not errors
+        browser.close()
