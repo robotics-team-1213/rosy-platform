@@ -32,3 +32,7 @@ D-604 reserved by another session (refs/adr/D-604), not yet on main; remove when
 D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
 D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands
 D-607 ADR exists only on shared local main, not on origin/main; remove when its branch is published
+D-610 reserved for AI-first problem resolution in another active branch (refs/adr/D-610); remove when it lands
+D-611 reserved for learned paint evidence mode in another active branch (refs/adr/D-611); remove when it lands
+D-612 reserved for perception blind-spot registry in another active branch (refs/adr/D-612); remove when it lands
+D-613 reserved for Fleet finite one-lap trip in another active branch (refs/adr/D-613); remove when it lands
