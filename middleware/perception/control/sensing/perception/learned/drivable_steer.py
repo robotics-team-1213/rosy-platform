@@ -36,6 +36,8 @@ CORRIDOR_HALF_M = 0.03
 CORRIDOR_FILL = 0.8
 PIVOT_AHEAD_M = 0.14
 PIVOT_RELEASE_M = 0.22
+#: a latched turn side is released when the way runs this far straight ahead again
+TURN_RELEASE_M = 0.30
 PIVOT_ERROR = 0.5
 PIVOT_CONFIDENCE = 0.37
 BOTH_CONFIDENCE = 0.9
@@ -43,6 +45,8 @@ ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.03
+#: a side opening counts as an exit only once its near end is within this of the nearest way row
+EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -96,10 +100,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     # The side whose open border reaches farther wins (a wall corner leaves the floor on the border
     # only near the robot); within EXIT_TIE_M of each other, keep right (D-384 2).
     above = xs > float(xs.min()) + 0.04
-    reach = {}
+    reach, near_ok = {}, {}
     for side, edge in (("left", open_left), ("right", open_right)):
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
+            near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
             far = int(np.argmax(np.where(hit, xs, -np.inf)))
             reach[side] = float(xs[far])
             # the point to arc toward: where the way leaves the view on that side, farthest out
@@ -109,6 +114,10 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = "left" if reach["left"] > reach["right"] + EXIT_TIE_M else "right"
     elif reach:
         out["exit"] = next(iter(reach))
+    # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
+    # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
+    if out["exit"] is not None and not near_ok[out["exit"]]:
+        out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     pursuit = min(lookahead, float(xs.max()))
     band = np.abs(xs - pursuit) <= ROW_BAND_M
@@ -140,10 +149,11 @@ class DrivableSteer:
         self._target = None
         self._pivot = None
         self._smoothed = None
+        self._side = None
         self._lost_since = None
 
     def reset(self):
-        self._key = self._target = self._pivot = self._smoothed = None
+        self._key = self._target = self._pivot = self._smoothed = self._side = None
         self._lost_since = None
 
     def lost(self, stamp):
@@ -160,6 +170,14 @@ class DrivableSteer:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
         info = dict(self._target)
         ahead, side = info["ahead_m"], info["exit"]
+        # The side chosen at a closing bend or junction is kept until the way runs ahead again
+        # (9dfk 20261010T001349Z weaved right/left at the ring's SE exit when the exit tie flipped).
+        if self._side is not None and ahead >= TURN_RELEASE_M:
+            self._side = None
+        if self._side is None and ahead < LOOKAHEAD_M and side is not None:
+            self._side = side
+        if self._side is not None and self._side in info["exit_point_m"]:
+            side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
         if self._pivot is None and ahead < PIVOT_AHEAD_M and side is not None:
