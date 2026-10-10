@@ -16,7 +16,7 @@ SITE = SiteMap.model_validate({
                {"id": "B", "name": "B", "x": 2, "y": 0, "kind": "junction"}],
     "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": [[0, 0], [2, 0]], "width_m": 0.185,
                "speed_cap_mps": 0.2}],
-    "crosswalks": [{"id": "cw", "polygon": [[1.0, -0.1], [1.12, -0.1], [1.12, 0.1], [1.0, 0.1]]}]})
+    "crosswalks": [{"id": "cw", "revision": "t", "polygon": [[1.0, -0.1], [1.12, -0.1], [1.12, 0.1], [1.0, 0.1]]}]})
 GRAPH = build_graph(SITE)
 CW = [(c.id, [tuple(p) for p in c.polygon]) for c in SITE.crosswalks]
 
