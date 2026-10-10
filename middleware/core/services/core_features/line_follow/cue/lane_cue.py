@@ -51,7 +51,7 @@ from typing import Optional
 
 from core_common.protocol.line_authority import STAMP_TOL_S
 from core_features.line_follow.model import LineFollowDecision
-from core_features.line_follow.odom_pivot import OdomPivot
+from core_features.line_follow.cue.odom_pivot import OdomPivot
 
 #: OFF_LANE: re-entry point further than this off the nose -> turn in place first (deg).
 PIVOT_BEARING_DEG = 45.0

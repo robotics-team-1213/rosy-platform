@@ -13,7 +13,7 @@ from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
-from core_features.line_follow.lane_cue import LaneCueMixin
+from core_features.line_follow.cue.lane_cue import LaneCueMixin
 from core_features.line_follow.crosswalk_report import CrosswalkReportMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
