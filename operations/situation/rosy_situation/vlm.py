@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 import time
 import urllib.request
@@ -105,6 +106,19 @@ class Vlm:
                  post: Callable[[str, dict, float], dict] = _post,
                  get: Callable[[str, float], dict] = _get) -> None:
         self.url, self.model, self._post, self._get = url.rstrip("/"), model, post, get
+        self.options = {"temperature": 0, "num_ctx": 8192, "seed": 42}
+        configured = json.loads(os.environ.get("ROSY_VLM_OPTIONS", "{}"))
+        bounds = {"temperature": (0, 1), "num_ctx": (4096, 16384), "seed": (0, 2147483647),
+                  "repeat_penalty": (0.8, 1.2), "top_p": (0.1, 1), "top_k": (1, 100)}
+        if not isinstance(configured, dict) or set(configured) - set(bounds):
+            raise ValueError("unsupported ROSY_VLM_OPTIONS")
+        for key, value in configured.items():
+            if (type(value) not in (int, float) or not math.isfinite(value)
+                    or not bounds[key][0] <= value <= bounds[key][1]
+                    or key in ("num_ctx", "seed", "top_k") and type(value) is not int):
+                raise ValueError(f"invalid ROSY_VLM_OPTIONS {key}")
+        self.options.update(configured)
+        self.options_id = hashlib.sha256(json.dumps(self.options, sort_keys=True).encode()).hexdigest()[:8]
 
     def profile(self) -> Optional[str]:
         """``<model>@<digest12>:<prompt>`` once Ollama reports the model, else None (not loaded)."""
@@ -115,7 +129,7 @@ class Vlm:
             return None
         for row in models:
             if row.get("name") == self.model and re.fullmatch(r"[0-9a-f]{64}", str(row.get("digest") or "")):
-                return f"{self.model}@{row['digest'][:12]}:{PROMPT_ID}"
+                return f"{self.model}@{row['digest'][:12]}:{PROMPT_ID}:{self.options_id}"
         return None
 
     def judge(self, case: dict, now: float) -> Optional[dict]:
@@ -163,7 +177,7 @@ class Vlm:
                     "sha256": hashlib.sha256(base64.b64decode(image["jpeg_b64"], validate=True)).hexdigest()}
             started = time.monotonic()
             reply = self._post(f"{self.url}/api/chat", {
-                "model": self.model, "stream": False, "format": response_schema(words, members, deadlock), "options": {"temperature": 0},
+                "model": self.model, "stream": False, "format": response_schema(words, members, deadlock), "options": self.options,
                 "messages": [{"role": "user", "content": prompt,
                               "images": images}]}, TIMEOUT_S)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
@@ -194,6 +208,7 @@ class Vlm:
                     "seen": str(answer.get("seen") or "")[:200]}
         evidence["prompt"] = {"id": PROMPT_ID, "sha256": hashlib.sha256(prompt.encode()).hexdigest(), "text": prompt}
         evidence["inference_s"] = round(time.monotonic() - started, 3)
+        evidence["model_options"] = dict(self.options)
         try:
             evidence["assessment"] = build_assessment(answer.get("assessment"), "mobility", cited[rid])
         except ValueError:

@@ -41,3 +41,5 @@ GPU가 정상이고 Model PC에서 승인된 digest·revision과 최소 비식�
 소유자가 설치·사용을 승인한 AI PC에는 검증한 Ollama 실행 파일을 `~/rosy-models/ollama/dist`에, 같은 `qwen3-vl:8b-instruct` manifest와 해시를 확인한 blobs를 `~/rosy-models/ollama/models`에 둔다. `rosy-ollama.service`를 사용자 유닛으로 설치한다. `127.0.0.1:11434`만 열며 모델 PC의 임시 tunnel을 대체한다. `ollama --version`, `/api/tags`의 digest, `/api/ps`의 GPU 적재와 문맥 길이, 실제 영상 응답·시간을 함께 확인한다. 적재·스모크 성공은 정확도나 주행 수용을 뜻하지 않는다.
 
 기본 환경은 context 8192, Flash Attention, f16 KV cache, 단일 동시 작업·단일 적재 모델·15분 유지다. 선택 `~/.config/rosy/ollama.env`로 문맥 길이를 조정하고 유닛을 재시작한다. 정확도 시험은 같은 프롬프트·영상·모델 digest로 8192/16384와 샘플링을 비교해 관찰 오해석과 6초 deadline을 기록한다. 저정밀 KV cache나 더 큰 문맥을 정확도 개선으로 자동 인정하지 않는다. API request의 options가 환경 기본값을 덮어쓸 수 있으므로 평가 기록에 실제 options도 저장한다.
+
+상황 서비스의 `situation.env`에는 선택 `ROSY_VLM_OPTIONS={"num_ctx":8192,"temperature":0,"seed":42}`를 둘 수 있다. 지원 키는 num_ctx(4096–16384 정수), temperature(0–1), seed(0–2147483647 정수), repeat_penalty(0.8–1.2), top_p(0.1–1), top_k(1–100 정수)다. 잘못된 키·값은 시작 시 거절한다. 기본값은 위 JSON이며 실제 options는 evidence.model_options와 모델 profile의 options 해시에 기록된다. 변경 후 situation 서비스도 재시작한다.

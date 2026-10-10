@@ -40,7 +40,7 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     post, calls = _post({"decision": "back_and_retry", "reason": "Rear clear", "confidence": 0.7, "seen": "empty"})
     proposal = Vlm(post=post, get=RUNNING).judge(_case(), now=100.0)
     assert proposal["decision"] == "BACK_AND_RETRY" and proposal["reason"] == "rear_clear"
-    assert proposal["source"] == "vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v4"
+    assert proposal["source"].startswith("vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
     views = proposal["evidence"]["views"]
     assert views["rosy_cam"]["frame_id"] == "rc-9" and views["rosy_cam"]["age_s"] == 1.0
     assert views["front"]["age_s"] == 1.5 and len(views["front"]["sha256"]) == 64
@@ -70,7 +70,7 @@ def test_model_profile_requires_a_running_model_with_a_digest():
     assert empty.profile() is None
     running = Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]})
-    assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d619-v4"
+    assert running.profile().startswith("qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
 
@@ -120,3 +120,19 @@ def test_deadlock_model_cannot_choose_an_outside_robot_or_unavoidable_edge():
     case["members"]["a"]["views"].pop("front")
     post, calls = _post({"decision": "REPLAN", "robot_id": "b", "blocked_edges": ["edge"]})
     assert Vlm(post=post, get=RUNNING).judge(case, 100.0) is None and calls == []
+
+
+def test_model_parameters_are_bounded_recorded_and_change_profile(monkeypatch):
+    original = Vlm(get=RUNNING).profile()
+    monkeypatch.setenv('ROSY_VLM_OPTIONS', '{"num_ctx":16384,"temperature":0.2}')
+    post, calls = _post({'decision': 'WAIT'})
+    model = Vlm(post=post, get=RUNNING)
+    proposal = model.judge(_case(), 100.0)
+    assert model.profile() != original
+    assert calls[-1][1]['options']['num_ctx'] == 16384
+    assert proposal['evidence']['model_options']['temperature'] == 0.2
+    import pytest
+    for invalid in ('{"num_ctx":0}', '{"temperature":NaN}', '{"seed":true}', '{"unknown":1}', '[]'):
+        monkeypatch.setenv('ROSY_VLM_OPTIONS', invalid)
+        with pytest.raises(ValueError):
+            Vlm()
