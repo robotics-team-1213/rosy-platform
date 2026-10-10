@@ -402,8 +402,12 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         angular = max(-self._config.max_angular,
                       min(self._config.max_angular, -self._config.steering_gain * error))
         reason = "tracking"
-        if guard in ("left", "right") and linear < self._config.ir_guard_min_linear:
-            pass  # D-344 §12 개정: turning in place (camera linear < ir_guard_min_linear), the camera turn stands
+        if guard in ("left", "right", "centre") and linear < self._config.ir_guard_min_linear:
+            # D-344 §12 개정 2: turning in place with a line under the IR row: keep the camera turn and
+            # creep backwards so the front swings away from the line instead of over it (the user's
+            # forward/back manoeuvre). Rear not seen clear: turn in place only.
+            if self._config.ir_guard_back_speed > 0.0 and self._rear_clear_now():
+                linear = -self._config.ir_guard_back_speed
         elif guard in ("left", "right"):
             # 경계선이 왼쪽 IR 밑이면 오른쪽(음의 각속도, REP-103)으로 비킨다.
             turn = min(self._config.ir_guard_turn, self._config.max_angular)

@@ -7,7 +7,6 @@ the sole final ``cmd_vel`` publisher (D-143).
 
 import json
 import math
-import os
 
 import cv2
 import numpy as np
@@ -50,10 +49,7 @@ from core_common.robot_body import PINKY_PRO
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
-from .sensing.perception.paint_localizer import PaintMap
-from .sensing.perception.route_camera import RouteCameraFollower
-from .sensing.perception.route_hybrid import RouteHybridFollower
-from .sensing.perception.route_map import RouteMapFollower
+from .route_followers import build_route_follower
 
 #: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
@@ -268,20 +264,8 @@ class LineObserverNode(Node):
                 'no follower built, CAMERA_LINE will publish no observation')
             return None
         try:
-            with open(graph_path, encoding='utf-8') as handle:
-                graph = yaml.safe_load(handle)
-            x_offset = float(self.get_parameter('camera_x_offset_m').value)
-            if mode == 'route_a':
-                return RouteCameraFollower(
-                    graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset)
-            paint_map = PaintMap.from_bundle(os.path.dirname(graph_path))
-            if mode == 'route_ab':
-                return RouteHybridFollower(
-                    graph, route, start_pose=tuple(route_start),
-                    camera_x_offset_m=x_offset, paint_map=paint_map)
-            return RouteMapFollower(
-                graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset,
-                paint_map=paint_map)
+            return build_route_follower(mode, graph_path, route, route_start,
+                                        float(self.get_parameter('camera_x_offset_m').value))
         except (OSError, yaml.YAMLError, ValueError) as exc:
             self.get_logger().warning(
                 f'{mode} route modes need lane_graph_path, route and route_start '
@@ -332,28 +316,15 @@ class LineObserverNode(Node):
                     profile=self._nominal_profile())
                 self._simulation_ground_key = key
             return self._simulation_ground
-        simulation_enabled = bool(
-            self.get_parameter('allow_simulation_ground').value)
-        use_sim_time = bool(self.get_parameter('use_sim_time').value)
-        height_m = float(self.get_parameter('gazebo_camera_height_m').value)
-        pitch_rad = float(self.get_parameter('gazebo_camera_pitch_rad').value)
-        hfov_rad = float(self.get_parameter('gazebo_camera_hfov_rad').value)
-        max_range_m = float(self.get_parameter(
-            'gazebo_camera_max_range_m').value)
-        key = (source, simulation_enabled, use_sim_time, int(width),
-               int(height), height_m, pitch_rad, hfov_rad, max_range_m)
+        plane = dict(source=source,
+                     simulation_enabled=bool(self.get_parameter('allow_simulation_ground').value),
+                     use_sim_time=bool(self.get_parameter('use_sim_time').value),
+                     width_px=int(width), height_px=int(height),
+                     **{name: float(self.get_parameter(f'gazebo_camera_{name}').value)
+                        for name in ('height_m', 'pitch_rad', 'hfov_rad', 'max_range_m')})
+        key = tuple(plane.values())
         if key != self._simulation_ground_key:
-            self._simulation_ground = simulation_ground_plane(
-                source=source,
-                simulation_enabled=simulation_enabled,
-                use_sim_time=use_sim_time,
-                width_px=width,
-                height_px=height,
-                height_m=height_m,
-                pitch_rad=pitch_rad,
-                hfov_rad=hfov_rad,
-                max_range_m=max_range_m,
-            )
+            self._simulation_ground = simulation_ground_plane(**plane)
             self._simulation_ground_key = key
         return self._simulation_ground
 

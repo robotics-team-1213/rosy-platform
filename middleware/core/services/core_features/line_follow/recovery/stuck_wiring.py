@@ -212,6 +212,15 @@ class StuckRecoveryMixin:
             return "blocked"
         return "clear"
 
+    def _rear_clear_now(self) -> bool:
+        """D-344 §12 개정 2: the body's rear strip is seen clear right now (fresh scan, URDF body)."""
+        config = self._config
+        if not config.body_geometry_known or self._body_points is None:
+            return False
+        rear = body_clearances(self._body_points, lidar_x_m=config.body_lidar_x_m or 0.0,
+                               rear_x_m=config.body_rear_x_m, half_width_m=self._rear_half_width())["rear_m"]
+        return self._rear_state(True, rear, self._clock()) == "clear"
+
     def _rear_half_width(self) -> float:
         config = self._config
         if config.body_half_width_m is None:

@@ -28,6 +28,9 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from core_common.robot_body import PINKY_PRO
+
+from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
 LOOKAHEAD_M = 0.25
 ROW_BAND_M = 0.03
@@ -53,6 +56,17 @@ NEAR_GAP_M = 0.04
 WALL_STANDOFF_M = 0.08
 #: an opening seen this far back (odometry travel) still names the side to turn at a closed way
 EXIT_MEMORY_M = 0.5
+PAINT_HALF_M = PAINT_HALF_WIDTH_M
+#: the boundary memory: seen way edges in odometry, newest last
+EDGE_MEMORY_POINTS = 1200
+#: only edges this near are remembered (the ground projection error grows with range)
+EDGE_MEMORY_MAX_X_M = 0.25
+#: URDF body (D-424), base_footprint
+BODY_HALF_M = PINKY_PRO.half_width_m
+#: a remembered boundary point this close to the path robot->target blocks that target
+CROSS_TOL_M = 0.015
+#: the way's near centre is the median centre of its rows within this of its nearest row
+NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
 EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
@@ -80,7 +94,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={})
+    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={}, edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -93,8 +107,14 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     xs = _row_x(rows, ground, x_offset)
     y_left, y_right = _col_y(first, rows, ground), _col_y(last, rows, ground)
     open_left, open_right = first == 0, last == width - 1
-    centre = np.where(open_left & ~open_right, y_right + half,
-                      np.where(open_right & ~open_left, y_left - half, (y_left + y_right) / 2.0))
+    # the seen boundary (closed edges) for the boundary memory, every 3rd row
+    out["edges_m"] = [(float(xs[i]), float(y)) for i in range(0, len(rows), 3) if xs[i] <= EDGE_MEMORY_MAX_X_M
+                      for y, closed in ((y_left[i], not open_left[i]), (y_right[i], not open_right[i])) if closed]
+    # one edge seen: the drivable edge is the tape's inner edge, so the lane centre is half a lane
+    # minus half a tape inside it
+    inner = half - PAINT_HALF_M
+    centre = np.where(open_left & ~open_right, y_right + inner,
+                      np.where(open_right & ~open_left, y_left - inner, (y_left + y_right) / 2.0))
     # ahead: walk up from the nearest row while the corridor columns are on the way
     ahead = 0.0
     for index in range(len(rows) - 1, -1, -1):
@@ -133,6 +153,8 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     if out["exit"] is not None and not near_ok[out["exit"]]:
         out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
+    near = xs <= float(xs.min()) + NEAR_BAND_M
+    out["near_centre_m"] = (round(float(np.median(xs[near])), 3), round(float(np.median(centre[near])), 3))
     pursuit = min(lookahead, float(xs.max()))
     band = np.abs(xs - pursuit) <= ROW_BAND_M
     if not band.any():
@@ -140,6 +162,37 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     out["target_m"] = (round(float(np.median(xs[band])), 3), round(float(np.median(centre[band])), 3))
     out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
     return out
+
+
+def _crosses(points, tx, ty):
+    """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
+    robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord
+    would cut the inside of every bend."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6 or not points:
+        return None
+    k = 2.0 * ty / d2                                    # signed curvature, left +
+    pts = np.asarray(points, float)
+    if abs(k) < 1e-6:
+        along, across = pts[:, 0], np.abs(pts[:, 1])
+        length = tx
+    else:
+        r = 1.0 / k                                       # circle centre (0, r)
+        dist = np.hypot(pts[:, 0], pts[:, 1] - r)
+        across = np.abs(dist - abs(r))
+        ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
+        along = ang * abs(r)
+        length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
+    hit = (along > 0.03) & (along < length) & (across < CROSS_TOL_M)
+    if not hit.any():
+        return None
+    first = int(np.argmin(np.where(hit, along, np.inf)))
+    return float(pts[first, 1])
+
+
+def _to_world(point, pose):
+    x, y, yaw = pose
+    return (x + math.cos(yaw) * point[0] - math.sin(yaw) * point[1], y + math.sin(yaw) * point[0] + math.cos(yaw) * point[1])
 
 
 def _to_current(point, source_pose, current_pose):
@@ -155,8 +208,9 @@ def _to_current(point, source_pose, current_pose):
 
 
 class DrivableSteer:
-    """Keep-mode steering from the newest drivable way; the only memory is the pivot latch,
-    the cached per-way target and the smoothed lateral offset."""
+    """Keep-mode steering from the newest drivable way. Memory: the pivot and turn-side latches, the
+    last opening seen, the smoothed lateral offset, and the boundary memory (way edges seen, in
+    odometry) that keeps the body off lines the camera no longer sees."""
 
     def __init__(self):
         self._key = None
@@ -165,10 +219,12 @@ class DrivableSteer:
         self._smoothed = None
         self._side = None
         self._memory = None
+        self._edges = []
         self._lost_since = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
+        self._edges = []
         self._lost_since = None
 
     def lost(self, stamp):
@@ -186,7 +242,11 @@ class DrivableSteer:
         self._lost_since = None
         if way_key != self._key:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
-        info = dict(self._target)
+            if source_pose is not None:
+                self._edges.extend(_to_world(p, source_pose) for p in self._target["edges_m"])
+                del self._edges[:-EDGE_MEMORY_POINTS]
+        info = {k: v for k, v in self._target.items() if k != "edges_m"}
+        seen = [_to_current(p, (0.0, 0.0, 0.0), current_pose) for p in self._edges] if current_pose is not None else []
         if wall_ahead_m is not None and info["target_m"] is not None:
             info["wall_ahead_m"] = round(wall_ahead_m, 3)
             info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
@@ -234,6 +294,11 @@ class DrivableSteer:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"][side]
         tx, ty = _to_current(target, source_pose, current_pose)
+        crossing = _crosses(seen, tx, ty)
+        if crossing is not None:
+            # the way to the target crosses a boundary seen earlier (floor beyond a line that has
+            # left the view): steer along it instead, toward the side the robot is on
+            strategy, ty = strategy + "_kept", (crossing - BODY_HALF_M - 0.01 if crossing > 0 else crossing + BODY_HALF_M + 0.01)
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
         error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
