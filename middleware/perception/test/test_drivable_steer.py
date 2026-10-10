@@ -109,7 +109,7 @@ def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
 
 def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
     beyond = np.zeros((240, 320), bool)
-    beyond[150:200, 100:220] = True                      # floor only beyond a gap
+    beyond[115:160, 100:220] = True                      # floor only beyond a gap
     error, confidence, debug = DrivableSteer().update(beyond, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
                                                       wall_ahead_m=None, side_clear_m={"left": None, "right": None})
     assert error is None and debug["reason"] == "way_beyond_line"
