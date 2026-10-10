@@ -453,9 +453,24 @@ class LineStuckAnswerLog:
                         camera = dict(seen)
                 ai = []
                 if "fleet_ai_facts" in tables:
+                    draft = connection.execute(
+                        """SELECT kind, robot_ids, value, confidence, evidence, source, observed_at, stage
+                           FROM fleet_ai_facts WHERE kind='incident_context'
+                             AND json_extract(evidence, '$.stuck_id')=?
+                             AND observed_at BETWEEN ? AND ?
+                           ORDER BY observed_at DESC LIMIT 20""",
+                        (stuck_id, opened - 5, opened + 120)).fetchall()
+                    for fact in draft:
+                        item = dict(fact)
+                        item["robot_ids"] = json.loads(item["robot_ids"])
+                        if robot_id in item["robot_ids"]:
+                            item["value"] = json.loads(item["value"])
+                            item["evidence"] = json.loads(item["evidence"])
+                            ai.append(item)
+                            break
                     candidates = connection.execute(
                         """SELECT kind, robot_ids, value, confidence, evidence, source, observed_at, stage
-                           FROM fleet_ai_facts WHERE observed_at BETWEEN ? AND ?
+                           FROM fleet_ai_facts WHERE kind!='incident_context' AND observed_at BETWEEN ? AND ?
                            ORDER BY observed_at DESC LIMIT 50""", (opened - 5, opened + 5)).fetchall()
                     for fact in candidates:
                         item = dict(fact)
