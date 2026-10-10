@@ -22,6 +22,7 @@ def _fleet(n: int = 2):
     for i in range(1, n + 1):
         robot = FakeRobot(f"rosy_{i:02d}",
                           state={"robot_id": f"rosy_{i:02d}", "navigation": "IDLE",
+                                 "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                  "map_id": "m1", "pose": {"x": float(i), "y": 0.0, "yaw": 0.0}})
         robots.append(robot)
     return robots

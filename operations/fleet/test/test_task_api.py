@@ -83,6 +83,7 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01", state={
         "robot_id": "rosy_01", "navigation": "IDLE", "mode": "IDLE",
+        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
         "safety": {"estop": False},
     })
     dispatched = Event()

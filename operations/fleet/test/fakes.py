@@ -81,6 +81,7 @@ class FakeRobot:
         #: 여러 로봇의 호출 순서를 한 줄로 보고 싶을 때 같은 리스트를 넘긴다.
         self.log = log if log is not None else []
         self._state = state or {"robot_id": robot_id, "map_id": "m1",
+                                "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                 "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}}
         self._swarm_state = swarm_state or {"active": True, "holding": False}
         #: 관제 콘솔이 읽는 점유 격자. `None` 이면 빈 dict 를 돌려준다(맵 없는 로봇).
