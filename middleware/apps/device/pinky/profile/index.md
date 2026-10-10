@@ -26,6 +26,7 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 6d2d65dce · fix(pinky_pro): 차선 순항 0.10 m/s
 - 2026-10-01 · edca9b2e · feat(profile): 생성 `geometry.yaml`, 카메라 NOMINAL을 URDF 값으로 (D-397)
 - 2026-10-01 · uncommitted · fix(pinky_pro): device CORE line_follow LiDAR forward 180 deg (D-344 §11)
 - 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
