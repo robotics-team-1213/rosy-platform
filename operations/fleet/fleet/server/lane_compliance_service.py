@@ -277,7 +277,8 @@ class LaneComplianceMonitor:
         pose = self._heading_samples[robot_id]
         back = (self.view(robot_id) or {}).get("return") or {}
         travel = getattr(pose, "dead_reckon_m", None)
-        if not isinstance(travel, (int, float)) or not math.isfinite(travel) or travel < 0:
+        if (not isinstance(travel, (int, float)) or isinstance(travel, bool)
+                or not math.isfinite(travel) or travel < 0):
             return {"status":"pose_untrusted"}
         return {**review, "map_id":pose.map_id, "x":pose.x, "y":pose.y, "yaw":pose.yaw,
                 "pose_age_s":pose.age_s, "offset_m":back.get("offset_m"),

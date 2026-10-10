@@ -79,6 +79,14 @@ def test_real_active_map_integer_version_is_supported_and_body_is_required():
     assert select(r, [r], cfg, now=10.1, attempt=1)[0] is None
 
 
+@pytest.mark.parametrize("caps", ["malformed", {"controls":"bad"},
+    {"controls":{"items":None}}, {"controls":{"items":[{"kind":"base_velocity",
+        "robot_kind":"pinky_pro", "stuck_realign":"PIVOT"}]}}])
+def test_malformed_capabilities_fail_closed(caps):
+    r = row(); r["capabilities"] = caps
+    assert select(r, [r], config(), now=10.1, attempt=1)[0] is None
+
+
 def test_body_near_area_edge_cannot_turn_even_with_turn_spot():
     r = row(); r["realign_evidence"]["x"] = .95
     assert select(r, [r], config(), now=10.1, attempt=1)[0] is None
