@@ -52,7 +52,7 @@ CUE_TTL_S = 1.0
 AT_CROSSWALK_M = 0.15
 #: D-430 review 1: 404 (no route), 500 (route without wiring), 403 (not the site seat), 501: the
 #: robot cannot take the cue; it is asked again after this long.
-UNSUPPORTED = (403, 404, 500, 501)
+UNSUPPORTED = (400, 403, 404, 422, 500, 501)   # 400/422: an older strict lane-cue schema
 #: A robot whose CORE cannot take the cue is asked again after this long.
 CUE_RETRY_S = 60.0
 
@@ -157,6 +157,7 @@ class LaneComplianceMonitor:
         return {"state": tracker.state, "since": tracker.since, "raw": raw.state, "moving": moving,
                 "pose_stamp": getattr(pose, "odom_stamp", None) if placed else None,
                 "guide": raw.guide if current else None,
+                "turn_spot": raw.turn_spot if current else False,
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
                 "crosswalk": raw.crosswalk,
@@ -193,7 +194,9 @@ class LaneComplianceMonitor:
                 # OFF_MAP: CORE holds without odom alignment (re-review 1), any positive stamp will do.
                 "pose_stamp": back["pose_stamp"] or self._last_stamp.get(robot_id) or now,
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
-                                        "offset_m", "edge_id", "guide")}}
+                                        "offset_m", "edge_id", "guide")},
+                # rev 4: only when true, so a CORE without the field (strict schema) never sees it.
+                **({"turn_spot": True} if back["turn_spot"] else {})}
         # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
             reply = await asyncio.wait_for(send(body), PERIOD_S)

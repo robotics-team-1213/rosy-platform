@@ -160,3 +160,10 @@ def test_no_cue_while_the_robot_has_an_open_stuck_except_off_map():
         asyncio.run(monitor.tick())
         clock[0] += 0.5
     assert monitor.view("r1")["return"]["state"] == OFF_LANE and client.sent == []
+
+
+def test_turn_spot_only_on_a_configured_spot():
+    cfg = LaneComplianceConfig.from_mapping({"turn_spots": [{"x": 0.5, "y": 0.0}], "turn_spot_tolerance_m": 0.018})
+    assert classify(0.51, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is True
+    assert classify(0.53, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is False
+    assert classify(0.5, 0.0, 0.0, 0.0, GRAPH, CW).turn_spot is False          # none configured

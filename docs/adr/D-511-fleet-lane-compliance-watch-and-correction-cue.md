@@ -96,7 +96,7 @@
 3. **CORE(`fleet_lane_cue_enabled`, 기본 false, Pinky true).** CAMERA_LINE이 이미 달리는 틱에서, 앞 물체·IR 낡음·IR 가운데 정지를 지난 뒤에만 읽는다. 움직임을 시작하지 않는다.
    - `ON_LINE`·`OFF_LANE`: IR이 선을 못 볼 때(또는 꺼짐) `side`를 IR 가장자리 가지로 넣는다(4항 그대로). IR이 본 쪽이 이긴다.
    - `OFF_LANE`이고 재진입점이 45° 넘게 옆: 그쪽으로 제자리 회전한 다음 차로 유지가 이어 간다.
-   - `WRONG_WAY`: `turn_deg`가 30° 안이 될 때까지 제자리 회전한다. 차로 0.185 m, 몸 회전 반지름 0.088 m(URDF)라 차로 안에서 돈다. 각도가 없으면 HOLD `fleet_wrong_way`.
+   - `WRONG_WAY`: `turn_deg`가 30° 안이 될 때까지 제자리 회전한다. (개정 4에서 바뀜: 차로 안에서는 돌지 않는다. 회전 원 0.0926 m(`robot_body` URDF 0.08257 m + 패드 0.010 m)가 차로 안쪽 반폭 0.080 m보다 넓다.) 각도가 없으면 HOLD `fleet_wrong_way`.
    - `OFF_MAP`: HOLD `fleet_off_map`. 콘솔이 CRIT으로 알리고 사람이 판단한다(D-577 AI PC 제안 경로는 그 브랜치가 잇는다).
    - `crosswalk_ahead`: `pose_age_s` 전의 odom 자세에 `fleet_map` 구역 하나를 D-491 구역 목록에 넣는다(같은 id는 새 것으로 바꾼다). D-491 IR 쉼과 D-573 서고-보고-건너기가 카메라 구역과 같은 목록에서 이 구역을 쓴다. 카메라 구역이 흔들려도 건넌다.
    - IR, 몸 기준 정지, D-573 게이트, D-517 권한이 모두 이긴다. 결정→움직임 입력이므로 D-430 Safety-Review 대상이다.
@@ -133,3 +133,9 @@
 - 회전 중 교차로 지시·arc·횡단보도 구역이 생기면 래치 HOLD `fleet_turn_interrupted`다. 교차로가 `aborted`로 남으면 모드를 바꿀 때까지 회전을 시작하지 않는다.
 - 켜려면 `obstacle_mode: path`가 필요하다(설정 검사).
 - 받는 자리는 D-555 3 현장 등록 자리(화면 코드 토큰 + `site:` 라벨)다. 라벨은 자리를 좁힐 뿐 Fleet을 인증하지 않는다. D-550이 hub 주체를 정하면 전용 grant로 바꾼다.
+
+### 개정 4 — 역주행은 회전 자리에서만 돈다 (2026-10-10, 교착 ADR docs/stuck-deadlock-realign과 합의)
+
+- 실제 회전 원은 0.0926 m(`core_common.robot_body`: URDF 0.08257 m + `SWEEP_PAD_M` 0.010 m)이고 차로 안쪽 반폭 0.080 m보다 넓다. 차로 안 U턴은 들어가지 않는다.
+- `LaneCueRequest`에 `turn_spot: bool`(기본 false)을 더한다. Fleet은 지도로 확인한 회전 자리(링 진입 네 곳, 현장 YAML `fleet.lane_compliance.turn_spots`) 안 `turn_spot_tolerance_m`(0.018 m, D-587 자세 한계)일 때만 true를 싣는다. false면 필드를 빼서 필드를 모르는 CORE(엄격 스키마)에는 보내지 않는다. Fleet은 400·422도 받을 수 없는 로봇으로 본다.
+- CORE는 WRONG_WAY에서 `turn_spot`이 true일 때만 제자리 회전한다. 아니면 래치 HOLD `fleet_wrong_way`이고 Fleet(D-577 REALIGN)이 푼다. 역방향으로 계속 달리지도, 차로 안에서 돌지도 않는다.
