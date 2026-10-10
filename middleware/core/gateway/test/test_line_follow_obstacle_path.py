@@ -282,6 +282,18 @@ def test_angular_follows_the_manual_ladder_and_keeps_the_curvature():
     assert small.angular == pytest.approx(0.08) and small.linear > 0
 
 
+@pytest.mark.parametrize("ceiling, follows", [(None, True), (lambda: 0.30, True), (lambda: 0.30, False)])
+@pytest.mark.parametrize("error", [-0.8, 0.8])
+def test_high_gain_preserves_curvature_at_config_and_manual_caps(ceiling, follows, error):
+    m = _laddered(ceiling, cruise_speed=0.10, max_linear=0.10,
+                  steering_gain=2.0, max_angular_follows_manual=follows)
+    _camera(m, 10.0, error=error)
+    d = m.tick(10.05)
+    cap = 0.30 if ceiling is not None and follows else 0.70
+    assert abs(d.angular) == pytest.approx(cap)
+    assert d.linear == pytest.approx(0.10 * (1 - 0.65 * abs(error)) * cap / (2.0 * abs(error)))
+
+
 def test_explicit_override_ignores_the_ladder_cap_and_the_floor_can_be_disabled():
     m = _laddered(lambda: 0.30, max_angular_follows_manual=False)
     _camera(m, 10.0, error=-0.8)
