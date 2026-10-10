@@ -78,11 +78,20 @@ class TripAdmission:
                 raise TripError(422, check["code"], check)
         return pose, enable
 
-    async def camera_check(self, robot_id: str) -> None:
+    async def camera_check(self, robot_id: str, caps=None) -> None:
         """D-601 B (plan time, lane plans): the robot's front camera, the line camera, must be live
         (CORE ``vision/front/status`` ``available``); else 422 ``TRIP_LANE_CAMERA_UNAVAILABLE``. Off with
-        ``fleet.trip.lane_camera_check: false`` (Gazebo SIM publishes no front preview)."""
+        ``fleet.trip.lane_camera_check: false`` (Gazebo SIM publishes no front preview). D-604: the
+        capabilities' ``line_follow.camera`` (same evidence) answers it without a call; an older CORE
+        (no such field) is still asked over ``front/status``."""
         if not self.config.lane_camera_check:
+            return
+        status = getattr(caps, "line_camera", None)
+        if status is not None:
+            if status.get("available") is not True:
+                raise TripError(422, "TRIP_LANE_CAMERA_UNAVAILABLE", {
+                    "stale": status.get("source") not in (None, "NONE"), "age_ms": status.get("age_ms"),
+                    "source": status.get("source")})
             return
         status = await self._call(self._junction.front_camera(robot_id), "TRIP_LANE_CAMERA_UNAVAILABLE") or {}
         if status.get("available") is not True:

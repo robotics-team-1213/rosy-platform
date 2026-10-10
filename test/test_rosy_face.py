@@ -1570,14 +1570,16 @@ def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tm
     assert spawn.patterns == ["navigating", "identify_amber", "navigating"]
 
 
-@pytest.mark.parametrize("status, core", [
-    ({"robot_mode": "EMERGENCY"}, {"estop": False, "robot_mode": "EMERGENCY", "caution": []}),
-    ({"robot_mode": "IDLE"}, {"estop": False, "robot_mode": "IDLE", "caution": ["battery_low"]}),
+@pytest.mark.parametrize("status, core, reason", [
+    ({"robot_mode": "EMERGENCY"}, {"estop": False, "robot_mode": "EMERGENCY", "caution": []}, "STATE_DISPLAY"),
+    ({"robot_mode": "IDLE"}, {"estop": False, "robot_mode": "IDLE", "caution": ["battery_low"]}, "CAUTION_ACTIVE"),
     ({"robot_mode": "NAVIGATION", "nav_state": "BLOCKED"},
-     {"estop": False, "robot_mode": "NAVIGATION", "caution": []}),
-    ({"robot_mode": "IDLE"}, None),  # no fresh CORE hand-over
+     {"estop": False, "robot_mode": "NAVIGATION", "caution": []}, "STATE_DISPLAY"),
+    ({"robot_mode": "IDLE"}, None, "CORE_UNAVAILABLE"),  # no fresh CORE hand-over
+    ({"robot_mode": "IDLE"}, {"estop": True, "robot_mode": "IDLE", "caution": []}, "ESTOP"),
 ])
-def test_identity_pulse_is_refused_while_a_safety_display_holds(tmp_path, status, core):
+def test_identity_pulse_is_refused_while_a_safety_display_holds(tmp_path, status, core, reason):
+    """D-596 rev 2026-10-10: the refusal names its reason, which CORE hands on to Fleet."""
     module = _display()
     _lamp_tree(tmp_path)
     _status(tmp_path, "CORE_READY", **status)
@@ -1588,6 +1590,7 @@ def test_identity_pulse_is_refused_while_a_safety_display_holds(tmp_path, status
     _hand_over(tmp_path, "identify_blue")
     assert display.handle_test() == "failed"
     assert "identify_blue" not in spawn.patterns
+    assert _answer(tmp_path)["reason"] == reason
 
 
 def test_identity_pulse_is_cut_short_when_caution_starts_mid_blink(tmp_path):

@@ -146,6 +146,8 @@ class TripCaps:
     lane_bend: bool = False
     #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
     trip_lease: bool = False
+    #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
+    line_camera: Optional[dict] = None
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -165,6 +167,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 and math.isfinite(speed) and speed >= 0):
             known = frozenset(mode for mode in modes if mode in ("lane", "free"))
             floor = item.get("site_floor_map_id")
+            line = capabilities.get("line_follow")
+            camera = line.get("camera") if isinstance(line, dict) else None
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
                             junction_pivot=item.get("junction_pivot") is True,
@@ -172,7 +176,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
-                            lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True)
+                            lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
+                            line_camera=camera if isinstance(camera, dict) else None)
     return None
 
 
