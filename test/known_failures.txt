@@ -9,3 +9,4 @@
 middleware/perception/test/test_line_observer_wiring.py::test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires  # fails on clean main 66bde0895 (2026-10-10), not D-589
 test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # fails on clean main e66eb4b16 (2026-10-10): fleet 52550 > 51848+150 and fleet/fleet/server/web/console.js 993 > 832+150; fleet re-judge lands with feat/d577-chain-supervision
 test/test_robot_literals.py::test_robot_literals_stay_in_their_family  # fails on clean main e6ffe9c2e (2026-10-10): D-597 drivable_steer.py not in the literal family set; owner to register
+deploy/robot/pinky_pro/image/test/test_verify_mounted_image.py::test_inspect_passes_with_valid_image  # fails on clean origin/main e66eb4b16 too (2026-10-10, pre-push host): fixture lacks the D-247 IMU/lamp/OV5647 boot lines and lamp files the inspector requires; not in GitHub CI; fixture update owed by the image owner
