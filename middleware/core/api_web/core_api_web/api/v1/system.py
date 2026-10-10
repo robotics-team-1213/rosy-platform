@@ -262,7 +262,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                           svc, "line_advice", None) is not None,
                                       trip_lease=getattr(svc, "trip_lease", None) is not None,
                                       goal_lease=True if "free" in drive_modes else None)
-    # `line_follow.camera` (D-604, v1.194 additive): the line camera's health from the same
+    # `line_follow.camera` (D-604, v1.195 additive): the line camera's health from the same
     # preview store `GET /vision/front/status` reads, so Fleet's lane admission needs no extra call.
     # `drive_modes` keeps meaning "the service exists"; source GAZEBO is the SIM preview label.
     if svc.line_follow is not None:

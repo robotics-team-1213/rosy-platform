@@ -43,5 +43,5 @@
 
 ### Consequences
 
-- API Reference v1.194: capabilities 행, `/trip` 행, 변경 이력 한 줄. Additive라 이전 Fleet·로봇은 그대로 동작한다.
+- API Reference v1.195: capabilities 행, `/trip` 행, 변경 이력 한 줄. Additive라 이전 Fleet·로봇은 그대로 동작한다.
 - 로봇 이미지에 이 CORE가 들어가기 전까지 실기 로봇은 front/status 경로를 그대로 탄다.
