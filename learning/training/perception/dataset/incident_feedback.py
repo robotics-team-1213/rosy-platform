@@ -74,8 +74,8 @@ def main() -> None:
     parser.add_argument("markers", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    result = bind(json.loads(args.incidents.read_text(encoding="utf-8")),
-                  json.loads(args.markers.read_text(encoding="utf-8")))
+    result = bind(json.loads(args.incidents.read_text(encoding="utf-8-sig")),
+                  json.loads(args.markers.read_text(encoding="utf-8-sig")))
     with args.out.open("x", encoding="utf-8") as output:
         output.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(f"{len(result['matches'])} matched, {len(result['missing_incidents'])} missing: {args.out}")

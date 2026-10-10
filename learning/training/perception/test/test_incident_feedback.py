@@ -1,5 +1,8 @@
 """Fleet incident reviews are candidates for a recording, never pixel labels."""
 
+import json
+import sys
+
 import incident_feedback
 import pytest
 
@@ -50,3 +53,15 @@ def test_ambiguous_or_invalid_report_is_rejected():
     broken["id"] = "line_stuck:rosy_41:stuck-a"
     with pytest.raises(ValueError, match="identity"):
         incident_feedback.bind({"reports": [broken]}, markers("stuck-a"))
+
+
+def test_cli_accepts_windows_utf8_bom_exports(tmp_path, monkeypatch):
+    incidents = tmp_path / "incidents.json"
+    marks = tmp_path / "stuck_markers.json"
+    output = tmp_path / "feedback.json"
+    incidents.write_text(json.dumps({"reports": [report()]}), encoding="utf-8-sig")
+    marks.write_text(json.dumps(markers("stuck-a")), encoding="utf-8-sig")
+    monkeypatch.setattr(sys, "argv", ["incident_feedback.py", str(incidents), str(marks),
+                                    "--out", str(output)])
+    incident_feedback.main()
+    assert json.loads(output.read_text(encoding="utf-8"))["matches"][0]["review_state"] == "unreviewed"
