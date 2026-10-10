@@ -63,6 +63,7 @@
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-11-core-drive-composition-first.md](../../../docs/plans/2026-10-11-core-drive-composition-first.md)
 
 ## 교훈 (docs/solutions)
 
