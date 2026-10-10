@@ -3091,3 +3091,8 @@
 - Change: 경로 보기 버튼을 정확한 접근성 이름으로 선택하고 반복 출발 자리도 이름으로 찾아, 한 바퀴 폼이 추가돼도 부분 문자열·select 순서에 기대지 않는다.
 - Evidence: 모델 PC 실제 Chromium 카드 주행 시험 10 passed; known_failures NEW 0. 실패한 CI fleet-1of3의 중복 버튼 선택과 반복 출발 선택을 재현하고 수정했다.
 - Gate: SOURCE / 원격 브라우저 시험. 로봇 물리 주행 증거는 아니다.
+## 2026-10-10 · uncommitted · fix(situation): open stuck judgement without changing command authority
+
+- Change: D-618 separates ai_observer case reads from AI-first enrollment; removes unsupported REALIGN from the VLM table. API Reference specifies request correlation, image/model evidence, queued admission, Fleet verdict and CORE outcome, with three contract examples.
+- Evidence: remote situation / AI facts / AI-first contracts 97 passed; known_failures 0 NEW. Live heartbeat reports Qwen model digest and both enrolled Fleet resolver robots; no corner inference or motion acceptance is claimed.
+- Gate: SOURCE / remote API contracts; field judgement and lane-follow acceptance remain pending.

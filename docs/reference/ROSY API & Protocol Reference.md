@@ -1505,11 +1505,11 @@ D-610 deadlock cases appear in `/api/fleet/ai/problems` after a stable wait cycl
 | 입력 획득 | `GET /api/fleet/ai/case/{problem_id}` | `context`, `history`, `views.front`, `views.rosy_cam`을 읽는다. 닫힌 문제는 404 `AI_CASE_NOT_OPEN`, 다른 역할의 사례 조회는 403 `AI_CASE_FORBIDDEN`. |
 | AI 판단 응답 | `POST /api/fleet/ai/proposals` | `robot_id`, `stuck_id`(요청 ID), `decision`, `reason`, `confidence`, `source`, `observed_at`, `ttl_s`, `evidence`, `body`로 응답한다. |
 | Fleet 접수 | 위 POST의 `state` | `queued`는 접수만 뜻한다. `absent`, `owner_busy`, `robot_not_acting`은 실행 대기열에 넣지 않는다. |
-| Fleet 판정·CORE 결과 | `GET /api/fleet/ai`의 `proposals[]`, `chain.robots[].last_answer`; `GET /api/fleet/line-stuck` | `robot_id` + `stuck_id`로 묶고 `source`, `decision`, `verdict`, `outcome`을 함께 보여준다. `forwarded`는 CORE에 전달한 상태이며 물리적 성공을 뜻하지 않는다. |
+| Fleet 판정·CORE 결과 | `GET /api/fleet/ai`의 `proposals[]`, `chain.robots[].last_answer`; `GET /api/fleet/line-stuck` | `robot_id` + `stuck_id`로 묶고 `source`, `decision`, `verdict`, `outcome`을 함께 보여준다. `forwarded`는 Fleet 실행 검사를 통과한 전달 예정 상태다. 실제 CORE 전달·수락은 `outcome`과 명령 기록으로 확인하며 물리적 성공은 별도 확인한다. |
 
-모든 시각은 UTC Unix seconds다. VLM 응답의 `source`는 `vlm:<model>@<digest12>:<prompt>`이며 `evidence.seen`은 영상에서 판단한 내용, `reason`은 짧은 사유 코드다. `evidence.views`의 두 영상은 각각 `frame_id`, `captured_at`, `age_s`, `sha256`으로 추적한다. JPEG와 Vision lease는 응답 기록에 복사하지 않는다. 모델 이름만 같아도 digest가 다르면 동일 판단자로 간주하지 않는다.
+`captured_at`, `observed_at`, `judged_at`은 UTC Unix seconds이며 `age_s`, `ttl_s`는 초 단위 기간이다. VLM 응답의 `source`는 `vlm:<model>@<digest12>:<prompt>`이며 `evidence.seen`은 영상에서 판단한 내용, `reason`은 짧은 사유 코드다. `evidence.views`의 두 영상은 각각 `frame_id`, `captured_at`, `age_s`, `sha256`으로 추적한다. JPEG와 Vision lease는 응답 기록에 복사하지 않는다. 모델 이름만 같아도 digest가 다르면 동일 판단자로 간주하지 않는다.
 
-현재 Qwen 어댑터는 두 영상이 모두 있어야 판단하며 모델 호출 제한은 6 s, 제안 TTL은 6 s다. 누락 영상·모델 부재·시간 초과·잘못된 JSON·허용 목록 밖 단어는 제안을 보내지 않고 기존 규칙으로 돌아간다. Fleet은 실행 시점의 문제 ID, TTL, 원인별 허용 단어, 현재 센서·차체 여유·교차로·위치·뒤쪽 차량·trip 권한을 다시 검사하고 CORE도 재검사한다. AI-first 전용 영상 신선도 제한은 별도로 적용하며 사례 조회만으로 이 모드를 활성화하지 않는다.
+현재 Qwen 어댑터는 두 영상이 모두 있어야 판단하며 모델 호출 제한은 6 s, 제안 TTL은 6 s다. 누락 영상·모델 부재·시간 초과·잘못된 JSON·허용 목록 밖 단어는 제안을 보내지 않고 기존 규칙으로 돌아간다. Fleet은 실행 시점의 문제 ID, TTL, 원인별 허용 단어, 교차로·위치·뒤쪽 차량·trip 권한을 다시 검사한다. CORE는 현재 센서, 차체 여유, 후방 경로와 사각, 충돌 정지·watchdog을 재검사한다. AI-first 전용 영상 신선도 제한은 별도로 적용하며 사례 조회만으로 이 모드를 활성화하지 않는다.
 
 예시의 `queued`와 최종 `verdict`를 구분한다. 아래는 계약 시험용 상황이며 실제 현장 모델 판단 결과는 별도 증거로 기록한다.
 
