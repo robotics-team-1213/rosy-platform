@@ -109,6 +109,15 @@ class SettingsStore internal constructor(private val store: DataStore<Preference
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { prefs -> prefs[AUTO_EXPOSURE] == true }
 
+    /** D-589 6: follow Vision `camera` messages; on until the operator turns it off. */
+    val recognitionExposure: Flow<Boolean> = store.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs[RECOGNITION_EXPOSURE] != false }
+
+    suspend fun saveRecognitionExposure(enabled: Boolean) {
+        store.edit { prefs -> prefs[RECOGNITION_EXPOSURE] = enabled }
+    }
+
     suspend fun saveAutoExposure(enabled: Boolean) {
         store.edit { prefs -> prefs[AUTO_EXPOSURE] = enabled }
     }
@@ -201,6 +210,7 @@ class SettingsStore internal constructor(private val store: DataStore<Preference
     private companion object {
         val LENS = stringPreferencesKey("lens")
         val AUTO_EXPOSURE = booleanPreferencesKey("auto_exposure_assist")
+        val RECOGNITION_EXPOSURE = booleanPreferencesKey("recognition_exposure")
         val DEVELOPMENT_POLICY = stringPreferencesKey("development_link_policy")
         val LINK_REVISION = stringPreferencesKey("site_link_revision")
         val PEER_RELATIONSHIP = stringPreferencesKey("camera_peer_relationship")

@@ -51,7 +51,7 @@ def _real(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def geometry_error(profile, intervals, *, overridden=()):
+def geometry_error(profile, intervals, *, overridden=(), override_bounds=None):
     """(pitch_rad, height_m, roll_rad, detector_px) error bounds of the ground from ``profile``, or None.
 
     ``intervals`` are the accepted camera_profile record's (None = no record, the URDF
@@ -65,10 +65,14 @@ def geometry_error(profile, intervals, *, overridden=()):
     A stated systematic is added to each band, whatever the steps. A band that is not positive,
     or a fit_step or systematic that is not three non-negative reals, is refused. The ground ignores roll, so a
     record's fitted roll is error too. An operator override of pitch or height states no
-    error: None.
+    error: None, unless ``override_bounds`` {pitch_uncertainty_rad, height_uncertainty_m} states the
+    accepted record's bands with it (user 2026-10-10: crosswalk zones must reach CORE on NOMINAL
+    ground with accepted calibration overrides, D-491 amendment); roll keeps the profile's bound.
     """
     if {"pitch_rad", "height_m"} & set(overridden):
-        return None
+        if not override_bounds:
+            return None
+        profile, intervals = {**profile, **override_bounds}, None
     px = profile.get("detector_lateral_px")
     if not (_real(px) and px > 0):
         return None
