@@ -65,3 +65,36 @@ def _trusted_map_pose(row: Mapping):
     if not isinstance(state, Mapping) or classify(state) == LEGACY:
         return None
     return _map_pose(row)
+
+
+#: D-577 개정 2026-10-10: the CORE words an AI PC proposal may carry per stuck cause. YIELD needs Fleet's
+#: meet geometry and MANUAL hands the robot to a person: neither comes from the AI PC. RESUME never on a
+#: lost lane (D-438 §3). A trip robot takes only WAIT (D-517 5). crosswalk_blocked is a person's (D-573).
+AI_WORDS = {"lane_lost": ("WAIT", "BACK_AND_RETRY", "ABORT"), "no_motion": ("WAIT", "BACK_AND_RETRY", "ABORT"),
+            "obstacle_ahead": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT")}
+
+
+def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfig) -> Optional[str]:
+    """Why Fleet refuses this proposal (then its rules answer), or None to forward it to CORE."""
+    cause, decision = stuck.get("cause"), proposal["decision"]
+    if row.get("trip") and decision != "WAIT":
+        return "trip"
+    if decision not in AI_WORDS.get(cause, ()):
+        return "word_not_allowed"
+    if "ai" in chain.retired:
+        return "core_refused_before"
+    if decision != "BACK_AND_RETRY":
+        return None
+    if stuck.get("rear_state") == "blocked":
+        return "rear_blocked"
+    if cause == "obstacle_ahead":
+        if not stuck.get("local_enabled"):
+            return "local_disabled"
+        if int(stuck.get("attempts") or 0) >= int(stuck.get("max_attempts") or 0):
+            return "attempts"
+        if chain.rule_answers >= config.rule_budget:
+            return "rule_budget"
+        if ((row.get("state") or {}).get("line_follow") or {}).get("crosswalk") is not None:
+            return "crosswalk"
+        return "peer_behind" if peer_behind(row, rows, config) else None
+    return lane_lost_hold(row, stuck, rows, chain, config, rule="R3" if cause == "lane_lost" else "R6")

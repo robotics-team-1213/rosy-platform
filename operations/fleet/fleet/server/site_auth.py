@@ -15,7 +15,8 @@ from typing import Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException, Request
 
-AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat"})  # D-577 4
+AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577 4
+                      "/api/fleet/ai/proposals"})   # D-577 개정 2026-10-10: proposals, Fleet validates
 
 _LOG = logging.getLogger(__name__)
 

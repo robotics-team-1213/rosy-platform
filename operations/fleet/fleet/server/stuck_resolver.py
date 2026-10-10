@@ -35,6 +35,8 @@ class ResolverConfig:
     peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
     #: D-577 1: R3 trusts a known Fleet map pose only while it is LOCALIZED and this fresh.
     pose_max_age_s: float = 2.0
+    #: D-577 개정 2026-10-10: how long a stuck waits for an AI PC proposal before the rules answer.
+    ai_wait_s: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class _Chain:
     answered: set = field(default_factory=set)       # stuck ids with an answer in flight/done
     retries: dict = field(default_factory=dict)      # stuck id -> transport resends
     escalated: set = field(default_factory=set)      # stuck ids already escalated
+    seen_at: float = 0.0                             # when the current stuck id was first seen
+    ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -166,6 +170,7 @@ class StuckResolver:
         self._pins: dict[str, str] = {}
         self._plans: dict[str, _YieldPlan] = {}
         self._sent_yield: dict[str, tuple] = {}
+        self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -181,7 +186,8 @@ class StuckResolver:
         if answer.decision == "YIELD" and answer.yield_m is not None:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
-        if (answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+        if ((answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+             or answer.rule == "ai" and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME" and answer.rule != "meet":
@@ -265,7 +271,7 @@ class StuckResolver:
         elif not chain.mode:
             chain.mode = mode
         if chain.stuck_id != sid:
-            chain.stuck_id, chain.closed_at = sid, None
+            chain.stuck_id, chain.closed_at, chain.seen_at = sid, None, now
             if chain.resume_id is not None and sid != chain.resume_id:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
@@ -279,6 +285,9 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
             return self._next_segment(row, rows)
+        proposed = self._ai_answer(now, row, stuck, rows, chain)
+        if proposed is not None:
+            return None if proposed == "wait" else proposed
         rule = self._rule(row, stuck, rows, chain)
         ai = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
         if ai is not None and rule is not None and rule[1] == "BACK_AND_RETRY":
@@ -299,6 +308,38 @@ class StuckResolver:
         if len(rule) == 4:
             return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
         return Answer(rid, sid, rule[1], rule[0])
+
+    def _ai_answer(self, now, row, stuck, rows, chain):
+        """D-577 개정 2026-10-10: the AI PC proposes, Fleet checks the envelope, CORE re-checks.
+
+        Returns an Answer for a valid proposal, "wait" while an acting robot's AI PC still has time,
+        or None: the rules answer. Every judged proposal is appended to ``ai_verdicts`` (audit)."""
+        rid, sid = str(row["robot_id"]), str(stuck["stuck_id"])
+        proposal = row.get("ai_proposal")
+        if proposal is not None and proposal["stuck_id"] != sid:
+            self._judge(chain, proposal, now, "stuck_mismatch")
+            proposal = None
+        if proposal is None:
+            waiting = row.get("ai_wait") and now - chain.seen_at < self.config.ai_wait_s
+            return "wait" if waiting else None
+        why = self._judge(chain, proposal, now, None, row, stuck, rows)
+        if why != "forwarded":
+            return None
+        decision = proposal["decision"]
+        return Answer(rid, sid, decision, "ai",
+                      escalate=f"ai_wait:{proposal['reason']}" if decision == "WAIT" else None)
+
+    def _judge(self, chain, proposal, now, verdict, row=None, stuck=None, rows=None) -> Optional[str]:
+        key = (proposal["stuck_id"], proposal["decision"], proposal["reason"])
+        if key in chain.ai_judged:
+            return None
+        chain.ai_judged.add(key)
+        if verdict is None:
+            from fleet.server.stuck_lane_lost import ai_proposal_invalid
+
+            verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, self.config) or "forwarded"
+        self.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
+        return verdict
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
         chain.escalated.add(sid)

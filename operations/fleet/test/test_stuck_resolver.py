@@ -700,3 +700,52 @@ def test_d577_acting_ai_fact_turns_a_back_off_into_r5_wait_and_a_human():
                                          escalate="obstacle_ahead_hold:ai:rear_blocked")]
     plain = StuckResolver(ResolverConfig(), painted=painted_track)
     assert plain.step(0.0, [_row(stuck=_stuck())]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+
+
+# ---- D-577 개정 2026-10-10: AI PC proposes, Fleet validates the envelope, rules on refusal/timeout ----
+
+def _proposal(decision="BACK_AND_RETRY", stuck_id="stuck-1", reason="obstacle_ahead_back_off"):
+    return {"robot_id": "rosy_01", "stuck_id": stuck_id, "decision": decision, "reason": reason,
+            "confidence": 0.6, "evidence": {}, "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+
+
+def _ai_row(proposal=None, stuck=None, wait=True):
+    row = _row(stuck=stuck or _stuck())
+    if proposal is not None:
+        row["ai_proposal"] = proposal
+    if wait:
+        row["ai_wait"] = True
+    return row
+
+
+def test_d577_valid_ai_proposal_is_forwarded():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_ai_row(_proposal())]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")]
+    assert [v["verdict"] for v in r.ai_verdicts] == ["forwarded"]
+    wait = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert wait.step(0.0, [_ai_row(_proposal("WAIT", reason="rear_blocked"))]) == [
+        Answer("rosy_01", "stuck-1", "WAIT", "ai", escalate="ai_wait:rear_blocked")]
+
+
+@pytest.mark.parametrize("proposal, stuck, verdict, fallback", [
+    (_proposal("MANUAL"), None, "word_not_allowed", "BACK_AND_RETRY"),
+    (_proposal("RESUME"), _stuck(cause="lane_lost"), "word_not_allowed", None),
+    (_proposal(stuck_id="stuck-0"), None, "stuck_mismatch", "BACK_AND_RETRY"),
+    (_proposal(), _stuck(attempts=2), "attempts", None),
+    (_proposal(), _stuck(local=False), "local_disabled", None),
+])
+def test_d577_invalid_ai_proposal_falls_back_to_the_rules(proposal, stuck, verdict, fallback):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(10.0, [_ai_row(proposal, stuck, wait=False)])
+    assert [v["verdict"] for v in r.ai_verdicts] == [verdict]
+    assert not any(isinstance(a, Answer) and a.rule == "ai" for a in actions)
+    if fallback:
+        assert actions == [Answer("rosy_01", "stuck-1", fallback, "R2")]
+
+
+def test_d577_no_ai_proposal_in_time_falls_back_to_the_rules():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_ai_row()]) == []                   # the AI PC still has its time
+    assert r.step(4.0, [_ai_row()]) == []
+    assert r.step(5.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    assert r.ai_verdicts == []

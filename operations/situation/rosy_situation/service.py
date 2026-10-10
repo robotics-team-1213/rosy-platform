@@ -169,6 +169,14 @@ class Situation:
             self._log("facts", fact)
         self.queue.extend(facts)
         self._flush()
+        for proposal in getattr(self.analyzers, "proposals", ()):   # D-577 개정: Fleet validates, CORE re-checks
+            self._log("proposals", proposal)
+            try:
+                self.fleet.call("/api/fleet/ai/proposals", proposal)
+            except urllib.error.HTTPError as exc:
+                _LOG.warning("proposal refused %s: %s", exc.code, exc.read()[:200])
+            except (OSError, ValueError) as exc:
+                _LOG.warning("proposal not sent: %s", exc)
         return 0.0 if stuck_event else max(0.0, PERIOD_S - (self.clock() - started))
 
 

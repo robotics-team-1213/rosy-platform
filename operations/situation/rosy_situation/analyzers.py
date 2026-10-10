@@ -10,6 +10,10 @@ Facts only (D-577 3): what the AI PC sees, never what to do. Input is the polled
   poses only (an odom pose of another robot is another frame, so LEGACY poses never count).
 - ``stalled``: line following on, no open stuck, zero command and no movement for ``STALL_S``: a HOLD
   CORE does not report (low light / over-exposure, D-407 keeps those out of the 5 s report).
+
+Proposals (D-577 개정 2026-10-10, 사용자: "AI PC 제안 → Fleet 검증 후 실행"): for each open stuck one CORE word
+with its reason. A blocked rear or a robot ahead proposes WAIT (Fleet then hands the stuck to a person);
+otherwise BACK_AND_RETRY, which Fleet forwards only when its preconditions hold and CORE re-checks.
 """
 
 from __future__ import annotations
@@ -49,6 +53,8 @@ class Analyzer:
         self._still: dict[str, tuple[float, tuple]] = {}           # robot -> (since, odom pose)
         self._seen: set[str] = set()
         self._primed = False
+        self._proposed: set[tuple] = set()
+        self.proposals: list[dict] = []            # this cycle's new proposals (service posts them)
 
     def __call__(self, snapshot: dict) -> list[dict]:
         now = float(snapshot.get("observed_at") or 0.0)
@@ -112,4 +118,24 @@ class Analyzer:
             elif now - since >= STALL_S:
                 fact("stalled", [rid], {"reason": lf.get("reason"), "state": lf.get("state"),
                                         "still_s": round(now - since, 1)}, 0.9, {"line_follow_mode": lf.get("mode")})
+        self.proposals = []
+        for rid, stuck in pending.items():
+            cause, sid = stuck.get("cause"), stuck.get("stuck_id")
+            if cause not in ("lane_lost", "no_motion", "obstacle_ahead") or not sid:
+                continue
+            kinds = {f["kind"] for f in facts if f["robot_ids"][0] == rid}
+            if "rear_blocked" in kinds:
+                decision, reason, confidence = "WAIT", "rear_blocked", 0.8
+            elif "path_blocked_by_robot" in kinds:
+                decision, reason, confidence = "WAIT", "robot_ahead", 0.8
+            else:
+                decision, reason, confidence = "BACK_AND_RETRY", f"{cause}_back_off", 0.6
+            key = (rid, sid, decision, reason)
+            if key in self._proposed:
+                continue
+            self._proposed.add(key)                  # ponytail: one entry per proposal; restart clears it
+            self.proposals.append({"robot_id": rid, "stuck_id": sid, "decision": decision, "reason": reason,
+                                   "confidence": confidence, "source": SOURCE, "observed_at": now, "ttl_s": 6.0,
+                                   "evidence": {"cause": cause, "detail": stuck.get("detail"),
+                                                "facts": sorted(kinds)}})
         return facts

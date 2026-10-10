@@ -66,3 +66,25 @@ def test_facts_pass_fleet_validation():
     stuck = {"robot_id": "r", "stuck_id": "s1", "rear_state": "blocked", "rear_clearance_m": 0.04}
     for fact in a(_snap(1000.0, [_row("r")], [stuck])):
         AiFact.model_validate(fact).check(1000.0)
+
+
+def test_one_proposal_per_stuck_wait_when_the_rear_is_blocked():
+    a = Analyzer()
+    stuck = {"robot_id": "r", "stuck_id": "s1", "cause": "no_motion", "detail": "lane_departure"}
+    a(_snap(1, [_row("r")], [stuck]))
+    assert [(p["decision"], p["reason"]) for p in a.proposals] == [("BACK_AND_RETRY", "no_motion_back_off")]
+    a(_snap(2, [_row("r")], [stuck]))
+    assert a.proposals == []                                            # same proposal is not sent twice
+    a(_snap(3, [_row("r")], [{**stuck, "rear_state": "blocked"}]))
+    assert [(p["decision"], p["reason"]) for p in a.proposals] == [("WAIT", "rear_blocked")]
+    a(_snap(4, [_row("r")], [{**stuck, "cause": "crosswalk_blocked", "stuck_id": "s2"}]))
+    assert a.proposals == []                                            # a crosswalk is a person's
+
+
+def test_proposals_pass_fleet_validation():
+    from fleet.server.ai_facts import AiProposal
+
+    a = Analyzer()
+    a(_snap(1000.0, [_row("r")], [{"robot_id": "r", "stuck_id": "s1", "cause": "lane_lost"}]))
+    for proposal in a.proposals:
+        AiProposal.model_validate(proposal)
