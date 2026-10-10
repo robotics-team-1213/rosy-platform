@@ -537,6 +537,27 @@ def test_append_only_follows_a_moved_module_through_legacy(tmp_path):
     assert harness._committed_log(tmp_path, base, "new/other", moved) is None
 
 
+def test_append_only_follows_a_later_layout_move_with_frozen_ownership(tmp_path):
+    git = _git_repo(tmp_path)
+    (tmp_path / "owned/pkg").mkdir(parents=True)
+    (tmp_path / "owned/pkg/logs.md").write_text(GOOD_LOG, encoding="utf-8")
+    git("add", "owned/pkg/logs.md")
+    git("commit", "-q", "-m", "ownership layout")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "current").mkdir()
+    git("mv", "owned/pkg", "current/pkg")
+    git("commit", "-q", "-m", "later layout")
+    moved = [{"path": "current/pkg", "layout_target": "current/pkg",
+              "d427_target": "owned/pkg", "legacy": "original/pkg"}]
+    committed = harness._committed_log(tmp_path, base, "current/pkg", moved)
+    assert committed == GOOD_LOG
+    edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
+    errors, warnings_ = harness._append_only_findings(
+        tmp_path, [base], "pkg", "current/pkg", edited, moved)
+    assert len(errors) == 1 and "were edited" in errors[0]
+    assert warnings_ == []
+
+
 def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):
     """A nested logs.md rewritten below git's 50 % rename similarity in the move
     commit has no traceable history; lint must say the check was skipped."""
