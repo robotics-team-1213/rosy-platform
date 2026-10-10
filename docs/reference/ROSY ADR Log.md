@@ -616,3 +616,4 @@
 | D-623 | 최신 RAW 사건 영상과 지도 방향을 Fleet·AI·프론트에 전달하고 경계 기하 변화에서만 재문의한다; 프레임 캐시·신선도 수정, 수락과 완료 구분, 이동 권한 유지 | Accepted (2026-10-10; SOURCE·원격 시험·배포·현장 별도) |
 | D-624 | 색상 역할·공용 컴포넌트·디자인 법칙; 팔레트 값 보존, 전체 웹 CSS 역할 소비, 갤러리 통합, Fleet·로봇 레이아웃 개선 | Accepted (2026-10-11; SOURCE·원격 G1·G2·G3·장치 수용 별도) |
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 | Accepted (2026-10-11, 사용자 후속 실행 요청; M3–M6 source 이전, 설치·장치·현장 수용은 별도) |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
