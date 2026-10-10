@@ -34,7 +34,7 @@ async function update(){
     ctx.save();ctx.translate(x+w/2,y+30+(h-35)/2);ctx.rotate(angle);ctx.drawImage(image,-image.width*scale/2,-image.height*scale/2,image.width*scale,image.height*scale);ctx.restore();
    }catch{ text('영상 읽기 실패',x+10,y+60,'#ffb45e'); }
   }));
-  const position=session.positions,tracking=position&&now-position.received_at<=2&&now-position.tracking.ts<=2?position.tracking:null;
+  const position=session.positions,tracking=position&&Math.abs(now-position.received_at)<=2&&Math.abs(now-position.tracking.ts)<=2?position.tracking:null;
   robots.forEach((source,i)=>{const row=tracking?.robots.find(r=>r.robot_id===source.robot_id),p=row?.camera;
    const confirmed=p&&['MARKER','OK','OFFSET'].includes(row.status);
    text(source.robot_id+': '+(confirmed?`지도 X ${p.x.toFixed(2)} / Y ${p.y.toFixed(2)} m`:`지도 위치 미확인 · ${row?.status||'연결 없음'}`),12+(i%2)*640,60+rows*h+Math.floor(i/2)*22,confirmed?'#f3f5f7':'#ffb45e');

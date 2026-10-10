@@ -115,6 +115,8 @@ def robot_frame(core, *, now=None):
         raise OSError("raw preview unavailable")
     stamp = float(meta["captured_at"])
     received = time.time() if now is None else now
+    if not math.isfinite(stamp) or not math.isfinite(received):
+        raise ValueError("invalid camera clock")
     # shortcut: ROS clocks can be non-UTC; use labelled receipt time until clock mapping is available.
     utc = math.isfinite(stamp) and stamp > 1_000_000_000 and abs(received - stamp) <= MAX_AGE
     return jpeg, {"seq": seq, "captured_at": stamp, "received_at": received,
@@ -180,6 +182,13 @@ class Session:
         self.db.commit()
 
     def frame(self, sid, jpeg, meta):
+        for key in ("captured_at", "received_at", "timeline_at"):
+            value = meta[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError("invalid frame timestamp")
+        if meta["clock"] not in ("source_utc", "receipt") or not isinstance(meta["seq"], int):
+            raise ValueError("invalid frame metadata")
+        json.dumps(meta, allow_nan=False)
         with self.lock:
             source = self.by_id[sid]
             if source["latest"] and (source["latest"]["seq"], source["latest"]["captured_at"]) == (meta["seq"], meta["captured_at"]):
@@ -203,6 +212,19 @@ class Session:
             self.publish()
 
     def positions(self, tracking):
+        if not isinstance(tracking, dict) or not isinstance(tracking.get("robots"), list):
+            raise ValueError("invalid tracking snapshot")
+        stamp = tracking.get("ts")
+        if not isinstance(stamp, (int, float)) or not math.isfinite(stamp):
+            raise ValueError("invalid tracking clock")
+        for row in tracking["robots"]:
+            if not isinstance(row, dict) or not isinstance(row.get("robot_id"), str):
+                raise ValueError("invalid tracked robot")
+            camera = row.get("camera")
+            if camera is not None and (not isinstance(camera, dict) or any(
+                    not isinstance(camera.get(k), (int, float)) or not math.isfinite(camera[k]) for k in ("x", "y"))):
+                raise ValueError("invalid tracked position")
+        json.dumps(tracking, allow_nan=False)
         with self.lock:
             self.position = {"received_at": self.clock(), "tracking": tracking}
             self.db.execute("INSERT INTO positions VALUES(?,?)", (self.clock(), json.dumps(self.position)))
@@ -218,7 +240,7 @@ class Session:
                 row["status"] = "stale"
             sources.append(row)
         p = self.position
-        if p and (now - p["received_at"] > MAX_AGE or now - p["tracking"].get("ts", 0.) > MAX_AGE):
+        if p and (abs(now - p["received_at"]) > MAX_AGE or abs(now - p["tracking"]["ts"]) > MAX_AGE):
             p = None
         return {"started_at": self.started, "ended_at": self.ended, "updated_at": now,
                 "max_age_s": MAX_AGE, "sources": sources, "positions": p,
@@ -251,11 +273,13 @@ def collect(session, sid, grab, stop, interval):
 
 
 def positions_loop(session, endpoint, stop):
-    site = SiteClient(endpoint)
+    site = None
     while not stop.is_set():
         try:
+            if site is None:
+                site = SiteClient(endpoint)
             session.positions(json.loads(site.request("/api/fleet/tracking")[0]))
-        except (OSError, ValueError, http.client.HTTPException):
+        except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
             pass
         stop.wait(.5)
 
@@ -285,7 +309,7 @@ def layout(sources):
 
 class Renderer:
     def __init__(self, session):
-        self.root = Path(session)
+        self.root = Path(session).resolve()
         self.manifest = json.loads((self.root / "session.json").read_text(encoding="utf-8"))
         self.size = (1280, layout(self.manifest["sources"])[4])
         db = sqlite3.connect(f"{(self.root / 'capture.sqlite3').as_uri()}?mode=ro", uri=True)
@@ -320,7 +344,7 @@ class Renderer:
                     camera = ImageOps.contain(camera, (max(1, width - 20), max(1, height - 35)))
                     image.paste(camera, (x + (width - camera.width) // 2, y + 30))
         n = bisect.bisect_right(self.pt, at) - 1
-        tracking = self.positions[n]["tracking"] if n >= 0 and at - self.pt[n] <= MAX_AGE and at - self.positions[n]["tracking"].get("ts", 0) <= MAX_AGE else {}
+        tracking = self.positions[n]["tracking"] if n >= 0 and at - self.pt[n] <= MAX_AGE and abs(at - self.positions[n]["tracking"]["ts"]) <= MAX_AGE else {}
         robot_ids = [s["robot_id"] for s in sources if s["kind"] == "robot"]
         lines = position_lines(tracking, robot_ids)
         for i, line in enumerate(lines):
@@ -355,12 +379,29 @@ def render(session, out, fps=2.):
            "started_at": start, "ended_at": end, "alignment": "source UTC where available, otherwise labelled receipt time"}), encoding="utf-8")
 
 
+class LocalWall(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}":
+            self.send_error(403)
+            return
+        super().do_GET()
+
+    def do_HEAD(self):
+        if self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}":
+            self.send_error(403)
+            return
+        super().do_HEAD()
+
+    def log_message(self, *args):
+        pass
+
+
 def record(config, out, duration, port, open_browser=True):
     validate_config(config)
     session = Session(out, config["sources"])
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop.set())
-    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(session.out))
+    handler = functools.partial(LocalWall, directory=str(session.out))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     wall = f"http://127.0.0.1:{server.server_port}/"
