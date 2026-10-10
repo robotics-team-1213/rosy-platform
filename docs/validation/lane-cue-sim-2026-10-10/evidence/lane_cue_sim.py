@@ -29,6 +29,8 @@ import argparse
 import collections
 import json
 import math
+import os
+import signal
 import random
 import sys
 import threading
@@ -46,7 +48,11 @@ from d495_sim_probe import Probe, gz, wrap  # noqa: E402  (rclpy recorder, CORE 
 INNER = '0.327,0.20,90'                # facing +y against the lane; the curve starts at y 0.38
 PERIOD_S, TTL_S = 0.5, 1.0            # Fleet lane_compliance_service PERIOD_S, CUE_TTL_S
 ROT_R, MARGIN = 0.08257, 0.02         # pinky body_rotation_radius_m, obstacle_body_margin_m
-LATCHES = ('fleet_off_map', 'fleet_cue_lost', 'fleet_turn_unconfirmed', 'fleet_turn_interrupted')
+LATCHES = ('fleet_off_map', 'fleet_cue_lost', 'fleet_turn_unconfirmed', 'fleet_turn_interrupted',
+           'fleet_wrong_way', 'fleet_turn_no_lane')
+# D-511 rev 4/5 turn spots (X:/DevTemp/steer-review/deadlock/turn_spots.json, the four ring entries) and
+# the ring's map direction there (lane_graph ring_n / ring_s tangent at the nearest point, deg).
+SPOTS = ((-0.213, 0.221, 153.0), (-0.519, 0.201, -136.0), (-0.524, -0.242, -38.0), (-0.214, -0.264, 25.0))
 
 
 class CueProbe(Probe):
@@ -298,7 +304,8 @@ def s2(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose)
     lane = wrap(p.get('gt')[2] + math.radians(a.turn))
-    p.cue_fn = lambda s: dict(state='WRONG_WAY', pose_stamp=s[3],
+    spot = {'turn_spot': True} if a.spot is not None else {}     # rev 4: WRONG_WAY pivots only on a spot
+    p.cue_fn = lambda s: dict(state='WRONG_WAY', pose_stamp=s[3], **spot,
                               turn_deg=round(deg(wrap(lane - s[2][2])) + p.rng.uniform(-2, 2), 2))
     started = p.wait(is_turn, 10, 'pivot start')
     y0 = (started or {}).get('odom')
@@ -339,10 +346,11 @@ def s2(p, a):
 
 class FleetWrongWay:
     """Fleet ReturnTracker in short: raw WRONG_WAY while |turn| > 135 (heading_gate 45), the reported
-    state follows raw after return_persist_s 1.0, detail fields only while reported == raw."""
+    state follows raw after return_persist_s 1.0, detail fields (turn_deg, turn_spot) only while
+    reported == raw. turn_spot: the MapPose within ``tol`` of the spot (Fleet turn_spot_tolerance_m)."""
 
-    def __init__(self, p, lane, noise, exact180):
-        self.p, self.lane, self.noise, self.exact = p, lane, noise, exact180
+    def __init__(self, p, lane, noise, exact180, spot=None, tol=0.018):
+        self.p, self.lane, self.noise, self.exact, self.spot, self.tol = p, lane, noise, exact180, spot, tol
         self.state = self.cand = None
 
     def __call__(self, s):
@@ -359,8 +367,10 @@ class FleetWrongWay:
         if self.state is None:
             return None
         cur = self.state == raw
+        at = self.spot is not None and math.hypot(gt[0] - self.spot[0], gt[1] - self.spot[1]) <= self.tol
         return dict(state=self.state, pose_stamp=stamp, lane_heading_deg=round(deg(self.lane), 1),
-                    turn_deg=round(turn, 2) if cur and self.state == 'WRONG_WAY' else None)
+                    turn_deg=round(turn, 2) if cur and self.state == 'WRONG_WAY' else None,
+                    **({'turn_spot': True} if cur and at and self.state == 'WRONG_WAY' else {}))
 
 
 def is_turn(r):
@@ -393,7 +403,7 @@ def pivot_rows(rows):
 def s3(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose, box=a.box)
-    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180)
+    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol)
     p.cue_fn = ff
     p.sleep(20.0 if a.box else 30.0)                                    # whole episode, incl. any stuck
     p.cue_fn = None
@@ -455,7 +465,7 @@ def s3(p, a):
 def s4(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
     prep(p, a.pose, box=True)
-    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False, a.spot_xy, a.spot_tol)
     stuck = p.wait(lambda r: r.get('stuck') is not None, 25, 'stuck open')
     st_wall = time.time()
     p.cue_fn = lambda s: dict(state='ON_LINE', pose_stamp=s[3], side='left', offset_m=-0.08)   # side cues
@@ -479,6 +489,115 @@ def s4(p, a):
     sm['timeline'] = reasons(rows)
     ok = (c['pivot_started'] and stuck is not None and c['pivot_while_stuck'] == 0 and not c['latch_while_stuck']
           and not c['cue_reason_while_stuck'] and le(c['yaw_change_while_stuck_deg'], 5.0))
+    sm['verdict'] = 'PASS' if ok else 'FAIL'
+    return sm
+
+
+def observer_pids():
+    """line_observer_node processes of this GZ_PARTITION (camera loss = SIGSTOP the observer)."""
+    tag, out = f"GZ_PARTITION={os.environ.get('GZ_PARTITION', '')}".encode(), []
+    for d in os.listdir('/proc'):
+        if not d.isdigit():
+            continue
+        try:
+            cmd, env = open(f'/proc/{d}/cmdline', 'rb').read(), open(f'/proc/{d}/environ', 'rb').read()
+        except OSError:
+            continue
+        if b'line_observer_node' in cmd and tag in env.split(bytes(1)):
+            out.append(int(d))
+    return out
+
+
+def pivot_of(r):
+    return (r.get('lane_cue') or {}).get('pivot')
+
+
+def s5(p, a):
+    """Turn-spot WRONG_WAY: one pivot to <= 10 deg (odom), then the camera re-acquires (no latch)."""
+    sm = {'verdict': 'FAIL', 'checks': {}}
+    prep(p, a.pose)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol)
+    c = sm['checks']
+    if a.camloss:
+        r = p.wait(lambda r: (pivot_of(r) or {}).get('turned_deg', 0) >= a.camloss_at, 20, 'camloss point')
+        pids = observer_pids()
+        for pid in pids:
+            os.kill(pid, signal.SIGSTOP)
+        c['camloss'] = p.action('camera_stop', pids=pids, pivot=pivot_of(r or {}))['sim_t']
+        time.sleep(a.camloss)
+        for pid in pids:
+            os.kill(pid, signal.SIGCONT)
+        c['camloss_end'] = p.action('camera_cont', pids=pids, pivot=pivot_of(p.last()))['sim_t']
+    p.sleep(max(4.0, 22.0 - (a.camloss or 0)))
+    p.cue_fn = None
+    p.sleep(1.5)
+    rows = rows_of(p)
+    cues = [json.loads(line) for line in open(p.out / 'cues.jsonl')]
+    c['cues'] = {'sent': len(cues), 'turn_spot_true': sum(1 for x in cues if x['body'].get('turn_spot')),
+                 'signs': {'+': sum(1 for x in cues if (x['body'].get('turn_deg') or 0) > 0),
+                           '-': sum(1 for x in cues if (x['body'].get('turn_deg') or 0) < 0)},
+                 'refused': [x['resp'] for x in cues if not x['resp'].get('accepted')][:3]}
+    c['pivots_started'] = len(cue_events(p, 'pivot'))
+    c['latched'] = [e['data'].get('latch') for e in cue_events(p, 'latched')]
+    i = next((k for k, r in enumerate(rows) if pivot_of(r)), None)
+    sm['timeline'] = reasons(rows)
+    if i is None:
+        return sm
+    j = next((k for k in range(i, len(rows)) if not pivot_of(rows[k])), len(rows) - 1)
+    a0, a1, end = rows[i], rows[j - 1], rows[j]
+    lane_odom = a0['odom'][2] + wrap(a.lane - a0['gt'][2])
+    c['start_err_gt_deg'] = round(deg(wrap(a0['gt'][2] - a.lane)), 1)
+    c['pivot_last_view'] = pivot_of(a1)
+    c['pivot_duration_sim_s'] = round(end['sim_t'] - a0['sim_t'], 2)
+    c['end_reason'] = end.get('reason')
+    c['end_err_odom_deg'] = round(deg(wrap(end['odom'][2] - lane_odom)), 1)
+    c['end_err_gt_deg'] = round(deg(wrap(end['gt'][2] - a.lane)), 1)
+    c['odom_turned_deg'] = round(deg(wrap(end['odom'][2] - a0['odom'][2])), 1)
+    c['pivot_xy_drift_m'] = round(math.hypot(end['gt'][0] - a0['gt'][0], end['gt'][1] - a0['gt'][1]), 4)
+    angs = [x['ang'] for x in cmds(p, a0['sim_t'] - 0.05, end['sim_t']) if x['lin'] == 0 and abs(x['ang']) > 0.05]
+    c['pivot_cmds'], c['pivot_sign_changes'] = len(angs), sum(1 for u, v in zip(angs, angs[1:]) if (u > 0) != (v > 0))
+    c['reasons_during_pivot'] = sorted({str(r.get('reason')) for r in rows[i:j]})
+    after = rows[j:]
+    nxt = next((r for r in after if r.get('reason') != 'fleet_turn_reacquire'), None)
+    c['reacquire_hold_seen'] = any(r.get('reason') == 'fleet_turn_reacquire' for r in after)
+    c['after_reacquire'] = nxt and (nxt.get('state'), nxt.get('reason'))
+    c['reacquire_s'] = nxt and round(nxt['sim_t'] - end['sim_t'], 2)
+    c['after'] = [t[1:] for t in reasons(rows, end['wall'])][:8]
+    ok = (c['pivots_started'] == 1 and not c['latched'] and le(abs(c['end_err_odom_deg']), 10.0)
+          and c['pivot_sign_changes'] == 0 and c['pivot_duration_sim_s'] >= 2.0
+          and nxt is not None and nxt.get('reason') not in LATCHES and le(c['reacquire_s'], 2.5))
+    sm['verdict'] = 'PASS' if ok else 'FAIL'
+    return sm
+
+
+def s6(p, a):
+    """WRONG_WAY off a turn spot: latched HOLD fleet_wrong_way, no motion, no pivot."""
+    sm = {'verdict': 'FAIL', 'checks': {}}
+    prep(p, a.pose)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False, None)
+    latched = p.wait(lambda r: r.get('reason') == 'fleet_wrong_way', 15, 'fleet_wrong_way')
+    p.sleep(10.0)
+    end = time.time()
+    p.cue_fn = None
+    rows = rows_of(p)
+    c = sm['checks']
+    cues = [json.loads(line) for line in open(p.out / 'cues.jsonl')]
+    ww = next((x for x in cues if x['body']['state'] == 'WRONG_WAY' and x['resp'].get('accepted')), None)
+    c['first_wrong_way_cue'] = ww and {k: ww['body'].get(k) for k in ('turn_deg', 'turn_spot')}
+    c['latch_after_cue_s'] = None if not (latched and ww) else round(latched['wall'] - ww['wall'], 2)
+    c['pivots_started'] = len(cue_events(p, 'pivot'))
+    if latched:
+        c['travel_after_latch_m'], c['yaw_after_latch_deg'] = disp(rows, latched['wall'] + 0.3, end)
+        sim0 = sim_at(rows, latched['wall'] + 0.3)
+        sim1 = max((r['sim_t'] for r in rows if r['wall'] <= end and r.get('sim_t')), default=None)
+        c['nonzero_cmd_after_latch'] = (sum(1 for x in cmds(p, sim0, sim1) if x['lin'] or x['ang'])
+                                        if sim0 and sim1 else None)
+        c['still_latched_at_end'] = all(r.get('reason') == 'fleet_wrong_way' for r in rows
+                                        if latched['wall'] + 0.3 <= r['wall'] <= end)
+    sm['timeline'] = reasons(rows)
+    ok = (latched is not None and le(c['latch_after_cue_s'], 0.6) and c['pivots_started'] == 0
+          and le(c.get('travel_after_latch_m'), 0.005) and c.get('nonzero_cmd_after_latch') == 0
+          and c.get('still_latched_at_end'))
     sm['verdict'] = 'PASS' if ok else 'FAIL'
     return sm
 
@@ -520,7 +639,7 @@ def plot(p, title):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('scenario', choices=('s1', 's2', 's3', 's4'))
+    ap.add_argument('scenario', choices=('s1', 's2', 's3', 's4', 's5', 's6'))
     ap.add_argument('--out', required=True)
     ap.add_argument('--site-token', required=True)
     ap.add_argument('--base', default='http://127.0.0.1:8671')
@@ -532,14 +651,23 @@ def main():
     ap.add_argument('--drop-deg', type=float, default=50.0, help='s2: stop cues once the pivot turned this much')
     ap.add_argument('--pose', default=None, help='x,y,yaw_deg (s2: inner road facing the lane way)')
     ap.add_argument('--lane', type=float, default=-90.0, help='s3/s4: lane direction (deg, map)')
+    ap.add_argument('--spot', type=int, default=None, help='turn spot 0-3 (SPOTS): pose there, facing against the ring')
+    ap.add_argument('--spot-tol', type=float, default=0.018, help='Fleet turn_spot_tolerance_m (FleetWrongWay)')
+    ap.add_argument('--yaw-off', type=float, default=0.0, help='--spot: facing = ring + 180 + this (deg)')
+    ap.add_argument('--camloss', type=float, default=0.0, help='s5: SIGSTOP line_observer this long (s)')
+    ap.add_argument('--camloss-at', type=float, default=60.0, help='s5: ... once the pivot turned this (deg)')
     ap.add_argument('--exact180', action='store_true')
     ap.add_argument('--box', action='store_true')
     ap.add_argument('--seed', type=int, default=1)
     a = ap.parse_args()
     x, y, yd = map(float, (a.pose or (INNER if a.scenario != 's2' else '0.327,0.27,-90')).split(','))
+    a.spot_xy = None
+    if a.spot is not None:
+        x, y, ring = SPOTS[a.spot]
+        a.spot_xy, a.lane, yd = (x, y), ring, ring + 180.0 + a.yaw_off
     a.pose, a.lane_deg, a.lane = (x, y, math.radians(yd)), a.lane, math.radians(a.lane)
     p = CueProbe(a)
-    sm = {'s1': s1, 's2': s2, 's3': s3, 's4': s4}[a.scenario](p, a)
+    sm = {'s1': s1, 's2': s2, 's3': s3, 's4': s4, 's5': s5, 's6': s6}[a.scenario](p, a)
     sm.update(scenario=a.scenario, args={k: v for k, v in vars(a).items() if k != 'token'})
     rows = rows_of(p)
     if len(rows) > 10 and rows[-1].get('sim_t') and rows[0].get('sim_t'):
