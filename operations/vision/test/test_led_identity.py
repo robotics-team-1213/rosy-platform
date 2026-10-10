@@ -19,8 +19,9 @@ def _blinking(t: float) -> bool:
 def _frame(lit: dict) -> np.ndarray:
     image = np.full((240, 320, 3), 90, np.uint8)
     for blob, color in lit.items():
-        x, y = int(blob.x_px) + 22, int(blob.y_px)  # the rear lamp sits in the ring
-        image[y - 4:y + 4, x - 6:x + 6] = color
+        # The rear lamp sits in the ring; its lit area is ~1.3 r^2 (site 2026-10-10: ~800 px at r 25).
+        x, y = int(blob.x_px) + 22, int(blob.y_px)
+        image[y - 8:y + 8, x - 10:x + 10] = color
     return image
 
 
