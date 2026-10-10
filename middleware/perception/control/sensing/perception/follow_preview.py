@@ -11,6 +11,7 @@ import math
 import cv2
 import numpy as np
 
+from .drivable.drivable_preview import draw_drivable, drivable
 from .lane_topology import lane_hypotheses
 
 
@@ -161,6 +162,8 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
 
     if not isinstance(keep, dict) or keep.get('image_size', original_size) != original_size:
         keep = None
+    if drivable(keep):   # the drivable way steers: legacy lanes, regions and the tape target would mislead
+        return draw_drivable(image, scale=scale, keep=keep)
     if keep is None and isinstance(line, dict) and line.get('source') == 'CAMERA_LINE':
         keep = dict(strategy='camera_line' if line.get('visible') is True else 'none',
                     error=line.get('error'), confidence=line.get('confidence'), reason='line lost')

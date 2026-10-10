@@ -183,3 +183,36 @@ export function operatorModeLabel(value, fallback = "—") {
   if (Object.hasOwn(MODE_ALIAS, value)) return MODE_ALIAS[value];
   return enumLabel(MODE_LABEL, value, fallback);
 }
+// Camera preview decision chain, rows 3-5 (CORE gates, stuck, Fleet/AI) from GET /line-follow; rows 1-2
+// (perception, steering) are drawn into the robot's preview image from line/keep_debug. Levels are
+// ui-status states: ready = passing, warning = limiting, error = stopping. Only reported fields are shown.
+const PERCEPTION_REASONS = new Set(["no_observation", "stale", "observation_stale", "perception_stale", "low_confidence",
+  "camera_observation_stale", "camera_line_not_visible", "camera_reselection_required", "reselection_required"]);
+export function lineDecisionChain(status) {
+  const s = status || {}; const stuck = s.stuck; const reason = String(s.reason || "");
+  const fixed = (v, n = 2) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(n) : "-");
+  const gates = [`${s.state || "OFF"} ${reason}`, `v ${fixed(s.linear)} w ${fixed(s.angular)}`];
+  if (s.body_gap_m != null || s.stop_gap_m != null) gates.push(`body gap ${fixed(s.body_gap_m)}/${fixed(s.stop_gap_m)} m`);
+  if (s.crosswalk) gates.push(`crosswalk ${s.crosswalk.state}${s.crosswalk.reason ? ` ${s.crosswalk.reason}` : ""}`);
+  if (s.authority) gates.push(`authority ${s.authority.state}${s.authority.reason ? ` ${s.authority.reason}` : ""}`);
+  const asking = stuck && ["ASKING", "WAITING_CONSOLE"].includes(stuck.phase);
+  const fleet = [stuck?.last_answer ? `last answer ${stuck.last_answer}` : "no stuck answer",
+    s.lane_cue ? `lane_cue ${s.lane_cue.state}` : "lane_cue not reported", "tier not reported by CORE"];
+  if (s.advice?.signal) fleet.push(`signal ${s.advice.signal.lamp}`);
+  const fleetHold = reason.startsWith("fleet_") || reason === "lane_return_fleet_required";
+  const rows = [
+    {layer: "3 CORE GATES", text: gates.join(" · "),
+      level: s.state === "TRACKING" ? "ready" : s.state === "RECOVERING" ? "warning" : "error"},
+    {layer: "4 STUCK", level: !stuck ? "ready" : asking ? "error" : "warning",
+      text: !stuck ? "none" : `${stuck.cause}${stuck.detail ? `/${stuck.detail}` : ""} · ${stuck.phase} · ${fixed(stuck.held_s, 0)} s · ${stuck.stuck_id}`},
+    {layer: "5 FLEET/AI", text: fleet.join(" · "),
+      level: fleetHold ? "error" : stuck?.last_answer === "WAIT" || ["OFF_LANE", "WRONG_WAY", "OFF_MAP"].includes(s.lane_cue?.state) ? "warning" : "ready"},
+  ];
+  if (s.state === "OFF" || !s.state) return {headline: {level: "unavailable", text: "LINE FOLLOW OFF"}, rows};
+  if (s.state === "TRACKING") return {headline: {level: stuck ? "warning" : "ready", text: stuck ? `MOVING? stuck open: ${stuck.cause}` : "MOVING - TRACKING"}, rows};
+  const layer = PERCEPTION_REASONS.has(reason) ? "1-2 PERCEPTION/STEERING (camera rows)" : fleetHold ? "5 FLEET/AI"
+    : reason.startsWith("stuck_") ? "4 STUCK" : "3 CORE GATES";
+  const context = [stuck ? `stuck ${fixed(stuck.held_s, 0)} s` : "", stuck?.last_answer ? `Fleet ${stuck.last_answer}` : ""].filter(Boolean);
+  return {headline: {level: s.state === "RECOVERING" ? "warning" : "error",
+    text: `${s.state === "RECOVERING" ? "RECOVERING BY" : "STOPPED BY"}: ${layer} - ${reason}${context.length ? ` (${context.join(", ")})` : ""}`}, rows};
+}

@@ -1411,3 +1411,8 @@
 - gate 변화: 없음. 장치 기본 `threshold` 유지. 로봇 주행은 돌리지 않음.
 - 결정: D-611
 - 교훈: 노드 메서드를 AST로 떼어 실행하는 시험은 새 헬퍼를 가짜 노드에 직접 달아야 한다.
+
+## 2026-10-10 · 8dd17ab69 · uiux(preview): 카메라 미리보기가 조향에 쓴 drivable 길을 그린다
+- 변경: keep_debug가 `paint_source_used: learned_drivable`(또는 `paint_target_requested: drivable`)이면 `follow_preview`가 옛 차선 후보·경계·영역 상자·도로 표시(STOP/CROSSWALK)를 그리지 않고 `drivable_preview.draw_drivable`로 조향에 쓴 길(초록), 나머지(어둡게), 고른 출구, 목표점과 추종 호, ahead_m, 경로 사전 방향(guide_deg), 머리줄 `DRIVABLE · 전략 · e · source`, 아래 띠에 결정 사슬 1 PERCEPTION·2 STEERING과 STOPPED BY 머리글을 그린다. `keep_step`이 조향한 길을 4 px 간격 run length로 keep_debug `drivable_way`에 싣는다(추론 추가 없음, 600 run 초과면 8 px, 그래도 넘으면 생략: CORE lane_perception 16 kB 상한). 대시보드 카메라 패널은 `GET /api/v1/line-follow`로 3 CORE 관문·4 막힘·5 Fleet/AI 줄과 STOPPED BY 머리글을 보인다(`core_ui_logic.lineDecisionChain`). CORE 상태는 로봇 ROS 그래프에 없어 영상에는 1·2줄만 있다. Fleet/AI 판단 계층(ai/rule)과 lane_cue는 CORE 상태에 없어 "not reported"로 적는다.
+- 증거: `test_drivable_preview.py`, `shared/web/test/test_line_decision_chain.py`, `test_panel_copy_evidence_browser.py::test_camera_decision_chain_names_the_layer_that_stops`. 원격 pytest(모델 PC) 영향 범위 4422 통과, 실패 2건은 known_failures. 브라우저 시험은 모델 PC Chromium에서 181 통과, 실패 7건은 main 9ad37190e에서도 같은 7건. 기록 프레임 전후 그림 X:\DevTemp\preview-drivable\*_pair.jpg.
+- gate 변화: SOURCE. 장치 반영은 아직 없다.

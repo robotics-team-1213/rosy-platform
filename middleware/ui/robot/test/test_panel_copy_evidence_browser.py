@@ -357,6 +357,20 @@ def test_camera_explains_lane_object_labels_and_disables_expansion_without_a_fra
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+def test_camera_decision_chain_names_the_layer_that_stops(panel):
+    page = panel('console/camera.js', role='viewer', width=390, height=844)
+    page.evaluate("""() => window.__callbacks['/api/v1/line-follow'].onData({state:'HOLD', reason:'lane_departure',
+      stuck:{stuck_id:'stuck-3d', cause:'no_motion', phase:'WAITING_CONSOLE', held_s:5.5, last_answer:'WAIT'}})""")
+    rows = page.locator('.surface-camera-chain ui-status')
+    assert rows.count() == 4
+    assert rows.nth(0).inner_text().startswith('STOPPED BY: 3 CORE GATES - lane_departure')
+    assert rows.nth(0).get_attribute('state') == 'error'
+    assert rows.nth(3).get_attribute('state') == 'warning'
+    page.evaluate("() => window.__callbacks['/api/v1/line-follow'].onError(new Error('down'))")
+    assert rows.count() == 1
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
 def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
     import cv2
     import numpy as np

@@ -36,6 +36,14 @@
 - 부모 단위 `perception/control/sensing/perception`은 learned 줄을 뺀 9895로 다시 판정한다. 12004 판정의 독립 검토가 "다음 증가 때 learned를 따로 단위로 둔다"고 적은 조건을 따른 것이다.
 - 계기: D-597 개정 3(`a85739fcb`)이 부모를 12165로 늘려 12004+150을 넘었다. import 경로, colcon 패키지, CORE 명령 소유는 바뀌지 않는다.
 
+### 2026-10-10 추가: drivable 단위
+
+- `SIZE_UNITS`에 `perception/control/sensing/perception/drivable`을 더한다. drivable 길에서 keep 조향을 만드는 코드다. `drivable_steer.py`(조향 법칙, 548줄, `learned/`에서 옮김), `drivable_keep.py`(프레임 단위 keep 단계, 112줄), `drivable_preview.py`(조향한 길을 그리는 카메라 미리보기, 148줄)와 `__init__.py`다. 판정은 `accept`, 기준선 810, 허용 +150이다.
+- `drivable_steer.py`는 `learned/`의 어떤 모듈도 import 하지 않는다. 길 마스크는 `learned/paint_worker.py`가 넘기고, `learned/drivable_paint.py`(길 마스크 만들기)는 `learned`에 남는다.
+- `learned` 단위는 1982로, 부모 `perception/control/sensing/perception`은 9934로 다시 판정한다. 계기: 독립 재판정이 `learned`가 2520(2270+150 초과)이고 대부분 `drivable_steer.py`(393→548)라고 적었다.
+- 주행 맥락, 지도 모서리 호 같은 새 조향 기능은 `drivable/`에 둔다. `drivable_steer.py`가 600줄에 닿기 전에 나눈다.
+- import 경로는 `control.sensing.perception.drivable.*`로 바뀐다. colcon 패키지(`find_packages`), ROS 노드, CORE 명령 소유는 바뀌지 않는다.
+
 ## 순서와 검증
 
 1. **1단계.** `SIZE_UNITS`에 한 줄, 새 단위 판정 한 개를 더하고 `control` 판정 수치를 낮춘다. 이 작업은 `refactor/control-perception-size-unit` 단독 브랜치에서 한다. 동작 변경은 없다. 같은 브랜치에서 `middleware/perception/control/sensing/perception/AGENTS.md`와 `middleware/perception/AGENTS.md`에 이 크기 단위를 한 줄씩 적는다.

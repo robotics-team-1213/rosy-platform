@@ -8,7 +8,11 @@ scan_summary  one LaserScan's ranges -> (wall ahead in the body strip, base_link
 
 from __future__ import annotations
 
+import math
+
 from core_common.robot_body import NOMINAL_BODY
+
+from .drivable_preview import way_runs
 
 #: The newest drivable way steers while its frame is at most this old (odometry moves its target;
 #: one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
@@ -21,7 +25,32 @@ CROSSWALK_MIN_PX = 150
 WALL_MAX_AGE_S = 0.5
 
 
-def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall):
+#: A route guide older than this (by the camera stamp) is not used.
+GUIDE_MAX_AGE_S = 3.0   # the guide prior carries gaps up to 3 s (architect 2026-10-10)
+#: Map distance from the lane centre beyond which keep refuses to drive on: half lane + half tape + half
+#: body (architect context rule c1; g8-9dfk NW corridor: 905/905 frames were 0.21-0.26 m off map v5).
+OFF_ROUTE_HOLD_M = 0.162
+#: the driving context is fresh while the Fleet pose is this young (confidence exp(-age/2)·exp(-ds/0.3))
+CONTEXT_FRESH_S = 1.0
+
+
+def parse_guide(raw, now):
+    """(heading_ahead_deg, stamp, pivot_ok, heading_here_deg, off_route_m) from a line/lane_guide JSON
+    {heading_ahead_deg, stamp, pivot_ok (the body's sweep circle fits here per the map; default true),
+    heading_here_deg, off_route_m (map distance to the route centre line; optional), s (route progress)}, or None."""
+    import json, math
+    try:
+        data = json.loads(raw)
+        deg, stamp, ok = float(data["heading_ahead_deg"]), float(data.get("stamp", now)), data.get("pivot_ok", True) is not False
+        here = float(data.get("heading_here_deg", deg))
+        off = None if data.get("off_route_m") is None else float(data["off_route_m"])
+        s = None if data.get("s") is None else float(data["s"])
+    except (ValueError, TypeError, KeyError):
+        return None
+    return (deg, stamp, ok, here, off, s) if math.isfinite(deg) and math.isfinite(here) and abs(deg) <= 180.0 else None
+
+
+def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall, guide=None):
     """(error, confidence) or None for this frame, and whether the drivable path decided it.
     `last` is the keeper's keep_debug dict (updated in place); pose_at(stamp) is odometry."""
     bars = worker.used_crosswalk
@@ -32,11 +61,27 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall)
     if latest is not None:
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
+        if guide is not None and abs(stamp - guide[1]) < GUIDE_MAX_AGE_S:
+            age = abs(stamp - guide[1])
+            then, now = pose_at(guide[1]), pose_at(stamp)
+            ds = 0.0 if then is None or now is None else math.hypot(now[0] - then[0], now[1] - then[1])
+            fresh = age <= CONTEXT_FRESH_S
+            s = None if guide[5] is None else guide[5] + ds
+            last['context'] = dict(s=None if s is None else round(s, 3), age_s=round(age, 2),
+                                   confidence=round(math.exp(-age / 2.0) * math.exp(-ds / 0.3), 3))
+            extra.update(guide_s=s, guide_fresh=fresh)
+            if fresh and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M:
+                # off the map's road: the camera's carpet is no lane, HOLD for Fleet (D-607 R7)
+                last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
+                            drivable_steer=dict(off_route_m=round(guide[4], 3)))
+                return None, True
+            extra['guide_deg'], extra['guide_pivot_ok'], extra['guide_here_deg'] = guide[0], guide[2], guide[3]
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
                                                pose_at(way_stamp), pose_at(stamp), **extra)
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)
+        last['drivable_way'] = way_runs(way, stamp - way_stamp)   # the preview draws what steered (sampled)
         return (None if error is None else (error, confidence)), True
     if steer._in_crosswalk(pose_at(stamp)):
         # bars (not drivable) fill the near view at a crosswalk: straight across (CORE D-573 gate)

@@ -27,7 +27,9 @@ DrivableSteer per camera frame: the newest way's target moved into the current p
 
 from __future__ import annotations
 
+import collections
 import math
+import time
 
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
@@ -73,6 +75,22 @@ CROSS_MIN_ALONG_M = 0.06
 PIVOT_MAX_RAD = 1.75
 #: centre-line curvature asked of CORE stays inside the exit_segment bound (1/m, left +)
 MAX_TARGET_CURVATURE = 5.0
+#: a route prior within this of straight ahead means "keep going" (no exit turn)
+GUIDE_STRAIGHT_DEG = 25.0
+#: Driving context (architect 2026-10-10, X:/DevTemp/steer-review/context): an exit is taken only where
+#: the map bends that way >= EXIT_BEND_DEG within 0.25 m (g1: 34 opposite + 14 fake exits of 750 turn frames)
+EXIT_BEND_DEG = 15.0
+#: the chosen target off the map heading by > |bend| + REALIGN_DEG for REALIGN_S: HOLD and request realign
+#: (g6/g7 NE spoke: 378/384 and 645/647 frames misaligned)
+REALIGN_DEG, REALIGN_S = 30.0, 2.0
+#: a lost way is crept along the map tangent only below this heading error
+CREEP_HEADING_DEG = 30.0
+#: the same failed manoeuvre within this route distance is not repeated: hand to Fleet
+REPEAT_S_M = 0.1
+#: beyond this the robot faces against the lane: reorient in place first
+GUIDE_REVERSE_DEG = 90.0
+#: re-acquire creep limits (camera nearest row 0.112 m - body front 0.042 m)
+CREEP_MAX_M, CREEP_MAX_S = 0.07, 5.0
 #: after a crosswalk zone is seen, no pivot or exit turn for this much travel
 CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
@@ -319,7 +337,13 @@ class DrivableSteer:
         self._edges = []
         self._pivot_yaw = None
         self._crosswalk_pose = None
+        self._creep_from = self._creep_target = self._tangent_from = None
         self._lost_since = None
+        self._ctx = {}
+        self._misaligned_since = None
+        self._failed = []                                   # (route s, manoeuvre) that ended in a HOLD
+        self.decisions = collections.deque(maxlen=16)       # (t, s, strategy, outcome)
+        self._last_out = self._pending = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
@@ -327,6 +351,46 @@ class DrivableSteer:
         self._crosswalk_pose = None
         self._edges = []
         self._lost_since = None
+
+    def _creep(self, info, pose, source_pose, half):
+        """Re-acquire instead of an in-place turn where the turn circle does not fit: creep along the
+        last valid way at most CREEP_MAX_M (camera nearest row - body front) for CREEP_MAX_S, then
+        HOLD for Fleet (architect deadlock design 2026-10-10)."""
+        now = time.monotonic()
+        if self._creep_from is None or info.get("target_m") is not None:
+            # a fresh target on the way: the forward arc to it stays on the way (g6 2026-10-10: the ring
+            # curve kept ahead_m at 0.118, a capped creep then held 192 frames); the cap is for a lost way
+            self._creep_from = (pose, now)
+        start, since = self._creep_from
+        moved = 0.0 if pose is None or start is None else math.hypot(pose[0] - start[0], pose[1] - start[1])
+        target = info["exit_point_m"].get(info["exit"]) if info.get("exit") else info.get("target_m")
+        if target is not None:
+            self._creep_target = (target, source_pose)   # toward the opening the map agrees with
+        ctx = self._ctx
+        if ctx.get("s") is not None and any(k == "creep" and abs(ctx["s"] - fs) < REPEAT_S_M for fs, k in self._failed):
+            return None, None, dict(info, strategy="none", reason="repeat_failed")
+        if ctx.get("guide") and not info.get("exit") and (not ctx.get("fresh") or abs(ctx.get("here", 0.0)) >= CREEP_HEADING_DEG):
+            return None, None, dict(info, strategy="none", reason="creep_heading")
+        if self._creep_target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
+            if ctx.get("s") is not None:
+                self._failed = self._failed[-15:] + [(ctx["s"], "creep")]
+            return None, None, dict(info, strategy="none", reason="creep_done")
+        tx, ty = _to_current(*self._creep_target, pose)
+        bearing = math.degrees(math.atan2(ty, tx))
+        if ctx.get("guide") and (bearing * ctx["ahead"] < 0 and abs(bearing) > 10.0 if abs(ctx["ahead"]) >= EXIT_BEND_DEG
+                                 else abs(bearing - ctx["ahead"]) > REALIGN_DEG):
+            # the way leaves the route: follow the map tangent instead, <= CREEP_MAX_M from where it began
+            # (architect rule a; g13-9dfk held 381 frames at the NE spoke foot, the way led into the island)
+            if self._tangent_from is None:
+                self._tangent_from = pose
+            t0 = self._tangent_from
+            if t0 is not None and pose is not None and math.hypot(pose[0] - t0[0], pose[1] - t0[1]) > CREEP_MAX_M:
+                return None, None, dict(info, strategy="none", reason="creep_heading")
+            g = math.radians(ctx["ahead"])
+            return (pursuit_error(LOOKAHEAD_M * math.cos(g), LOOKAHEAD_M * math.sin(g), ONE_CONFIDENCE), ONE_CONFIDENCE,
+                    dict(info, strategy="drivable_creep_map"))
+        self._tangent_from = None
+        return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
     def lost(self, stamp):
         """No fresh way this frame: forget the latch only after FORGET_S without one."""
@@ -347,8 +411,44 @@ class DrivableSteer:
             return False
         return True
 
-    def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None, side_clear_m=None):
+    def update(self, *args, guide_s=None, guide_fresh=True, **kw):
+        """_update with the driving context: the realign rule, a strategy switch only after two
+        consecutive frames (a HOLD applies at once), and the decision history."""
+        here = kw.get("guide_here_deg", kw.get("guide_deg"))
+        self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None,
+                         ahead=kw.get("guide_deg"))
+        error, confidence, info = self._update(*args, **kw)
+        guide = kw.get("guide_deg")
+        target = info.get("target_now_m")
+        if error is not None and guide is not None and guide_fresh and target:
+            bend = abs(guide - (guide if here is None else here))
+            off = abs(math.degrees(math.atan2(target[1], target[0])) - guide)
+            if off <= bend + REALIGN_DEG:
+                self._misaligned_since = None
+            elif self._misaligned_since is None:
+                self._misaligned_since = time.monotonic()
+            elif time.monotonic() - self._misaligned_since >= REALIGN_S:
+                error = confidence = None
+                info = dict(info, strategy="none", reason="realign", misaligned_deg=round(off, 1))
+        strategy = info["strategy"]
+        # entering or leaving a closed-way turn acts at once; the hysteresis is for flips between driving targets
+        urgent = any(k in st for st in (strategy, (self._last_out or (0, 0, {"strategy": ""}))[2]["strategy"])
+                     for k in ("pivot", "reorient", "off_line"))
+        if error is not None and not urgent and self._last_out is not None and strategy != self._last_out[2]["strategy"]                 and self._last_out[0] is not None and self._pending != strategy:
+            self._pending = strategy
+            error, confidence, info = self._last_out[0], self._last_out[1], dict(info, strategy=self._last_out[2]["strategy"],
+                                                                               switch_pending=strategy)
+        else:
+            self._pending = None
+        self._last_out = (error, confidence, info)
+        if not self.decisions or self.decisions[-1][2] != info["strategy"]:
+            self.decisions.append((round(time.monotonic(), 1), guide_s, info["strategy"], info.get("reason")))
+        info["context"] = dict(s=guide_s, fresh=guide_fresh, here_deg=here, ahead_deg=guide,
+                               last=list(self.decisions)[-3:])
+        return error, confidence, info
+
+    def _update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
+                wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True, guide_here_deg=None):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -372,6 +472,51 @@ class DrivableSteer:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        bridge = False
+        if guide_deg is not None:
+            # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
+            # the map knows which way the road goes where the camera sees two openings or none.
+            info["guide_deg"] = round(guide_deg, 1)
+            bridge = abs(guide_deg) < GUIDE_STRAIGHT_DEG
+            # wrong way is judged on the lane direction here, not 0.25 m ahead (a hairpin ahead is a turn)
+            here = guide_deg if guide_here_deg is None else guide_here_deg
+            # ... and agreed 0.25 m ahead: g7-9dfk held 344 frames on a polyline joint (here > 90, ahead 16)
+            if abs(guide_deg) <= GUIDE_REVERSE_DEG:
+                here = guide_deg
+            if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
+                # facing against the lane where the turn circle does not fit (a 0.16 m lane, not one of
+                # the ring-entry turn spots): no U-turn in the lane, HOLD for Fleet (architect 2026-10-10)
+                self._smoothed = self._pivot = self._side = None
+                return None, None, dict(info, strategy="none", reason="wrong_way_hold", reorient_deferred=True)
+            elif abs(here) > GUIDE_REVERSE_DEG:
+                # facing against the lane: turn in place toward its direction (user 2026-10-10: when
+                # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
+                # S-curve top and drove the loop backwards)
+                self._smoothed = self._pivot = self._side = None
+                error = -PIVOT_ERROR if here > 0 else PIVOT_ERROR
+                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
+            want = None if abs(guide_deg) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
+                "left" if guide_deg > 0 else "right")
+            if want is None:
+                # the map lane goes on: no exit turn or pivot; a way cut short (blue tape, cable)
+                # is bridged along the lane below (user 2026-10-10: the map is the route reference)
+                side = info["exit"] = None
+                self._pivot = self._side = None
+            elif want in info["exit_reach_m"]:
+                side = info["exit"] = want
+            elif ahead < LOOKAHEAD_M:
+                # no opening seen on the route's side and the way closes: turn in place toward it, never
+                # an arc that rolls forward onto the line ahead (9dfk 20261010T043756Z_rosy_41 crossed one)
+                self._smoothed = None
+                error = -PIVOT_ERROR if want == "left" else PIVOT_ERROR
+                if guide_deg is not None and not guide_pivot_ok:
+                    # an opening against the route is no creep target (c2-8kcn turned left, map said right)
+                    info["exit"] = None
+                    return self._creep(info, current_pose, source_pose, half)
+                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_pivot_" + want, guided=True)
+            elif side is not None and side != want:
+                side = info["exit"] = None      # an opening against the route is not taken
+            self._side = side if side is not None else self._side
         if side is not None and current_pose is not None and _crosses(
                 seen, *_to_current(info["exit_point_m"][side], source_pose, current_pose)) is not None:
             # an "opening" beyond a boundary seen earlier is a strip past a line, not a road
@@ -404,8 +549,12 @@ class DrivableSteer:
             # D-344 §12 amendment 3), then the normal rules
             self._smoothed = self._pivot = None
             error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
+            if guide_deg is not None and not guide_pivot_ok:
+                return self._creep(info, current_pose, source_pose, half)
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
-        if self._in_crosswalk(current_pose):
+        if self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
+            # (only where the map lane goes straight on: g10-9dfk held 822 frames "crosswalk straight"
+            # into the wall at the SW 90-degree corner, the corner's transverse line read as bars)
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
             # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
             # and crosses (p8/p10: pivots at the bottom-road crosswalk became U-turns).
@@ -429,10 +578,20 @@ class DrivableSteer:
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
+            if guide_deg is not None and not guide_pivot_ok:
+                return self._creep(info, current_pose, source_pose, half)
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_pivot_{self._pivot}")
+        if (guide_deg is not None and bridge and (info["target_m"] is None or ahead < PIVOT_AHEAD_M)
+                and (wall_ahead_m is None or wall_ahead_m - WALL_STANDOFF_M >= PIVOT_AHEAD_M)):
+            # map bridge: the camera way ends but the map lane goes straight on and no wall is near
+            self._smoothed = None
+            error = pursuit_error(LOOKAHEAD_M, LOOKAHEAD_M * math.tan(math.radians(guide_deg)), ONE_CONFIDENCE)
+            return error, ONE_CONFIDENCE, dict(info, strategy="drivable_map_bridge")
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
+        if ahead >= PIVOT_RELEASE_M:
+            self._creep_from = self._creep_target = None   # way re-acquired: the next creep starts fresh
         strategy, target = "drivable_centre", info["target_m"]
         if ahead < LOOKAHEAD_M and side is not None:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
