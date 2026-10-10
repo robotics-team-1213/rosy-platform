@@ -34,7 +34,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 __version__ = "0.2.0"
-PERIOD_S, HEARTBEAT_S, TIMEOUT_S = 1.0, 2.0, 2.0
+PERIOD_S, HEARTBEAT_S = 1.0, 2.0
+TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")
@@ -47,7 +48,7 @@ def analyze(snapshot: dict) -> list[dict]:
 
 
 class Fleet:
-    """Bearer HTTP to Fleet with a 2 s timeout per call; errors surface as OSError / HTTPError / ValueError."""
+    """Bearer HTTP to Fleet with a 4 s timeout per call; errors surface as OSError / HTTPError / ValueError."""
 
     def __init__(self, url: str, token: str, ca: Optional[str] = None) -> None:
         self._url, self._token = url.rstrip("/"), token
