@@ -875,6 +875,17 @@ def test_d577_ai_back_off_with_a_peer_ahead_waits_for_r1_first():
     assert _judged(None, row, peer)[0] == "peer_ahead"
 
 
+@pytest.mark.parametrize("cause", ["obstacle_ahead", "lane_lost", "no_motion"])
+def test_d577_ai_back_off_refused_when_the_rear_is_unknown_allowed_when_clear(cause):
+    # D-577 / D-610: peer_behind None (a peer with no trusted map pose) is not a clear rear.
+    unknown = _row("rosy_02", pose=(-0.2, 0.0, 0.0), localization=None)
+    assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), unknown) == (
+        "peer_unknown", [])
+    clear = _row("rosy_02", pose=(0.0, 1.0, 0.0))             # trusted, outside both bands
+    assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), clear) == (
+        "forwarded", [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")])
+
+
 def test_d577_ai_never_forwards_a_moving_word_the_r3_gate_would_hold():
     import random
 
