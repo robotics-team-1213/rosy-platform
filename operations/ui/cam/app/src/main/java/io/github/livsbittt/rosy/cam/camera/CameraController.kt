@@ -1,16 +1,26 @@
 package io.github.livsbittt.rosy.cam.camera
 
 import android.content.Context
+import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.Range
 import android.util.Size
 import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.Camera2Interop
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -26,7 +36,10 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
 import io.github.livsbittt.rosy.cam.link.OverheadConfig
 import io.github.livsbittt.rosy.cam.link.OverheadLink
+import io.github.livsbittt.rosy.cam.link.Protocol
 import io.github.livsbittt.rosy.cam.link.SensorInfo
+import io.github.livsbittt.rosy.cam.link.ServerMessage
+import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -47,6 +60,7 @@ class CameraController(
     private val onError: (Throwable) -> Unit,
     private val onLighting: (LightingStatus) -> Unit = {},
     private val onExposure: (ExposureStatus) -> Unit = {},
+    private val onTuning: (TuningStatus) -> Unit = {},
 ) {
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "overhead-analysis")
@@ -69,8 +83,6 @@ class CameraController(
     private var exposurePolicy: ExposureAssistPolicy? = null
     private var exposureStep = 0.0
     private var exposureEnabled = false
-    private var exposureApplied = 0
-    private var exposureFailed = false
     private var exposureShown: ExposureStatus? = null
     @Volatile private var measureExposure = false
     @Volatile private var latestStats: StatsSample? = null
@@ -85,11 +97,37 @@ class CameraController(
     private var torchDeadline: Runnable? = null
     private var torchOffDeadline: Runnable? = null
 
+    // D-589 S2: Vision-driven camera settings. Main thread only, except the capture-result volatiles.
+    private val tuning = RecognitionTuning()
+    private var capabilities: CameraCapabilities? = null
+    /** Written, confirmed and in-flight camera-control state, per bind epoch. */
+    private val writer = TuningWriter { reportTuning() }
+    private var tuningMode: TuningMode? = null
+    private var tuningShown: TuningStatus? = null
+    private var reportedKey: List<Any?>? = null
+    private var reportPending = false
+    @Volatile private var exposureNs = 0L
+    @Volatile private var sensorIso = 0
+    /** Capture results seen; written only on the camera callback thread. */
+    @Volatile private var captures = 0L
+    private var torchSeen = false
+    private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
+        override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+            result.get(CaptureResult.SENSOR_EXPOSURE_TIME)?.let { exposureNs = it }
+            result.get(CaptureResult.SENSOR_SENSITIVITY)?.let { sensorIso = it }
+            captures++
+        }
+    }
+
     /** Set on main when the camera is rebound or quality/width change; consumed on the analysis thread. */
     @Volatile
     private var qualityResetPending = true
     private val limiter = FpsLimiter(OverheadConfig.DEFAULT.fps)
     private val preview = Preview.Builder().build()
+
+    init {
+        link?.onCamera = { msg -> main.post { receiveCamera(msg) } }
+    }
 
     @Volatile
     private var config: OverheadConfig = OverheadConfig.DEFAULT
@@ -186,8 +224,22 @@ class CameraController(
         if (stopped) return
         exposureEnabled = enabled
         measureExposure = enabled && exposurePolicy != null
-        exposureFailed = false
+        writer.clearFailures() // An explicit operator toggle may retry a failed camera control.
         if (!enabled) latestStats = null
+        evaluateExposure()
+    }
+
+    /** D-589 6: the "인식 자동 노출 (Vision)" switch; off ignores `camera` messages. */
+    fun setRecognitionTuning(enabled: Boolean) {
+        if (stopped || tuning.enabled == enabled) return
+        tuning.setEnabled(enabled)
+        evaluateExposure()
+    }
+
+    /** D-589 7: PowerManager thermal status (-1 unknown); SEVERE (3) and up holds the camera settings. */
+    fun setThermalStatus(status: Int) {
+        if (stopped || tuning.thermal == status) return
+        tuning.thermal = status
         evaluateExposure()
     }
 
@@ -225,6 +277,7 @@ class CameraController(
 
     fun stop() {
         stopped = true
+        link?.onCamera = null
         releaseLighting()
         preview.setSurfaceProvider(null)
         provider?.unbindAll()
@@ -250,6 +303,7 @@ class CameraController(
         }
     }
 
+    @OptIn(ExperimentalCamera2Interop::class)
     private fun bindOrThrow() {
         val cameraProvider = provider ?: return
         val target = config
@@ -262,6 +316,8 @@ class CameraController(
                 .setResolutionSelector(selectorFor(target.width))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                // D-589: exposure time and ISO of each capture, reported in camera_state.
+                .also { Camera2Interop.Extender(it).setSessionCaptureCallback(captureCallback) }
                 .build()
             analysis?.setAnalyzer(analysisExecutor) { image -> analyze(image, epoch) }
             val camera = if (analysis == null) {
@@ -279,7 +335,6 @@ class CameraController(
                 dark = false, message = null)
             val range = camera.cameraInfo.exposureState
             exposureStep = range.exposureCompensationStep.toDouble()
-            exposureApplied = 0
             exposureShown = null
             exposurePolicy = if (range.isExposureCompensationSupported && exposureStep > 0.0) {
                 val limit = minOf((ExposureAssistPolicy.LIMIT_EV / exposureStep).toInt(),
@@ -288,6 +343,12 @@ class CameraController(
                 if (limit >= 1) ExposureAssistPolicy(minOf(step, limit), limit) else null
             } else null
             measureExposure = exposureEnabled && exposurePolicy != null
+            val caps = readCapabilities(camera)
+            capabilities = caps
+            // Also clears the Camera2 interop options CameraX kept for this camera id from an earlier bind.
+            writer.bind(CameraXPort(camera, caps), captures)
+            torchSeen = false
+            reportPending = true
             val observer = Observer<Int> { state ->
                 if (stopped || generation != epoch || this.camera !== camera) return@Observer
                 lighting = lighting.copy(torchOn = state == TorchState.ON)
@@ -427,24 +488,25 @@ class CameraController(
         val bound = camera
         val now = SystemClock.elapsedRealtime()
         val sample = latestStats?.takeIf { it.generation == generation && now - it.atMs in 0..1000 }
-        val target = if (policy == null) 0 else
-            policy.update(sample?.stats, now, exposureEnabled && !exposureFailed, thermalBlocked || lighting.torchOn)
-        if (bound != null && target != exposureApplied) {
-            exposureApplied = target
-            try {
-                val future = bound.cameraControl.setExposureCompensationIndex(target)
-                future.addListener({
-                    if (stopped || camera !== bound) return@addListener
-                    try { future.get() } catch (error: Exception) {
-                        exposureFailed = true
-                        Log.w(TAG, "exposure compensation failed", error)
-                    }
-                }, ContextCompat.getMainExecutor(context))
-            } catch (error: Exception) {
-                exposureFailed = true
-                Log.w(TAG, "exposure compensation unavailable", error)
+        val mode = tuning.mode(now)
+        // D-589 3: a fresh Vision request overrides the D-544 assist, which restarts from 0 once Vision goes quiet.
+        val target = if (policy == null) 0 else policy.update(sample?.stats, now,
+            exposureEnabled && !writer.evFailed && mode != TuningMode.VISION,
+            thermalBlocked || lighting.torchOn || mode == TuningMode.THERMAL_HOLD)
+        val caps = capabilities
+        if (tuning.tick(now)) reportPending = true
+        if (bound != null && caps != null) {
+            // A torch going on or off changes the exposure under any lock: settle again before locking.
+            if (lighting.torchOn != torchSeen) {
+                torchSeen = lighting.torchOn
+                writer.touch(now, captures)
             }
-            Log.i(TAG, "exposure_ev index=$target step=$exposureStep")
+            // A hold changes nothing, not even a settle unlock after the torch (heat forces it off).
+            if (mode != TuningMode.THERMAL_HOLD) {
+                writer.drive(tuning.target(mode, caps, writer.written, target, torchOn = lighting.torchOn), now, captures)
+            }
+            tuningMode = mode
+            reportTuning()
         }
         val status = ExposureStatus(policy != null, exposureEnabled, policy?.verdict ?: ExposureVerdict.OK,
             target, if (exposureEnabled) sample?.stats else null)
@@ -454,6 +516,111 @@ class CameraController(
             exposureShown = status
             onExposure(status)
         }
+    }
+
+    private fun receiveCamera(msg: ServerMessage.Camera) {
+        if (stopped) return
+        when (tuning.receive(msg, SystemClock.elapsedRealtime())) {
+            RecognitionTuning.Receipt.APPLIED -> Unit
+            RecognitionTuning.Receipt.IGNORED_SWITCH_OFF ->
+                Log.i(TAG, "camera seq=${msg.seq} ignored: recognition exposure switch is off")
+            RecognitionTuning.Receipt.TOO_SOON -> Log.i(TAG, "camera seq=${msg.seq} waits: too soon after the last one")
+        }
+        reportPending = true
+        evaluateExposure()
+    }
+
+    /**
+     * EV through CameraX; locks, exposure cap and anti-banding through Camera2 interop options, no rebind.
+     * Answers arrive on the main thread; the writer drops those of an older bind.
+     */
+    @OptIn(ExperimentalCamera2Interop::class)
+    private inner class CameraXPort(private val bound: Camera, private val caps: CameraCapabilities) : CameraPort {
+        override fun setEv(index: Int, done: (WriteOutcome) -> Unit) {
+            run("exposure compensation", done) { bound.cameraControl.setExposureCompensationIndex(index) }
+            Log.i(TAG, "exposure_ev index=$index step=$exposureStep")
+        }
+
+        override fun setOptions(settings: CameraSettings, done: (WriteOutcome) -> Unit) {
+            run("camera options", done) {
+                Camera2CameraControl.from(bound.cameraControl).setCaptureRequestOptions(captureOptions(settings, caps))
+            }
+            Log.i(TAG, "camera options ae_lock=${settings.aeLock} awb_lock=${settings.awbLock} " +
+                "fps=${settings.fpsRange} antibanding=${settings.antibanding.wire}")
+        }
+
+        override fun clearOptions(done: (WriteOutcome) -> Unit) {
+            run("clear camera options", done) { Camera2CameraControl.from(bound.cameraControl).clearCaptureRequestOptions() }
+        }
+
+        private fun run(what: String, done: (WriteOutcome) -> Unit, call: () -> ListenableFuture<*>) {
+            val future = try { call() } catch (error: Exception) {
+                Log.w(TAG, "$what unavailable", error)
+                done(WriteOutcome.FAILED)
+                return
+            }
+            future.addListener({
+                val outcome = try {
+                    future.get()
+                    WriteOutcome.OK
+                } catch (error: Exception) {
+                    if (error.cause is CameraControl.OperationCanceledException) WriteOutcome.CANCELLED else {
+                        Log.w(TAG, "$what failed", error)
+                        WriteOutcome.FAILED
+                    }
+                }
+                if (!stopped) done(outcome)
+            }, ContextCompat.getMainExecutor(context))
+        }
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun captureOptions(s: CameraSettings, caps: CameraCapabilities): CaptureRequestOptions =
+        CaptureRequestOptions.Builder().apply {
+            if (caps.aeLock) setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, s.aeLock)
+            if (caps.awbLock) setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, s.awbLock)
+            s.fpsRange?.let { setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(it.lower, it.upper)) }
+            if (s.antibanding == Antibanding.HZ60) {
+                setCaptureRequestOption(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE, CameraMetadata.CONTROL_AE_ANTIBANDING_MODE_60HZ)
+            }
+        }.build()
+
+    /** Shows the tuning line and, once the camera confirmed every write, publishes `camera_state` on a change. */
+    private fun reportTuning() {
+        val caps = capabilities ?: return
+        val mode = tuningMode ?: return
+        val confirmed = writer.confirmed
+        val status = TuningStatus(mode, confirmed, exposureEnabled && exposurePolicy != null, caps.evStep)
+        if (status != tuningShown) {
+            tuningShown = status
+            onTuning(status)
+        }
+        if (!writer.readyToReport) return
+        val key = listOf(tuning.lastSeq, confirmed, mode, tuning.thermal, caps)
+        if (key == reportedKey && !reportPending) return
+        reportedKey = key
+        reportPending = false
+        link?.publishCameraState(Protocol.cameraState(tuning.lastSeq ?: 0, confirmed.applied(mode), caps.supported(),
+            exposureNs.takeIf { it > 0 }?.let { it / 1000 }, sensorIso.takeIf { it > 0 }, tuning.thermal))
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun readCapabilities(camera: Camera): CameraCapabilities {
+        val exposure = camera.cameraInfo.exposureState
+        val info = try { Camera2CameraInfo.from(camera.cameraInfo) } catch (e: IllegalArgumentException) { null }
+        fun <T> read(key: CameraCharacteristics.Key<T>): T? = try { info?.getCameraCharacteristic(key) } catch (e: Exception) { null }
+        val evOk = exposure.isExposureCompensationSupported
+        return CameraCapabilities(
+            evMin = if (evOk) exposure.exposureCompensationRange.lower else 0,
+            evMax = if (evOk) exposure.exposureCompensationRange.upper else 0,
+            evStep = if (evOk) exposure.exposureCompensationStep.toDouble() else 0.0,
+            aeLock = read(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true,
+            awbLock = read(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE) == true,
+            antibanding60 = read(CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES)
+                ?.contains(CameraMetadata.CONTROL_AE_ANTIBANDING_MODE_60HZ) == true,
+            fpsRanges = read(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+                ?.map { FpsRange(it.lower, it.upper) }.orEmpty(),
+        ).also { Log.i(TAG, "camera capabilities $it") }
     }
 
     private fun emitLighting() {
@@ -541,7 +708,12 @@ class CameraController(
         latestLuma = null
         latestStats = null
         exposurePolicy = null
-        exposureApplied = 0
+        // A rebind starts from CameraX defaults; a fresh Vision request is applied again on the next tick.
+        capabilities = null
+        writer.unbind()
+        tuningMode = null
+        exposureNs = 0L
+        sensorIso = 0
         lastLumaNs = 0L
         torchDeadline?.let(main::removeCallbacks)
         torchDeadline = null
