@@ -40,3 +40,10 @@ Named at the trip_runner.py re-judge (847 lines, ceiling 600) after D-517 M1a.
 - Allowed imports out of the subpackage: `routing.graph`, `routing.execute.arc_id`, `server.trip_ports`, `localization.map_pose`. Nothing in traffic/ may import trip_runner.
 - The move does not change behaviour. Do it before D-517 M4, then re-judge. Decide then whether `server/traffic_reservations.py` (no production importer) moves in or retires.
 - Status 2026-10-08: applied as a pure move (`git mv`, no shim). Names kept: `fleet/traffic/blocks.py`, `lane_traffic.py`, `trip_authority.py`. `fleet/fleet/traffic` is in `SIZE_UNITS` at 867; the fleet package base dropped by the 863 moved lines. `server/traffic_reservations.py` stays in server/ until the M4 re-judge.
+
+## Trip admission and progress seam (2026-10-10)
+
+Named at the 2026-10-10 independent re-judge of trip_runner.py (837) and applied before D-601 grows the start checks.
+- `server/trip_admission.py` (`TripAdmission` mixin): `_caps_checks`, `_pose_checks`, `_still_on_pin`, `LOCALIZED`, `LINE_MODES`. New trip start checks (D-601) go here, not into trip_runner.
+- `server/trip_progress.py` (`TripProgress` mixin): `_locate`, `_completed`, `_arrived`, `_stalled`, `MANOEUVRE`.
+- Pure move, no behaviour change; trip_runner re-exports `LOCALIZED`, `LINE_MODES`, `MANOEUVRE`. Neither module imports trip_runner. trip_runner measured 751 after the move.

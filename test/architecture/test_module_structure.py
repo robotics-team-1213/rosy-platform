@@ -115,8 +115,12 @@ SIZE_VERDICTS = {
         "tests. Budget and allowance unchanged",
     ),
     "fleet/fleet/server/trip_runner.py": (
-        837,
-        "split: re-judged at 837 on 2026-10-09 (independent re-judge 2026-10-10, critic: number agreed; the 2026-10-08 seam is already applied, so the next growth moves the start admission checks (_caps_checks, _pose_checks, _still_on_pin) and the progress predicates (_locate, _completed, _arrived, _stalled; ~100 lines) to server/trip_admission.py and server/trip_progress.py, named in the seam plan in the same change): D-517 3 no stop "
+        751,
+        "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
+        "no behaviour change): the start checks are in server/trip_admission.py and the progress predicates in "
+        "server/trip_progress.py (docs/plans/2026-10-07-fleet-site-map-web-server-seam.md); D-601 start checks go "
+        "into trip_admission. What remains is start/cancel/tick/_step*/replan and the CORE junction protocol; "
+        "+150 allowance measured from 751. Previously re-judged at 837 on 2026-10-09 (independent re-judge 2026-10-10, critic: number agreed; the 2026-10-08 seam is already applied, so the next growth moves the start admission checks (_caps_checks, _pose_checks, _still_on_pin) and the progress predicates (_locate, _completed, _arrived, _stalled; ~100 lines) to server/trip_admission.py and server/trip_progress.py, named in the seam plan in the same change): D-517 3 no stop "
         "inside a zone adds one arrival line (a stop short of a zone counts from that point); the zone rules live in "
         "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. +150 allowance measured from 837. Previously "
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
