@@ -266,18 +266,22 @@ class ReturnController:
 
     def _search(self, inp):
         self.phase = "search"
-        if not inp.turn_clear:
-            return self._hold("rotation_space_unconfirmed")
-        if self._search_start is None:
-            self._search_start, self._search_pose = inp.now, inp.pose
-        turn = abs(_angle(inp.pose.yaw-self._search_pose.yaw))
-        if turn >= .18 or inp.now-self._search_start >= 2:
-            self._search_attempt += 1
-            self._search_start = self._search_pose = None
-            return self._hold("search_candidate_finished")
         if self._search_attempt >= 2:
             self.phase = "fleet"
             return ReturnAction(self.phase, "local_candidates_exhausted", fleet_required=True)
+        if not inp.turn_clear:
+            return self._hold("rotation_space_unconfirmed")
+        if self._search_start is None:
+            self._search_start = inp.now
+            if self._search_pose is None:
+                self._search_pose = inp.pose
+        # Anchor both looks at the original heading; the second .18 rad leg reaches its other side.
+        turn = _angle(inp.pose.yaw-self._search_pose.yaw)
+        reached = turn >= .09 if self._search_attempt == 0 else turn <= -.09
+        if reached or abs(turn) >= .18 or inp.now-self._search_start >= 2:
+            self._search_attempt += 1
+            self._search_start = None
+            return self._hold("search_candidate_finished")
         rate = min(.15, inp.angular_limit)
         return ReturnAction(self.phase, "sensor_search", angular=rate*(1 if self._search_attempt == 0 else -1))
 
@@ -292,6 +296,7 @@ class ReturnController:
             self.trail.samples.clear()
             self._count = 0
             self._last_evidence = self._candidate = self._last_pose = None
+            self._search_start = self._search_pose = None
             self._reference_invalid = self.checkpoint is not None
             self.phase, self._opened = "departure_stop", now
             self._approach.finished = True
@@ -306,6 +311,7 @@ class ReturnController:
                 self._count = 0
                 self._reference_invalid = True
                 self._candidate = None
+                self._search_start = self._search_pose = None
                 if self.phase == "tracking":
                     self.phase, self._opened = "departure_stop", now
             self._last_pose = p
