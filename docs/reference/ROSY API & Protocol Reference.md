@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.194
+**Version:** v1.195
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2650,6 +2650,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.195 | 2026-10-10 | 동작 변경 (D-573 개정 3, feat/crosswalk-clear-5s, Safety-Review 대상): CORE 횡단보도 게이트의 보기 창 설정 `line_follow.crosswalk_look_s`(1.0 s)를 `line_follow.crosswalk_clear_s`(기본 5.0 s, 0.5–60)로 바꾸고 `crosswalk_look_min_scans` 기본을 8에서 40(10 Hz × 5 s × 0.8)으로 올린다. 창 안 모든 스캔이 빔이어야 하고 사람·UNKNOWN·오래된 스캔은 창을 다시 연다. `crosswalk_report_s`는 `crosswalk_clear_s`보다 커야 한다(아니면 시작 거부). 비워진 창이 도는 동안 `crosswalk_blocked`를 열지 않는다. 옛 키 `crosswalk_look_s`가 있는 설정은 CORE 시작을 거부한다(별칭 없음). 스냅숏 필드는 그대로이고 `look_progress`의 분모가 `crosswalk_clear_s`가 된다 |
 | v1.194 | 2026-10-10 | 동작 변경 (D-573 6 개정·D-577 남은 항목 2·3, feat/crosswalk-null-outside-zone, Safety-Review 대상): CORE 는 `line_follow.crosswalk` 를 게이트 설정과 무관하게 늘 보고한다(게이트 기본값은 여전히 꺼짐). 값은 게이트 객체, 새 `{state: inside}`·`{state: ahead}`, 새 `{state: unknown, reason: pose_stale\|perception_stale\|not_watched\|zone_unplaced}`, 또는 null(구역 밖이 증명됨). 게이트를 켠 로봇도 이제 증명하지 못하면 null 대신 `unknown` 이다. Fleet 판단기는 `unknown` 을 R5 `crosswalk_unknown` 으로 막고, 현장 지도 횡단보도 0.29 m 안(신뢰 지도 자세)이면 R5 `crosswalk`, 지도에 횡단보도가 있는데 신뢰 지도 자세가 없으면 R5 `crosswalk_unknown` 이며, R5 를 보낸 막힘의 재전송은 같은 R5 로만 하며(R3·AI 답으로 바뀌지 않음), Fleet 정지로 끊긴 R5 도 사람 행을 올린다. 계약(같은 버전): `LaneContainmentEvidence` 선택 필드 `crosswalk_uncertainty_m`(m, 0–1, 영상 시각 몸 좌표에서 횡단보도 가까운·먼 끝의 앞뒤 최악 한도, 검출기가 돈 모든 프레임에 있음, 없음 = 돌지 않음). CORE 설정 `line_follow.crosswalk_max_uncertainty_m`(0.058). 필드가 없거나 한도를 넘으면 `unknown` 사유 `camera_crosswalk_unadmittable`; 구역 앞뒤 여유는 그 필드(차선 `uncertainty_m`은 옆만). 인식은 이 버전의 CORE가 로봇에 들어간 뒤 플래그로 낸다(기본 꺼짐). envelope 1.0 변경 없음 |
 | v1.193 | 2026-10-10 | 동작 변경 (D-596 개정 2026-10-10 사용자 결정 (a)(b), feat/led-confirm-anywhere-pin-prefill): `matched` 판정이 파랑 점멸(`evidence.mode`가 `steady` 아님)이면 예상 자리 밖이어도 `far_from_robot` 없이 이름을 붙인다(source마다 파랑 요청은 하나). 주황과 정색 표시는 예상 자리 안에서만. 콘솔 "위치 찍기"는 지도 자세가 `LOCALIZED`가 아니고 `GET /api/fleet/tracking/identity`에 `CONFIRMED` 트랙이 있으면 그 자리를 핀 위치로 쓴다(방향은 운영자). 새 필드 없음 |
 | v1.192 | 2026-10-10 | Behavioural + Additive (D-601, feat/trip-start-enables-camera-line): Fleet `POST /api/fleet/trips/{plan_id}/start`이 `lane` 계획에서 로봇 line-follow `OFF`를 거절하지 않고, 모든 시작 검사·trip lease·trip 열림 뒤 마지막으로 로봇 `PUT /api/v1/line-follow/mode {mode: CAMERA_LINE}`을 보낸다(trip 루프만; 운영자 `line-follow` 경로는 그대로 `IR_LINE`·`OFF`). 실패는 trip `failed`(`TRIP_LINE_FOLLOW_START_FAILED`) + 멈춤, 응답 409. 끝에서는 지금처럼 언제나 `OFF`. 새 시작 거절 422 `TRIP_START_HEADING_MISMATCH`(첫 차로 방향과 `fleet.trip.start_heading_tol_deg` 20° 넘게 다름)·`TRIP_START_OFF_LANE`(차로 반폭 밖), `detail {code, edge_id, heading_err_deg, tol_deg, off_lane_m}`. `/trip`: `lane` 계획은 로봇 `GET /api/v1/vision/front/status` `available`이 아니면 422 `TRIP_LANE_CAMERA_UNAVAILABLE`, 응답에 `start_check`(같은 검사), `TRIP_HEADING_CONFLICT` `detail.heading_err_deg`·`TRIP_START_OFF_MAP` `detail.off_lane_m`. 로봇 API 변경 없음. |

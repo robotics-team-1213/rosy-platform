@@ -24,7 +24,7 @@ def rig(hold_s=None, **config):
 
 
 def step(r, t, x, *, y=0.0, yaw=0.0, ir_error=None, crosswalk=None, ground="CALIBRATED",
-         uncertainty=0.005, ir_calibrated=True, crosswalk_uncertainty=None):
+         uncertainty=0.005, ir_calibrated=True, crosswalk_uncertainty=0.005):
     clock, manager = r
     clock[0] = t
     manager.observe_return_pose(stamp_ns=round(t * 1e9), source_now_ns=round(t * 1e9),
@@ -48,14 +48,14 @@ def step(r, t, x, *, y=0.0, yaw=0.0, ir_error=None, crosswalk=None, ground="CALI
     return manager.tick(t)
 
 
-def drive_to(r, x_end, *, crosswalk=(0.15, 0.27), ground="CALIBRATED", ir_error=0.0):
-    """Camera sees the crosswalk once from x=0, then the robot drives on to x_end."""
-    step(r, 1.0, 0.0, crosswalk=crosswalk, ground=ground)
+def drive_to(r, x_end, *, crosswalk=(0.15, 0.27), ground="CALIBRATED", ir_error=0.0, y_end=0.0, **frame):
+    """Camera sees the crosswalk once from x=0, then the robot drives on to (x_end, y_end)."""
+    step(r, 1.0, 0.0, crosswalk=crosswalk, ground=ground, **frame)
     t, x = 1.0, 0.0
     while x < x_end - 1e-9:
         t, x = t + 0.05, min(x_end, x + 0.01)
-        step(r, t, x)
-    return step(r, t + 0.05, x_end, ir_error=ir_error)
+        step(r, t, x, y=y_end * x / x_end, **frame)
+    return step(r, t + 0.05, x_end, y=y_end, ir_error=ir_error, **frame)
 
 
 @pytest.mark.parametrize("ir_error", [0.0, -0.8, 0.8])
@@ -73,12 +73,13 @@ def test_without_a_seen_crosswalk_the_centre_reading_still_stops():
 
 
 @pytest.mark.parametrize("ground,uncertainty", [("NOMINAL", None), ("CALIBRATED", None),
-                                                ("NOMINAL", 0.02)])
+                                                ("NOMINAL", 0.025)])  # over MAX_LATERAL_M
 def test_unbounded_projection_admits_no_zone(ground, uncertainty):
     zones = CrosswalkZones()
     zones.observe(LaneContainmentEvidence.model_validate(dict(
         stamp=1.0, geometry_id="g", ground_source=ground, uncertainty_m=uncertainty, boundaries=[],
-        crosswalk=dict(near_m=0.15, far_m=0.27))), epoch=0, received_at=1.0)
+        crosswalk_uncertainty_m=0.01, crosswalk=dict(near_m=0.15, far_m=0.27))),
+        epoch=0, received_at=1.0, max_along=0.058)
     assert zones._zones == []
 
 
@@ -194,3 +195,68 @@ def test_range_error_widens_the_zone_ends():
     # camera-range term, inside it with 5 % of the 0.27 m far edge (+0.0135).
     assert drive_to(rig(crosswalk_range_error_fraction=0.0), 0.26).linear == 0
     assert drive_to(rig(), 0.26).linear > 0
+
+
+# ---- D-491 / D-573 6 개정 2 (2026-10-10): along-track bound admits, lateral sets the corridor ----
+
+def _zones_from(lateral, along, crosswalk=(0.16, 0.28)):
+    zones = CrosswalkZones()
+    raw = dict(stamp=1.0, geometry_id="g", ground_source="NOMINAL", uncertainty_m=lateral, boundaries=[],
+               crosswalk_uncertainty_m=along)
+    if crosswalk is not None:
+        raw["crosswalk"] = dict(near_m=crosswalk[0], far_m=crosswalk[1])
+    zones.observe(LaneContainmentEvidence.model_validate(raw), epoch=0, received_at=1.0, max_along=0.058)
+    return zones._zones
+
+
+def test_field_frame_admits_a_zone():
+    """8kcn/9dfk today: lane lateral 0.024 m (> the D-468 0.015), crosswalk along 0.022 m at 0.16 m."""
+    [zone] = _zones_from(0.024, 0.022)
+    assert (zone["uncertainty"], zone["along"]) == (0.024, 0.022)
+
+
+@pytest.mark.parametrize("lateral,along,crosswalk", [
+    (0.005, None, (0.16, 0.28)),     # detector did not state its along-track bound
+    (0.005, 0.059, (0.16, 0.28)),    # over crosswalk_max_uncertainty_m
+    (0.025, 0.022, (0.16, 0.28)),    # lateral over the IR-catch cap: corridor would pass the paint
+    (None, 0.022, (0.16, 0.28)),     # lateral unknown: no corridor bound
+    (0.005, 0.022, None),            # no crosswalk detected
+])
+def test_unbounded_frames_admit_no_zone(lateral, along, crosswalk):
+    assert _zones_from(lateral, along, crosswalk) == []
+
+
+def test_lateral_cap_keeps_the_ir_catch_reach():
+    from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, IR_CATCH_HALF_M, MAX_LATERAL_M
+    assert CORRIDOR_HALF_M + MAX_LATERAL_M <= IR_CATCH_HALF_M + 1e-12
+    assert MAX_LATERAL_M == pytest.approx(0.024)
+
+
+def test_ir_guard_rests_in_a_field_zone_and_stops_past_it():
+    field = dict(uncertainty=0.024, crosswalk_uncertainty=0.022)
+    r = rig()
+    assert drive_to(r, 0.15, **field).linear > 0
+    assert r[1].status().reason == "ir_guard_crosswalk"
+    r = rig()
+    assert drive_to(r, 0.32, **field).linear == 0     # IR row 0.3495 > far 0.27 + along 0.022 + drift
+    assert r[1].status().reason == "lane_departure"
+
+
+def test_corridor_is_widened_by_the_lateral_bound():
+    # IR row 0.11 m across + 5 % odom drift 0.009: inside 0.10 + 0.024, outside 0.10 + 0.005.
+    r = rig()
+    assert drive_to(r, 0.15, y_end=0.11, uncertainty=0.024, crosswalk_uncertainty=0.022).linear > 0
+    r = rig()
+    assert drive_to(r, 0.15, y_end=0.11, uncertainty=0.005, crosswalk_uncertainty=0.022).linear == 0
+    # Past the widened corridor the guard is back even with the field bound.
+    r = rig()
+    assert drive_to(r, 0.15, y_end=0.14, uncertainty=0.024, crosswalk_uncertainty=0.022).linear == 0
+    assert r[1].status().reason == "lane_departure"
+
+
+def test_odom_drift_narrows_the_corridor_at_the_cap():
+    """Safety review 2026-10-10: drift is position doubt, so it shrinks the corridor. IR row 0.12 m across
+    is within 0.10 + 0.024 = IR_CATCH_HALF_M, but 0.12 + drift 0.0096 is past it: the guard is back."""
+    r = rig()
+    assert drive_to(r, 0.15, y_end=0.12, uncertainty=0.024, crosswalk_uncertainty=0.022).linear == 0
+    assert r[1].status().reason == "lane_departure"
