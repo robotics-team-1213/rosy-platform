@@ -179,6 +179,7 @@ class LineFollowConfig:
     # 2026-10-10 사용자: 활성 차선 주행에서 명령이 이만큼 0 이면 원인과 무관하게 막힘을 열어 Fleet 에
     # 묻는다(원인 no_motion, 상세 = HOLD 사유). 0 = 끔. 로컬 후진 대체 없음: Fleet 답 또는 사람만.
     stuck_report_s: float = 5.0
+    no_progress_yaw_deg: float = 30.0  # 2026-10-10: no_progress/dithering also need |net yaw| below this
     recovery_back_m: float = 0.08
     recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
@@ -359,7 +360,7 @@ class LineFollowConfig:
         timing = (self.recovery_ask_s, self.recovery_back_m, self.recovery_back_speed,
                   self.recovery_rear_clear_m, self.recovery_settle_s, self.recovery_trail_s,
                   self.recovery_trail_yaw_deg, self.recovery_restuck_s, self.recovery_restuck_m,
-                  self.recovery_trail_max_age_s)
+                  self.recovery_trail_max_age_s, self.no_progress_yaw_deg)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
         if not _finite(self.stuck_report_s) or not 0.0 <= self.stuck_report_s <= 60.0:

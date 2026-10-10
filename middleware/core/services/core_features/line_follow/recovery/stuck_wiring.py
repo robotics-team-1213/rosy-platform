@@ -17,6 +17,7 @@ from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
+from core_features.line_follow.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
 from core_features.line_follow.recovery.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
 
@@ -39,6 +40,7 @@ class StuckRecoveryMixin:
         self._return_source_high_water_ns: Optional[int] = None
         self._trail = ForwardTrail()
         self._still_since: Optional[float] = None  # zero base command since (stuck_report_s)
+        self._progress = ProgressWatch()  # D-407 개정 2026-10-10: no_progress / dithering
 
     def bind_recovery(self, **providers: Callable[[], object]) -> None:
         unknown = set(providers) - set(_PROVIDERS)
@@ -147,15 +149,22 @@ class StuckRecoveryMixin:
                     and self._return_controller is not None
                     and self._return_controller.phase != "tracking")
 
-    def note_issued(self, linear: float, angular: float, now: float) -> None:
+    def note_issued(self, linear: float, angular: float, now: float, traffic_held: bool = False) -> None:
         """The twist CORE actually handed the CommandManager (after the traffic gate)."""
         with self._lock:
             self._trail.record(now, linear, angular)
+            pose, c, reason = self._fresh_pose(now), self._config, self._status.reason or ""
+            if pose is None or traffic_held or reason.startswith(("junction_", "authority_", "crosswalk_")):
+                self._progress.reset()  # no odom, or an intentional wait (D-525/D-517/D-494/D-573 gates)
+            else:
+                self._progress.note(now, (self._return_evidence.epoch, pose.frame), pose.x, pose.y, pose.yaw,
+                                    linear, angular, reason, max(c.stuck_report_s, c.recovery_restuck_s) + 1.0)
 
     def _recovery_reset(self, reason: str, now: float) -> None:
         self._recovery.reset(reason, now)
         self._trail.clear()
         self._still_since = None
+        self._progress.reset()
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
                        principal_ref: Optional[str] = None, now: Optional[float] = None,
@@ -195,6 +204,7 @@ class StuckRecoveryMixin:
         """RESUME / recovered: lift the obstacle latch once (re-blocks below the stop distance)."""
         if self._return_controller is not None and self._return_controller.phase == 'fleet':
             self._return_controller.restart_verification(now)
+        self._progress.reset()  # a RESUME / recovered close starts a new window
         self._obstacle_blocked = False
         self._clear_since = None
         self._blocked_since = None
@@ -274,6 +284,10 @@ class StuckRecoveryMixin:
                 and now - self._still_since >= report_s):
             # 2026-10-10 user: any reason the robot stays still this long goes to Fleet.
             cause, detail = "no_motion", self._status.reason
+        elif cause is None and report_s > 0.0 and config.body_stop_known:  # half URDF body length
+            cause = self._progress.cause(now, report_s, (config.body_front_x_m - config.body_rear_x_m) / 2,
+                math.radians(config.no_progress_yaw_deg), config.recovery_restuck_s, config.recovery_restuck_m)
+            detail = self._progress.reason or self._status.reason
         ceiling = self._provided("linear_ceiling")
         blind = None
         if known and self._range_min is not None:

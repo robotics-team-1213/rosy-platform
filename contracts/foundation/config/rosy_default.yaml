@@ -186,6 +186,9 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_local_enabled: true
   recovery_ask_s: 15.0             # console answer window before the local fallback
   stuck_report_s: 5.0              # active mode, zero command this long for any reason -> stuck no_motion to Fleet (0 = off)
+  # D-407 개정 / D-607 (2026-10-10): over stuck_report_s odom moved < half the URDF body length and
+  # |net yaw| < this while motion was commanded -> stuck no_progress (dithering: >= 2 v/w sign flips).
+  no_progress_yaw_deg: 30.0
   recovery_back_m: 0.08            # one back-off (<= 0.20)
   recovery_back_speed: 0.03        # m/s ceiling; actual = min(safety.manual_linear, this)
   recovery_rear_clear_m: 0.06      # rear clearance from the body rear, before and during
