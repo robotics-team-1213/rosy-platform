@@ -162,6 +162,33 @@ def test_failed_candidate_health_rolls_back_to_last_accepted_release(native_case
     assert runtime.actions == ["stop", "start", "stop", "start"]
 
 
+def test_io_that_was_running_but_is_dead_after_start_rolls_back(native_case):
+    # 8kcn 2026.10.10-100: rosy-io died ~7 s after "systemctl start" and activation
+    # still reported success, leaving the robot without LiDAR.
+    manager_type, root, key, _private, first, second, links = native_case
+    manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+    states = iter([True, False, True])  # before stop, after start (dead), after rollback is not read
+    runtime = RuntimeRecorder()
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links,
+                           io_active=lambda: next(states), io_settle_s=0)
+
+    with pytest.raises(RuntimeError, match="rolled back"):
+        manager.activate(second.name)
+
+    assert links.values == {"current": first.name, "previous": second.name}
+    assert runtime.actions == ["stop", "start", "stop", "start"]
+
+
+def test_io_that_stays_active_keeps_the_new_release(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links,
+                           io_active=lambda: True, io_settle_s=0)
+
+    assert manager.activate(second.name)["ok"] is True
+    assert links.values["current"] == second.name
+
+
 def test_explicit_rollback_reverifies_previous_and_swaps_links(native_case):
     manager_type, root, key, _private, first, second, links = native_case
     manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links)

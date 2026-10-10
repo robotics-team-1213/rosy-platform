@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import time
 import sys
 from typing import Callable, Protocol
 
@@ -50,6 +51,8 @@ PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"
 PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")
 RUNTIME_ID = re.compile(r"^[0-9a-f]{64}$")
 RUNTIME_TARGET = "rosy-runtime.target"
+# Seconds to wait after start before judging rosy-io (bringup fails ~7 s in).
+IO_SETTLE_S = 20.0
 # Every unit with PartOf=rosy-runtime.target (pinned by a test).
 RUNTIME_STOP_UNITS = (RUNTIME_TARGET, "rosy-core.service", "rosy-io.service", "rosy-camera.service",
                       "rosy-host-agent.service", "rosy-ssh-pairing.service")
@@ -138,6 +141,8 @@ class NativeReleaseManager:
         runtime: Callable[[str], None] | None = None,
         links: LinkStore | None = None,
         precheck: Callable[[], None] | None = None,
+        io_active: Callable[[], bool] | None = None,
+        io_settle_s: float = IO_SETTLE_S,
     ) -> None:
         self.root = Path(root).resolve()
         self.public_key = Path(public_key)
@@ -152,6 +157,10 @@ class NativeReleaseManager:
         # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
         # after verification and right before the runtime stops; raising refuses.
         self.precheck = precheck
+        # rosy-io is Type=simple: "systemctl start" returns before bringup has
+        # opened the motors. Real runs probe systemd; injected runtimes opt out.
+        self.io_active = io_active or (self._io_is_active if runtime is None else (lambda: False))
+        self.io_settle_s = io_settle_s
 
     @staticmethod
     def _systemctl(action: str) -> None:
@@ -165,6 +174,14 @@ class NativeReleaseManager:
             check=True,
             timeout=120,
         )
+
+    @staticmethod
+    def _io_is_active() -> bool:
+        try:
+            return subprocess.run(["systemctl", "is-active", "--quiet", "rosy-io.service"],
+                                  check=False, timeout=30).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
 
     @contextlib.contextmanager
     def _locked(self):
@@ -328,6 +345,7 @@ class NativeReleaseManager:
                 operation="activate", candidate=release_id,
                 old_current=old_current, old_previous=old_previous, phase="prepared",
             )
+            expect_io = self.io_active()
             self._runtime("stop")
             self._set_link(self.previous, old_current)
             self._set_link(self.current, release_id)
@@ -337,6 +355,12 @@ class NativeReleaseManager:
             )
             try:
                 self._runtime("start")
+                if expect_io:
+                    # 2026.10.10-100 on 8kcn: bringup died 7 s after start and
+                    # nothing noticed. Wait past that window, then require I/O.
+                    time.sleep(self.io_settle_s)
+                    if not self.io_active():
+                        raise RuntimeError("NATIVE_IO_NOT_ACTIVE: rosy-io.service is not active after start")
             except Exception as exc:
                 self._runtime("stop")
                 self._restore(old_current, release_id)
