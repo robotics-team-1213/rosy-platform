@@ -17,12 +17,16 @@ MAX_CUE_TTL_S = 2.0
 
 
 class CrosswalkAhead(BaseModel):
-    """The next crosswalk along the lane: body front to its near edge (0 inside), its length."""
+    """D-491/D-573 zone from Fleet's map: near/far edge along the lane from base_footprint at the
+    robot pose ``pose_age_s`` ago (near < 0 once inside); ``uncertainty_m`` is the ceiling pose bound."""
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1, max_length=128)
-    distance_m: float = Field(ge=0, le=5, allow_inf_nan=False)
-    length_m: float = Field(ge=0, le=2, allow_inf_nan=False)
+    near_m: float = Field(ge=-1, le=5, allow_inf_nan=False)
+    far_m: float = Field(ge=-1, le=6, allow_inf_nan=False)
+    uncertainty_m: float = Field(gt=0, le=0.2, allow_inf_nan=False)
+    source: Literal["fleet_map"] = "fleet_map"
+    pose_age_s: float = Field(0.0, ge=0, le=5, allow_inf_nan=False)
 
 
 class LaneCueRequest(BaseModel):

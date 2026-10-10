@@ -81,3 +81,18 @@ def test_older_seq_is_stale():
     m = _manager()
     assert m.set_lane_cue(_cue("ON_LANE", seq=5), now=10.0)[0]
     assert m.set_lane_cue(_cue("OFF_MAP", seq=4), now=10.1) == (False, "stale")
+
+
+def test_fleet_crosswalk_zone_joins_the_d491_list_once_per_id():
+    m = _manager()
+    for k, t in enumerate((9.8, 9.9, 10.0)):
+        stamp = int(t * 1e9)
+        m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.01 * k, y=0.0, yaw=0.0,
+                              received_at=t)
+    zone = {"id": "cw_south", "near_m": 0.2, "far_m": 0.33, "uncertainty_m": 0.035,
+            "source": "fleet_map", "pose_age_s": 0.1}
+    m.set_lane_cue(_cue("ON_LANE", crosswalk_ahead=zone), now=10.0)
+    m.set_lane_cue(_cue("ON_LANE", seq=2, crosswalk_ahead={**zone, "near_m": 0.19}), now=10.0)
+    fleet = [z for z in m._crosswalks._zones if z.get("source") == "fleet_map"]
+    assert len(fleet) == 1 and fleet[0]["near"] == 0.19 and fleet[0]["anchor"].x == pytest.approx(0.01)
+    assert m._crosswalk_zones()[0].near == 0.19          # the D-573 gate sees it too

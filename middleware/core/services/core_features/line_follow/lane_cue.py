@@ -13,23 +13,22 @@ the result afterwards. Per state:
   ``PIVOT_DONE_DEG``; the lane is 0.185 m and the Pinky sweep radius 0.088 m, so the pivot fits
   (URDF). Without ``turn_deg`` (Fleet has no heading): HOLD.
 - OFF_MAP: HOLD ``fleet_off_map`` until Fleet says otherwise (Fleet raises it to the operator).
-- ``crosswalk_ahead``: one D-573 zone anchored at the odom pose when the cue arrived, so the gate
-  stops, looks and crosses even when the camera zone is unstable.
+- ``crosswalk_ahead``: one ``fleet_map`` zone in the D-491 zone list, anchored at the odom pose
+  ``pose_age_s`` before the cue arrived (the ceiling pose's age), so the IR rest (D-491) and the
+  stop, look, cross gate (D-573) engage even when the camera zone is unstable (user, 2026-10-10:
+  zones come from both Fleet's map and the camera).
 """
 from __future__ import annotations
 
 import math
 from typing import Optional
 
-from core_features.line_follow.crosswalk_gate import Zone
 from core_features.line_follow.model import LineFollowDecision
 
 #: OFF_LANE: re-entry point further than this off the nose -> turn in place first (deg).
 PIVOT_BEARING_DEG = 45.0
 #: WRONG_WAY pivot ends when the lane direction is within this of the nose (deg).
 PIVOT_DONE_DEG = 30.0
-#: Fleet zone margin along the road: Rosy Cam pose (~2 cm) + 0.5 s latency at cruise (~4 cm).
-FLEET_ZONE_MARGIN_M = 0.06
 
 
 class LaneCueMixin:
@@ -38,7 +37,6 @@ class LaneCueMixin:
     def _init_lane_cue(self) -> None:
         self._cue: Optional[dict] = None
         self._cue_until = 0.0
-        self._cue_zone: Optional[Zone] = None
 
     def set_lane_cue(self, cue: dict, now: Optional[float] = None) -> tuple[bool, Optional[str]]:
         """Keep the newest cue (``LaneCueRequest.model_dump()``). (accepted, reason)."""
@@ -51,7 +49,7 @@ class LaneCueMixin:
                     and cue["seq"] <= old["seq"]):
                 return False, "stale"
             self._cue, self._cue_until = dict(cue), now + float(cue["ttl_s"])
-            self._cue_zone = self._anchor_cue_zone(cue.get("crosswalk_ahead"), now)
+            self._add_fleet_zone(cue.get("crosswalk_ahead"), now)
             return True, None
 
     def lane_cue_status(self, now: Optional[float] = None) -> Optional[dict]:
@@ -63,16 +61,16 @@ class LaneCueMixin:
     def _fresh_cue(self, now: float) -> Optional[dict]:
         return self._cue if self._cue is not None and now < self._cue_until else None
 
-    def _anchor_cue_zone(self, ahead, now: float) -> Optional[Zone]:
-        pose = self._fresh_pose(now)
-        if not ahead or pose is None:
-            return None
-        near = float(ahead["distance_m"]) + self._config.body_front_x_m
-        return Zone(key=(self._return_evidence.epoch, pose.frame), x=pose.x, y=pose.y, yaw=pose.yaw,
-                    near=near, far=near + float(ahead["length_m"]), margin=FLEET_ZONE_MARGIN_M)
-
-    def _fleet_crosswalk_zones(self, now: float) -> list:
-        return [self._cue_zone] if self._cue_zone is not None and self._fresh_cue(now) else []
+    def _add_fleet_zone(self, ahead, now: float) -> None:
+        """Replace this run's Fleet zone; the anchor is the odom sample nearest the ceiling pose time."""
+        if not ahead or self._fresh_pose(now) is None:
+            return
+        at = now - float(ahead.get("pose_age_s") or 0.0)
+        anchor = min(self._return_evidence.trail.samples, key=lambda p: abs(p.received_at - at))
+        self._crosswalks.add_fleet(dict(
+            epoch=self._return_evidence.epoch, stamp_ns=anchor.stamp_ns, near=float(ahead["near_m"]),
+            far=float(ahead["far_m"]), uncertainty=float(ahead["uncertainty_m"]), received_at=now,
+            anchor=anchor, left=None, right=None, source="fleet_map", id=ahead["id"]))
 
     def _lane_cue_guard(self, now: float, guard: Optional[str]) -> Optional[str]:
         """IR first: only an IR that sees nothing (clear) or is off takes the cue's side."""

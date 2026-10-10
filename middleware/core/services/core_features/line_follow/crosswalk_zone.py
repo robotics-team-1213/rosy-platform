@@ -43,6 +43,14 @@ class CrosswalkZones:
                                 right=min(edges["right"]) if "right" in edges else None))
         del self._zones[:-MAX_ZONES]
 
+    def add_fleet(self, zone):
+        """D-491 개정 2026-10-10: a zone from Fleet's map (anchor already in odom, its own
+        uncertainty). One per crosswalk id: a newer cue replaces it. Kept and dropped like a camera
+        zone (passed, turned, off the corridor, another epoch)."""
+        self._zones = [z for z in self._zones
+                       if not (z.get("source") == "fleet_map" and z.get("id") == zone["id"])] + [zone]
+        del self._zones[:-MAX_ZONES]
+
     def holds(self, evidence, *, now, guard, ir_x, max_length, odom_error_fraction, range_error_fraction=0.):
         """Call every guarded tick. True while a firing guard (left/right/centre) may rest."""
         if self._epoch != evidence.epoch:  # zones carry their own epoch; restart the rest state

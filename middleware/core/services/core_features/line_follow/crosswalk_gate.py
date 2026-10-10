@@ -452,7 +452,7 @@ class CrosswalkGateMixin:
                 out.append(Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"],
                                 far=z["far"], margin=z["uncertainty"] + c.crosswalk_range_error_fraction * z["far"],
                                 left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"]))
-        return out + self._fleet_crosswalk_zones(self._clock())  # D-511 rev 1 Fleet hint
+        return out
 
     def _fresh_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
