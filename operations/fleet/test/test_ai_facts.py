@@ -290,6 +290,28 @@ def test_d577_heartbeat_carries_the_build_commit(tmp_path):
     assert bad.status_code == 422
 
 
+def test_structured_assessment_is_optional_but_cannot_claim_verification_or_another_frame(tmp_path):
+    from core_common.protocol.situation import build_assessment
+    app, _, _ = _app(tmp_path)
+    app.state.ai_facts.acting = frozenset({"rosy_01"})
+    client = TestClient(app)
+    _beat(client)
+    views = {"front": {"frame_id": "front:1"}, "rosy_cam": {"frame_id": "ceiling:2"}}
+    assessment = build_assessment({"type": "geometry", "direction": "reobserve", "observations": {
+        "front": "Curved boundary beside a wall.", "rosy_cam": "Robot near the track edge."},
+        "uncertainties": ["Heading is not confirmed."]}, "mobility", views)
+    body = {"robot_id": "rosy_01", "stuck_id": "s-1", "decision": "WAIT", "reason": "heading_uncertain",
+            "confidence": 0.8, "evidence": {"views": views, "assessment": assessment},
+            "source": "vlm:qwen3-vl:8b-instruct@abc:d619-v1", "observed_at": time.time(), "ttl_s": 6.0}
+    assert client.post("/api/fleet/ai/proposals", headers=_auth(AI), json=body).json() == {"state": "queued"}
+    for change in ({"verification": "verified"}, {"domain": "manipulation"},
+                   {"observations": [{"source": "front", "frame_id": "other", "description": "A wall."}]}):
+        reply = client.post("/api/fleet/ai/proposals", headers=_auth(AI), json={
+            **body, "evidence": {"views": views, "assessment": {**assessment, **change}}})
+        assert reply.status_code == 422
+    assert not [call for call in app.state.console.clients()["rosy_01"].calls if call[0] in MOTION_CALLS]
+
+
 def test_d577_proposal_outcome_reaches_the_stuck_row_and_the_hourly_counts():
     now = [5000.0]
     board = ai_facts.AiFactsBoard(clock=lambda: now[0])

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import math
 from typing import Callable, Literal, Optional
 
 from fastapi import Depends, HTTPException, Query
@@ -53,7 +54,9 @@ def rosy_cam_lease(robot_id: str, sightings, map_pose, signer, sources: tuple[st
                              crop_map_id=row["map_id"], crop_revision=row["calibration_revision"])
     except (ValueError, KeyError):
         return None
-    return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease}
+    return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease,
+            "target_robot_id": robot_id, "map_id": row["map_id"],
+            "calibration_revision": row["calibration_revision"], "crop_map": [row["x"], row["y"], 1.0]}
 
 
 def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guard, authorize,
@@ -81,17 +84,18 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
             out.append(deadlock)
         return out
 
-    async def _views(rid: str, stuck_id: Optional[str] = None) -> dict:
+    async def _views(rid: str) -> dict:
         front = None
         fetch = getattr(clients().get(rid), "front_frame", None)
         try:
-            jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+            jpeg, status = await asyncio.wait_for(fetch(overlay=False), timeout=3.0)
             if jpeg is not None:
-                if stuck_id and line_stuck.preview(rid, stuck_id) is None:
-                    line_stuck.keep_preview(rid, stuck_id, jpeg, status)
-                age = (status.get("age_ms") or 0) / 1000.0
+                captured = float(status["captured_at"])
+                if not math.isfinite(captured):
+                    raise ValueError("unknown capture timestamp")
                 front = {"frame_id": f"{status.get('source')}:{status.get('sequence')}",
-                         "captured_at": round(first.wall() - age, 3), "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
+                         "captured_at": captured, "jpeg_b64": base64.b64encode(jpeg).decode("ascii"),
+                         "overlay": status.get("overlay"), "width": status.get("width"), "height": status.get("height")}
         except Exception:  # noqa: BLE001 - unavailable fresh evidence means no VLM judgement
             pass
         views = {"front": front, "rosy_cam": None if rosy_cam is None else rosy_cam(rid)}
@@ -112,17 +116,19 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         rows = loop._rows if loop is not None else {}
         row = rows.get(rid) or {"robot_id": rid, "map_pose": pose(rid)}
         stuck_id = problem_id if problem["kind"] == "stuck" else None
+        opened = next((p for p in line_stuck.pending() if p.get("robot_id") == rid
+                       and p.get("stuck_id") == stuck_id), None) if stuck_id else None
         if problem["kind"] == "deadlock":
             ids = problem["context"]["cycle"]
             views = await asyncio.gather(*(_views(mid) for mid in ids))
             return {**problem, "built_at": first.wall(),
                     "members": {mid: {"context": context(rows.get(mid) or {"map_pose": pose(mid)}), "views": view}
                                 for mid, view in zip(ids, views)}}
-        views = await _views(rid, stuck_id)
+        views = await _views(rid)
         wall = first.wall()
         history = [] if episodes is None else await asyncio.to_thread(
             episodes.episodes, 20, rid, wall - 600.0)
-        return {**problem, "stuck_id": stuck_id, "context": context(row), "built_at": wall,
+        return {**problem, "stuck_id": stuck_id, "context": context(row, opened), "built_at": wall,
                 "history": [{k: h.get(k) for k in ("opened_at", "problem_id", "kind", "decision", "tier", "verdict",
                                                    "core_code", "outcome")} for h in history],
                 "views": views}
