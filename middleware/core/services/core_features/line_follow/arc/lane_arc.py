@@ -129,7 +129,8 @@ class ArcMixin:
                 x = pose.x + (math.sin(pose.yaw+k*d)-math.sin(pose.yaw))/k - anchor.x
                 y = pose.y - (math.cos(pose.yaw+k*d)-math.cos(pose.yaw))/k - anchor.y
                 along, across = c*x+n*y, -n*x+c*y
-                if (z['near']-z['uncertainty'] <= along <= z['far']+z['uncertainty']
+                m = max(z.get('along') or 0., z['uncertainty'])  # D-573 6: along-track bound when stated
+                if (z['near']-m <= along <= z['far']+m
                         and abs(across) <= CORRIDOR_HALF_M+z['uncertainty']):
                     return True
         return False
