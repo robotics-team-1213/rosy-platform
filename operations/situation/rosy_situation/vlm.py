@@ -15,6 +15,7 @@ import base64
 import hashlib
 import json
 import logging
+import re
 import urllib.request
 from typing import Callable, Optional
 
@@ -47,23 +48,28 @@ def _post(url: str, body: dict, timeout: float) -> dict:
         return json.loads(response.read())
 
 
+def _get(url: str, timeout: float) -> dict:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
 class Vlm:
     def __init__(self, url: str = OLLAMA_URL, model: str = MODEL, *,
-                 post: Callable[[str, dict, float], dict] = _post) -> None:
-        self.url, self.model, self._post = url.rstrip("/"), model, post
-        self._profile: Optional[str] = None
+                 post: Callable[[str, dict, float], dict] = _post,
+                 get: Callable[[str, float], dict] = _get) -> None:
+        self.url, self.model, self._post, self._get = url.rstrip("/"), model, post, get
 
     def profile(self) -> Optional[str]:
         """``<model>@<digest12>:<prompt>`` once Ollama reports the model, else None (not loaded)."""
-        if self._profile is None:
-            try:
-                info = self._post(f"{self.url}/api/show", {"model": self.model}, TIMEOUT_S)
-            except (OSError, ValueError) as exc:
-                _LOG.info("vlm not available: %s", exc)
-                return None
-            digest = str(info.get("digest") or (info.get("details") or {}).get("digest") or "")[:12]
-            self._profile = f"{self.model}@{digest or 'unknown'}:{PROMPT_ID}"
-        return self._profile
+        try:
+            models = self._get(f"{self.url}/api/ps", TIMEOUT_S).get("models") or []
+        except (OSError, ValueError, AttributeError) as exc:
+            _LOG.info("vlm not available: %s", exc)
+            return None
+        for row in models:
+            if row.get("name") == self.model and re.fullmatch(r"[0-9a-f]{64}", str(row.get("digest") or "")):
+                return f"{self.model}@{row['digest'][:12]}:{PROMPT_ID}"
+        return None
 
     def judge(self, case: dict, now: float) -> Optional[dict]:
         """One proposal for this case, or None (the analyzer's proposal stands)."""

@@ -8,6 +8,8 @@ import json
 from rosy_situation.vlm import Vlm
 
 JPEG = base64.b64encode(b"\xff\xd8fake\xff\xd9").decode()
+DIGEST = "abcdef0123456789" * 4
+RUNNING = lambda _url, _timeout: {"models": [{"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]}
 
 
 def _case(**views):
@@ -32,7 +34,7 @@ def _post(answer, fail=None):
 
 def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model():
     post, calls = _post({"decision": "back_and_retry", "reason": "Rear clear", "confidence": 0.7, "seen": "empty"})
-    proposal = Vlm(post=post).judge(_case(), now=100.0)
+    proposal = Vlm(post=post, get=RUNNING).judge(_case(), now=100.0)
     assert proposal["decision"] == "BACK_AND_RETRY" and proposal["reason"] == "rear_clear"
     assert proposal["source"] == "vlm:qwen3-vl:8b-instruct@abcdef012345:d610-v1"
     views = proposal["evidence"]["views"]
@@ -47,16 +49,16 @@ def test_a_missing_view_a_word_outside_the_table_or_no_model_is_none():
     post, calls = _post({"decision": "RESUME"})
     assert Vlm(post=post).judge(_case(front={"frame_id": "f"}, rosy_cam={"jpeg_b64": JPEG}), 100.0) is None
     assert calls == []                                      # never asked without both views
-    assert Vlm(post=_post({"decision": "FLY"})[0]).judge(_case(), 100.0) is None
-    assert Vlm(post=_post({}, fail=OSError("refused"))[0]).judge(_case(), 100.0) is None
-    assert Vlm(post=_post({"decision": "STOP"})[0]).judge({**_case(), "kind": "unknown"}, 100.0) is None
+    assert Vlm(post=_post({"decision": "FLY"})[0], get=RUNNING).judge(_case(), 100.0) is None
+    assert Vlm(post=_post({}, fail=OSError("refused"))[0], get=RUNNING).judge(_case(), 100.0) is None
+    assert Vlm(post=_post({"decision": "STOP"})[0], get=RUNNING).judge({**_case(), "kind": "unknown"}, 100.0) is None
 
 
 def test_model_profile_requires_a_running_model_with_a_digest():
     empty = Vlm(get=lambda _url, _timeout: {"models": []})
     assert empty.profile() is None
     running = Vlm(get=lambda _url, _timeout: {"models": [
-        {"name": "qwen3-vl:8b-instruct", "digest": "abcdef0123456789"}]})
+        {"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]})
     assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d610-v1"
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None

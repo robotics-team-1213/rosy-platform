@@ -116,6 +116,7 @@ class Situation:
         try:
             self.fleet.call("/api/fleet/ai/heartbeat", {
                 "service_version": __version__, "model_profiles": [self._profile] if mode == "available" and self._profile else [],
+                "owner_mode": mode,
                 "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s})
         except (OSError, ValueError) as exc:
             _LOG.warning("heartbeat failed: %s", exc)
@@ -229,33 +230,28 @@ class Situation:
             return
         if self._case_task is not None and self._case_task.done():
             try:
-                proposal = self._case_task.result()
-                if proposal is not None:
-                    self.fleet.call("/api/fleet/ai/proposals", proposal)
-                    self._log("proposals", proposal)
-            except (OSError, ValueError) as exc:
-                _LOG.warning("vlm proposal not sent: %s", exc)
+                self._case_task.result()
+            except Exception as exc:  # noqa: BLE001 - a bad case or model response must not stop Fleet polling
+                _LOG.warning("vlm case failed: %s", type(exc).__name__)
             self._case_task = None
-        if self._case_task is not None:
-            return
-        try:
-            problems = self.fleet.call("/api/fleet/ai/problems").get("problems") or []
-        except (OSError, ValueError) as exc:
-            _LOG.warning("ai problems unavailable: %s", exc)
-            return
+        if self._case_task is None:
+            self._case_task = self._executor.submit(self._ai_cycle)
+
+    def _ai_cycle(self) -> None:
+        problems = self.fleet.call("/api/fleet/ai/problems").get("problems") or []
         now = self.clock()
         for problem in problems:
             pid = str(problem.get("problem_id") or "")
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
-                self._case_task = self._executor.submit(self._judge_case, pid)
+                case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                proposal = self.vlm.judge(case, self.wall())
+                if proposal is not None and self.owner_mode() == "available":
+                    self.fleet.call("/api/fleet/ai/proposals", proposal)
+                    self._log("proposals", proposal)
                 break
         if len(self._case_seen) > 256:
             self._case_seen = {pid: at for pid, at in self._case_seen.items() if now - at < 60.0}
-
-    def _judge_case(self, problem_id: str):
-        case = self.fleet.call(f"/api/fleet/ai/case/{problem_id}")
-        return self.vlm.judge(case, self.wall())
 
 
 def main() -> None:
