@@ -630,6 +630,8 @@ DISABLED_WITHOUT_REASON = {
     ("operations/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
     ("operations/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
+    ("operations/fleet/fleet/server/web/formation.js", 'el("formation-leader").disabled = status.active;'):
+        NATIVE + " (대형 상태 태그 — 리더는 해제 뒤 바꾼다)",
     ("operations/fleet/fleet/server/web/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
     ("operations/fleet/fleet/server/web/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
     ("operations/fleet/fleet/server/web/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",

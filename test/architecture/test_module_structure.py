@@ -82,13 +82,14 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
-#: docs/plans/2026-10-10-core-line-follow-size-unit.md
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
+              "core/services/core_features/line_follow/cue",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
@@ -218,7 +219,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_550,
+        53_090,
+        "split: re-judged at 53090 on 2026-10-10: D-608 adds read-only incident reports, reviews and evidence joins within Fleet; the existing stuck subpackage split remains due before further growth. Previously "
         "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
         "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
@@ -675,13 +677,18 @@ SIZE_VERDICTS = {
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
-        993,
+        1_175,
+        "split: re-judged at 1175 on 2026-10-10: D-608 adds incident display, human review and JSON export within the existing Fleet session and role boundary. Extract the incident panel before further console growth. Previously "
         "split: re-judged at 993 on 2026-10-10 over 832 (+161; independent re-judge, critic): D-593 pin tool +45, "
         "site path/link +48, host/marker +18, stop/cancel feedback +33, D-596 b +12, D-519 login +8; owners unchanged. "
         "The D-473 follow-up was not done: before any growth (HARD_TIER 1000 leaves zero allowance) move the "
         "auth/session bootstrap (D-473/D-519) and the D-593 pin press-drag into their own web assets with "
         "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
+    ),
+    "fleet/fleet/server/web/shared/styles.css": (
+        802,
+        "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
     "fleet/fleet/server/cell_job_store.py": (
         824,
@@ -1010,15 +1017,24 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow": (
-        3_357,
-        "accept: re-judged at 3357 on 2026-10-10 for D-511 rev 1-5 (feat/core-fleet-lane-cue, self-judged, "
-        "independent re-judge requested): lane_cue.py (Fleet lane cue, the same LineFollowManager domain under "
-        "its lock) and odom_pivot.py (camera-independent pivot, pure, reused by D-607 P3). Earlier: "
-        "independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
+        3_018,
+        "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independent re-judge "
+        "2026-10-10 required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
+        "Earlier: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
         "(read-only critic agent); docs/plans/2026-10-10-core-line-follow-size-unit.md registers the rest of "
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
+    ),
+    "core/services/core_features/line_follow/cue": (
+        376,
+        "split: judged at 376 on 2026-10-10 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
+        "size-unit.md, cue addendum; independent review requested): lane_cue.py 320 (D-511 Fleet lane cue, a "
+        "LaneCueMixin of LineFollowManager under its lock) and odom_pivot.py 55 (pure, camera-independent turn in "
+        "place; D-607 P3 REALIGN may import it from recovery, as recovery imports line_follow.clearance). The "
+        "manager touches only _init_lane_cue, _lane_cue_plan, _lane_cue_turn, _lane_cue_view, "
+        "_lane_cue_spot_running and _cue_spot_turning. Re-judge after +150.",
     ),
     "perception/control/sensing/perception/learned": (
         2_270,
