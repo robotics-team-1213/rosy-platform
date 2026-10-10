@@ -13,9 +13,9 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
-from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
-from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.resolver import ResolverConfig, StuckResolver
+from fleet.stuck.loop import PRINCIPAL_ID, StuckResolverLoop
 from site_map_fixture import painted_track
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
@@ -149,8 +149,10 @@ def test_applied_yield_with_lost_reply_is_escalated_without_replay(error):
     door = next(item for item in painted.doors if item.edge_id == "east")
     state = _state(stuck={**STUCK, "decisions": ["WAIT", "YIELD"]})
     state["pose"] = dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.2, direction=1)))
+    state["localization"] = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
     peer = {"robot_id": "peer", "online": True, "state": {
-        "pose": dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.45, direction=-1)))}}
+        "pose": dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.45, direction=-1))),
+        "localization": {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}}}
     board = LineStuckBoard(clock=FakeClock())
     applied = []
 

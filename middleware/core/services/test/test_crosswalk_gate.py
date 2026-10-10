@@ -1,5 +1,5 @@
 """D-573 (c): the CORE crosswalk gate stops before a camera crosswalk zone, looks with the LiDAR and
-crosses only after 1 s of proof; no timeout; a D-407 crosswalk_blocked stuck asks a human."""
+crosses only after 5 s of continuous proof (rev 3); no timeout; a D-407 crosswalk_blocked stuck asks a human."""
 import math
 from pathlib import Path
 
@@ -129,12 +129,12 @@ def test_stops_before_the_near_edge_with_the_zone_outside_the_blind_band():
     assert s.crosswalk.state in ("looking", "waiting")
 
 
-def test_empty_look_for_one_second_then_crosses_and_closes():
+def test_empty_look_then_crosses_and_closes():
     s = Sim(edges=(0.09, -0.09))                              # lane edges: the camera watched the ground
     s.to_stop()
     stop_t = s.t
-    go = next(t for t, d in s.run(5.0) if d.linear > 0)
-    assert 1.0 <= go - stop_t <= 1.6
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert 5.0 <= go - stop_t <= 5.6
     assert s.crosswalk.state == "crossing"
     assert s.m.status().linear <= 0.04 + 1e-9
     s.run(15.0)
@@ -147,8 +147,8 @@ def test_paint_only_scene_is_clear():
     s = Sim()
     s.to_stop()
     stop_t = s.t
-    go = next(t for t, d in s.run(5.0, crosswalk=(NEAR, FAR)) if d.linear > 0)
-    assert go - stop_t <= 1.6
+    go = next(t for t, d in s.run(7.0, crosswalk=(NEAR, FAR)) if d.linear > 0)
+    assert go - stop_t <= 5.6
 
 
 @pytest.mark.parametrize("obj", [(0.60, 0.0, 0.03),      # on the crosswalk
@@ -192,7 +192,7 @@ def test_person_leaves_then_the_stuck_clears_and_the_robot_crosses():
     s.to_stop()
     s.run(11.0)
     s.objects = []
-    go = next(t for t, d in s.run(3.0) if d.linear > 0)
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
     assert s.m.status().stuck is None
     closed = [d for n, d in s.bus.events if n == "nav.line_stuck_closed"]
     assert closed[-1]["reason"] == "cleared"
@@ -207,8 +207,8 @@ def test_one_bad_scan_restarts_the_window():
     s.run(0.1)
     s.objects = []
     bad_t = s.t
-    go = next(t for t, d in s.run(5.0) if d.linear > 0)
-    assert go - bad_t >= 1.0 - 0.05 - 1e-6      # the bad scan is at most one tick before bad_t
+    go = next(t for t, d in s.run(8.0) if d.linear > 0)
+    assert go - bad_t >= 5.0 - 0.05 - 1e-6      # the bad scan is at most one tick before bad_t
 
 
 @pytest.mark.parametrize("hole", [lambda a: abs(a) < 0.3, lambda a: 0.3 < a < 0.8])
@@ -251,7 +251,7 @@ def test_zone_lost_after_arming_stops_for_good():
 def test_crossing_holds_for_a_return_ahead_but_not_for_a_waiting_strip_inside_the_zone():
     s = Sim(crosswalk_approach_default_m=0.10)
     s.to_stop()
-    s.run(1.5)
+    s.run(5.5)
     assert s.crosswalk.state == "crossing"
     end = s.t + 20.0
     while s.x + B.front_x_m < NEAR + 0.02:
@@ -290,7 +290,7 @@ def test_snapshot_reports_unknown_before_the_camera_watched_and_the_zone_inside(
 def test_gate_never_lifts_a_zero_or_raises_a_speed():
     s = Sim()
     s.to_stop()
-    s.run(1.5)
+    s.run(5.5)
     assert s.crosswalk.state == "crossing"
     zero = LineFollowDecision(generation=1, mode=LineFollowMode.CAMERA_LINE)
     assert s.m._crosswalk_gate(s.t, zero) == zero
@@ -311,7 +311,7 @@ def test_estop_and_mode_off_reset_the_gate():
 def test_body_stop_still_wins_while_crossing():
     s = Sim()
     s.to_stop()
-    s.run(1.5)
+    s.run(5.5)
     assert s.crosswalk.state == "crossing"
     lidar = [(B.front_x_m + 0.01 - B.lidar_x_m, 0.0)]           # a return touching the body front
     s.m.observe_body_points(lidar, range_min=RANGE_MIN, received_at=s.t)
@@ -364,8 +364,8 @@ def test_the_track_wall_beside_the_lane_is_outside_the_look_area():
     s.objects = [(x / 100, -0.13 - 0.01, 0.01) for x in range(0, 120)]   # a wall of returns
     s.to_stop()
     stop_t = s.t
-    go = next(t for t, d in s.run(5.0) if d.linear > 0)
-    assert go - stop_t <= 1.6
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert go - stop_t <= 5.6
 
 
 def test_a_person_inside_the_seen_lane_corridor_still_stops():
@@ -537,6 +537,66 @@ def test_an_armed_zone_the_robot_turned_away_from_disarms(pose):
 def test_the_gate_needs_the_d422_path_mode():
     with pytest.raises(ValueError):
         LineFollowConfig(**BODY, crosswalk_gate_enabled=True, obstacle_mode="sector")
+
+
+# ---- D-573 rev 3 (2026-10-10 user): 5 s of continuous clear, then cross ----------------------------
+def _go_after(s, seconds):
+    return next((t for t, d in s.run(seconds) if d.linear > 0), None)
+
+
+def test_five_seconds_of_continuous_clear_then_crosses_without_asking_anyone():
+    s = Sim()
+    s.to_stop()
+    stop_t = s.t
+    assert _go_after(s, 4.8) is None                         # clear is observed, never cut short
+    go = _go_after(s, 2.0)
+    assert go is not None and 5.0 <= go - stop_t <= 5.6
+    assert s.crosswalk.state == "crossing"
+    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
+
+
+@pytest.mark.parametrize("bad", ["person", "unknown"])
+def test_a_bad_scan_at_4_9_s_restarts_the_five_second_window(bad):
+    s = Sim()
+    s.to_stop()
+    assert _go_after(s, 4.9) is None
+    if bad == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    else:
+        s.no_return = lambda a: abs(a) < 0.3
+    s.run(0.1)
+    s.objects, s.no_return = [], None
+    bad_t = s.t
+    go = _go_after(s, 8.0)
+    assert go is not None and go - bad_t >= 5.0 - 0.05 - 1e-6
+
+
+def test_clear_window_is_configurable():
+    s = Sim(crosswalk_clear_s=2.0, crosswalk_look_min_scans=16)
+    s.to_stop()
+    stop_t = s.t
+    go = _go_after(s, 4.0)
+    assert go is not None and 2.0 <= go - stop_t <= 2.6
+
+
+def test_no_human_report_while_the_area_is_clearing():
+    """A person leaves after 8 s: the 10 s report must not fire inside the 5 s clear window."""
+    s = Sim()
+    s.objects = [(0.60, 0.0, 0.03)]
+    s.to_stop()
+    s.run(8.0)
+    s.objects = []
+    go = _go_after(s, 8.0)
+    assert go is not None
+    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
+
+
+def test_clear_window_defaults_and_report_ordering():
+    c = LineFollowConfig()
+    assert c.crosswalk_clear_s == 5.0 and c.crosswalk_look_min_scans == 40
+    assert c.crosswalk_report_s > c.crosswalk_clear_s
+    with pytest.raises(ValueError):
+        LineFollowConfig(crosswalk_clear_s=10.0, crosswalk_report_s=10.0)
 
 
 def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():

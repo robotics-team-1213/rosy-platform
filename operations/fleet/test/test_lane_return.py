@@ -117,7 +117,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
 
 def test_resolver_never_auto_resumes_at_a_mapped_crosswalk():
     # The XW crosswalk RESUME rule was removed as unsafe (independent review 2026-10-10).
-    from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
+    from fleet.stuck.resolver import ResolverConfig, StuckResolver
     resolver = StuckResolver(ResolverConfig())
     resolver.at_crosswalk = lambda rid: rid == "r1"
     row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
