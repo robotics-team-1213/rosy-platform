@@ -23,12 +23,13 @@ WALL = 1_760_000_000.0
 PROFILE = "qwen3-vl:8b-instruct@abc:d610-v1"
 
 
-def test_ai_camera_lease_uses_only_fresh_same_map_sighting_and_localized_pose():
+def test_ai_camera_lease_uses_only_fresh_same_map_sighting_including_pose_loss():
     signer = VisionLeaseSigner("x" * 32)
     pose = SimpleNamespace(state="LOCALIZED", x=0.2, y=0.3, map_id="track")
-    sighting = {"robot_id": "rosy_01", "source_id": "ceiling", "map_id": "track", "stale": False}
+    sighting = {"robot_id": "rosy_01", "source_id": "ceiling", "map_id": "track", "stale": False,
+                "x": 0.2, "y": 0.3, "calibration_revision": "rev1"}
     sightings = SimpleNamespace(snapshot=lambda: {"sightings": [sighting]})
-    poses = SimpleNamespace(arbitrated_pose=lambda _rid: pose)
+    poses = SimpleNamespace(arbitrated_pose=lambda _rid: pose, active_map_id=lambda: "track")
     view = rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",))
     assert view["frame_path"] == "/api/vision/sources/ceiling/frame"
     lease = signer.verify(view["lease"], source_id="ceiling")
@@ -37,7 +38,8 @@ def test_ai_camera_lease_uses_only_fresh_same_map_sighting_and_localized_pose():
         sightings.snapshot = lambda: {"sightings": [bad]}
         assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is None
     pose.state = "LOST"
-    assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is None
+    sightings.snapshot = lambda: {"sightings": [sighting]}
+    assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is not None
 
 
 def _first(robots=("rosy_01",), keep=None):

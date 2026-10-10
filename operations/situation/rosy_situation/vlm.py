@@ -35,8 +35,8 @@ WORDS = {"stuck": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "REALIG
          "trip_failed": ("STOP", "CANCEL")}
 _LOG = logging.getLogger("rosy_situation.vlm")
 
-PROMPT = """You decide what a small lane-following robot should do next. Two pictures follow: first the ceiling
-camera crop around the robot, then the robot's own front camera. The robot's local safety (body stop, watchdog,
+PROMPT = """You decide what a small lane-following robot should do next. Pictures follow in the labeled order:
+ceiling camera crop and front camera per robot. The robot's local safety (body stop, watchdog,
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
 {{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it}}.
 Prefer WAIT when the pictures do not show the way clear. Problem and context:
@@ -76,19 +76,40 @@ class Vlm:
     def judge(self, case: dict, now: float) -> Optional[dict]:
         """One proposal for this case, or None (the analyzer's proposal stands)."""
         words = WORDS.get(case.get("kind"), ())
-        views = case.get("views") or {}
-        if not words or any(not (views.get(v) or {}).get("jpeg_b64") for v in VIEWS):
+        deadlock = case.get("kind") == "deadlock"
+        members = case.get("members") if deadlock else {case.get("robot_id"): case}
+        if (not words or not members
+                or any(not (member.get("views", {}).get(v) or {}).get("jpeg_b64")
+                       for member in members.values() for v in VIEWS)):
             return None                               # D-610 5: both views or no VLM judgement
         profile = self.profile()
         if profile is None:
             return None
         context = json.dumps({k: case.get(k) for k in ("kind", "robot_id", "problem_id", "context", "history")},
                              separators=(",", ":"), default=str)[:6000]
-        images = [views[v]["jpeg_b64"] for v in VIEWS]
+        pairs = [(rid, v) for rid in sorted(members) for v in VIEWS]
+        images = [members[rid]["views"][v]["jpeg_b64"] for rid, v in pairs]
+        prompt = PROMPT.format(words=list(words), context=context)
+        prompt += "\nPicture order: " + ", ".join(f"{rid}:{view}" for rid, view in pairs)
+        if deadlock:
+            prompt += ("\nChoose robot_id from the cycle. For REPLAN include blocked_edges, a nonempty list "
+                       "from that robot's avoidable edges. Member contexts: "
+                       + json.dumps({rid: member.get("context") for rid, member in members.items()},
+                                    default=str)[:6000])
         try:
+            cited = {}
+            for rid, view in pairs:
+                image = members[rid]["views"][view]
+                captured_at = float(image["captured_at"])
+                if not math.isfinite(captured_at):
+                    return None
+                cited.setdefault(rid, {})[view] = {
+                    "frame_id": image.get("frame_id"), "captured_at": captured_at,
+                    "age_s": round(now - captured_at, 3),
+                    "sha256": hashlib.sha256(base64.b64decode(image["jpeg_b64"], validate=True)).hexdigest()}
             reply = self._post(f"{self.url}/api/chat", {
                 "model": self.model, "stream": False, "format": "json", "options": {"temperature": 0},
-                "messages": [{"role": "user", "content": PROMPT.format(words=list(words), context=context),
+                "messages": [{"role": "user", "content": prompt,
                               "images": images}]}, TIMEOUT_S)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
             decision = str(answer["decision"]).upper()
@@ -96,22 +117,30 @@ class Vlm:
             if not math.isfinite(confidence):
                 return None
             confidence = min(1.0, max(0.0, confidence))
-        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            rid = answer["robot_id"] if deadlock else case.get("robot_id")
+            if rid not in members:
+                return None
+            body = {}
+            if deadlock and decision == "REPLAN":
+                edges = answer.get("blocked_edges")
+                avoidable = (case.get("context") or {}).get("avoidable", {}).get(rid, [])
+                if (not isinstance(edges, list) or not edges or not all(isinstance(e, str) for e in edges)
+                        or not set(edges) <= set(avoidable)):
+                    return None
+                body = {"blocked_edges": edges}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, binascii.Error) as exc:
             _LOG.warning("vlm judgement dropped: %s", exc)
             return None
         if decision not in words:
             _LOG.warning("vlm word %r not allowed for %s", decision, case.get("kind"))
             return None
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
-        try:
-            evidence = {"views": {v: {"frame_id": views[v].get("frame_id"), "captured_at": views[v].get("captured_at"),
-                                      "age_s": round(now - float(views[v].get("captured_at") or 0.0), 3),
-                                      "sha256": hashlib.sha256(base64.b64decode(views[v]["jpeg_b64"], validate=True)).hexdigest()}
-                                for v in VIEWS},
-                        "map_pose": (case.get("context") or {}).get("map_pose"),
-                        "seen": str(answer.get("seen") or "")[:200]}
-        except (ValueError, TypeError, KeyError, binascii.Error):
-            return None
-        return {"robot_id": case.get("robot_id"), "stuck_id": case.get("stuck_id") or case.get("problem_id"),
+        evidence = {"views": cited[rid], "map_pose": (members[rid].get("context") or {}).get("map_pose"),
+                    "seen": str(answer.get("seen") or "")[:200]}
+        if deadlock:
+            evidence["members"] = {mid: {"views": cited[mid],
+                                        "map_pose": (member.get("context") or {}).get("map_pose")}
+                                   for mid, member in members.items()}
+        return {"robot_id": rid, "stuck_id": case.get("stuck_id") or case.get("problem_id"), "body": body,
                 "decision": decision, "reason": reason[:64] or "vlm", "confidence": confidence,
                 "evidence": evidence, "source": f"vlm:{profile}", "observed_at": now, "ttl_s": TTL_S}

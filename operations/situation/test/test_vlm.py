@@ -72,3 +72,16 @@ def test_vlm_uses_recent_outcomes_and_drops_nonfinite_confidence_or_bad_image():
     assert Vlm(post=_post({"decision": "WAIT", "confidence": float("nan")})[0], get=RUNNING).judge(case, 100.0) is None
     bad = {**case, "views": {**case["views"], "front": {**case["views"]["front"], "jpeg_b64": "!"}}}
     assert Vlm(post=post, get=RUNNING).judge(bad, 100.0) is None
+
+
+def test_deadlock_model_cannot_choose_an_outside_robot_or_unavoidable_edge():
+    case = {"kind": "deadlock", "problem_id": "deadlock:a:b", "robot_id": "a",
+            "context": {"cycle": ["a", "b"], "avoidable": {"b": ["edge"]}},
+            "members": {rid: _case() for rid in ("a", "b")}}
+    for answer in ({"decision": "REPLAN", "robot_id": "c", "blocked_edges": ["edge"]},
+                   {"decision": "REPLAN", "robot_id": "b", "blocked_edges": ["other"]},
+                   {"decision": "REPLAN", "robot_id": "b", "blocked_edges": "edge"}):
+        assert Vlm(post=_post(answer)[0], get=RUNNING).judge(case, 100.0) is None
+    case["members"]["a"]["views"].pop("front")
+    post, calls = _post({"decision": "REPLAN", "robot_id": "b", "blocked_edges": ["edge"]})
+    assert Vlm(post=post, get=RUNNING).judge(case, 100.0) is None and calls == []

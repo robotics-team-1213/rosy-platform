@@ -15,7 +15,8 @@ D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plan
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
-| `board.py` | D-407 `LineStuckBoard` — per-robot open lane stuck (CORE `line_follow.stuck` + `nav.line_stuck_opened` clearances) and `LineStuckAnswerLog`. Console is `server/web/line-stuck.js` |
+| `board.py` | D-407 `LineStuckBoard` — per-robot open lane stuck (CORE `line_follow.stuck` + `nav.line_stuck_opened` clearances), memory state. Console is `server/web/line-stuck.js` |
+| `reports.py` | `LineStuckAnswerLog` — durable answers, episodes, incident reports and operator reviews; existing SQLite schema |
 | `resolver.py` | D-438 `StuckResolver` — pure rule core (R1 WAIT for a peer ahead, R2 back-off, R3/R6 lane-lost or no-motion back-off, R5 hold + human), `ResolverConfig`. No I/O |
 | `lane_lost.py` | D-577 lane-lost hold rules, AI PC proposal envelope check, `peer_ahead`/`peer_behind` on trusted map poses only |
 | `loop.py` | `StuckResolverLoop` — 1 s poll + hub wake, board update, sends answers as `fleet-resolver` |

@@ -620,7 +620,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                             read_guard=read_guard, authorize=authorize, require_named_operator=require_named_operator,
                             clients=console.clients,
                             rosy_cam=lambda rid: rosy_cam_lease(rid, sightings, map_pose,
-                                                                vision_signer, vision_sources))
+                                                                vision_signer, vision_sources),
+                            pose=map_pose.stuck_pose,
+                            deadlock_case=lambda: getattr(app.state.trip_runner.traffic.ai_replan, "case", None))
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(

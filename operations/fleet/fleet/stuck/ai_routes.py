@@ -38,37 +38,29 @@ class HumanClassChange(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
-def _front_view(board, robot_id: str, stuck_id: Optional[str], wall: float) -> Optional[dict]:
-    shown = board.preview(robot_id, stuck_id) if stuck_id else None
-    if shown is None:
-        return None
-    return {"frame_id": f"{shown['source']}:{shown['sequence']}", "captured_at": round(wall - shown["age_s"], 3),
-            "jpeg_b64": shown["jpeg_base64"]}
-
-
 def rosy_cam_lease(robot_id: str, sightings, map_pose, signer, sources: tuple[str, ...]) -> Optional[dict]:
-    """Give the AI PC a short direct Vision read for a localized robot on the same map."""
+    """Give the AI PC a direct crop at a fresh accepted sighting, including during pose loss."""
     if sightings is None or signer is None:
-        return None
-    pose = map_pose.arbitrated_pose(robot_id)
-    if pose is None or pose.state != "LOCALIZED" or pose.x is None or pose.y is None:
         return None
     row = next((row for row in sightings.snapshot()["sightings"]
                 if row.get("robot_id") == robot_id and not row.get("stale")
-                and row.get("source_id") in sources and row.get("map_id") == pose.map_id), None)
+                and row.get("source_id") in sources and row.get("map_id") == map_pose.active_map_id()), None)
     if row is None:
         return None
     try:
         lease = signer.issue(principal_id="ai-case", source_id=row["source_id"], ttl_s=10,
-                             rectification={"mode": "map"}, crop_map=(pose.x, pose.y, 1.0))
-    except ValueError:
+                             rectification={"mode": "map"}, crop_map=(row["x"], row["y"], 1.0),
+                             crop_map_id=row["map_id"], crop_revision=row["calibration_revision"])
+    except (ValueError, KeyError):
         return None
     return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease}
 
 
 def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guard, authorize,
                             require_named_operator, clients: Callable[[], dict],
-                            rosy_cam: Optional[Callable[[str], Optional[dict]]] = None) -> None:
+                            rosy_cam: Optional[Callable[[str], Optional[dict]]] = None,
+                            pose: Callable[[str], Optional[dict]] = lambda _rid: None,
+                            deadlock_case: Callable[[], Optional[dict]] = lambda: None) -> None:
     @app.get("/api/fleet/ai/first", dependencies=read_guard, tags=["ai"])
     def ai_first_view() -> dict:
         return first.view()
@@ -84,7 +76,27 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         if loop is not None and loop.problems is not None:
             out += [{"problem_id": p["problem_id"], "kind": p["kind"], "robot_id": p["robot_id"]}
                     for p in loop.problems.open.values()]
+        deadlock = deadlock_case()
+        if deadlock is not None:
+            out.append(deadlock)
         return out
+
+    async def _views(rid: str, stuck_id: Optional[str] = None) -> dict:
+        front = None
+        fetch = getattr(clients().get(rid), "front_frame", None)
+        try:
+            jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+            if jpeg is not None:
+                if stuck_id and line_stuck.preview(rid, stuck_id) is None:
+                    line_stuck.keep_preview(rid, stuck_id, jpeg, status)
+                age = (status.get("age_ms") or 0) / 1000.0
+                front = {"frame_id": f"{status.get('source')}:{status.get('sequence')}",
+                         "captured_at": round(first.wall() - age, 3),
+                         "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
+        except Exception:  # noqa: BLE001 - unavailable fresh evidence means no VLM judgement
+            pass
+        views = {"front": front, "rosy_cam": None if rosy_cam is None else rosy_cam(rid)}
+        return {name: view for name, view in views.items() if view is not None}
 
     @app.get("/api/fleet/ai/problems", dependencies=read_guard, tags=["ai"])
     def ai_problems() -> dict:
@@ -95,32 +107,26 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         if principal.role != "ai_observer":
             raise HTTPException(status_code=403, detail={"code": "AI_CASE_FORBIDDEN"})
         problem = next((p for p in _problems() if p["problem_id"] == problem_id), None)
-        if problem is None or loop is None:
+        if problem is None:
             raise HTTPException(status_code=404, detail={"code": "AI_CASE_NOT_OPEN", "message": problem_id})
         rid = problem["robot_id"]
-        row = loop._rows.get(rid) or {"robot_id": rid}
+        rows = loop._rows if loop is not None else {}
+        row = rows.get(rid) or {"robot_id": rid, "map_pose": pose(rid)}
         stuck_id = problem_id if problem["kind"] == "stuck" else None
-        wall, front = first.wall(), None
-        if stuck_id is None or line_stuck.preview(rid, stuck_id) is None:
-            fetch = getattr(clients().get(rid), "front_frame", None)
-            try:
-                jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
-            except Exception:  # noqa: BLE001 - no picture: the case says so and the VLM does not judge
-                jpeg = None
-            if jpeg is not None and stuck_id is not None:
-                line_stuck.keep_preview(rid, stuck_id, jpeg, status)   # D-577 8: one picture per stuck
-            elif jpeg is not None:
-                age = (status.get("age_ms") or 0) / 1000.0
-                front = {"frame_id": f"{status.get('source')}:{status.get('sequence')}",
-                         "captured_at": round(wall - age, 3), "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
+        if problem["kind"] == "deadlock":
+            ids = problem["context"]["cycle"]
+            views = await asyncio.gather(*(_views(mid) for mid in ids))
+            return {**problem, "built_at": first.wall(),
+                    "members": {mid: {"context": context(rows.get(mid) or {"map_pose": pose(mid)}), "views": view}
+                                for mid, view in zip(ids, views)}}
+        views = await _views(rid, stuck_id)
+        wall = first.wall()
         history = [] if episodes is None else await asyncio.to_thread(
             episodes.episodes, 20, rid, wall - 600.0)
-        views = {"front": front or _front_view(line_stuck, rid, stuck_id, wall),
-                 "rosy_cam": None if rosy_cam is None else rosy_cam(rid)}
         return {**problem, "stuck_id": stuck_id, "context": context(row), "built_at": wall,
                 "history": [{k: h.get(k) for k in ("opened_at", "problem_id", "kind", "decision", "tier", "verdict",
                                                    "core_code", "outcome")} for h in history],
-                "views": {name: view for name, view in views.items() if view is not None}}
+                "views": views}
 
     @app.get("/api/fleet/ai/episodes", dependencies=read_guard, tags=["ai"])
     def ai_episodes(limit: int = Query(500, ge=1, le=5000), robot_id: Optional[str] = None) -> Response:

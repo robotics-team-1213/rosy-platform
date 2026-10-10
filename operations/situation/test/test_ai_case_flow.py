@@ -1,0 +1,91 @@
+"""Real Fleet cases reach VLM and validated replan; every retry reads a fresh front frame."""
+
+import base64
+import json
+from types import SimpleNamespace
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from fleet.stuck.ai_first import AiFirst
+from fleet.stuck.ai_routes import install_ai_first_routes
+from fleet.stuck.deadlock import AiReplan
+from rosy_situation.service import Situation
+from rosy_situation.vlm import Vlm
+
+WALL = 1_760_000_000.0
+JPEG = b"\xff\xd8frame\xff\xd9"
+
+
+class Front:
+    sequence = 0
+
+    async def front_frame(self):
+        self.sequence += 1
+        return JPEG, {"source": "front", "sequence": self.sequence, "age_ms": 100}
+
+
+def routes(first, line, clients, loop=None, deadlock=lambda: None):
+    app = FastAPI()
+    principal = lambda: SimpleNamespace(role="ai_observer")
+    install_ai_first_routes(app, first=first, line_stuck=line, loop=loop, episodes=None,
+                            read_guard=[], authorize=principal, require_named_operator=principal,
+                            clients=lambda: clients, deadlock_case=deadlock,
+                            pose=lambda _rid: {"state": "LOCALIZED", "age_s": 0.1},
+                            rosy_cam=lambda rid: {"frame_path": f"/api/vision/sources/{rid}/frame", "lease": "private"})
+    return TestClient(app)
+
+
+def test_stuck_ai_retry_reads_new_front_without_replacing_operator_preview():
+    first = AiFirst(("a",))
+    first.wall = lambda: WALL
+    line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1"}],
+                           preview=lambda *_args: {"sequence": 0})
+    front = Front()
+    client = routes(first, line, {"a": front}, SimpleNamespace(problems=None, _rows={}))
+    one = client.get("/api/fleet/ai/case/s1").json()
+    first.wall = lambda: WALL + 8
+    two = client.get("/api/fleet/ai/case/s1").json()
+    assert one["views"]["front"]["frame_id"] == "front:1"
+    assert two["views"]["front"]["frame_id"] == "front:2"
+    assert two["views"]["front"]["captured_at"] == WALL + 7.9
+
+
+def test_deadlock_case_service_vlm_and_fleet_replan_are_connected(tmp_path):
+    first = AiFirst(("a", "b"))
+    first.wall = lambda: WALL
+    board = SimpleNamespace(proposal=None, verdicts=[])
+    board.problem_proposal = lambda _pid: board.proposal
+    replan = AiReplan(first, board)
+    replan(("a", "b"), {"b": ["y"]}, 0.0)
+    client = routes(first, SimpleNamespace(pending=lambda: []), {"a": Front(), "b": Front()},
+                    deadlock=lambda: replan.case)
+
+    class Fleet:
+        def call(self, path, body=None):
+            if body is not None:
+                assert path == "/api/fleet/ai/proposals"
+                board.proposal = body
+                return {}
+            reply = client.get(path)
+            assert reply.status_code == 200, reply.text
+            return reply.json()
+
+        def frame(self, path, _lease):
+            return {"jpeg_b64": base64.b64encode(JPEG).decode(), "captured_at": WALL,
+                    "frame_id": f"{path.split('/')[4]}:cam"}
+
+    def chat(_url, body, _timeout):
+        assert len(body["messages"][0]["images"]) == 4
+        return {"message": {"content": json.dumps({"decision": "REPLAN", "robot_id": "b",
+                                                    "blocked_edges": ["y"], "confidence": 0.8})}}
+
+    vlm = Vlm(post=chat, get=lambda *_args: {"models": [{"name": "qwen3-vl:8b-instruct", "digest": "a" * 64}]})
+    first.profiles = lambda: [vlm.profile()]
+    mode = tmp_path / "mode"
+    mode.write_text("available")
+    situation = Situation(Fleet(), tmp_path / "state", mode, wall=lambda: WALL, vlm=vlm)
+    situation._ai_cycle()
+    assert board.proposal["robot_id"] == "b" and board.proposal["body"] == {"blocked_edges": ["y"]}
+    assert board.proposal["evidence"]["views"]["rosy_cam"]["frame_id"] == "b:cam"
+    assert replan(("a", "b"), {"b": ["y"]}, 1.0) == ("b", ("y",))

@@ -36,7 +36,11 @@ def _replan(robot="b", edges=("y",), source=f"vlm:{PROFILE}"):
             "confidence": 0.7, "source": source, "observed_at": WALL, "ttl_s": 6.0, "body": {"blocked_edges": list(edges)},
             "evidence": {"views": {"rosy_cam": {"frame_id": "c", "captured_at": WALL},
                                    "front": {"frame_id": "f", "captured_at": WALL}},
-                         "map_pose": {"state": "LOCALIZED", "age_s": 0.1}}}
+                         "map_pose": {"state": "LOCALIZED", "age_s": 0.1},
+                         "members": {rid: {"views": {"rosy_cam": {"frame_id": f"c:{rid}", "captured_at": WALL},
+                                                     "front": {"frame_id": f"f:{rid}", "captured_at": WALL}},
+                                           "map_pose": {"state": "LOCALIZED", "age_s": 0.1}}
+                                     for rid in ("a", "b")}}}
 
 
 def _first(robots=("a", "b")):
@@ -56,6 +60,23 @@ def test_ai_replan_checks_members_edges_evidence_and_ai_first():
         assert AiReplan(first, board)(("a", "b"), avoidable, 0.0) is None
         assert board.verdicts[-1]["verdict"] == verdict
     assert AiReplan(_first(robots=("b",)), _Board(_replan()))(("a", "b"), avoidable, 0.0) is None
+
+
+def test_deadlock_case_is_published_without_a_proposal_and_cleared_when_cycle_closes():
+    replan = AiReplan(_first(), _Board(None))
+    assert replan(("a", "b"), {"b": ["y"]}, 0.0) is None
+    assert replan.case["problem_id"] == "deadlock:a:b"
+    assert replan.case["context"]["avoidable"] == {"a": [], "b": ["y"]}
+    replan((), {}, 1.0)
+    assert replan.case is None
+
+
+def test_ai_replan_requires_fresh_views_for_every_cycle_member():
+    proposal = _replan()
+    proposal["evidence"]["members"]["a"]["views"]["front"]["captured_at"] = WALL - 4
+    board = _Board(proposal)
+    assert AiReplan(_first(), board)(("a", "b"), {"b": ["y"]}, 0.0) is None
+    assert board.verdicts[-1]["verdict"] == "evidence_stale:front"
 
 
 def _routable(monkeypatch, runner):
@@ -91,6 +112,29 @@ def test_without_the_ai_mark_the_replan_waits_for_the_operator(monkeypatch):
     _ticks(runner, fleet, n=CYCLE_PERIODS + 1)
     hold = runner.view("b")["hold"]
     assert hold["reason"] == "replan" and hold["plan"] is not None
+    assert "replan_confirmed_by" not in runner.view("b")["detail"]
+
+
+def test_delayed_ai_reply_reaches_the_trip_runner_before_operator_fallback(monkeypatch):
+    runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
+    board = _Board(None)
+    runner.traffic.ai_replan = AiReplan(_first(), board)
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 4)
+    assert runner.traffic.ai_replan.case["problem_id"] == "deadlock:a:b"
+    assert runner.view("b")["hold"] is None and runner.traffic._tried == {}
+    board.proposal = _replan(edges=("ring_n",))
+    _ticks(runner, fleet, n=2)
+    assert runner.view("b")["hold"] is None
+    assert runner.view("b")["detail"]["replan_confirmed_by"] == "fleet-ai"
+
+
+def test_missing_ai_reply_falls_back_after_the_bounded_wait(monkeypatch):
+    runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
+    runner.traffic.ai_replan = AiReplan(_first(), _Board(None))
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 18)
+    assert runner.view("b")["hold"]["reason"] == "replan"
     assert "replan_confirmed_by" not in runner.view("b")["detail"]
 
 
