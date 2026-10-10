@@ -14,7 +14,7 @@ AI PC의 기존 `ai_observer` 읽기 권한으로 Fleet `GET /api/fleet/state`, 
 
 | 항목 | 관찰 |
 |---|---|
-| 설치 Fleet | 이미지 태그 `b45e9a36c17659e0bc64f3cc67474c08dacb5629`; 로컬 Git에서 이번 브랜치의 첫 구현 `71ad37f8c`는 그 이미지의 조상이 아님 |
+| 설치 Fleet | 이미지 태그 commit `b45e9a36c17659e0bc64f3cc67474c08dacb5629`; 로컬 Git에서 이번 브랜치의 첫 구현 `71ad37f8c`는 그 이미지의 조상이 아님 |
 | 활성 지도 | `map_v2_fleet` v5, SHA-256 `cd13474068721637c1824f7b97422eef6370fd3ca5c3788433d060b159acf94f`; `W_mid`=(-1.2953,-0.0037), 파란 B `E_mid`=(0.8559,-0.5134), 둘 다 `kind:stop` |
 | Fleet trip | 열린 trip 0개 |
 | AI PC | `rosy-situation` heartbeat v0.2.0, `owner_mode:shared`, 상태 `present`; 그림자 사실 0개. 후보 v0.3.0은 미설치 |

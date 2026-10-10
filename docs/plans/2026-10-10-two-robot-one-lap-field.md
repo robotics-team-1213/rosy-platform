@@ -14,7 +14,7 @@
 - 지도는 일방통행이다. 예시 경로는 `W_mid → SW_line → SW → SE → SE_line → E_mid → NE_line → NE → NW → NW_line → W_mid`와 그 반대 출발 순환이다. 경유 `E_mid`/`W_mid`를 사용해 짧은 동일 장소 도착 경로를 피한다. 계획의 실제 `segments`와 `actions`를 승인 전에 화면에 그린다.
 - 2026-10-10 현장 읽기: 두 로봇 온라인, 열린 trip 0, AI 상황 서비스 heartbeat 있음. `rosy_40`은 `junction_turn:false`, `rosy_41`은 `junction_turn:true`; 두 로봇 모두 `goal_navigation:false`, `lane_arc:false`. Fleet 실행 검사는 차로 경로에 `junction_turn`을 요구하므로 `rosy_40`의 현재 능력으로는 동시 한 바퀴를 시작할 수 없다. 능력 값을 강제로 참으로 바꾸지 않는다.
 - 현장 AI PC 설치판 `rosy-situation` v0.2.0은 경로 이탈 사실을 아직 만들지 않는다. 이 브랜치 v0.3.0은 계획 선분과 지도 자세로 `trip_route_check`를 계산하지만, Fleet과 같은 자세 입력을 사용하므로 물리적 무이탈을 독립적으로 증명하지는 못한다.
-- 현장 Fleet 설치판은 2026-10-10 16:08 KST 읽기에서 `b45e9a36c17659e0bc64f3cc67474c08dacb5629` 이미지로 바뀌었다. 이번 브랜치의 한 바퀴 구현은 그 이미지에 없으며, AI PC도 v0.2.0이다. 최종 전달에는 자유 주행 이탈 취소 수정을 포함하고 설치 SHA를 다시 읽는다.
+- 현장 Fleet 설치판은 2026-10-10 16:08 KST 읽기에서 commit `b45e9a36c17659e0bc64f3cc67474c08dacb5629` 이미지로 바뀌었다. 이번 브랜치의 한 바퀴 구현은 그 이미지에 없으며, AI PC도 v0.2.0이다. 최종 전달에는 자유 주행 이탈 취소 수정을 포함하고 설치 SHA를 다시 읽는다.
 
 ## Task 1. 관제의 유한 한 바퀴 계획
 
@@ -49,7 +49,7 @@
 
 - **SOURCE:** `feat/one-lap-console`에 관제 유한 1회 경로, `start_at`의 계획·시작 자세 확인, Fleet free 구간 이탈 시 목표 취소, AI PC의 진행 구간별 그림자 판정을 구현했다. 두 로봇은 각각 별도 trip을 선택·시작한다.
 - **원격 시험:** 모델 PC에서 Fleet 관련 시험과 AI/Fleet 사실 시험 37개가 통과했다. 각 실행의 `known_failures.py` 결과는 NEW 0, KNOWN 0이다 (`X:/DevTemp/one-lap*/run-1.txt`). 관제 경로 Node 시험 5개도 통과했다. 이는 현장 설치나 실제 주행 증거가 아니다.
-- **설치·현장:** 최신 읽기는 [검증 기록](../validation/two-robot-one-lap-2026-10-10/result.md)에 남겼다. 설치 Fleet `b45e9a36c17659e0bc64f3cc67474c08dacb5629`, AI PC v0.2.0, 열린 trip 0개다. `rosy_40`의 `junction_turn:false`는 현재 차로 trip 시작을 차단한다. `rosy_40`의 지도 자세는 `W_mid`에서 약 0.071 m, `rosy_41`은 `E_mid`에서 멀어 선택 출발지 0.05 m 조건을 만족하지 않는다. 실기기 주행 명령은 보내지 않았다.
+- **설치·현장:** 최신 읽기는 [검증 기록](../validation/two-robot-one-lap-2026-10-10/result.md)에 남겼다. 설치 Fleet commit `b45e9a36c17659e0bc64f3cc67474c08dacb5629`, AI PC v0.2.0, 열린 trip 0개다. `rosy_40`의 `junction_turn:false`는 현재 차로 trip 시작을 차단한다. `rosy_40`의 지도 자세는 `W_mid`에서 약 0.071 m, `rosy_41`은 `E_mid`에서 멀어 선택 출발지 0.05 m 조건을 만족하지 않는다. 실기기 주행 명령은 보내지 않았다.
 - **다음 검증 조건:** 설치판·교차로 능력·출발 위치를 현장 근거로 바로잡고, 모델 PC에서 두 로봇 동시 주행과 차체 간격을 검증한 뒤 현장 저속 단일 로봇, 이어 동시 한 바퀴를 계측한다. 두 `arrived`, 원위치 정지, 경로·차체 이탈 0, AI 사실과 독립 영상의 시각 일치가 확인될 때 완료한다.
 - **중간 장소 실행 수정:** `W_mid`·`E_mid` 같은 차선 중간의 이름 있는 장소에 돌아가는 유한 계획이 기존 `LANE_END_NOT_A_PLACE`로 거절되는 문제를 발견해 고쳤다. 두 로봇 유한 trip·기존 반복 lap의 원격 회귀와 Fleet/AI 전체 시험 결과는 [추가 검증 기록](../validation/two-robot-one-lap-2026-10-10b/result.md)에 남겼다. Gazebo 호스트 메모리와 현장 능력·출발 위치는 아직 미충족이다.
 - **활성 지도 계산:** 현장 `map_v2_fleet` v5의 읽기 전용 사본에서 `W_mid → E_mid → W_mid`와 반대 방향을 각각 7.3752 m로 계획했다. 각 최종 action은 해당 출발 장소의 `stop`이며 `junction_turn:false`는 실행 검사에서 거절된다. 지도 SHA·차선 순서·계산 경계는 [지도 계획 기록](../validation/two-robot-one-lap-2026-10-10c/result.md)에 남겼다.
