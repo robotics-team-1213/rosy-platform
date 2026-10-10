@@ -140,3 +140,7 @@
 6. **AI PC 제안기(`analyzer:stuck_scene@1`).** 결정론이다: 뒤가 막혔으면(`rear_blocked`) 또는 앞에 로봇이 있으면 `WAIT`, 아니면 `BACK_AND_RETRY`. 막힘·결정·이유 조합마다 한 번 보낸다. 비전 모델은 아직 쓰지 않는다(D-492 V0·V1 전).
 
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.
+
+### 개정 (2026-10-10): 사건 원인 초안의 맥락
+
+AI PC는 열린 차선 정지마다 한 번 `GET /api/fleet/site-map/active`, `GET /api/fleet/sightings`를 읽고 기존 state 및 line-stuck 센서 필드와 함께 `incident_context` 사실을 남긴다. 이 사실은 `analyzer:incident_context@1`의 shadow 출력이며 CORE 원인을 검증된 근본 원인으로 승격하지 않는다. `value.cause_draft`는 `line_marking|obstacle|unknown`, `support[]`에는 CORE·신선한 Rosy Cam 관측 메타데이터·신뢰할 수 있는 지도 위치·센서값을 출처별로, `missing[]`에는 빠진 증거를 넣는다. 지도 위치는 `localization.trusted=true`, `legacy=false`인 경우에만 비교한다. 프레임은 요청하거나 해석하지 않으며 `camera_frame_interpreted=false`와 `interpreted_front_image` 부족을 명시한다. 사람의 append-only 검토는 D-608 보고서에서 별도로 남긴다. 이 사실은 resolver의 acting kind나 motion proposal 입력이 아니다. 영상 모델과 실제 이미지 해석은 기존 V0·V1 및 소유자 동의 관문을 유지한다.

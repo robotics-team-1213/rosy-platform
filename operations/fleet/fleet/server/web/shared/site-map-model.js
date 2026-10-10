@@ -12,6 +12,7 @@ export const AI_FACT_LABEL = {
   wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
   waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
   unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
+  incident_context: '사건 원인 초안',
 };
 export const TRIP_ERROR_LABEL = {
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
