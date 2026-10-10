@@ -114,6 +114,16 @@ def generate_launch_description():
                 # test pins that they equal this profile).
             }],
         ),
+        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
+        # Display JPEG only; no road/observation, so traffic_policy is untouched.
+        Node(
+            package="gz_sim",
+            executable="sim_jpeg_relay.py",
+            name="sim_jpeg_relay",
+            output="screen",
+            parameters=[{"use_sim_time": True}],
+            remappings=[("camera/image_raw", "camera/front")],
+        ),
         Node(
             package="core",
             executable="core",

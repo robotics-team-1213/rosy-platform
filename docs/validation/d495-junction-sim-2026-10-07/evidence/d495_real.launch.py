@@ -92,6 +92,11 @@ def generate_launch_description():
                 "gazebo_camera_max_range_m": 0.6,
             }],
         ),
+        # D-601 in SIM (2026-10-10): front preview for Fleet's lane camera check; display JPEG only.
+        Node(
+            package="gz_sim", executable="sim_jpeg_relay.py", name="sim_jpeg_relay", output="screen",
+            parameters=[{"use_sim_time": True}], remappings=[("camera/image_raw", "camera/front")],
+        ),
         Node(
             package="core", executable="core", name="core", output="screen",
             parameters=[{"use_sim_time": True}],
