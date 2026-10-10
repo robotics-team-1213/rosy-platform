@@ -182,13 +182,15 @@ WASHED_FRACTION = 0.5
 #: past the lane (beyond the half-width) and how much further than the other
 #: end its open end must run, and for how many frames without a line across
 #: the path a seen side stays latched (it holds while such a line stays ahead).
+#: A new side needs its closed-side boundary (>= a half-width) seen within CORNER_SEED_FRAMES: it
+#: shortens near the corner, and sparse learned paint may show the open end later (v13c SIM 2026-10-10).
 CORNER_LOOKAHEAD_M = 0.12
 CORNER_MAX_AHEAD_M = 0.45
 CORNER_OPEN_M = 0.02
 CORNER_ASYMMETRY_M = 0.02
 #: The closed end sits on the outer lane line: within this of the half-width.
 CORNER_CLOSED_TOLERANCE_M = 0.03
-CORNER_LATCH_FRAMES = 12
+CORNER_LATCH_FRAMES = CORNER_SEED_FRAMES = 12
 #: A corner line within this of square to the heading means the turn has not
 #: started (go straight until the corner); past it the robot is mid-turn and
 #: pursues the new centre line at no less than its distance + CORNER_REACH_M.
@@ -234,23 +236,21 @@ class LaneKeeper:
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
+        self._seeds = deque(maxlen=CORNER_SEED_FRAMES)
         self.last: dict = {}
 
     def _forget(self) -> None:
         """No usable view: the next frame is judged afresh (no inherited
-        target, sides or steering history); a latched corner keeps counting."""
+        target, sides, corner seeds or steering history); a latched corner keeps counting."""
         self._previous_target = None
         self._tracked = []
         self._steer_history.clear()
+        self._seeds.clear()
 
     def reset(self) -> None:
-        self._previous_target = None
-        self._tracked = []
-        self._steer_history.clear()
+        self._forget()
         self._flip_hold = False
-        self._corner_side = None
-        self._corner_frames = 0
-        self._corner_engaged = False
+        self._corner_side, self._corner_frames, self._corner_engaged = None, 0, False
         self.last = {}
 
     def _birds_eye(self, ground, width: int, height: int) -> BirdsEye:
@@ -282,7 +282,6 @@ class LaneKeeper:
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
-        prior_boundaries = self.last.get("boundaries", [])
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
                      "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1,
@@ -419,7 +418,8 @@ class LaneKeeper:
         # line, a crosswalk or a junction mouth, not an L-corner).
         corner = None
         if self._corner_turning and strategy != "both":
-            corner = self._corner(transverse, half, left + right + conflicts, left + right + prior_boundaries)
+            corner = self._corner(transverse, half, left + right + conflicts, left + right + [r for f in self._seeds for r in f])
+        self._seeds.append([r for r in left + right if r["length_m"] >= half])  # corner seeds (closed side)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
