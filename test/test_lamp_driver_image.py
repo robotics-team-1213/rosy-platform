@@ -52,6 +52,7 @@ def test_identify_light_has_a_dark_baseline_then_two_seconds_steadily_on(tmp_pat
 typedef unsigned int ws2811_led_t;
 #define M_PI 3.14159265358979323846
 #define DIM 0x40
+#define PEAK 255
 #define BREATH_MAX 63
 ''' + pure + '''
 int main(void) {
@@ -68,7 +69,8 @@ int main(void) {
 }
 ''', encoding="utf-8")
     binary = tmp_path / "lamp"
-    subprocess.run([compiler, str(harness), "-lm", "-o", str(binary)], check=True, capture_output=True)
+    compiled = subprocess.run([compiler, str(harness), "-lm", "-o", str(binary)], capture_output=True, text=True)
+    assert compiled.returncode == 0, compiled.stderr
     subprocess.run([str(binary)], check=True, capture_output=True)
 
 
