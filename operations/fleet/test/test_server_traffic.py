@@ -462,9 +462,8 @@ def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
     assert console._trusted["rosy_02"] == (0.0, 0.3)
 
 
-def test_a_d395_robot_that_goes_null_is_untrusted_until_the_grace_lapses():
-    """A robot that ever reported localization is not legacy: after a CORE restart its null
-    is untrusted (keep-out at its last trusted pose) until it has been null for 30 s."""
+def test_null_localization_stays_untrusted_after_cached_position_expires():
+    """A CORE restart never restores trust by timeout; the old position expires after 30 s."""
     mover = _mover()
     other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
     console, clock = _clocked(mover, other)

@@ -113,8 +113,7 @@ def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
     if verdict != TRUSTED:
         return None
     if "localization" in row:
-        # Console owns the D-395 restart grace. Null raw localization is not
-        # legacy while its current badge says the map pose is untrusted.
+        # Reject a stale or incompatible console trust verdict as well as raw state.
         badge = row["localization"]
         if not isinstance(badge, Mapping) or badge.get("trusted") is not True:
             return None

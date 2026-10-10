@@ -2,8 +2,7 @@
 // 태그 어휘로 옮긴다: 확정은 중립, 미확정·미보고는 warn, 사람 확인 필요는 crit.
 // DOM 없는 순수 함수만 둔다(node 시험 대상).
 
-// Field 2026-10-10: a motor-mode robot reports no localization (legacy) while Fleet's MapPose (the
-// D-536 guide row, what trips read) places it; the badge then says that, not "위치 상태 미보고".
+// CORE UNKNOWN and Fleet MapPose are separate evidence sources; show a valid Fleet pose explicitly.
 export function localizationTag(loc, guideRow) {
   if (!loc) return null;
   const site = !loc.trusted && loc.state === "UNKNOWN" ? guideRow?.pose : null;
@@ -77,8 +76,7 @@ export function sitePoseText(guideRow) {
   return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}`;
 }
 
-/** The card's one position chip (2026-10-10: "위치 상태 미보고" read as a fault). Fleet's site map pose first, CORE's
- * localization only when CORE reports one, else a neutral "지도 위치 없음"; needs_human stays critical. */
+/** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */
 export function positionTag(loc, guideRow) {
   if (loc?.needs_human) return localizationTag(loc);
   const pose = guideRow?.pose;
