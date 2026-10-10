@@ -218,7 +218,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_848,
+        52_550,
+        "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
+        "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
+        "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
+        "(stuck_* +27, second breach of the D-577 move rule), D-589/D-555 +6; no new owner, no new command path. "
+        "Next fleet growth first lands docs/plans/2026-10-10-fleet-stuck-subpackage.md; next lane_compliance growth "
+        "registers fleet/fleet/localization (1567) as a SIZE_UNITS entry. Previously "
         "split: re-judged at 51848 on 2026-10-10 after D-577 AI PC proposals/acting facts over 51672 "
         "(+176, self-judged): proposal envelope check beside the lane-lost rules in server/stuck_lane_lost.py, "
         "proposal store/route/audit in server/ai_facts.py, loop wiring +20; no new owner, every answer still "
@@ -669,7 +675,12 @@ SIZE_VERDICTS = {
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
-        832,
+        993,
+        "split: re-judged at 993 on 2026-10-10 over 832 (+161; independent re-judge, critic): D-593 pin tool +45, "
+        "site path/link +48, host/marker +18, stop/cancel feedback +33, D-596 b +12, D-519 login +8; owners unchanged. "
+        "The D-473 follow-up was not done: before any growth (HARD_TIER 1000 leaves zero allowance) move the "
+        "auth/session bootstrap (D-473/D-519) and the D-593 pin press-drag into their own web assets with "
+        "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/cell_job_store.py": (
