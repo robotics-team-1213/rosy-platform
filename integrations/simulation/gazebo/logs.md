@@ -283,3 +283,7 @@
 - gate 변화: 없음. ROS-SIM 한 대, 장치·현장 수용 아님.
 - 결정: D-495 수용 점검표 S1–S6, D-498 S7–S9 (승격 전 남은 항목은 result.md 발견 1–9)
 - 교훈: 끝난 launch가 남긴 bridge가 odom을 같은 stamp로 겹쳐 내면 CORE PoseTrail이 끊긴다. sim 실행 스크립트는 자기 `GZ_PARTITION`의 프로세스를 모두 끝낸 뒤 띄운다. 같은 호스트의 다른 sim과는 도메인·포트·world 파일 이름까지 나눈다.
+## 2026-10-10 · uncommitted · fix(sim): SIM Fleet 공용 사이트 설정 (D-601 B)
+- 변경: `config/fleet_sim_site.yaml`(`fleet.trip.lane_camera_check: false`)을 두고 SIM에서 Fleet을 띄우는 곳 여섯(`tools/run_fleet_sim.sh`, `tools/validation/fleet_gazebo/run.py`, `tools/sim/d395_s1_bench.py`, d407 `console.sh`, lap_fleet.py 둘)이 이 파일을 읽는다. SIM 런치는 road_observer를 띄우지 않아 CORE `vision/front/status`가 언제나 `available: false`다.
+- 증거: `operations/fleet/test/test_fleet_sim_site_d601.py`(설정 적재, 여섯 곳 참조, 미리보기 없는 FakeRobot의 lane 계획 200).
+- gate 변화: 없음. SIM 실주행 재확인은 하지 않았다.

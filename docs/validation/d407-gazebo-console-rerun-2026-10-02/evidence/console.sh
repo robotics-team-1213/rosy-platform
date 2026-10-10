@@ -17,4 +17,4 @@ YAML
 chmod 600 "$RUN/robots.yaml"
 exec python3 -m fleet.cli console --robots "$RUN/robots.yaml" --host 127.0.0.1 --port 8096 \
   --token d407-console --events-db "$RUN/events.db" --tasks-db "$RUN/tasks.db" \
-  --no-localization-service
+  --no-localization-service \n  --site-config "$(ros2 pkg prefix gz_sim)/share/gz_sim/config/fleet_sim_site.yaml"

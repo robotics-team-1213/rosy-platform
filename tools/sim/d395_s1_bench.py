@@ -328,7 +328,9 @@ class Bench:
                 "from fleet.cli import main; main(sys.argv[1:])")
         self.spawn([sys.executable, "-c", boot, "console", "--robots", manifest, "--port",
                     str(self.args.fleet_port), "--localization-lane-rules",
-                    str(Path(self.args.ws) / "middleware/perception/map/map_v2_fleet/lane_rules.yaml")],
+                    str(Path(self.args.ws) / "middleware/perception/map/map_v2_fleet/lane_rules.yaml"),
+                    "--site-config",
+                    str(Path(self.args.ws) / "integrations/simulation/gazebo/config/fleet_sim_site.yaml")],
                    "fleet.log")
         self.note("power_on", spawn=sc["spawn"], load=self.load())
         for item in self.args.loc_param:     # tuning runs: loc_assist parameters read per call
