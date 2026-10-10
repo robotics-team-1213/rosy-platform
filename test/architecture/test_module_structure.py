@@ -170,10 +170,13 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        1617,
-        "accept: pure move per docs/plans/2026-10-10-fleet-stuck-subpackage.md (D-607 P0), 1608 at the move "
+        1781,
+        "accept: measured at 1781 on 2026-10-10 after merging main: D-608 incident reports grew board.py "
+        "(server/line_stuck.py on main) by 168 and ai_facts.py by 2 before this move landed; independent "
+        "re-judge pending. Previously 1617 (independent re-judge 2026-10-10, critic: agree): pure move per "
+        "docs/plans/2026-10-10-fleet-stuck-subpackage.md (D-607 P0), 1608 at the move "
         "(git -M 98-99%, import lines only, no shim); +9 D-577 남은 항목 4 R1 trusted poses (e297b05f8). "
-        "Independent re-judge 2026-10-10, critic: agree. +150 allowance measured from 1617",
+        "+150 allowance measured from 1781",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,
@@ -225,10 +228,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_085,
-        "split: re-judged at 51085 on 2026-10-10 (independent re-judge, critic: agree), 52687 on main minus "
-        "1602 moved to fleet/fleet/stuck (D-607 P0). Next lane_compliance growth registers "
-        "fleet/fleet/localization (1567). +150 allowance measured from 51085. Previously "
+        51_324,
+        "split: measured at 51324 on 2026-10-10 after merging main (D-608 incident reports, 53090) into the "
+        "fleet/fleet/stuck move: 1781 lines left for fleet/fleet/stuck (D-607 P0). Independent re-judge pending "
+        "(the critic agreed 51085 before D-608). Next lane_compliance growth registers fleet/fleet/localization "
+        "(1567). +150 allowance measured from 51324. Previously "
+        "split: re-judged at 53090 on 2026-10-10: D-608 adds read-only incident reports, reviews and evidence joins within Fleet; the existing stuck subpackage split remains due before further growth. Previously "
         "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
         "D-596 identify +83, D-577 (d) deadlock row +55, D-494 3 MapPose +38, D-573 6 crosswalk holds +29 "
@@ -685,13 +690,18 @@ SIZE_VERDICTS = {
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
-        993,
+        1_175,
+        "split: re-judged at 1175 on 2026-10-10: D-608 adds incident display, human review and JSON export within the existing Fleet session and role boundary. Extract the incident panel before further console growth. Previously "
         "split: re-judged at 993 on 2026-10-10 over 832 (+161; independent re-judge, critic): D-593 pin tool +45, "
         "site path/link +48, host/marker +18, stop/cancel feedback +33, D-596 b +12, D-519 login +8; owners unchanged. "
         "The D-473 follow-up was not done: before any growth (HARD_TIER 1000 leaves zero allowance) move the "
         "auth/session bootstrap (D-473/D-519) and the D-593 pin press-drag into their own web assets with "
         "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
+    ),
+    "fleet/fleet/server/web/shared/styles.css": (
+        802,
+        "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
     "fleet/fleet/server/cell_job_store.py": (
         824,
