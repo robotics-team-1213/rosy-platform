@@ -7,4 +7,4 @@
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
 test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # main 2026-10-10: perception/control/sensing/perception package past 12004+150 (drivable steer work, perception owner re-judges)
-test/test_robot_literals.py::test_robot_literals_stay_in_their_family  # main 2026-10-10: new learned/drivable_steer.py not yet in the literal family list (perception owner)
+middleware/execution/local::test_size_verdicts_are_well_formed_and_current  # same perception package size verdict, as the grouped run names it
