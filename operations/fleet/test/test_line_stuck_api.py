@@ -574,6 +574,8 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
     assert report["evidence"]["rosy_cam"]["source_id"] == "ceiling_north"
     assert report["evidence"]["ai_facts"][0]["stage"] == "shadow"
     assert report["evidence"]["front_image"]["status"] == "not_retained"
+    [traffic] = response.json()["traffic_reports"]
+    assert traffic["classification"] == "stalled" and traffic["evidence"]["ai_fact"]["source"] == "analyzer:test@1"
     url = "/api/fleet/incidents/rosy_01/stuck-abc/review"
     body = {"root_cause": "obstacle", "note": "floor box seen"}
     assert client.post(url, json=body, headers=_auth(VIEWER)).status_code == 403
@@ -583,4 +585,11 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
     assert updated["reviews"][-1]["root_cause"] == "obstacle"
     assert updated["reviews"][-1]["principal_id"] == "op-7"
     assert client.post("/api/fleet/incidents/rosy_01/missing/review", json=body,
+                       headers=_auth(OPERATOR)).status_code == 404
+    fact_url = f"/api/fleet/incidents/facts/{traffic['evidence']['ai_fact']['fact_row']}/review"
+    assert client.post(fact_url, json=body, headers=_auth(VIEWER)).status_code == 403
+    assert client.post(fact_url, json=body, headers=_auth(OPERATOR)).json() == {"reviewed": True}
+    [reviewed] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["traffic_reports"]
+    assert reviewed["reviews"][-1]["note"] == "floor box seen"
+    assert client.post("/api/fleet/incidents/facts/99999/review", json=body,
                        headers=_auth(OPERATOR)).status_code == 404

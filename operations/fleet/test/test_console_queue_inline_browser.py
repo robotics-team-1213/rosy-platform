@@ -82,8 +82,16 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
                            "front_image": {"status": "not_retained"}},
               "actions": [], "reviews": []}
     posts = []
-    api = {**API, "/api/fleet/incidents": {"reports": [report]}}
-    answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True})}
+    traffic = {"schema": "rosy.incident.v1", "id": "ai_fact:17", "classification": "wait_cycle_confirmed",
+               "robot_ids": ["rosy_01", "rosy_02"], "opened_at": "2026-10-10T05:00:00+00:00",
+               "evidence": {"ai_fact": {"fact_row": 17, "kind": "wait_cycle_confirmed",
+                                        "source": "analyzer:traffic_watch@1", "stage": "shadow",
+                                        "confidence": 0.7, "value": {"fleet_agrees": False},
+                                        "evidence": {"fleet_wait_cycle": None}}},
+               "actions": [], "reviews": []}
+    api = {**API, "/api/fleet/incidents": {"reports": [report], "traffic_reports": [traffic]}}
+    answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True}),
+               "/api/fleet/incidents/facts/17/review": (200, {"reviewed": True})}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, answers)
         item = page.locator("#incident-list li")
@@ -97,6 +105,12 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         item.locator("button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
+        fact = page.locator("#incident-traffic-list li")
+        fact.locator("summary").click()
+        expect(fact).to_contain_text("AI 단독 대기 순환 판단")
+        fact.locator("select").select_option("traffic_wait")
+        fact.locator("button[type=submit]").click()
+        assert posts[-1][0] == "/api/fleet/incidents/facts/17/review"
         assert not errors
         browser.close()
 
