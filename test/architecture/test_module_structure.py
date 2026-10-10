@@ -720,7 +720,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_366,
+        1_374,
+        "accept: re-judged at 1374 on 2026-10-10 (self-judged): +8 for one before-validator on "
+        "LineFollowStatus so a parsed copy (Fleet hub snapshot, D-555) keeps the crosswalk key; same owner, "
+        "no new type. Previously "
         "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "
         "re-judged at 1360 (independent read-only critic: LineCrosswalkStatus lives in protocol/line_crosswalk.py; "
         "here one re-export, LineStuckStatus.detail, LineFollowStatus.crosswalk/crosswalk_reported and the "
