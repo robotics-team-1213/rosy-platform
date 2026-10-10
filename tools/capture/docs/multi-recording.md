@@ -27,9 +27,10 @@ CA와 Viewer 토큰은 기존 등록 절차에서 준비한다. 설정은 공개
 
 다른 카메라나 로봇은 `sources`에 행을 추가한다. `id`는 표시 이름과 저장 폴더에 쓰는 영숫자·`_`·`-`로 된 고유한 이름이다. `robot_id`는 기존 등록 ID를 쓰고 해당 로봇의 인증서·토큰과 연결한다. 로봇만 녹화할 때도 `site`를 지정하면 Fleet가 확인한 위치를 함께 저장할 수 있다. 저장된 이름은 설정에 따른 이름이며 미확인 검출의 신원을 이 도구가 추측하지 않는다.
 
-```powershell
-python tools/capture/multi_record.py record --config <private-config.json> --out X:/DevTemp/<new-session> --duration 60
-python tools/capture/multi_record.py render --session X:/DevTemp/<session> --out X:/DevTemp/<combined.mp4>
+```bash
+# Ubuntu 관제 PC에서 실행한다. 각 실행에 새 세션 이름을 쓴다.
+python3 tools/capture/multi_record.py record --config "$HOME/.local/share/rosy/capture/config/sources.json" --out "$HOME/.local/share/rosy/capture/sessions/<new-session>" --duration 60
+python3 tools/capture/multi_record.py render --session "$HOME/.local/share/rosy/capture/sessions/<session>" --out "$HOME/.local/share/rosy/capture/sessions/<session>/combined.mp4"
 ```
 
 시작하면 관제 PC의 `127.0.0.1` 화면을 연다. 브라우저 창 열기가 오래 걸려도 수집은 별도로 진행한다. 지정 시간 또는 Ctrl+C로 종료한다. 다른 PC에 HTTP 화면을 공개하지 않는다. 종료한 세션은 MP4로 재생·공유한다. `--no-open`은 화면을 열지 않는다. 기존 세션 폴더와 MP4는 덮어쓰지 않는다.
