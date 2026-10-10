@@ -47,6 +47,13 @@ class Rig:
                                   error=ir_error, confidence=0.9 if ir_error is not None else 0.0,
                                   ir_calibrated=True, calibration_revision=REV), received_at=t, source_now=t)
 
+    def wait(self, dt, **feed):
+        """Time passes with odom (and camera) at 10 Hz, as on the robot; no tick."""
+        while dt > 1e-9:
+            self.t += min(0.1, dt)
+            dt -= 0.1
+            self.feed(**feed)
+
     def step(self, dt=0.1, **feed):
         self.t += dt
         self.feed(**feed)
@@ -86,7 +93,7 @@ def test_ir_reading_wins_over_the_cue():
 def _wrong_way(rig, turn=-170.0):
     rig.cue("WRONG_WAY", 1, turn_deg=turn)
     assert rig.step().linear > 0                                        # one cue: debounce, keep drives
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=turn)
     return rig.step()
 
@@ -115,7 +122,7 @@ def test_a_pivot_that_odom_does_not_confirm_latches_hold_until_a_normal_cue():
         if rig.m.status().reason == "fleet_turn_unconfirmed":
             break
     assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "fleet_turn_unconfirmed"
-    rig.t += 3.0                                                        # Fleet silent: still held
+    rig.wait(3.0)                                                        # Fleet silent: still held
     assert rig.step().linear == 0
     rig.cue("ON_LANE", 100)
     assert rig.step().linear > 0
@@ -125,7 +132,7 @@ def test_off_map_latches_past_the_ttl_and_a_stuck_decision_releases_it():
     rig = Rig()
     rig.cue("OFF_MAP", 1)
     assert rig.step().linear == 0 and rig.m.status().reason == "fleet_off_map"
-    rig.t += 5.0
+    rig.wait(5.0)
     assert rig.step().linear == 0                                        # fail-closed after expiry
     rig.m.release_lane_cue_latch(principal_ref="op")
     assert rig.step().linear > 0
@@ -134,7 +141,7 @@ def test_off_map_latches_past_the_ttl_and_a_stuck_decision_releases_it():
 def test_cue_lost_mid_pivot_latches():
     rig = Rig()
     _wrong_way(rig)
-    rig.t += 1.5                                                        # no new cue: ttl 1 s ran out
+    rig.wait(1.5)                                                        # no new cue: ttl 1 s ran out
     assert rig.step().linear == 0 and rig.m.status().reason == "fleet_cue_lost"
 
 
@@ -142,7 +149,7 @@ def test_no_pivot_without_a_fresh_camera_or_while_lost():
     rig = Rig()
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
     rig.step()
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
     d = rig.step(0.4, camera=False)                                     # camera stale (> 0.3 s)
     assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "camera_observation_stale"
@@ -151,12 +158,12 @@ def test_no_pivot_without_a_fresh_camera_or_while_lost():
 def test_ordering_epoch_and_pose_age():
     rig = Rig()
     assert rig.cue("ON_LANE", 5)[0]
-    rig.t += 3.0
+    rig.wait(3.0)
     rig.feed()
     assert rig.cue("ON_LANE", 4) == (False, "stale")                    # kept across expiry
     assert rig.cue("ON_LANE", 6)[0]
     assert rig.cue("ON_LANE", 1, epoch="other") == (False, "epoch_busy")
-    rig.t += 2.0
+    rig.wait(2.0)
     rig.feed()
     assert rig.cue("ON_LANE", 1, epoch="other")[0]                      # the old one expired
     body_old = rig.m.set_lane_cue({"cue_id": "x", "fleet_epoch": "other", "seq": 9, "ttl_s": 1.0,
@@ -226,7 +233,7 @@ def test_the_body_stop_measures_the_pivot_on_its_rotation_circle():
     assert step().linear > 0                                        # straight: nothing in the path
     rig.cue("WRONG_WAY", 1, turn_deg=170.0)
     step()
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=170.0)
     d = step()
     assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "obstacle_ahead"
@@ -248,7 +255,7 @@ def test_a_turn_near_180_keeps_its_sign_and_ends_on_progress(signs):
     rig = Rig()
     rig.cue("WRONG_WAY", 1, turn_deg=signs[0])
     rig.step()
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=signs[1])
     d = rig.step()
     first = 1 if signs[0] > 0 else -1
@@ -264,8 +271,12 @@ def test_a_turn_near_180_keeps_its_sign_and_ends_on_progress(signs):
 
 def test_pivot_is_zeroed_by_the_authority_and_its_deadline_latches_without_restart():
     rig = Rig(authority_required=True)
-    d = _wrong_way(rig)
-    assert (d.linear, d.angular) == (0, 0)                           # D-517 authority: no GO
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
+    rig.step()
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
+    d = rig.step()
+    assert (d.linear, d.angular) == (0, 0) and rig.m._pivot is not None   # D-517 authority: no GO
     for seq in range(3, 60):
         rig.cue("WRONG_WAY", seq, turn_deg=-170.0)
         rig.step(0.25)
@@ -286,7 +297,7 @@ def test_no_pivot_start_while_a_junction_or_crosswalk_owns_the_heading(owner):
         rig.m._junction = {"state": owner.split("_")[1], "action": "left", "place_id": "P"}
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
     rig.step()
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
     rig.step()
     assert rig.m._pivot is None and rig.m.status().reason != "fleet_wrong_way_turn"
@@ -297,14 +308,14 @@ def test_no_pivot_while_lost_or_on_nominal_ground():
     rig.m._lost_latched = True
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
     rig.step()
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
     d = rig.step(ir_error=-0.9)                                      # IR sees a line: LOST stays latched
     assert d.angular == 0 and rig.m.status().state == "LOST"
     rig = Rig()
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
     rig.step(ground="NOMINAL")
-    rig.t += 0.5
+    rig.wait(0.5)
     rig.cue("WRONG_WAY", 2, turn_deg=-170.0)
     d = rig.step(ground="NOMINAL")
     assert d.angular == 0 and rig.m.status().reason == "nominal_ground_requires_driver"
