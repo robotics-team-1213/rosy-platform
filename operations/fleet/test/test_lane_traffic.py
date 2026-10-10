@@ -140,6 +140,14 @@ def test_two_finite_laps_return_to_their_own_start_and_stop():
         assert view["plan"]["actions"][-1]["action"] == "stop"
     _ticks(runner, fleet)
     assert runner.view("a")["state"] == runner.view("b")["state"] == "running"
+    for robot_id, stop in (("a", "start_n"), ("b", "start_s")):
+        live, tail = _to_tail(runner, store, fleet, robot_id)
+        _ticks(runner, fleet)
+        assert fleet.p[robot_id].sent[-1][0:2] == ("stop", stop)
+        fleet.at(robot_id, live.arc(tail), live.segments[tail]["s_to"])
+        _ticks(runner, fleet)
+        assert runner.view(robot_id)["state"] == "arrived"
+    assert runner.open_trips() == []
 
 
 def test_a_slow_robot_never_holds_another_back():

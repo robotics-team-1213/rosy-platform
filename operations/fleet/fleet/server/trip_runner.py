@@ -148,7 +148,8 @@ class TripRunner(TripAdmission, TripProgress):
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
             repeat = bool((row.get("request") or {}).get("repeat"))
             graph = self._graph_for(plan["map_version"])
-            caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat)
+            caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
+                                           plan["actions"][-1]["place_id"])
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             engaged = self._engaged(robot_id)
