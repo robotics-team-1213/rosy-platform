@@ -1400,7 +1400,7 @@
 - 증거: `test_learned_drivable_paint.py`(직선·갈래 우측·횡단보도·덮개 부족·크롭·keeper 종단 오차가 테이프 경로와 0.05 안), overlay·CLI·readback 시험. 원격 pytest 통과(현장 PC).
 - gate 변화: SOURCE. 장치 기본은 꺼짐이다. Pi 지연, 실프레임 재생, 실물은 별도다.
 
-## 2026-10-10 · uncommitted · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
+## 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
 - 변경: `EvidenceModes`. `paint_source: learned`에서 마스크가 있으면 그 마스크, 없으면 바로 `denoise_fallback`. 반사 제거로 내려간 뒤 학습으로 돌아가려면 신선한 마스크 2프레임. 밝기 문턱은 폴백이 아님. 카메라 공백·keep 이탈은 래치를 비운다. drivable 길이 늦을 때의 정지는 D-597 그대로. keep_debug에 `evidence_mode`와 `evidence_rows`(횡단보도 보고, 정지선, 장애물 metric/hold, 신호 hsv).
-- 증거: `middleware/perception/test/test_evidence_mode.py`. 원격 pytest는 커밋 뒤.
+- 증거: 모델 PC `rosy@100.98.162.71`에서 `test_evidence_mode.py`와 `test_lane_paint_source.py` 33 passed, 1 skipped. `known_failures` NEW 0.
 - gate 변화: 없음. 장치 기본 `threshold` 유지.

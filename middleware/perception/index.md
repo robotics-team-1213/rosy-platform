@@ -68,7 +68,7 @@
 
 ## 최근 기록
 
-- 2026-10-10 · uncommitted · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
+- 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
 - 2026-10-10 · 027e69e08 · feat(control): keep 모드 learned paint를 drivable 길로 (D-597)
 - 2026-10-10 · uncommitted · docs(control): verify CORE bend handoff and body footprint
 - 2026-10-10 · uncommitted · feat(control): keep closed-loop gap diagnostic
