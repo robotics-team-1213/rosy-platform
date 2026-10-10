@@ -141,6 +141,20 @@ def test_return_verifies_several_new_frames_and_geometry_identity():
     assert ctl.tick(inp(1.6)).phase == "tracking"
 
 
+def test_boundary_change_compares_geometry_after_pose_alignment_not_camera_motion():
+    old = Corridor(Boundary(0, .1), Boundary(0, -.1), "camera-a")
+    anchor = pose(1)
+    current = pose(1.1, y=.02)
+    moved_camera = Corridor(Boundary(0, .08), Boundary(0, -.12), "camera-a")
+    assert moved_camera.matches(old, anchor, current)
+    jitter = Corridor(Boundary(0, .085), Boundary(0, -.115), "camera-a")
+    assert jitter.matches(old, anchor, current)
+    changed = Corridor(Boundary(0, .1), Boundary(0, -.1), "camera-a")
+    assert not changed.matches(old, anchor, current)
+    revised = Corridor(Boundary(0, .08), Boundary(0, -.12), "camera-b")
+    assert not revised.matches(old, anchor, current)
+
+
 def test_nonfinite_sensor_values_are_rejected():
     with pytest.raises(ValueError): Boundary(math.nan, .1)
     with pytest.raises(ValueError): pose(1, x=math.inf)

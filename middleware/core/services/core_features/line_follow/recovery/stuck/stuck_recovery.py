@@ -82,6 +82,7 @@ class StuckInput:
     linear_ceiling: float = 0.0          # D-342 live manual linear limit
     last_lane: Optional[dict] = None
     preview_seq: Optional[int] = None
+    lane_boundary: Optional[dict] = None   # D-623 aligned camera geometry; inquiry only
 
 
 @dataclass(frozen=True)
@@ -489,6 +490,7 @@ class StuckRecovery:
                                  "scan_age_s": inp.scan_age_s, "geometry_known": inp.geometry_known,
                                  "rear_state": inp.rear_state, "preview_seq": inp.preview_seq,
                                  "trail_m": inp.trail_m, "trail_age_s": inp.trail_age_s},
+                "lane_boundary": inp.lane_boundary,
                 "execution_authority": "CORE_recheck_required"}
 
     def _answered(self, stuck_id: str, decision: str, by: str, principal_ref: Optional[str],
@@ -546,6 +548,7 @@ class StuckRecovery:
             "local_enabled": self._config.recovery_local_enabled,
             "ask_remaining_s": remaining, "last_answer": self._last_answer,
             "decisions": list(self._decisions()),
+            "inquiry": None if self._last is None else self._inquiry(self._last),
             **({"detail": self._detail} if self._cause in (CROSSWALK, NO_MOTION, *REPORT_ONLY) else {}),
         }
 

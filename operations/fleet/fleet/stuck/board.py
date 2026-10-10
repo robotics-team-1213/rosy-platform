@@ -56,6 +56,7 @@ class LineStuckBoard:
         self.trip_busy: Optional[Callable[[str], bool]] = None
         self.ai_view: Optional[Callable[[str, str], dict]] = None   # D-577 8: AI chip, facts, proposal
         self.map_pose: Optional[Callable[[str], object]] = None
+        self.heading_review: Optional[Callable[[str], dict]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
         # Episode writes queued by observe(), in order; flush() runs them (off the event loop).
@@ -137,6 +138,8 @@ class LineStuckBoard:
                 self._open_episode(row, stuck, robots)
             self._peak(robot_id, stuck)
             entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
+            if isinstance(stuck.get("inquiry"), dict):
+                entry["inquiry"] = stuck["inquiry"]
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:
             del self._open[robot_id]   # left the roster
@@ -254,6 +257,11 @@ class LineStuckBoard:
                      if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]
                      and a["decision"] != "ESCALATE"), None)
         shown["fleet_answer"] = last
+        if self.heading_review is not None:
+            try:
+                shown["heading_review"] = self.heading_review(robot_id)
+            except Exception:  # noqa: BLE001 - a direction observer must not hide the stuck
+                shown["heading_review"] = {"status": "observer_unavailable"}
         note = self._resolver.get((robot_id, entry["stuck_id"]))
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {

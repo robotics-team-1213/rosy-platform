@@ -1031,6 +1031,7 @@ class LineStuckStatus(BaseModel):
     decisions: list[str] = Field(default_factory=list)
     # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; else the (last) HOLD reason
     detail: Optional[str] = None
+    inquiry: Optional[dict] = None  # D-623 current typed situation context; not execution permission
 
 
 class LineJunctionStatus(BaseModel):
