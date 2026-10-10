@@ -155,6 +155,9 @@ def test_model_infer_mask_applies_the_gate_when_opened_with_it(tmp_path):
     assert np.array_equal(gated.infer_mask(frame)[0].astype(bool), (labels == LANE) & (np.arange(H)[:, None] >= 150))
     assert plain.infer_mask(frame)[0][60:90, 250:300].all()
     assert np.array_equal(gated.infer_with_mask(frame)[1], gated.infer_mask(frame)[0])
+    fallback, kind, _info, _latency = gated.infer_drivable(frame)
+    assert kind == "lane_marking"
+    assert np.array_equal(fallback, gated.infer_mask(frame)[0])
 
 
 def test_model_without_wall_class_is_refused_with_the_gate(tmp_path):

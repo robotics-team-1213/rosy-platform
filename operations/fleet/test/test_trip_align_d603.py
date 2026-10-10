@@ -75,6 +75,18 @@ def test_a_reversed_robot_is_turned_then_started():
     assert view["detail"]["aligned"] == [{"delta_deg": -178.0, "final_err_deg": 1.0}]
 
 
+def test_wrong_one_lap_start_refuses_before_any_alignment_turn():
+    runner, store, ports = _aligned_setup()
+    row = store.plan("p1")
+    store.record_plan(plan_id="lap", robot_id=row["robot_id"], principal_id="bob",
+                      map_version=row["map_version"], request={**row["request"], "start_at": "NW"},
+                      result=row["result"])
+    core = Core(ports)
+    _turned(ports, 178)
+    assert _code(runner.start("lap", "bob")) == "TRIP_START_PLACE_MISMATCH"
+    assert core.asked == [] and runner.running() is None
+
+
 def test_odom_over_rotation_gets_one_small_second_turn():
     runner, _store, ports = _aligned_setup()
     core = Core(ports, real=1.15)  # the wheels turn 15 % more than CORE's odom says

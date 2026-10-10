@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import math
 
+from core_common.robot_body import NOMINAL_BODY
+from fleet.routing.trip import ARRIVED_M
 from fleet.localization.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
@@ -64,7 +66,7 @@ class TripAdmission:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         return caps
 
-    async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False):
+    async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):
         """D-494 start checks on line following and the map pose: ``(pose, enable)`` or ``TripError``.
         D-601 A: at a start (not a lap) a robot with line following OFF passes, ``enable`` True: the
         trip turns the camera line on itself once it is open. D-601 D: a start also checks alignment."""
@@ -81,20 +83,36 @@ class TripAdmission:
                 anchor_age > self.config.start_anchor_age_s and not self._still_on_pin(pose)):
             raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None,
                                                          "anchor_age_s": anchor_age})
+        if start_at is not None:
+            distance = math.dist((pose.x, pose.y), graph.place_xy(start_at))
+            if distance > ARRIVED_M:
+                raise TripError(422, "TRIP_START_PLACE_MISMATCH",
+                                {"place": start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M})
+            if caps.kind != "pinky_pro":
+                raise TripError(422, "TRIP_BODY_UNKNOWN", {"kind": caps.kind})
+            if not segments:
+                raise TripError(422, "TRIP_NO_ROUTE")
+            first = graph.arcs[arc_id(segments[0])]
+            offset = first.project(pose.x, pose.y)[0]
+            margin = first.width_m / 2 - offset - NOMINAL_BODY.half_width_m
+            if margin < 0:
+                raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
+                                {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
         if start:
             check = start_check(graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg)
             if check["code"] is not None:
                 raise TripError(422, check["code"], check)
         return pose, enable
 
-    async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str):
+    async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *, start_at=None, caps=None):
         """``_pose_checks(start=True)`` plus D-603: with ``fleet.trip.auto_align`` a TRIP_START_HEADING_MISMATCH
         (on the lane: off-lane is judged first) asks CORE to turn by the error, then checks again from a
         fresh sighting. ``(pose, enable, turns)``; a refused or aborted turn refuses the start."""
         turns: list = []
         for attempt in range(ALIGN_TURNS + 1):
             try:
-                return (*await self._pose_checks(robot_id, graph, segments, start=True), turns)
+                return (*await self._pose_checks(robot_id, graph, segments, start=True,
+                                                 start_at=start_at, caps=caps), turns)
             except TripError as exc:
                 err = exc.detail.get("heading_err_deg") if exc.code == "TRIP_START_HEADING_MISMATCH" else None
                 if not self.config.auto_align or err is None or attempt == ALIGN_TURNS:

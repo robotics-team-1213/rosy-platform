@@ -148,7 +148,8 @@ class LaneSegModel:
         way, info = drivable_target(logits, self.manifest.classes,
                                     ignore_top=spec.crop[2] if spec.crop is not None else 0)
         if way is None:
-            mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size), "lane_marking"
+            mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size,
+                                          floor_gate=self.floor_gate), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
         crosswalk = [c.index for c in self.manifest.classes if c.name == "crosswalk"]
