@@ -586,3 +586,9 @@
 - 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
 - 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
 - gate 변화: 없음.
+
+## 2026-10-10 · uncommitted · fix: nominal body selection
+
+- 변경: nominal_body_for(kind)는 알려진 기종의 공칭 차체만 반환하고 알 수 없는 기종은 None으로 거절한다. Fleet 출발 검사가 이를 공유한다.
+- 증거: 원격 회귀시험에서 선택 함수 부재를 재현했다. 수정 후 원격 재검증 대기.
+- gate 변화: 없음. 실기기 차체 이탈 방지 증거가 아니다.

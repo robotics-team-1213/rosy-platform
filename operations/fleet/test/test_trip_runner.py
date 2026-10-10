@@ -330,6 +330,17 @@ def test_pinky_trip_exposes_body_width_for_ai_route_check():
     _plan(store, ports, "ab:fwd", 0.1, "C")
     view = run(runner.start("p1", "bob"))
     assert view["body_half_width_m"] == pytest.approx(NOMINAL_BODY.half_width_m)
+    assert view["pose_observed_at"] == ports.now
+
+    async def delayed_junction(robot_id):
+        ports.now += 3.0
+        return ports.core.status()
+
+    ports.junction_state = delayed_junction
+    sampled_at = ports.now
+    run(runner.tick())
+    assert view["pose_observed_at"] == sampled_at
+    assert view["updated_at"] >= sampled_at + 3.0
 
 
 def test_start_refuses_with_every_d491_code_in_order():

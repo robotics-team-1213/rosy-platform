@@ -13,6 +13,7 @@ D-517의 `repeat: true`는 계속 도는 운행이다. 현장 `map_v2_fleet` v5�
    - 시작 직전 선택된 첫 경로 구간의 중심선 거리와 D-424 Pinky Pro 공칭 몸 반폭 합이 그 구간 반폭을 넘으면 `TRIP_START_BODY_OUTSIDE_ROUTE`로 거절한다. 지원하는 차체 치수가 없거나 이동할 계획 구간이 없으면 각각 `TRIP_BODY_UNKNOWN`, `TRIP_NO_ROUTE`로 거절한다. 이 검사는 시작 명령을 보내기 전에 실행한다.
 3. Fleet과 CORE가 주행·안전 권한을 갖는다. AI PC의 계획 경로 이탈 분석은 별도 그림자 사실로 검증한 뒤 연결하며 직접 로봇을 움직이지 않는다. 현장 설치 전에는 `rosy_40`의 `junction_turn:false`와 두 로봇의 주행·정지 근거를 해결해야 한다. 능력 광고를 강제로 참으로 바꾸지 않는다.
    - 관제는 교착 여부와 관계없이 열린 trip이 있으면 기존 `/api/fleet/ai`를 조회한다. 같은 로봇·trip·지도 버전의 최신 `trip_route_check`가 유효 시간 안의 `OFF_ROUTE`일 때 예외 큐에 허용 경계 초과 거리를 경고한다. 새 `ON_ROUTE`·`UNKNOWN`, 만료, trip 종료는 경고를 지운다. 이 표시는 주행 명령을 만들지 않는다.
+   - trip view의 `pose_observed_at`은 자세를 읽은 wall timestamp이며 junction 조회·명령 지연이나 저장 시각 `updated_at`이 이를 갱신하지 않는다. AI는 표본 나이와 읽기 후 경과를 합쳐 1.5 s 넘으면 `UNKNOWN`으로 판단한다. 없거나 유효하지 않은 시각·나이도 `UNKNOWN`이다. 최대 0.5 s의 미래 시계 차이만 허용하고 AI 관측 시각은 HTTP 읽기 완료 시각이다.
 
 ### Consequences and evidence
 
