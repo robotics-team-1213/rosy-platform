@@ -28,20 +28,20 @@ test("an unlocalized robot warns and needs_human is critical", () => {
   assert.equal(localizationUrgent(row()), false);
 });
 
-test("a robot without D-395 warns 위치 상태 미보고", () => {
+test("missing localization warns 위치 모름", () => {
   const legacy = localizationTag(row({ state: "UNKNOWN", pose_frame: null, trusted: false, legacy: false,
-    label: "위치 상태 미보고" }));
-  assert.equal(legacy.text, "위치 상태 미보고");
+    label: "위치 모름" }));
+  assert.equal(legacy.text, "위치 모름");
   assert.equal(legacy.cls, "warn");
 });
 
-test("a robot without D-395 that Fleet's MapPose places shows the MapPose state, not 미보고", () => {
-  // Field 2026-10-10: rosy_40 (motor mode) was LOCALIZED by camera and the badge said 위치 상태 미보고.
-  const legacy = row({ state: "UNKNOWN", pose_frame: null, trusted: false, legacy: false, label: "위치 상태 미보고" });
+test("an UNKNOWN CORE pose can show a separate Fleet MapPose", () => {
+  // Field 2026-10-10: rosy_40 (motor mode) was LOCALIZED by camera and the badge said 위치 모름.
+  const legacy = row({ state: "UNKNOWN", pose_frame: null, trusted: false, legacy: false, label: "위치 모름" });
   assert.deepEqual(localizationTag(legacy, { pose: { x: 1, y: 2, state: "LOCALIZED" } }),
     { text: "위치 확정", cls: "", title: "Fleet MapPose · LOCALIZED" });
   assert.equal(localizationTag(legacy, { pose: { x: 1, y: 2, state: "DEGRADED" } }).cls, "warn");
-  assert.equal(localizationTag(legacy, { pose: null }).text, "위치 상태 미보고");
+  assert.equal(localizationTag(legacy, { pose: null }).text, "위치 모름");
   assert.equal(localizationTag(row(), { pose: { state: "DEGRADED" } }).text, "위치 확정");  // D-395 robot: its own
 });
 
@@ -82,7 +82,7 @@ test("the map draws the robot's own pose only when it is a LOCALIZED map pose, n
 });
 
 test("the card's position chip speaks what places the robot, and a missing CORE block is not a fault", () => {
-  const legacy = row({ state: "UNKNOWN", pose_frame: null, trusted: false, legacy: false, trusted: false, label: "위치 상태 미보고" });
+  const legacy = row({ state: "UNKNOWN", pose_frame: null, trusted: false, legacy: false, trusted: false, label: "위치 모름" });
   const guide = (pose) => ({ robot_id: "rosy_01", pose });
   // Fleet's site map pose first, even when CORE reports nothing (lane following without Nav2).
   assert.deepEqual(positionTag(legacy, guide({ x: 0.69, y: -0.44, state: "LOCALIZED", source: "sighting" })),

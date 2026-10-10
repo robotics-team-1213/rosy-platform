@@ -26,7 +26,6 @@ UNTRUSTED_KEEP_OUT_M = 0.45
 #: Missing localization expires the last trusted position after a CORE restart.
 LAPSED_GRACE_S = 30.0
 
-LEGACY_LABEL = "위치 상태 미보고"
 NEEDS_HUMAN_LABEL = "위치 확인 필요"
 STATE_LABELS = {
     LocState.UNKNOWN: "위치 모름",
