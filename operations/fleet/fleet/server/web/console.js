@@ -4,7 +4,7 @@ import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
-import { createLineStuckPanel } from "./line-stuck.js";
+import { CAUSE_LABEL, createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -270,7 +270,8 @@ async function refreshIncidents() {
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
       const core = report.evidence.core, fleet = report.evidence.fleet;
-      summary.textContent = `${report.robot_ids.map(incidentRobotName).join(", ")} · ${core.cause || "원인 미확인"} · ${report.opened_at}`;
+      const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
+      summary.textContent = `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName} · ${new Date(report.opened_at).toLocaleString("ko-KR")}`;
       detail.append(summary);
       incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "진행 중"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
       incidentLine(detail, `CORE: 단계 ${core.phase_at_open || "미확인"}, 정지 ${core.held_s_max ?? "미확인"}초, 재시도 ${core.attempts_max ?? "미확인"}`);
@@ -305,12 +306,8 @@ async function refreshIncidents() {
     }
     const trafficList = el("incident-traffic-list");
     trafficList.replaceChildren();
-    const shown = new Set();
     for (const report of incidentTrafficReports) {
       const ai = report.evidence.ai_fact;
-      const key = `${report.classification}|${report.robot_ids.join(",")}`;
-      if (shown.has(key)) continue;
-      shown.add(key);
       const item = document.createElement("li");
       item.className = "stuck-item incident-row closed";
       const detail = document.createElement("details");
@@ -320,7 +317,7 @@ async function refreshIncidents() {
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || report.classification;
-      summary.textContent = `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")} · ${report.opened_at}`;
+      summary.textContent = `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")} · ${new Date(report.opened_at).toLocaleString("ko-KR")}`;
       detail.append(summary);
       incidentLine(detail, `AI ${ai.source} · ${ai.stage} · 신뢰도 ${Math.round(ai.confidence * 100)}%`);
       incidentLine(detail, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
@@ -332,9 +329,8 @@ async function refreshIncidents() {
         `/api/fleet/incidents/facts/${ai.fact_row}/review`));
       item.append(detail);
       trafficList.append(item);
-      if (shown.size === 5) break;
     }
-    if (!shown.size) {
+    if (!incidentTrafficReports.length) {
       const empty = document.createElement("li");
       empty.textContent = "저장된 AI 상황 사실이 없습니다.";
       trafficList.append(empty);
