@@ -41,10 +41,10 @@ def crop_map_plane(plane: MapPlane, x: float, y: float, radius_m: float
     """The signed robot neighborhood in map metres, clipped to this calibrated plane."""
     min_x, _, _, max_y = plane.bounds_m
     ppm = plane.px_per_m
-    left = max(0, math.floor((x - radius_m - min_x) * ppm))
-    right = min(plane.size[0], math.ceil((x + radius_m - min_x) * ppm))
-    top = max(0, math.floor((max_y - y - radius_m) * ppm))
-    bottom = min(plane.size[1], math.ceil((max_y - y + radius_m) * ppm))
+    left = max(0, round((x - radius_m - min_x) * ppm))
+    right = min(plane.size[0], round((x + radius_m - min_x) * ppm))
+    top = max(0, round((max_y - y - radius_m) * ppm))
+    bottom = min(plane.size[1], round((max_y - y + radius_m) * ppm))
     if right <= left or bottom <= top:
         return None
     image = _decode(plane.jpeg)[top:bottom, left:right]
