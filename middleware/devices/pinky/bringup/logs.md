@@ -62,3 +62,9 @@
 - 증거: `test_wheel_calibration.py`(순서, 0·NaN·음수, 비현실 값 거부), `test/test_bringup_motor_contracts.py`.
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD — 레코드 없는 로봇은 오도메트리가 약 3.7 % 바뀐다. 8kcn·9dfk 레코드는 배포 전/함께 승인.
 - 결정: D-397 Proposed.
+
+## 2026-10-11 · 5faad3583 · refactor: Pinky bringup 장치 holder 이전
+
+- 변경: D-626 devices/pinky/bringup으로 이동. driver/deadman/launch/setup identity를 유지하고 실제 소비자·Docker 소스·test ancestor를 정렬했다. 최초 logs 이동은 R100이다.
+- 증거: Pinky 통합 후보 원격 885 성공·2 skip, motor/deadman/Dynamixel Safety 포함. 실제 Linux bringup wheel/entrypoint/config/share 설치 확인, 독립 source 리뷰와 known_failures 0 NEW/0 known.
+- gate 변화: 없음. 실물 모터·정지·새 ARM64 설치는 확인하지 않았다.

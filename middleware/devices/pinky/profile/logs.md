@@ -37,3 +37,9 @@
 - 변경: D-344 개정, 순항 0.10 m/s와 steering_gain 2.0으로 경로 곡률 유지. 현장 8kcn의 옛 거리 덮어쓰기를 제거하여 D-591 몸 기준 판정을 적용.
 - 증거: 원격 AI PC에서 관련 시험 95 passed, known_failures 비교 0 NEW. 0.10 m/s에서 벽 여유 0.048 m 통과, 0.015 m 정지. 두 실물 설정 적용과 CORE 재시작 확인, X: follow-speed-clearance 세션에 증거 보관.
 - gate 변화: SOURCE/원격 시험 확인. 장치 설정 적용 확인, 물리 주행 수용 HOLD(안전 데이터 disconnected, 8kcn IR stale, 9dfk 몸 여유 0.0186 m).
+
+## 2026-10-11 · 7b0a8d965 · refactor: Pinky profile 장치 holder 이전
+
+- 변경: D-626 devices/pinky/profile으로 이동하며 pinky_pro package/share identity와 numeric profile/geometry를 유지했다. 일반 source profile 탐색 경로를 devices로 정렬했다.
+- 증거: Pinky 통합 원격 885 성공·2 skip 중 profile/robot-selection 계약 포함, 독립 source 리뷰와 known_failures 0 NEW/0 known. 로그는 R100 이동 후 증거를 추가했다.
+- gate 변화: 없음. 기존 ROS evidence는 과거 후보이며 새 colcon/image/device 수용을 주장하지 않는다.

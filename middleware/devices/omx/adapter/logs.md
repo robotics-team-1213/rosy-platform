@@ -467,3 +467,9 @@
 - 변경: 좌석 설정을 마친 뒤 가짜 관절 상태의 수신 시각을 갱신하고, 이 시험에서만 상태 신선도 한계를 넓혀 호스트 부하가 좌석 판정을 가리지 않게 했다.
 - 증거: 전체 변경 검사에서 `readback_or_controller_not_ready` 거부를 재현했다. 어댑터 시험으로 수정 결과를 검증한다.
 - gate 변화: 없음. 제품의 관절 상태 0.5초 한계는 유지한다.
+
+## 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증
+
+- 변경: D-626 devices/omx/adapter으로 이동. Safety 구현 5개와 arm owner/stop/HOLD 유지. caller PYTHONPATH·root 계산·manifest·Docker 소스와 물리 package 표를 정렬했다.
+- 증거: 원격 adapter/profile 및 owner/fence/G2 caller 532 성공·3 skip, 실제 Linux wheel/entrypoint/kinematics config/ament share 설치 확인. 독립 Safety source 승인과 known_failures 0 NEW/0 known.
+- gate 변화: 없음. ROS/vendor/실물 stop/rearm/현장 수용은 별도.

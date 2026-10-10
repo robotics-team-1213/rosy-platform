@@ -40,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 291d03a9f · refactor: Nav2 Drive planning holder 이전
 - 2026-10-01 · uncommitted · feat(launch): hardware.launch.py에 D-395 loc_assist 옵트인 (P2-3)
 - 2026-09-29 · uncommitted · feat(launch): Flask 시대 web_* 진입점 4종 삭제 (스코어카드 §6 과제 3)
 - 2026-09-27 · 804dda61 · fix(mapping): scope the occupancy map to the robot namespace
 - 2026-09-25 · uncommitted · refactor(runtime): move navigation under src/runtime (D-231)
-- 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed를 navigation에 연결

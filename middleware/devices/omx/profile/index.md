@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 1691d395c · refactor: OMX profile 장치 holder 이전 검증
 - 2026-10-01 · 21224829 · fix(omx): ship an empty CORE config layer
 - 2026-09-26 · uncommitted · verify two isolated OMX-AI simulator instances
 - 2026-09-25 · uncommitted · refactor(products): OMX arm settings leave the adapter package (D-232)

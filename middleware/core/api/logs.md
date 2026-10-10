@@ -850,3 +850,9 @@
 - 변경: API v1.202 설명·변경 이력·설정 불리언 시험을 정렬했다.
 - 증거: AI PC 원격 foundation·서버 app·프로토콜·하네스·네트워크 계약 1095 passed, known_failures 0 NEW.
 - gate 변화: focused SOURCE/원격 계약만 확인. ARM64 빌드·설치·FIELD 미확인.
+
+## 2026-10-11 · 5faad3583 · refactor: API holder 이전 검증
+
+- 변경: D-626 api_web holder를 api로 옮기며 core_api_web identity·설치 경로·Safety 구현을 유지하고 소비자와 harness 현재 경로를 정렬했다. 로그는 최초 이동 커밋에서 R100으로 보존했다.
+- 증거: API 후보 원격 489 성공·13 browser skip, 실제 Linux wheel 설치/package/ament share 확인. 독립 Safety source 승인, known_failures 0 NEW/0 known.
+- gate 변화: 없음. 브라우저·새 이미지·장치/현장 수용은 별도.

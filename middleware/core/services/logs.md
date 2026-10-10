@@ -943,3 +943,8 @@
 - Change: Current inquiry carries pose-aligned lane boundary revision after three consistent new observations; stale data and camera motion do not advance the revision.
 - Evidence: Independent source review approved; remote regression pending.
 - Gate: SOURCE only; CORE motion authority and safety checks unchanged; DEVICE/FIELD pending.
+## 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분
+
+- 변경: 알고리즘과 최종 권한은 기존 feature에 두고 CORE 조립을 gateway/core/drive로 분리했다. stuck provider 안내 경로만 정렬했다.
+- 증거: 원격 전체 core_features 1675 성공, known_failures 0 NEW/0 known. CORE 조립은 별도 독립 Safety source 검토를 통과했다.
+- gate 변화: 없음. 새 producer·복구·곡률 정책과 장치 활성화는 추가하지 않았다.
