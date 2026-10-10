@@ -1076,6 +1076,14 @@ class LineFollowStatus(BaseModel):
     crosswalk: Optional[LineCrosswalkStatus] = None
     crosswalk_reported: bool = Field(default=False, exclude=True)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _crosswalk_key_means_reported(cls, data):
+        # A parsed copy (Fleet hub snapshot, D-555) keeps the key: absent stays "not watched" (D-577 R3).
+        if isinstance(data, dict) and "crosswalk" in data and "crosswalk_reported" not in data:
+            data = {**data, "crosswalk_reported": True}
+        return data
+
     @model_serializer(mode="wrap")
     def _omit_unreported_crosswalk(self, handler):
         data = handler(self)
