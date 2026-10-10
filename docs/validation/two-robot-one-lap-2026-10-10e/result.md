@@ -25,3 +25,5 @@
 `65c834b0c`에서 관제의 AI 사실 조회 조건을 교착 발생뿐 아니라 열린 trip에도 적용했다. 같은 로봇·trip·지도 버전의 최신 유효 `OFF_ROUTE` 사실은 차체 허용 경계 초과 거리와 위치 확인 경고로 표시한다. 오래된 사실, 다른 운행·지도, 비정상 수치, 새 `ON_ROUTE`·`UNKNOWN`, trip 종료는 경고를 내지 않는다. 관련 Node 26개 시험을 확인했고, 원격 AI PC에서 전체 관제 Node 시험을 실행하는 `test_console_web_node_unit_tests_pass`를 포함한 `test_site_map_api.py`, `test_console_disabled_features.py`, `test_console_palette.py` 45개 시험이 통과했다(`X:/DevTemp/one-lap-ai-route-queue/run-1.txt`, NEW 0·KNOWN 0). lint 오류 0·경고 24개, Safety-Review 36개 커밋 검사가 통과했다.
 
 이 표시는 AI 관찰을 운영자에게 전달하며 로봇을 움직이거나 정지시키지 않는다. 실제 브라우저 렌더와 현장 설치·주행 수용은 이 시험에 포함되지 않는다.
+
+`55f63e4b2`의 추가 시험은 원격 현장 PC의 실제 Chromium과 Fleet 정적 화면에서 실행했다. 가짜 API의 교착 없는 열린 trip에 `OFF_ROUTE` 사실을 공급해 경고 표시·로봇 이름·2 cm 초과 거리를 확인하고, 다음 조회의 `ON_ROUTE` 판정으로 경고가 사라짐을 확인했다. 로봇 명령 POST와 브라우저 오류는 0개였다(`X:/DevTemp/one-lap-ai-route-browser/run-1.txt`, opt-in 활성, 시험 1개 통과, NEW 0·KNOWN 0). 이 증거는 브라우저 연결·표시 범위이며 실제 로봇 이탈 방지 수용은 아니다.
