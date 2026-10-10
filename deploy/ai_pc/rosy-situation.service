@@ -10,6 +10,7 @@ WorkingDirectory=%h/rosy-situation/current/operations/situation
 # FLEET_URL, FLEET_TOKEN_FILE (ai_observer token), FLEET_CA; optional ROSY_SITUATION_STATE,
 # ROSY_SITUATION_OWNER_MODE (file only the owner writes: available | shared | owner_busy; missing = owner_busy)
 EnvironmentFile=%h/.config/rosy/situation.env
+Environment=PYTHONPATH=%h/rosy-situation/current/contracts/foundation
 ExecStart=/usr/bin/python3 -m rosy_situation.service
 Restart=on-failure
 RestartSec=5s
