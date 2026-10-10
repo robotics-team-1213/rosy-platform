@@ -88,6 +88,52 @@ def test_late_red_before_rotation_cancels_fallback():
     assert status.junction.signal_state == "red"
 
 
+def test_red_still_cancels_a_rotation_zeroed_by_authority():
+    rig = Rig(junction_signal_enabled=True, authority_required=True)
+    rig.m._wall = lambda: rig.now
+    rig.step(junction=True)
+    request = rig.m.junction_signal_request()
+    assert answer(rig, request, 'green', True)
+    for _ in range(20):
+        decision, _ = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        if rig.m._junction.get('sub') == 'rotating':
+            break
+    assert rig.m._junction['sub'] == 'rotating'
+    assert answer(rig, request, 'red')
+    rig.m.set_authority('A1', 'L1', rig.now, 1., 2.)
+    for _ in range(10):
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        assert status.junction.state == 'waiting'
+
+
+def test_red_still_cancels_a_rotation_zeroed_by_crosswalk():
+    from core_features.line_follow.crosswalk_gate import Zone
+    from test_line_junction import BODY
+
+    rig = Rig(junction_signal_enabled=True, crosswalk_gate_enabled=True,
+              obstacle_mode='path', **BODY)
+    rig.step(junction=True)
+    request = rig.m.junction_signal_request()
+    zones = [Zone((rig.m._return_evidence.epoch, 'odom'), 0., 0., 0., .08, .3)]
+    rig.m._crosswalk_zones = lambda: zones
+    assert answer(rig, request, 'green', True)
+    for _ in range(20):
+        decision, _ = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        if rig.m._junction.get('sub') == 'rotating':
+            break
+    assert rig.m._junction['sub'] == 'rotating'
+    assert answer(rig, request, 'red')
+    zones.clear()
+    rig.m._xwalk.reset()
+    for _ in range(10):
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        assert status.junction.state == 'waiting'
+
+
 def test_fallback_still_needs_motion_basis():
     rig = Rig(proof=False, junction_signal_enabled=True)
     for _ in range(63):
