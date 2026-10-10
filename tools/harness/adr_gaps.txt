@@ -25,8 +25,6 @@ D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; 
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-621 reserved in another active branch; not in this structure candidate, remove when integrated
 D-622 reserved in another active branch; not in this structure candidate, remove when integrated
-D-623 on main after this branch baseline; remove when main is integrated
-D-624 on main after this branch baseline; remove when main is integrated
 
 
 D-621 reserved by another active session; ADR not yet landed in this branch

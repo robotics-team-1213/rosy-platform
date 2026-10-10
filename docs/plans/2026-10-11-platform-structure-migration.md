@@ -10,6 +10,8 @@
 
 **상태:** M0–M2 준비 완료, M3–M9 미실행, 2026-10-11. 기준 `f14070a59`, 브랜치 `feat/platform-structure-migration`. 사용자는 구조 방향과 ADR·계획·도구 작성을 요청했다. 실제 제품 이전 M3 이후는 실행하지 않았다.
 
+**후속 실행:** 같은 날 사용자의 실행 요청으로 [D-626](../adr/D-626-d625-holder-migration-execution.md)에 따라 M3–M6를 진행한다. 이전 전 후보 `3927f9a33`의 원격 architecture/도구 104 성공 표시·exit 0, known_failures 0 NEW/0 known. 독립 리뷰의 설치 목적지·Safety 코드 보존 조건을 반영한다. 완료 결과는 아래 실행 기록에 추가한다.
+
 ## 이전 단위와 선행 조건
 
 | 순서/ID | 현재 → 목표 | 유지할 identity | 실행 전 확인 |
