@@ -35,8 +35,8 @@ WORDS = {"stuck": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "REALIG
          "trip_failed": ("STOP", "CANCEL")}
 _LOG = logging.getLogger("rosy_situation.vlm")
 
-PROMPT = """You decide what a small lane-following robot should do next. Two pictures follow: first the ceiling
-camera crop around the robot, then the robot's own front camera. The robot's local safety (body stop, watchdog,
+PROMPT = """You decide what a small lane-following robot should do next. Pictures follow in the labeled order:
+ceiling camera crop and front camera per robot. The robot's local safety (body stop, watchdog,
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
 {{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it}}.
 Prefer WAIT when the pictures do not show the way clear. Problem and context:

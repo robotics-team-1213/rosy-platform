@@ -185,8 +185,8 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        2785,
-        "accept: measured at 2785 on 2026-10-10 after the named reports seam in "
+        2800,
+        "accept: measured at 2800 on 2026-10-10 after the named reports seam in "
         "docs/plans/2026-10-10-fleet-stuck-subpackage.md was applied: LineStuckAnswerLog and _resolution "
         "are in reports.py, board.py keeps memory state. D-610 separates AI policy, case transport, "
         "problem watch, outcome tracking and episode storage into existing small owner files; "
@@ -615,7 +615,7 @@ SIZE_VERDICTS = {
         "gained the install call; verdict unchanged; re-judged again when the pairing security "
         "fixes and the console camera-approval section (web/camera-pairing.js under the D-362 "
         "web budget, its node and host tests) joined; verdict unchanged; re-judged "
-        "2026-10-01 at 23166 (main had reached 22797 with D-392 work) after the robot-address drift "
+        "2026-10-01 at 23166 (main had reached 22800 with D-392 work) after the robot-address drift "
         "audit joined as its own modules (server/address_drift.py pure classifier, web/address-drift.js "
         "pure copy) plus its route in ingest_routes.py and tests, then at 23237 after the "
         "review fix made move-address re-pair with the screen code (enrollment.py) and dropped bulk "

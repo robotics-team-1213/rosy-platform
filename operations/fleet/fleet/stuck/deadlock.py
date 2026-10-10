@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from typing import Mapping, Sequence
 
 from fleet.stuck.closed_loop import _write
+from fleet.stuck.ai_first import VLM_WAIT_S
 
 
 class AiReplan:
@@ -24,22 +25,32 @@ class AiReplan:
         self.first, self.board, self._log = first, board, SimpleNamespace(episodes=episodes)
         self._judged: set = set()
         self.case = None
+        self.waiting = False
+        self._started = None
 
     def __call__(self, cycle: Sequence[str], avoidable: Mapping[str, Sequence[str]], now: float):
         members = sorted(cycle)
         self.case = None
+        self.waiting = False
         if not members or not all(self.first.on(r) for r in members):
+            self._started = None
             return None
         pid = "deadlock:" + ":".join(members)
+        if self._started is None or self._started[0] != pid:
+            self._started = (pid, now)
+        self.waiting = bool(set(self.first.profiles())) and now - self._started[1] < VLM_WAIT_S
         self.case = {"problem_id": pid, "kind": "deadlock", "robot_id": members[0],
                      "context": {"cycle": members, "avoidable": {r: list(avoidable.get(r, ())) for r in members}}}
         proposal = self.board.problem_proposal(pid)
         if proposal is None or proposal["decision"] != "REPLAN":
             return None
         pick, edges = proposal["robot_id"], tuple(proposal.get("body", {}).get("blocked_edges") or ())
+        judged = (pid, pick, edges, proposal["reason"], proposal.get("observed_at"))
+        if judged in self._judged:
+            self.waiting = False
+            return None
         key = "deadlock:wait_cycle:lane"           # ponytail: one place word until blocks name their place
         verdict = self._verdict(proposal, pid, pick, edges, avoidable, key, now)
-        judged = (pid, pick, edges, proposal["reason"])
         if judged not in self._judged:
             self._judged.add(judged)
             self.board.verdicts.append({**proposal, "verdict": verdict, "judged_at": time.time()})
@@ -50,7 +61,10 @@ class AiReplan:
                    verdict=verdict)
             if verdict == "forwarded":
                 self.first.sent(pick, pid, "REPLAN", now)
-        return (pick, edges) if verdict == "forwarded" else None
+        if verdict == "forwarded":
+            self.waiting = False
+            return pick, edges
+        return None
 
     def _verdict(self, proposal, pid, pick, edges, avoidable, key, now) -> str:
         if not str(proposal.get("source", "")).startswith("vlm:"):

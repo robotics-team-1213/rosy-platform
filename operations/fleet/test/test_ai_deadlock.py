@@ -79,6 +79,18 @@ def test_ai_replan_requires_fresh_views_for_every_cycle_member():
     assert board.verdicts[-1]["verdict"] == "evidence_stale:front"
 
 
+def test_deadlock_proposal_is_not_replayed_and_new_answers_obey_the_cap():
+    board = _Board(_replan())
+    replan = AiReplan(_first(), board)
+    for number in range(3):
+        board.proposal["observed_at"] = WALL + number * 0.1
+        assert replan(("a", "b"), {"b": ["y"]}, number) == ("b", ("y",))
+        assert replan(("a", "b"), {"b": ["y"]}, number) is None
+    board.proposal["observed_at"] = WALL + 0.3
+    assert replan(("a", "b"), {"b": ["y"]}, 4) is None
+    assert board.verdicts[-1]["verdict"] == "ai_exhausted"
+
+
 def _routable(monkeypatch, runner):
     """This demo map has no other route around ring_n (TRIP_NO_ROUTE); hand back the trip's own plan
     as the replanned route so the switch itself is under test."""
@@ -112,6 +124,31 @@ def test_without_the_ai_mark_the_replan_waits_for_the_operator(monkeypatch):
     _ticks(runner, fleet, n=CYCLE_PERIODS + 1)
     hold = runner.view("b")["hold"]
     assert hold["reason"] == "replan" and hold["plan"] is not None
+    assert "replan_confirmed_by" not in runner.view("b")["detail"]
+
+
+def test_delayed_ai_reply_reaches_the_trip_runner_before_operator_fallback(monkeypatch):
+    runner, _store, fleet = _cycle(monkeypatch)
+    runner.traffic._clock = lambda: fleet.now
+    _routable(monkeypatch, runner)
+    board = _Board(None)
+    runner.traffic.ai_replan = AiReplan(_first(), board)
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 4)
+    assert runner.traffic.ai_replan.case["problem_id"] == "deadlock:a:b"
+    assert runner.view("b")["hold"] is None and runner.traffic._tried == {}
+    board.proposal = _replan(edges=("ring_n",))
+    _ticks(runner, fleet, n=2)
+    assert runner.view("b")["hold"] is None
+    assert runner.view("b")["detail"]["replan_confirmed_by"] == "fleet-ai"
+
+
+def test_missing_ai_reply_falls_back_after_the_bounded_wait(monkeypatch):
+    runner, _store, fleet = _cycle(monkeypatch)
+    runner.traffic._clock = lambda: fleet.now
+    _routable(monkeypatch, runner)
+    runner.traffic.ai_replan = AiReplan(_first(), _Board(None))
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 18)
+    assert runner.view("b")["hold"]["reason"] == "replan"
     assert "replan_confirmed_by" not in runner.view("b")["detail"]
 
 

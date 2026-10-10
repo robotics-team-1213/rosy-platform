@@ -316,10 +316,11 @@ class TrafficService:
         self._cycle = (seen, self._cycle[1] + 1 if seen and seen == self._cycle[0] else int(bool(seen)))
         pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
                    if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
-        decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
-                                    pending, self._unknown_since, now,
-                                    ai_pick=self.ai_replan(cycle if cycle and self._cycle[1] >= handover.CYCLE_PERIODS
-                                                          else (), avoidable, now))
+        ai_pick = self.ai_replan(cycle if cycle and self._cycle[1] >= handover.CYCLE_PERIODS
+                                else (), avoidable, now)
+        periods = 0 if getattr(self.ai_replan, "waiting", False) else self._cycle[1]
+        decisions = handover.decide(cycle, periods, avoidable, {r: t[1] for r, t in self._tried.items()},
+                                    pending, self._unknown_since, now, ai_pick=ai_pick)
         decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
         for robot_id, row in decisions.items():
             if row["decision"] == "replan":
