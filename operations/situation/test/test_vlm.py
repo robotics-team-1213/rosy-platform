@@ -50,3 +50,13 @@ def test_a_missing_view_a_word_outside_the_table_or_no_model_is_none():
     assert Vlm(post=_post({"decision": "FLY"})[0]).judge(_case(), 100.0) is None
     assert Vlm(post=_post({}, fail=OSError("refused"))[0]).judge(_case(), 100.0) is None
     assert Vlm(post=_post({"decision": "STOP"})[0]).judge({**_case(), "kind": "unknown"}, 100.0) is None
+
+
+def test_model_profile_requires_a_running_model_with_a_digest():
+    empty = Vlm(get=lambda _url, _timeout: {"models": []})
+    assert empty.profile() is None
+    running = Vlm(get=lambda _url, _timeout: {"models": [
+        {"name": "qwen3-vl:8b-instruct", "digest": "abcdef0123456789"}]})
+    assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d610-v1"
+    assert Vlm(get=lambda _url, _timeout: {"models": [
+        {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
