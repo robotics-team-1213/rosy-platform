@@ -567,16 +567,11 @@ class StuckResolver:
 
 
 def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
-    """R1's judgement: an online peer inside the front band. None = this robot has no pose.
+    """R1's front band (also the episode log's value); on Fleet map poses when Fleet has them."""
+    from fleet.server.stuck_lane_lost import fleet_pose_of
 
-    Shared with the Fleet stuck-episode log, so the recorded value is what R1 would see. With Fleet map
-    poses (the loop's ``map_pose``, Rosy Cam sightings) only those count: robots' odom origins differ."""
     rows = list(rows)
-    if any(other.get("map_pose") is not None for other in rows):
-        from fleet.server.stuck_lane_lost import fleet_pose
-
-        return _peer_in_band(row, rows, config, 1.0, pose_of=lambda r: fleet_pose(r, config))
-    return _peer_in_band(row, rows, config, 1.0)
+    return _peer_in_band(row, rows, config, 1.0, pose_of=fleet_pose_of(rows, config) or _pose_of)
 
 
 

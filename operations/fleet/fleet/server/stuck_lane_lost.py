@@ -55,9 +55,8 @@ def peer_behind(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    if any(other.get("map_pose") is not None for other in rows):   # Fleet map poses (Rosy Cam), 남은 항목 4
-        return _peer_in_band(row, others, config, -1.0, pose_of=lambda r: fleet_pose(r, config), strict=True)
-    return _peer_in_band(row, others, config, -1.0, pose_of=_trusted_map_pose, strict=True)
+    pose_of = fleet_pose_of(rows, config) or _trusted_map_pose
+    return _peer_in_band(row, others, config, -1.0, pose_of=pose_of, strict=True)
 
 
 def _trusted_map_pose(row: Mapping):
@@ -141,3 +140,11 @@ def fleet_pose(row: Mapping, config: ResolverConfig) -> Optional[tuple[float, fl
     if not isinstance(age, (int, float)) or not 0.0 <= age <= config.pose_max_age_s:
         return None
     return float(pose["x"]), float(pose["y"]), float(pose.get("yaw") or 0.0)
+
+
+def fleet_pose_of(rows, config: ResolverConfig):
+    """D-577 남은 항목 4: with Fleet map poses (Rosy Cam, the loop's ``map_pose``) peers are judged on
+    them only, since robots' odom origins differ; None where Fleet has none (simulation, tests)."""
+    if any(other.get("map_pose") is not None for other in rows):
+        return lambda row: fleet_pose(row, config)
+    return None
