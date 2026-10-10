@@ -127,13 +127,13 @@ def test_tick_asks_lost_robots_silently_in_blue_only_every_thirty_seconds():
     for _ in range(80):                                        # 800 s later
         tick(10.0)
     assert asked["rosy_41"][0] == 13.0
-    # Marker still hidden: 30 s, then 2 min, then every 5 min (D-596 7).
+    # Marker still hidden: retry every 30 s, one blue request per source.
     assert [b - a for a, b in zip(asked["rosy_40"], asked["rosy_40"][1:])][:4] == [30.0] * 4
     assert all(quiet for _color, quiet in robots["rosy_40"].calls)
     clock.now += 0.5
-    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: the backoff restarts
+    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: no longer lost
     asyncio.run(identity.tick())
-    assert identity.triggers.backoff("rosy_40") == 1
+    assert "rosy_40" not in identity.triggers._lost_since
 
 
 def test_a_never_seen_robot_is_identified_after_thirty_seconds():
