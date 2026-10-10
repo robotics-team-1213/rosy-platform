@@ -537,3 +537,11 @@ def test_an_armed_zone_the_robot_turned_away_from_disarms(pose):
 def test_the_gate_needs_the_d422_path_mode():
     with pytest.raises(ValueError):
         LineFollowConfig(**BODY, crosswalk_gate_enabled=True, obstacle_mode="sector")
+
+
+def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
+    """Fleet's hub re-parses the robot snapshot: null (gate on, outside a zone) must stay, absent stays absent."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
+    assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
