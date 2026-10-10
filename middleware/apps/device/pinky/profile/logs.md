@@ -34,4 +34,6 @@
 
 ## 2026-10-10 · 6d2d65dce · fix(pinky_pro): 차선 순항 0.10 m/s
 
-D-344 개정: 실물 파일럿 0.04 m/s의 2.5배, steering_gain 2.0으로 경로 곡률 유지. D-591 몸 여유 시험을 0.10 m/s까지 확장. 원격 시험과 현장 설정/주행 증거는 X: follow-speed-clearance 세션에 보관. 실물 수용은 별도 확인.
+- 변경: D-344 개정, 순항 0.10 m/s와 steering_gain 2.0으로 경로 곡률 유지. 현장 8kcn의 옛 거리 덮어쓰기를 제거하여 D-591 몸 기준 판정을 적용.
+- 증거: 원격 AI PC에서 관련 시험 95 passed, known_failures 비교 0 NEW. 0.10 m/s에서 벽 여유 0.048 m 통과, 0.015 m 정지. 두 실물 설정 적용과 CORE 재시작 확인, X: follow-speed-clearance 세션에 증거 보관.
+- gate 변화: SOURCE/원격 시험 확인. 장치 설정 적용 확인, 물리 주행 수용 HOLD(안전 데이터 disconnected, 8kcn IR stale, 9dfk 몸 여유 0.0186 m).
