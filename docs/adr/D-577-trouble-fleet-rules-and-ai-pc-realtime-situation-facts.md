@@ -126,7 +126,7 @@
 
 남은 항목에 더한다:
 
-4. 판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다. 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
+4. ~~판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다.~~ **R1·뒤 띠는 닫힘(2026-10-10, `feat/ai-pc-judge`).** Fleet 지도 자세(Rosy Cam 목격, `MapPoseService`)가 있는 현장에서는 R1 앞 띠와 R3·R6 뒤 띠를 그 자세(`LOCALIZED`, 2 s 이내)로만 잰다. 지도 자세 서비스가 없는 설정(시뮬레이션·시험)만 예전처럼 로봇 자세를 쓴다. meet 규칙은 아직 남았다. 아래는 원래 기록: 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
 
 ### 개정 (2026-10-10, 사용자 결정): AI PC 제안 → Fleet 검증 후 실행
 

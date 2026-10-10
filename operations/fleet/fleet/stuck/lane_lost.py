@@ -84,7 +84,8 @@ def _trusted_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    return _peer_in_band(row, others, config, sign, pose_of=_trusted_map_pose, strict=True)
+    pose_of = fleet_pose_of(rows, config) or _trusted_map_pose
+    return _peer_in_band(row, others, config, sign, pose_of=pose_of, strict=True)
 
 
 def _trusted_map_pose(row: Mapping):
@@ -159,3 +160,22 @@ def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=N
                                       resolver._painted()) or "forwarded"
     resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
     return verdict
+
+
+def fleet_pose(row: Mapping, config: ResolverConfig) -> Optional[tuple[float, float, float]]:
+    """D-577 남은 항목 4: Fleet's own map pose of a robot, LOCALIZED and fresh, else None."""
+    pose = row.get("map_pose")
+    if not isinstance(pose, Mapping) or pose.get("state") != "LOCALIZED" or pose.get("x") is None:
+        return None
+    age = pose.get("age_s")
+    if not isinstance(age, (int, float)) or not 0.0 <= age <= config.pose_max_age_s:
+        return None
+    return float(pose["x"]), float(pose["y"]), float(pose.get("yaw") or 0.0)
+
+
+def fleet_pose_of(rows, config: ResolverConfig):
+    """D-577 남은 항목 4: with Fleet map poses (Rosy Cam, the loop's ``map_pose``) peers are judged on
+    them only, since robots' odom origins differ; None where Fleet has none (simulation, tests)."""
+    if any(other.get("map_pose") is not None for other in rows):
+        return lambda row: fleet_pose(row, config)
+    return None

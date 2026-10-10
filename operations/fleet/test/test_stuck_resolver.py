@@ -853,3 +853,18 @@ def test_d573_map_with_crosswalks_and_an_unsourced_unknown_pose_holds():
     row = _clear(_row(stuck=_lost(), localization=_frame("map")))
     row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
     assert r.step(0.0, [row]) == _hold("crosswalk_unknown")
+# ---- D-577 남은 항목 4: with Fleet map poses (Rosy Cam) peers are judged on them, not on odom ----
+
+def _mp(x, y=0.0, yaw=0.0, state="LOCALIZED", age=0.5):
+    return {"state": state, "age_s": age, "sourced": True, "x": x, "y": y, "yaw": yaw}
+
+
+def test_d577_r1_uses_fleet_map_poses_not_odom_origins():
+    me, peer = _row("rosy_01", _stuck()), _row("rosy_02", None, pose=(0.2, 0.0, 0.0))   # odom: peer "ahead"
+    me["map_pose"], peer["map_pose"] = _mp(1.0), _mp(-1.0)                             # map: far apart
+    r = StuckResolver(ResolverConfig(), painted=lambda: None)
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    me2, peer2 = _row("rosy_01", _stuck()), _row("rosy_02", None, pose=(5.0, 0.0, 0.0))
+    me2["map_pose"], peer2["map_pose"] = _mp(1.0), _mp(1.2)                            # map: peer ahead
+    r2 = StuckResolver(ResolverConfig(), painted=lambda: None)
+    assert r2.step(0.0, [me2, peer2]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
