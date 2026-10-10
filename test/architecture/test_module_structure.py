@@ -115,10 +115,9 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/server/trip_runner.py": (
         837,
-        "split: re-judged at 837 on 2026-10-09 (author's record; NEEDS the independent re-judge): D-517 3 no stop "
+        "split: re-judged at 837 on 2026-10-09 (independent re-judge 2026-10-10, critic: number agreed; the 2026-10-08 seam is already applied, so the next growth moves the start admission checks (_caps_checks, _pose_checks, _still_on_pin) and the progress predicates (_locate, _completed, _arrived, _stalled; ~100 lines) to server/trip_admission.py and server/trip_progress.py, named in the seam plan in the same change): D-517 3 no stop "
         "inside a zone adds one arrival line (a stop short of a zone counts from that point); the zone rules live in "
-        "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. The named split stays the next "
-        "step. +150 allowance measured from 837. Previously "
+        "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. +150 allowance measured from 837. Previously "
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
         "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
         "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
@@ -133,11 +132,9 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/traffic/lane_traffic.py": (
         612,
-        "accept: measured at 612 on 2026-10-10 (author's record; NEEDS the independent re-judge). D-525 rev 6 "
+        "accept: measured at 612 on 2026-10-10 (independent re-judge 2026-10-10, critic: agree on accept; the lane-traffic seam is already applied - next growth moves the D-525 signal methods _green..._signal_view (lane_traffic.py:333-459, ~125 lines) to traffic/signal_service.py). D-525 rev 6 "
         "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
-        "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. The named "
-        "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
-        "Re-judge on further growth",
+        "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. Re-judge on further growth",
     ),
     "fleet/fleet/traffic": (
         1884,
@@ -215,20 +212,19 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         51_672,
-        "split: re-judged at 51672 on 2026-10-10 after merging D-600 over main 51521 (+151; self-judged). The robot "
+        "split: re-judged at 51672 on 2026-10-10 (independent re-judge 2026-10-10, critic: agree on the number - D-600/D-596/D-594/D-593/D-581 each sit in existing owners or one new module, no motion path; corrections: fleet/swarm/anchor.py is not pure (async anchor refresh and relay factory; it changes the TRAIL reference CORE follows, independently reviewed), and D-596 automatic triggers reuse the D-472 lamp identify call (no motion, E-stop excluded, backoff). Next tracking/identity/sightings/path_history growth first moves tracking*.py, identity*.py, sightings*.py, sighting_store.py and path_history.py into a fleet/fleet/observe SIZE_UNITS subpackage by a dated docs/plans plan) after merging D-600 over main 51521 (+151). The robot "
         "regions for Vision's background learn are TrackingService.occupied in the existing D-457 owner "
         "(server/tracking.py, map pose wired at the app root), the unknown-floor hatch in map-view.js and "
         "tracking-layer.js, relearn copy in tracking-relearn.js; most new lines are tests. No new owner and "
         "no robot command path. Previously "
-        "split: re-judged at 51521 on 2026-10-10 after merging D-596 over main 51209 (+312; self-judged, "
-        "NEEDS the independent re-judge). One new pure module fleet/server/identity_triggers.py (automatic "
+        "split: re-judged at 51521 on 2026-10-10 after merging D-596 over main 51209 (+312; re-judged independently 2026-10-10). One new pure module fleet/server/identity_triggers.py (automatic "
         "LED identify rules), parallel per-colour requests in server/identity.py, the guide finding and the "
-        "roster LED button; the identity binding stays observation-only, no robot command path. Previously "
+        "roster LED button; the identity binding stays observation-only, no motion path (automatic lamp identify via the existing D-472 call). Previously "
         "split: re-judged at 51209 on 2026-10-10 after merging D-594 robot path history over main 50857 (+352): "
         "one new display/replay owner fleet/server/path_history.py (recorder, site-DB store, viewer read route; "
         "reads the existing D-395 trust, D-494 3 map pose and D-457 tracking owners, never commands or stops a "
         "robot), wired at the app composition root (app.py +9, console.py untouched); web/trail-view.js fetches "
-        "the record, index.html +9 and styles.css +6. Self-judged; independent re-judge pending. Previously "
+        "the record, index.html +9 and styles.css +6. Re-judged independently 2026-10-10. Previously "
         "split: re-judged at 50857 on 2026-10-10 after D-577 (b)+(c) over main 50460 (+397; independent "
         "read-only critic). (b) evidence picture/alert in existing owners line_stuck.py, line-stuck.js, "
         "queues.js, console_routes.py, HttpRobotClient.front_frame; (c) one new shadow-only module "
@@ -242,11 +238,9 @@ SIZE_VERDICTS = {
         "toggle in roster.js, the canvas press-drag in console.js and two guide fields; the new lines are "
         "mostly test_map_pose_pin.py. No new owner and no robot command path. Previously "
         "split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
-        "an independent REQUEST CHANGES review whose fixes are in). One new pure module "
-        "fleet/swarm/anchor.py (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
+        "an independent REQUEST CHANGES review whose fixes are in). One new module fleet/swarm/anchor.py (async anchor refresh + relay factory, not pure) (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
         "stale and jump stops, explicit anchor_hold samples, the anchored relay factory and status), its hook "
-        "in swarm/relay.py, a stream-evidence key in console_view.py, MapPoseTracker.odom_to_map and four "
-        "console.py lines. It reads the existing D-494 3 map pose owner; no new robot command path. Previously "
+        "in swarm/relay.py, a stream-evidence key in console_view.py, MapPoseTracker.odom_to_map and three console.py lines. It reads the existing D-494 3 map pose owner; no new robot command path. Previously "
         "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
         "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
         "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
@@ -299,8 +293,7 @@ SIZE_VERDICTS = {
         "Next growth (D-540 step (d) trip controls on the card): first move attentionItems/attentionKey/"
         "openDecisionKey/syncRows/fillQueues/setTriageHead and the line-stuck button helpers to "
         "web/queues.js; roster.js keeps the card. +150 allowance unchanged, measured from 47636. Previously "
-        "re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
-        "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
+        "re-judged at 47327 on 2026-10-09 (independent re-judge 2026-10-10, critic: agree - Safety-Review 6d5ac1bb1 done before this record; renewal of an already-sent goal only): D-550 10 goal lease adds +211 production lines over main 47116: "
         "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
         "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
         "presence route and wiring, +13 transport, +10 trip_runner, +4 signals.js presence; console.py "
@@ -704,8 +697,7 @@ SIZE_VERDICTS = {
         "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
         "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
         "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
-        "D-600 (584) merged, plus the hold-stops-fill guard. Self-judged; next growth moves the suspect/ghost "
-        "healing into its own module. ROS-free, host-testable (X5)",
+        "D-600 (584) merged, plus the hold-stops-fill guard. (independent re-judge 2026-10-10, critic: agree - 5 over on one MOG2 owner; next growth first moves BackgroundStore to track/background_store.py with a re-export, then suspect/ghost healing). ROS-free, host-testable (X5)",
     ),
     "vision/rosy_vision/ingest.py": (
         825,
@@ -732,7 +724,7 @@ SIZE_VERDICTS = {
         "re-judged at 1360 (independent read-only critic: LineCrosswalkStatus lives in protocol/line_crosswalk.py; "
         "here one re-export, LineStuckStatus.detail, LineFollowStatus.crosswalk/crosswalk_reported and the "
         "omit-when-unreported serializer), on top of D-581 at 1353: "
-        "accept: re-judged at 1353 on 2026-10-10 for D-581 (self-judged after the independent review): four "
+        "accept: re-judged at 1353 on 2026-10-10 for D-581 (independent re-judge 2026-10-10, critic: agree - six additive lines on PoseSample, which is defined here): four "
         "optional PoseSample fields (anchor, for_robot_id, anchor_age_s, anchor_hold) and their comment; additive, "
         "envelope 1.0 kept, no new model. Previously: accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
         "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
@@ -917,7 +909,7 @@ SIZE_VERDICTS = {
         "accept: D-581 (2026-10-10, re-judged at 634 after the review fixes: anchor_withheld hold) adds the Fleet-anchored "
         "sample kind (_sample_kind, _own_pose, odom provider) to the one follower state machine; the "
         "trail geometry stays in swarm/trail.py and the anchoring in Fleet. One lock owner, ROS-free, "
-        "covered by core_features test_swarm*.py. Re-judge on further growth",
+        "covered by core_features test_swarm*.py. (independent re-judge 2026-10-10, critic: agree - one locked follower state machine; next growth moves status/state_payload/_formation_label (~43 lines) out)",
     ),
     "core/services/core_features/docking/manager.py": (
         663,
@@ -1114,7 +1106,7 @@ SIZE_VERDICTS = {
         "also lives in the learned backend it serves; the split plan is unchanged. Re-judged at 12004 "
         "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
         "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
-        "learned backend it serves; the split plan is unchanged.",
+        "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891).",
     ),
     "control": (
         34_619,
@@ -1263,11 +1255,10 @@ SIZE_VERDICTS = {
     ),
     "learning/training/perception/dataset/lane_derived_drivable.py": (
         678,
-        "accept: recorded at 678 on 2026-10-10 (author's record; NEEDS the independent re-judge) after "
-        "D-554/D-563/D-576 landed together: one label-derivation pipeline (lane-bounded fill, own-road "
+        "accept: recorded at 678 on 2026-10-10 (independent re-judge 2026-10-10, critic: accept kept for training tooling; the file holds derive, union and review-sheet jobs - next growth moves sheets/_tile/_corrupt/_check_canar*/import_verdicts/_only_cleared/finalize to dataset/lane_derived_review.py) after "
+        "D-554/D-563/D-576 landed together: derive, union and review-sheet jobs (lane-bounded fill, own-road "
         "walls, per-row both-line rule, canaries) covered by "
-        "learning/training/perception/test/test_lane_derived_drivable.py. Split the wall/fill helpers "
-        "out if it grows again",
+        "learning/training/perception/test/test_lane_derived_drivable.py. Re-judge on further growth",
     ),
     "learning/training/perception/rosy_ml.py": (
         615,
