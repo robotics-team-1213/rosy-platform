@@ -39,9 +39,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent / 'd495-junction-sim-2026-10-07' / 'evidence'))
 from d495_sim_probe import Probe, gz, wrap  # noqa: E402  (rclpy recorder, CORE API, gz services)
 
-# west road straight x=-1.2696, y -0.42..0.42; lane_graph west:f runs +y there (dock undock_turn).
-SPAWN = (-1.2696, 0.243, -math.pi / 2)
-LANE_F = math.pi / 2
+# Inner road of map_v2_fleet: east segment straight x=0.327, y 0.20..0.38, lane order runs -y. The
+# nearest wall return there is 0.26-0.29 m from base_link; on every perimeter road it is 0.06-0.09 m,
+# inside the rotation circle + margin (0.1026 m), so a pivot there is held by D-422 (run s3 --pose
+# -1.2696,0.243,-90 --lane 90 for that case).
+INNER = '0.327,0.20,90'                # facing +y against the lane; the curve starts at y 0.38
 PERIOD_S, TTL_S = 0.5, 1.0            # Fleet lane_compliance_service PERIOD_S, CUE_TTL_S
 ROT_R, MARGIN = 0.08257, 0.02         # pinky body_rotation_radius_m, obstacle_body_margin_m
 LATCHES = ('fleet_off_map', 'fleet_cue_lost', 'fleet_turn_unconfirmed', 'fleet_turn_interrupted')
@@ -132,9 +134,9 @@ class CueProbe(Probe):
         s = self.sample(self.rng.uniform(*self.lat))
         return s[3]
 
-    def box(self, name, x, y, sx, sy, height=0.25):
+    def box(self, name, x, y, sx, sy, yaw=0.0, height=0.25):
         geo = f"<geometry><box><size>{sx} {sy} {height}</size></box></geometry>"
-        sdf = (f"<sdf version='1.9'><model name='{name}'><static>true</static><pose>{x} {y} {height/2} 0 0 0</pose>"
+        sdf = (f"<sdf version='1.9'><model name='{name}'><static>true</static><pose>{x} {y} {height/2} 0 0 {yaw}</pose>"
                f"<link name='l'><collision name='c'>{geo}</collision><visual name='v'>{geo}</visual></link>"
                f"</model></sdf>")
         return self.action('box', name=name, x=x, y=y, sx=sx, sy=sy,
@@ -150,18 +152,24 @@ def deg(r):
     return math.degrees(r)
 
 
+def le(v, limit):
+    return v is not None and v <= limit
+
+
 def prep(p, pose, box=False):
     p.unbox('lcbox')
     p.mode('OFF')
     time.sleep(0.5)
     p._teleport(*pose)
     if box:
-        # Long side wall left of the body (facing -y, left is +x): face 0.088 m from base_link, inside
+        # A 0.24 m wall along the heading, left of the body, its face 0.092 m from base_link: inside
         # the rotation circle + margin (0.1026) and outside the straight body corridor (0.0766).
-        p.box('lcbox', pose[0] + 0.088 + 0.005, pose[1] - 0.04, 0.01, 0.24)
+        x, y, yaw = pose
+        lx, ly, fx, fy = -math.sin(yaw), math.cos(yaw), math.cos(yaw), math.sin(yaw)
+        p.box('lcbox', x + 0.097 * lx + 0.04 * fx, y + 0.097 * ly + 0.04 * fy, 0.24, 0.01, yaw)
         time.sleep(1.0)
     p.mode('CAMERA_LINE')
-    r = p.wait(lambda r: r.get('state') == 'TRACKING', 20, 'tracking')
+    r = p.wait(lambda r: r.get('state') == 'TRACKING', 8 if box else 20, 'tracking')
     p.action('ready', state=p.last().get('state'), reason=p.last().get('reason'))
     return r
 
@@ -206,6 +214,8 @@ def first(rows, pred, after=0.0):
 
 
 def rows_of(p):
+    for f in p.files.values():
+        f.flush()                                                        # cmd/events are read back from disk
     with p.lock:
         return list(p.rows)
 
@@ -260,7 +270,8 @@ def s1(p, a):
     c['gap_travel_m'] = disp(rows, gap_wall, off_wall)[0]               # cue expired: today's keep drives
     hold = disp(rows, (lat_t or 0) + 1.0, hold_end) if lat_t else (None, None)
     c['hold_travel_m'], c['hold_yaw_deg'] = hold
-    sim0, sim1 = (sim_at(rows, (lat_t or 0) + 0.3), sim_at(rows, hold_end)) if lat_t else (None, None)
+    sim1 = max((r['sim_t'] for r in rows if r['wall'] <= hold_end and r.get('sim_t')), default=None)
+    sim0 = sim_at(rows, (lat_t or 0) + 0.3) if lat_t else None
     nz = [x for x in cmds(p, sim0, sim1) if abs(x['lin']) > 1e-6 or abs(x['ang']) > 1e-6] if sim0 and sim1 else ['?']
     c['nonzero_cmd_in_hold'] = len(nz)
     c['probes'] = {k: v[1] for k, v in probes.items()}
@@ -268,13 +279,16 @@ def s1(p, a):
     c['release_accepted'] = rel_code[1]
     c['released'] = released is not None
     c['moved_after_release_m'] = disp(rows, rel_wall, moved_wall)[0]
+    s_rel = sim_at(rows, rel_wall)
+    c['drive_cmd_after_release_s'] = next((round(x['sim_t'] - s_rel, 2) for x in cmds(p, s_rel or 0, 1e12)
+                                           if x['lin'] > 1e-6), None) if s_rel else None
     c['latched_again'] = latched2 is not None
     after = [r for r in rows if r['wall'] > mc_wall + 0.5]
     c['mode_change_cleared'] = bool(after) and all(r.get('reason') != 'fleet_off_map' for r in after)
     sm['timeline'] = reasons(rows)
     ok = (c['off_map_accepted'] and c['latch_after_post_s'] is not None and c['latch_after_post_s'] <= 1.0
           and c['hold_travel_m'] is not None and c['hold_travel_m'] <= 0.01 and c['nonzero_cmd_in_hold'] == 0
-          and c['latched_through_probes'] and c['released'] and (c['moved_after_release_m'] or 0) >= 0.03
+          and c['latched_through_probes'] and c['released'] and le(c['drive_cmd_after_release_s'], 2.0)
           and c['latched_again'] and c['mode_change_cleared'])
     sm['verdict'] = 'PASS' if ok else 'FAIL'
     return sm
@@ -282,7 +296,7 @@ def s1(p, a):
 
 def s2(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, SPAWN)
+    prep(p, a.pose)
     lane = wrap(p.get('gt')[2] + math.radians(a.turn))
     p.cue_fn = lambda s: dict(state='WRONG_WAY', pose_stamp=s[3],
                               turn_deg=round(deg(wrap(lane - s[2][2])) + p.rng.uniform(-2, 2), 2))
@@ -318,7 +332,7 @@ def s2(p, a):
     ok = (c['pivot_started'] and c['latch_reason'] in ('fleet_cue_lost', 'fleet_turn_unconfirmed')
           and c['latch_after_last_cue_sim_s'] is not None and c['latch_after_last_cue_sim_s'] <= TTL_S + PERIOD_S + 0.2
           and c['max_turned_deg'] <= c['budget_deg'] and c.get('nonzero_cmd_after_latch') == 0
-          and (c.get('yaw_after_latch_deg') or 99) <= 3.0 and c.get('still_latched_at_end'))
+          and le(c.get('yaw_after_latch_deg'), 3.0) and c.get('still_latched_at_end'))
     sm['verdict'] = 'PASS' if ok else 'FAIL'
     return sm
 
@@ -375,16 +389,10 @@ def pivot_rows(rows):
 
 def s3(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, SPAWN, box=a.box)
-    ff = FleetWrongWay(p, LANE_F, a.noise, a.exact180)
+    prep(p, a.pose, box=a.box)
+    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180)
     p.cue_fn = ff
-    end = time.time() + (14.0 if a.box else 30.0)
-    while time.time() < end:
-        rs = rows_of(p)
-        if not a.box and any(is_turn(x) for x in rs) and not any(is_turn(x) for x in rs[-10:]):
-            break                                                        # pivot over (done or latched)
-        time.sleep(0.2)
-    p.sleep(3.0)                                                         # Fleet keeps judging after
+    p.sleep(20.0 if a.box else 30.0)                                    # whole episode, incl. any stuck
     p.cue_fn = None
     p.sleep(1.5)
     rows = rows_of(p)
@@ -405,10 +413,10 @@ def s3(p, a):
         sim0 = (a0 or {}).get('sim_t')
         angs = [x for x in cmds(p, sim0, 1e12) if abs(x['ang']) > 1e-6] if sim0 else []
         c['nonzero_angular_after_pivot_start'] = len(angs)
-        c['yaw_change_deg'] = disp(rows, (a0 or rows[0])['wall'], rows[-1]['wall'])[1]
+        c['yaw_change_deg'] = disp(rows, a0['wall'], rows[-1]['wall'])[1] if a0 else None
         c['body_gap_m'] = sorted({r.get('body_gap_m') for r in rows if r.get('reason') == 'obstacle_ahead'} - {None})[:3]
         c['after'] = reasons(rows, (a0 or rows[0])['wall'])[-4:]
-        ok = c['pivot_started'] and c['obstacle_ahead_seen'] and (c['yaw_change_deg'] or 99) <= 5.0
+        ok = c['pivot_started'] and c['obstacle_ahead_seen'] and le(c['yaw_change_deg'], 5.0)
         sm['timeline'] = reasons(rows)
         sm['verdict'] = 'PASS' if ok else 'FAIL'
         return sm
@@ -416,7 +424,7 @@ def s3(p, a):
         sm['timeline'] = reasons(rows)
         return sm
     sim0, sim1 = a0['sim_t'], a1['sim_t']
-    angs = [x['ang'] for x in cmds(p, sim0 - 0.05, sim1 + 0.15) if abs(x['ang']) > 1e-6]
+    angs = [x['ang'] for x in cmds(p, sim0 - 0.05, sim1 + 0.15) if x['lin'] == 0 and abs(x['ang']) > 0.05]
     c['pivot_cmd_count'] = len(angs)
     c['pivot_sign_changes'] = sum(1 for u, v in zip(angs, angs[1:]) if (u > 0) != (v > 0))
     c['pivot_duration_sim_s'] = round(sim1 - sim0, 2)
@@ -426,11 +434,11 @@ def s3(p, a):
     # Settled pose 1 s after the pivot ended (before the keep drives far).
     settle = first(rows, lambda r: r['wall'] >= (end_row or a1)['wall'] + 0.6) or rows[-1]
     o0, o1, g0, g1 = a0['odom'], settle['odom'], a0['gt'], settle['gt']
-    lane_odom = o0[2] + wrap(LANE_F - g0[2])        # lane direction in the odom frame at pivot start
+    lane_odom = o0[2] + wrap(a.lane - g0[2])        # lane direction in the odom frame at pivot start
     c['odom_turned_deg'] = round(deg(wrap(o1[2] - o0[2])), 1)
     c['yaw_err_odom_deg'] = round(deg(wrap(o1[2] - lane_odom)), 1)
-    c['yaw_err_gt_deg'] = round(deg(wrap(g1[2] - LANE_F)), 1)
-    c['start_err_gt_deg'] = round(deg(wrap(g0[2] - LANE_F)), 1)
+    c['yaw_err_gt_deg'] = round(deg(wrap(g1[2] - a.lane)), 1)
+    c['start_err_gt_deg'] = round(deg(wrap(g0[2] - a.lane)), 1)
     c['pivots_started'] = len(cue_events(p, 'pivot'))
     sm['timeline'] = reasons(rows)
     ok = (not c['latched'] and c['pivot_sign_changes'] == 0 and abs(c['yaw_err_odom_deg']) <= 10
@@ -441,29 +449,31 @@ def s3(p, a):
 
 def s4(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, SPAWN, box=True)
-    p.cue_fn = FleetWrongWay(p, LANE_F, a.noise, False)
+    prep(p, a.pose, box=True)
+    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False)
     stuck = p.wait(lambda r: r.get('stuck') is not None, 25, 'stuck open')
     st_wall = time.time()
-    p.sleep(2.0)
     p.cue_fn = lambda s: dict(state='ON_LINE', pose_stamp=s[3], side='left', offset_m=-0.08)   # side cues
-    p.sleep(4.0)
+    p.sleep(6.0)
     p.cue_fn = None
     end = time.time()
     rows = rows_of(p)
     c = sm['checks']
     c['pivot_started'] = bool(cue_events(p, 'pivot'))
     c['stuck'] = stuck and stuck.get('stuck')
-    open_rows = [r for r in rows if r['wall'] >= (stuck or {'wall': 1e18})['wall']]
+    open_rows = [r for r in rows if r.get('stuck')]                    # while a D-407 stuck is open
     c['pivot_while_stuck'] = sum(1 for r in open_rows if is_turn(r))
     c['latch_while_stuck'] = sorted({latch_of(r) for r in open_rows} - {None})
     c['reasons_while_stuck'] = sorted({str(r.get('reason')) for r in open_rows})
     c['cue_reason_while_stuck'] = [x for x in c['reasons_while_stuck'] if x.startswith(('cue_', 'fleet_'))]
-    c['yaw_change_while_stuck_deg'] = disp(rows, st_wall, end)[1]
+    c['stuck_open_rows'] = len(open_rows)
+    c['side_cue_rows_while_stuck'] = sum(1 for r in open_rows if r['wall'] >= st_wall)
+    c['yaw_change_while_stuck_deg'] = disp(open_rows, st_wall, end)[1]
+    c['after_close'] = reasons(rows, max((r['wall'] for r in open_rows), default=end))[:6]
     c['events_pivot_latched'] = [e.get('data') for e in cue_events(p, 'pivot') + cue_events(p, 'latched')]
     sm['timeline'] = reasons(rows)
     ok = (c['pivot_started'] and stuck is not None and c['pivot_while_stuck'] == 0 and not c['latch_while_stuck']
-          and not c['cue_reason_while_stuck'] and (c['yaw_change_while_stuck_deg'] or 99) <= 5.0)
+          and not c['cue_reason_while_stuck'] and le(c['yaw_change_while_stuck_deg'], 5.0))
     sm['verdict'] = 'PASS' if ok else 'FAIL'
     return sm
 
@@ -515,10 +525,14 @@ def main():
     ap.add_argument('--noise', type=float, default=3.0)
     ap.add_argument('--turn', type=float, default=120.0, help='s2 turn_deg')
     ap.add_argument('--drop-deg', type=float, default=50.0, help='s2: stop cues once the pivot turned this much')
+    ap.add_argument('--pose', default=None, help='x,y,yaw_deg (s2: inner road facing the lane way)')
+    ap.add_argument('--lane', type=float, default=-90.0, help='s3/s4: lane direction (deg, map)')
     ap.add_argument('--exact180', action='store_true')
     ap.add_argument('--box', action='store_true')
     ap.add_argument('--seed', type=int, default=1)
     a = ap.parse_args()
+    x, y, yd = map(float, (a.pose or (INNER if a.scenario != 's2' else '0.327,0.27,-90')).split(','))
+    a.pose, a.lane_deg, a.lane = (x, y, math.radians(yd)), a.lane, math.radians(a.lane)
     p = CueProbe(a)
     sm = {'s1': s1, 's2': s2, 's3': s3, 's4': s4}[a.scenario](p, a)
     sm.update(scenario=a.scenario, args={k: v for k, v in vars(a).items() if k != 'token'})

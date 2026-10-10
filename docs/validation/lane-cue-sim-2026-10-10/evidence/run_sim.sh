@@ -21,6 +21,15 @@ for d in $(find -L "$WS/src/rosy-platform" -path '*/.worktrees' -prune -o -type 
 done
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-67} GZ_PARTITION=${GZ_PARTITION:-rosy_lcsim}
 RUN=$WS/lcsim; mkdir -p "$RUN"
+# SIGMA (m): SIM LiDAR range noise, as the D-573 crosswalk SIM: the measured C1 value (8kcn
+# 2026-10-10, max 3.4 mm over 0-0.5 m) with 1 mm resolution, in this workspace's copy of
+# rosy_gz.urdf.xacro (symlink install), never the repo. The shipped 0.02 m sigma puts a wall
+# 0.09 m beside the body into the straight corridor (0.077 m) on some scans. Unset keeps it.
+SIGMA=${SIGMA:-0.0034}
+X=$WS/src/rosy-platform/middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro
+if [ -n "$SIGMA" ]; then
+  sed -i -e "s#<stddev>[0-9.]*</stddev>#<stddev>$SIGMA</stddev>#" -e "s#<resolution>0.03</resolution>#<resolution>0.001</resolution>#" "$X"
+fi
 SHARE=$(ros2 pkg prefix gz_sim)/share/gz_sim
 python3 - "$RUN" <<'PY'
 import secrets, sys, yaml
