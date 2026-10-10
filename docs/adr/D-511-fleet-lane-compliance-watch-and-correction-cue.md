@@ -134,8 +134,9 @@
 - 켜려면 `obstacle_mode: path`가 필요하다(설정 검사).
 - 받는 자리는 D-555 3 현장 등록 자리(화면 코드 토큰 + `site:` 라벨)다. 라벨은 자리를 좁힐 뿐 Fleet을 인증하지 않는다. D-550이 hub 주체를 정하면 전용 grant로 바꾼다.
 
-### 개정 4 — 역주행은 회전 자리에서만 돈다 (2026-10-10, 교착 ADR docs/stuck-deadlock-realign과 합의)
+### 개정 4 — 역주행은 회전 자리에서만 돈다 (2026-10-10, [D-607](D-607-stuck-deadlock-realign.md) 교착 ADR과 합의)
 
 - 실제 회전 원은 0.0926 m(`core_common.robot_body`: URDF 0.08257 m + `SWEEP_PAD_M` 0.010 m)이고 차로 안쪽 반폭 0.080 m보다 넓다. 차로 안 U턴은 들어가지 않는다.
 - `LaneCueRequest`에 `turn_spot: bool`(기본 false)을 더한다. Fleet은 지도로 확인한 회전 자리(링 진입 네 곳, 현장 YAML `fleet.lane_compliance.turn_spots`) 안 `turn_spot_tolerance_m`(0.018 m, D-587 자세 한계)일 때만 true를 싣는다. false면 필드를 빼서 필드를 모르는 CORE(엄격 스키마)에는 보내지 않는다. Fleet은 400·422도 받을 수 없는 로봇으로 본다.
 - CORE는 WRONG_WAY에서 `turn_spot`이 true일 때만 제자리 회전한다. 아니면 래치 HOLD `fleet_wrong_way`이고 Fleet(D-577 REALIGN)이 푼다. 역방향으로 계속 달리지도, 차로 안에서 돌지도 않는다.
+- 교착 해소와 IR 가운데 면제는 [D-607](D-607-stuck-deadlock-realign.md)(Proposed)이 정한다. IR 가운데 면제도 회전 자리에서만이다. 이 개정은 lane-cue 쪽 규칙만 적는다.
