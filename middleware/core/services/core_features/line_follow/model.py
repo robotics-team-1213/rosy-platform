@@ -143,6 +143,9 @@ class LineFollowConfig:
     crosswalk_odom_error_fraction: float = 0.05
     # 카메라가 잰 횡단보도 끝 거리의 앞뒤 오차 비율(9dfk 실측 2026-10-07: 0.3 m에서 약 1.5 cm).
     crosswalk_range_error_fraction: float = 0.05
+    # D-573 6 개정: 한 프레임이 밝힌 횡단보도 앞뒤 최악 오차(crosswalk_uncertainty_m)의 상한. 8kcn 승인
+    # 기록(높이 ±5 mm, pitch ±0.25°, 3 px)으로 잰 검출 범위 끝(0.33 m)의 값. 유도는 D-573 6항 보고 개정.
+    crosswalk_max_uncertainty_m: float = 0.058
     # D-573 crosswalk gate (crosswalk_gate.py): stop before a camera crosswalk zone, look with the
     # LiDAR, cross only after crosswalk_look_s of empty scans (>= crosswalk_look_min_scans: 10 Hz
     # x 1 s x 0.8). No timeout: after crosswalk_report_s a D-407 crosswalk_blocked stuck asks a human.
@@ -340,6 +343,8 @@ class LineFollowConfig:
             raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
         if not (_finite(self.crosswalk_range_error_fraction) and 0.0 <= self.crosswalk_range_error_fraction <= 0.5):
             raise ValueError("crosswalk_range_error_fraction must be in [0, 0.5]")
+        if not (_finite(self.crosswalk_max_uncertainty_m) and 0.0 < self.crosswalk_max_uncertainty_m <= 0.5):
+            raise ValueError("crosswalk_max_uncertainty_m must be in (0, 0.5]")
         self._check_crosswalk_gate()
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
