@@ -23,7 +23,7 @@ from typing import Callable, Optional
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d610-v1"
+PROMPT_ID = "d618-v1"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -39,6 +39,9 @@ PROMPT = """You decide what a small lane-following robot should do next. Picture
 ceiling camera crop and front camera per robot. The robot's local safety (body stop, watchdog,
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
 {{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it}}.
+In seen, describe the visible lane boundaries, wall or corner, and obstruction/free space in one concrete
+sentence. Do not just repeat the cause or camera label. If geometry is uncertain, say what cannot be determined.
+The context cause is a report, not proof of what the pictures show.
 Prefer WAIT when the pictures do not show the way clear. Problem and context:
 {context}"""
 
