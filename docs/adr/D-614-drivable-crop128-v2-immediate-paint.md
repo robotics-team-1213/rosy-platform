@@ -24,4 +24,8 @@
 
 모델 PC 후보 해시 → 로봇 설치본 해시·매니페스트 로딩 → 포인터·카메라 새 revision 읽기 → ROSY 재생/SIM → 실물 제한 시험을 별개 증거로 기록한다. 하나라도 확인되지 않으면 그 단계는 HOLD다.
 
+### 후속 결정 — 두 로봇의 shadow는 원본 v1
+
+사용자가 2026-10-10에 두 로봇 모두 `~/Desktop/drivable-v13-crop128-20261010` 원본 v1을 shadow로 지정했다. 위 3항의 "shadow는 건드리지 않는다"는 최초 paint 적용에만 해당한다. v1 ONNX SHA-256 `ede0ae96327c22f5da61dca40a75ceb2f011f163bd2fa2f3e27c1558a988d39b`를 보존한다. 원본 `v13-drivable` 매니페스트는 D-554 부모 계보 검사에서 거절되므로, 이를 통과했다고 가장하지 않고 `lane-seg-20261010-ede0ae96` 시험 별칭으로 포장한다. 설치 로더가 요구하는 `camera_profile_revision`과 crop 형식만 보충하고 원본 revision·SHA를 notes에 남긴다. 정지·차선추종 OFF·미션 없음 상태에서 기존 shadow를 `shadow.previous`에 보존하고 두 로봇의 shadow를 이 v1 시험 패키지로 바꾼다. paint는 v2로 유지한다. v1도 D-554 intake 통과본이나 운영 승인으로 취급하지 않는다. shadow가 관측 전용임을 확인하고 새 revision 읽기·해시를 기록한다. 실패하면 로봇별 `shadow.previous`로 복귀한다.
+
 **Related:** [D-378](D-378-real-drive-errors-and-autonomy-gates.md), [D-475](D-475-human-reviewed-fixed-eval-truth.md), [D-554](D-554-v13-drivable-lane-derived-labels.md), [D-599](D-599-drivable-model-team-crop128.md), [D-597](D-597-drivable-keep-steering-source.md).
