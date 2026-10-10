@@ -12,7 +12,7 @@ Product device trees for the OMX arm and the Pinky Pro base.
 | Directory | Purpose |
 |-----------|---------|
 | `omx/` | Adapter, profile, and the agent composition wheel (see `omx/AGENTS.md`) |
-| `pinky/` | Bringup, description, and profile (see `pinky/AGENTS.md`) |
+| `../../devices/pinky/` | Pinky moved to the hardware-family holder (D-626) |
 
 ## For AI Agents
 

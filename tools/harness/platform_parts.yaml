@@ -217,14 +217,16 @@ roots:
     wave: "4c"
     import_prefix: [led]
     concern: control
-  - path: middleware/apps/device/pinky/bringup
+  - path: middleware/devices/pinky/bringup
+    layout_target: middleware/devices/pinky/bringup
     part: middleware
     d427_target: middleware/apps/device/pinky/bringup
     legacy: src/products/pinky_pro/bringup
     wave: "4c"
     import_prefix: [bringup, rosylib]
     concern: control
-  - path: middleware/apps/device/pinky/profile
+  - path: middleware/devices/pinky/profile
+    layout_target: middleware/devices/pinky/profile
     part: middleware
     d427_target: middleware/apps/device/pinky/profile
     legacy: src/products/pinky_pro/profile
@@ -247,7 +249,8 @@ roots:
     wave: "4c"
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
     concern: control
-  - path: middleware/apps/device/pinky/description
+  - path: middleware/devices/pinky/description
+    layout_target: middleware/devices/pinky/description
     part: middleware
     d427_target: middleware/apps/device/pinky/description
     legacy: src/sim/description

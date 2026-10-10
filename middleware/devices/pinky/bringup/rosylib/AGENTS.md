@@ -29,5 +29,5 @@ Rosy-owned stand-in for the vendor's closed `pinkylib` (D-192). Installed by the
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/apps/device/pinky/bringup/test/test_rosylib_battery.py middleware/apps/device/pinky/bringup/test/test_adc_ownership.py middleware/apps/device/pinky/bringup/test/test_rosylib_battery_curve.py -q
+python -m pytest middleware/devices/pinky/bringup/test/test_rosylib_battery.py middleware/devices/pinky/bringup/test/test_adc_ownership.py middleware/devices/pinky/bringup/test/test_rosylib_battery_curve.py -q
 ```

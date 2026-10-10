@@ -32,7 +32,7 @@ def _launch_files():
 
 
 def test_ir_scan_includes_nested_product_bringup():
-    assert ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py" in _launch_files()
+    assert ROOT / "middleware" / "devices" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py" in _launch_files()
 
 
 def _code_text(text: str) -> str:
@@ -81,7 +81,7 @@ def test_rosy_io_graph_starts_ir_but_hardware_graph_does_not_double_it():
     """D-344 §12: rosy-io (motor/core modes) gets IR from bringup's enable_ir;
     the navigation hardware graph includes bringup without enable_ir and takes
     IR from line_follow instead. The two units conflict, so one reader per bus."""
-    bringup = (ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch"
+    bringup = (ROOT / "middleware" / "devices" / "pinky" / "bringup" / "launch"
                / "bringup_robot.launch.py").read_text(encoding="utf-8")
     assert "DeclareLaunchArgument('enable_ir', default_value='false'" in bringup
     assert "condition=IfCondition(enable_ir)" in bringup

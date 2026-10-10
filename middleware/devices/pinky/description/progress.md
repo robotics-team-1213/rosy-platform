@@ -7,7 +7,7 @@ gates:
   SOURCE:
     state: GO
     evidence: "URDF surface 및 sim collision geometry 계약 통과 (2026-09-21); 물리 description의 상세 mesh는 보존"
-    cmd: "python -m pytest src/sim/description/test -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/pinky-description -- middleware/devices/pinky/description/test -q"
   LOCAL:
     state: GO
     evidence: "ROS Jazzy 컨테이너에서 xacro 렌더와 primitive collision 계약 통과"

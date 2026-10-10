@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception"}
+           "foundation", "ros_idl", "perception", "devices"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -1518,9 +1518,9 @@ ROLE_DIR = {
     "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
     "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
-    "pinky_pro": ("apps", "device", "pinky", "profile"),
-    "bringup": ("apps", "device", "pinky", "bringup"),
-    "description": ("apps", "device", "pinky", "description"),
+    "pinky_pro": ("devices", "pinky", "profile"),
+    "bringup": ("devices", "pinky", "bringup"),
+    "description": ("devices", "pinky", "description"),
     "sensor_adc": ("drivers", "pinky_adc"),
     "lamp_control": ("drivers", "pinky_lamp"),
     "led": ("drivers", "pinky_led"),
@@ -1837,8 +1837,9 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
 @pytest.mark.parametrize(
     "rel, name, ok",
     [
-        (("apps", "device", "pinky", "bringup"), "bringup", True),
-        (("apps", "device", "pinky", "profile"), "pinky_pro", True),
+        (("devices", "pinky", "bringup"), "bringup", True),
+        (("devices", "pinky", "profile"), "pinky_pro", True),
+        (("apps", "device", "pinky", "bringup"), "bringup", False),
         (("apps", "device", "omx", "adapter"), "omx_adapter", True),
         (("drivers", "imu_bno055"), "imu_bno055", True),
         (("devices", "pinky_pro", "bringup"), "bringup", False),

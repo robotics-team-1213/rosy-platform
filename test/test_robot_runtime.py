@@ -97,12 +97,12 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "COPY --from=core-build /opt/rosy_ws/install" in dockerfile
     assert "COPY --from=io-build /opt/rosy_ws/install" in dockerfile
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
-    assert "middleware/apps/device/pinky/description/meshes/**" in dockerignore
+    assert "middleware/devices/pinky/description/meshes/**" in dockerignore
     assert "RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes" in dockerfile
     # D-196: the core stage copies the robot package CORE reads its profile from.
-    assert "COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile" in dockerfile
+    assert "COPY middleware/devices/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile" in dockerfile
     assert "COPY src/products/pinky_pro ./src/products/pinky_pro" not in dockerfile
-    for allowed in ("!middleware/apps/", "!middleware/apps/device/pinky/", "!middleware/apps/device/pinky/profile/**"):
+    for allowed in ("!middleware/apps/", "!middleware/devices/pinky/", "!middleware/devices/pinky/profile/**"):
         assert allowed in dockerignore.splitlines(), allowed
 
 
@@ -176,7 +176,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
 def test_initial_io_slice_disables_unavailable_adc_battery_driver():
     compose_command = compose()["services"]["rosy-io"]["command"]
     launch = (
-        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "middleware" / "devices" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
     ).read_text(encoding="utf-8")
 
     assert "enable_battery:=false" in compose_command
@@ -513,5 +513,5 @@ def test_launch_closure_walks_the_deployed_launch_tree():
 
 def test_launch_resolver_includes_nested_product_bringup():
     assert _launch_file("bringup_robot.launch.py") == (
-        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "middleware" / "devices" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
     )

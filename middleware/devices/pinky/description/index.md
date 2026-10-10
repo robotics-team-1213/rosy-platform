@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -13,9 +13,9 @@
 
 ## 계획·결과 문서
 
-- [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../../../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
-- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
-- [2026-09-15-module-harness-design.md](../../../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
+- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
+- [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `middleware/apps/device/pinky/description/test/test_urdf_surface.py`
+- `middleware/devices/pinky/description/test/test_urdf_surface.py`
 - `test/test_robot_runtime.py`
 
 ## 최근 기록

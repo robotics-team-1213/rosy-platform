@@ -32,7 +32,7 @@ def test_checked_in_geometry_matches_the_urdf():
 
 def test_header_names_the_urdf_source_without_hashes():
     text = urdf_nominal.OUTPUT.read_text(encoding="utf-8")
-    assert "middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro" in text
+    assert "middleware/devices/pinky/description/urdf/rosy.urdf.xacro" in text
     assert not re.search(r"[0-9a-f]{40}", text), "no hashes: the secret scan rejects 40-hex strings"
     assert "upstream import 6455b1a9" in text
 
@@ -90,8 +90,8 @@ def test_unsupported_xacro_fails_loudly():
 G = GEOMETRY
 SRC = REPO / "src"
 SENSING = SRC.parent / "middleware" / "perception"
-BRINGUP = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup"
-PROFILE = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+BRINGUP = SRC.parent / "middleware" / "devices" / "pinky" / "bringup"
+PROFILE = SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def _yaml(path):
@@ -193,7 +193,7 @@ def test_wheel_consumers():
                               "NOMINAL_WHEEL_RADIUS_M", "NOMINAL_WHEEL_SEPARATION_M", "WHEEL_TOLERANCE")
     assert (store["NOMINAL_WHEEL_RADIUS_M"], store["NOMINAL_WHEEL_SEPARATION_M"]) == (radius, separation)
     assert store["WHEEL_TOLERANCE"] == 0.10
-    gz = _text(SRC.parent / "middleware" / "apps" / "device" / "pinky" / "description" / "urdf" / "rosy_gz.urdf.xacro")
+    gz = _text(SRC.parent / "middleware" / "devices" / "pinky" / "description" / "urdf" / "rosy_gz.urdf.xacro")
     assert f"<wheel_separation>{separation}</wheel_separation>" in gz
     assert f"<wheel_radius>{radius}</wheel_radius>" in gz
     isaac = _load("isaac_graph_contract", REPO / "learning" / "envs" / "isaac" / "graph_contract.py").robot_contract("rosy_01")
