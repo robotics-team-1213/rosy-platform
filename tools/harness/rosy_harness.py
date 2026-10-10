@@ -27,7 +27,8 @@ from urllib.parse import quote
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), also when loaded by path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
+import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
 from adr_gaps import (  # noqa: E402,F401
     ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
@@ -567,6 +568,9 @@ def generated_targets(repo: Path) -> dict[Path, str]:
     targets[repo / config["status"]] = render_status(repo, config)
     if config.get("sim2real_gaps"):
         targets[repo / config["sim2real_table"]] = sim2real.render(sim2real.read(repo / config["sim2real_gaps"]))
+    if config.get("perception_gaps"):
+        targets[repo / config["perception_table"]] = perception_gaps.render(
+            perception_gaps.read(repo / config["perception_gaps"]))
     return targets
 
 
@@ -727,6 +731,12 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))
         errors += [f"sim2real: {e}" for e in gap_errors]
         warnings += [f"sim2real: {w}" for w in gap_warnings]
+    if config.get("perception_gaps"):
+        registry, problem = perception_gaps.load(repo / config["perception_gaps"])
+        spot_errors, spot_warnings = ([problem], []) if problem else perception_gaps.validate(
+            registry, repo, set(adr.index))
+        errors += [f"perception: {e}" for e in spot_errors]
+        warnings += [f"perception: {w}" for w in spot_warnings]
     governed = [(config["adr_log"], adr_text)]
     for module in config["modules"]:
         for name in ("progress.md", "logs.md"):

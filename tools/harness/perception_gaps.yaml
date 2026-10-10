@@ -1,0 +1,68 @@
+schema: rosy.perception-gaps.v1
+
+# Perception blind-spot registry. Sibling of sim2real_gaps.yaml (D-480), not a
+# row in it. `rosy_harness.py lint` checks every row; `generate` writes
+# docs/reference/perception-gaps.md.
+#   kind: miss (seen and wrong) or candidate (not adopted; HOLD or CLOSED only).
+#   born: recording id YYYYMMDDThhmmssZ, device:YYYY-MM-DD, or an in-repo .md path.
+#   evidence: ADR id, repo path (optional :33 / :26-33 / :33,108), or {path, branch}.
+#   replay: a repo file, or unbuilt. CLOSED forbids unbuilt and requires validated_by.
+#   status: OPEN | IN-PROGRESS | CLOSED | HOLD.
+# A replay that moves the born recording's counts updates the row in that same commit.
+# Do not close a row by flipping a robot flag or wiring an unwired candidate.
+
+spots:
+  - id: P-01
+    kind: miss
+    spot: "주행 모델이 바닥 112–239행만 칠한다. 9dfk 실측 pitch·height에서 가장 먼 칠은 렌즈 앞 약 0.30 m라 그보다 먼 갈림·출구·횡단보도는 배경이 된다. 11,896장 재생에서 오른쪽이 기대인 230장 중 14장만 오른쪽을 골랐다."
+    born: "20261009T073835Z"
+    evidence:
+      - docs/validation/drivable-branch-replay-2026-10-10.md:43-58
+      - D-599
+      - middleware/perception/control/sensing/perception/learned/drivable_paint.py:114
+    replay: tools/drivable_branch_replay.py
+    owner: perception
+    status: OPEN
+    next: "같은 프레임 재생에서 기대 오른쪽 갈림 수가 움직이기 전에는 닫지 않는다. right_exit_way는 직선 차로를 자르므로 연결하지 않는다."
+
+  - id: P-02
+    kind: miss
+    spot: "횡단보도 역할은 ignore라 길을 만들기 전에 drivable로 다시 칠한다. 줄무늬 검출은 경계 페인트에서 돌고 막대가 없어 비며, 클래스 마스크로만 넘긴다."
+    born: "20261010T015707Z"
+    evidence:
+      - middleware/perception/control/sensing/perception/learned/drivable_paint.py:174
+      - middleware/perception/control/sensing/perception/crosswalk_stripes.py:72
+      - middleware/perception/control/sensing/perception/crosswalk_stripes.py:98-107
+      - D-597
+    replay: unbuilt
+    owner: perception
+    status: OPEN
+    next: "20261010T015707Z를 재생해 기대 횡단보도 구간과 빈 구간을 세는 도구가 생기기 전에는 닫지 않는다."
+
+  - id: P-03
+    kind: miss
+    spot: "9dfk는 카메라 횡단보도 구역을 내지 않는다. crosswalk_uncertainty_enabled 기본이 꺼져 있고, pitch·height override에 override_bounds가 없으면 geometry_error가 없어 가로·세로 불확실성이 비어 구역이 거절된다."
+    born: "device:2026-10-10"
+    evidence:
+      - middleware/perception/control/line_observer_node.py:134
+      - middleware/perception/control/line_observer_node.py:530
+      - middleware/perception/control/line_observer_node.py:635
+      - middleware/perception/control/sensing/perception/lane_containment.py:72-74
+      - middleware/core/services/core_features/line_follow/crosswalk_zone.py:45-48
+    replay: unbuilt
+    owner: perception
+    status: OPEN
+    next: "이 변경에서 장치 플래그를 켜지 않는다. 같은 날 9dfk 읽기를 재생해 구역이 생기고 차선 위 오탐이 늘지 않을 때만 닫는다."
+
+  - id: P-04
+    kind: candidate
+    spot: "한 차선만 보일 때 차선 IR로 횡단보도를 고르지 않는다. 막대 반사 약 1700은 테이프 min_white 0.55에 못 미치고, 가운데만 밝은 위상은 차선과 같으며, 좌우만 밝은 두 띠는 관측 없음으로 버린다."
+    born: docs/solutions/workflow-issues/ir-line-calibration-by-guided-line-crossing-2026-10-07.md
+    evidence:
+      - middleware/perception/control/sensing/perception/lane.py:99-115
+      - D-491
+      - docs/solutions/workflow-issues/ir-line-calibration-by-guided-line-crossing-2026-10-07.md
+    replay: unbuilt
+    owner: perception
+    status: HOLD
+    next: "기대 횡단보도는 지나고 일반 차선 횡단은 정지가 되지 않는 재생이 생기기 전에는 CLOSED가 될 수 없다."

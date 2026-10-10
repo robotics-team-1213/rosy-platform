@@ -7620,3 +7620,9 @@ osy-d395-s1d\`.
 - 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
 - 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
 - gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
+
+- 변경: 인식 맹점 목록 `tools/harness/perception_gaps.yaml`을 sim2real 목록 옆에 두었다. 한 행은 녹음 id, `device:YYYY-MM-DD`, 또는 저장소 안 기록에서 태어나고, CLOSED는 저장소에 있는 재생과 `validated_by`가 있어야 한다. candidate는 HOLD 또는 CLOSED만 된다. 첫 행은 P-01 가까운 바닥(OPEN), P-02 ignore를 길로 다시 칠함(OPEN), P-03 9dfk 구역 없음(OPEN), P-04 차선 IR은 횡단보도 선택기가 아님(HOLD)이다.
+- 증거: D-612. 행 형식은 `test/test_perception_gaps.py`가 고정한다. 원격 시험 PC 결과와 known_failures 비교는 이 커밋을 보낸 뒤의 착지 기록이다. 주행 코드와 로봇 overlay는 바꾸지 않았다.
+- gate 변화: SOURCE만. 장치 수용, 8kcn 확인, 각 행을 닫는 재생은 별도.
