@@ -46,7 +46,8 @@ from d495_sim_probe import Probe, gz, wrap  # noqa: E402  (rclpy recorder, CORE 
 # --lane 90) the wall is ~0.12 m from base_link: D-422 measured a 0.04 m rotation gap with the C1
 # sigma (run_sim.sh SIGMA), but the shipped SIM sigma 0.02 m / 0.03 m resolution puts it inside.
 INNER = '0.327,0.20,90'                # facing +y against the lane; the curve starts at y 0.38
-PERIOD_S, TTL_S = 0.5, 1.0            # Fleet lane_compliance_service PERIOD_S, CUE_TTL_S
+PERIOD_S, TTL_S = 0.5, 1.0
+DEBOUNCE = 0.5                        # CORE: WRONG_WAY needs two cues >= 0.5 s apart before any latch (run 3)            # Fleet lane_compliance_service PERIOD_S, CUE_TTL_S
 ROT_R, MARGIN = 0.08257, 0.02         # pinky body_rotation_radius_m, obstacle_body_margin_m
 LATCHES = ('fleet_off_map', 'fleet_cue_lost', 'fleet_turn_unconfirmed', 'fleet_turn_interrupted',
            'fleet_wrong_way', 'fleet_turn_no_lane')
@@ -162,7 +163,9 @@ def le(v, limit):
     return v is not None and v <= limit
 
 
-def prep(p, pose, box=False):
+def prep(p, pose, box=False, cue=None):
+    """Teleport, optional box, CAMERA_LINE. ``cue``: Fleet starts posting as the mode is set (run 3:
+    waiting for TRACKING first let D-407 back-offs carry a robot that cannot see the lane off the spot)."""
     p.unbox('lcbox')
     p.mode('OFF')
     time.sleep(0.5)
@@ -175,7 +178,9 @@ def prep(p, pose, box=False):
         p.box('lcbox', x + 0.097 * lx + 0.04 * fx, y + 0.097 * ly + 0.04 * fy, 0.24, 0.01, yaw)
         time.sleep(1.0)
     p.mode('CAMERA_LINE')
-    r = p.wait(lambda r: r.get('state') == 'TRACKING', 8 if box else 20, 'tracking')
+    if cue is not None:
+        p.cue_fn = cue
+    r = p.wait(lambda r: r.get('state') == 'TRACKING', 3 if cue is not None else 8 if box else 20, 'tracking')
     p.action('ready', state=p.last().get('state'), reason=p.last().get('reason'))
     return r
 
@@ -409,8 +414,8 @@ def pivot_rows(rows):
 
 def s3(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, a.pose, box=a.box)
     ff = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol, a.prejudged)
+    prep(p, a.pose, box=a.box, cue=ff if a.spot is not None else None)
     p.cue_fn = ff
     p.sleep(20.0 if a.box else 30.0)                                    # whole episode, incl. any stuck
     p.cue_fn = None
@@ -471,8 +476,9 @@ def s3(p, a):
 
 def s4(p, a):
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, a.pose, box=True)
-    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, False, a.spot_xy, a.spot_tol, a.prejudged)
+    ff = FleetWrongWay(p, a.lane, a.noise, False, a.spot_xy, a.spot_tol, a.prejudged)
+    prep(p, a.pose, box=True, cue=ff if a.spot is not None else None)
+    p.cue_fn = ff
     stuck = p.wait(lambda r: r.get('stuck') is not None, 25, 'stuck open')
     st_wall = time.time()
     p.cue_fn = lambda s: dict(state='ON_LINE', pose_stamp=s[3], side='left', offset_m=-0.08)   # side cues
@@ -524,8 +530,9 @@ def pivot_of(r):
 def s5(p, a):
     """Turn-spot WRONG_WAY: one pivot to <= 10 deg (odom), then the camera re-acquires (no latch)."""
     sm = {'verdict': 'FAIL', 'checks': {}}
-    prep(p, a.pose)
-    p.cue_fn = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol, a.prejudged)
+    ff = FleetWrongWay(p, a.lane, a.noise, a.exact180, a.spot_xy, a.spot_tol, a.prejudged)
+    prep(p, a.pose, cue=ff)
+    p.cue_fn = ff
     c = sm['checks']
     if a.camloss:
         r = p.wait(lambda r: (pivot_of(r) or {}).get('turned_deg', 0) >= a.camloss_at, 20, 'camloss point')
@@ -604,7 +611,7 @@ def s6(p, a):
         c['still_latched_at_end'] = all(r.get('reason') == 'fleet_wrong_way' for r in rows
                                         if latched['wall'] + 0.3 <= r['wall'] <= end)
     sm['timeline'] = reasons(rows)
-    ok = (latched is not None and le(c['latch_after_cue_s'], 0.6) and c['pivots_started'] == 0
+    ok = (latched is not None and le(c['latch_after_cue_s'], DEBOUNCE + PERIOD_S + 0.2) and c['pivots_started'] == 0
           and le(c.get('travel_after_latch_m'), 0.005) and c.get('nonzero_cmd_after_latch') == 0
           and c.get('still_latched_at_end'))
     sm['verdict'] = 'PASS' if ok else 'FAIL'
