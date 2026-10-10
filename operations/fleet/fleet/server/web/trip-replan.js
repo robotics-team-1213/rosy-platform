@@ -21,11 +21,16 @@ export function replanView(trip, { operator, named = "", busy = false }) {
 /** D-577 (d) wait-cycle row for one robot: Fleet's decision per cycle robot, the AI facts naming it. */
 export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named = "", busy = false }) {
   const resolver = traffic?.resolver || [];
-  const lines = (traffic?.wait_cycle || []).map((id) => {
+  const lines = (traffic?.wait_cycle || []).filter((id) => !id.startsWith("signal:")).map((id) => {
     const row = resolver.find((item) => item.robot_id === id && item.trigger === "wait_cycle");
     return `${id} · 해결기 ${row ? RESOLVER_DECISION_LABEL[row.decision] || row.decision : "판단 전"}`;
   });
-  const facts = (aiFacts || []).filter((fact) => (fact.robot_ids || []).includes(robotId));
+  const newest = new Map();  // Fleet keeps every post within its ttl: one line per kind and robots, the newest
+  for (const fact of aiFacts || []) {
+    const key = `${fact.kind}|${(fact.robot_ids || []).join(",")}`;
+    if ((fact.robot_ids || []).includes(robotId) && !(newest.get(key)?.observed_at > fact.observed_at)) newest.set(key, fact);
+  }
+  const facts = [...newest.values()];
   lines.push(...(facts.length ? facts.map((fact) => `AI 참고 · ${AI_FACT_LABEL[fact.kind] || fact.kind} · `
     + `${fact.robot_ids.join(", ")} · 신뢰도 ${Math.round(fact.confidence * 100)}%`) : ["AI 사실 없음"]));
   const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : "";
@@ -111,7 +116,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
           [primaryButton("바뀐 경로로 계속"), "confirm", spec.confirmReason, () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다")],
           [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")]]));
     }
-    for (const robotId of view.stateUnavailable ? [] : view.traffic?.wait_cycle || []) {
+    for (const robotId of view.stateUnavailable ? [] : (view.traffic?.wait_cycle || []).filter((id) => !id.startsWith("signal:"))) {
       const trip = (view.trafficTrips || []).find((row) => row.robot_id === robotId) || null;
       const spec = deadlockView(view.traffic, trip, view.trafficAi, robotId,
         { operator, named, busy: Boolean(trip && busy.has(trip.trip_id)) });

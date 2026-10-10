@@ -79,9 +79,11 @@ test("replan slot: confirm needs an operator and a plan; cancel (a stop) needs o
 });
 
 test("deadlock slot (D-577 d): Fleet's decision per robot, AI facts for this robot, existing trip routes only", () => {
-  const traffic = { wait_cycle: ["a", "b"], resolver: [
+  const traffic = { wait_cycle: ["a", "b", "signal:z1"], resolver: [
     { robot_id: "a", trigger: "wait_cycle", decision: "replan" }, { robot_id: "b", trigger: "wait_cycle", decision: "wait" }] };
-  const facts = [{ kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.8 },
+  const facts = [{ kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.7, observed_at: 1 },
+    { kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.8, observed_at: 2 },  // newest wins
+    { kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.7, observed_at: 0 },
     { kind: "waiting_but_moving", robot_ids: ["c"], confidence: 0.8 }];
   const held = { trip_id: "t1", robot_id: "a", hold: { reason: "replan", plan: { places: [] } } };
   assert.deepEqual(deadlockView(traffic, held, facts, "a", { operator: true }), {

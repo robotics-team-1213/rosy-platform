@@ -76,14 +76,19 @@ def test_a_robot_the_table_holds_but_that_moves_is_reported_and_breaks_the_confi
     assert out[2][0]["value"]["moved_m"] == 0.1 and out[2][0]["evidence"]["in_cycle"] is True
 
 
-def test_a_cycle_that_keeps_reforming_is_a_livelock():
+def test_a_cycle_that_keeps_reforming_is_a_livelock_but_a_one_snapshot_flicker_is_not():
+    gone = {"traffic": {}}
     watch = TrafficWatch()
     facts = []
-    for t in range(0, 40, 2):        # formed at 0, 2, 4, ...: dissolves every other snapshot
-        facts = watch(_deadlock(t)) + watch(_deadlock(t + 1, cycle=None) | {"traffic": {}})
-        if t == 2:
+    for t in range(0, 40, 3):        # formed at 0, 3, 6, ...: gone for two snapshots each time
+        facts = watch(_deadlock(t)) + watch(_deadlock(t + 1) | gone) + watch(_deadlock(t + 2) | gone)
+        if t == 3:
             assert "livelock" not in [f["kind"] for f in facts]
     assert ("livelock", ("a", "b")) in _kinds(facts)
+    flicker = TrafficWatch()
+    for t in range(0, 40, 2):        # Fleet's cycle drops out for one snapshot: still one deadlock
+        facts = flicker(_deadlock(t)) + flicker(_deadlock(t + 1) | gone)
+        assert "livelock" not in [f["kind"] for f in facts], t
 
 
 def test_a_trip_robot_moving_without_route_progress_is_a_livelock():
@@ -156,6 +161,18 @@ def test_every_kind_passes_fleet_validation_and_carries_no_command_word():
     for fact in facts:
         AiFact.model_validate(fact).check(fact["observed_at"])
         assert not math.isnan(fact["confidence"])
+
+
+def test_a_fact_fleet_would_refuse_is_dropped_so_it_cannot_sink_the_batch():
+    unit = [_unit("u9", ["a"], state="UNKNOWN", zone="STOP")]         # a zone named like a command word
+    watch = TrafficWatch()
+    watch(_snap(0, [_row("a")], units=unit))
+    assert watch(_snap(31, [_row("a")], units=unit)) == []
+    many = [f"r{i}" for i in range(17)]
+    crowd = [_unit("u1", many, state="UNKNOWN")]
+    watch = TrafficWatch()
+    watch(_snap(0, [], units=crowd))
+    assert watch(_snap(31, [], units=crowd)) == []
 
 
 def test_the_service_analyzer_adds_traffic_facts_without_changing_proposals():

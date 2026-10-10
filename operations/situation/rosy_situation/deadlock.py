@@ -35,7 +35,12 @@ CYCLE_SNAPSHOTS = 3        # D-577 (d) wait_cycle_confirmed
 STATE_STALE_S = 2.0        # D-577 (d) wait_cycle_stale_input
 WAIT_MOVE_S = 2.0          # D-577 (d) waiting_but_moving
 REFORM_N, REFORM_WINDOW_S = 3, 60.0
-LIVELOCK_S, LIVELOCK_PATH_M, STEP_M = 20.0, 0.10, 0.01
+LIVELOCK_S, LIVELOCK_PATH_M, STEP_M = 20.0, 0.10, 0.02
+REFORM_GAP = 2             # snapshots a cycle must be gone before it counts as re-formed (not a flicker)
+#: Fleet refuses a whole facts post over one command word or > 16 robot ids (ai_facts.py); a bad traffic fact
+#: must never take a stuck_scene acting fact down with it, so such a fact is dropped here.
+COMMAND_WORDS = frozenset({"WAIT", "RESUME", "BACK_AND_RETRY", "YIELD", "ABORT", "MANUAL", "STOP", "GO"})
+MAX_IDS = 16
 STALL_S = 20.0             # same as the trip stall rule
 UNKNOWN_S = 30.0           # same as M4 UNKNOWN_LIMIT_S
 
@@ -46,6 +51,23 @@ def _xy(row: Optional[dict]) -> Optional[tuple[float, float]]:
         return float(pose["x"]), float(pose["y"])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _words(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _words(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _words(item)
+
+
+def _sendable(fact: dict) -> bool:
+    return len(fact["robot_ids"]) <= MAX_IDS and not any(
+        w.strip().upper() in COMMAND_WORDS for w in _words([fact["value"], fact["evidence"]]))
 
 
 def _cycle(waits: dict[str, set]) -> Optional[frozenset]:
@@ -74,6 +96,7 @@ class TrafficWatch:
         self._track: dict[str, deque] = {}          # robot -> (t, xy) for the last WAIT_MOVE_S
         self._cycle: tuple = (frozenset(), 0, 0.0, {})   # members, snapshots in a row, since, xy at since
         self._formed: dict[frozenset, deque] = {}
+        self._gone = REFORM_GAP                     # snapshots since the last cycle was seen
         self._wait_since: dict[str, float] = {}
         self._progress: dict[str, list] = {}        # robot -> [since, d0, path_m, last xy, always commanded]
         self._still: dict[str, tuple] = {}
@@ -102,7 +125,7 @@ class TrafficWatch:
                 track.popleft()
 
         def moved(rid, since_xy) -> float:
-            return math.dist(xy[rid], since_xy) if xy.get(rid) and since_xy else 0.0
+            return math.dist(xy[rid], since_xy) if xy.get(rid) and since_xy else math.inf  # unknown: not still
 
         def refused(rid) -> list:
             return [w for w in trips.get(rid, {}).get("waiting_for") or [] if not str(w).startswith("signal:")]
@@ -128,15 +151,15 @@ class TrafficWatch:
         # wait cycles: Fleet's and the table's own
         fleet_cycle = frozenset(str(r) for r in traffic.get("wait_cycle") or [] if not str(r).startswith("signal:"))
         table_cycle = _cycle(waits) or frozenset()
-        members = fleet_cycle or table_cycle
+        members = fleet_cycle | table_cycle         # one group while Fleet and the table name the same robots
         last, count, since, at = self._cycle
         if members and members == last:
             count += 1
         else:
             count, since, at = (1, now, {r: xy.get(r) for r in members}) if members else (0, now, {})
-            if members:
-                formed = self._formed.setdefault(members, deque())
-                formed.append(now)
+            if members and self._gone >= REFORM_GAP:
+                self._formed.setdefault(members, deque()).append(now)
+        self._gone = 0 if members else self._gone + 1
         self._cycle = (members, count, since, at)
         for key in list(self._formed):
             formed = self._formed[key]
@@ -170,7 +193,7 @@ class TrafficWatch:
         self._wait_since = {r: self._wait_since.get(r, now) for r in held if r in rows}
         for rid, start in sorted(self._wait_since.items()):
             window = [p for t, p in self._track.get(rid, ()) if t >= max(start, now - WAIT_MOVE_S) - 1e-6]
-            if now - start >= WAIT_MOVE_S - 1e-6 and window and moved(rid, window[0]) > MOVED_M:
+            if now - start >= WAIT_MOVE_S - 1e-6 and window and xy.get(rid) and moved(rid, window[0]) > MOVED_M:
                 fact("waiting_but_moving", [rid], {"moved_m": round(moved(rid, window[0]), 3),
                                                    "window_s": WAIT_MOVE_S},
                      0.8, {"waiting_for": sorted(waits.get(rid, ())), "in_cycle": rid in members})
@@ -200,7 +223,7 @@ class TrafficWatch:
                                          "for_s": round(now - track[0], 1), "commanded": track[4]},
                      0.7, {"route_progress": "front_d_m"})
             end = trip.get("authority_end_m")
-            if trip.get("trip_state") != "running" or refused(rid) or end is None or end - front <= MOVED_M:
+            if trip.get("trip_state") != "running" or trip.get("waiting_for") or end is None or end - front <= MOVED_M:
                 self._still.pop(rid, None)
                 continue
             start, where = self._still.setdefault(rid, (now, here))
@@ -225,4 +248,4 @@ class TrafficWatch:
                      {"unit": uid, "zone": unit.get("zone"), "unknown_s": round(now - start, 1)}, 0.9,
                      {"fleet_resolver_unknown": sorted(r for r in unit["holders"]
                                                        if resolver.get(r, {}).get("trigger") == "unknown")})
-        return facts
+        return [f for f in facts if _sendable(f)]
