@@ -318,6 +318,8 @@ class DrivableSteer:
                 self._failed = self._failed[-15:] + [(ctx["s"], "creep")]
             return None, None, dict(info, strategy="none", reason="creep_done")
         tx, ty = _to_current(*self._creep_target, pose)
+        if ctx.get("guide") and abs(math.degrees(math.atan2(ty, tx)) - ctx["ahead"]) >                 abs(ctx["ahead"] - ctx["here"]) + REALIGN_DEG:
+            return None, None, dict(info, strategy="none", reason="creep_heading")   # the way leaves the route
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
     def lost(self, stamp):
@@ -343,7 +345,8 @@ class DrivableSteer:
         """_update with the driving context: the realign rule, a strategy switch only after two
         consecutive frames (a HOLD applies at once), and the decision history."""
         here = kw.get("guide_here_deg", kw.get("guide_deg"))
-        self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None)
+        self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None,
+                         ahead=kw.get("guide_deg"))
         error, confidence, info = self._update(*args, **kw)
         guide = kw.get("guide_deg")
         target = info.get("target_now_m")
