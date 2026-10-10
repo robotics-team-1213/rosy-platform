@@ -139,4 +139,5 @@
 - 실제 회전 원은 0.0926 m(`core_common.robot_body`: URDF 0.08257 m + `SWEEP_PAD_M` 0.010 m)이고 차로 안쪽 반폭 0.080 m보다 넓다. 차로 안 U턴은 들어가지 않는다.
 - `LaneCueRequest`에 `turn_spot: bool`(기본 false)을 더한다. Fleet은 지도로 확인한 회전 자리(링 진입 네 곳, 현장 YAML `fleet.lane_compliance.turn_spots`) 안 `turn_spot_tolerance_m`(0.018 m, D-587 자세 한계)일 때만 true를 싣는다. false면 필드를 빼서 필드를 모르는 CORE(엄격 스키마)에는 보내지 않는다. Fleet은 400·422도 받을 수 없는 로봇으로 본다.
 - CORE는 WRONG_WAY에서 `turn_spot`이 true일 때만 제자리 회전한다. 아니면 래치 HOLD `fleet_wrong_way`이고 Fleet(D-577 REALIGN)이 푼다. 역방향으로 계속 달리지도, 차로 안에서 돌지도 않는다.
+- 사용자 결정(D-607 개정 메모, 선택 (b)): 링 진입 네 자리 (−0.213, 0.221)·(−0.519, 0.201)·(−0.524, −0.242)·(−0.214, −0.264)를 회전 자리로 쓴다. 회전 원 가장자리가 칠한 선을 테이프 폭 0.025 m까지 넘을 수 있고(실측 1–2 cm), 회전 중에는 D-344 §12 IR 가운데 면제에 기댄다. 허용 오차는 D-607의 0.018 m다. 값은 `deploy/site/fleet-site.yaml.example`에 있고 현장에는 설치 도우미로 넣는다. `line_follow.fleet_lane_cue_enabled`는 Safety-Review와 Gazebo 시나리오를 통과할 때까지 false다.
 - 교착 해소와 IR 가운데 면제는 [D-607](D-607-stuck-deadlock-realign.md)(Proposed)이 정한다. IR 가운데 면제도 회전 자리에서만이다. 이 개정은 lane-cue 쪽 규칙만 적는다.

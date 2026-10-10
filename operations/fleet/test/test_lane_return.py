@@ -167,3 +167,11 @@ def test_turn_spot_only_on_a_configured_spot():
     assert classify(0.51, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is True
     assert classify(0.53, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is False
     assert classify(0.5, 0.0, 0.0, 0.0, GRAPH, CW).turn_spot is False          # none configured
+
+
+def test_site_example_turn_spots_parse():
+    import yaml
+    from pathlib import Path
+    example = Path(__file__).resolve().parents[3] / "deploy" / "site" / "fleet-site.yaml.example"
+    cfg = LaneComplianceConfig.from_mapping(yaml.safe_load(example.read_text(encoding="utf-8"))["fleet"]["lane_compliance"])
+    assert len(cfg.turn_spots) == 4 and cfg.turn_spot_tolerance_m == 0.018 and cfg.wrong_way is False
