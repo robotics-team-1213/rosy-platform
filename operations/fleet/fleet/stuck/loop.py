@@ -103,7 +103,11 @@ class StuckResolverLoop:
             if not row.get("online") or not stuck.get("stuck_id"):
                 continue
             active.add(robot_id)
-            review = self.heading_review(robot_id)
+            try:
+                review = self.heading_review(robot_id)
+            except Exception:  # noqa: BLE001 - observation cannot interrupt existing recovery decisions
+                log.debug("heading observer failed for %s", robot_id, exc_info=True)
+                review = {"status": "observer_unavailable"}
             if review is None:
                 continue
             turn = review.get("turn_deg")

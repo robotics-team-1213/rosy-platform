@@ -38,7 +38,7 @@ def test_monitor_reassesses_against_current_active_map():
                                     poses=SimpleNamespace(arbitrated_pose=lambda _rid: pose),
                                     site_maps=maps, wall=lambda: 100.1)
     monitor._latest["robot"] = view
-    monitor._heading_samples = {"robot": (pose.x, pose.y, pose.yaw, pose.map_id, pose.odom_stamp)}
+    monitor._heading_samples = {"robot": pose}
     assert monitor.stuck_heading("robot")["turn_deg"] == 20.0
     maps.active = lambda: (6, SimpleNamespace(map_id="site"), None, None)
     assert monitor.stuck_heading("robot") == {"status": "lane_sample_untrusted"}
@@ -53,7 +53,7 @@ def test_new_anchor_with_same_odom_stamp_cannot_reuse_previous_lane(change):
     maps = SimpleNamespace(active=lambda: (5, SimpleNamespace(map_id="site"), None, None))
     monitor = LaneComplianceMonitor(lambda: ["robot"], poses=poses, site_maps=maps, wall=lambda: 100.1)
     monitor._latest["robot"] = view
-    monitor._heading_samples = {"robot": (pose.x, pose.y, pose.yaw, pose.map_id, pose.odom_stamp)}
+    monitor._heading_samples = {"robot": pose}
     assert monitor.stuck_heading("robot") == {"status": "lane_sample_untrusted"}
 
 
