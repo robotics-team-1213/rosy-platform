@@ -31,12 +31,11 @@ const pageScope = createPageScope();
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
 // D-493 — 넓은 단: 왼쪽 열은 지도 하나, 오른쪽 열은 예외·로봇(발행 띠 포함)·카메라·대형 순서다.
-// 한 열 단(D-359 US-009): 예외 → 로봇(발행 띠 포함) → 지도 → 카메라 → 대형·기록.
-const layoutPanels = [document.querySelector('.queues-panel'),
-  document.querySelector('[aria-labelledby="roster-heading"]'), document.querySelector('[aria-labelledby="map-heading"]'),
-  document.querySelector('.incident-panel'),
+// 한 열 단(D-359 US-009): 예외 → 지도 → 사건 → 로봇 → 카메라 → 대형·기록.
+const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
+  document.querySelector('.incident-panel'), document.querySelector('[aria-labelledby="roster-heading"]'),
   document.querySelector('.vision-preview'), document.querySelector('.ops-block')];
-const MAP_PANEL = 2;
+const MAP_PANEL = 1;
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
