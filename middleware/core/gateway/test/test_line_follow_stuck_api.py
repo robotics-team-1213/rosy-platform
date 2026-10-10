@@ -351,3 +351,50 @@ def test_abort_and_manual_in_emergency_are_refused_before_the_stuck_is_consumed(
     assert refused.status_code == 409 and "EMERGENCY_ACTIVE" in refused.text
     assert services.line_follow.status().stuck.stuck_id == stuck_id
     assert services.modes.mode is Mode.EMERGENCY
+
+
+# --- D-607 8 REALIGN ------------------------------------------------------------------------------
+
+REALIGN = {"kind": "PIVOT", "angle_rad": 0.5, "pose_stamp": 1.0, "attempt": 1, "turn_spot": True}
+
+
+def test_realign_is_off_by_default_and_not_offered(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    body = client.get("/api/v1/line-follow", headers=VIEWER).json()
+    assert "REALIGN" not in body["stuck"]["decisions"]
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN", "realign": REALIGN},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "STUCK_DECISION_REFUSED"
+    assert "realign_kind" in refused.text
+    services.state.set_velocity(0.0, 0.0)  # a live base (D-32) announces the drive control
+    caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]["items"][0]
+    assert "stuck_realign" not in caps
+
+
+def test_realign_body_belongs_to_realign_only(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    wrong = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT", "realign": REALIGN},
+                        headers=OPERATOR)
+    assert wrong.status_code == 400, wrong.text
+
+
+def test_realign_enabled_is_offered_announced_and_checked_by_core(core_client):
+    on = {"line_follow": {"stuck_realign_enabled": True, "obstacle_mode": "path", "recovery_local_enabled": True}}
+    client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=on, **kw))
+    assert "REALIGN" in client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["decisions"]
+    services.state.set_velocity(0.0, 0.0)  # a live base (D-32) announces the drive control
+    caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]["items"][0]
+    assert caps["stuck_realign"] == ["PIVOT", "KTURN"]
+    unset = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN"}, headers=OPERATOR)
+    assert unset.status_code == 409 and "realign_unset" in unset.text
+    wide = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN",
+                                  "realign": {**REALIGN, "angle_rad": 2.0}}, headers=OPERATOR)
+    assert wide.status_code == 409 and "realign_angle" in wide.text
+
+
+def test_realign_is_refused_under_estop(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    services.safety.trigger_estop("test")
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN", "realign": REALIGN},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and services.command.select_output().angular == 0.0

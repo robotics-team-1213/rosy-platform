@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import math
 import uuid
-from collections import deque
 from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
@@ -40,6 +39,7 @@ DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD")
 CROSSWALK = "crosswalk_blocked"
 CROSSWALK_DECISIONS = ("WAIT", "MANUAL", "ABORT")
 NO_MOTION = "no_motion"  # 2026-10-10 user: zero command for stuck_report_s, any reason; Fleet answers
+REPORT_ONLY = ("no_progress", "dithering")  # D-407 개정 2026-10-10: commanded, odom still; drives on until answered
 _TURN_RATE = 0.3          # rad/s. One yield segment turns, then creeps forward.
 _TURN_SKIP = 0.15         # rad. Smaller than this and the crawl starts at once.
 _TURN_CLEAR_M = 0.02      # clearance outside the rotation radius a turn requires
@@ -53,8 +53,8 @@ class StuckInput:
     """Everything one tick knows. Distances in metres; None = nothing seen / unknown."""
 
     now: float
-    cause: Optional[str] = None  # "obstacle_ahead" | "lane_lost" | "crosswalk_blocked" | "no_motion" | None
-    cause_detail: Optional[str] = None   # D-573 4 crosswalk_blocked reason; no_motion: the HOLD reason
+    cause: Optional[str] = None  # obstacle_ahead | lane_lost | crosswalk_blocked | no_motion | REPORT_ONLY | None
+    cause_detail: Optional[str] = None   # D-573 4 crosswalk_blocked reason; else the (last) HOLD reason
     lane_visible: bool = False           # fresh, confident lane evidence (re-judge)
     front_clear: bool = True             # no path-band return within obstacle_resume_m
     front_band_m: Optional[float] = None
@@ -89,65 +89,6 @@ class StuckAction:
     kind: str = "pass"     # pass (base decision) | hold (zero) | back | resume | yield
     linear: float = 0.0
     angular: float = 0.0
-
-
-class ForwardTrail:
-    """The CORE-issued line-follow twists, to prove the space behind was just driven through.
-
-    User decision 2026-10-02 (D-407 rear blind zone): back off into the blind band only over
-    ground the robot drove forward over. ``measure`` integrates the issued twists over the
-    ``window_s`` of commands that ends at the last forward command (the robot has stood still
-    or backed off since): net forward metres (reverse subtracts) and total |yaw| in degrees.
-    A gap in the record counts no travel; a record older than ``STALE_S`` reads as missing.
-    """
-
-    MAX_DT_S = 0.25    # one issued twist never covers more than this (nav timeout order)
-    STALE_S = 1.0
-
-    def __init__(self, maxlen: int = 4000) -> None:
-        self._samples: deque = deque(maxlen=maxlen)
-
-    def clear(self) -> None:
-        self._samples.clear()
-
-    def record(self, now: float, linear: float, angular: float) -> None:
-        if self._samples and now < self._samples[-1][0]:
-            self._samples.clear()            # clock went backwards: trust nothing before
-        self._samples.append((float(now), float(linear), float(angular)))
-
-    def net_since(self, since: float, now: float) -> float:
-        """Net forward metres issued from ``since`` to ``now`` (gaps count no travel)."""
-        samples = [sample for sample in self._samples if sample[0] >= since]
-        net = 0.0
-        for index, (t, lin, _) in enumerate(samples):
-            end = samples[index + 1][0] if index + 1 < len(samples) else now
-            net += lin * max(0.0, min(end - t, self.MAX_DT_S))
-        return net
-
-    def last_forward_at(self) -> Optional[float]:
-        """Time of the newest forward (linear > 0) issued twist, or None."""
-        for t, lin, _ in reversed(self._samples):
-            if lin > 0.0:
-                return t
-        return None
-
-    def measure(self, now: float, window_s: float) -> tuple[Optional[float], Optional[float]]:
-        samples = list(self._samples)
-        if not samples or now - samples[-1][0] > self.STALE_S:
-            return None, None
-        forward = [t for t, lin, _ in samples if lin > 0.0]
-        if not forward:
-            return None, None
-        start = forward[-1] - window_s
-        net = yaw = 0.0
-        for index, (t, lin, ang) in enumerate(samples):
-            if t < start:
-                continue
-            end = samples[index + 1][0] if index + 1 < len(samples) else now
-            dt = max(0.0, min(end - t, self.MAX_DT_S))
-            net += lin * dt
-            yaw += abs(ang) * dt
-        return net, math.degrees(yaw)
 
 
 class AnswerRefused(Exception):
@@ -211,7 +152,7 @@ class StuckRecovery:
         if self._cause == CROSSWALK:
             self._detail = inp.cause_detail
             return StuckAction("hold")
-        if self._cause == NO_MOTION and inp.cause == NO_MOTION:
+        if self._cause in (NO_MOTION, *REPORT_ONLY) and inp.cause is not None:
             self._detail = inp.cause_detail
         if self._phase == BACKING:
             return self._backing(inp)
@@ -227,7 +168,7 @@ class StuckRecovery:
         if (self._phase == ASKING
                 and (not inp.console_linked or inp.now >= (self._deadline or inp.now))):
             return self._local(inp, "no_console" if not inp.console_linked else "ask_timeout")
-        return StuckAction("hold")
+        return StuckAction("pass" if self._cause in REPORT_ONLY and self._last_answer is None else "hold")
 
     def reset(self, reason: str, now: float) -> None:
         if self._id is not None:
@@ -505,12 +446,12 @@ class StuckRecovery:
                   "turn_clearance_m": inp.turn_m, "rear_blind_m": inp.rear_blind_m,
                   "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
                   "restuck_of": self._restuck_of, "attempts": self._attempts,
-                  **({"detail": inp.cause_detail} if inp.cause in (CROSSWALK, NO_MOTION) else {})},
+                  **({"detail": inp.cause_detail} if inp.cause in (CROSSWALK, NO_MOTION, *REPORT_ONLY) else {})},
         )
         if not ask:
             return
-        if inp.cause in (CROSSWALK, NO_MOTION):  # no local back-off, no ASKING fallback
-            self._console_only("crosswalk_gate" if inp.cause == CROSSWALK else NO_MOTION, inp.now)
+        if inp.cause in (CROSSWALK, NO_MOTION, *REPORT_ONLY):  # no local back-off, no ASKING fallback
+            self._console_only("crosswalk_gate" if inp.cause == CROSSWALK else inp.cause, inp.now)
             return
         if self._attempts >= self._config.recovery_max_attempts:
             self._console_only("attempts_exhausted", inp.now)
@@ -592,7 +533,7 @@ class StuckRecovery:
             "local_enabled": self._config.recovery_local_enabled,
             "ask_remaining_s": remaining, "last_answer": self._last_answer,
             "decisions": list(self._decisions()),
-            **({"detail": self._detail} if self._cause in (CROSSWALK, NO_MOTION) else {}),
+            **({"detail": self._detail} if self._cause in (CROSSWALK, NO_MOTION, *REPORT_ONLY) else {}),
         }
 
     def _decisions(self) -> tuple:

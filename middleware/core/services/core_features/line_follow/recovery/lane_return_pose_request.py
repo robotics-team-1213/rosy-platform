@@ -5,7 +5,7 @@
 already returns HOLD for both). An accepted Fleet decision calls `resume_after_pose`,
 which re-opens verification of a `fleet` phase through the existing D-407 RESUME.
 """
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 
 #: A single missed odom sample is not a request: the pose must stay stale this long.
 POSE_STALE_ASK_S = 1.0

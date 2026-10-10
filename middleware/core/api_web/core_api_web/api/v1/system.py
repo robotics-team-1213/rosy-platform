@@ -229,6 +229,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
     # `trip_lease` (D-541 1): CORE holds the Fleet trip lease and fences non-owner motion.
     # `goal_lease` (D-550 10): navigation/goal takes lease_ttl_s; announced with goal navigation.
+    # `stuck_realign` (D-607 8): the REALIGN kinds the stuck decision takes (line_follow.stuck_realign_enabled).
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -261,7 +262,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       line_follow_advice=svc.line_follow is not None and getattr(
                                           svc, "line_advice", None) is not None,
                                       trip_lease=getattr(svc, "trip_lease", None) is not None,
-                                      goal_lease=True if "free" in drive_modes else None)
+                                      goal_lease=True if "free" in drive_modes else None,
+                                      stuck_realign=(("PIVOT", "KTURN") if svc.line_follow is not None and getattr(
+                                          svc.line_follow.config, "stuck_realign_enabled", False) is True else None))
     # `line_follow.camera` (D-604, v1.197 additive): the line camera's health from the same
     # preview store `GET /vision/front/status` reads, so Fleet's lane admission needs no extra call.
     # `drive_modes` keeps meaning "the service exists"; source GAZEBO is the SIM preview label.

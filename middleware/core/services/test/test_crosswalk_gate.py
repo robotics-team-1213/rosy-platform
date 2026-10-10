@@ -11,7 +11,7 @@ from core_features.line_follow import crosswalk_gate as gate_module
 from core_features.line_follow.crosswalk_gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 
 RANGE_MIN = 0.15     # D-573 Context 4: the Pinky LiDAR range_min
 NEAR, FAR = 0.50, 0.70

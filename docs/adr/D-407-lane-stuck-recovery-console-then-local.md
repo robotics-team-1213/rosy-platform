@@ -115,3 +115,24 @@ D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한�
 **왜.** 2026-10-10 현장 기록: 8kcn이 HOLD/LOST로 40 s 넘게 답 없이 서 있었고(`X:\DevTemp\drivable-keep-run\drive-8kcn-2.txt`), 9dfk는 `HOLD lane_departure`로 90 s 서 있었다(`drive-9dfk-2.txt`). `lane_departure`는 막힘 원인이 아니어서 Fleet에 아무것도 가지 않았다.
 
 **검증.** 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_stuck_no_motion.py`(사유 다섯 가지 각각 5 s 뒤 한 번 열림·4.8 s 전에는 안 열림, 주행 중·OFF·`stuck_report_s: 0`이면 안 열림, 다시 움직이면 `cleared`, Fleet `BACK_AND_RETRY`는 CORE가 후진, 뒤가 막히면 거절)를 원격 pytest로 돌렸다. 실기는 다음 로봇 릴리스 뒤다.
+
+## 개정 (2026-10-10): 명령은 있는데 제자리면 `no_progress`·`dithering`으로 Fleet에 묻는다
+
+사용자 지시(2026-10-10, 원문): "교착 상태에 대한 개념을 5초 이상 같은 자리 혹은 제자리 답보 혹은 기타였을 경우에 처리해야"
+
+Fleet 쪽 답(WAIT + 사람, AI는 WAIT/ABORT만)은 D-607(Proposed, `D-607-stuck-deadlock-realign.md`, 브랜치 `docs/stuck-deadlock-realign`)이 정한다. 이 개정은 CORE가 언제 여는지만 정한다.
+
+0. **기본은 꺼짐.** 두 원인은 `line_follow.progress_watch_enabled`(기본 `false`)가 켜야 열린다. 꺼져 있으면 동작은 이 개정 전과 같다(새 열림 없음, D-468 틱 처리 그대로). Fleet이 이 원인에 WAIT + 사람으로 답하는 D-607 P1이 배포된 뒤 켠다. 그 전에는 모르는 원인이 `no_rule`로 사람에게만 가고 WAIT가 없어, 로봇이 답 없이 계속 움직인다.
+
+1. **새 원인 두 개.** 활성 차선 모드에서 기존 원인(`crosswalk_blocked`·`obstacle_ahead`·`lane_lost`·`no_motion`)이 없을 때, 바퀴 odom만으로 본다.
+   - `no_progress`: `stuck_report_s`(5 s) 창 동안 odom 순이동이 URDF 몸 길이의 절반(`(body_front_x_m − body_rear_x_m)/2`, Pinky 0.059 m) 미만이고 순 |yaw|가 `line_follow.no_progress_yaw_deg`(기본 30°) 미만인데 창 안에 움직임 명령이 있었다. `line_follow.no_progress_creep_enabled`(기본 `false`)를 켜면 `recovery_restuck_s`(20 s) 동안 `recovery_restuck_m`(0.30 m) 미만으로 기었고 틱의 30 % 이상이 움직임 명령인 경우도 연다. 재생에서 이 규칙의 열림은 대부분 실제로 느리게 가던 로봇이었고, Fleet은 이 원인에 WAIT로 답하므로 움직이는 로봇을 세운다. 그래서 따로 끈다(조율 결정 2026-10-10).
+   - `dithering`: 5 s 제자리 조건에 더해 창 안에서 v 또는 ω(|ω| > 0.05 rad/s)의 부호가 두 번 이상 바뀌었다.
+   - "명령"은 CORE가 실제로 내보낸 twist(교통 게이트 뒤)다. HOLD와 주행이 번갈아도 창을 다시 시작하지 않는다(8kcn D-468/IR 가장자리 467 s 사례).
+2. **의도한 대기는 세지 않는다.** D-494 교차로(`junction_*`), D-517 권한(`authority_*`), D-573 횡단보도(`crosswalk_*`) 사유가 붙은 틱, D-525 신호·D-517 M4 교통 게이트가 0으로 만든 틱, OFF, odom 없음은 창을 지운다. URDF 몸이 없거나 `stuck_report_s: 0`이면 열지 않는다.
+3. **열리면.** `no_motion`과 같은 경로다. 곧바로 `WAITING_CONSOLE`(`nav.line_stuck_asked` `reason` = 원인), 로컬 후진 대체 없음, `detail` = 마지막 HOLD/전략 사유. 답이 오기 전까지 CORE는 원래 결정대로 움직인다(보고만). 수락된 답은 다른 원인과 같다(WAIT면 HOLD). D-468 로컬 복귀가 틱을 가진 동안에도 열리고, 그러면 D-468은 기존 규칙대로 틱을 돌려준다.
+4. **닫힘.** 5 s 창에서 몸 길이(0.118 m) 이상 가면 `cleared`로 닫힌다. RESUME·`recovered`는 창을 지운다.
+5. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 게이트, CORE 단일 `/cmd_vel`(D-2). 로직은 ROS 없는 `line_follow/progress_watch.py`에 있다. API Ref v1.198.
+
+**왜.** 2026-10-10 실주행 확정 막힘 39건(1448 s) 가운데 20건(683 s)을 `no_motion`이 놓쳤다. 명령이 0이 아니었기 때문이다(TRACKING 중 흔들림, HOLD/가장자리 번갈음, 후진·재시도 반복). 분석은 `X:\DevTemp\steer-review\deadlock\`.
+
+**검증.** 재생 `X:\DevTemp\stuck-no-progress\replay.py`(실제 `ProgressWatch`, `drive.txt` 틱 + 바퀴 odom, odom 없는 실행은 천장 자세로 대신; 결과 `replay.txt`·`replay_creep.txt`). 기본값(기어감 규칙 꺼짐)으로 확정 39건 중 새 규칙이 37건, 기존 `no_motion`과 합쳐 39건을 잡는다. `no_motion`이 놓쳤던 20건은 모두 잡는다. 54개 실행 8214 s에서 열림 354건(같은 자리에서 5 s 안에 다시 열린 것을 합치면 167건, `no_progress` 110·`dithering` 57). 천장으로 볼 수 있는 열림 141건 중 118건은 천장도 제자리(5 s에 0.059 m 미만), 21건은 0.059–0.118 m, 2건만 몸 길이 이상이었다. 5 s에 몸 길이 이상 주행한 960 s 동안 열려 있던 시간은 0 s다. 기어감 규칙을 켜면 새 규칙만으로 38건이고, 열림 201건 중 천장으로 볼 수 있는 44건의 기어감 열림 가운데 36건이 느리게 가던 로봇이었다. 교차로 대기 틱이 창에 든 열림은 0건이다. 기록에는 횡단보도·신호·권한 대기가 없어 단위 시험으로 본다(권한은 실제 D-517 게이트, 교차로·횡단보도는 게이트 출력 모사, 교통은 게이트 대역). 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_stuck_no_progress.py`(꺼짐·켜짐 두 상태 포함)를 원격 pytest로 돌렸다. 실기는 P1 배포와 다음 로봇 릴리스 뒤다.
