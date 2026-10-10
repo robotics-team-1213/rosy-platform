@@ -70,8 +70,8 @@ function travelYaw(poses) {
 
 /** Leader for a formation. `by` is `ahead` (furthest LOCALIZED map pose along the shared heading),
  * `number` (smaller trailing id, also the tie-break inside 0.17 m), or empty when nobody can lead. */
-export function chooseLeader(robots, poseOf = robotMapPose) {
-  const candidates = (robots || []).filter(canLead);
+export function chooseLeader(robots, poseOf = robotMapPose, eligible = canLead) {
+  const candidates = (robots || []).filter(eligible);
   if (!candidates.length) return { id: "", by: "" };
   const posed = [];
   for (const robot of candidates) {
@@ -93,6 +93,16 @@ export function chooseLeader(robots, poseOf = robotMapPose) {
     return { id: pack[0], by: pack.length === 1 ? "ahead" : "number" };
   }
   return { id: candidates.map(robot => robot.robot_id).sort(compareOrder)[0], by: "number" };
+}
+
+// Lane trips have their own admission; swarm capabilities belong to formation sessions.
+export function chooseConvoyLeader(robots, leaders, guide, mapId) {
+  const candidates = (robots || []).filter(robot => robot.online && leaders.includes(robot.robot_id));
+  const poses = candidates.map(robot => (guide?.robots || []).find(row => row.robot_id === robot.robot_id)?.pose);
+  const located = Boolean(mapId) && poses.every(pose => pose?.state === 'LOCALIZED'
+    && pose.map_id === mapId && Number.isFinite(pose.age_s) && pose.age_s >= 0 && pose.age_s <= 2
+    && [pose.x, pose.y, pose.yaw].every(Number.isFinite));
+  return chooseLeader(candidates, robot => located ? poses[candidates.indexOf(robot)] : null, () => true);
 }
 
 /** How 리더에게 길 주기 moves the leader: a map point (Nav goal) or the card's lane trip. */

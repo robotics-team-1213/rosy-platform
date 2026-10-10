@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityReason, chooseLeader, formationReason, leaderPathKind, noRobotServesGrid,
+  capabilityReason, chooseConvoyLeader, chooseLeader, formationReason, leaderPathKind, noRobotServesGrid,
 } from '../../fleet/server/web/motion-readiness.js';
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
@@ -52,6 +52,22 @@ test('the leader is the robot furthest along a shared heading', () => {
     lead('rosy_60', { x: 1, y: 0, yaw: 0.1, goal: true }),
   ]);
   assert.deepEqual(choice, { id: 'rosy_60', by: 'ahead' });
+});
+
+test('lane convoy ranks open repeat leaders without requiring formation support', () => {
+  const robots = [lead('rosy_40', { can: false }), lead('rosy_41', { can: false }), lead('rosy_1')];
+  const leaders = ['rosy_41', 'rosy_40'];
+  const guide = { robots: robots.map((robot, i) => ({ robot_id: robot.robot_id,
+    pose: { state: 'LOCALIZED', map_id: 'floor', age_s: 0.1, x: i, y: 0, yaw: 0 } })) };
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_41', by: 'ahead' });
+  guide.robots[1].pose.map_id = 'other';
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_40', by: 'number' });
+  guide.robots[1].pose.map_id = 'floor';
+  guide.robots[1].pose.age_s = 3;
+  assert.deepEqual(chooseConvoyLeader(robots, leaders, guide, 'floor'), { id: 'rosy_40', by: 'number' });
+  robots[0].online = false;
+  assert.equal(chooseConvoyLeader(robots, leaders, guide, 'floor').id, 'rosy_41');
+  assert.deepEqual(chooseLeader(robots.slice(0, 2)), { id: '', by: '' });
 });
 
 test('a missing direction or a pack within one body uses the smaller robot number', () => {

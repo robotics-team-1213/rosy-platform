@@ -9,7 +9,7 @@ import {
   repeatTripReason, startTrip,
   trafficCardLine, tripRefusalText, tripStartReason,
 } from "/console/assets/site-map-model.js";
-import { chooseLeader } from "./motion-readiness.js";
+import { chooseConvoyLeader } from "./motion-readiness.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 
 export { endedTripText, openTrip };
@@ -236,7 +236,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     if (!bound) { bound = true; bindConvoy(); }
     const follower = el("convoy-follower"), leader = el("convoy-leader");
     const leaders = convoyLeaders(view.trafficTrips, null);
-    const choice = chooseLeader(view.robots.filter((robot) => leaders.includes(robot.robot_id)));
+    const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.map?.map_id);
     if (leader.dataset.leaderOverride && !leaders.includes(leader.dataset.leaderOverride)) {
       delete leader.dataset.leaderOverride;
     }
@@ -259,7 +259,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
   function bindConvoy() {
     scope.listen(el("convoy-leader"), "change", () => {
       const leaders = convoyLeaders(view.trafficTrips, null);
-      const choice = chooseLeader(view.robots.filter((robot) => leaders.includes(robot.robot_id)));
+      const choice = chooseConvoyLeader(view.robots, leaders, view.guide, view.activeSiteMap?.map?.map_id);
       const leader = el("convoy-leader");
       if (leader.value && leader.value !== choice.id) leader.dataset.leaderOverride = leader.value;
       else delete leader.dataset.leaderOverride;
