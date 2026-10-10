@@ -8,6 +8,7 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
+import { pinPrefill } from "./localization-badge.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
@@ -693,20 +694,31 @@ pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
   const robotId = view.pinning;
   if (!robotId || !start) return;
   const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
-  const current = (view.guide?.robots || []).find((row) => row.robot_id === robotId)?.pose;
+  const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robotId);
+  const current = guideRow?.pose;
   const yaw = dragged ? Math.atan2(end.y - start.y, end.x - start.x) : (typeof current?.yaw === "number" ? current.yaw : 0);
   view.pinning = null;
   el("map-canvas").classList.add("idle");
   render();
+  // D-596 amendment (b): an LED-confirmed blob is the place; the press and drag only set the heading.
+  let led = null;
+  try {
+    led = pinPrefill(await call("/api/fleet/tracking/identity", { signals: [life.signal] }), guideRow, robotId);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+  }
+  if (!life.current()) return;
+  const place = led || start;
   const deg = (yaw * 180 / Math.PI).toFixed(0);
-  await confirmedAction.run({message: `${robotId}의 지도 위치를 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) m, 방향 ${deg}°로 찍을까요? 로봇에는 아무것도 보내지 않습니다.`,
+  const where = led ? "LED로 확인된 자리" : "지도 위치";
+  await confirmedAction.run({message: `${robotId}의 ${where}를 (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) m, 방향 ${deg}°로 찍을까요? 로봇에는 아무것도 보내지 않습니다.`,
     opener: el("map-canvas"), eligible: () => !view.stateUnavailable && !namedReason(),
     request: async (owner) => {
       const pose = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x: start.x, y: start.y, yaw }), signals: [owner.signal] });
+        body: JSON.stringify({ x: place.x, y: place.y, yaw }), signals: [owner.signal] });
       if (!owner.current() || !life.current()) return;
-      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
+      log(`${robotId} 운영자 핀 (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
       mapView.refreshGuide?.();
     }, onError: (err) => log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad")});
 });

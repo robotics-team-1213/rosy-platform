@@ -120,6 +120,28 @@
    - 이제 가드는 같은 strict-host-key ssh(호스트명이 증명되면 HostKeyAlias)로 로봇의 `ROSY_API_TLS_HOST`와 공개 CA를 읽고, `calibration_tls_read.py`(CA와 정확한 호스트명 검증)로 한 번 묻는다. 실패하면 이전 경고 그대로다.
    - 8kcn·9dfk에서 읽기만 해서 확인했다. 둘 다 "no active calibration session", 각 3 s.
 
+### Addendum 4 (2026-10-10, 델타 한 줄 배포: `ship.py`, 하드링크 풀기, 카메라만 재시작)
+
+사용자(2026-10-10): "배포 과정 병렬로 해서 개선하고 그러고 속도 향상시켜." 조향 세션이 한 시간에 여러 번 델타를 두 로봇(9dfk 192.168.1.201, 8kcn 192.168.1.202)에 낸다. 그 주행을 멈추지 않고 그 시간을 줄인다. 서명, 로봇의 전체 트리 검증, 실패 시 롤백, CORE가 바뀔 때의 CORE readiness는 그대로다. 브랜치 `feat/fast-ship`.
+
+1. **잰 값 (로그에서, 로봇에 push 하지 않음).** 델타 078–094의 tarball 생성 시각부터 push 로그 마지막 쓰기까지: 9dfk 42–88 s(중앙 약 54 s), 8kcn 71–134 s(중앙 약 80 s). 로그에는 단계별 시각이 없어 단계는 다음으로 나눴다.
+   - ssh·scp 한 번에 2.2–3.0 s(이 PC→두 로봇, 읽기 전용으로 잼). push 한 번에 claim, mkdir, scp 둘, chmod, unpack, activate, CORE 확인, readiness, image-layer dry-run·apply, claim 해제로 13번, 보정 가드 ssh 2번 → 연결만 약 35–40 s.
+   - unpack의 base `cp -a`: 92 MB, 파일 3170개를 SD 카드에 복사(8kcn이 매번 25 s쯤 더 걸린다).
+   - activate: 전체 트리 검증 + runtime 전체 stop/start + CORE readiness(약 13 s). 그 뒤 image-layer 동기화 두 번(바뀐 것 0개).
+   - 델타 만들기: 지금 이 PC에서 재면 base 복사 6 s, 봉인 46 s, 서명 50 s, 새 트리 검증 19 s(새로 쓴 3170개 파일을 매번 다시 읽는다). 조용할 때 약 15 s.
+2. **`tools/release/ship.py --base <id> --robots 9dfk,8kcn`.** 보정 가드를 로봇마다 먼저 띄우고, `payload-reserved-<id>` 태그로 번호를 잡고(`robot_cd.py` 규칙, 422면 다음 번호), 델타를 만들어 서명하고, 로봇마다 ssh 한 세션으로 동시에 보내고, 요약 한 줄을 찍는다. 로그는 `X:\DevTemp\rosy-release-<id>\ship-<robot>.txt`, 로봇 쪽 단계는 `PHASE <이름> <초>`로 남는다. `--dry-run`은 만들기만 하고 계획을 찍는다. 전체 빌드와 `-Rollback`은 그대로 `rosy-release-push(-many).ps1`이다. 로봇별 설정 overlay는 넣지 않았다. 로봇별 설정은 `/etc/rosy/`(예: `line_observer_overrides`)에 있고 릴리스가 덮지 않는다.
+3. **델타는 base의 서명된 메타데이터로 만든다.** `make_delta_release.py`는 base의 `SHA256SUMS` 서명을 확인하고, 바뀌지 않은 파일의 해시는 그 서명된 목록에서 가져온다. 로컬에 base 전체를 복사하거나 다시 해시하지 않는다. 바뀐 파일과 생성 파일 셋, 새 `manifest.json`·`SHA256SUMS`·서명만 쓴다. 릴리스 094를 같은 입력으로 다시 만들면 `SHA256SUMS`와 `manifest.json`이 바이트 단위로 같았다. `x/<id>`에는 그 파일들과 다음 델타용 `.modes.json`(파일 모드)만 남는다. 옛 델타 base는 tarball의 `.rosy-delta-base`를 따라 전체 tarball까지 모드를 모은다. 잰 값 3.2 s.
+4. **로봇에서 base를 하드링크로 편다 (Addendum 3의 `cp -a`를 바꿈).** `rosy-release-unpack.sh`가 `cp -al`을 쓴다. Addendum 3은 base가 롤백 대상이라 하드링크를 피했다. 바꾼 근거: 릴리스 폴더는 제자리에서 쓰지 않는다. GNU tar는 델타 파일을 풀기 전에 그 경로를 unlink 하므로 base의 inode는 그대로다(`test_a_delta_is_laid_over_a_copy_of_its_base`가 base 내용을 확인). 이후 chown/chmod는 base에서 이미 맞춘 값이라 바뀌는 것이 없다. 누가 한쪽을 제자리에서 고치면 양쪽이 같이 바뀌지만, 활성화·롤백 때 `native_release.py verify()`가 전체를 다시 해시하므로 조용히 넘어가지 않고 거부된다.
+5. **카메라만 재시작 (활성화 변경).** `native_release.py activate --release-id <id> --restart-unit rosy-camera.service`.
+   - 링크 교체, 저널, 실패 시 롤백은 전체 활성화와 같다. 차이는 runtime 전체 대신 `rosy-camera.service`만 stop/start 한다는 것뿐이다. start 뒤 3 s 지나 `is-active`가 아니면 링크를 되돌리고 옛 카메라를 다시 띄운다. 허용 유닛은 `rosy-camera.service` 하나다.
+   - `ship.py`가 이 모드를 고르는 조건: 바뀐 페이로드 파일이 모두 `control/sensing/perception/` 아래이거나 `camera_preview.launch.py`가 띄우는 노드 모듈(`line_observer_node` 등 7개)이다. CORE는 `control`을 import 하지 않고, rosy-io의 `ir_adc_node`는 `perception/`을 import 하지 않는다(`test/test_ship.py`가 정적 import로 고정).
+   - 로봇 쪽(`tools/release/ship_remote.sh`, `tools/` 아래라 델타의 배포 파일로 세지 않는다)은 다음이면 전체 활성화로 돌아간다: 설치된 activator가 이 옵션을 모를 때, 현재 릴리스가 델타의 base가 아닐 때, CORE가 안 돌 때, `rosy-navigation`(control 노드를 띄운다)이 돌 때.
+   - 그래서 CORE는 base 이전 릴리스 폴더를 작업 폴더로 둔 채 계속 돈다. 그 폴더의 CORE 코드는 새 릴리스와 바이트 단위로 같다(base가 현재 릴리스일 때만 허용하므로 연쇄해도 같다). CORE는 import를 `/opt/rosy/current` 경로로 하므로, 자동 업데이트의 정리가 옛 폴더를 지워도 작업 폴더만 사라진다. CORE가 다음에 재시작하면 현재 릴리스로 뜬다. CORE가 알리는 릴리스 번호는 그 사이 이전 값일 수 있다.
+   - 이 activator는 image layer라, 이 변경이 든 릴리스가 한 번 동기화된 뒤부터 쓰인다. 그 전에는 위 규칙대로 전체 활성화가 된다.
+6. **image-layer 동기화는 델타가 `deploy/robot/native/` 파일을 바꿀 때만 돈다.** 동기화는 릴리스 안의 그 폴더를 기준으로 하므로, 그 폴더가 base와 같으면 할 일이 없다.
+7. **기대 시간.** 카메라 모드: 번호·가드 약 3–5 s(동시), 만들기 3–5 s, 로봇마다 ssh 한 번 약 3 s + 풀기 1–2 s + 전체 검증 2–4 s + 카메라 재시작과 3 s 확인 약 5 s → 한 번에 약 20–25 s, 두 로봇 동시. 전체 모드는 CORE stop/start와 readiness로 15–20 s를 더해 약 35–45 s. 첫 실제 사용은 사용자가 조향 세션의 주행 틈에 정한다.
+8. **시험.** `test/test_ship.py`(재시작 범위, import 고정, 임시 root에서 실제 unpack·verify·링크 교체: 카메라 모드, 카메라 실패 롤백, 전체 모드, base가 현재가 아닐 때 전체로 돌아감), `test/test_native_release_activation.py`(카메라만 활성화·롤백·허용 유닛), `test/test_make_delta_release.py`(모드 연쇄), `test/test_release_unpack_helper.py`(하드링크 뒤 base 유지).
+
 ### Consequences
 
 - push → 서명 롤아웃이 약 18–20분에서 약 7–8분(+카나리)이 된다.

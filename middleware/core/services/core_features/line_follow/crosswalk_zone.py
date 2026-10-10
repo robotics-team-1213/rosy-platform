@@ -27,10 +27,13 @@ class CrosswalkZones:
 
     def clear(self):
         self._zones, self._epoch, self._last, self._rest_from, self._odometer, self._spent = [], None, None, None, 0., False
+        self.fresh = []  # D-573 6: every new zone, for the report's own list (crosswalk_report.py)
 
     def observe(self, evidence, *, epoch, received_at):
         crosswalk = evidence.crosswalk
-        if crosswalk is None or evidence.uncertainty_m is None or evidence.uncertainty_m > MAX_UNCERTAINTY_M:
+        if evidence.uncertainty_m is None or evidence.uncertainty_m > MAX_UNCERTAINTY_M:
+            return
+        if crosswalk is None:
             return
         # D-573: the lane corridor across the zone (inner paint edges at its near/far ends, body
         # frame at the image), None when a side was not seen. Only the crosswalk gate reads it.
@@ -38,9 +41,11 @@ class CrosswalkZones:
                  for b in evidence.boundaries}
         self._zones.append(dict(epoch=epoch, stamp_ns=round(evidence.stamp*1e9), near=crosswalk.near_m,
                                 far=crosswalk.far_m, uncertainty=evidence.uncertainty_m,
+                                along=evidence.crosswalk_uncertainty_m,
                                 received_at=received_at, anchor=None,
                                 left=max(edges["left"]) if "left" in edges else None,
                                 right=min(edges["right"]) if "right" in edges else None))
+        self.fresh.append(self._zones[-1])
         del self._zones[:-MAX_ZONES]
 
     def holds(self, evidence, *, now, guard, ir_x, max_length, odom_error_fraction, range_error_fraction=0.):

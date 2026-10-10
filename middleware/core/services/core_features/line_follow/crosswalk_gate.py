@@ -407,6 +407,17 @@ class CrosswalkGate:
 
 
 
+def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None) -> Zone:
+    """A D-491 zone record with a resolved anchor as a Zone. Along the road the frame's crosswalk
+    bound (D-573 6 개정), else along_default, else the lane's lateral bound (D-491 as before)."""
+    a = z["anchor"]
+    along = z.get("along")
+    along = along if along is not None else along_default if along_default is not None else z["uncertainty"]
+    return Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"], far=z["far"],
+                margin=along + range_error_fraction * z["far"],
+                left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"])
+
+
 class CrosswalkGateMixin:
     """LineFollowManager glue (manager lock throughout). Default off (crosswalk_gate_enabled)."""
 
@@ -447,11 +458,8 @@ class CrosswalkGateMixin:
         for z in self._crosswalks._zones:  # ponytail: shares the D-491 list; an accessor if a third reader comes
             if z["anchor"] is None and z["epoch"] == ev.epoch:
                 z["anchor"] = ev._image_pose(z["stamp_ns"])
-            a = z["anchor"]
-            if a is not None:
-                out.append(Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"],
-                                far=z["far"], margin=z["uncertainty"] + c.crosswalk_range_error_fraction * z["far"],
-                                left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"]))
+            if z["anchor"] is not None:
+                out.append(zone_of(z, c.crosswalk_range_error_fraction))
         return out
 
     def _fresh_corridor(self, now: float):

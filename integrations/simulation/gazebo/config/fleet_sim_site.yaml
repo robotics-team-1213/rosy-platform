@@ -1,0 +1,8 @@
+# Fleet site config (--site-config) for every Fleet that drives Gazebo SIM robots.
+# New SIM scripts pass this file instead of writing their own fleet.trip section.
+fleet:
+  trip:
+    # D-601 B: SIM launches start no road_observer_node, so CORE's
+    # /api/v1/vision/front/status never reports a live front preview and every
+    # lane plan would be refused 422 TRIP_LANE_CAMERA_UNAVAILABLE.
+    lane_camera_check: false

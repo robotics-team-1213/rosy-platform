@@ -99,3 +99,15 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
   assert.equal(positionTag(row({ needs_human: true, trusted: false, label: "위치 확인 필요" }),
     guide({ x: 1, y: 1, state: "LOCALIZED", source: "sighting" })).cls, "crit");
 });
+
+test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {
+  const { pinPrefill } = await import("../../fleet/server/web/localization-badge.js");
+  const identity = { robots: [{ robot_id: "rosy_41", state: "CONFIRMED", x: 0.398, y: -0.499 },
+    { robot_id: "rosy_40", state: "UNKNOWN", x: null, y: null }] };
+  const degraded = { pose: { x: 0.962, y: -0.011, state: "DEGRADED" } };
+  assert.deepEqual(pinPrefill(identity, degraded, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.deepEqual(pinPrefill(identity, { pose: null }, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.equal(pinPrefill(identity, { pose: { x: 0.4, y: -0.5, state: "LOCALIZED" } }, "rosy_41"), null);
+  assert.equal(pinPrefill(identity, degraded, "rosy_40"), null);
+  assert.equal(pinPrefill(null, degraded, "rosy_41"), null);
+});

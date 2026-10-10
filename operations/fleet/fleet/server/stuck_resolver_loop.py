@@ -137,6 +137,9 @@ class StuckResolverLoop:
                 escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
                 if escalation is not None:
                     self._escalated(escalation)
+            elif answer.escalate is not None:          # D-577 남은 항목 3: R5's human row is not lost
+                self._escalated(Escalate(answer.robot_id, answer.stuck_id, answer.escalate),
+                                rule=answer.rule, decision=answer.decision)
             raise
         except RobotApiError as exc:
             code = exc.code

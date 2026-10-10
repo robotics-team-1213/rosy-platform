@@ -49,8 +49,9 @@ def rays_at(x, objects, *, no_return=None, wall_m=1.5, step_deg=2):
 
 
 class Sim:
-    def __init__(self, enabled=True, edges=None, **config):
+    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, **config):
         self.edges = edges          # (left, right) inner paint edges the camera reports, or None
+        self.xw_u, self.lat_u = xw_u, lat_u   # crosswalk along-track bound (None = detector off), lane lateral
         self.t, self.x, self.linear = 1.0, 0.0, 0.0
         self.objects, self.no_return, self.scans = [], None, True
         self.bus = Bus()
@@ -68,7 +69,8 @@ class Sim:
         t, m = self.t, self.m
         m.observe_return_pose(stamp_ns=round(t * 1e9), source_now_ns=round(t * 1e9), frame="odom",
                               x=self.x, y=0.0, yaw=0.0, received_at=t)
-        raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=0.005,
+        raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=self.lat_u,
+                   crosswalk_uncertainty_m=self.xw_u,
                    boundaries=[] if self.edges is None else [
                        dict(side=side, slope=0.0, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
                        for side, y in zip(("left", "right"), self.edges)])
@@ -128,7 +130,7 @@ def test_stops_before_the_near_edge_with_the_zone_outside_the_blind_band():
 
 
 def test_empty_look_for_one_second_then_crosses_and_closes():
-    s = Sim()
+    s = Sim(edges=(0.09, -0.09))                              # lane edges: the camera watched the ground
     s.to_stop()
     stop_t = s.t
     go = next(t for t, d in s.run(5.0) if d.linear > 0)
@@ -268,16 +270,16 @@ def test_flag_off_changes_nothing():
     s.objects = [(0.60, 0.0, 0.03)]
     s.frame(crosswalk=(NEAR, FAR))
     assert all(d.linear > 0 for _, d in s.run(3.0))
-    assert "crosswalk" not in s.m.status().model_dump()
-    assert "crosswalk" not in s.m.status().model_dump_json()
+    assert s.m.status().reason is None or not s.m.status().reason.startswith("crosswalk")
+    assert "crosswalk" in s.m.status().model_dump()          # D-573 6 개정 2026-10-10: reported anyway
     assert not s.m.wants_crosswalk_scan
 
 
-def test_snapshot_reports_null_outside_a_zone_and_the_zone_inside():
+def test_snapshot_reports_unknown_before_the_camera_watched_and_the_zone_inside():
     s = Sim()
     s.frame()
     dumped = s.m.status().model_dump()
-    assert "crosswalk" in dumped and dumped["crosswalk"] is None
+    assert dumped["crosswalk"]["state"] == "unknown"           # D-573 6 개정: no seen lane edges yet
     assert "crosswalk_reported" not in dumped
     s.frame(crosswalk=(NEAR, FAR))
     s.frame()
@@ -303,7 +305,7 @@ def test_estop_and_mode_off_reset_the_gate():
     s.m.stop("estop")
     assert s.m.tick(s.t).linear == 0.0
     s.m.set_mode(LineFollowMode.CAMERA_LINE)
-    assert s.crosswalk is None
+    assert s.m._xwalk.zone is None and s.crosswalk.state == "unknown"
 
 
 def test_body_stop_still_wins_while_crossing():
