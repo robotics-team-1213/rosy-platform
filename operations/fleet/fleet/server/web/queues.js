@@ -165,6 +165,14 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         ? { severity: "crit", text: `: 차로 이탈 — ${text}` }
         : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
     }
+    // D-511 개정 1: Fleet이 본 복귀 상태 한 줄. 같은 판정을 로봇에도 보낸다(lane-cue).
+    const back = lane?.return;
+    const backText = { OFF_LANE: "차로 밖 — 차로로 복귀 지시", OFF_MAP: "지도 밖 — 정지·확인 필요",
+                       WRONG_WAY: "역주행 — 돌아서기 지시", ON_LINE: "차선 위 — 안쪽으로 보정" }[back?.state];
+    if (backText) {
+      const side = back.side ? ` (${back.side === "left" ? "왼쪽" : "오른쪽"})` : "";
+      items.push({ severity: back.state === "ON_LINE" ? "warn" : "crit", text: `: ${backText}${side}` });
+    }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
     items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
     items.push(...guideAttention(view.guide, robot.robot_id));  // D-536 coordinate guides

@@ -74,7 +74,10 @@ CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
 NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
-EXIT_NEAR_M = 0.10
+EXIT_NEAR_M = 0.05
+#: the bottom rows and centre half-width (px) that tell a line under the body
+STRADDLE_ROWS = 12
+STRADDLE_HALF_PX = 12
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -100,7 +103,8 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={}, edges_m=[])
+    out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False, exit_point_m={},
+               exit_reach_m={}, near_centre_m=None, edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -108,6 +112,13 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     if float(_row_x([rows.max()], ground, x_offset)[0]) > float(_row_x([height - 1], ground, x_offset)[0]) + NEAR_GAP_M:
         out["reason"] = "way_beyond_line"
         return out
+    # A line under the robot: the bottom rows' middle is not way but one side is (the body straddles
+    # a line; 9dfk sat on the ring's island line, IR lane_departure, 20261010T032022Z_rosy_41).
+    bottom = way[height - STRADDLE_ROWS:]
+    mid = int(round(ground.principal_x))
+    if bottom.any() and not bottom[:, mid - STRADDLE_HALF_PX:mid + STRADDLE_HALF_PX].any():
+        left, right = bottom[:, :mid].sum(), bottom[:, mid:].sum()
+        out["straddle"] = "left" if left > right else "right"
     first = np.argmax(way[rows], axis=1)
     last = width - 1 - np.argmax(way[rows, ::-1], axis=1)
     xs = _row_x(rows, ground, x_offset)
@@ -144,9 +155,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
             near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
-            far = int(np.argmax(np.where(hit, xs, -np.inf)))
-            reach[side] = float(xs[far])
-            # the point to arc toward: where the way leaves the view on that side, farthest out
+            # aim at the middle of the opening, not its far end: the far end cut the inside corner
+            # (9dfk 20261010T030423Z_rosy_41 left the lane twice at the NE spoke turning right)
+            idx = np.flatnonzero(hit)
+            far = int(idx[np.argsort(xs[idx])[len(idx) // 2]])
+            reach[side] = float(xs[hit].max())
             out["exit_point_m"][side] = (round(float(xs[far]), 3),
                                                        round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:
@@ -194,6 +207,26 @@ def _crosses(points, tx, ty):
         return None
     first = int(np.argmin(np.where(hit, along, np.inf)))
     return float(pts[first, 1])
+
+
+#: CORE line-follow law the error is shaped for (rosy_default.yaml line_follow; robot overlays):
+#: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
+CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.04
+
+
+def pursuit_error(tx, ty, confidence):
+    """The keep error whose CORE command drives the pure-pursuit arc to (tx, ty): curvature
+    k = 2y/(x^2+y^2) and w/v = k under CORE's law (CORE keeps the curvature when it caps w).
+    error = -y/half made CORE turn 5-30x tighter than the road (independent review: actual radius
+    0.025 m vs road 0.25 m in turns), cutting corners onto lines (user 2026-10-10)."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6:
+        return 0.0
+    k = 2.0 * ty / d2
+    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
+    kc = abs(k) * speed
+    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0 else 1.0
+    return float(-math.copysign(min(1.0, error), k))
 
 
 def _to_world(point, pose):
@@ -308,6 +341,12 @@ class DrivableSteer:
             side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
+        if info.get("straddle") is not None and not self._in_crosswalk(current_pose):
+            # off the line first: turn toward the way (CORE creeps back while its IR sees the line,
+            # D-344 §12 amendment 3), then the normal rules
+            self._smoothed = self._pivot = None
+            error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
+            return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
         if self._in_crosswalk(current_pose):
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
             # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
@@ -338,17 +377,10 @@ class DrivableSteer:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"][side]
         tx, ty = _to_current(target, source_pose, current_pose)
-        crossing = _crosses(seen, tx, ty)
-        if crossing is not None:
-            # The arc to the target crosses a boundary seen earlier (floor beyond a line that has left
-            # the view): pull the target back to the robot's side of it. A clamp, never a swap to the
-            # other side (replacing the target flipped the error sign frame to frame, p8 140-178 s).
-            margin = BODY_HALF_M + 0.01
-            clamped = min(ty, crossing - margin) if crossing > 0 else max(ty, crossing + margin)
-            if clamped != ty:
-                strategy, ty = strategy + "_kept", clamped
+        # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
+        # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
-        error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
+        error = pursuit_error(tx, self._smoothed, confidence)
         return error, confidence, dict(info, strategy=strategy, target_now_m=(round(tx, 3), round(self._smoothed, 3)))
 

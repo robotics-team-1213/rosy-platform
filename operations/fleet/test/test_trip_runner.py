@@ -161,6 +161,9 @@ class Ports:
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
         self.refreshes = 0
+        self.line_starts: list[str] = []  # D-601 A: CAMERA_LINE turned on by the trip
+        self.line_start_error = None
+        self.camera = {"available": True, "stale": False, "age_ms": 40}  # D-601 B
 
     def caps_for(self, robot_id):
         return self.caps.get(robot_id)
@@ -182,6 +185,16 @@ class Ports:
 
     async def line_follow_mode(self, robot_id):
         return self.core.mode
+
+    async def start_camera_line(self, robot_id):
+        if self.line_start_error is not None:
+            raise self.line_start_error
+        self.line_starts.append(robot_id)
+        self.core.mode = "CAMERA_LINE"
+        return {"mode": "CAMERA_LINE", "state": "TRACKING"}
+
+    async def front_camera(self, robot_id):
+        return self.camera
 
     async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
                             advance_m=None, expect=None):
@@ -322,7 +335,7 @@ def test_start_refuses_with_every_d491_code_in_order():
     ports.caps = {"rosy_60": TripCaps("pinky_pro", frozenset({"free"}), 0.2, junction_turn=True)}
     assert _code(runner.start("p1", "bob")) == "TRIP_MODE_UNSUPPORTED"
     ports.caps = {"rosy_60": LANE}
-    ports.core.mode = "OFF"
+    ports.core.mode = None  # unknown (D-601 A: OFF is turned on by the start itself)
     assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
     ports.core.mode = "IR_LINE"  # no junction detection on IR (M4)
     assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
@@ -1054,6 +1067,24 @@ def _app(tmp_path, ports):
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1)
     return TestClient(app), tasks, store, robot, console
+
+
+def test_trip_plan_reads_fleet_map_pose_for_a_robot_that_reports_no_localization(tmp_path):
+    """Field 2026-10-10: a motor-mode robot (localization null) with a LOCALIZED MapPose plans and starts."""
+    ports = Ports()
+    client, _tasks, store, robot, _console = _app(tmp_path, ports)
+    robot._state = {"robot_id": "rosy_60", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "localization": None}
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+    assert plan.status_code == 200, plan.text
+    started = client.post(f"/api/fleet/trips/{plan.json()['plan_id']}/start", headers=OPERATOR)
+    assert started.status_code == 200, started.text
+    run(client.app.state.trip_runner.cancel(plan.json()["plan_id"], "bob"))
+    for state in ("DEGRADED", "UNKNOWN"):
+        ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, state=state)
+        refused = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+        assert refused.status_code == 422 and refused.json()["detail"] == {
+            "code": "TRIP_POSE_UNTRUSTED", "detail": {"pose_state": state}}
 
 
 def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_path):

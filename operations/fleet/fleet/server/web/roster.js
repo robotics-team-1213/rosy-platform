@@ -420,7 +420,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
     blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : !view.map ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
+        : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
     pin.addEventListener("click", scope.guard(() => {
       view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
       if (view.pinning) {

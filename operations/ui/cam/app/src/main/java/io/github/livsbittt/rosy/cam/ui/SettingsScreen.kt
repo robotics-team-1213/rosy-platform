@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,6 +69,9 @@ fun SettingsScreen(
     development: LinkPolicy? = null,
     onDevelopmentImport: (DevelopmentBootstrap, (Boolean) -> Unit) -> Unit = { _, result -> result(false) },
     onDevelopmentRevoke: () -> Unit = {},
+    /** D-589 6: obey Vision `camera` messages; applies live, also while the camera runs. */
+    recognitionExposure: Boolean = true,
+    onRecognitionExposure: (Boolean) -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
@@ -132,6 +136,23 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
         LensSection(lens, backCameras, running = locked, onLens = onLens)
+        // The whole row is one checkbox for touch and TalkBack, labelled by its text.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .toggleable(value = recognitionExposure, role = Role.Checkbox, onValueChange = onRecognitionExposure)
+                .padding(vertical = 4.dp),
+        ) {
+            Checkbox(checked = recognitionExposure, onCheckedChange = null)
+            Text(stringResource(R.string.settings_recognition_exposure))
+        }
+        Text(
+            stringResource(R.string.settings_recognition_exposure_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             enabled = !locked,

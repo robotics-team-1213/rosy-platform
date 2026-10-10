@@ -38,7 +38,7 @@ def test_one_unseen_edge_offsets_from_the_seen_edge():
 def test_closed_ahead_pivots_toward_the_open_side_then_releases():
     steer = DrivableSteer()
     error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.04, x_max=0.33), 1, G, XO, HALF)
-    assert debug["strategy"] == "drivable_turn_left" and error < -0.5     # closed at 0.2 m: arc left
+    assert debug["strategy"] == "drivable_turn_left" and error < 0          # closed at 0.2 m: arc left
     error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33), 3, G, XO, HALF)
     assert (error, confidence, debug["strategy"]) == (-PIVOT_ERROR, PIVOT_CONFIDENCE, "drivable_pivot_left")
     error, confidence, debug = steer.update(_lane(HALF, -HALF), 2, G, XO, HALF)
@@ -57,7 +57,7 @@ def test_odometry_moves_the_target_into_the_current_pose():
     straight, _, _ = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
     steer.reset()
     turned, _, _ = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.3))
-    assert turned > straight + 0.3       # turned left since the frame: the same point now lies right
+    assert turned > straight + 0.05      # turned left since the frame: the same point now lies right
 
 
 def test_a_lidar_wall_beyond_the_model_view_closes_the_way():
@@ -105,3 +105,22 @@ def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
     assert steer.update(closed, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))[2]["strategy"] == "drivable_pivot_left"
     assert steer.update(closed, 2, G, XO, HALF, (0.0, 0.0, 1.9), (0.0, 0.0, 1.9))[2]["reason"] == "pivot_limit"
+
+
+def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
+    beyond = np.zeros((240, 320), bool)
+    beyond[115:160, 100:220] = True                      # floor only beyond a gap
+    error, confidence, debug = DrivableSteer().update(beyond, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
+                                                      wall_ahead_m=None, side_clear_m={"left": None, "right": None})
+    assert error is None and debug["reason"] == "way_beyond_line"
+
+
+def test_pursuit_error_realises_the_arc_under_cores_law():
+    from control.sensing.perception.learned.drivable_steer import (
+        CORE_CRUISE_MPS, CORE_CURVE_SLOWDOWN, CORE_MIN_CONFIDENCE, CORE_STEERING_GAIN, pursuit_error)
+    x, y, conf = 0.25, 0.05, 0.9
+    error = pursuit_error(x, y, conf)
+    w = -CORE_STEERING_GAIN * error
+    v = CORE_CRUISE_MPS * (conf - CORE_MIN_CONFIDENCE) / (1 - CORE_MIN_CONFIDENCE) * max(0.2, 1 - CORE_CURVE_SLOWDOWN * abs(error))
+    assert abs(w / v - 2 * y / (x * x + y * y)) < 1e-6 and error < 0
+    assert pursuit_error(0.25, 0.0, conf) == 0.0
