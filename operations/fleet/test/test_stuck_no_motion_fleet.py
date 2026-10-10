@@ -75,3 +75,19 @@ def test_site_config_names_enrolled_robots(tmp_path):
                     encoding="utf-8")
     assert _stuck_resolver_enrolled(SimpleNamespace(site_config=str(path))) == {"rosy_40", "rosy_41"}
     assert _stuck_resolver_enrolled(SimpleNamespace(site_config=None)) == frozenset()
+
+
+def test_no_motion_backs_off_with_an_online_legacy_peer_and_holds_for_a_peer_seen_behind():
+    """Both robots online without a localization report (today): R6, CORE re-checks the rear."""
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _row(_state())
+    me["state"]["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    peer = {"robot_id": "rosy_40", "online": True,
+            "state": {"robot_id": "rosy_40", "pose": {"x": -0.2, "y": 0.0, "yaw": 0.0}}}
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_41", "stuck-nm", "BACK_AND_RETRY", "R6")]
+    trusted = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
+    me["state"]["localization"] = trusted
+    peer["state"]["localization"] = trusted
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [me, peer]) == [
+        Answer("rosy_41", "stuck-nm", "WAIT", "R5", escalate="no_motion_hold:peer_behind")]
