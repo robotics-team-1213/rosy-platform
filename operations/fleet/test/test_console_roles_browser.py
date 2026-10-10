@@ -49,6 +49,10 @@ class LaneRobot(FakeRobot):
 @pytest.fixture
 def fleet_site(tmp_path):
     fleet = AuthFleet(IDS, {robot_id: AUTH for robot_id in IDS})
+
+    async def front_camera(robot_id):  # D-601 B: the line camera is live on every fake robot
+        return {"available": True}
+    fleet.front_camera = front_camera
     fleet.advance(time.time() - fleet.now)
     store = SiteMapStore(tmp_path / "maps.sqlite")
     store.import_if_empty(demo_site(), source="test")
