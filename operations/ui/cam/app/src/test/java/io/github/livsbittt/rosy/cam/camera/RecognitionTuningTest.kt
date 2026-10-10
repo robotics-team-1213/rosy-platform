@@ -114,7 +114,7 @@ class RecognitionTuningTest {
     }
 
     @Test
-    fun requestsCloserThan500MsWaitAndTheNewestIsAppliedWhenTheGapEnds() {
+    fun newestEarlyRequestAppliesAfterTheGap() {
         val t = RecognitionTuning()
         t.receive(req(seq = 1, ev = -1), 0)
         assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 2, ev = 3), 100))
