@@ -125,3 +125,12 @@ def test_pursuit_error_realises_the_arc_under_cores_law():
     v = CORE_CRUISE_MPS * (conf - CORE_MIN_CONFIDENCE) / (1 - CORE_MIN_CONFIDENCE) * max(0.2, 1 - CORE_CURVE_SLOWDOWN * abs(error))
     assert abs(w / v - 2 * y / (x * x + y * y)) < 1e-6 and error < 0
     assert pursuit_error(0.25, 0.0, conf) == 0.0
+
+
+def test_route_guide_picks_the_side_and_turns_at_a_blind_corner():
+    closed = _lane(0.06, -0.06, x_max=0.13)         # wall ahead, no opening in view
+    error, _, debug = DrivableSteer().update(closed, 1, G, XO, HALF, guide_deg=80.0)
+    assert debug["strategy"] == "drivable_pivot_left" and error < 0
+    both = _lane(0.5, -0.5, x_max=0.15) | _lane(0.03, -0.03, x_max=0.33)
+    debug = DrivableSteer().update(both, 1, G, XO, HALF, guide_deg=-70.0)[2]
+    assert debug["exit"] in ("right", None)

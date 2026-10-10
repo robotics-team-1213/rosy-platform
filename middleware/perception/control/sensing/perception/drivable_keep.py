@@ -21,7 +21,22 @@ CROSSWALK_MIN_PX = 150
 WALL_MAX_AGE_S = 0.5
 
 
-def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall):
+#: A route guide older than this (by the camera stamp) is not used.
+GUIDE_MAX_AGE_S = 1.5
+
+
+def parse_guide(raw, now):
+    """(heading_ahead_deg, stamp) from a line/lane_guide JSON {heading_ahead_deg, stamp}, or None."""
+    import json, math
+    try:
+        data = json.loads(raw)
+        deg, stamp = float(data["heading_ahead_deg"]), float(data.get("stamp", now))
+    except (ValueError, TypeError, KeyError):
+        return None
+    return (deg, stamp) if math.isfinite(deg) and -180.0 <= deg <= 180.0 else None
+
+
+def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall, guide=None):
     """(error, confidence) or None for this frame, and whether the drivable path decided it.
     `last` is the keeper's keep_debug dict (updated in place); pose_at(stamp) is odometry."""
     bars = worker.used_crosswalk
@@ -32,6 +47,8 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall)
     if latest is not None:
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
+        if guide is not None and abs(stamp - guide[1]) < GUIDE_MAX_AGE_S:
+            extra['guide_deg'] = guide[0]
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
                                                pose_at(way_stamp), pose_at(stamp), **extra)
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),

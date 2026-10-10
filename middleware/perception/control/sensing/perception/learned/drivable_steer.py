@@ -69,6 +69,8 @@ CROSS_TOL_M = 0.015
 CROSS_MIN_ALONG_M = 0.06
 #: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
 PIVOT_MAX_RAD = 1.75
+#: a route prior within this of straight ahead means "keep going" (no exit turn)
+GUIDE_STRAIGHT_DEG = 25.0
 #: after a crosswalk zone is seen, no pivot or exit turn for this much travel
 CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
@@ -290,7 +292,7 @@ class DrivableSteer:
         return True
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None, side_clear_m=None):
+               wall_ahead_m=None, side_clear_m=None, guide_deg=None):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -314,6 +316,18 @@ class DrivableSteer:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        if guide_deg is not None:
+            # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
+            # the map knows which way the road goes where the camera sees two openings or none.
+            info["guide_deg"] = round(guide_deg, 1)
+            want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG else ("left" if guide_deg > 0 else "right")
+            if want is None:
+                side = info["exit"] = None if ahead >= PIVOT_AHEAD_M else side
+            elif want in info["exit_reach_m"] or (side is None and ahead < LOOKAHEAD_M):
+                side = info["exit"] = want
+                if want not in info["exit_point_m"]:
+                    info["exit_point_m"][want] = (0.12, 0.12 if want == "left" else -0.12)
+            self._side = side if side is not None else self._side
         if side is not None and current_pose is not None and _crosses(
                 seen, *_to_current(info["exit_point_m"][side], source_pose, current_pose)) is not None:
             # an "opening" beyond a boundary seen earlier is a strip past a line, not a road
