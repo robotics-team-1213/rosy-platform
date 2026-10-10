@@ -50,15 +50,20 @@ def configure_velocity_drive(drive, damping=None):
         if imported is not None and not math.isfinite(imported):
             raise ValueError("Imported wheel damping must be finite")
         damping = positive_damping(imported) if imported is not None and imported > 0 else 1.0
+    # Acceleration drives underpower the wheel when its ground-contact load is omitted.
+    drive.CreateTypeAttr("force")
     drive.CreateStiffnessAttr(0.0)
     drive.CreateDampingAttr(damping)
     drive.CreateTargetVelocityAttr(0.0)
     expected = (0.0, damping, 0.0)
     observed = (drive.GetStiffnessAttr().Get(), drive.GetDampingAttr().Get(),
                 drive.GetTargetVelocityAttr().Get())
-    if any(value is None or not math.isfinite(value) or not math.isclose(value, target, abs_tol=1e-8)
-           for value, target in zip(observed, expected)):
-        raise RuntimeError(f"Wheel velocity drive readback failed: expected {expected}, observed {observed}")
+    observed_type = drive.GetTypeAttr().Get()
+    if observed_type != "force" or any(
+            value is None or not math.isfinite(value) or not math.isclose(value, target, abs_tol=1e-8)
+            for value, target in zip(observed, expected)):
+        raise RuntimeError(f"Wheel velocity drive readback failed: type={observed_type}; "
+                           f"expected {expected}, observed {observed}")
     return damping
 
 
