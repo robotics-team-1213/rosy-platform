@@ -279,7 +279,7 @@ class DrivableSteer:
         self._edges = []
         self._pivot_yaw = None
         self._crosswalk_pose = None
-        self._creep_from = self._creep_target = None
+        self._creep_from = self._creep_target = self._tangent_from = None
         self._lost_since = None
         self._ctx = {}
         self._misaligned_since = None
@@ -321,7 +321,17 @@ class DrivableSteer:
         bearing = math.degrees(math.atan2(ty, tx))
         if ctx.get("guide") and (bearing * ctx["ahead"] < 0 and abs(bearing) > 10.0 if abs(ctx["ahead"]) >= EXIT_BEND_DEG
                                  else abs(bearing - ctx["ahead"]) > REALIGN_DEG):
-            return None, None, dict(info, strategy="none", reason="creep_heading")   # the way leaves the route
+            # the way leaves the route: follow the map tangent instead, <= CREEP_MAX_M from where it began
+            # (architect rule a; g13-9dfk held 381 frames at the NE spoke foot, the way led into the island)
+            if self._tangent_from is None:
+                self._tangent_from = pose
+            t0 = self._tangent_from
+            if t0 is not None and pose is not None and math.hypot(pose[0] - t0[0], pose[1] - t0[1]) > CREEP_MAX_M:
+                return None, None, dict(info, strategy="none", reason="creep_heading")
+            g = math.radians(ctx["ahead"])
+            return (pursuit_error(LOOKAHEAD_M * math.cos(g), LOOKAHEAD_M * math.sin(g), ONE_CONFIDENCE), ONE_CONFIDENCE,
+                    dict(info, strategy="drivable_creep_map"))
+        self._tangent_from = None
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
     def lost(self, stamp):

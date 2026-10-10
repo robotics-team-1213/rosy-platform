@@ -208,4 +208,4 @@ def test_a_creep_never_aims_at_an_opening_against_the_route():
     closed_left = _lane(0.06, -0.06, x_max=0.13) | _lane(0.5, 0.02, x_max=0.3)
     error, _, debug = DrivableSteer().update(closed_left, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
                                              guide_deg=-45.0, guide_here_deg=0.0, guide_pivot_ok=False)
-    assert error is None or error >= 0, debug
+    assert error is None or error >= 0, debug          # the map tangent (right) or a HOLD, never left
