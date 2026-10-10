@@ -68,8 +68,10 @@ def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
         if (route_map and route_map.get("version") == trip.get("map_version")
                 and pose.get("state") == "LOCALIZED" and float(pose["age_s"]) <= 1.5):
             x, y = float(pose["x"]), float(pose["y"])
-            if not all(math.isfinite(v) for v in (x, y)):
-                raise ValueError("nonfinite pose")
+            body_half_width = float(trip["body_half_width_m"])
+            if not all(math.isfinite(v) for v in (x, y, body_half_width)) or body_half_width <= 0:
+                raise ValueError("nonfinite pose or body width")
+            evidence["body_half_width_m"] = body_half_width
             edges = {edge["id"]: edge for edge in route_map["map"]["edges"]}
             index = int(trip["segment_index"])
             segments = trip["plan"]["segments"]
@@ -80,7 +82,7 @@ def _route_fact(trip: dict, route_map: dict | None, now: float) -> dict:
                 edge = edges[segment["edge_id"]]
                 distance = _route_distance(x, y, segment, edge)
                 if math.isfinite(distance) and (closest is None or distance < closest[0]):
-                    closest = distance, float(edge["width_m"]) / 2, segment["edge_id"]
+                    closest = distance, float(edge["width_m"]) / 2 - body_half_width, segment["edge_id"]
             if closest is not None:
                 distance, limit, edge_id = closest
                 value = {"status": "OFF_ROUTE" if distance > limit else "ON_ROUTE",

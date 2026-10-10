@@ -22,6 +22,7 @@ from typing import Awaitable, Callable, Iterable, Optional
 
 import httpx
 
+from core_common.robot_body import NOMINAL_BODY
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
@@ -197,6 +198,7 @@ class TripRunner(TripAdmission, TripProgress):
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
+                    "body_half_width_m": NOMINAL_BODY.half_width_m if caps.kind == "pinky_pro" else None,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
                     "lease": lease, "stop_moved": moved}
