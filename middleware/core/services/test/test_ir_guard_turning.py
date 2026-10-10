@@ -28,3 +28,8 @@ def test_turning_in_place_over_a_line_under_the_centre_sensor_does_not_hold():
     decision = turn(rig(ir_guard_min_linear=0.01), ir_error=0.0, confidence=0.37)
     assert decision.angular > 0.0
     assert turn(rig(ir_guard_min_linear=0.01), ir_error=0.0, confidence=0.9).angular == 0.0
+
+
+def test_backing_needs_a_seen_clear_rear():
+    decision = turn(rig(ir_guard_min_linear=0.01, ir_guard_back_speed=0.02), ir_error=0.0, confidence=0.37)
+    assert decision.linear == 0.0 and decision.angular > 0.0      # no scan, no body: turn in place only

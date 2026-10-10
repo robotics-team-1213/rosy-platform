@@ -50,6 +50,7 @@ line_follow:
   # D-344 §12 amendment (2026-10-10): a drivable pivot or sharp arc (D-597 amendment 2) commands
   # under 0.01 m/s; the side IR steer-away only fought it (9dfk on a ring-entry speed bump).
   ir_guard_min_linear: 0.01
+  ir_guard_back_speed: 0.02
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

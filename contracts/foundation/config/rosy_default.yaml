@@ -147,6 +147,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   ir_guard_turn: 0.5               # rad/s steer away from the boundary (clamped to max_angular)
   ir_guard_speed_scale: 0.5        # linear scale while steering away
   ir_guard_min_linear: 0.0         # D-344 §12 amend: below this camera linear (turning in place) no side steer-away; 0 = off
+  ir_guard_back_speed: 0.0         # D-344 §12 amend 2: then creep back at this speed while turning (rear clear); 0 = turn in place
   # D-491: rest the guard while the IR row is in a crosswalk zone the camera saw (CALIBRATED/GAZEBO
   # ground, bounded uncertainty). ir_row_x_m comes from the robot package (URDF); null = never rest.
   crosswalk_zone_max_m: 0.20       # zone length cap; re-set after measurement
