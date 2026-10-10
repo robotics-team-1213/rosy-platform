@@ -81,12 +81,15 @@ class LaneComplianceConfig:
     #: D-511 rev 2: a map pose guides only while its sighting anchor is this fresh (s); D-587 poses
     #: are +-3 cm / +-5 deg within 1 s (localization session, 2026-10-10).
     guide_anchor_max_s: float = 1.5
+    #: Judge WRONG_WAY at all. Off until the field travel direction and the map's one-way order are
+    #: reconciled (2026-10-10: recorded travel runs against map v5's polyline order in the map frame).
+    wrong_way: bool = False
     #: Send the return cue (``POST /line-follow/lane-cue``) to the robot; off = observe only.
     return_cue: bool = True
 
     def __post_init__(self) -> None:
-        if not isinstance(self.return_cue, bool):
-            raise ValueError("fleet.lane_compliance.return_cue must be true or false")
+        if not isinstance(self.return_cue, bool) or not isinstance(self.wrong_way, bool):
+            raise ValueError("fleet.lane_compliance.return_cue / wrong_way must be true or false")
         for name in ("line_half_width_m", "off_map_pad_m", "off_map_unseen_s", "return_persist_s",
                      "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m", "crosswalk_uncertainty_m", "guide_ahead_m",
                      "guide_anchor_max_s"):
@@ -277,7 +280,7 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
     else:
         state = OFF_LANE
     facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
-    if facing is not None and state != OFF_LANE:
+    if config.wrong_way and facing is not None and state != OFF_LANE:
         # Every lane under the body runs against the robot: wrong way. At a junction a lane
         # within 90 deg is always under the body, so turning there is not.
         under = [t for a, d, _, t in projected if d - body_half_width_m < a.width_m / 2.0]
