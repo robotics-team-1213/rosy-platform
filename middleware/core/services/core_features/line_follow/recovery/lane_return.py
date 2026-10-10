@@ -221,6 +221,7 @@ class ReturnController:
         self._opened = None
         self._search_start = None
         self._search_pose = None
+        self._search_target = None
         self._search_attempt = 0
         self._path = []
         self._last_pose = None
@@ -249,6 +250,7 @@ class ReturnController:
         self._count = self._search_attempt = 0
         self._last_evidence = self._candidate = None
         self._search_start = self._search_pose = None
+        self._search_target = None
         self._align_start = self._align_pose = None
         self._path.clear()
         self._approach = CorridorApproach()
@@ -264,22 +266,29 @@ class ReturnController:
     def _hold(self, reason):
         return ReturnAction(self.phase, reason)
 
-    def _search(self, inp):
+    def _search(self, inp, lane=None):
         self.phase = "search"
-        if not inp.turn_clear:
-            return self._hold("rotation_space_unconfirmed")
-        if self._search_start is None:
-            self._search_start, self._search_pose = inp.now, inp.pose
-        turn = abs(_angle(inp.pose.yaw-self._search_pose.yaw))
-        if turn >= .18 or inp.now-self._search_start >= 2:
-            self._search_attempt += 1
-            self._search_start = self._search_pose = None
-            return self._hold("search_candidate_finished")
         if self._search_attempt >= 2:
             self.phase = "fleet"
             return ReturnAction(self.phase, "local_candidates_exhausted", fleet_required=True)
+        if not inp.turn_clear:
+            return self._hold("rotation_space_unconfirmed")
+        if self._search_start is None:
+            self._search_start = inp.now
+            if self._search_pose is None:
+                self._search_pose = inp.pose
+                # A proven lane supplies the first look direction; otherwise inspect both sides.
+                self._search_target = max(-.15, min(.15, lane.heading)) if lane else .09
+        turn = _angle(inp.pose.yaw-self._search_pose.yaw)
+        target = (self._search_target if self._search_attempt == 0
+                  else -math.copysign(.09, self._search_target))
+        reached = turn >= target if target > 0 else turn <= target
+        if reached or abs(turn) >= .18 or inp.now-self._search_start >= 2:
+            self._search_attempt += 1
+            self._search_start = None
+            return self._hold("search_candidate_finished")
         rate = min(.15, inp.angular_limit)
-        return ReturnAction(self.phase, "sensor_search", angular=rate*(1 if self._search_attempt == 0 else -1))
+        return ReturnAction(self.phase, "sensor_search", angular=math.copysign(rate, target))
 
     def observe(self, now, pose, epoch):
         """Feed the trail only. The caller runs this on every tick, holds included, so a
@@ -292,6 +301,8 @@ class ReturnController:
             self.trail.samples.clear()
             self._count = 0
             self._last_evidence = self._candidate = self._last_pose = None
+            self._search_start = self._search_pose = None
+            self._search_target = None
             self._reference_invalid = self.checkpoint is not None
             self.phase, self._opened = "departure_stop", now
             self._approach.finished = True
@@ -306,6 +317,8 @@ class ReturnController:
                 self._count = 0
                 self._reference_invalid = True
                 self._candidate = None
+                self._search_start = self._search_pose = None
+                self._search_target = None
                 if self.phase == "tracking":
                     self.phase, self._opened = "departure_stop", now
             self._last_pose = p
@@ -383,6 +396,7 @@ class ReturnController:
                     self.checkpoint = (p, lane)
                     self._reference_invalid = False  # D-507 7: the new checkpoint is the reference
                 self._opened = self._search_start = self._search_pose = None
+                self._search_target = None
                 self._search_attempt = 0
                 self._candidate = None
                 self._align_start = self._align_pose = None
@@ -416,13 +430,13 @@ class ReturnController:
                     # Preserve curvature while obeying the live angular ceiling.
                     scale = min(1, inp.angular_limit/abs(angular)) if angular else 1
                     return ReturnAction(self.phase, "measured_path_return", -speed*scale, angular*scale)
-        if lane is not None and inside and inp.turn_clear and abs(lane.heading) > .12:
+        if lane is not None and inside and same and inp.turn_clear and abs(lane.heading) > .12:
             self.phase = "align"
             if self._align_start is None:
                 self._align_start, self._align_pose = inp.now, p
             if (inp.now-self._align_start >= 2 or
                     abs(_angle(p.yaw-self._align_pose.yaw)) >= .18):
-                return self._search(inp)
+                return self._search(inp, lane)
             return ReturnAction(self.phase, "lane_heading_align", angular=max(-inp.angular_limit,
                                 min(inp.angular_limit, lane.heading)))
         return self._search(inp)

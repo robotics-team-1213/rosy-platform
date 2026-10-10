@@ -931,3 +931,9 @@
 - Change: Existing stuck opened/asked events carry situation-inquiry-v1 goal, frame reference, scan age and attempts; no new motion authority.
 - Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
 - Gate: SOURCE; deployment and model accuracy are separate evidence.
+
+## 2026-10-10 - fix/lap-search-reviewed - Bounded lane search
+
+- Change: Freeze verified same-corridor search bearing and search both directions without resetting the existing attempt or time budget.
+- Evidence: Remote return suite 128 passed, 0 NEW on d49e9740e; independent lap_review APPROVE WITH NOTES for the combined diff.
+- Gate: Source regression evidence only; new source DEVICE/FIELD pending.

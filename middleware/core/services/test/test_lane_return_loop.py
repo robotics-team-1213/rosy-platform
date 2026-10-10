@@ -1,5 +1,6 @@
 """D-468 synthetic planar closed loop: outputs move measured pose, not elapsed distance."""
 import math
+import pytest
 
 from core_features.line_follow.recovery.lane_return import (
     Boundary, Corridor, Footprint, Pose, ReturnController, ReturnInput,
@@ -27,20 +28,24 @@ def advance(state, action, dt=.05, slip=1.):
     return x+v*math.cos(yaw)*dt,y+v*math.sin(yaw)*dt,yaw+w*dt
 
 
-def test_no_checkpoint_recovers_current_lane_with_measured_low_speed_approach():
+@pytest.mark.parametrize("offset", [.055, -.055])
+def test_no_checkpoint_recovers_current_lane_with_measured_low_speed_approach(offset):
     ctl = ReturnController(BODY)
-    state = (0.,.055,0.)
+    state = (0.,offset,0.)
     phases = set()
+    trace = []
     for step in range(241):
         t = 1.+step*.05
         action = ctl.tick(inputs(t,*state))
         phases.add(action.phase)
+        if not trace or trace[-1][1] != action.phase:
+            trace.append((t, action.phase, action.reason, state))
         assert abs(action.linear) <= .04 and abs(action.angular) <= .3
         if action.recovered:
             assert inputs(t,*state).corridor.margin(BODY) >= .015
             assert abs(state[2]) <= .12
             break
-        assert not action.fleet_required
+        assert not action.fleet_required, trace
         state = advance(state,action)
     else:
         raise AssertionError(f"local recovery failed; phases={phases}, state={state}")
