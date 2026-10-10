@@ -166,6 +166,7 @@ roots:
     import_prefix: [core_events]
     concern: control
   - path: middleware/core/api
+    layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
     d427_target: middleware/core/api_web
     legacy: src/runtime/api_web
