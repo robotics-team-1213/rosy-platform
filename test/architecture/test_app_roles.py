@@ -23,7 +23,9 @@ CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "Fleet user API": re.compile(r"/api/fleet/(?!pairing/(?:v1|v2)(?:/|\$path\b|[\"']|$))"),
     "cmd_vel": re.compile(r"cmd_vel"),
-    "estop": re.compile(r"estop", re.IGNORECASE),
+    # A word that starts with e-stop (estop, ESTOP, e_stop) or a camelCase part (sendEstop, EStop);
+    # not the letters inside another word such as CameraX CaptureRequestOptions.
+    "estop": re.compile(r"(?<![A-Za-z])(?i:e[-_]?stop)|(?<=[a-z])E[-_]?(?:stop|Stop|STOP)"),
 }
 # 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write, the
 #    D-457 detections write and own-config read, plus the D-341 12 read of paired-camera
@@ -76,6 +78,14 @@ def owns_overlaps(rows: list[dict]) -> list[str]:
 def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert CAMERA_APP.is_dir()
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
+
+
+def test_camera_estop_rule_matches_words_not_letters_inside_names():
+    rule = CAMERA_FORBIDDEN["estop"]
+    for text in ("estop", "ESTOP", "e_stop", "E-stop", "sendEstop()", "EStop", "val estopUrl"):
+        assert rule.search(text), text
+    for text in ("CaptureRequestOptions", "requestOptions", "setCaptureRequestOptions(x)", "bestOption"):
+        assert rule.search(text) is None, text
 
 
 def test_camera_pairing_namespace_exemption_keeps_user_routes_forbidden():

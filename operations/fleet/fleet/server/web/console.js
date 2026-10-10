@@ -668,6 +668,10 @@ function focusGoalButton(robotId) {
 let pinStart = null;
 function canvasWorld(event) {
   const rect = el("map-canvas").getBoundingClientRect();
+  if (!view.map) {
+    const world = view.siteToWorld?.(event.clientX - rect.left, event.clientY - rect.top);
+    return world ? { ...world, px: event.clientX, py: event.clientY } : null;
+  }
   const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
   const offX = (rect.width - view.map.width * scale) / 2, offY = (rect.height - view.map.height * scale) / 2;
   const col = (event.clientX - rect.left - offX) / scale, rowFromTop = (event.clientY - rect.top - offY) / scale;
@@ -677,12 +681,12 @@ function canvasWorld(event) {
     px: event.clientX, py: event.clientY };
 }
 pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-  if (!view.pinning || !view.map) return;
+  if (!view.pinning || (!view.map && !view.siteMap)) return;
   pinStart = canvasWorld(event);
 });
 pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
   const life = pageScope.capture();
-  const start = pinStart, end = view.map ? canvasWorld(event) : null;
+  const start = pinStart, end = canvasWorld(event);
   pinStart = null;
   const robotId = view.pinning;
   if (!robotId || !start) return;

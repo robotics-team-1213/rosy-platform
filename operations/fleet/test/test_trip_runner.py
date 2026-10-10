@@ -1056,6 +1056,24 @@ def _app(tmp_path, ports):
     return TestClient(app), tasks, store, robot, console
 
 
+def test_trip_plan_reads_fleet_map_pose_for_a_robot_that_reports_no_localization(tmp_path):
+    """Field 2026-10-10: a motor-mode robot (localization null) with a LOCALIZED MapPose plans and starts."""
+    ports = Ports()
+    client, _tasks, store, robot, _console = _app(tmp_path, ports)
+    robot._state = {"robot_id": "rosy_60", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "localization": None}
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+    assert plan.status_code == 200, plan.text
+    started = client.post(f"/api/fleet/trips/{plan.json()['plan_id']}/start", headers=OPERATOR)
+    assert started.status_code == 200, started.text
+    run(client.app.state.trip_runner.cancel(plan.json()["plan_id"], "bob"))
+    for state in ("DEGRADED", "UNKNOWN"):
+        ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, state=state)
+        refused = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+        assert refused.status_code == 422 and refused.json()["detail"] == {
+            "code": "TRIP_POSE_UNTRUSTED", "detail": {"pose_state": state}}
+
+
 def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_path):
     ports = Ports()
     client, tasks, store, _robot, _console = _app(tmp_path, ports)
