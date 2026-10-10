@@ -363,7 +363,9 @@ def _resolve_optional_site_config(args) -> None:
 
 def _hub_link(args) -> dict | None:
     """D-555: what robots receive with a hub credential, or None when not configured."""
-    hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
+    hostname, ca = getattr(args, "hub_link_hostname", None) or None, getattr(args, "hub_link_ca", None)
+    if ca is not None and str(ca) in ("", "."):
+        ca = None                      # compose passes "" when the site leaves the hub link unset
     if hostname is None and ca is None:
         return None
     from core_common.protocol.discovery_txt import HOSTNAME
