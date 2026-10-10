@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import edge_drive
 
 
-@pytest.mark.parametrize("ending", ["off", "lease", "connection", "interrupt", "recording"])
+@pytest.mark.parametrize("ending", ["off", "lease", "connection", "interrupt", "recording", "replacement"])
 def test_continuous_test_keeps_core_holds_then_stops_and_cleans_up(monkeypatch, ending):
     calls, samples = [], []
     holds = edge_drive.argparse.Namespace(status=200)
@@ -17,7 +17,8 @@ def test_continuous_test_keeps_core_holds_then_stops_and_cleans_up(monkeypatch, 
     monkeypatch.setattr(edge_drive.time, "sleep", lambda _: None)
     monkeypatch.setattr(edge_drive, "rec_start", lambda _: calls.append("record-start") or "rec-1")
     monkeypatch.setattr(edge_drive, "_recording_state", lambda _: {
-        "state": "idle" if ending == "recording" and len(samples) == 3 else "recording", "id": "rec-1"})
+        "state": "idle" if ending == "recording" and len(samples) == 3 else "recording",
+        "id": "rec-2" if ending == "replacement" and len(samples) == 3 else "rec-1"})
     monkeypatch.setattr(edge_drive, "rec_stop", lambda _: calls.append("record-stop"))
     monkeypatch.setattr(edge_drive, "_arm", lambda _: calls.append("arm") or holds)
     monkeypatch.setattr(edge_drive, "_disarm", lambda _: calls.append("disarm"))
@@ -48,7 +49,11 @@ def test_continuous_test_keeps_core_holds_then_stops_and_cleans_up(monkeypatch, 
         edge_drive.cmd_drive(Core(), args)
     assert samples == ["crosswalk_person_present", "lane_departure", "obstacle"]
     assert calls.count("arm") == 1
-    assert calls[-3:] == ["disarm", ("PUT", "/line-follow/mode", {"mode": "OFF"}), "record-stop"]
+    if ending == "replacement":
+        assert calls[-2:] == ["disarm", ("PUT", "/line-follow/mode", {"mode": "OFF"})]
+        assert "record-stop" not in calls
+    else:
+        assert calls[-3:] == ["disarm", ("PUT", "/line-follow/mode", {"mode": "OFF"}), "record-stop"]
     assert not any(isinstance(c, tuple) and c[1] in ("/teleop", "/line-follow/stuck/decision") for c in calls)
 
 
@@ -70,3 +75,16 @@ def test_refused_recording_does_not_arm_or_stop_another_recording(monkeypatch):
     with pytest.raises(SystemExit, match="recording refused"):
         edge_drive.cmd_drive(None, edge_drive.argparse.Namespace(continuous_test=True))
     assert calls == []
+
+
+def test_start_does_not_adopt_a_replacement_recording(monkeypatch):
+    calls = []
+    class Core:
+        def call(self, method, path, body=None):
+            calls.append((method, path))
+            if method == "POST":
+                return 201, {"id": "original", "state": "starting"}
+            return 200, {"active": {"id": "replacement", "state": "recording"}}
+    with pytest.raises(SystemExit, match="replaced before ready"):
+        edge_drive.rec_start(Core())
+    assert ("POST", "/recordings/active/stop") not in calls
