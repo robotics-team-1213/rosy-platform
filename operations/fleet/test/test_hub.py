@@ -318,3 +318,18 @@ def test_pairing_tokens_added_and_dropped_at_runtime_gate_hello():
     assert hub.registry.online_ids() == []
     reply = hub.handle(_hello("rosy_09", "pair-09"))
     assert reply.type is EnvelopeType.ERROR and reply.payload["code"] == "PAIRING_INVALID"
+
+
+def test_a_refused_heartbeat_ends_the_last_good_snapshot_freshness():
+    """rosy-b3 review: after a malformed heartbeat the gather must not keep serving the old snapshot."""
+    from fleet.hub.hub import HubSession
+
+    hub, session = SiteHub([_ep()]), HubSession()
+    hub.handle(_hello(), session=session)
+    good = HeartbeatPayload(state_snapshot=StateSnapshot(robot_id="rosy_01", seq=4)).model_dump(mode="json")
+    hub.handle(Envelope(type=EnvelopeType.HEARTBEAT, payload=good), session=session)
+    assert hub.registry.record("rosy_01").last_heartbeat_monotonic is not None
+    bad = {**good, "state_snapshot": {**good["state_snapshot"], "line_follow": {"crosswalk": "outside"}}}
+    reply = hub.handle(Envelope(type=EnvelopeType.HEARTBEAT, payload=bad), session=session)
+    assert reply.type is EnvelopeType.ERROR
+    assert hub.registry.record("rosy_01").last_heartbeat_monotonic is None
