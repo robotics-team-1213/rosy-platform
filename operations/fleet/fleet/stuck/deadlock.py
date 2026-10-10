@@ -45,9 +45,12 @@ class AiReplan:
         if proposal is None or proposal["decision"] != "REPLAN":
             return None
         pick, edges = proposal["robot_id"], tuple(proposal.get("body", {}).get("blocked_edges") or ())
+        judged = (pid, pick, edges, proposal["reason"], proposal.get("observed_at"))
+        if judged in self._judged:
+            self.waiting = False
+            return None
         key = "deadlock:wait_cycle:lane"           # ponytail: one place word until blocks name their place
         verdict = self._verdict(proposal, pid, pick, edges, avoidable, key, now)
-        judged = (pid, pick, edges, proposal["reason"])
         if judged not in self._judged:
             self._judged.add(judged)
             self.board.verdicts.append({**proposal, "verdict": verdict, "judged_at": time.time()})
