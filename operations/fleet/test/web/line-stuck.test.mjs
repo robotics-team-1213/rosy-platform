@@ -8,6 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
+  previewFresh, headingText, fleetAnswerText,
 } = await import("../../fleet/server/web/line-stuck.js");
 
 const STUCK = {
@@ -157,10 +158,28 @@ test("D-577 8: the AI chip says whether AI judgment exists, and each live fact s
 });
 
 test("D-577 8: the evidence picture says which camera, which frame and how old", () => {
-  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 0), "앞 카메라 #812 · 0초 전 촬영");
-  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 3), "앞 카메라 #812 · 3초 전 촬영");
+  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 0), "사건 기록 영상 · 앞 카메라 #812 · 0초 전 촬영");
+  assert.equal(evidenceCaption({ source: "front", sequence: 812, age_s: 0.4 }, 3), "사건 기록 영상 · 앞 카메라 #812 · 3초 전 촬영");
   assert.equal(evidenceCaption(null), "카메라 그림 없음");
   assert.equal(evidenceCaption({ state: "loading" }), "카메라 그림 받는 중");
+});
+
+test("live evidence expires and an incident snapshot cannot be shown as current", () => {
+  const live = { live: true, age_s: 0.4, source: "front", sequence: 900 };
+  assert.ok(previewFresh(live));
+  assert.ok(!previewFresh(live, 3));
+  assert.ok(!previewFresh({ ...live, live: false }));
+  assert.ok(!previewFresh({ ...live, age_s: NaN }));
+  assert.match(evidenceCaption(live), /현재 영상/);
+  assert.match(evidenceCaption(live, 3), /만료/);
+});
+
+test("UI distinguishes map direction advice, transmitted command and CORE receipt", () => {
+  assert.match(headingText({ status: "heading_compared", turn_deg: -20, edge_id: "lower", map_version: 5 }), /오른쪽 20°/);
+  assert.match(headingText({ status: "pose_untrusted" }), /재확인 필요/);
+  assert.match(fleetAnswerText({ tier: "ai", decision: "WAIT", accepted: true, outcome: "hold" }), /AI 판단 → Fleet 전송 대기 → CORE 수락/);
+  assert.match(fleetAnswerText({ decision: "RESUME", accepted: false, code: "EMERGENCY_ACTIVE" }), /CORE 거절/);
+  assert.match(fleetAnswerText({ decision: "RESUME", accepted: null }), /미확인/);
 });
 
 test("D-577 8: one alert when a stuck row appears, one more when it goes 30 s unanswered", () => {

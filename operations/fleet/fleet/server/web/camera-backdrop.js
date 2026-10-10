@@ -34,17 +34,18 @@ export function planeAffine(plane, width, height, toPx) {
 // 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
 // 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
 let topDownCache = null;
-function drawCameraTopDown(ctx, image, calibration, bounds, toPx, width, height, dpr, rot = 0) {
+function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height, dpr, rot = 0) {
+  const image = frame.image;
   const key = [calibration.calibration_revision, width, height, dpr, rot,
     bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
-  if (!topDownCache || topDownCache.image !== image || topDownCache.key !== key) {
+  if (!topDownCache || topDownCache.frame !== frame || topDownCache.key !== key) {
     const off = document.createElement("canvas");
     off.width = Math.round(width * dpr);
     off.height = Math.round(height * dpr);
     const octx = off.getContext("2d");
     octx.scale(dpr, dpr);
     warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
-    topDownCache = { image, key, canvas: off };
+    topDownCache = { frame, key, canvas: off };
   }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -84,7 +85,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     || cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
   function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot) {
     if (!usesPlane()) {
-      drawCameraTopDown(ctx, cameraFrame.image, record, bounds, toPx, width, height, dpr, rot);
+      drawCameraTopDown(ctx, cameraFrame, record, bounds, toPx, width, height, dpr, rot);
       return;
     }
     const { image, plane } = planeFrame();
@@ -165,7 +166,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       }
       lastFrame = frame;
       // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
-      frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
+      (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
       setCameraFrame(frame);
       showFrame();
       // Ask Vision only when the site view can draw it (no grid map, a site map, a calibration on it).

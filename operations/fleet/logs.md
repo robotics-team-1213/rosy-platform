@@ -1,4 +1,4 @@
-﻿# fleet logs
+# fleet logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
@@ -3131,3 +3131,9 @@
 - Change: Integrated automatic-leader console selection. Lane convoy candidates are online open-repeat-trip robots; rank fresh LOCALIZED guide poses in the active map, otherwise robot number. Both callers share selection; formation capability admission is preserved.
 - Evidence: Node suite 274 passed; remote focused Python contracts 62 passed, known_failures 0 NEW. Independent led_review approved source and fleet size 51061.
 - Gate: SOURCE / remote contracts; deployment and physical convoy acceptance remain separate.
+
+## 2026-10-11 · uncommitted · fix(fleet): fresh recovery context (D-623)
+
+- Change: Fresh raw incident preview, per-frame backdrop cache, download/decode freshness and invalidation; validated map heading reaches AI case and console; actual Fleet command and CORE receipt shown separately.
+- Evidence: Remote validation pending. Existing D-468 aligned-boundary comparison and D-595 frozen calibration remain authoritative.
+- Gate: SOURCE; no new motion permission, AI-first activation or physical acceptance.

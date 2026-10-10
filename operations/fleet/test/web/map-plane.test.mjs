@@ -144,3 +144,34 @@ test("the plane feed rejects a picture that does not match its rectangle", async
   await h.feed.refresh();
   assert.equal(h.feed.current(), null);
 });
+
+test("download and decode time cannot make an expired map plane look fresh", async (t) => {
+  const OldImage = globalThis.Image;
+  const h = feedHarness([live(), live({ ageMs: NaN })]);
+  globalThis.Image = class {
+    constructor() { this.naturalWidth = 200; this.naturalHeight = 100; }
+    async decode() { h.advance(2100); }
+  };
+  t.after(() => { globalThis.Image = OldImage; });
+  await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
+  await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
+});
+
+test("a delayed decode cannot restore a plane after its view is disabled", async (t) => {
+  const OldImage = globalThis.Image;
+  let decode;
+  globalThis.Image = class {
+    constructor() { this.naturalWidth = 200; this.naturalHeight = 100; }
+    decode() { return new Promise((resolve) => { decode = resolve; }); }
+  };
+  t.after(() => { globalThis.Image = OldImage; });
+  const h = feedHarness([live()]);
+  const pending = h.feed.refresh();
+  await Promise.resolve();
+  await h.feed.refresh(false);
+  decode();
+  await pending;
+  assert.equal(h.feed.current(), null);
+});

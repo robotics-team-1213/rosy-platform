@@ -34,6 +34,7 @@ def context(row: Mapping, stuck: Optional[Mapping] = None) -> dict:
             "inquiry_observed_at": stuck.get("inquiry_observed_at"),
             "current_mode": state.get("mode"),
             "route_context": line_follow.get("route_context"),
+            "heading_review": row.get("heading_review"),
             "route_context_published_at_s": line_follow.get("route_context_published_at_s"),
             "task_intent": {"task": "lane_follow_recovery", "trip_active": bool(row.get("trip")),
                             "goal": "recover the intended lane direction without overriding CORE safety"},

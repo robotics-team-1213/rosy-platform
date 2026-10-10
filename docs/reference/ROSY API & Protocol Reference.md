@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.203
+**Version:** v1.204
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,13 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.204 Fleet 현재 영상과 복구 방향 (D-623)
+
+- 기존 `GET /api/fleet/robots/{robot_id}/line-stuck/evidence?stuck_id=`에 선택 query `live: bool = false`를 추가한다. 기본 사건 사진 보존 동작은 그대로다. `live=true`는 열린 사건에만 현재 RAW front JPEG를 읽고 `{robot_id, stuck_id, sequence, source, media_type, jpeg_base64, live:true, captured_at:number|null, age_s}`를 반환한다. CORE 촬영 시각이 있으면 그 시각으로, 없으면 CORE `age_ms`와 요청 경과 시간으로 나이를 재며 3초를 넘거나 나이를 확인하지 못하면 기존 404 `STUCK_PREVIEW_UNAVAILABLE`이다. 닫힌/교체된 사건은 404 `STUCK_NOT_OPEN`. viewer+ 권한과 로봇 credential 경계는 동일하다. JPEG는 현재 요청에서만 반환하고 원본 사건 사진을 덮어쓰거나 디스크에 저장하지 않는다. D-136 T1의 단일 사진 제한은 이 인증된 열린 사건 조회만 예외로 한다.
+- `/api/fleet/state`의 열린 `line_stuck` 행과 `/api/fleet/line-stuck`의 pending 행에 선택 `heading_review`를 넣는다. `status:heading_compared`일 때만 `{turn_deg, pose_stamp, edge_id, map_version, turn_spot}`가 있다. 미확인 상태(`pose_untrusted`, `lane_sample_untrusted`, `observer_unavailable`)에는 회전각이 없다. AI case의 `context.heading_review`도 같은 의미다. 방향 재평가이며 실행 허가는 아니다.
+- 차선 경계의 실제 변화 판정은 D-468의 자세 정렬 후 경계 기하 비교를 따른다. 프레임 sequence 증가, JPEG hash 차이, 모델 confidence, D-595 보정 jitter는 경계 변화나 새 이동 명령의 근거가 아니다. 이동 결정 단어/CORE 실행 계약은 변경하지 않는다.
+- CORE `line_follow.stuck.inquiry`는 선택 object/null이며 현재 `situation-inquiry-v1` 문맥을 담는다. `lane_boundary`는 `{state:unknown|baseline|confirming|confirmed, revision:integer>=0, epoch:integer, source_stamp_ns:integer|null, geometry_id?:string, reason?:string}`이다. 신선한 D-468 경계가 자세 정렬 후 기존 경계와 다르고 서로 다른 촬영 시각 세 개에서 일치할 때만 revision이 증가한다. 새 epoch/geometry는 baseline이며 변화로 세지 않는다. Fleet은 최신 상태 inquiry를 최초 사건 inquiry보다 우선한다. AI는 같은 stuck의 첫 문의 후에는 confirmed revision 변경에서만 재문의한다. 경계 상태가 없는 기존 장치도 첫 문의만 가능하며 자동 재문의는 하지 않는다. 이 상태는 기하 관측의 변화이고 명령·허가가 아니다.
 
 ---
 

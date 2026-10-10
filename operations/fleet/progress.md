@@ -156,3 +156,7 @@ plans:
 - 관제 UI 가 로봇 `cmd_vel`·DDS 에 붙지 않는다(설계 §6). 내리는 것은 원자 액션뿐이다.
 - `map` 프레임을 로봇별로 접두하지 않는다. CORE 가 `map` 고정으로 pose 를 읽고 목표를 받는다(`ros_bridge._map_frame`).
 - `core`를 이 패키지에서 수정하지 않는다. 로봇 계약에 없는 것은 API Ref 사이클의 finding이지 로컬 patch가 아니다.
+
+### 2026-10-10 D-623 current image and recovery context
+
+SOURCE implemented; remote verification pending. No Fleet REALIGN activation or field motion proof.

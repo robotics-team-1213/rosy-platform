@@ -110,6 +110,7 @@ class StuckResolverLoop:
                 review = {"status": "observer_unavailable"}
             if review is None:
                 continue
+            row["heading_review"] = review
             turn = review.get("turn_deg")
             key = (stuck["stuck_id"], review["status"], review.get("map_version"),
                    review.get("edge_id"), round(turn / 5) if turn is not None else None)

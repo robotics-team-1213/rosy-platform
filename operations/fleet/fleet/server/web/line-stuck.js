@@ -275,12 +275,39 @@ export function decisionButtons(stuck, { operator, namedReason = "", busy = fals
 
 const CAMERA_LABEL = Object.freeze({ front: "앞 카메라" });
 
+export function previewFresh(preview, elapsedS = 0) {
+  return preview?.live === true && Number.isFinite(preview.age_s)
+    && preview.age_s >= 0 && preview.age_s + elapsedS <= 3;
+}
+
+export function headingText(review) {
+  if (!review) return "";
+  if (review.status !== "heading_compared" || !Number.isFinite(review.turn_deg)) {
+    return `지도 방향 재확인 필요 (${review.status})`;
+  }
+  const turn = review.turn_deg;
+  return `지도 방향: ${turn === 0 ? "현재 방향 일치" : `${turn > 0 ? "왼쪽" : "오른쪽"} ${Math.abs(turn)}°`}`
+    + ` · 차로 ${review.edge_id || "미확인"} · 지도 v${review.map_version}`
+    + ` · ${review.turn_spot ? "회전 지점" : "회전 지점 아님"} · 회전 허가 아님`;
+}
+
+export function fleetAnswerText(answer) {
+  if (!answer) return "";
+  const decision = DECISION_LABEL[answer.decision] || answer.decision;
+  const source = answer.tier === "ai" ? "AI 판단" : answer.tier === "human" ? "운영자 판단" : "Fleet 규칙";
+  const receipt = answer.accepted === true ? "CORE 수락 · 복구 완료는 별도 확인"
+    : answer.accepted === false ? `CORE 거절 (${answer.code || answer.message || "사유 미확인"})`
+      : "CORE 처리 결과 미확인";
+  return `${source} → Fleet 전송 ${decision} → ${receipt}${answer.outcome ? ` · 상태 ${OUTCOME_TEXT[answer.outcome] || answer.outcome}` : ""}`;
+}
+
 /** D-577 8: caption of the stuck's evidence picture; `elapsedS` = seconds since Fleet answered. */
 export function evidenceCaption(preview, elapsedS = 0) {
   if (!preview) return "카메라 그림 없음";
   if (preview.state === "loading") return "카메라 그림 받는 중";
+  if (preview.live && !previewFresh(preview, elapsedS)) return "현재 영상 만료 — 새 프레임 기다림";
   const age = Math.round((preview.age_s ?? 0) + elapsedS);
-  return `${CAMERA_LABEL[preview.source] || preview.source || "카메라"} #${preview.sequence} · ${age}초 전 촬영`;
+  return `${preview.live ? "현재 영상" : "사건 기록 영상"} · ${CAMERA_LABEL[preview.source] || preview.source || "카메라"} #${preview.sequence} · ${age}초 전 촬영`;
 }
 
 /** D-577 8: alerts to raise now — once when a stuck row appears, once more when it goes overdue.
@@ -420,17 +447,18 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
   }
 
   async function loadPreview(robotId, stuckId) {
-    previews.set(robotId, { stuck_id: stuckId, state: "loading" });
+    const pending = { stuck_id: stuckId, state: "loading", at: Date.now() };
+    previews.set(robotId, pending);
     let entry;
     try {
       const preview = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/evidence`
-        + `?stuck_id=${encodeURIComponent(stuckId)}`);
-      entry = { stuck_id: stuckId, state: "ok", preview, at: Date.now() };
+        + `?stuck_id=${encodeURIComponent(stuckId)}&live=true`);
+      entry = { stuck_id: stuckId, state: "ok", preview, at: pending.at };
     } catch (err) {
       if (err.name === "AbortError") return;
-      entry = { stuck_id: stuckId, state: "none" };
+      entry = { stuck_id: stuckId, state: "none", at: Date.now() };
     }
-    if (previews.get(robotId)?.stuck_id !== stuckId) return;   // the stuck changed meanwhile
+    if (previews.get(robotId) !== pending) return;   // the stuck closed or changed while fetching
     previews.set(robotId, entry);
     render();
   }
@@ -440,10 +468,10 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     const figure = document.createElement("figure");
     figure.className = "stuck-evidence";
     const caption = document.createElement("figcaption");
-    if (entry?.state === "ok") {
+    if (entry?.state === "ok" && previewFresh(entry.preview, (Date.now() - entry.at) / 1000)) {
       const img = document.createElement("img");
       img.src = `data:${entry.preview.media_type};base64,${entry.preview.jpeg_base64}`;
-      img.alt = `${robotId} 막힘 순간의 카메라 그림`;
+      img.alt = `${robotId} 현재 앞 카메라 영상`;
       figure.append(img);
     }
     caption.textContent = evidenceCaption(entry?.state === "ok" ? entry.preview
@@ -512,6 +540,14 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       actions.append(node);
     }
     li.append(head, facts);
+    const boundary = stuck.inquiry?.lane_boundary;
+    const boundaryText = boundary ? `차선 경계: ${boundary.state} · 변화 #${boundary.revision} · 같은 경계에서는 AI 재문의 대기` : "";
+    for (const text of [headingText(stuck.heading_review), boundaryText, fleetAnswerText(stuck.fleet_answer)].filter(Boolean)) {
+      const line = document.createElement("p");
+      line.className = "stuck-resolver";
+      line.textContent = text;
+      li.append(line);
+    }
     const note = resolverText(stuck.resolver);
     if (note) {
       const line = document.createElement("p");
@@ -595,9 +631,12 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       const stuck = robot.line_stuck;
       // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
       const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
-      if (!previews.has(robot.robot_id)) loadPreview(robot.robot_id, stuck.stuck_id);
+      const preview = previews.get(robot.robot_id);
+      if (!preview || (preview.state !== "loading" && Date.now() - preview.at >= 2000)) {
+        loadPreview(robot.robot_id, stuck.stuck_id);
+      }
       const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
-        previews.get(robot.robot_id)?.state || null,
+        previews.get(robot.robot_id)?.state || null, previews.get(robot.robot_id)?.at || null,
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
@@ -610,6 +649,9 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
         const entry = previews.get(robot.robot_id);
         const caption = node.querySelector(".stuck-evidence figcaption");
         if (caption && entry?.state === "ok") caption.textContent = evidenceCaption(entry.preview, (Date.now() - entry.at) / 1000);
+        if (entry?.state === "ok" && !previewFresh(entry.preview, (Date.now() - entry.at) / 1000)) {
+          node.querySelector(".stuck-evidence img")?.remove();
+        }
       }
     }
 
