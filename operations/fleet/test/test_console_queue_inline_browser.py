@@ -111,6 +111,11 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         fact.locator("select").select_option("traffic_wait")
         fact.locator("button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/facts/17/review"
+        with page.expect_download() as download_info:
+            page.locator("#incident-export").click()
+        download = download_info.value
+        assert download.suggested_filename == "rosy-incidents.json"
+        assert json.loads(Path(download.path()).read_text(encoding="utf-8"))["traffic_reports"][0]["id"] == "ai_fact:17"
         assert not errors
         browser.close()
 
