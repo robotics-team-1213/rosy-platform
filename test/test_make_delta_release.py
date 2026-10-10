@@ -81,3 +81,30 @@ def test_push_preflight_accepts_a_signed_delta_and_refuses_a_tampered_file(tmp_p
     assert signing.verify_release_files(delta, public)  # the full check needs the base files
     (delta / "install" / "a.py").write_bytes(b"tampered\n")
     assert [r.code for r in signing.verify_delta_files(delta, public)] == ["CHECKSUM_MISMATCH"]
+
+
+def test_base_modes_follow_a_delta_chain_to_the_full_tarball(tmp_path):
+    # D-553 addendum 4: an exec bit set only in the full base survives deltas built on deltas.
+    import io
+    import json
+    import tarfile
+
+    def tarball(release_id, files, marker=None):
+        folder = tmp_path / f"rosy-release-{release_id}"
+        (folder / "x" / release_id).mkdir(parents=True)
+        with tarfile.open(folder / f"{release_id}.tar.gz", "w:gz") as bundle:
+            for name, mode in files.items():
+                info = tarfile.TarInfo(name)
+                info.mode = mode
+                bundle.addfile(info, io.BytesIO(b""))
+            if marker:
+                info = tarfile.TarInfo(tool.DELTA_MARKER)
+                info.size = len(marker)
+                bundle.addfile(info, io.BytesIO(marker))
+        return folder / "x" / release_id, folder / f"{release_id}.tar.gz"
+
+    tarball("2026.10.01-001", {"bin/run": 0o755, "a.py": 0o644})
+    base, delta = tarball("2026.10.01-002", {"a.py": 0o600}, b"2026.10.01-001\n" + b"0" * 64 + b"\n")
+    assert tool.base_modes(base, delta) == {"bin/run": 0o755, "a.py": 0o600}
+    (base / tool.MODES_FILE).write_text(json.dumps({"only": 0o644}))
+    assert tool.base_modes(base, delta) == {"only": 0o644}
