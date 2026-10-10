@@ -82,7 +82,10 @@ def test_deadlock_case_service_vlm_and_fleet_replan_are_connected(tmp_path):
     def chat(_url, body, _timeout):
         assert len(body["messages"][0]["images"]) == 4
         return {"message": {"content": json.dumps({"decision": "REPLAN", "robot_id": "b",
-                                                    "blocked_edges": ["y"], "confidence": 0.8})}}
+            "blocked_edges": ["y"], "confidence": 0.8,
+            "assessment": {"type": "resource_conflict", "direction": "replan", "observations": {
+                "front": "Another robot is ahead.", "rosy_cam": "Two robots share the corridor."},
+                "uncertainties": ["Current traffic ownership needs Fleet confirmation."]}})}}
 
     vlm = Vlm(post=chat, get=lambda *_args: {"models": [{"name": "qwen3-vl:8b-instruct", "digest": "a" * 64}]})
     first.profiles = lambda: [vlm.profile()]

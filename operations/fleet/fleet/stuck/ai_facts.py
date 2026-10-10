@@ -114,6 +114,16 @@ class AiProposal(BaseModel):
     ttl_s: float = Field(gt=0.0, le=8.0)
     body: dict[str, Any] = Field(default_factory=dict)    # D-610 7: REPLAN {blocked_edges: [...]}
 
+    @field_validator("evidence")
+    @classmethod
+    def _assessment(cls, evidence):
+        if "assessment" in evidence:
+            from core_common.protocol.situation import validate_assessment
+            validate_assessment(evidence["assessment"], evidence.get("views"))
+            if evidence["assessment"]["domain"] != "mobility":
+                raise ValueError("lane-stuck proposal requires mobility domain")
+        return evidence
+
 
 class AiFactLog:
     """`fleet_ai_facts` beside the other Fleet journal tables (`--tasks-db`); one row per accepted fact."""

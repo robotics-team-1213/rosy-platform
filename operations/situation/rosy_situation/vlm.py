@@ -20,10 +20,11 @@ import math
 import re
 import urllib.request
 from typing import Callable, Optional
+from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d618-v1"
+PROMPT_ID = "d619-v1"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -39,6 +40,11 @@ PROMPT = """You decide what a small lane-following robot should do next. Picture
 ceiling camera crop and front camera per robot. The robot's local safety (body stop, watchdog,
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
 {{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it}}.
+Also include assessment: {{"type": one of {types}, "direction": one of {directions},
+"observations": {{"front": concrete visual observation, "rosy_cam": concrete visual observation}},
+"uncertainties": [what the images cannot confirm]}}. Observations concern the chosen robot only.
+The direction is advisory, not permission to move. Never claim body clearance, depth, grasp success,
+or action completion from pixels or overlays. Do not identify a robot in the ceiling view without evidence.
 In seen, describe the visible lane boundaries, wall or corner, and obstruction/free space in one concrete
 sentence. Do not just repeat the cause or camera label. If geometry is uncertain, say what cannot be determined.
 The context cause is a report, not proof of what the pictures show.
@@ -92,7 +98,7 @@ class Vlm:
                              separators=(",", ":"), default=str)[:6000]
         pairs = [(rid, v) for rid in sorted(members) for v in VIEWS]
         images = [members[rid]["views"][v]["jpeg_b64"] for rid, v in pairs]
-        prompt = PROMPT.format(words=list(words), context=context)
+        prompt = PROMPT.format(words=list(words), context=context, types=list(TYPES), directions=list(DIRECTIONS))
         prompt += "\nPicture order: " + ", ".join(f"{rid}:{view}" for rid, view in pairs)
         if deadlock:
             prompt += ("\nChoose robot_id from the cycle. For REPLAN include blocked_edges, a nonempty list "
@@ -139,6 +145,11 @@ class Vlm:
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
         evidence = {"views": cited[rid], "map_pose": (members[rid].get("context") or {}).get("map_pose"),
                     "seen": str(answer.get("seen") or "")[:200]}
+        try:
+            evidence["assessment"] = build_assessment(answer.get("assessment"), "mobility", cited[rid])
+        except ValueError:
+            _LOG.warning("vlm assessment missing or invalid")
+            return None
         if deadlock:
             evidence["members"] = {mid: {"views": cited[mid],
                                         "map_pose": (member.get("context") or {}).get("map_pose")}

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.201
+**Version:** v1.202
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1515,6 +1515,14 @@ D-610 deadlock cases appear in `/api/fleet/ai/problems` after a stable wait cycl
 
 Qwen 프롬프트 `d618-v1`은 `evidence.seen`에 실제 보이는 차선 경계·벽/코너·장애물/빈 공간과 불확실한 부분을 구체적으로 설명하도록 요구한다. 입력 `context.cause`를 영상 정답으로 취급하거나 카메라 이름만 반복하지 않는다. 이 요구는 프롬프트 계약이며 기하학적 정확성을 자동 보증하지 않는다. 모델 설명과 실제 영상의 일치 여부는 예시 검토와 현장 수용에서 확인한다.
 
+v1.202 / D-619: `evidence.assessment`를 선택 추가한다. 공통 계약은 `core_common.protocol.situation`이며 `version: situation-v1`, `domain: mobility|manipulation`, `type: geometry|obstruction|visibility_limited|target_missing|target_misaligned|resource_conflict|action_unconfirmed|unknown`, `direction: hold|reobserve|recover|replan|human_review|continue`, `observations: [{source, frame_id, description}]`, `uncertainties: [text]`, `verification: unverified`다. 현재 lane-stuck API에는 mobility만 허용한다. 로봇암은 같은 판단 형식을 사용할 수 있지만 이번 변경은 로봇암 명령 API나 실행 capability를 추가하지 않는다.
+
+각 observation은 `evidence.views`의 실제 source/frame_id와 일치해야 한다. 모든 공급 영상에 각각 설명이 있어야 하며 각 설명·불확실성은 300자 이내, 관찰·불확실성 목록은 각각 최대 8개다. 모델이 검증 완료를 자칭하거나 영상 ID를 바꾸면 Fleet은 422로 거절한다. 이전 assessment 없는 proposal은 호환되며 기존 D-577 실행 검사를 그대로 따른다. Qwen `d619-v1`은 이 구조를 반드시 생성해야 하며 누락·오류면 제안을 폐기하고 기존 규칙을 사용한다.
+
+`direction`은 처리 분류다. `reobserve`는 새 관측 후 같은 문제를 재판단, `hold`는 현재 작업 보류, `recover`는 장치별 허용 복구 후보, `replan`은 현재 자원·경로·Skill 후보 재검토, `human_review`는 독립 검토, `continue`는 기존 작업 지속 후보다. 어떤 방향도 속도·회전·조인트 명령·3D 자세를 직접 만들지 않는다. 이동 로봇은 기존 decision/D-577/CORE 검사, 로봇암은 기존 capability·Skill allowlist·보정 frame·실행 receipt 경계에 연결해야 한다.
+
+영상 설명의 정확성은 모델 confidence와 별개다. 모델 평가 상태는 항상 unverified이며 기존 incident review/episode/outcome으로 별도 센서 대조·독립 검토·사람 정답·실제 완료를 기록한다. 오버레이는 다른 알고리즘의 출력이며 독립 거리·정답 증거가 아니다. 신규 프롬프트와 이전 프롬프트 결과를 동일 프로필로 비교하지 않는다. 새 사례 재생은 실제 모델·계약 fake·신선한 운영 case를 구분하고 응답 시간과 판단 불확실성을 함께 보여준다.
+
 | 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |
 |---|---|---|---|
 | 벽 앞 차선 상실, 뒤쪽 통로가 보임 | `BACK_AND_RETRY`, `reason: rear_clear`, `evidence.seen: rear corridor visible` | D-577 후진 전제 충족 시 `forwarded`, CORE 응답 후 `outcome` 기록 | 판단 영상 ID·모델·근거와 CORE 수락 여부 |
@@ -2726,6 +2734,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
 | v1.201 | 2026-10-10 | Behavioural + Additive (D-407 개정·D-607, feat/stuck-no-progress-dithering): CORE 막힘 `cause` 에 `no_progress`·`dithering` 추가(§8 `nav.line_stuck_opened` 행). 새 설정 `line_follow.progress_watch_enabled`(기본 `false`, YAML 불리언), `line_follow.no_progress_yaw_deg`(기본 30, 양수), `line_follow.no_progress_creep_enabled`(기본 `false`). 켜져 있을 때 명령은 있는데 odom 이 `stuck_report_s` 동안 몸 길이 절반 미만·|yaw| 30° 미만이면 연다(기어감 플래그를 켜면 20 s 에 0.30 m 미만도). 꺼져 있으면 동작 변화 없음. 의도한 대기(교차로·권한·횡단보도·신호/교통 게이트)는 세지 않는다. 답 전까지 보고만 한다(움직임 변화 없음). D-468 로컬 복귀 틱에서도 열린다. 상태 `line_follow.stuck.cause`·`detail` 도 같은 값. v1.195–v1.198 은 main, v1.199 는 D-607 REALIGN 브랜치, v1.200 은 D-511 lane cue. |
 | v1.200 | 2026-10-10 | Additive (D-511 개정 1·2, feat/core-fleet-lane-cue, D-430 Safety-Review 대상): `POST /api/v1/line-follow/lane-cue` — Fleet 현장 등록 토큰(D-555 3 자리: 화면 코드 출처 + `site:` 라벨, 공유 dev 토큰 거절, 그 밖 403)만. `LaneCueRequest` `{cue_id, fleet_epoch, seq, ttl_s (0 < s ≤ 2), pose_stamp (CORE 벽시계 odom 시각, D-517 권한과 같음), state: ON_LANE\|ON_LINE\|OFF_LANE\|OFF_MAP\|WRONG_WAY, side?, bearing_deg?, turn_deg?, lane_heading_deg?, offset_m?, edge_id?, guide?: {ahead_m, heading_ahead_deg?, curvature_1pm, to_end_m, next_place_id, ring}, turn_spot? (기본 false), context?: {route: lap, segment_id, s_m, lap_m, heading_deg, ahead_m, heading_ahead_deg, offset_m?, next?: {kind, ds_m, action, ref?}, pose_age_s?, anchor_age_s?} (D-511 개정 6, 저장·표시만)}`, 응답 `{accepted, reason}`(`disabled`|`stale`|`epoch_busy`|`odom_stale`|`pose_stale`|`pose_future`). `(fleet_epoch, seq)`는 만료와 무관하게 유지(옛 seq는 늘 stale), 다른 epoch는 신선한 신호·회전·래치가 없을 때만. `pose_stamp`가 최신 odom보다 1.5 s 넘게 오래되면 거절(OFF_MAP은 정합 없이 받음). 회전 부호는 시작 때 고정, 끝은 odom 진행량. 켜려면 `obstacle_mode: path`. 설정 `line_follow.fleet_lane_cue_enabled`(기본 false, Pinky false). CAMERA_LINE에서 IR 감시 뒤, 몸 정지(D-422) 앞에서 판단하고 회전은 LOST 래치·NOMINAL 지면·카메라 신선 조건을 모두 지난 뒤에만 낸다: ON_LINE/OFF_LANE은 IR이 선을 못 볼 때 `\|offset_m\| ≥ 0.05` 같은 쪽 2회 연속이면 차로 가운데 쪽 IR 가장자리 조향(후진 없음, 사유 `fleet_cue_left\|right`); WRONG_WAY는 `turn_spot`이 true일 때만(아니면 래치 HOLD `fleet_wrong_way`, 회전 원 0.0926 m > 차로 안쪽 반폭 0.080 m) `turn_deg` > 30°이면, 그리고 OFF_LANE(재진입 방위 > 45°)은 같은 부호 2회·0.5 s 뒤 `pose_stamp` 시점 odom yaw + 각도를 목표로 제자리 회전(10° 안이면 끝, 예산 \|각도\|+30°, 시간 \|각도\|/속도+2 s를 넘으면 래치 HOLD `fleet_turn_unconfirmed`; 교차로 지시·arc·횡단보도 구역 중엔 시작 안 함). OFF_MAP, 회전 중 신호 만료(`fleet_cue_lost`)는 래치 HOLD — 같은 epoch의 ON_LANE/ON_LINE 신호, D-407 막힘 결정(STUCK_DECIDE), 모드 변경만 푼다. 모드 변경·E-stop은 신호를 지운다. 사건 `nav.lane_cue`. `guide`는 저장·표시만. 횡단보도 구역은 이 경로로 오지 않는다(D-573 권한 `crosswalks[]`). `GET /line-follow` `lane_cue`(신선한 신호·래치·회전이 있을 때) |
 | v1.199 | 2026-10-10 | Additive (D-607 8, feat/core-stuck-realign, Safety-Review 대상): `POST /line-follow/stuck/decision` `REALIGN` + `realign` 본문(PIVOT 회전 자리 한정·KTURN), 능력 `controls.items[].stuck_realign`, 설정 `line_follow.stuck_realign_enabled`(기본 false), 막힘 단계 `REALIGNING`·`REALIGN_SETTLING`, 사유 `stuck_realign`, `nav.line_stuck_local_attempt` `trigger: realign` + `realign_attempt`·`realign {kind, leg, turn_spot, turned_deg, remaining_deg, ticks}`. |
