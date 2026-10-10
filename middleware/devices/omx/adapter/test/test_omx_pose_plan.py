@@ -30,7 +30,7 @@ from omx_adapter.pose_plan import (
 )
 
 
-PROFILE_PATH = Path(__file__).resolve().parents[6] / "deploy/robot/omx/sim/cell_profile.yaml"
+PROFILE_PATH = Path(__file__).resolve().parents[5] / "deploy/robot/omx/sim/cell_profile.yaml"
 CELL = "c" * 64
 # The device's accepted recipe (its hash) -> item -> grasp geometry (review minor 5).
 _ACCEPTED_ITEMS = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": 0.03}}

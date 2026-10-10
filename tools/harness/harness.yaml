@@ -144,10 +144,10 @@ modules:
     functional_kind: host-contract
     functional: [middleware/ui/pilot/test/test_stick.py]
   - name: omx_adapter
-    path: middleware/apps/device/omx/adapter
-    tests: [middleware/apps/device/omx/adapter/test]
+    path: middleware/devices/omx/adapter
+    tests: [middleware/devices/omx/adapter/test]
     functional_kind: pytest
-    functional: [middleware/apps/device/omx/adapter/test]
+    functional: [middleware/devices/omx/adapter/test]
   - name: interfaces
     path: contracts/ros_idl
     tests: [contracts/ros_idl/test/test_srv_surface.py]
@@ -160,10 +160,10 @@ modules:
     functional_kind: host-contract
     functional: [middleware/devices/pinky/profile/test/test_robot_package.py]
   - name: omx
-    path: middleware/apps/device/omx/profile
-    tests: [middleware/apps/device/omx/profile/test]
+    path: middleware/devices/omx/profile
+    tests: [middleware/devices/omx/profile/test]
     functional_kind: host-contract
-    functional: [middleware/apps/device/omx/profile/test/test_omx_package.py]
+    functional: [middleware/devices/omx/profile/test/test_omx_package.py]
   - name: description
     path: middleware/devices/pinky/description
     tests: [middleware/devices/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]

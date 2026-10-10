@@ -12,8 +12,7 @@ On-robot middleware. CORE (the external API and the only final `/cmd_vel` publis
 | Directory | Purpose |
 |-----------|---------|
 | `core/` | Gateway, events, services, web API, navigation (see `core/AGENTS.md`) |
-| `apps/` | Device applications for Pinky and OMX (see `apps/AGENTS.md`) |
-| `devices/` | Hardware families: Pinky bringup, description and profile; package identities stay unchanged (D-626) |
+| `devices/` | Pinky and OMX hardware-family assembly, profiles and adapters (see `devices/AGENTS.md`, D-626) |
 | `drivers/` | Board drivers: IMU, ADC, lamp, LED (see `drivers/AGENTS.md`) |
 | `perception/` | Absorbed Control package. It must not publish the operational final command beside CORE (see `perception/AGENTS.md`) |
 | `ui/` | Robot face, Pilot, and the CORE dashboard (see `ui/AGENTS.md`) |

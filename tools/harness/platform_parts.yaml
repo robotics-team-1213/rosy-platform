@@ -232,7 +232,8 @@ roots:
     legacy: src/products/pinky_pro/profile
     wave: "4c"
     concern: control
-  - path: middleware/apps/device/omx/adapter
+  - path: middleware/devices/omx/adapter
+    layout_target: middleware/devices/omx/adapter
     part: middleware
     d427_target: middleware/apps/device/omx/adapter
     legacy: src/products/omx/adapter
@@ -242,7 +243,8 @@ roots:
       demonstration.py and lerobot_export.py are learning-flavoured (future
       learning/curation); kept at package granularity until the B move.
     concern: control
-  - path: middleware/apps/device/omx/profile
+  - path: middleware/devices/omx/profile
+    layout_target: middleware/devices/omx/profile
     part: middleware
     d427_target: middleware/apps/device/omx/profile
     legacy: src/products/omx/profile
@@ -257,7 +259,8 @@ roots:
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
-  - path: middleware/apps/device/omx/agent
+  - path: middleware/devices/omx/agent
+    layout_target: middleware/devices/omx/agent
     part: middleware
     d427_target: middleware/apps/device/omx/agent
     legacy: apps/agent
@@ -681,11 +684,11 @@ safety_modules:
   - middleware/core/services/core_features/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
-  - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
-  - middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
-  - middleware/apps/device/omx/adapter/omx_adapter/action_api.py
-  - middleware/apps/device/omx/adapter/omx_adapter/owner_recovery_api.py
-  - middleware/apps/device/omx/adapter/omx_adapter/action_store_readback.py
+  - middleware/devices/omx/adapter/omx_adapter/command_owner.py
+  - middleware/devices/omx/adapter/omx_adapter/local_stop.py
+  - middleware/devices/omx/adapter/omx_adapter/action_api.py
+  - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
+  - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
   - operations/fleet/fleet/server/dispatch_admission.py
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py

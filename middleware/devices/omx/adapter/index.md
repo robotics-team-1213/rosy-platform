@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -25,16 +25,16 @@
 
 ## 계획·결과 문서
 
-- [2026-09-15-module-harness-design.md](../../../../../docs/plans/2026-09-15-module-harness-design.md)
-- [2026-09-26-omx-ai-workstation-runtime.md](../../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
-- [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
-- [2026-09-30-omx-pick-place-local-execution.md](../../../../../docs/plans/2026-09-30-omx-pick-place-local-execution.md)
-- [2026-10-01-model-tool-contract-implementation.md](../../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
-- [2026-10-01-omx-demonstration-lerobot-design.md](../../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
-- [2026-10-01-pilot-omx-gazebo-practice.md](../../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
-- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
-- [2026-10-02-rosy-cell-c3-gazebo.md](../../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
-- [2026-10-04-d442-omx-preempt-recovery.md](../../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
+- [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-26-omx-ai-workstation-runtime.md](../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
+- [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-30-omx-pick-place-local-execution.md](../../../../docs/plans/2026-09-30-omx-pick-place-local-execution.md)
+- [2026-10-01-model-tool-contract-implementation.md](../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
+- [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
+- [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
+- [2026-10-04-d442-omx-preempt-recovery.md](../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 
 ## 교훈 (docs/solutions)
 
@@ -42,7 +42,7 @@
 
 ## 시험
 
-- `middleware/apps/device/omx/adapter/test`
+- `middleware/devices/omx/adapter/test`
 
 ## 최근 기록
 

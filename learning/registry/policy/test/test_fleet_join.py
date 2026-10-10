@@ -81,8 +81,8 @@ def test_episode_revision_tampering_rejected():
 
 
 def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
-    sys.path[:0] = [str(ROOT / 'middleware/apps/device/omx/adapter'),
-                   str(ROOT / 'middleware/apps/device/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
+    sys.path[:0] = [str(ROOT / 'middleware/devices/omx/adapter'),
+                   str(ROOT / 'middleware/devices/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
     from test_demonstration import complete_episode
     from common_episode import convert
     original = tmp_path / 'recordings'
@@ -105,8 +105,8 @@ def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
 
 
 def export_inputs(tmp_path):
-    sys.path[:0] = [str(ROOT / 'middleware/apps/device/omx/adapter'),
-                   str(ROOT / 'middleware/apps/device/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
+    sys.path[:0] = [str(ROOT / 'middleware/devices/omx/adapter'),
+                   str(ROOT / 'middleware/devices/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
     from test_demonstration import complete_episode
     from common_episode import convert
     original = tmp_path / 'recordings'
