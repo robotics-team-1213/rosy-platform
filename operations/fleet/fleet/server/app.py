@@ -135,6 +135,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
                ai_facts_acting: frozenset = frozenset(),
+               ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
@@ -590,6 +591,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                            db_path=task_service.store.path if task_service else None,
                                            acting=ai_facts_acting)
     app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
+    from fleet.stuck.ai_first import AiFirst
+    from fleet.stuck.episodes import ProblemLog
+    app.state.ai_first = ai_first or AiFirst()
+    app.state.ai_facts.first, app.state.ai_first.profiles = app.state.ai_first, app.state.ai_facts.profiles
+    app.state.ai_episodes = ProblemLog(task_service.store.path if task_service else None)   # D-610 9
+    app.state.ai_first.human_classes = app.state.ai_episodes.active
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
@@ -618,6 +625,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
+        from fleet.stuck.problems import ProblemWatch
+        resolver_core.ai_first = app.state.ai_first               # D-610: AI-first robots, closed loop, P2 kinds
+        app.state.stuck_resolver.episodes, app.state.stuck_resolver.problems = app.state.ai_episodes, ProblemWatch()
+    from fleet.stuck.ai_routes import install_ai_first_routes
+    install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
+                            loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
+                            read_guard=read_guard, authorize=authorize, require_named_operator=require_named_operator,
+                            clients=console.clients)
 
     def ai_chain() -> dict:   # D-577 supervision row: credential presence only, never a secret
         enrolled = console.clients() if stuck_resolver_enrolled else {}
@@ -680,6 +695,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    from fleet.stuck.deadlock import AiReplan   # D-610 7: the AI PC picks a wait cycle's replan, Fleet checks it
+    trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     from fleet.server.map_pose_service import install_map_pin_route  # D-593
     install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)

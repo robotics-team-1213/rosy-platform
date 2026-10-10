@@ -143,6 +143,7 @@ class StuckResolver:
         self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
         #: D-573 개정 2026-10-10: robot_id -> on / at a mapped crosswalk (the lane monitor's view).
         self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
+        self.ai_first = None                          # D-610 3: `ai_first.AiFirst` (app.py), None = D-577 only
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -164,7 +165,8 @@ class StuckResolver:
              or answer.rule == "ai" and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
-        if answer.decision == "RESUME" and answer.rule != "meet":
+        if answer.decision == "RESUME" and answer.rule != "meet" and not (    # D-610 2: a re-stuck goes back to the AI
+                answer.rule == "ai" and self.ai_first is not None and self.ai_first.on(answer.robot_id)):
             chain.resume_id = answer.stuck_id
 
     def result(self, answer: Answer, *, code: Optional[str]) -> Optional[Escalate]:
@@ -264,6 +266,7 @@ class StuckResolver:
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
+        from fleet.stuck.ai_first import ai_answer    # D-610: AI-first robots, else the D-577 path
         if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
             # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
             return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")

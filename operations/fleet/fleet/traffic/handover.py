@@ -9,6 +9,9 @@ robot over when it waits in a cycle or holds an UNKNOWN unit for ``UNKNOWN_LIMIT
   waits for closed (D-490 ``blocked``). A changed route stands at that place for an operator's
   confirmation (D-489 9 ``replan_hold``); Fleet never switches a route by itself. The others ``wait``.
   The rows stay so while that hold waits for the operator.
+- D-610 7: ``ai_pick`` ``(robot, edges)`` from the AI PC replaces the first-avoidable choice when the robot is a
+  member and the edges lie in its ``avoidable``; its row says ``ai: true`` and the trip runner switches the route
+  without the operator once the first-trip plan checks pass. Otherwise the rows are as without it.
 - ``human``: no cycle member can leave before the unit it waits for (that unit is on its current lane,
   or it is on its last segment), a replan was already asked for on this route, or the pose is UNKNOWN.
 """
@@ -24,7 +27,7 @@ CYCLE_PERIODS = 3
 
 def decide(cycle: Optional[Sequence[str]], periods: int, avoidable: Mapping[str, Sequence[str]],
            tried: Mapping[str, Sequence[str]], pending: set, unknown_since: Mapping[str, float], now: float, *,
-           unknown_limit_s: float = UNKNOWN_LIMIT_S) -> dict[str, dict]:
+           unknown_limit_s: float = UNKNOWN_LIMIT_S, ai_pick: Optional[tuple] = None) -> dict[str, dict]:
     """``{robot id: {trigger, decision, ...}}`` for every robot handed over this period.
 
     ``periods``: how many periods in a row this cycle was seen; ``avoidable``: robot id -> edges it
@@ -43,13 +46,17 @@ def decide(cycle: Optional[Sequence[str]], periods: int, avoidable: Mapping[str,
         return out
     elif any(r in tried or r in out for r in members):
         pick, edges = None, ()
+    elif ai_pick is not None and ai_pick[0] in members and ai_pick[1] and set(ai_pick[1]) <= set(avoidable.get(ai_pick[0], ())):
+        pick, edges = ai_pick
     else:
-        pick = next((r for r in members if avoidable.get(r)), None)
+        pick, ai_pick = next((r for r in members if avoidable.get(r)), None), None
         edges = avoidable.get(pick, ())
     for robot_id in members:
         row = {"trigger": "wait_cycle", "cycle": list(cycle),
                "decision": "replan" if robot_id == pick else "wait" if pick else "human"}
         if robot_id == pick:
             row["blocked_edges"] = sorted(edges)
+            if ai_pick is not None and held is None:
+                row["ai"] = True
         out.setdefault(robot_id, row)
     return out

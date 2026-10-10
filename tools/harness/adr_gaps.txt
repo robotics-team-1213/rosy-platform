@@ -47,3 +47,6 @@ D-610 reserved by another session (refs/adr/D-610, AI-first problem resolution),
 D-611 reserved by another session (refs/adr/D-611, evidence mode hold), not yet on main; remove when it lands
 D-608 reserved by another session (refs/adr/D-608), not yet on main; remove when it lands
 D-610 reserved by another session (refs/adr/D-610), not yet on main; remove when it lands
+D-606 reserved by another session (refs/adr/D-606), not yet on main; remove when it lands
+D-608 reserved by another session (refs/adr/D-608), not yet on main; remove when it lands
+D-609 reserved by another session (refs/adr/D-609), not yet on main; remove when it lands

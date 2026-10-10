@@ -36,6 +36,22 @@ class MapPlane:
     image_to_plane: tuple[float, ...]
 
 
+def crop_map_plane(plane: MapPlane, x: float, y: float, radius_m: float
+                   ) -> tuple[bytes, tuple[int, int], tuple[float, float, float, float]] | None:
+    """The signed robot neighborhood in map metres, clipped to this calibrated plane."""
+    min_x, _, _, max_y = plane.bounds_m
+    ppm = plane.px_per_m
+    left = max(0, round((x - radius_m - min_x) * ppm))
+    right = min(plane.size[0], round((x + radius_m - min_x) * ppm))
+    top = max(0, round((max_y - y - radius_m) * ppm))
+    bottom = min(plane.size[1], round((max_y - y + radius_m) * ppm))
+    if right <= left or bottom <= top:
+        return None
+    image = _decode(plane.jpeg)[top:bottom, left:right]
+    bounds = (min_x + left / ppm, max_y - bottom / ppm, min_x + right / ppm, max_y - top / ppm)
+    return _encode(image), (right - left, bottom - top), bounds
+
+
 def _decode(jpeg: bytes) -> np.ndarray:
     if not isinstance(jpeg, bytes) or not jpeg:
         raise ValueError("preview JPEG is empty")

@@ -116,6 +116,18 @@ def test_map_plane_response_headers():
     assert image.shape[:2] == (520, 920)
 
 
+def test_ai_map_crop_lease_returns_only_the_robot_neighborhood():
+    server = _server()
+    server.report_calibration(SOURCE, RECORD, MAP)
+    token = server.preview_signer.issue(principal_id="ai-case", source_id=SOURCE,
+                                        rectification={"mode": "map"}, crop_map=(0.0, 0.0, 0.5))
+    response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
+    assert response.status_code == 200
+    assert response.headers["X-Frame-Rectified"] == "map-crop"
+    image = cv2.imdecode(np.frombuffer(response.body, np.uint8), cv2.IMREAD_COLOR)
+    assert image.shape[:2] == (400, 400)
+
+
 @pytest.mark.parametrize("record, lens", [
     (None, LENS),                                                     # no record
     (RECORD, {**LENS, "focal_mm": 2.2}),                              # lens changed

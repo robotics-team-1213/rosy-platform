@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+from concurrent.futures import Future
 
 from rosy_situation import service
 from rosy_situation.service import Situation
@@ -46,6 +47,50 @@ def _service(tmp_path, fleet, mode="shared", analyzers=service.analyze, clock=No
 def _fact(n):
     return {"kind": "stalled", "robot_ids": ["rosy_01"], "value": {"n": n}, "confidence": 0.5,
             "evidence": {"line": n}, "source": "analyzer:stub@0", "observed_at": 1.0, "ttl_s": 5.0}
+
+
+def test_available_model_reads_one_case_and_posts_its_answer_without_logging_images(tmp_path):
+    class Cases(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/ai/problems":
+                self.calls.append((path, body))
+                return {"problems": [{"problem_id": "s-1", "robot_id": "pinky", "kind": "stuck"}]}
+            if path == "/api/fleet/ai/case/s-1":
+                self.calls.append((path, body))
+                return {"problem_id": "s-1", "robot_id": "pinky", "kind": "stuck",
+                        "views": {"front": {"jpeg_b64": "secret-image"},
+                                  "rosy_cam": {"jpeg_b64": "secret-image"}}}
+            return super().call(path, body)
+
+    class Model:
+        def profile(self):
+            return "qwen3-vl:8b-instruct@abc:d610-v1"
+
+        def judge(self, case, now):
+            assert case["problem_id"] == "s-1"
+            return {"robot_id": "pinky", "stuck_id": "s-1", "decision": "WAIT", "reason": "blocked",
+                    "confidence": 0.8, "source": "vlm:qwen3-vl:8b-instruct@abc:d610-v1",
+                    "observed_at": now, "ttl_s": 6, "evidence": {}}
+
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    fleet, clock = Cases(), Clock()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          wall=clock, vlm=Model(), executor=Immediate())
+    situation.step()  # load the profile off the polling thread
+    clock.now += 2
+    situation.step()  # report the profile, start one case
+    situation.step()  # send the answer
+    assert fleet.paths().count("/api/fleet/ai/case/s-1") == 1
+    assert fleet.paths().count("/api/fleet/ai/proposals") == 1
+    assert any(body["model_profiles"] == [Model().profile()] for path, body in fleet.calls
+               if path == "/api/fleet/ai/heartbeat")
+    assert all("secret-image" not in path.read_text() for path in (tmp_path / "state" / "logs").glob("*"))
 
 
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):

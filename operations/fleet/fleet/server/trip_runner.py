@@ -303,28 +303,47 @@ class TripRunner(TripAdmission, TripProgress):
                     return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
-            active = self._store.active()
-            if active is None or active[0] != hold["map_version"]:  # plan again at this place
-                live.view["hold"], live.replan_pending = None, True
-                self._save(live)
-                raise TripError(409, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
-            live.view.update(plan=hold["plan"], map_version=hold["map_version"], segment_index=0, hold=None)
-            live.graph = active[2]
-            live.route_rev += 1
-            if "lap_route" in hold:  # D-517 2: the operator took the changed lap
-                live.lap_route = hold["lap_route"]
-                live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
-                                      for edge, forward, _s in hold["lap_route"])
-                live.view["lap"] += 1
-                live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
-            live.view["detail"]["replan_confirmed_by"] = principal_id
-            sent = live.sent
-            live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-            live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
-            live.lap_start = 0
+            self._apply_replan(live, hold, principal_id)
             self._describe(live)
             self._save(live)
             return live.view
+
+    def _apply_replan(self, live: LiveTrip, hold: dict, principal_id: str) -> None:
+        """Switch to the held new route (operator confirm, or D-610 7 an AI replan that passed the start checks)."""
+        active = self._store.active()
+        if active is None or active[0] != hold["map_version"]:  # plan again at this place
+            live.view["hold"], live.replan_pending = None, True
+            self._save(live)
+            raise TripError(409, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
+        live.view.update(plan=hold["plan"], map_version=hold["map_version"], segment_index=0, hold=None)
+        live.graph = active[2]
+        live.route_rev += 1
+        if "lap_route" in hold:  # D-517 2: the operator took the changed lap
+            live.lap_route = hold["lap_route"]
+            live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
+                                  for edge, forward, _s in hold["lap_route"])
+            live.view["lap"] += 1
+            live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
+        live.view["detail"]["replan_confirmed_by"] = principal_id
+        sent = live.sent
+        live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
+        live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
+        live.lap_start = 0
+
+    async def _ai_confirm(self, live: LiveTrip) -> None:
+        """D-610 7: an AI replan switches without ``replan_hold`` once the new route passes the D-494/D-601
+        start checks a first trip passes; a refusal leaves the hold for the operator (D-517 M4)."""
+        hold = live.view["hold"]
+        if not hold or hold.get("reason") != "replan" or hold.get("plan") is None:
+            return
+        robot_id, segments = live.view["robot_id"], hold["plan"]["segments"]
+        try:
+            graph = self._graph_for(hold["map_version"])
+            await self._caps_checks(robot_id, graph, segments, bool(live.repeat))
+            await self._pose_checks(robot_id, graph, segments)
+            self._apply_replan(live, hold, "fleet-ai")
+        except TripError as exc:
+            live.view["detail"]["ai_replan_refused"] = exc.code
 
     # ---- loop ---------------------------------------------------------------------------
 
@@ -460,6 +479,8 @@ class TripRunner(TripAdmission, TripProgress):
                     and remaining <= self.config.arm_distance_m and not self._core_busy(live)
                     and (live.sent is None or live.sent["index"] != index)):
                 self._replan(live, index, frozenset(resolver["blocked_edges"]))
+                if resolver.get("ai"):
+                    await self._ai_confirm(live)
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last

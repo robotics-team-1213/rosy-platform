@@ -31,6 +31,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
@@ -83,7 +84,7 @@ class Fleet:
 class Situation:
     def __init__(self, fleet, state_dir: Path, owner_mode_file: Path, *,
                  clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time,
-                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None) -> None:
+                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None, vlm=None, executor=None) -> None:
         self.fleet, self.state_dir, self.owner_mode_file = fleet, Path(state_dir), Path(owner_mode_file)
         self.clock, self.wall, self.analyzers, self.commit = clock, wall, analyzers, commit
         self.queue: deque = deque(maxlen=QUEUE)        # oldest dropped first (D-577 4)
@@ -99,6 +100,13 @@ class Situation:
         self._route_map: Optional[dict] = None
         from rosy_situation.incident_context import ContextDraft
         self.context_draft = ContextDraft()
+        self.vlm = vlm
+        self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="rosy-vlm")
+        self._profile = None
+        self._profile_task = None
+        self._case_task = None
+        self._case_seen: dict[str, float] = {}
+        self._profile_retry_at = 0.0
 
     def owner_mode(self) -> str:
         try:
@@ -125,7 +133,7 @@ class Situation:
         self._last_beat = now
         try:
             self.fleet.call("/api/fleet/ai/heartbeat", {
-                "service_version": __version__, "model_profiles": [], "owner_mode": mode,
+                "service_version": __version__, "model_profiles": [self._profile] if mode == "available" and self._profile else [], "owner_mode": mode,
                 "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s,
                 "build_commit": self.commit})
         except (OSError, ValueError) as exc:
@@ -207,6 +215,7 @@ class Situation:
         """One cycle; returns the seconds until the next (0 after a stuck event)."""
         started = self.clock()
         mode = self.owner_mode()
+        self._ai(mode)
         self._heartbeat(mode)
         if mode == "owner_busy":
             return PERIOD_S
@@ -231,6 +240,47 @@ class Situation:
                 _LOG.warning("proposal not sent: %s", exc)
         return 0.0 if stuck_event else max(0.0, PERIOD_S - (self.clock() - started))
 
+    def _ai(self, mode: str) -> None:
+        """Poll one model job without delaying Fleet reads, heartbeat or the rule fallback."""
+        if self.vlm is None or mode != "available":
+            return
+        if self._profile_task is not None and self._profile_task.done():
+            try:
+                self._profile = self._profile_task.result()
+            except (OSError, ValueError) as exc:
+                _LOG.warning("vlm profile unavailable: %s", exc)
+            self._profile_task = None
+            if self._profile is None:
+                self._profile_retry_at = self.clock() + 30.0
+        if self._profile is None:
+            if self._profile_task is None and self.clock() >= self._profile_retry_at:
+                self._profile_task = self._executor.submit(self.vlm.profile)
+            return
+        if self._case_task is not None and self._case_task.done():
+            try:
+                self._case_task.result()
+            except Exception as exc:  # noqa: BLE001 - a bad case or model response must not stop Fleet polling
+                _LOG.warning("vlm case failed: %s", type(exc).__name__)
+            self._case_task = None
+        if self._case_task is None:
+            self._case_task = self._executor.submit(self._ai_cycle)
+
+    def _ai_cycle(self) -> None:
+        problems = self.fleet.call("/api/fleet/ai/problems").get("problems") or []
+        now = self.clock()
+        for problem in problems:
+            pid = str(problem.get("problem_id") or "")
+            if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
+                self._case_seen[pid] = now
+                case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                proposal = self.vlm.judge(case, self.wall())
+                if proposal is not None and self.owner_mode() == "available":
+                    self.fleet.call("/api/fleet/ai/proposals", proposal)
+                    self._log("proposals", proposal)
+                break
+        if len(self._case_seen) > 256:
+            self._case_seen = {pid: at for pid, at in self._case_seen.items() if now - at < 60.0}
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -239,9 +289,10 @@ def main() -> None:
     state = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_STATE", "~/.local/state/rosy-situation")))
     owner = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_OWNER_MODE", "~/.config/rosy/situation-owner-mode")))
     from rosy_situation.analyzers import Analyzer
+    from rosy_situation.vlm import Vlm
 
     service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner,
-                        analyzers=Analyzer(), commit=build_commit())
+                        analyzers=Analyzer(), commit=build_commit(), vlm=Vlm())
     while True:
         time.sleep(service.step())
 
