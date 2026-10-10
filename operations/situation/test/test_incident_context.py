@@ -30,3 +30,14 @@ def test_untrusted_or_missing_context_stays_uncertain():
     assert "fresh_rosy_cam_sighting" in fact["value"]["missing"]
     assert "trusted_map_pose_and_active_map" in fact["value"]["missing"]
     assert fact["confidence"] == 0.2
+
+
+def test_no_motion_with_near_front_range_is_only_a_low_confidence_obstacle_draft():
+    snapshot = {"observed_at": 100.0,
+                "line_stuck": {"pending": [{"robot_id": "pinky", "stuck_id": "s3", "cause": "no_motion",
+                                            "front_clearance_m": 0.12}]},
+                "state": {"robots": [{"robot_id": "pinky", "state": {}}]}}
+    fact = ContextDraft()(snapshot)[0]
+    assert fact["value"]["cause_draft"] == "obstacle"
+    assert fact["confidence"] == 0.35
+    assert fact["value"]["support"][-1]["value"]["front_clearance_m"] == 0.12

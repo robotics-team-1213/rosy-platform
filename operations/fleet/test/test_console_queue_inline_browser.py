@@ -78,7 +78,11 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
                                      "resolved_by": None},
                            "rosy_cam": {"source_id": "ceiling_north", "seq": 21,
                                         "captured_at": 1791608400},
-                           "ai_facts": [{"kind": "stalled", "stage": "shadow", "confidence": 0.8}],
+                           "ai_facts": [{"kind": "stalled", "stage": "shadow", "confidence": 0.8},
+                                        {"kind": "incident_context", "stage": "shadow", "confidence": 0.45,
+                                         "value": {"cause_draft": "obstacle", "missing": ["interpreted_front_image"],
+                                                   "support": [{"source": "core_sensor", "field": "front_clearance_m",
+                                                                "value": 0.12}]}}],
                            "front_image": {"status": "not_retained"}},
               "actions": [], "reviews": []}
     posts = []
@@ -98,6 +102,8 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         expect(item).to_have_count(1)
         item.locator("summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
+        expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
+        expect(item).to_contain_text("interpreted_front_image")
         expect(item).to_contain_text("AI 참고: stalled (shadow, 80%)")
         expect(item).to_contain_text("이미지는 보존되지 않음")
         item.locator("select").select_option("obstacle")
