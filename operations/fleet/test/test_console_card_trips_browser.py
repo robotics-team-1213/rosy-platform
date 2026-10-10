@@ -114,7 +114,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         assert _card(page, "rosy_02").locator(".card-trip").count() == 0
 
         form = _open_form(page, "rosy_02")
-        form.locator("select").nth(1).select_option("B")
+        form.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("B")
         form.locator('ui-button[data-trip-repeat="rosy_02"]').click()
         _settle(page, posts, "/api/fleet/trips/p2/start", 2)
         body = [json.loads(data) for path, data in posts if path == "/api/fleet/robots/rosy_02/trip"][-1]
