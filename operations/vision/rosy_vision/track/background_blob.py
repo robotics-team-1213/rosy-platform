@@ -20,6 +20,11 @@ the first learn replays them instead of learning the parked robots. A different 
 frame size learns live as before; a light change since then trips SCENE_CHANGED on the first
 frame and learns live. Replay happens once per process, so that cannot loop.
 
+D-589: the kept background also carries the camera settings fingerprint it was learned under.
+When the phone reports newly applied settings, ``camera_changed`` learns again (automatic, not
+kept) and re-arms the replay, which then happens only for a file of exactly these settings. A
+file from before D-589 has no fingerprint: it replays only while no settings are known.
+
 D-547: when the background was learned with robots parked (no kept background), the learned
 background image is searched once, when the model becomes ready, for robot-sized dark compact
 blobs in the track (darkness is the max of B, G, R against the track median, so blue tape is
@@ -133,15 +138,18 @@ class BackgroundStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
-    def save(self, revision: str, frames: list[np.ndarray], unknown: np.ndarray | None = None) -> None:
+    def save(self, revision: str, frames: list[np.ndarray], unknown: np.ndarray | None = None,
+             camera: str | None = None) -> None:
         encoded = {} if unknown is None else {"unknown": np.packbits(unknown)}  # D-600
         for index, image in enumerate(frames):
             ok, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, STORE_JPEG_QUALITY])
             if not ok:
                 raise ValueError("background frame did not encode")
             encoded[f"f{index:03d}"] = data.ravel()
-        meta = json.dumps({"revision": revision, "shape": list(frames[0].shape),
-                           "count": len(frames)}).encode("utf-8")
+        meta = {"revision": revision, "shape": list(frames[0].shape), "count": len(frames)}
+        if camera is not None:
+            meta["camera"] = camera
+        meta = json.dumps(meta).encode("utf-8")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + ".new")
         try:
@@ -154,12 +162,14 @@ class BackgroundStore:
             temporary.unlink(missing_ok=True)
             raise
 
-    def load(self, revision: str, shape: tuple[int, ...]) -> list[np.ndarray] | None:
-        """The kept frames for this revision and work size, else None (missing or unreadable)."""
+    def load(self, revision: str, shape: tuple[int, ...],
+             camera: str | None = None) -> list[np.ndarray] | None:
+        """The kept frames for this revision, work size and camera settings, else None."""
         try:
             with np.load(self.path, allow_pickle=False) as data:
                 meta = json.loads(bytes(data["meta"]).decode("utf-8"))
-                if meta.get("revision") != revision or tuple(meta.get("shape") or ()) != tuple(shape):
+                if (meta.get("revision") != revision or tuple(meta.get("shape") or ()) != tuple(shape)
+                        or meta.get("camera") != camera):
                     return None
                 frames = [cv2.imdecode(data[f"f{index:03d}"], cv2.IMREAD_COLOR)
                           for index in range(int(meta["count"]))]
@@ -218,6 +228,7 @@ class BackgroundBlobDetector:
         self._view: tuple = ()
         self._store = store
         self._restore_pending = store is not None  # D-539: once per process, at the first learn
+        self._camera: str | None = None  # D-589: applied camera settings fingerprint, once known
         self._occupied: tuple = ()  # D-600: Fleet's robot regions, map (x, y, radius_m)
         self._previous = None  # D-600: (background, dark map) of the last ready learn
         self._hold_until = -math.inf  # D-596 1: capture time up to which the background is frozen
@@ -262,6 +273,21 @@ class BackgroundBlobDetector:
         self._restore_pending = False
         self._save = self._store is not None
 
+    def camera_changed(self, fingerprint: str, *, first: bool = False) -> None:
+        """D-589: the camera changed (new settings, back to Vision control, a new link, or a
+        tune's confirmed lock). Learn again (an automatic reset, not an operator relearn) and
+        replay a kept background made under exactly these settings. ``first`` (the first
+        settings ever reported) only names the settings when the background is already learned.
+        An operator relearn in progress is kept, under these settings."""
+        self._camera = fingerprint
+        if first and self._ready:
+            return
+        save = self._save
+        self.reset()
+        self._previous = None  # D-600: a background from other settings cannot fill robot regions
+        self._save = save  # an operator relearn in progress is still kept
+        self._restore_pending = self._store is not None and not save
+
     def detect(self, frame: Frame, calib: Calibration) -> DetectorResult:
         image = _work_image(frame.image)
         work_height, work_width = image.shape[:2]
@@ -280,7 +306,7 @@ class BackgroundBlobDetector:
             self._shape = image.shape
         if self._restore_pending and not self._ready and self._learned == 0:
             self._restore_pending = False
-            kept = self._store.load(calib.revision, image.shape)
+            kept = self._store.load(calib.revision, image.shape, self._camera)
             if kept is not None:
                 for background in kept:
                     self._model.apply(background, learningRate=-1)
@@ -310,7 +336,8 @@ class BackgroundBlobDetector:
                 if self._save:
                     self._save = False
                     try:
-                        self._store.save(calib.revision, list(self._frames), self._unknown)
+                        self._store.save(calib.revision, list(self._frames), self._unknown,
+                                         camera=self._camera)
                         self._kept = True
                     except Exception as exc:  # tracking goes on; the next restart learns live
                         logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
@@ -381,7 +408,8 @@ class BackgroundBlobDetector:
                 logger.info("unknown floor filled px=%d", int(filled.sum()))
                 if self._kept:
                     try:  # the kept background learns the floor too
-                        self._store.save(calib.revision, list(self._frames), self._unknown)
+                        self._store.save(calib.revision, list(self._frames), self._unknown,
+                                         camera=self._camera)
                     except Exception as exc:
                         logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
         found.sort(key=lambda item: item.score, reverse=True)

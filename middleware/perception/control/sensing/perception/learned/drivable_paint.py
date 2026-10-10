@@ -138,6 +138,23 @@ def right_exit_way(region: np.ndarray, top: int = 0) -> tuple[np.ndarray | None,
     return region & nearer_right, len(exits)
 
 
+#: Thin background strips between drivable floor (a charging cable lying across the road) are
+#: closed up to this many model pixels; lane paint never changes (user 2026-10-10: keep the
+#: cables, handle them in logic; 9dfk 20261010T015707Z_rosy_41 140-155 s).
+CABLE_CLOSE_PX = 9
+
+
+def close_thin_gaps(labels: np.ndarray, drivable: int, background) -> np.ndarray:
+    """Labels with background pixels inside a morphological closing of the drivable floor set to
+    drivable. Only background turns: lane_marking and every other class stay barriers."""
+    if not len(background):
+        return labels
+    floor = (labels == drivable).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CABLE_CLOSE_PX, CABLE_CLOSE_PX))
+    closed = cv2.morphologyEx(floor, cv2.MORPH_CLOSE, kernel).astype(bool)
+    return np.where(closed & np.isin(labels, background), drivable, labels)
+
+
 def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tuple[np.ndarray | None, dict]:
     """(the drivable way as a bool mask on the logits grid, or None; info for keep_debug).
 
@@ -155,6 +172,7 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
     # `ignore` paint inside the road (crosswalk, speed bump) is road for the way: as a pass-through
     # only (lane_bounded_drivable through_idxs) it would leave holes that cut the way's rows apart.
     labels = np.where(np.isin(labels, roles.get("ignore", [])), roles["drivable"][0], labels)
+    labels = close_thin_gaps(labels, roles["drivable"][0], roles.get("background", ()))
     names = {c.name: c.index for c in classes}
     region = lane_bounded_drivable(
         labels, roles["drivable"][0], roles.get("lane_marking", ()), ignore_top=ignore_top,

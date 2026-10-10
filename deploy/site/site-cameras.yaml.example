@@ -32,6 +32,9 @@ sources:
     # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
     # edge forward as the robot stickers (heading_edge). Omit to send none.
     place_markers: [34, 35, 36, 37, 38]
+    # D-589: Vision keeps tuning this camera's exposure for recognition (needs --track).
+    # false: Vision sends no camera messages and the phone follows its own D-544 settings.
+    auto_tune: true
 
   # A second source needs its own sighting token wired in too: add a secret file and its
   # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet

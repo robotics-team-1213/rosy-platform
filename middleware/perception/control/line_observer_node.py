@@ -58,6 +58,10 @@ KEEP_MAX_FRAME_GAP_S = 0.5
 #: D-597 amendment 2: the newest drivable way steers while its frame is at most this old (odometry
 #: moves its target; one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
 DRIVABLE_WAY_MAX_AGE_S = 1.5
+#: crosswalk-class pixels (same inference) at or below this frame row (~0.35 m ahead) that mean
+#: "at a crosswalk" for the drivable heading hold
+CROSSWALK_NEAR_ROW = 120
+CROSSWALK_MIN_PX = 150
 
 
 COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
@@ -530,6 +534,11 @@ class LineObserverNode(Node):
                     bend_expected=bend_rules)
                 latest = (self._paint_worker.latest_way(DRIVABLE_WAY_MAX_AGE_S)
                           if self._drivable_steer is not None else None)
+                bars = self._paint_worker.used_crosswalk if self._drivable_steer is not None else None
+                if self._drivable_steer is not None and (
+                        self._lane_keeper.last.get('crosswalk') is not None
+                        or (bars is not None and int(bars[CROSSWALK_NEAR_ROW:].sum()) >= CROSSWALK_MIN_PX)):
+                    self._drivable_steer.crosswalk(self._odom_history.pose_at(image_stamp))
                 if latest is not None:
                     way, way_stamp = latest
                     error, confidence, steer = self._drivable_steer.update(
@@ -545,6 +554,14 @@ class LineObserverNode(Node):
                         target_m=list(steer.get('target_now_m') or steer['target_m'] or []) or None,
                         reason=steer.get('reason'))
                     # the way chose the branch already: the tape keeper's junction HOLD does not apply
+                    self._lane_keeper.last.pop('junction_ahead_m', None)
+                    paint_used = 'learned_drivable'
+                elif self._drivable_steer is not None and self._drivable_steer._in_crosswalk(
+                        self._odom_history.pose_at(image_stamp)):
+                    # bars (not drivable) fill the near view at a crosswalk: straight across (D-573 gate)
+                    observation = LaneObservation(error=0.0, confidence=0.6)
+                    self._lane_keeper.last.update(strategy='drivable_crosswalk_straight', reason=None,
+                                                  error=0.0, confidence=0.6)
                     self._lane_keeper.last.pop('junction_ahead_m', None)
                     paint_used = 'learned_drivable'
                 elif self._drivable_steer is not None:
@@ -708,7 +725,10 @@ class LineObserverNode(Node):
         view = PINKY_PRO.scan_view(dict(ranges=list(msg.ranges), angle_min=msg.angle_min,
                                         angle_increment=msg.angle_increment, range_min=msg.range_min,
                                         range_max=msg.range_max))
-        gap = PINKY_PRO.translation_gap(view.points, pad_m=0.0)
+        # a wall, not a speck: the nearest return in the body strip counts only with 2 more within 0.02 m
+        strip = sorted(x for x, y in view.points if x > PINKY_PRO.front_x_m and abs(y) <= PINKY_PRO.half_width_m)
+        near = next((x for i, x in enumerate(strip) if i + 2 < len(strip) and strip[i + 2] - x <= 0.02), None)
+        gap = None if near is None else near - PINKY_PRO.front_x_m
         # nearest wall beside the robot on each side, within 0.35 m ahead (exit sides, D-597 amendment 2)
         # A wall, not a post: returns within 0.20 m laterally spanning >= 0.10 m along x (the signal
         # posts at the ring entries are a few cm wide and stand beside the road, 9dfk 20261010T010701Z_rosy_41).

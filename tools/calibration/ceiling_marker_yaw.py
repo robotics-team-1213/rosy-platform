@@ -25,6 +25,9 @@ Prints the ``marker_yaw_offset_deg`` value for site-cameras.yaml and the nearest
 with fewer than 5 samples, under 0.25 m of travel, more than 0.02 m off a straight line or
 more than 5 deg of yaw spread.
 
+Offline (no Fleet, no token): ``--frames DIR --record record.json`` reads recorded raw
+frames of one straight forward drive (file mtime = capture time) and the approved record.
+
 Token: ``ROSY_FLEET_TOKEN`` (viewer or above), or ``--dev-session`` on a development-mode
 site. The token is never printed. ``estimate`` is stdlib only.
 """
@@ -38,6 +41,7 @@ import ssl
 import sys
 import time
 import urllib.request
+from pathlib import Path
 from typing import Sequence
 
 MIN_SAMPLES = 5
@@ -110,13 +114,26 @@ def _request(fleet: str, path: str, token: str | None, context, body: dict | Non
         return (data, dict(response.headers)) if raw else json.loads(data)
 
 
-def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, int], seconds: float,
-            token: str | None, context) -> list[tuple]:
-    """(captured_at, x, y, raw marker yaw) from the raw frames; needs rosy_vision (Vision container)."""
+def frame_sample(record: dict, jpeg: bytes, size: tuple[int, int], captured_at: float, *,
+                 source: str, marker: int, heading_edge: tuple[int, int]) -> tuple | None:
+    """(captured_at, x, y, raw marker yaw) for one raw frame, or None; needs rosy_vision."""
     from rosy_vision.detect import detect_markers
     from rosy_vision.track.calibration import from_record
     from rosy_vision.track.marker_sightings import marker_pose, solved_camera
 
+    quad = detect_markers(jpeg).get(marker)
+    calibration = from_record(record, source_id=source, map_id=record["map_id"], frame_size=size,
+                              lens=record.get("lens")) if min(size) > 0 else None
+    camera = solved_camera(calibration) if calibration is not None else None
+    if quad is None or camera is None or not math.isfinite(captured_at):
+        return None
+    pose = marker_pose(calibration, quad, heading_edge, camera)
+    return None if pose is None else (captured_at, *pose)
+
+
+def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, int], seconds: float,
+            token: str | None, context) -> list[tuple]:
+    """(captured_at, x, y, raw marker yaw) from the raw frames; needs rosy_vision (Vision container)."""
     records = _request(fleet, "/api/fleet/calibrations", token, context).get("calibrations", [])
     record = next((r for r in records if r.get("source_id") == source), None)
     if record is None:
@@ -135,16 +152,31 @@ def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, in
             continue
         captured_at = float(headers.get("X-Frame-Captured-At", "nan"))
         size = (int(headers.get("X-Frame-Width", 0)), int(headers.get("X-Frame-Height", 0)))
-        quad = detect_markers(jpeg).get(marker)
-        calibration = from_record(record, source_id=source, map_id=record["map_id"], frame_size=size,
-                                  lens=record.get("lens")) if min(size) > 0 else None
-        camera = solved_camera(calibration) if calibration is not None else None
-        if quad is not None and camera is not None and math.isfinite(captured_at):
-            pose = marker_pose(calibration, quad, heading_edge, camera)
-            if pose is not None:
-                samples[captured_at] = (captured_at, *pose)
+        sample = frame_sample(record, jpeg, size, captured_at, source=source, marker=marker,
+                              heading_edge=heading_edge)
+        if sample is not None:
+            samples[captured_at] = sample
         time.sleep(0.25)
     return list(samples.values())
+
+
+def collect_offline(frames: str, record: dict, *, source: str, marker: int,
+                    heading_edge: tuple[int, int]) -> list[tuple]:
+    """Recorded raw frames (*.jpg, file mtime = capture time) of one straight drive."""
+    import cv2
+    import numpy as np
+
+    samples = []
+    for path in sorted(Path(frames).glob("*.jpg")):
+        jpeg = path.read_bytes()
+        image = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            continue
+        sample = frame_sample(record, jpeg, (image.shape[1], image.shape[0]), path.stat().st_mtime,
+                              source=source, marker=marker, heading_edge=heading_edge)
+        if sample is not None:
+            samples.append(sample)
+    return samples
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -158,11 +190,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--dev-session", action="store_true", help="ask a development-mode site for a session")
     parser.add_argument("--insecure", action="store_true", help="skip TLS verification (site self-signed cert)")
     parser.add_argument("--origin", help="Origin header for session requests (default: --fleet)")
+    parser.add_argument("--frames", help="offline: folder of recorded raw frames of one straight drive")
+    parser.add_argument("--record", help="offline: the approved D-457 record as JSON (with --frames)")
     args = parser.parse_args(argv)
     fleet = args.fleet.rstrip("/")
     ORIGIN[:] = [args.origin] if args.origin else []
     edge = tuple(int(v) for v in args.heading_edge.split(","))
     context = ssl._create_unverified_context() if args.insecure else None
+    if args.frames:
+        with open(args.record, encoding="utf-8") as handle:
+            record = json.load(handle)
+        try:
+            result = estimate(collect_offline(args.frames, record, source=args.source,
+                                              marker=args.marker, heading_edge=edge))
+        except EstimateError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result))
+        return 0
     token = os.environ.get("ROSY_FLEET_TOKEN")
     if args.dev_session:
         token = _request(fleet, "/api/fleet/auth/development-session", None, context, {})["token"]

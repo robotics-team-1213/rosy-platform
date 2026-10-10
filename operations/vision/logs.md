@@ -421,3 +421,51 @@
 - 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
 - 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.
 - gate 변화: 없음(SOURCE).
+
+## 2026-10-10 · uncommitted · feat(vision): D-589 S1 인식 점수·EV 언덕 오르기·camera/camera_state·배경 재학습 연동
+- 변경: `track/tuning.py` — 인식 점수(승인 보정 트랙 사각형 안, 작업 해상도 640). `paint_contrast`는 사이트 차선 페인트(`--map-paint` `road_lines.stl`)를 보정으로 영상에 옮겨 2 px 넓힌 띠의 밝은 절반 중앙값과 카펫(페인트를 4 px 넓힌 밖) 중앙값 차를 카펫 강건 표준편차(1.4826·MAD)로 나눈다. 승인 맞춤이 실제 선에서 1–3 px 어긋나서 띠를 쓴다. 페인트가 없으면 트랙 안 가장 밝은 3 %와 트랙 전체로 대신한다. `clip`(≥247)·`crush`(≤16), `marker_rate`(최근 10분에 본 로봇 마커 중 이 프레임에 보인 비율, 없으면 빠짐), `score` 한 식(`contrast/(contrast+1.5)`, 마커 0.3 가중, clip·crush 0.05 초과 시 크게 깎음). `Tuner`는 순수 상태 기계: 실제 EV −2.0…+1.0을 1/3 EV 단계로, `supported.ev_step`으로 보정 지수로 바꿔 보낸다. 폰이 seq를 mode `vision`으로 되돌린 뒤 4 s(처음 1 s는 AE 안정) 점수를 재고, 더 나은 쪽으로만 한 단계씩, 가장 좋은 단계에서 AE·AWB 잠금. 잠근 뒤 25 % 넘는 하락 60 s(재맞춤 최소 5분)·clip/crush 0.15 초과(즉시)·30분 탐침(±1단계). 열 ≥3 또는 `thermal_hold`면 멈추고 마지막 잠금 유지. `disabled`면 보내지 않음. 현재 설정을 20 s마다 다시 보낸다(폰은 60 s만 신선). 노출 상한 요청 33333 µs. source별 기록 `<track-state>/<source>.tuning.json`, 다음 맞춤은 마지막 잠금 EV에서 시작
+- 변경: `protocol.py` `make_camera`·`parse_camera`·`parse_camera_state`(S2 계약, 엄격 검사, 추가 키 무시). `ingest.py`가 hello 뒤 텍스트에서 유효한 `camera_state`만 연결별로 보관하고(나쁜 것·다른 type 무시, 프레임 경로 영향 없음) `send_camera`로 하향 전송. 공유 벡터는 S2 파일 그대로(`camera_example.max_exposure_us` 33333)
+- 변경: `TrackWorker`가 탐지 스레드에서 점수를 재고 루프에서 튜너를 돌린다. mode `vision`에서 `applied`가 실제로 바뀌면 `camera_changed`(자동 재학습, 운영자 재학습 경로 아님). D-539 저장본에 설정 지문(`camera`)을 넣어 같은 설정에서만 재생, 지문 없는 옛 파일은 설정을 아는 동안 불일치로 실시간 학습. 검출 payload 선택 필드 `tuning {state, score, ev, locked}`, Fleet `/api/fleet/tracking` source 행 `tuning`. `site-cameras.yaml` `auto_tune`(기본 true, false면 camera 메시지 없음, Fleet은 키를 받고 무시). API Reference v1.178(v1.177은 다른 브랜치; 뒤에 main이 v1.178을 가져가 v1.179가 됨)
+- 증거: 원격 pytest(모델 PC) operations/vision/test + 공유 벡터 계약 시험 672 passed, Fleet 추적·sightings 설정 5파일 121 passed, known_failures 0 new. 실프레임 점수(2026-10-09 `ceiling_north`, `paint-7b220d432c2a`, 하네스 X:/DevTemp/cam-auto-tune-s1/eval_score.py): bg-seq 60장 contrast 4.63·clip 0.0044·crush 0.0062·score 0.755, bg-seq3 30장 4.14·0.0070·0.0065·0.734, cam-d515-live raw 4.05·0.0033·0.0089·0.730(밝은 무리 대체는 0.748/0.733/0.726). 같은 프레임의 합성 노출 0.3–1.0배는 0.75–0.77로 평탄, 1.2배 0.17(clip 0.10), 0.15배 0(crush 0.23)
+- gate 변화: SOURCE/LOCAL. 폰 적용(S2)과 현장 맞춤→잠금 기록(S4) 전
+
+## 2026-10-10 · uncommitted · feat(vision): D-589 S1 독립 리뷰 반영 — 언덕 오르기 대신 지키며 잡고 잠그기
+- 변경: 리뷰 실프레임 근거(X:\DevTemp\cam-auto-tune-review\rev_eval.py: 날아감·뭉개짐 없는 EV 사이 점수 ±0.01, 한 번 머무는 동안 잡음 최대 0.022)로 ADR 4항이 바뀌었다. 위 항목의 언덕 오르기와 30분 탐침은 없어졌다. `Tuner`는 마지막 잠금 EV(처음 0)에서 AE를 풀고 4 s 한 번 잰 뒤 트랙 안 `clip > 0.02`이면 1/3 EV 내리고(−2.0까지), `crush > 0.05`이면 올리고(+1.0까지), 둘 다 아니면 AE·AWB를 잠근다. 떠난 단계로 돌아가지 않고 6단계 안에 끝난다. 잠근 뒤에는 (a) `clip`·`crush` > 0.15(잠글 때 이미 넘었으면 그보다 0.05 더 나빠질 때, 간격 5분에서 배로) 또는 (b) 트랙 중앙 밝기가 선형 1/2 EV 넘게 60 s 달라질 때만 다시 맞춘다. `score`·`paint_contrast`·`marker_rate`는 상태 표시용이다. 폰이 이미 마지막 잠금 설정으로 잠겨 있으면 맞추지 않고 이어 간다. seq는 무작위 u32에서 시작. 열 정지 중 폰은 그대로 두고(맞춤 도중이면 풀린 채) 식으면 다시 맞춘다. 연결 15 s 동안 `camera_state`가 없으면 상태 `unsupported`
+- 변경: 맞추는 동안 추적은 `LEARNING`을 내고 중간 단계는 배우지 않는다. 잠금 반향과 1 s 안정 뒤 한 번 `camera_changed`(지문이 맞으면 D-539 재생). 맞춤 중 운영자 재학습은 잠금 지문으로 저장된다. 맞춤 밖에서는 mode `vision`의 새 `applied`, 다른 mode에서 `vision`으로 돌아옴, 새 연결이 카메라 변경이다(같은 지문의 20 s 반향은 아님). `camera` 송신은 기다리지 않는다. `auto_tune: false`면 `tuning`을 싣지 않는다. Fleet이 `tuning` 때문에 422를 주면 한 번 빼고 다시 보내고 그 프로세스에서는 싣지 않는다. 계약 상태에 `unsupported` 추가. adr_gaps의 D-585…D-588 중복 줄 삭제. 점수 계산은 탐지기 작업 영상을 다시 쓰지 않고 따로 줄인다(프레임당 약 1 ms, 탐지기 내부를 건드리지 않으려고)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 실프레임 점수는 위 항목과 같다(점수 식 변화 없음)
+- gate 변화: 없음(SOURCE/LOCAL)
+
+## 2026-10-10 · uncommitted · fix(vision): D-589 S1 재검토 반영 — 맞춤 기한, 맞춤 중 마커, 재연결
+- 변경: 맞춤(단계와 잠금 안정)이 시작 뒤 `TUNE_DEADLINE_S` 90 s 안에 끝나지 않으면 지금 설정을 확인 없이 잠금으로 보고 한 번 다시 배운 뒤(설정을 모르면 재생 없는 초기화) 추적 정지를 푼다. 폰이 ae_lock 없이 되돌리거나 `camera_state` 없는 앱으로 연결이 바뀌어도 추적이 영원히 멈추지 않는다. 기준선은 그 뒤 첫 전체 창. 맞춤 중에는 배경 검출만 멈추고 ArUco 로봇 마커는 계속 낸다. 재연결은 `applied`(잠금 포함)가 바뀌었거나 `vision`으로 돌아올 때만 카메라 변경이다. API Reference는 main이 v1.178–v1.180을 가져가 v1.181
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.182로 다시 매김
+- 변경: main이 v1.181(D-407 개정)을 먼저 가져가 D-589 S1은 v1.182다. 앞 항목의 v1.181은 v1.182로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.182
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.184로 다시 매김
+- 변경: main이 v1.182·v1.183(D-577)을 먼저 가져가 D-589 S1은 v1.184다. 앞 항목들의 v1.181·v1.182는 v1.184로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.184
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
+- 변경: main의 D-596(LED 확인 2–3 fps, 색마다 동시 요청, 확인 창 동안 배경 얼림)·D-595(승인 기록 우선 순서)와 D-589를 합쳤다. `TrackWorker._detect`는 D-589 카메라 변경·맞춤 정지와 D-596 `hold`를 함께 받는다. 맞춤 정지 중에도 배경만 멈추고 마커는 낸다. LED 확인 창이 열린 동안에는 튜너에 측정을 넘기지 않아 맞춤 단계·다시 맞추기 판정이 일어나지 않는다(노출이 바뀌면 점멸이 가려진다). 요청 재송신은 그대로다. 배경 얼림(`hold`)은 카메라 재학습 뒤 학습도 창 뒤로 미룬다. main이 v1.184·v1.185를 가져가 D-589는 API Reference v1.186이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 다섯 파일)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 확인 창 중 맞춤 멈춤 시험 `test_no_tune_step_is_judged_while_an_led_identify_window_is_open`
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
+- 변경: main의 D-600(Fleet `occupied` 로봇 자리를 빼고 배경 학습, 모르는 바닥 `unknown_floor`와 채우기)과 D-589를 합쳤다. 검출 payload는 D-600 `unknown_floor`와 D-589 `tuning`을 함께 싣고, Fleet `tracking.py` source 행도 둘 다 넘긴다. 매 단계 `set_occupied`를 먼저 하고, D-589 맞춤 정지·잠금 뒤 한 번 재학습·카메라 지문과 D-596 `hold`를 그대로 넘긴다. 그래서 잠금 뒤 재학습도 로봇 자리를 뺀 학습이다. D-539 저장본은 모르는 바닥 지도와 카메라 지문을 함께 저장하고(채울 때 다시 쓰는 저장본도 지문 유지) 같은 지문에서만 재생한다. 카메라가 바뀌어 다시 배울 때는 이전 배경(`_previous`)을 로봇 자리 채우기에 쓰지 않는다. 노출이 달라 그 배경이 맞지 않기 때문이며, 그 자리는 inpainting과 모르는 바닥 채우기로 간다. main이 v1.186을 가져가 D-589는 API Reference v1.187이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 여섯 곳)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
+- 변경: main이 v1.187(D-407·D-577)을 먼저 가져가 D-589 S1은 v1.188이다. 앞 항목들의 버전은 v1.188로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.188
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
+- 변경: main이 앞 번호를 먼저 가져가 D-589 S1은 v1.189다. 앞 항목들의 버전은 v1.189로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.189
+- gate 변화: 없음
