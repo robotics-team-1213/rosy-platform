@@ -21,15 +21,19 @@ import threading
 import time
 from pathlib import Path
 
+import yaml
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
+# D-601 B: the shared SIM Fleet site config (lane_camera_check false: no front preview in SIM).
+SIM_SITE = REPO/'integrations/simulation/gazebo/config/fleet_sim_site.yaml'
 sys.path[:0] = [str(REPO/'operations/fleet'), str(REPO/'contracts/foundation')]
 from fleet.localization.map_pose import MapPose  # noqa: E402
 from fleet.server.app import create_app  # noqa: E402
 from fleet.server.console import FleetConsole  # noqa: E402
 from fleet.server.site_map_store import SiteMapStore  # noqa: E402
 from fleet.server.task_service import FleetTaskService  # noqa: E402
-from fleet.server.trip_ports import HttpLaneJunction  # noqa: E402
+from fleet.server.trip_ports import HttpLaneJunction, TripConfig  # noqa: E402
 from fleet.server.task_store import FleetTaskStore  # noqa: E402
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph  # noqa: E402
 from fleet.swarm.robots import RobotEndpoint  # noqa: E402
@@ -140,7 +144,8 @@ def main():
     users = {hashlib.sha256(OPERATOR_TOKEN.encode()).hexdigest(): {'principal_id': 'lapsim', 'role': 'operator'}}
     tasks = FleetTaskService(FleetTaskStore(Path(a.db)), robot_ids={ROBOT})  # site auth needs the audit store
     app = create_app(console, task_service=tasks, site_users=users, site_maps=store, map_pose_port=gt,
-                     lane_junction=LoggedJunction(console.clients, gt, a.sends))
+                     lane_junction=LoggedJunction(console.clients, gt, a.sends),
+                     trip_config=TripConfig.from_mapping(yaml.safe_load(SIM_SITE.read_text())['fleet']['trip']))
     asyncio.run(uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=a.port, log_level='warning')).serve())
 
 

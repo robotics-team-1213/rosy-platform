@@ -44,7 +44,7 @@ from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
-from .sensing.perception.learned.drivable_keep import keep_step, scan_summary
+from .sensing.perception.drivable_keep import keep_step, scan_summary
 from .sensing.perception.learned.drivable_steer import DrivableSteer
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
@@ -131,6 +131,7 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_height_m_override', math.nan, _READ_ONLY)
         self.declare_parameter('camera_pitch_uncertainty_rad_override', math.nan, _READ_ONLY)  # record bands,
         self.declare_parameter('camera_height_uncertainty_m_override', math.nan, _READ_ONLY)   # D-491 amendment
+        self.declare_parameter('crosswalk_uncertainty_enabled', False, _READ_ONLY)  # D-573 6: CORE must know the field
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
@@ -630,7 +631,8 @@ class LineObserverNode(Node):
                 self._lane_keeper.last, ground, stamp=source_stamp,
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
                 camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
-                paint_half_width_m=self._paint_half_width_m)
+                paint_half_width_m=self._paint_half_width_m,
+                crosswalk_uncertainty=bool(self.get_parameter('crosswalk_uncertainty_enabled').value))
         self._publish('CAMERA_LINE', observation, stamp=source_stamp,
                       quality=quality, containment=containment,
                       route_context_seq=route_context_seq)

@@ -137,6 +137,7 @@ class FakeRobot:
         self.mission_status_error: Optional[BaseException] = None
         #: D-407: raised by `line_stuck_decision` (e.g. RobotApiError 409 STUCK_ID_MISMATCH).
         self.stuck_decision_error: Optional[BaseException] = None
+        self.front_status_value: dict = {"available": True, "stale": False, "age_ms": 40}
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -209,6 +210,10 @@ class FakeRobot:
     async def line_follow_mode(self, mode: str) -> dict:
         self._record("line_follow_mode", mode)
         return {"mode": mode, "state": "WAITING" if mode == "IR_LINE" else "OFF"}
+
+    async def front_status(self) -> dict:
+        """D-601 B: CORE ``vision/front/status``; a plan with a lane edge reads it (not recorded)."""
+        return self.front_status_value
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, **_extra) -> dict:
         self._record("line_stuck_decision", stuck_id, decision)

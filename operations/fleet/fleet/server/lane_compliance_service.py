@@ -133,15 +133,21 @@ class LaneComplianceMonitor:
     def _return(self, robot_id: str, pose, moving: bool, graph, crosswalks, bounds, now: float):
         """D-511 rev 1: the robot's debounced return state, or None before the first judgement."""
         tracker = self._returns.setdefault(robot_id, ReturnTracker(self.config))
-        placed = (pose is not None and getattr(pose, "state", None) in (LOCALIZED, DEGRADED)
-                  and pose.x is not None and pose.y is not None and graph is not None)
+        state = getattr(pose, "state", None)
+        anchor = getattr(pose, "anchor_age_s", None)
+        # D-511 rev 2: guide only from a fresh LOCALIZED pose (an LED track has no anchor age). A
+        # DEGRADED or stale pose is "not judged now", never OFF_MAP; only no pose at all is unseen.
+        placed = (state == LOCALIZED and pose.x is not None and pose.y is not None and graph is not None
+                  and (anchor is None or anchor <= self.config.guide_anchor_max_s))
         raw = tracker.update(now, pose.x if placed else None, pose.y if placed else None,
-                             pose.yaw if placed else None, graph, crosswalks, moving, bounds)
+                             pose.yaw if placed else None, graph, crosswalks, moving, bounds,
+                             unseen_counts=state not in (LOCALIZED, DEGRADED))
         if tracker.state == UNSEEN:
             return None
         current = tracker.state == raw.state   # detail fields belong to the reported state only
         detail = ("edge_id", "offset_m", "side", "bearing_deg", "lane_heading_deg", "turn_deg")
-        return {"state": tracker.state, "since": tracker.since, "raw": raw.state,
+        return {"state": tracker.state, "since": tracker.since, "raw": raw.state, "moving": moving,
+                "guide": raw.guide if current else None,
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
                 "crosswalk": raw.crosswalk,
@@ -158,9 +164,11 @@ class LaneComplianceMonitor:
 
     async def _send_cue(self, robot_id: str, back: dict, now: float) -> None:
         state = back["state"]
-        if (state == ON_LANE and back["crosswalk_ahead"] is None
+        if back["raw"] == UNSEEN and state != OFF_MAP:
+            return                     # not judged now: CORE's cue expires, the robot drives as today
+        if (state == ON_LANE and not back["moving"]
                 and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
-            return                     # on the lane: nothing to clear, no crosswalk to name
+            return                     # still on the lane: nothing to guide, nothing to clear
         if self._cue_mute.get(robot_id, 0.0) > now:
             return
         send = getattr((self._clients() or {}).get(robot_id), "line_follow_lane_cue", None)
@@ -170,7 +178,8 @@ class LaneComplianceMonitor:
         body = {"cue_id": f"{robot_id}-{self._epoch}-{self._cue_seq}", "fleet_epoch": self._epoch,
                 "seq": self._cue_seq, "ttl_s": CUE_TTL_S,
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
-                                        "offset_m", "edge_id", "crosswalk_ahead")}}
+                                        "offset_m", "edge_id", "guide")}}
+        # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
             await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch

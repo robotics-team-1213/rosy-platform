@@ -56,6 +56,15 @@ export function robotMapPose(robot) {
 }
 
 /** Fleet's site map pose: "지도 0.69, -0.44 · 확정·카메라", "지도 위치 모름", or null without a guide row. */
+// D-596 amendment (b): the LED-confirmed blob of a robot whose Fleet map pose is not LOCALIZED is the
+// place the 위치 찍기 pin starts from; the operator sets the heading. LED alone never localizes (D-598 2).
+export function pinPrefill(identityReadback, guideRow, robotId) {
+  if (guideRow?.pose?.state === "LOCALIZED") return null;
+  const row = (identityReadback?.robots || []).find((item) => item.robot_id === robotId);
+  return row?.state === "CONFIRMED" && Number.isFinite(row.x) && Number.isFinite(row.y)
+    ? { x: row.x, y: row.y } : null;
+}
+
 export function sitePoseText(guideRow) {
   if (!guideRow) return null;
   const pose = guideRow.pose;
