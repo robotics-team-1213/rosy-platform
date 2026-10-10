@@ -1,4 +1,5 @@
 from rosy_situation.incident_context import ContextDraft
+from fleet.stuck.ai_facts import AiFact
 
 
 def test_context_draft_keeps_sources_and_missing_image_separate():
@@ -41,3 +42,17 @@ def test_no_motion_with_near_front_range_is_only_a_low_confidence_obstacle_draft
     assert fact["value"]["cause_draft"] == "obstacle"
     assert fact["confidence"] == 0.35
     assert fact["value"]["support"][-1]["value"]["front_clearance_m"] == 0.12
+
+
+def test_real_core_stuck_shape_passes_fleet_fact_validation():
+    stuck = {"stuck_id": "s4", "cause": "no_motion", "phase": "WAITING_CONSOLE",
+             "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD"],
+             "last_answer": "WAIT"}
+    snapshot = {"observed_at": 100.0,
+                "line_stuck": {"pending": [{"robot_id": "pinky", **stuck}]},
+                "state": {"robots": [{"robot_id": "pinky", "state": {
+                    "line_follow": {"mode": "CAMERA_LINE", "stuck": stuck}}}]}}
+    fact = ContextDraft()(snapshot)[0]
+    AiFact.model_validate(fact).check(100.0)
+    assert fact["value"]["support"][-1]["value"]["line_follow"] == {
+        "mode": "CAMERA_LINE", "stuck": True}
