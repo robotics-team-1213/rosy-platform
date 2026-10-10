@@ -34,6 +34,7 @@ def test_ai_camera_lease_uses_only_fresh_same_map_sighting_including_pose_loss()
     assert view["frame_path"] == "/api/vision/sources/ceiling/frame"
     lease = signer.verify(view["lease"], source_id="ceiling")
     assert lease["crop_map"] == [0.2, 0.3, 1.0] and lease["exp"] - lease["iat"] == 10
+    assert lease["crop_map_id"] == "track" and lease["crop_revision"] == "rev1"
     for bad in ({**sighting, "stale": True}, {**sighting, "map_id": "other"}):
         sightings.snapshot = lambda: {"sightings": [bad]}
         assert rosy_cam_lease("rosy_01", sightings, poses, signer, ("ceiling",)) is None

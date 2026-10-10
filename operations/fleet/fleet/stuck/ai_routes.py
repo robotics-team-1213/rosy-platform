@@ -56,26 +56,6 @@ def rosy_cam_lease(robot_id: str, sightings, map_pose, signer, sources: tuple[st
     return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease}
 
 
-def rosy_cam_lease(robot_id: str, sightings, map_pose, signer, sources: tuple[str, ...]) -> Optional[dict]:
-    """Give the AI PC a short direct Vision read for a localized robot on the same map."""
-    if sightings is None or signer is None:
-        return None
-    pose = map_pose.arbitrated_pose(robot_id)
-    if pose is None or pose.state != "LOCALIZED" or pose.x is None or pose.y is None:
-        return None
-    row = next((row for row in sightings.snapshot()["sightings"]
-                if row.get("robot_id") == robot_id and not row.get("stale")
-                and row.get("source_id") in sources and row.get("map_id") == pose.map_id), None)
-    if row is None:
-        return None
-    try:
-        lease = signer.issue(principal_id="ai-case", source_id=row["source_id"], ttl_s=10,
-                             rectification={"mode": "map"}, crop_map=(pose.x, pose.y, 1.0))
-    except ValueError:
-        return None
-    return {"frame_path": f"/api/vision/sources/{row['source_id']}/frame", "lease": lease}
-
-
 def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guard, authorize,
                             require_named_operator, clients: Callable[[], dict],
                             rosy_cam: Optional[Callable[[str], Optional[dict]]] = None,
