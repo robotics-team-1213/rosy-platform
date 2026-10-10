@@ -62,7 +62,7 @@ def human(loop, robot_id: str, problem_id: str) -> None:
 async def answered(loop, answer, code: Optional[str], now: float) -> None:
     rid, sid = answer.robot_id, answer.stuck_id
     row = loop._rows.get(rid) or {"robot_id": rid}
-    first = loop._resolver.ai_first
+    first = getattr(loop._resolver, "ai_first", None)
     chain = loop._resolver._chains.get(rid)
     if code == REFUSED and answer.rule == "ai" and first is not None and chain is not None:
         first.refused(rid, chain.started_at, answer.decision)   # D-610 5: never the same answer again
@@ -88,7 +88,7 @@ async def answered(loop, answer, code: Optional[str], now: float) -> None:
 
 async def check(loop, now: float, robots) -> None:
     stalled = loop.problems.stalled_ids() if loop.problems is not None else frozenset()
-    first = loop._resolver.ai_first
+    first = getattr(loop._resolver, "ai_first", None)
     for out in loop.outcomes.check(now, robots, stalled=stalled):
         log.info("problem %s on %s after %s: %s", out["problem_id"], out["robot_id"], out["decision"], out["outcome"])
         await _awrite(loop, "outcome", out)

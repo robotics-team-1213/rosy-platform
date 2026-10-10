@@ -61,7 +61,7 @@ class ProblemWatch:
         return isinstance(pose, Mapping) and pose.get("state") in ("DEGRADED", "UNKNOWN")
 
     async def run(self, loop, now: float, robots) -> None:
-        first = loop._resolver.ai_first
+        first = getattr(loop._resolver, "ai_first", None)
         for row in robots:
             rid = str(row["robot_id"])
             watched = first is not None and first.on(rid) and row.get("online", True)
