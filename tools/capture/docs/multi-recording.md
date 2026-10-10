@@ -1,6 +1,6 @@
 ﻿# 여러 카메라·로봇을 함께 녹화
 
-`multi_record.py`는 관제 PC에서 선택한 Rosy Cam 소스와 로봇 전방 카메라를 함께 녹화한다. 소스 수에 따라 화면 칸을 늘린다. 많은 소스는 화면을 세로로 늘려 스크롤하고 합성 영상도 같은 높이로 만든다. 기존 Fleet 영상 중계 금지 계약을 유지하며 PC가 각 로봇 CORE에서 직접 영상을 받는다.
+`multi_record.py`는 현장의 Fleet가 설치된 **관제 PC에서 실행하고 저장한다**. 작업 노트북은 배포·확인만 하며 운영 녹화의 저장 주체가 아니다. 설정·원본·위치·분석 DB·MP4를 모두 같은 관제 PC의 세션 폴더에 둔다. 선택한 Rosy Cam 소스와 로봇 전방 카메라를 함께 녹화한다. 소스 수에 따라 화면 칸을 늘린다. 많은 소스는 화면을 세로로 늘려 스크롤하고 합성 영상도 같은 높이로 만든다. 기존 Fleet 영상 중계 금지 계약을 유지하며 관제 PC가 각 로봇 CORE에서 직접 영상을 받는다.
 
 ## 실행
 
@@ -32,7 +32,7 @@ python tools/capture/multi_record.py record --config <private-config.json> --out
 python tools/capture/multi_record.py render --session X:/DevTemp/<session> --out X:/DevTemp/<combined.mp4>
 ```
 
-시작하면 이 PC의 `127.0.0.1` 화면을 연다. 지정 시간 또는 Ctrl+C로 종료한다. 다른 PC에 HTTP 화면을 공개하지 않는다. 종료한 세션은 MP4로 재생·공유한다. `--no-open`은 화면을 열지 않는다. 기존 세션 폴더와 MP4는 덮어쓰지 않는다.
+시작하면 관제 PC의 `127.0.0.1` 화면을 연다. 브라우저 창 열기가 오래 걸려도 수집은 별도로 진행한다. 지정 시간 또는 Ctrl+C로 종료한다. 다른 PC에 HTTP 화면을 공개하지 않는다. 종료한 세션은 MP4로 재생·공유한다. `--no-open`은 화면을 열지 않는다. 기존 세션 폴더와 MP4는 덮어쓰지 않는다.
 
 ## 저장과 분석
 
