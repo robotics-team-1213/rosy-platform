@@ -332,10 +332,14 @@ class DrivableSteer:
             want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG else ("left" if guide_deg > 0 else "right")
             if want is None:
                 side = info["exit"] = None if ahead >= PIVOT_AHEAD_M else side
-            elif want in info["exit_reach_m"] or ahead < LOOKAHEAD_M:
+            elif want in info["exit_reach_m"]:
                 side = info["exit"] = want
-                if want not in info["exit_point_m"]:
-                    info["exit_point_m"][want] = (0.12, 0.12 if want == "left" else -0.12)
+            elif ahead < LOOKAHEAD_M:
+                # no opening seen on the route's side and the way closes: turn in place toward it, never
+                # an arc that rolls forward onto the line ahead (9dfk 20261010T043756Z_rosy_41 crossed one)
+                self._smoothed = None
+                error = -PIVOT_ERROR if want == "left" else PIVOT_ERROR
+                return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_pivot_" + want, guided=True)
             elif side is not None and side != want:
                 side = info["exit"] = None      # an opening against the route is not taken
             self._side = side if side is not None else self._side
