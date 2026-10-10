@@ -115,19 +115,15 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
     assert states.count(ON_LANE) == 1 and states[-1] == ON_LANE
 
 
-def test_resolver_resumes_a_stuck_at_a_mapped_crosswalk_once():
-    from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
+def test_resolver_never_auto_resumes_at_a_mapped_crosswalk():
+    # The XW crosswalk RESUME rule was removed as unsafe (independent review 2026-10-10).
+    from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
     resolver = StuckResolver(ResolverConfig())
     resolver.at_crosswalk = lambda rid: rid == "r1"
     row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
         "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": "no_motion"}}}}
-    [answer] = resolver.step(0.0, [row])
-    assert isinstance(answer, Answer) and (answer.decision, answer.rule) == ("RESUME", "XW")
-    resolver.sent(answer, 0.0)
-    resolver.result(answer, code=None)
-    row["state"]["line_follow"]["stuck"] = {"stuck_id": "s2", "cause": "no_motion"}
-    [again] = resolver.step(1.0, [row])
-    assert getattr(again, "reason", None) == "restuck_after_resume"   # a human, not a WAIT loop
+    answers = resolver.step(0.0, [row])
+    assert not any(getattr(a, "decision", None) == "RESUME" and getattr(a, "rule", None) == "XW" for a in answers)
 
 
 def test_a_refused_cue_is_not_counted_as_sent():

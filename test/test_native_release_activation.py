@@ -162,6 +162,33 @@ def test_failed_candidate_health_rolls_back_to_last_accepted_release(native_case
     assert runtime.actions == ["stop", "start", "stop", "start"]
 
 
+def test_io_that_was_running_but_is_dead_after_start_rolls_back(native_case):
+    # 8kcn 2026.10.10-100: rosy-io died ~7 s after "systemctl start" and activation
+    # still reported success, leaving the robot without LiDAR.
+    manager_type, root, key, _private, first, second, links = native_case
+    manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+    states = iter([True, False, True])  # before stop, after start (dead), after rollback is not read
+    runtime = RuntimeRecorder()
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links,
+                           io_active=lambda: next(states), io_settle_s=0)
+
+    with pytest.raises(RuntimeError, match="rolled back"):
+        manager.activate(second.name)
+
+    assert links.values == {"current": first.name, "previous": second.name}
+    assert runtime.actions == ["stop", "start", "stop", "start"]
+
+
+def test_io_that_stays_active_keeps_the_new_release(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links,
+                           io_active=lambda: True, io_settle_s=0)
+
+    assert manager.activate(second.name)["ok"] is True
+    assert links.values["current"] == second.name
+
+
 def test_explicit_rollback_reverifies_previous_and_swaps_links(native_case):
     manager_type, root, key, _private, first, second, links = native_case
     manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links)
@@ -523,6 +550,19 @@ def test_a_camera_only_activation_that_fails_rolls_back_the_camera(native_case):
 
     assert links.values["current"] == first.name
     assert [action for action, _ in units.calls] == ["stop", "start", "stop", "start"]
+
+
+def test_camera_only_activation_does_not_wait_on_rosy_io(native_case):
+    # rosy-io is not restarted on a camera-only activation, so its active check has nothing to measure.
+    manager_type, root, key, _private, first, second, links = native_case
+    probes = []
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links,
+                           units=UnitRecorder(), io_active=lambda: probes.append(1) or False,
+                           io_settle_s=0)
+    manager.activate(first.name)
+    probes.clear()
+    assert manager.activate(second.name, ("rosy-camera.service",))["ok"] is True
+    assert probes == []
 
 
 def test_only_the_camera_may_restart_alone(native_case):
