@@ -1,0 +1,75 @@
+"""D-610 7 (P3): the AI PC picks a wait cycle's replan; Fleet checks it; the trip runner skips replan_hold."""
+
+from __future__ import annotations
+
+from fleet.stuck.ai_first import AiFirst
+from fleet.stuck.deadlock import AiReplan
+from fleet.traffic.handover import CYCLE_PERIODS, decide
+from test_lane_traffic import _cycle, _rows, _ticks
+
+WALL = 1_760_000_000.0
+PROFILE = "qwen3-vl:8b-instruct@abc:d610-v1"
+
+
+def test_handover_takes_a_valid_ai_pick_and_marks_it():
+    out = decide(("a", "b"), CYCLE_PERIODS, {"a": ["x"], "b": ["y", "z"]}, {}, set(), {}, 0.0, ai_pick=("b", ("z",)))
+    assert out["b"] == {"trigger": "wait_cycle", "cycle": ["a", "b"], "decision": "replan", "blocked_edges": ["z"],
+                        "ai": True}
+    assert out["a"]["decision"] == "wait"
+    for bad in (("b", ("x",)), ("c", ("x",)), ("b", ())):     # not avoidable, not a member, nothing to close
+        plain = decide(("a", "b"), CYCLE_PERIODS, {"a": ["x"], "b": ["y"]}, {}, set(), {}, 0.0, ai_pick=bad)
+        assert plain["a"] == {"trigger": "wait_cycle", "cycle": ["a", "b"], "decision": "replan", "blocked_edges": ["x"]}
+    tried = decide(("a", "b"), CYCLE_PERIODS, {"a": ["x"]}, {"a": ["x"]}, set(), {}, 0.0, ai_pick=("a", ("x",)))
+    assert {row["decision"] for row in tried.values()} == {"human"}   # already tried on this route: a person
+
+
+class _Board:
+    def __init__(self, proposal):
+        self.proposal, self.verdicts = proposal, []
+
+    def problem_proposal(self, problem_id):
+        return self.proposal if self.proposal and self.proposal["stuck_id"] == problem_id else None
+
+
+def _replan(robot="b", edges=("y",), source=f"vlm:{PROFILE}"):
+    return {"robot_id": robot, "stuck_id": "deadlock:a:b", "decision": "REPLAN", "reason": "b_can_leave",
+            "confidence": 0.7, "source": source, "observed_at": WALL, "ttl_s": 6.0, "body": {"blocked_edges": list(edges)},
+            "evidence": {"views": {"rosy_cam": {"frame_id": "c", "captured_at": WALL},
+                                   "front": {"frame_id": "f", "captured_at": WALL}},
+                         "map_pose": {"state": "LOCALIZED", "age_s": 0.1}}}
+
+
+def _first(robots=("a", "b")):
+    first = AiFirst(robots)
+    first.wall, first.profiles = (lambda: WALL), (lambda: [PROFILE])
+    return first
+
+
+def test_ai_replan_checks_members_edges_evidence_and_ai_first():
+    avoidable = {"b": ["y"]}
+    assert AiReplan(_first(), _Board(_replan()))(("a", "b"), avoidable, 0.0) == ("b", ("y",))
+    for first, proposal, verdict in (
+            (_first(), _replan(edges=("q",)), "edges_not_avoidable"),
+            (_first(), _replan(robot="c"), "not_a_member"),
+            (_first(), _replan(source="analyzer:x@1"), "not_vlm")):
+        board = _Board(proposal)
+        assert AiReplan(first, board)(("a", "b"), avoidable, 0.0) is None
+        assert board.verdicts[-1]["verdict"] == verdict
+    assert AiReplan(_first(robots=("b",)), _Board(_replan()))(("a", "b"), avoidable, 0.0) is None
+
+
+def test_an_ai_replan_switches_the_route_without_the_operator_after_the_start_checks(monkeypatch):
+    operator, _store, fleet = _cycle(monkeypatch)
+    _ticks(operator, fleet, n=CYCLE_PERIODS + 1)
+    held = operator.view("b")["hold"]
+    runner, _store, fleet = _cycle(monkeypatch)
+    runner.traffic.ai_replan = lambda cycle, avoidable, now: ("b", ("ring_n",))
+    _ticks(runner, fleet, n=CYCLE_PERIODS)
+    assert next(r for r in runner.traffic.view()["resolver"] if r["robot_id"] == "b").get("ai") is True
+    _ticks(runner, fleet)
+    view = runner.view("b")
+    if held is not None and held.get("plan"):
+        assert view["hold"] is None and view["detail"]["replan_confirmed_by"] == "fleet-ai"
+        assert all(seg["edge_id"] != "ring_n" for seg in view["plan"]["segments"][view["segment_index"]:])
+    else:
+        assert _rows(runner)["b"] in ("replan", "human")
