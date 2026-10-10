@@ -305,6 +305,8 @@ function render() {
   tripReplan.render();
 
   formation.fillLeaders();
+  // Map labels always show for 최우선 robots (warn causes are often fleet-wide); the rest declutter.
+  view.attention = new Set(view.robots.filter((r) => roster.attentionItems(r).some((i) => i.severity === "crit")).map((r) => r.robot_id));
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
   const hint = el("hint");
@@ -785,19 +787,21 @@ bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), l
 // D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
 const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
 const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
+// D-540 6 (user decision 2026-10-10): a stop — no confirm, any operator, no latch; the line says it was sent.
 pageScope.listen(el("cancel-all"), "click", async () => {
-  await confirmedAction.run({message: "등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?", opener: el("cancel-all"), eligible: () => !auth.locked,
-    request: async owner => {
-    cancelAllNotice("주행 취소 요청 중…");
-    const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [owner.signal] });
-    if (!owner.current()) return;
+  if (auth.locked) return;
+  const life = pageScope.capture();
+  cancelAllNotice(`전체 주행 취소를 보냈습니다 · ${view.robots.length}대 · 응답 기다리는 중`);
+  try {
+    const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [life.signal] });
+    if (!life.current()) return;
     // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
     const allAnswered = result.total > 0 && result.cancelled === result.total;
     const summary = result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
       : `주행 취소 요청 응답: ${result.cancelled}/${result.total} · 물리 정지 미확인`;
-    cancelAllNotice(summary, result.total > 0 && !allAnswered);
-    log(summary,
-    allAnswered ? undefined : "bad");
+    cancelAllNotice(result.total === 0 ? summary : `전체 주행 취소를 보냈습니다 · ${result.total}대 · ${summary}`,
+      result.total > 0 && !allAnswered);
+    log(summary, allAnswered ? undefined : "bad");
     result.robots.filter((r) => r.result !== "cancelled").forEach((r) => {
       const steps = Object.entries(r.steps).filter(([, step]) => !step.ok).map(([name, step]) =>
         step.error?.sent === false && name === "line_follow" ? "주소 미확인 — 차선 추종 끄기 미전송"
@@ -810,13 +814,14 @@ pageScope.listen(el("cancel-all"), "click", async () => {
     result.tasks.error ? "bad" : undefined);
     // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
     if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
-    await refreshDispatchControl(owner);
-  }, onError: err => {
+    await refreshDispatchControl(life);
+  } catch (err) {
+    if (err.name === "AbortError" || !life.current()) return;
     cancelAllNotice(err.status >= 500 || !err.status
       ? "주행 취소 결과 확인 불가 — Fleet 연결과 로봇 상태를 다시 확인하세요."
       : `주행 취소 요청 거절 — ${err.message}`);
     log(`전체 주행 취소 실패 — ${err.message}`, "bad");
-  }});
+  }
 });
 
 

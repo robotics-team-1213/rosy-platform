@@ -34,7 +34,7 @@ export function tripReason(robot, { view, operator, named }) {
 export function cancelScope(trip, lineFollowMode) {
   const lane = lineFollowMode === "CAMERA_LINE" || lineFollowMode === "IR_LINE";
   if (trip) return { trip: trip.trip_id, lane, text: "진행 중인 운행을 취소합니다" };
-  return { trip: null, lane, text: lane ? "목표와 차선 주행을 취소합니다" : "목표를 취소합니다" };
+  return { trip: null, lane, text: lane ? "목표와 차선 추종을 취소합니다" : "목표를 취소합니다" };
 }
 
 // Options change only when the list does, so a poll keeps the operator's choice.
@@ -187,28 +187,31 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     return box;
   }
 
-  // D-540 3 `대형·대열`: the follower plans a repeat trip from its start place with `convoy.leader`.
+  // D-540 3 `대형·대열`: pick the leader (a robot on an open repeat trip), then the follower (a robot with no
+  // open trip); the follower plans a repeat trip from its start place with `convoy.leader`.
   const convoy = { busy: false, note: null };
   let bound = false;
   function syncConvoy() {
     if (!bound) { bound = true; bindConvoy(); }
     const follower = el("convoy-follower"), leader = el("convoy-leader");
-    const ids = view.robots.map((robot) => robot.robot_id);
-    placeOptions(follower, ids.map((id) => ({ id })), follower.value, (row) => row.id);
-    const leaders = convoyLeaders(view.trafficTrips, follower.value);
-    placeOptions(leader, leaders.map((id) => ({ id })), leader.value, (row) => row.id);
+    const leaders = convoyLeaders(view.trafficTrips, null);
+    const lead = placeOptions(leader, leaders.map((id) => ({ id })), leader.value, (row) => row.id);
+    const free = view.robots.map((robot) => robot.robot_id).filter((id) => id !== lead && !openTrip(view, id));
+    const chosen = placeOptions(follower, free.map((id) => ({ id })), follower.value, (row) => row.id);
     const starts = places().filter((place) => place.kind === "start");
     const start = placeOptions(el("convoy-start"), starts, el("convoy-start").value);
-    const robot = view.robots.find((row) => row.robot_id === follower.value);
-    const reason = gate(robot) || (convoy.busy ? "보내는 중" : "")
-      || (leaders.length ? "" : "반복 운행 중인 리더가 없습니다 · 리더를 먼저 반복 운행으로 출발시키세요")
-      || repeatTripReason({ active: view.activeSiteMap, running: openTrip(view, follower.value), start });
+    const robot = view.robots.find((row) => row.robot_id === chosen);
+    const reason = (convoy.busy ? "보내는 중" : "")
+      || (leaders.length ? "" : "반복 운행 중인 리더가 없습니다 · 리더 카드의 운행…에서 반복 운행을 먼저 시작하세요")
+      || (free.length ? "" : "따라갈 로봇이 없습니다 · 운행 중이 아닌 로봇이 필요합니다")
+      || gate(robot)
+      || repeatTripReason({ active: view.activeSiteMap, running: openTrip(view, chosen), start });
     setReason(el("convoy-go"), reason);
-    el("convoy-detail").textContent = convoy.note || (reason ? "" : `${follower.value} → ${leader.value} 뒤에서 반복 운행 · 출발 ${start}`);
+    el("convoy-detail").textContent = convoy.note || (reason ? "" : `팔로워 ${chosen} · 리더 ${lead} 뒤에서 반복 운행 · 출발 ${start}`);
   }
 
   function bindConvoy() {
-    for (const id of ["convoy-follower", "convoy-leader", "convoy-start"]) scope.listen(el(id), "change", syncConvoy);
+    for (const id of ["convoy-leader", "convoy-follower", "convoy-start"]) scope.listen(el(id), "change", syncConvoy);
     scope.listen(el("convoy-go"), "click", () => {
       const id = el("convoy-follower").value, leader = el("convoy-leader").value, start = el("convoy-start").value;
       send(id, convoy, async () => {
