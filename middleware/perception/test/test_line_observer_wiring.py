@@ -13,6 +13,20 @@ import numpy as np
 ROOT = Path(__file__).parents[1]
 
 
+def _arm_paint_latch(node):
+    """Extracted _on_camera calls the D-611 latch the real node owns."""
+    from control.sensing.perception.evidence_mode import EvidenceModes
+
+    node._evidence_modes = EvidenceModes()
+
+    def drop():
+        if node._paint_worker is not None:
+            node._paint_worker.reset()
+        node._evidence_modes.reset()
+
+    node._drop_learned_paint = drop
+
+
 @pytest.mark.parametrize('brightness,reason', [(30, 'low_light'), (255, 'overexposed')])
 def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(brightness, reason):
     from control.sensing.perception.camera_visibility import visibility_reason
@@ -28,6 +42,7 @@ def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(b
         _paint_worker=SimpleNamespace(reset=lambda: resets.append('worker')),
         _keep_last_stamp=9., _publish=lambda *args, **kwargs: publications.append((args, kwargs)),
         _publish_debug=lambda *_: None)
+    _arm_paint_latch(node)
     msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=0)))
     namespace['_on_camera'](node, msg)
     assert resets == ['keeper', 'between', 'worker'] and node._keep_last_stamp is None
@@ -110,6 +125,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
         _publish_debug=lambda *_: None,
         observation_pub=SimpleNamespace(publish=lambda msg: observed.append(json.loads(msg.data))),
         _keep_debug_pub=SimpleNamespace(publish=lambda msg: debug.append(json.loads(msg.data))))
+    _arm_paint_latch(node)
     node._publish = lambda *args, **kw: namespace['_publish'](node, *args, **kw)
     for stamp in (10.1, 10.6):
         msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=int((stamp-10)*1e9))))
@@ -344,6 +360,7 @@ def test_route_prototype_latches_invisible_after_simulation_context_changes():
                            _publish=lambda _source, value, **kw: (publications.append(value),
                                                                   qualities.append(kw.get('quality'))),
                            _publish_debug=lambda *a: None)
+    _arm_paint_latch(node)
     namespace = {'Image': object, 'image_msg_to_frame': lambda _: np.zeros((8, 8, 3), np.uint8),
                  'visibility_reason': lambda _: 'usable', 'pose_if_fresh': lambda *a: (0., 0., 0.),
                  'simulation_ground_allowed': lambda **kw: (

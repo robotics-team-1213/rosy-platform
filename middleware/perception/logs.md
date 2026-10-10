@@ -1399,3 +1399,15 @@
 - 변경: 읽기 전용 `learned_paint_target`(기본 `lane_marking`, `drivable`). `drivable`이면 paint worker가 `infer_drivable`을 불러 `learned/drivable_paint.py`가 D-566 영역(성장 제한 없음, ignore 역할은 도로)에서 로봇 아래 도로부터 위로 이어지는 길을 만들고, 갈래가 나뉘면 가장 오른쪽(D-384 2항)을 따른다. 길 양쪽 바깥에 선 폭 띠를 그려 keeper 페인트로 준다. drivable 없음·근거리 2% 미만이면 같은 추론의 lane_marking. 매니페스트 `input.crop` 지원(자르기·background로 되돌리기). keep_debug `paint_source_used: learned_drivable`, `paint_target_requested`, `paint_drivable`. 운영자 overlay 허용 키와 `--paint-target` CLI 플래그, CORE readback은 `learned_drivable`을 `learned`로 보고.
 - 증거: `test_learned_drivable_paint.py`(직선·갈래 우측·횡단보도·덮개 부족·크롭·keeper 종단 오차가 테이프 경로와 0.05 안), overlay·CLI·readback 시험. 원격 pytest 통과(현장 PC).
 - gate 변화: SOURCE. 장치 기본은 꺼짐이다. Pi 지연, 실프레임 재생, 실물은 별도다.
+
+## 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
+- 변경: `EvidenceModes`. `paint_source: learned`에서 마스크가 있으면 그 마스크, 없으면 바로 `denoise_fallback`. 반사 제거로 내려간 뒤 학습으로 돌아가려면 신선한 마스크 2프레임. 밝기 문턱은 폴백이 아님. 카메라 공백·keep 이탈은 래치를 비운다. drivable 길이 늦을 때의 정지는 D-597 그대로. keep_debug에 `evidence_mode`와 `evidence_rows`(횡단보도 보고, 정지선, 장애물 metric/hold, 신호 hsv).
+- 증거: 모델 PC `rosy@100.98.162.71`에서 `test_evidence_mode.py`와 `test_lane_paint_source.py` 33 passed, 1 skipped. `known_failures` NEW 0.
+- gate 변화: 없음. 장치 기본 `threshold` 유지.
+
+## 2026-10-10 · 928b3dc23 · test(control): 떼어 낸 카메라 콜백이 D-611 래치를 갖는다
+- 변경: 제품 동작은 그대로. `test_learned_paint_motion`의 가짜 노드에 `EvidenceModes`. `test_line_observer_wiring`이 소스에서 떼어 실행하는 `_on_camera` 가짜에 래치 리셋. `known_failures`에서 이제 통과하는 keep 콜백 한 줄을 뺌.
+- 증거: 모델 PC `rosy@100.98.162.71`, 커밋 `928b3dc23`, `middleware/perception/test/` 2950 passed, 112 skipped, 62 subtests, 156.97s. `known_failures` NEW 0. 직전 `d226f7f42`는 같은 스위트 8 failed, 2942 passed (가짜 노드에 `_drop_learned_paint`와 `_evidence_modes`가 없음).
+- gate 변화: 없음. 장치 기본 `threshold` 유지. 로봇 주행은 돌리지 않음.
+- 결정: D-611
+- 교훈: 노드 메서드를 AST로 떼어 실행하는 시험은 새 헬퍼를 가짜 노드에 직접 달아야 한다.
