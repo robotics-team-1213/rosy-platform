@@ -36,6 +36,8 @@ CORRIDOR_HALF_M = 0.03
 CORRIDOR_FILL = 0.8
 PIVOT_AHEAD_M = 0.14
 PIVOT_RELEASE_M = 0.22
+#: a latched turn side is released when the way runs this far straight ahead again
+TURN_RELEASE_M = 0.30
 PIVOT_ERROR = 0.5
 PIVOT_CONFIDENCE = 0.37
 BOTH_CONFIDENCE = 0.9
@@ -140,10 +142,11 @@ class DrivableSteer:
         self._target = None
         self._pivot = None
         self._smoothed = None
+        self._side = None
         self._lost_since = None
 
     def reset(self):
-        self._key = self._target = self._pivot = self._smoothed = None
+        self._key = self._target = self._pivot = self._smoothed = self._side = None
         self._lost_since = None
 
     def lost(self, stamp):
@@ -160,6 +163,14 @@ class DrivableSteer:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
         info = dict(self._target)
         ahead, side = info["ahead_m"], info["exit"]
+        # The side chosen at a closing bend or junction is kept until the way runs ahead again
+        # (9dfk 20261010T001349Z weaved right/left at the ring's SE exit when the exit tie flipped).
+        if self._side is not None and ahead >= TURN_RELEASE_M:
+            self._side = None
+        if self._side is None and ahead < LOOKAHEAD_M and side is not None:
+            self._side = side
+        if self._side is not None and self._side in info["exit_point_m"]:
+            side = info["exit"] = self._side
         if self._pivot is not None and (ahead >= PIVOT_RELEASE_M or side is None):
             self._pivot = None
         if self._pivot is None and ahead < PIVOT_AHEAD_M and side is not None:
