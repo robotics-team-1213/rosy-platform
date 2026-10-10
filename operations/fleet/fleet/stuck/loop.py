@@ -15,8 +15,8 @@ from typing import Awaitable, Callable, Mapping, Optional
 import httpx
 
 from fleet.server.console_routes import transport_failure
-from fleet.server.line_stuck import LineStuckBoard
-from fleet.server.stuck_resolver import Answer, Escalate, StuckResolver
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.resolver import Answer, Escalate, StuckResolver
 from fleet.swarm.transport import RobotApiError
 
 PRINCIPAL_ID = "fleet-resolver"

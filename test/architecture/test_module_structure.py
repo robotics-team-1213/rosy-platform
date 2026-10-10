@@ -94,6 +94,7 @@ SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
+              "fleet/fleet/stuck",
               "perception/control/sensing/perception",
               "perception/control/sensing/perception/learned")
 
@@ -170,6 +171,15 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md, and decide then whether "
         "server/traffic_reservations.py moves in or retires.",
     ),
+    "fleet/fleet/stuck": (
+        1781,
+        "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
+        "re-judged 2026-10-10) + D-608 incident reports "
+        "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
+        "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
+        "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
+        "+150 allowance measured from 1781",
+    ),
     "fleet/fleet/server/web/map-view.js": (
         831,
         "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
@@ -220,7 +230,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_090,
+        51_324,
+        "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
+        "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
+        "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "
+        "Previously "
         "split: re-judged at 53090 on 2026-10-10: D-608 adds read-only incident reports, reviews and evidence joins within Fleet; the existing stuck subpackage split remains due before further growth. Previously "
         "split: re-judged at 52550 on 2026-10-10 over 51848 (+702; independent re-judge 2026-10-10, critic): "
         "D-511 rev 1/2 lane return +333, D-601 trip start checks +158 (trip_admission/trip_progress split out of trip_runner), "
