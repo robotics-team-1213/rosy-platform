@@ -197,3 +197,27 @@ def test_failed_export_never_leaves_final_video_or_overwrites_sidecar(tmp_path, 
     with pytest.raises(FileExistsError):
         m.render(s.out, out)
     assert sidecar.read_text() == "prior evidence"
+
+
+def test_browser_launch_cannot_block_capture(tmp_path, monkeypatch):
+    m = module()
+    import threading
+    released = threading.Event()
+    browser_started = threading.Event()
+    config = {"sources": [{"id": "robot_a", "kind": "robot", "url": "https://robot.local:8080",
+                            "token_file": "memory", "ca_file": "memory"}]}
+    def browser(_):
+        browser_started.set()
+        released.wait(3)
+    monkeypatch.setattr(m.webbrowser, "open", browser)
+    monkeypatch.setattr(m, "client", lambda _: object())
+    monkeypatch.setattr(m, "robot_frame", lambda _: (b"jpeg", {"seq": 1, "captured_at": 1.,
+                      "received_at": m.time.time(), "timeline_at": m.time.time(), "clock": "receipt"}))
+    # A separate supervisor releases a hung browser; recording must already have finished.
+    threading.Timer(2., released.set).start()
+    start = m.time.monotonic()
+    s = m.record(config, tmp_path / "session", .05, 0, True)
+    elapsed = m.time.monotonic() - start
+    released.set()
+    assert browser_started.is_set()
+    assert elapsed < 1.5 and s.sources[0]["frames"] > 0
