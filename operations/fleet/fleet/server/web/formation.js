@@ -3,7 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
-import { formationReason } from "./motion-readiness.js";
+import { capabilityReason, chooseLeader, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);
 const shapeLabel = (shape) => enumLabel(FORMATION_SHAPE_LABEL, shape);
@@ -22,6 +22,8 @@ const ABOVE = "위 사유";
 // Many robots: name a few, count the rest (the form and the cards carry every id).
 const fewIds = (ids, n = 5) => ids.length > n ? `${ids.slice(0, n).join(", ")} 외 ${ids.length - n}대` : ids.join(", ");
 const AFTER_OPEN = "대형 변경·재개·해제는 대형을 시작한 뒤에 씁니다";
+const PATH_AFTER = "대형을 시작한 뒤에 리더에게 길을 줍니다";
+const LEADER_HOW = { ahead: "방향 앞", number: "번호 앞" };
 
 export function createFormation({ scope, el, view, log, call, render, namedReason = () => "" }) {
   // 모양 목록도 같은 표에서 온다. 값(열거값)은 요청 본문과 title에만.
@@ -44,12 +46,17 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
 
   // 팔로워 칸은 리더를 뺀 로봇이다. 리더를 바꾸면 다시 그리되, 운영자가 푼 칸은 그대로 둔다.
   const unchecked = new Set();
+  function canFollow(id) {
+    const robot = view.robots.find((row) => row.robot_id === id);
+    return Boolean(robot?.online) && capabilityReason(robot.capabilities, "swarm.follow") === "";
+  }
   function fillMembers() {
     const leader = el("formation-leader").value;
     const ids = view.robots.map((r) => r.robot_id).filter((id) => id !== leader);
     const box = el("formation-members");
-    if (box.dataset.ids === ids.join(",")) return;
-    box.dataset.ids = ids.join(",");
+    const signature = ids.map((id) => `${id}:${canFollow(id) ? 1 : 0}`).join(",");
+    if (box.dataset.ids === signature) return;
+    box.dataset.ids = signature;
     box.replaceChildren(...ids.map((id) => {
       const label = document.createElement("label");
       label.className = "ui-check";
@@ -57,7 +64,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       input.className = "ui-field";
       input.type = "checkbox";
       input.value = id;
-      input.checked = !unchecked.has(id);
+      input.checked = canFollow(id) && !unchecked.has(id);
       input.addEventListener("change", () => { if (input.checked) unchecked.delete(id); else unchecked.add(id); });
       // 좁은 칸에서는 줄임표로 자르고 전체 id 는 title 로 남긴다.
       const name = document.createElement("span");
@@ -66,6 +73,19 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       label.append(input, name);
       return label;
     }));
+  }
+
+  function applyAutoLeader() {
+    const select = el("formation-leader");
+    const choice = chooseLeader(view.robots);
+    view.leaderChoice = choice;
+    if (view.formation?.active || view.formationUnavailable) return;
+    const ids = view.robots.map((robot) => robot.robot_id);
+    if (select.dataset.leaderOverride && !ids.includes(select.dataset.leaderOverride)) {
+      delete select.dataset.leaderOverride;
+    }
+    const use = select.dataset.leaderOverride || choice.id;
+    if (use && [...select.options].some((option) => option.value === use)) select.value = use;
   }
 
   function fillLeaders() {
@@ -77,7 +97,9 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       select.replaceChildren(...ids.map((id) => new Option(id, id)));
       if (ids.includes(current)) select.value = current;
     }
+    applyAutoLeader();
     syncPendingSummary();
+    setPath();
     filterRobots();
   }
 
@@ -96,9 +118,43 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
 
   // D-252: 시작 전 확인 문장. 슬롯 좌표는 서버 기하가 쥐고 있어 클라이언트가
   // 미리 그릴 수 없으므로, 폼 현재값을 문장으로 미리 말한다.
+  function pathContext() {
+    return {
+      map: Boolean(view.map),
+      places: view.activeSiteMap?.map?.places?.length || 0,
+    };
+  }
+
+  function pathReason() {
+    const named = namedReason();
+    if (named) return named;
+    if (view.formationUnavailable) return "대형 상태 확인 불가";
+    if (!view.formation?.active) return PATH_AFTER;
+    const robot = view.robots.find((row) => row.robot_id === view.formation.leader);
+    return leaderPathKind(robot, pathContext()).reason;
+  }
+
+  function setPath() {
+    const button = el("formation-path");
+    if (!button) return;
+    const why = pathReason();
+    button.disabled = Boolean(why);
+    if (why) button.setAttribute("reason", why);
+    else button.removeAttribute("reason");
+  }
+
+  function rememberLeaderOverride() {
+    const select = el("formation-leader");
+    const choice = view.leaderChoice;
+    if (!choice?.id || view.formation?.active || view.formationUnavailable) return;
+    if (select.value && select.value !== choice.id) select.dataset.leaderOverride = select.value;
+    else delete select.dataset.leaderOverride;
+  }
+
   function syncPendingSummary() {
     fillMembers();
     if (view.formationUnavailable || (view.formation && view.formation.active)) return;
+    rememberLeaderOverride();
     const leader = el("formation-leader").value;
     const shape = el("formation-shape").value;
     const spacing = Number(el("formation-spacing").value);
@@ -107,8 +163,10 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     setButtons(reason ? `${reason} · ${AFTER_OPEN}` : AFTER_OPEN, {
       "formation-start": Boolean(reason), "formation-reform": true, "formation-resume": true, "formation-stop": true,
     });
+    setPath();
+    const how = leader === view.leaderChoice?.id ? (LEADER_HOW[view.leaderChoice.by] || "번호 앞") : "직접 지정";
     el("formation-detail").textContent = reason ? ""
-      : `리더 ${leader} · 팔로워 ${members.length}대(${fewIds(members)}) · ${shapeLabel(shape)} · 간격 ${spacing} m`;
+      : `리더 ${leader} · 팔로워 ${members.length}대(${fewIds(members)}) · ${shapeLabel(shape)} · 간격 ${spacing} m · ${how}`;
   }
 
   function renderFormation(status) {
@@ -138,6 +196,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       "formation-start": true, "formation-reform": false,
       "formation-resume": !holding || pending.length > 0, "formation-stop": false,
     });
+    setPath();
     const slots = Object.entries(status.assignment || {})
       .map(([id, slot]) => `${id} 뒤 ${slot.distance.toFixed(2)} m`
         + (Math.abs(slot.lateral) > 1e-6 ? ` · 옆 ${slot.lateral.toFixed(2)} m` : ""));
@@ -195,6 +254,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       // 마지막 확인 상태가 활성일 때는 해제 요청만 남긴다. 최종 판정은 Fleet API다.
       setButtons("대형 상태 확인 불가", { "formation-start": true, "formation-reform": true,
         "formation-resume": true, "formation-stop": !wasActive });
+      setPath();
       render();
     }
   }
@@ -247,6 +307,34 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
 
     scope.listen(el("formation-stop"), "click", () =>
       formationCall("/api/fleet/formation/stop", null, "해제"));
+
+    scope.listen(el("formation-path"), "click", () => {
+      if (el("formation-path").disabled) return;
+      const leader = view.formation?.leader;
+      const robot = view.robots.find((row) => row.robot_id === leader);
+      const kind = leaderPathKind(robot, pathContext());
+      if (kind.kind === "goal") {
+        view.selected = leader;
+        view.pinning = null;
+        view.cursor = view.map
+          ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) } : null;
+        const stage = el("map-stage");
+        if (stage) stage.dataset.view = "map";
+        const bird = el("birdseye-toggle");
+        if (bird) bird.setAttribute("aria-pressed", "false");
+        const canvas = el("map-canvas");
+        canvas.classList.remove("idle");
+        canvas.tabIndex = 0;
+        render();
+        canvas.focus({ preventScroll: true });
+        log(`${leader} 길을 지도에 찍으세요. 확인 뒤 그 점으로 계획해 이동합니다.`);
+        return;
+      }
+      if (kind.kind === "trip") {
+        view.openLeaderTrip?.(leader);
+        log(`${leader} 운행을 열었습니다. 목적지를 고르고 경로 보기를 누른 뒤 운행 시작을 누르면 계획대로 이동합니다.`);
+      }
+    });
 
     scope.listen(el("formation-filter"), "input", filterRobots);
     // D-252: 폼이 바뀌면 대기 요약을 갱신한다. 대형 중에는 서버 상태가 주인이므로 건드리지 않는다.
