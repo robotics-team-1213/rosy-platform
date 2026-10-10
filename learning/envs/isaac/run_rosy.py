@@ -272,6 +272,7 @@ def main():
                 # Remove delayed menu callbacks while the USD context still exists.
                 omni.timeline.get_timeline_interface().stop()
                 headless_menu.clear_menu_data()
+                headless_menu.rebuild_menus()
                 simulation_app.update()
         finally:
             command_watchdog.ACTIVE_WATCHDOG = None
