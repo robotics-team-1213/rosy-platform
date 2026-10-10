@@ -4,11 +4,13 @@
 
 **Goal:** ROSY의 공통 제품 정체성에 맞춰 3단계 도메인 개요와 필요한 내부 책임을 최대 5 depth로 정돈하고 세계 상태와 행동 예측을 권한·근거·학습 수명에 맞게 연결한다.
 
-**Architecture:** [플랫폼 설계](2026-10-11-rosy-platform-identity-and-structure-design.md)의 `middleware/operations/learning` 세 파트와 공용 계약·adapter를 유지한다. 제안된 `control`, `devices`, `prediction` 배치는 후속 ADR에서 확정한 뒤 필요한 소스 단위만 이동한다. 세계 상태는 관측의 projection, world model은 예측 생산자다.
+**Architecture:** [플랫폼 설계](2026-10-11-rosy-platform-identity-and-structure-design.md)의 `middleware/operations/learning` 세 파트와 공용 계약·adapter를 유지한다. `control`, `devices`, `prediction` 구조 방향은 [D-625](../adr/D-625-semantic-structure-and-staged-migration.md)로 결정하고 필요한 소스 단위만 단계별 검증 후 이동한다. 세계 상태는 관측의 projection, world model은 예측 생산자다.
 
 **Tech Stack:** 기존 Python/ROS 2 Jazzy/ament/wheel, platform manifest, remote pytest, 기존 episode/registry 도구. world model 기술·가중치·GPU 요구는 아직 선정하지 않았다.
 
 **상태:** Proposed, 2026-10-11, 기준 `81b6ed879`, `docs/core-responsibility-plan`. 문서 완료가 코드 이동·모델 학습·배포·실물 수용을 뜻하지 않는다.
+
+**후속 결정:** S1의 구조 방향 ADR과 [이전 계획·도구](2026-10-11-platform-structure-migration.md)는 준비했다. S2 이후 책임 추출·world 소비자·학습/추론 구현은 미실행이다. 도구 브랜치는 `feat/platform-structure-migration`이다.
 
 **개정:** 후속 사용자 요청으로 책임 분류 상한을 5단계로 조정했다. 현행 소스의 이동과 실제 namespace 깊이는 별도 검증하며, 4·5단계의 후보를 일괄 생성하지 않는다.
 

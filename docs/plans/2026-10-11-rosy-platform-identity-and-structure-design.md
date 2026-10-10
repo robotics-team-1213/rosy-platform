@@ -1,8 +1,9 @@
 # ROSY Platform 정체성과 최대 5단계 책임 구조 설계
 
-**상태:** Proposed. 2026-10-11 사용자 요청에 따른 제품·구조 재검토다. 기존 Accepted ADR, API, 배포 구조를 변경·승격하지 않는다.
+**상태:** 구조 방향은 [D-625](../adr/D-625-semantic-structure-and-staged-migration.md)로 Accepted (2026-10-11). 상세 책임 추출·개별 holder 생성·설치·장치 수용은 후속 단계다. 기존 API와 현재 배포 구조를 변경·승격하지 않는다.
 **기준:** `81b6ed879`, `docs/core-responsibility-plan`. 세계 상태와 행동 예측을 함께 다룬다는 사용자 답변을 반영한다.
 **실행:** [플랫폼 구조 실행 계획](2026-10-11-rosy-platform-identity-and-structure.md).
+**이전 준비:** [이전표·도구·검증·복구 계획](2026-10-11-platform-structure-migration.md). 계획과 도구만 준비했으며 실제 제품 폴더 이동은 0건이다.
 **상세:** [CORE·Drive·Arm·Safety 설계](2026-10-11-core-responsibility-and-driving-design.md), [상세 실행 계획](2026-10-11-core-responsibility-and-driving.md).
 
 **개정:** 같은 대화의 후속 요청에 따라 3단계 개요를 유지하고 복잡한 도메인의 내부 책임은 최대 5단계까지 허용한다. 모든 폴더를 5단계로 만드는 제안은 아니다.

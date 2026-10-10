@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python stdlib, 기존 `_legacy_paths.LegacyScan`, Git, JSON 이전표, 원격 pytest, 기존 harness/architecture 계약.
 
-**상태:** Ready for tool preparation, 2026-10-11. 기준 `f14070a59`, 브랜치 `feat/platform-structure-migration`. 사용자는 구조 방향과 ADR·계획·도구 작성을 요청했다. 이 계획의 M0–M2만 이번 작업 범위다. 실제 제품 이전 M3 이후는 실행하지 않는다.
+**상태:** M0–M2 준비 완료, M3–M9 미실행, 2026-10-11. 기준 `f14070a59`, 브랜치 `feat/platform-structure-migration`. 사용자는 구조 방향과 ADR·계획·도구 작성을 요청했다. 실제 제품 이전 M3 이후는 실행하지 않았다.
 
 ## 이전 단위와 선행 조건
 
@@ -78,3 +78,18 @@ preview JSON의 원래 HEAD·source/target·tracked 목록을 X에 보관한다.
 CORE 계획의 port/admission/취소/guard characterization을 통과한 단위만 추출한다. Drive의 planning/tracking/recovery/곡률 envelope와 Arm의 joints/gripper/limits/workspace를 별도 책임으로 만들면서 기존 writer·generation·budget을 유지한다. process runtime과 action attempt lifecycle은 서로 다른 책임이다.
 
 World State 소비자와 예측 replay 입력 계약을 먼저 연결한다. 이후 한 가지 Drive 또는 Arm 행동 예측을 offline 평가하고 uncertainty/abstention을 검증한다. model provider 선정·학습 job·AI PC 추론·shadow 관찰·실행 활성화는 각각 독립 단계다. world model 출력만으로 복구·goal 완료·Safety 통과를 인정하지 않는다.
+
+## M0–M2 준비 결과
+
+계획/ADR·구현 전 시험은 `e98e0aeed`, 도구는 `360093ecc`, 거절 원인과 tracked link 시험 보강은 `f2f9945c7`에 기록했다. 구현 전 원격 RED에서 도구가 없어 12 NEW였으며 known failure 목록에 넣지 않았다. `f2f9945c7`의 모델 PC 원격 도구/harness/network 계약은 144 성공 표시·exit 0, known_failures 0 NEW/0 known이다. 기존 freshness warning은 별도이며 제품 gate는 올리지 않았다.
+
+실제 Windows 트리 preview는 아래와 같다. 참조 수는 scanner의 검출 건수로, 역사적 `d427_target`·시험 fixture 같은 검토 후 유지할 참조도 포함한다. completeness나 수정 완료 건수가 아니다.
+
+| 단위 | tracked 파일 | 참조 검출 | Safety 자동 이동 차단 |
+|---|---:|---:|---|
+| core-api | 74 | 73 | Safety module 1개 및 명시적 수동 단위 |
+| pinky-device | 97 | 171 | 현재 manifest에는 없음; 장치 설치/stop 검증은 별도 |
+| omx-device | 99 | 155 | Safety module 5개 및 명시적 수동 단위 |
+| drive-nav2 | 49 | 51 | 현재 manifest에는 없음; 최종 writer 계약은 별도 |
+
+preview 전후 전체 tracked byte hash와 Git status/index가 같음을 확인했다. 제품 이동 0건이다. 결과와 원격 로그는 X 관리 세션 `2026-10-11--001305--core-responsibility-plan--66d72e`의 `evidence/structure-preview`, `logs/structure-move-{red,green,final}`에 보관한다. 자동 참조 치환·Windows 실제 이동·실제 패키지 설치·ARM64 이미지·장치·현장 수용은 검증하지 않았다.
