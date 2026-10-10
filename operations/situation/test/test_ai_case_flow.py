@@ -21,7 +21,8 @@ JPEG = b"\xff\xd8frame\xff\xd9"
 class Front:
     sequence = 0
 
-    async def front_frame(self):
+    async def front_frame(self, *, overlay=True):
+        assert overlay is False
         self.sequence += 1
         return JPEG, {"source": "front", "sequence": self.sequence, "age_ms": 100}
 

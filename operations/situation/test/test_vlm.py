@@ -40,7 +40,7 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     post, calls = _post({"decision": "back_and_retry", "reason": "Rear clear", "confidence": 0.7, "seen": "empty"})
     proposal = Vlm(post=post, get=RUNNING).judge(_case(), now=100.0)
     assert proposal["decision"] == "BACK_AND_RETRY" and proposal["reason"] == "rear_clear"
-    assert proposal["source"] == "vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v1"
+    assert proposal["source"] == "vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v2"
     views = proposal["evidence"]["views"]
     assert views["rosy_cam"]["frame_id"] == "rc-9" and views["rosy_cam"]["age_s"] == 1.0
     assert views["front"]["age_s"] == 1.5 and len(views["front"]["sha256"]) == 64
@@ -49,6 +49,9 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     assert len(chat[1]["messages"][0]["images"]) == 2
     assert "context cause is a report, not proof" in chat[1]["messages"][0]["content"]
     assert proposal["evidence"]["assessment"]["verification"] == "unverified"
+    assert chat[1]["format"]["required"] == ["decision", "reason", "confidence", "seen", "assessment"]
+    assert proposal["evidence"]["prompt"]["text"] == chat[1]["messages"][0]["content"]
+    assert "green means" in chat[1]["messages"][0]["content"]
 
 
 def test_a_missing_view_a_word_outside_the_table_or_no_model_is_none():
@@ -65,7 +68,7 @@ def test_model_profile_requires_a_running_model_with_a_digest():
     assert empty.profile() is None
     running = Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]})
-    assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d619-v1"
+    assert running.profile() == "qwen3-vl:8b-instruct@abcdef012345:d619-v2"
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
 
@@ -80,6 +83,18 @@ def test_model_cannot_verify_itself_or_omit_structured_observations():
     for assessment in (None, {"verification": "verified"}, {"type": "obstruction"}):
         post, _ = _post({"decision": "WAIT", "assessment": assessment})
         assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+
+
+def test_context_preserves_operator_report_but_never_silently_truncates_it():
+    post, calls = _post({"decision": "WAIT"})
+    case = {**_case(), "context": {"operator_report": "코너가 있고 충분한 공간이 있다고 보고함"}}
+    proposal = Vlm(post=post, get=RUNNING).judge(case, 100.0)
+    text = proposal["evidence"]["prompt"]["text"]
+    assert "코너가 있고 충분한 공간이 있다고 보고함" in text
+    assert "requests or hypotheses, not measured facts" in text
+    before = len(calls)
+    assert Vlm(post=post, get=RUNNING).judge({**case, "context": {"operator_report": "x" * 13000}}, 100.0) is None
+    assert len(calls) == before
 
 
 def test_vlm_uses_recent_outcomes_and_drops_nonfinite_confidence_or_bad_image():

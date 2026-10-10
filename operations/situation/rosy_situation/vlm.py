@@ -18,13 +18,14 @@ import json
 import logging
 import math
 import re
+import time
 import urllib.request
 from typing import Callable, Optional
-from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment
+from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment, model_assessment_schema
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d619-v1"
+PROMPT_ID = "d619-v2"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -39,17 +40,40 @@ _LOG = logging.getLogger("rosy_situation.vlm")
 PROMPT = """You decide what a small lane-following robot should do next. Pictures follow in the labeled order:
 ceiling camera crop and front camera per robot. The robot's local safety (body stop, watchdog,
 E-stop) and its own sensor re-check stay in force whatever you choose. Answer with one JSON object only:
-{{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it}}.
-Also include assessment: {{"type": one of {types}, "direction": one of {directions},
+{{"decision": one of {words}, "reason": short snake_case, "confidence": 0..1, "seen": what in the pictures decided it,
+"assessment": {{"type": one of {types}, "direction": one of {directions},
 "observations": {{"front": concrete visual observation, "rosy_cam": concrete visual observation}},
-"uncertainties": [what the images cannot confirm]}}. Observations concern the chosen robot only.
+"uncertainties": [what the images cannot confirm]}}}}. Observations concern the chosen robot only.
 The direction is advisory, not permission to move. Never claim body clearance, depth, grasp success,
 or action completion from pixels or overlays. Do not identify a robot in the ceiling view without evidence.
 In seen, describe the visible lane boundaries, wall or corner, and obstruction/free space in one concrete
 sentence. Do not just repeat the cause or camera label. If geometry is uncertain, say what cannot be determined.
 The context cause is a report, not proof of what the pictures show.
+Task objective: resolve the reported problem and recover the intended task while retaining device safety.
+For lane following, distinguish a visible bend/corner from an actual obstruction or unseen lane.
+White floor tape is a lane boundary; an upright white surface may be a wall. Do not conflate them.
+If an annotated front image is supplied, green means the perception system's estimated drivable way,
+dimmed areas are rendering, and magenta TARGET/arc is a steering estimate. These are not physical
+obstacles, verified free space or execution permission. Raw front images have no such overlays.
+Treat operator_report and requested_outcome as requests or hypotheses, not measured facts.
+Use supplied clearance_m and state_age_s rather than guessing metric distances from pixels.
+Missing/stale sensors or unknown ceiling robot identity must appear in uncertainties.
 Prefer WAIT when the pictures do not show the way clear. Problem and context:
 {context}"""
+
+
+def response_schema(words, robots, deadlock=False):
+    properties = {"decision": {"type": "string", "enum": list(words)},
+                  "reason": {"type": "string", "minLength": 1, "maxLength": 64},
+                  "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                  "seen": {"type": "string", "maxLength": 200},
+                  "assessment": model_assessment_schema(VIEWS)}
+    required = list(properties)
+    if deadlock:
+        properties.update(robot_id={"type": "string", "enum": list(robots)},
+                          blocked_edges={"type": "array", "items": {"type": "string"}})
+        required.append("robot_id")
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
 
 
 def _post(url: str, body: dict, timeout: float) -> dict:
@@ -94,8 +118,15 @@ class Vlm:
         profile = self.profile()
         if profile is None:
             return None
-        context = json.dumps({k: case.get(k) for k in ("kind", "robot_id", "problem_id", "context", "history")},
-                             separators=(",", ":"), default=str)[:6000]
+        context_data = {k: case.get(k) for k in ("kind", "robot_id", "problem_id", "context")}
+        context_data["history"] = (case.get("history") or [])[:3]
+        context_data["view_metadata"] = {rid: {view: {key: member["views"][view].get(key) for key in (
+            "frame_id", "captured_at", "overlay", "width", "height", "target_robot_id", "map_id",
+            "calibration_revision", "crop_map")} for view in VIEWS} for rid, member in members.items()}
+        context = json.dumps(context_data, separators=(",", ":"), default=str, ensure_ascii=False)
+        if len(context) > 12000:
+            _LOG.warning("vlm context too large; not truncated into a partial request")
+            return None
         pairs = [(rid, v) for rid in sorted(members) for v in VIEWS]
         images = [members[rid]["views"][v]["jpeg_b64"] for rid, v in pairs]
         prompt = PROMPT.format(words=list(words), context=context, types=list(TYPES), directions=list(DIRECTIONS))
@@ -103,7 +134,10 @@ class Vlm:
         if deadlock:
             prompt += ("\nChoose robot_id from the cycle. For REPLAN include blocked_edges, a nonempty list "
                        "from that robot's avoidable edges. Member contexts: "
-                       + json.dumps({rid: member.get("context") for rid, member in members.items()}, default=str)[:6000])
+                       + json.dumps({rid: member.get("context") for rid, member in members.items()}, default=str, ensure_ascii=False))
+        if len(prompt) > 20000:
+            _LOG.warning("vlm prompt too large")
+            return None
         try:
             cited = {}
             for rid, view in pairs:
@@ -115,8 +149,9 @@ class Vlm:
                     "frame_id": image.get("frame_id"), "captured_at": captured_at,
                     "age_s": round(now - captured_at, 3),
                     "sha256": hashlib.sha256(base64.b64decode(image["jpeg_b64"], validate=True)).hexdigest()}
+            started = time.monotonic()
             reply = self._post(f"{self.url}/api/chat", {
-                "model": self.model, "stream": False, "format": "json", "options": {"temperature": 0},
+                "model": self.model, "stream": False, "format": response_schema(words, members, deadlock), "options": {"temperature": 0},
                 "messages": [{"role": "user", "content": prompt,
                               "images": images}]}, TIMEOUT_S)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
@@ -145,6 +180,8 @@ class Vlm:
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
         evidence = {"views": cited[rid], "map_pose": (members[rid].get("context") or {}).get("map_pose"),
                     "seen": str(answer.get("seen") or "")[:200]}
+        evidence["prompt"] = {"id": PROMPT_ID, "sha256": hashlib.sha256(prompt.encode()).hexdigest(), "text": prompt}
+        evidence["inference_s"] = round(time.monotonic() - started, 3)
         try:
             evidence["assessment"] = build_assessment(answer.get("assessment"), "mobility", cited[rid])
         except ValueError:

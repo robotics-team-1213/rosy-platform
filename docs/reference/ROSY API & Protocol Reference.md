@@ -1523,6 +1523,10 @@ v1.202 / D-619: `evidence.assessment`를 선택 추가한다. 공통 계약은 `
 
 영상 설명의 정확성은 모델 confidence와 별개다. 모델 평가 상태는 항상 unverified이며 기존 incident review/episode/outcome으로 별도 센서 대조·독립 검토·사람 정답·실제 완료를 기록한다. 오버레이는 다른 알고리즘의 출력이며 독립 거리·정답 증거가 아니다. 신규 프롬프트와 이전 프롬프트 결과를 동일 프로필로 비교하지 않는다. 새 사례 재생은 실제 모델·계약 fake·신선한 운영 case를 구분하고 응답 시간과 판단 불확실성을 함께 보여준다.
 
+`d619-v2` case 입력은 원본 front frame(`overlay=false`, 실제 raw sequence)을 요구한다. 원본이 없으면 VLM은 보류하며 운영자 retained preview를 덮어쓰지 않는다. front view에는 overlay/width/height, Rosy Cam lease view에는 target_robot_id/map_id/calibration_revision/crop_map 출처가 추가된다. AI PC가 Vision JPEG로 교체한 뒤에도 이 출처는 유지한다. case context는 `state_age_s`와 `clearance_m {front_clearance_m, rear_clearance_m, turn_clearance_m, rear_blind_m}`을 포함한다. 누락값은 null이며 영상 추정값으로 채우지 않는다.
+
+모델에는 문제 종류·목표 로봇·센서/지도 상태·최근 실제 처리 결과·영상 메타데이터를 전달한다. 임의 operator_report/requested_outcome을 포함한 요청은 사용자 보고·가설로 명시하며 측정 사실로 승인하지 않는다. 최근 history는 최대 3건만 입력하고 맥락 JSON이 12,000자 또는 전체 프롬프트가 20,000자를 넘으면 VLM 판단을 보류한다. JSON을 중간에서 잘라 보내지 않는다. Qwen 응답은 JSON Schema로 필수 assessment를 제한한다. proposal evidence의 `prompt {id, sha256, text}`는 모델이 받은 정확한 요청문이고 `inference_s`는 실제 모델 호출 이후 파싱까지의 측정 시간이다. JPEG·lease·credential은 prompt 기록에서 제외한다. 기존 API의 권한과 CORE 실행 검사는 그대로 유지한다.
+
 | 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |
 |---|---|---|---|
 | 벽 앞 차선 상실, 뒤쪽 통로가 보임 | `BACK_AND_RETRY`, `reason: rear_clear`, `evidence.seen: rear corridor visible` | D-577 후진 전제 충족 시 `forwarded`, CORE 응답 후 `outcome` 기록 | 판단 영상 ID·모델·근거와 CORE 수락 여부 |
