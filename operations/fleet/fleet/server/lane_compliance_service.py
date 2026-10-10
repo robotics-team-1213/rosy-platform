@@ -69,6 +69,7 @@ class LaneComplianceMonitor:
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
         self._cue_mute: dict[str, float] = {}    # robot -> wall time an unsupported CORE is asked again
+        self._cue_refused: dict[str, Optional[str]] = {}   # robot -> last refusal reason (log once)
         self._last_stamp: dict[str, float] = {}  # robot -> last odom stamp sent (an OFF_MAP cue reuses it)
         self._epoch = f"{int(wall() * 1000):x}"
         self._robot_ids = robot_ids
@@ -184,12 +185,13 @@ class LaneComplianceMonitor:
         self._cue_seq += 1
         body = {"cue_id": f"{robot_id}-{self._epoch}-{self._cue_seq}", "fleet_epoch": self._epoch,
                 "seq": self._cue_seq, "ttl_s": CUE_TTL_S,
-                "pose_stamp": back["pose_stamp"] or self._last_stamp.get(robot_id),
+                # OFF_MAP: CORE holds without odom alignment (re-review 1), any positive stamp will do.
+                "pose_stamp": back["pose_stamp"] or self._last_stamp.get(robot_id) or now,
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
                                         "offset_m", "edge_id", "guide")}}
         # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
-            await asyncio.wait_for(send(body), PERIOD_S)
+            reply = await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch
             status = getattr(exc, "status", None)
             if status in UNSUPPORTED:
@@ -199,6 +201,17 @@ class LaneComplianceMonitor:
             else:
                 logger.debug("lane cue %s failed: %s", robot_id, exc)
             return
+        if isinstance(reply, dict) and reply.get("accepted") is False:
+            # D-430 re-review 1: a refused cue did not take effect; say why and try again next tick
+            # ("disabled": that robot's CORE does not read cues, asked again after CUE_RETRY_S).
+            reason = reply.get("reason")
+            if reason == "disabled":
+                self._cue_mute[robot_id] = now + CUE_RETRY_S
+            if self._cue_refused.get(robot_id) != reason:
+                logger.warning("lane cue %s: %s refused (%s)", robot_id, state, reason)
+            self._cue_refused[robot_id] = reason
+            return
+        self._cue_refused.pop(robot_id, None)
         if back["pose_stamp"] is not None:
             self._last_stamp[robot_id] = back["pose_stamp"]
         if self._cue_sent.get(robot_id) != state:

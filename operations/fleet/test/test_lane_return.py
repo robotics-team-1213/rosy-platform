@@ -128,3 +128,22 @@ def test_resolver_resumes_a_stuck_at_a_mapped_crosswalk_once():
     row["state"]["line_follow"]["stuck"] = {"stuck_id": "s2", "cause": "no_motion"}
     [again] = resolver.step(1.0, [row])
     assert getattr(again, "reason", None) == "restuck_after_resume"   # a human, not a WAIT loop
+
+
+def test_a_refused_cue_is_not_counted_as_sent():
+    clock = [100.0]
+
+    class Refusing(Client):
+        async def line_follow_lane_cue(self, body):
+            self.sent.append(body)
+            return {"accepted": False, "reason": "pose_stale"}
+
+    client = Refusing()
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5),
+                                    wall=lambda: clock[0], clients=lambda: {"r1": client})
+    for _ in range(4):
+        asyncio.run(monitor.tick())
+        clock[0] += 0.5
+    assert client.sent and monitor._cue_sent.get("r1") is None and monitor._cue_refused["r1"] == "pose_stale"
