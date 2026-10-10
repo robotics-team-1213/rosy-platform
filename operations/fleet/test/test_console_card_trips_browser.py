@@ -207,7 +207,9 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
                 assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
-            form.scroll_into_view_if_needed()
+            # One atomic scroll: a 1 s poll may rebuild the card between a locator's resolve and its action.
+            page.evaluate("document.querySelector('#roster article[data-robot-id=\"rosy_02\"] .card-trip')"
+                          "?.scrollIntoView({block: 'nearest'})")
             _shot(page, f"card-trip-{width}x{height}.png")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
         assert not errors
