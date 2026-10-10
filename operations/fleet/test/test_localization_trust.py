@@ -25,9 +25,9 @@ def snap(localization=..., pose=(1.0, 2.0)):
     (snap(loc("SUSPECT", "map")), trust.UNTRUSTED),
     (snap(loc("UNKNOWN", "odom")), trust.UNTRUSTED),
     (snap({"state": "LOCALIZED"}), trust.UNTRUSTED),      # present but malformed: not trusted
-    (snap(), trust.LEGACY),                                  # no field: a pre-D-395 robot
-    (snap(None), trust.LEGACY),                              # explicit null
-    (None, trust.LEGACY),
+    (snap(), trust.UNTRUSTED),                                  # no field: a pre-D-395 robot
+    (snap(None), trust.UNTRUSTED),                              # explicit null
+    (None, trust.UNTRUSTED),
 ])
 def test_classify(state, expected):
     assert trust.classify(state) == expected
@@ -61,8 +61,8 @@ def test_an_unknown_route_is_not_blocked_by_a_located_obstacle():
 def test_badge_names_the_state_and_flags_legacy_and_needs_human():
     assert trust.badge(None) is None
     legacy = trust.badge(snap())
-    assert legacy["legacy"] is True and legacy["label"] == "위치 상태 미보고"
-    assert legacy["trusted"] is True                   # legacy keeps today's behaviour
+    assert legacy["legacy"] is False and legacy["label"] == "위치 모름"
+    assert legacy["trusted"] is False and legacy["state"] == "UNKNOWN"
     ok = trust.badge(snap(loc()))
     assert ok == {"state": "LOCALIZED", "pose_frame": "map", "trusted": True, "legacy": False,
                   "needs_human": False, "label": "위치 확정"}

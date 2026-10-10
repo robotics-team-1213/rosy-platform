@@ -913,3 +913,9 @@
 - 변경: 굽이 `bending`·`reacquiring` 상태에는 `bend_phase`를 발행하고 접근 거리 `ahead_m`은 생략한다. 차선 복귀 시 B9가 이미 지난 접근 창에 의존하지 않게 한다.
 - 증거: `test_route_context.py` 집중 검사. 계약 v1.166.
 - gate 변화: SOURCE. 기본 `route_context_enabled=false`; 실물 재생·SIM·DEVICE 수용 대기.
+
+## 2026-10-10 · uncommitted · fix(core): preserve high-gain curvature at angular saturation
+
+- 변경: 선행 각속도 clip을 제거하고 최종 설정·수동 cap에서 선속도도 비례 축소한다.
+- 증거: test_line_follow_obstacle_path.py의 양방향 큰 오차·설정 상한·수동 상한·override 회귀. 수정 전 원격 시험 6 failed.
+- gate 변화: SOURCE. 독립 검토 snapshot-review /root/snapshot_review; 최종 원격 시험과 DEVICE 수용은 별도.

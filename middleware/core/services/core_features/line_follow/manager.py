@@ -409,8 +409,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
         curve_scale = max(0.2, 1.0 - 0.65 * abs(error))
         linear = min(self._config.cruise_speed, self._config.max_linear)
         linear *= confidence_scale * curve_scale
-        angular = max(-self._config.max_angular,
-                      min(self._config.max_angular, -self._config.steering_gain * error))
+        angular = -self._config.steering_gain * error
         reason = "tracking"
         if guard in ("left", "right", "centre") and linear < self._config.ir_guard_min_linear:
             # D-344 §12 개정 2: turning in place with a line under the IR row: keep the camera turn and
