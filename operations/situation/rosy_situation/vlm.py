@@ -26,7 +26,7 @@ from core_common.protocol.situation import DIRECTIONS, TYPES, build_assessment, 
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "qwen3-vl:8b-instruct"           # D-492 model; the digest is pinned in the profile id
-PROMPT_ID = "d619-v4"
+PROMPT_ID = "d619-v5"
 TIMEOUT_S = 6.0
 TTL_S = 6.0
 VIEWS = ("rosy_cam", "front")
@@ -176,10 +176,37 @@ class Vlm:
                     "age_s": round(now - captured_at, 3),
                     "sha256": hashlib.sha256(base64.b64decode(image["jpeg_b64"], validate=True)).hexdigest()}
             started = time.monotonic()
+            descriptions, prompt_calls = {}, []
+            for (mid, view), jpeg in zip(pairs, images):
+                observation_prompt = (f"Describe only visible physical surfaces and floor markings in this {view} "
+                    "image in one short sentence. Do not assume a corner or free path. Do not identify a target "
+                    "robot. Answer JSON with observation.")
+                remaining = TIMEOUT_S - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise TimeoutError("VLM observation deadline")
+                observed = self._post(f"{self.url}/api/chat", {
+                    "model": self.model, "stream": False, "options": {**self.options, "num_predict": 96},
+                    "format": {"type": "object", "additionalProperties": False, "required": ["observation"],
+                               "properties": {"observation": {"type": "string", "minLength": 1, "maxLength": 180}}},
+                    "messages": [{"role": "user", "content": observation_prompt, "images": [jpeg]}]}, remaining)
+                observation = json.loads((observed.get("message") or {}).get("content") or "")
+                if (not isinstance(observation, dict) or set(observation) != {"observation"}
+                        or not isinstance(observation["observation"], str)
+                        or not 1 <= len(observation["observation"].strip()) <= 180):
+                    return None
+                descriptions.setdefault(mid, {})[view] = observation["observation"].strip()
+                prompt_calls.append({"robot_id": mid, "view": view, "text": observation_prompt,
+                                     "model_options": {**self.options, "num_predict": 96}})
+            prompt += ("\nNo images in this reasoning call. Independent per-view model observations (unverified): "
+                       + json.dumps(descriptions, ensure_ascii=False)
+                       + ". Use these observations without transferring objects between views.")
+            remaining = TIMEOUT_S - (time.monotonic() - started)
+            if remaining <= 0:
+                raise TimeoutError("VLM judgement deadline")
+            prompt_calls.append({"text": prompt, "model_options": dict(self.options)})
             reply = self._post(f"{self.url}/api/chat", {
                 "model": self.model, "stream": False, "format": response_schema(words, members, deadlock), "options": self.options,
-                "messages": [{"role": "user", "content": prompt,
-                              "images": images}]}, TIMEOUT_S)
+                "messages": [{"role": "user", "content": prompt}]}, remaining)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
             decision = str(answer["decision"]).upper()
             confidence = float(answer.get("confidence", 0.0))
@@ -206,11 +233,15 @@ class Vlm:
         reason = "".join(c if c.isalnum() or c in "_:.-" else "_" for c in str(answer.get("reason") or "vlm").lower())
         evidence = {"views": cited[rid], "map_pose": (members[rid].get("context") or {}).get("map_pose"),
                     "seen": str(answer.get("seen") or "")[:200]}
-        evidence["prompt"] = {"id": PROMPT_ID, "sha256": hashlib.sha256(prompt.encode()).hexdigest(), "text": prompt}
+        evidence["prompt"] = {"id": PROMPT_ID, "sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+                              "text": prompt, "calls": prompt_calls}
         evidence["inference_s"] = round(time.monotonic() - started, 3)
         evidence["model_options"] = dict(self.options)
         try:
-            evidence["assessment"] = build_assessment(answer.get("assessment"), "mobility", cited[rid])
+            assessment = answer.get("assessment")
+            if isinstance(assessment, dict):
+                assessment = {**assessment, "observations": descriptions[rid]}
+            evidence["assessment"] = build_assessment(assessment, "mobility", cited[rid])
         except ValueError:
             _LOG.warning("vlm assessment missing or invalid")
             return None

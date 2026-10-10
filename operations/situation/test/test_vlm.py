@@ -42,13 +42,14 @@ def test_a_word_of_the_table_becomes_a_proposal_citing_both_views_and_the_model(
     post, calls = _post({"decision": "back_and_retry", "reason": "Rear clear", "confidence": 0.7, "seen": "empty"})
     proposal = Vlm(post=post, get=RUNNING).judge(_case(), now=100.0)
     assert proposal["decision"] == "BACK_AND_RETRY" and proposal["reason"] == "rear_clear"
-    assert proposal["source"].startswith("vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
+    assert proposal["source"].startswith("vlm:qwen3-vl:8b-instruct@abcdef012345:d619-v5:")
     views = proposal["evidence"]["views"]
     assert views["rosy_cam"]["frame_id"] == "rc-9" and views["rosy_cam"]["age_s"] == 1.0
     assert views["front"]["age_s"] == 1.5 and len(views["front"]["sha256"]) == 64
     chat = calls[-1]
-    assert chat[0] == "http://127.0.0.1:11434/api/chat" and chat[2] == 6.0
-    assert len(chat[1]["messages"][0]["images"]) == 2
+    assert chat[0] == "http://127.0.0.1:11434/api/chat" and 0 < chat[2] <= 6.0
+    assert "images" not in chat[1]["messages"][0]
+    assert len(calls) == 3
     assert "context cause is a report, not proof" in chat[1]["messages"][0]["content"]
     assert proposal["evidence"]["assessment"]["verification"] == "unverified"
     assert chat[1]["format"]["required"] == ["decision", "reason", "confidence", "seen", "assessment"]
@@ -72,7 +73,7 @@ def test_model_profile_requires_a_running_model_with_a_digest():
     assert empty.profile() is None
     running = Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct", "digest": DIGEST}]})
-    assert running.profile().startswith("qwen3-vl:8b-instruct@abcdef012345:d619-v4:")
+    assert running.profile().startswith("qwen3-vl:8b-instruct@abcdef012345:d619-v5:")
     assert Vlm(get=lambda _url, _timeout: {"models": [
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
 
