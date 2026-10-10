@@ -1,0 +1,78 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "pivot_started": true,
+  "turned_at_drop_deg": null,
+  "latch_reason": null,
+  "latch_after_last_cue_sim_s": null,
+  "latch_after_last_cue_wall_s": null,
+  "max_turned_deg": 34.4,
+  "budget_deg": 150.0
+ },
+ "timeline": [
+  [
+   235.775,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   238.679,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   238.794,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   241.705,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   244.438,
+   "HOLD",
+   "stuck_settling"
+  ],
+  [
+   245.432,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   246.397,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   247.776,
+   "HOLD",
+   "junction_waiting"
+  ]
+ ],
+ "scenario": "s2",
+ "args": {
+  "scenario": "s2",
+  "out": "runs/s2_r2",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.8,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.27,
+   -1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "exact180": false,
+  "box": false,
+  "seed": 22,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.98,
+ "capability_at_end": false
+}

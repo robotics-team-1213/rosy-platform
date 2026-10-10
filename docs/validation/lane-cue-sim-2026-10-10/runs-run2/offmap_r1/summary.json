@@ -1,0 +1,124 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "off_map_accepted": true,
+  "off_map_stamp_age_s": 4.65,
+  "latch_after_post_s": 0.13,
+  "gap_travel_m": 0.0927,
+  "hold_travel_m": 0.0,
+  "hold_yaw_deg": 0.0,
+  "nonzero_cmd_in_hold": 0,
+  "probes": {
+   "off_lane_same_epoch": {
+    "accepted": true,
+    "reason": null
+   },
+   "on_lane_other_epoch": {
+    "accepted": false,
+    "reason": "epoch_busy"
+   },
+   "on_lane_old_seq": {
+    "accepted": false,
+    "reason": "stale"
+   }
+  },
+  "latched_through_probes": true,
+  "release_accepted": {
+   "accepted": true,
+   "reason": null
+  },
+  "released": true,
+  "moved_after_release_m": 0.0,
+  "drive_cmd_after_release_s": null,
+  "latched_again": false,
+  "mode_change_cleared": true
+ },
+ "timeline": [
+  [
+   584.394,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   587.231,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   587.348,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   590.909,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   591.033,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   591.788,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   593.614,
+   "HOLD",
+   "fleet_off_map"
+  ],
+  [
+   601.516,
+   "LOST",
+   "reselection_required"
+  ],
+  [
+   601.637,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  [
+   610.532,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   611.12,
+   "HOLD",
+   "camera_line_not_visible"
+  ]
+ ],
+ "scenario": "s1",
+ "args": {
+  "scenario": "s1",
+  "out": "runs/offmap_r1",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "spot": null,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": false,
+  "exact180": false,
+  "box": false,
+  "seed": 11,
+  "spot_xy": null,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

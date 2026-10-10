@@ -1,0 +1,129 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "off_map_accepted": true,
+  "off_map_stamp_age_s": 4.548,
+  "latch_after_post_s": 0.13,
+  "gap_travel_m": 0.172,
+  "hold_travel_m": 0.0,
+  "hold_yaw_deg": 0.0,
+  "nonzero_cmd_in_hold": 0,
+  "probes": {
+   "off_lane_same_epoch": {
+    "accepted": true,
+    "reason": null
+   },
+   "on_lane_other_epoch": {
+    "accepted": false,
+    "reason": "epoch_busy"
+   },
+   "on_lane_old_seq": {
+    "accepted": false,
+    "reason": "stale"
+   }
+  },
+  "latched_through_probes": true,
+  "release_accepted": {
+   "accepted": true,
+   "reason": null
+  },
+  "released": true,
+  "moved_after_release_m": 0.1048,
+  "drive_cmd_after_release_s": 0.01,
+  "latched_again": true,
+  "mode_change_cleared": true
+ },
+ "timeline": [
+  [
+   645.957,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   648.812,
+   "WAITING",
+   "no_observation"
+  ],
+  [
+   648.928,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   652.674,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   652.788,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   655.132,
+   "HOLD",
+   "fleet_off_map"
+  ],
+  [
+   663.033,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   663.82,
+   "HOLD",
+   "crosswalk_looking"
+  ],
+  [
+   665.127,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   668.135,
+   "HOLD",
+   "fleet_off_map"
+  ],
+  [
+   668.254,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   668.747,
+   "TRACKING",
+   "tracking"
+  ]
+ ],
+ "scenario": "s1",
+ "args": {
+  "scenario": "s1",
+  "out": "runs/offmap_r3",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.4,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "spot": null,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": false,
+  "exact180": false,
+  "box": false,
+  "seed": 13,
+  "spot_xy": null,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}
