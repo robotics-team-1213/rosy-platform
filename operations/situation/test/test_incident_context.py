@@ -1,5 +1,5 @@
 from rosy_situation.incident_context import ContextDraft
-from fleet.stuck.ai_facts import AiFact
+from fleet.server.ai_facts import AiFact
 
 
 def test_context_draft_keeps_sources_and_missing_image_separate():
