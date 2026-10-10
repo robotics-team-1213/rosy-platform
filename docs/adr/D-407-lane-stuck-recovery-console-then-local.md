@@ -114,4 +114,4 @@ D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한�
 
 **왜.** 2026-10-10 현장 기록: 8kcn이 HOLD/LOST로 40 s 넘게 답 없이 서 있었고(`X:\DevTemp\drivable-keep-run\drive-8kcn-2.txt`), 9dfk는 `HOLD lane_departure`로 90 s 서 있었다(`drive-9dfk-2.txt`). `lane_departure`는 막힘 원인이 아니어서 Fleet에 아무것도 가지 않았다.
 
-**검증.** 호스트 단위 시험 `middleware/core/services/test/test_line_follow_stuck_no_motion.py`(사유 다섯 가지 각각 5 s 뒤 한 번 열림·4.8 s 전에는 안 열림, 주행 중·OFF·`stuck_report_s: 0`이면 안 열림, 다시 움직이면 `cleared`, Fleet `BACK_AND_RETRY`는 CORE가 후진, 뒤가 막히면 거절)를 원격 pytest로 돌렸다. 실기는 다음 로봇 릴리스 뒤다.
+**검증.** 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_stuck_no_motion.py`(사유 다섯 가지 각각 5 s 뒤 한 번 열림·4.8 s 전에는 안 열림, 주행 중·OFF·`stuck_report_s: 0`이면 안 열림, 다시 움직이면 `cleared`, Fleet `BACK_AND_RETRY`는 CORE가 후진, 뒤가 막히면 거절)를 원격 pytest로 돌렸다. 실기는 다음 로봇 릴리스 뒤다.
