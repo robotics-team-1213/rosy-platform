@@ -304,6 +304,10 @@ function render() {
   tripReplan.render();
 
   formation.fillLeaders();
+  // The map labels a robot with a 최우선 (crit) exception always; the rest only where they fit (declutter).
+  // Warn-only causes are often fleet-wide (one cause on 90 robots) and would force every label back on.
+  view.attention = new Set(view.robots.filter((robot) => roster.attentionItems(robot)
+    .some((item) => item.severity === "crit")).map((robot) => robot.robot_id));
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
   const hint = el("hint");

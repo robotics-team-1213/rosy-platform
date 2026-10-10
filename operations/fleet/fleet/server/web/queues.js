@@ -20,6 +20,30 @@ export function queueRowText(text, named) {
   return named ? text : text.replace(/^:\s*/, "");
 }
 
+/** Many robots: warn rows with the same cause become one row ("배터리 근거 확인 불가 · 9대 (…)") so one fleet-wide
+ * cause does not bury the rest. Decision rows never group; a cause on one robot stays its own row. The group
+ * keeps the first row's place. Critical rows are not passed here (they stay one per robot, first). */
+export function groupRows(rows, min = 2) {
+  const same = new Map();
+  for (const row of rows) if (!row.decision) same.set(row.text, [...(same.get(row.text) || []), row]);
+  const out = [], done = new Set();
+  for (const row of rows) {
+    const group = row.decision ? null : same.get(row.text);
+    if (!group || group.length < min) { out.push(row); continue; }
+    if (done.has(row.text)) continue;
+    done.add(row.text);
+    out.push({ severity: row.severity, text: row.text, robotId: "", group: group.map((r) => r.robotId),
+               key: `group|${row.text}` });
+  }
+  return out;
+}
+
+/** "배터리 근거 확인 불가 — 센서/CORE 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
+export function groupText(text, ids, shown = 3) {
+  const few = ids.slice(0, shown).join(" · ");
+  return `${text.replace(/^:\s*/, "")} · ${ids.length}대 (${few}${ids.length > shown ? ` 외 ${ids.length - shown}대` : ""})`;
+}
+
 /** D-540 3: the queue row open on its decision. The operator's last pick holds while that row lives;
  * otherwise the most urgent decision row (critical first) is open. */
 export function openDecisionKey(keys, choice) {
@@ -156,16 +180,16 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
   function attentionKey(robot) {
     return view.stateUnavailable ? "" : attentionItems(robot).map((item) => item.text.replace(/\d+/g, "#")).join("|");
   }
-  // D-252: 큐 머리는 ui-triage. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로 둔다.
-  function setTriageHead(id, label, list) {
+  // D-252: 큐 머리는 ui-triage. <b>는 범주+로봇 수다. D-540 3: 로봇 이름은 행에서 한 번만 쓴다 — 머리에
+  // 이름을 다시 늘어놓으면 "rosy_03 / rosy_03: 판단 요청"처럼 두 번 읽힌다(2026-10-10 walkthrough).
+  function setTriageHead(id, label, rows) {
     const head = el(id);
     if (!head) return;
-    const names = [...new Set([...list.querySelectorAll("li b")].map((b) => b.textContent))];
-    head.querySelector("b").textContent = `${label} ${names.length}`;
-    // Many robots: the head names six and counts the rest; every name stays in title and in the rows.
+    const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
+    head.querySelector("b").textContent = `${label} ${names.size}`;
     const small = head.querySelector("small");
-    small.textContent = names.length > 6 ? `${names.slice(0, 6).join(" · ")} 외 ${names.length - 6}대` : names.join(" · ");
-    small.title = names.length > 6 ? names.join(" · ") : "";
+    small.textContent = "";
+    small.title = [...names].join(" · ");
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
@@ -173,6 +197,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
   function syncRows(list, rows, open) {
     const old = new Map([...list.children].map((node) => [node.dataset.key, node]));
     const nodes = rows.map((row, index) => {
+      if (row.group) return groupRow(old.get(row.key), row);
       const named = index === 0 || rows[index - 1].robotId !== row.robotId;  // the name once per robot
       let li = old.get(row.key);
       if (!li || li.dataset.decision !== (row.decision || "")) {
@@ -210,6 +235,26 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     }
   }
 
+  // One row for one cause on many robots; the list of every robot opens under it (native disclosure, kept
+  // across polls because the row is kept by key).
+  function groupRow(li, row) {
+    if (!li || li.dataset.group !== "1") {
+      li = document.createElement("li");
+      li.dataset.key = row.key;
+      li.dataset.group = "1";
+      const details = document.createElement("details");
+      details.className = "queue-group";
+      details.append(document.createElement("summary"), nodeWithText("p", "hint", ""));
+      li.append(details);
+    }
+    const summary = li.querySelector("summary"), all = li.querySelector("p");
+    const text = groupText(row.text, row.group);
+    if (summary.textContent !== text) summary.textContent = text;
+    const names = row.group.join(" · ");
+    if (all.textContent !== names) all.textContent = names;
+    return li;
+  }
+
   function fillQueues() {
     // ADR-1000: Populate Queues
     const warnList = el("warning-list");
@@ -223,12 +268,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       }
     }
     rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
+    rows.warn = groupRows(rows.warn);
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);
     syncRows(critList, rows.crit, open);
     syncRows(warnList, rows.warn, open);
-    setTriageHead("warning-head", "주의 요망", warnList);
-    setTriageHead("critical-head", "최우선 개입 요망", critList);
+    setTriageHead("warning-head", "주의 요망", rows.warn);
+    setTriageHead("critical-head", "최우선 개입 요망", rows.crit);
 
     // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
     // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다

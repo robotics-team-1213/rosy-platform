@@ -20,6 +20,10 @@ import { noRobotServesGrid } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
+// A map label is the robot's short id: "rosy_012" reads "012" (the full id stays on the card and in chips
+// that already carry it).
+const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
+
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
   const camera = createCameraBackdrop({ scope, el, view, draw });
   let calibrationsAt = 0;
@@ -105,10 +109,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // D-359 US-008 — 이번 그리기에 놓인 칩(캔버스 픽셀, 시험은 window.__mapChips). 추적 오차와
   // 중재 칩이 겹쳐 못 읽었다: 새 칩은 빈 자리가 날 때까지 아래·위로 한 칸씩 번갈아 비킨다.
   // US-009 — 칩은 자리만 먼저 정하고(로봇 표식 상자도 피한다) 선을 다 그린 뒤 flushChips가 칠한다.
-  let placedChips = [], pendingChips = [], markerBoxes = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
+  let placedChips = [], pendingChips = [], markerBoxes = [], optionalChips = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-  function drawChip(ctx, grid, cx, cy, text, tone) {
+  // Many robots (10, 100): a chip that is not `important` (selected, exception, warn/crit tone) never shifts
+  // to make room; it is drawn at its own spot only if that spot is still free after every important chip,
+  // else hidden (declutter). Important chips keep the shift-and-stack rule above.
+  function drawChip(ctx, grid, cx, cy, text, tone, important = true) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
     const fontSize = Math.max(12, Math.round(12 * ctx.canvas.width / displayedWidth));
@@ -126,6 +133,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const clampY = (value) => Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, value));
     const rectAt = (centreY) => ({ x: x - width / 2, y: centreY - height / 2, w: width, h: height, text });
     const anchorY = clampY(point.y);
+    if (!important && !tone) {
+      optionalChips.push({ rect: rectAt(anchorY), chip: { x, y: anchorY, width, height, fontSize, text, tone } });
+      ctx.restore();
+      return;
+    }
     let y = anchorY;
     const taken = (r) => [...placedChips, ...markerBoxes].some((o) => chipsOverlap(r, o));
     for (let step = 1; step <= CHIP_TRIES && taken(rectAt(y)); step += 1) {
@@ -138,6 +150,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
 
   function flushChips(ctx) {
+    let hidden = 0;
+    for (const { rect, chip } of optionalChips) {
+      if ([...placedChips, ...markerBoxes].some((o) => chipsOverlap(rect, o))) { hidden += 1; continue; }
+      placedChips.push(rect);
+      pendingChips.push(chip);
+    }
+    optionalChips = [];
+    window.__mapChipsHidden = hidden;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.textAlign = "center";
@@ -304,7 +324,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
     ctx.stroke();
     ctx.restore();
-    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
+    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined,
+      labelImportant(s.robot_id));
   }
 
   // D-457 관제 카메라 추적: 카메라 위치 고리 + 자가보고 위치까지 선 + 차이 칩. 0.15 m 초과는 주황,
@@ -333,7 +354,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
       const label = row.measured && !row.pose && markers.size === 1
         ? `ArUco ${[...markers][0]}` : offsetLabel(row);
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined, labelImportant(row.robotId));
     }
     // D-600: 배경이 아직 못 본 바닥은 빗금 원 — 로봇이 비키면 Vision 이 채운다.
     ctx.strokeStyle = css("--ink-quiet");
@@ -566,7 +587,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
   const guide = (ctx, toPoint) => {
-    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip, on: layerOn("poses") });
+    // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): exceptions and the selected robot always show.
+    const chip = (c, g, x, y, text, tone) => drawChip(c, g, x, y, text, tone, labelImportant(String(text).split(" · ")[0]));
+    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses") });
     drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
   };
 
@@ -574,6 +597,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const observed = new Set(view.sightings.filter((s) => s.state === "fresh").map((s) => s.robot_id));
     for (const row of view.cameraTracking?.robots || []) observed.add(row.robotId);
     return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
+  }
+
+  // An id label always shows for the selected robot, a called one and a robot with an exception (view.attention,
+  // the queue's own rule, set by console.js before draw).
+  function labelImportant(robotId) {
+    return view.selected === robotId || view.pinning === robotId || activeCall(robotId) || Boolean(view.attention?.has(robotId));
   }
 
   function activeCall(robotId) {
@@ -584,7 +613,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;
-    placedChips = []; pendingChips = []; markerBoxes = [];
+    placedChips = []; pendingChips = []; markerBoxes = []; optionalChips = [];
     window.__mapChips = placedChips;
     window.__mapMarkers = markerBoxes;
     if (!grid) {
@@ -618,6 +647,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
+    const labels = [];  // id labels go after every marker box exists, so a label never covers a marker
     view.robots.forEach((robot, index) => {
       // Only the robot's LOCALIZED map pose draws the triangle; otherwise Fleet's map pose (guide circle)
       // and Rosy Cam tracking (ring) show where it is, each in its own layer.
@@ -654,6 +684,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
       const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
       markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
+      labels.push([cx, cy + size * 2.2, robot.robot_id]);
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
@@ -667,6 +698,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ctx.stroke();
       }
     });
+    for (const [x, y, robotId] of labels) drawChip(ctx, grid, x, y, shortId(robotId), undefined, labelImportant(robotId));
     traffic(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 1 / grid.resolution);
     guide(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; });
     drawFormationOverlay(ctx, grid);

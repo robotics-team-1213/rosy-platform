@@ -1773,7 +1773,9 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         )
         assert page.locator(".queues-panel").is_visible()
         assert "릴레이 끊김" in page.inner_text("#critical-list")
-        assert "rosy_03" in page.inner_text("#critical-head")
+        # D-540 3: the robot is named once, in its row; the head counts (names stay in its title).
+        assert "rosy_03" in page.inner_text("#critical-list")
+        assert "rosy_03" in page.locator("#critical-head small").get_attribute("title")
         browser.close()
 
 
