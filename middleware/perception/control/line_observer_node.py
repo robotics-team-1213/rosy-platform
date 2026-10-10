@@ -531,10 +531,15 @@ class LineObserverNode(Node):
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
                 if self._drivable_steer is not None:   # D-597 amendments 2-3
-                    step, decided = keep_step(
-                        self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,
-                        self._lane_keeper._x_offset, float(self.get_parameter('lane_half_width_m').value),
-                        self._odom_history.pose_at, image_stamp, self._wall_ahead)
+                    try:
+                        step, decided = keep_step(
+                            self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,
+                            self._lane_keeper._x_offset, float(self.get_parameter('lane_half_width_m').value),
+                            self._odom_history.pose_at, image_stamp, self._wall_ahead)
+                    except Exception as exc:  # noqa: BLE001 - a steering bug holds the robot, never kills the node
+                        self.get_logger().error(f'drivable steer failed: {exc!r}', throttle_duration_sec=5.0)
+                        self._drivable_steer.reset()
+                        step, decided = None, True
                     observation = None if step is None else LaneObservation(error=step[0], confidence=step[1])
                     paint_used = 'learned_drivable' if decided else paint_used
                 bundle = keep_debug_payload(

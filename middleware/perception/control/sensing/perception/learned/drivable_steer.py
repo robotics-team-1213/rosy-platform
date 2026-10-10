@@ -100,7 +100,8 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={}, edges_m=[])
+    out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, both=False, exit_point_m={},
+               exit_reach_m={}, near_centre_m=None, edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -338,15 +339,8 @@ class DrivableSteer:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"][side]
         tx, ty = _to_current(target, source_pose, current_pose)
-        crossing = _crosses(seen, tx, ty)
-        if crossing is not None:
-            # The arc to the target crosses a boundary seen earlier (floor beyond a line that has left
-            # the view): pull the target back to the robot's side of it. A clamp, never a swap to the
-            # other side (replacing the target flipped the error sign frame to frame, p8 140-178 s).
-            margin = BODY_HALF_M + 0.01
-            clamped = min(ty, crossing - margin) if crossing > 0 else max(ty, crossing + margin)
-            if clamped != ty:
-                strategy, ty = strategy + "_kept", clamped
+        # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
+        # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
         error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
