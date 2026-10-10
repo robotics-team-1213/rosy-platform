@@ -41,10 +41,10 @@ OFF 상태의 crosswalk `perception_stale`는 이번 모드 활성화 뒤 fresh 
 
 | 파일 / 녹화 | SHA-256 또는 식별자 |
 |---|---|
-| 9dfk camera-line-crosswalk.jsonl | `8b5e8017b32d3a4efbb532ae019a2f8b14fd327ed3c1b3dcfc99706fc4073073` |
-| 8kcn camera-line-crosswalk.jsonl | `0d1f4e6a96ad4c05d624eed5544ef3289f3e9650c3acf2c30d33315c5cd7fe7e` |
-| 9dfk bag-analysis.json | `aa447ead75448511ba8689bd3752ba142ea43687274f8e4f24757d19cc69978a` |
-| 8kcn bag-analysis.json | `7cbf3a5cd087e985eacabec4fa1af129a1eea2d310df3bd02a6ec7f4624f8af8` |
+| 9dfk camera-line-crosswalk.jsonl | sha256: `8b5e8017b32d3a4efbb532ae019a2f8b14fd327ed3c1b3dcfc99706fc4073073` |
+| 8kcn camera-line-crosswalk.jsonl | sha256: `0d1f4e6a96ad4c05d624eed5544ef3289f3e9650c3acf2c30d33315c5cd7fe7e` |
+| 9dfk bag-analysis.json | sha256: `aa447ead75448511ba8689bd3752ba142ea43687274f8e4f24757d19cc69978a` |
+| 8kcn bag-analysis.json | sha256: `7cbf3a5cd087e985eacabec4fa1af129a1eea2d310df3bd02a6ec7f4624f8af8` |
 | 9dfk 녹화 / duration | `20261010T084336Z_rosy_41` / 4.598 s |
 | 8kcn 녹화 / duration | `20261010T084356Z_rosy_40` / 5.398 s |
 
