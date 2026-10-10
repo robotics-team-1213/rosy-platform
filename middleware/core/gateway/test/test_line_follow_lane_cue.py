@@ -294,7 +294,7 @@ def test_no_pivot_start_while_a_junction_or_crosswalk_owns_the_heading(owner):
     if owner == "crosswalk_zone":
         rig.m._xwalk._zone = object()
     else:
-        rig.m._junction = {"state": owner.split("_")[1], "action": "left", "place_id": "P"}
+        rig.m._junction = {"state": owner.split("_")[1], "action": "left", "place_id": "P", "expires_at": 1e9}
     rig.cue("WRONG_WAY", 1, turn_deg=-170.0)
     rig.step()
     rig.wait(0.5)
