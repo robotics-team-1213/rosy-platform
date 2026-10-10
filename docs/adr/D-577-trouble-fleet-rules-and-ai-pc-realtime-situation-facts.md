@@ -30,7 +30,7 @@
 
 1. **Fleet 판단기 규칙: 차선 상실(`lane_lost`)에도 답한다. 안전한 답만 낸다.** trip 로봇은 D-517 M4 그대로(R1 `WAIT`만, 나머지 사람)다. 아래는 trip이 아닌 로봇이다.
    - **R3 `lane_lost_back_off` = `BACK_AND_RETRY`는 아래가 모두 참일 때만.** 로컬 복구 켜짐, 시도 수가 `recovery_max_attempts` 미만(D-438 그대로), Fleet이 아는 동료 로봇의 몸이 뒤 띠(`resolver_peer_reach_m`, 기본 0.30 m) 안에 없음, 로봇이 횡단보도 구역(D-573) 안이 아님, 그 로봇의 `MapPose`가 `LOCALIZED`이고 `age_s` ≤ 2 s이거나 Fleet이 자세를 전혀 모름(모름이면 뒤 띠 판정은 CORE 재검사에만 맡긴다). 뒤 여유·사각·지나온 길은 CORE가 판정한다(D-407 §4). 판단기는 `rear_state`로 후진을 허락하지 않는다.
-   - **Safety-Review 보완(2026-10-09, 구현 (a)).** R3 조건은 닫힌 쪽으로 읽는다. 자세: Fleet이 그 로봇의 목격 출처를 한 번도 가진 적이 없을 때만 `UNKNOWN`을 "모름"으로 본다. 출처가 있었는데 `UNKNOWN`(odom 낡음·anchor 잃음)이면 R5 `pose`다. 뒤 띠: 자신과 동료 모두 D-395 신뢰 지도 자세(`LOCALIZED`·map 또는 미보고 legacy)로만 잰다. 동료가 온라인인데 어느 한쪽 자세가 없거나 신뢰되지 않으면 R5 `peer_unknown`이다. 횡단보도: CORE가 `line_follow.crosswalk`를 보고하지 않으면(지금의 모든 CORE) R5 `crosswalk_unknown`이다. D-573 구현은 구역 밖에서 `crosswalk: null`, 안에서 객체를 내야 R3가 열린다.
+   - **Safety-Review 보완(2026-10-09, 구현 (a)).** R3 조건은 닫힌 쪽으로 읽는다. 자세: Fleet이 그 로봇의 목격 출처를 한 번도 가진 적이 없을 때만 `UNKNOWN`을 "모름"으로 본다. 출처가 있었는데 `UNKNOWN`(odom 낡음·anchor 잃음)이면 R5 `pose`다. 뒤 띠: 자신과 동료 모두 D-395 신뢰 지도 자세(`LOCALIZED`·map 또는 미보고 legacy)로만 잰다. 동료가 온라인인데 어느 한쪽 자세가 없거나 신뢰되지 않으면 R5 `peer_unknown`이다. 횡단보도: CORE가 `line_follow.crosswalk`를 보고하지 않으면(지금의 모든 CORE) R5 `crosswalk_unknown`이다. D-573 구현은 구역 밖에서 `crosswalk: null`, 안에서 객체를 내야 R3가 열린다. (2026-10-10 개정: CORE는 게이트와 무관하게 늘 보고하고, 모를 때 내는 `{state: unknown}`도 R5 `crosswalk_unknown`이다. 현장 지도 `crosswalks[]`가 기준이다: 신뢰 지도 자세가 다각형에서 `stuck_lane_lost.CROSSWALK_REACH_M`(0.29 m) 안이면 R5 `crosswalk`, 지도에 횡단보도가 있는데 신뢰 지도 자세가 없거나 출처 없는 `UNKNOWN`이면 R5 `crosswalk_unknown`이다. D-573 6항 보고 개정.)
    - **새 R5 `lane_lost_hold` = `WAIT` 후 바로 사람.** R3 조건이 거짓이면(동료가 뒤에 있음, 횡단보도, 시도 소진, 로컬 복구 꺼짐) `WAIT`을 보내고 같은 주기에 `lane_lost_hold:<이유>`로 큐에 올린다. `WAIT`은 CORE를 `console_wait`로 두어 로컬 후진 타이머를 멈춘다. 동료 로봇 쪽으로의 무인 후진을 막는 것이 목적이다. R5는 규칙 예산을 쓰지 않는다(멈추는 답이고 한 막힘에 한 번).
    - **`RESUME`은 `lane_lost`에 어떤 단계도 보내지 않는다(D-438 §3 그대로).** 차선 증거 없이 상실 래치를 풀기 때문이다. `ABORT`·`MANUAL`은 사람만 고른다.
    - 원인 문자열은 CORE 막힘 `cause`(`obstacle_ahead`|`lane_lost`)만 본다. HOLD 사유(`camera_line_not_visible` 등)는 큐 표시와 에피소드 기록에만 쓴다.
@@ -98,8 +98,8 @@
 ### 남은 항목 (Safety-Review 2026-10-10, 구현 (a))
 
 1. ~~뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다.~~ **닫힘(2026-10-10, `feat/stuck-5s-fleet-ai`).** 뒤 띠는 이제 자신과 동료 모두 `localization`을 보고하는 신뢰 지도 자세로만 잰다. 동료가 온라인인데 어느 한쪽이 LEGACY(odom)면 R5 `peer_unknown`이다(`stuck_lane_lost.peer_behind`). D-573 횡단보도 관문을 켜도 R3가 odom 자세로 열리지 않는다.
-2. R5 전송이 실패한 뒤 다음 주기에 R3 조건이 모두 참이면 R3가 고를 수 있다.
-3. Fleet 정지(작업 취소)로 끊긴 R5 전송은 사람에게 올라가지 않는다.
+2. ~~R5 전송이 실패한 뒤 다음 주기에 R3 조건이 모두 참이면 R3가 고를 수 있다.~~ **닫힘(2026-10-10, `feat/crosswalk-null-outside-zone`).** 한 막힘에 R5를 보냈으면 판단기는 그 막힘의 다시 보내기를 같은 R5(`WAIT`, 같은 `<cause>_hold:<이유>`)로만 한다. R3·R6·AI 답이 그것을 대신하지 않는다(`_Chain.held`).
+3. ~~Fleet 정지(작업 취소)로 끊긴 R5 전송은 사람에게 올라가지 않는다.~~ **닫힘(2026-10-10, 같은 브랜치).** 응답 전에 Fleet이 멈추면 결과 `STUCK_DECISION_OUTCOME_UNKNOWN`을 남기고 그 R5의 사람 행(`<cause>_hold:<이유>`)도 올린다(`stuck_resolver_loop._answer`). 다음 Fleet이 막힘을 새로 보면 같은 규칙으로 다시 판단한다.
 
 ### 개정 (2026-10-10): 5 s 무동작 막힘(`no_motion`)과 등록 로봇 자격
 

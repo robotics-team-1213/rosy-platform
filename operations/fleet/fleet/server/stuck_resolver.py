@@ -77,6 +77,7 @@ class _Chain:
     escalated: set = field(default_factory=set)      # stuck ids already escalated
     seen_at: float = 0.0                             # when the current stuck id was first seen
     ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
+    held: dict = field(default_factory=dict)         # stuck id -> R5 escalation sent (D-577 남은 항목 2)
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -185,6 +186,8 @@ class StuckResolver:
         if chain is None:
             chain = self._chains[answer.robot_id] = _Chain(started_at=now, mode="")
         chain.answered.add(answer.stuck_id)
+        if answer.rule == "R5":
+            chain.held[answer.stuck_id] = answer.escalate
         if answer.decision == "YIELD" and answer.yield_m is not None:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
@@ -290,6 +293,8 @@ class StuckResolver:
         if sid in chain.answered:
             ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
+        if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
+            return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
         if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
             # XW removed after independent Safety-Review 2026-10-10: a RESUME here could cross with no look for
             # people (CORE gate off) or override a "person present" hold. Stop and hand it to a person, trip or
@@ -352,7 +357,7 @@ class StuckResolver:
 
             # no_motion (2026-10-10, any zero-command reason >= stuck_report_s): R6 = R3's back-off
             # and look again under R3's preconditions; CORE re-checks the rear (D-407 §4).
-            hold = lane_lost_hold(row, stuck, rows, chain, self.config,
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config, painted=self._painted(),
                                   rule="R3" if cause == "lane_lost" else "R6")
             if hold is None:
                 return ("R3" if cause == "lane_lost" else "R6", "BACK_AND_RETRY")

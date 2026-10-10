@@ -7,10 +7,17 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional
 
-from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band, peer_ahead
+from fleet.server.stuck_resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
+from fleet.site_map import _inside, _point_segment
+
+#: D-573 1 / D-577 1: R3 holds within this of a site-map crosswalk. Robot URDF rear 0.076 m + the
+#: D-407 back-off cap 0.20 m, with the 0.057 m half width (hypot 0.282), rounded up.
+# ponytail: one body size for every robot, as ResolverConfig.peer_band_half_width_m.
+CROSSWALK_REACH_M = 0.29
 
 
-def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = "R3") -> Optional[str]:
+def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = "R3", *,
+                   painted=None) -> Optional[str]:
     """D-577 1: why R3 may not back off (the R5 reason), or None when every precondition holds.
 
     The rear clearance, blind spot and travelled path stay CORE's re-check (D-407 §4)."""
@@ -22,13 +29,14 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = 
         return "refused"
     if chain.rule_answers >= config.rule_budget:
         return "rule_budget"
-    # D-573: CORE reports `line_follow.crosswalk` null outside a zone and a mapping inside one.
-    # Absent = this CORE does not report it (none does yet): fail closed.
+    # D-573 6 개정 2026-10-10: CORE reports `line_follow.crosswalk` null outside every zone, a mapping
+    # near one and `state: unknown` when it cannot know. Absent = an older CORE: fail closed.
     line_follow = (row.get("state") or {}).get("line_follow") or {}
     if "crosswalk" not in line_follow:
         return "crosswalk_unknown"
     if line_follow["crosswalk"] is not None:
-        return "crosswalk"
+        crosswalk = line_follow["crosswalk"]
+        return "crosswalk_unknown" if isinstance(crosswalk, Mapping) and crosswalk.get("state") == "unknown" else "crosswalk"
     pose = row.get("map_pose")                    # set by the loop from the Fleet map pose service
     # UNKNOWN passes only for a robot Fleet never had a sighting source for; a lost pose holds.
     if isinstance(pose, Mapping) and (pose.get("state") != "UNKNOWN" or pose.get("sourced") is not False):
@@ -36,6 +44,15 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = 
         if (pose.get("state") != "LOCALIZED" or not isinstance(age, (int, float))
                 or not 0.0 <= age <= config.pose_max_age_s):
             return "pose"
+    # D-573 1: the site-map crosswalk is the reference, CORE's camera only confirms. Measured on the
+    # trusted map pose (D-395); without one, or with no Fleet sighting source, Fleet cannot tell.
+    if painted is not None and painted.crosswalks:
+        me = _trusted_map_pose(row)
+        if me is None or (isinstance(pose, Mapping) and pose.get("state") == "UNKNOWN"):
+            return "crosswalk_unknown"
+        if any(_inside(me[:2], polygon) or min(_point_segment(me[:2], a, b) for a, b in zip(
+                polygon, polygon[1:] + polygon[:1])) <= CROSSWALK_REACH_M for polygon in painted.crosswalks):
+            return "crosswalk"
     behind = peer_behind(row, rows, config)
     if behind is None and rule != "R6":
         # D-577 개정 2026-10-10: a no_motion stuck (R6) is not held for an unknown peer pose; CORE's
@@ -74,7 +91,7 @@ def _trusted_map_pose(row: Mapping):
 AI_WORDS = {cause: ("WAIT", "BACK_AND_RETRY", "ABORT") for cause in ("lane_lost", "no_motion", "obstacle_ahead")}
 
 
-def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfig) -> Optional[str]:
+def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfig, painted=None) -> Optional[str]:
     """Why Fleet refuses this proposal (then its rules answer), or None to forward it to CORE.
 
     Safety-Review 2026-10-10 (user: keep AI acting, strengthen the checks): the AI may only make Fleet more
@@ -94,8 +111,10 @@ def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfi
     line_follow = (row.get("state") or {}).get("line_follow") or {}
     if "crosswalk" not in line_follow:
         return "crosswalk_unknown"
-    if line_follow["crosswalk"] is not None:
-        return "crosswalk"
+    if line_follow["crosswalk"] is not None:            # D-573 6: CORE `state: unknown` is not "outside"
+        crosswalk = line_follow["crosswalk"]
+        return "crosswalk_unknown" if isinstance(crosswalk, Mapping) and crosswalk.get("state") == "unknown" \
+            else "crosswalk"
     if decision == "ABORT":
         return None
     fact = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
@@ -105,7 +124,7 @@ def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfi
         return "rear_blocked"
     if cause == "obstacle_ahead" and "R1" not in chain.retired and peer_ahead(row, rows, config):
         return "peer_ahead"                           # the rules send R1 WAIT first
-    return lane_lost_hold(row, stuck, rows, chain, config, rule="R3")
+    return lane_lost_hold(row, stuck, rows, chain, config, rule="R3", painted=painted)
 
 
 def ai_answer(resolver, now, row, stuck, rows, chain):
@@ -147,6 +166,7 @@ def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=N
         return None
     chain.ai_judged.add(key)
     if verdict is None:
-        verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, resolver.config) or "forwarded"
+        verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, resolver.config,
+                                      resolver._painted()) or "forwarded"
     resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
     return verdict
