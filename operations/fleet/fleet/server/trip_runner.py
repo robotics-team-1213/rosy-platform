@@ -24,9 +24,8 @@ import httpx
 
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
-from fleet.localization.map_pose import OPERATOR_PIN
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target, unsupported
+from fleet.routing.execute import advance_m, exit_segment, lane_action, replan_hold, turn_target
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
@@ -34,19 +33,15 @@ from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
 from fleet.traffic.trip_lease import TripLease
+from fleet.server.trip_admission import LINE_MODES, LOCALIZED, TripAdmission  # noqa: F401
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     hold_back_m, lap_due, lap_retry_due, next_lap, stop_points)
+from fleet.server.trip_progress import MANOEUVRE, TripProgress
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
 
-LOCALIZED = "LOCALIZED"
-#: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
-LINE_MODES = ("CAMERA_LINE",)
-#: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
-#: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
-MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
 #: D-520 2: CORE's ``line_follow.arc.reason`` for an arc that ended with no instruction armed
 #: (event ``nav.lane_arc_end_unarmed``); CORE then follows the lane as today.
 ARC_END_UNARMED = "lane_arc_end_unarmed"
@@ -69,7 +64,9 @@ class _JunctionAborted(RuntimeError):
     """CORE answered our instruction by aborting its manoeuvre (D-495): never resent."""
 
 
-class TripRunner:
+class TripRunner(TripAdmission, TripProgress):
+    """Start checks: ``trip_admission``; progress predicates: ``trip_progress``."""
+
     def __init__(self, *, store, routing_config, caps: TripCapsPort, poses: MapPosePort,
                  junction: LaneJunctionPort, goal: Callable[..., Awaitable[dict]],
                  cancel_goal: Callable[[str], Awaitable[dict]],
@@ -203,48 +200,6 @@ class TripRunner:
                 self._describe(live)
             self._save(live)
             return live.view
-
-    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool):
-        """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
-        map_id = self._store.active()[1].map_id
-        lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
-        caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
-        if caps is None:
-            raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
-        refused = unsupported(graph, segments, kind=caps.kind, modes=caps.modes,
-                              junction_turn=caps.junction_turn, config=self._routing,
-                              max_turn_deg=self.config.max_turn_deg, repeat=repeat)
-        if refused is not None:
-            raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
-        floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
-        if lane and floor is not None and floor != map_id:
-            raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
-        if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
-            raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
-        if lane and self.authority.mode(caps) != "core" and caps.line_follow_authority_required is True:
-            raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
-        return caps
-
-    async def _pose_checks(self, robot_id: str, graph, segments: list) -> MapPose:
-        """D-494 start checks on line following and the map pose; the pose, or ``TripError``."""
-        if any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments):
-            mode = await self._call(self._junction.line_follow_mode(robot_id), "TRIP_LINE_FOLLOW_NOT_ACTIVE")
-            if mode not in LINE_MODES:
-                raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
-        pose = await self.map_pose(robot_id)
-        anchor_age = getattr(pose, "anchor_age_s", None)
-        if pose is None or pose.state != LOCALIZED or anchor_age is None or (
-                anchor_age > self.config.start_anchor_age_s and not self._still_on_pin(pose)):
-            raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None,
-                                                         "anchor_age_s": anchor_age})
-        return pose
-
-    def _still_on_pin(self, pose: MapPose) -> bool:
-        """D-593 7: a LOCALIZED operator-pin pose (its anchor is then <= max_anchor_age_s old) whose
-        odom has not moved since the pin. An odom reset drops the anchor, so it is never still."""
-        return (getattr(pose, "anchor_source", None) == OPERATOR_PIN
-                and pose.dead_reckon_m <= self.config.pin_start_still_m
-                and getattr(pose, "bridge_turn_deg", math.inf) <= self.config.pin_start_still_deg)
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""
@@ -656,67 +611,6 @@ class TripRunner:
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
             raise _GoalRefused(reply.get("reason") or "")
-
-    def _locate(self, live: LiveTrip, pose: MapPose) -> tuple[int, float, Optional[float]]:
-        """``(segment index, s on it, off-lane distance or None)``; moves past finished segments."""
-        index = live.view["segment_index"]
-        while True:
-            arc = live.arc(index)
-            dist, s, _t = arc.project(pose.x, pose.y)
-            if index + 1 >= len(live.segments) or live.view["hold"] is not None:
-                break
-            nxt, nxt_segment = live.arc(index + 1), live.segments[index + 1]
-            nxt_dist, nxt_s, _t = nxt.project(pose.x, pose.y)
-            onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
-            remaining = live.segments[index]["s_to"] - s
-            if arc.drive_mode == "lane":
-                # lap SIM 2 lap_12: CORE closed a straight while D-407 backed the robot 0.26 m short
-                # of SE; advancing there judged the pose against ring_e (0.276 m) and stopped a robot
-                # 0.07 m off ring_s. A carried-out place moves on only once the robot is on the next lane.
-                done = (self._completed(live, index) and remaining <= self.config.pass_window_m
-                        and nxt_dist <= nxt.width_m / 2)
-            else:
-                done = remaining <= self.config.advance_free_m
-            if not (done or onto_next):
-                break
-            index += 1
-        near = [dist] + ([live.arc(index + 1).project(pose.x, pose.y)[0]] if index + 1 < len(live.segments) else [])
-        return index, s, (dist if min(near) > live.arc(index).width_m / 2 else None)
-
-    def _completed(self, live: LiveTrip, index: int) -> bool:
-        """CORE finished our instruction for this place: idle again, or a newer seq."""
-        sent, junction = live.sent, live.junction
-        if sent is None or sent["index"] != index or sent["action"] in (STOP, "bend"):
-            return False
-        if sent.get("done"):
-            return True
-        seq = junction.get("seq")
-        newer = isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
-        return bool(sent.get("carried")) and (junction.get("state") == "idle" or newer)
-
-    def _arrived(self, live: LiveTrip, index: int, remaining: float, lane: bool) -> bool:
-        """Free: within the D-463 ``DONE_M``. Lane: our stop for this place was accepted, and the
-        robot is within ``arrive_lane_m``, or CORE holds that stop within ``pass_window_m``."""
-        if not lane:
-            return remaining <= self.config.arrive_free_m
-        sent = live.sent
-        if sent is None or (sent["index"], sent["action"]) != (index, STOP):
-            return False
-        holding = live.junction.get("seq") == sent["seq"] and live.junction.get("state") == "executing"
-        remaining -= hold_back_m(self.traffic, live.segments[index]) or 0.0  # D-517 3: it stops short of a zone
-        return remaining <= self.config.arrive_lane_m or (holding and remaining <= self.config.pass_window_m)
-
-    def _stalled(self, live: LiveTrip, index: int, s: float) -> bool:
-        now = self._clock()
-        progress = live.progress(index, s)
-        if (live.progress_at is None or progress >= live.best_progress + self.config.stall_m
-                or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
-                or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
-                or (live.authority or {}).get("state") == "HOLDING"):  # nor at the authority's end
-            live.best_progress = max(live.best_progress, progress)
-            live.progress_at = now
-            return False
-        return now - live.progress_at >= self.config.stall_s
 
     async def _retry_lap(self, live: LiveTrip, index: int) -> bool:
         """Plan the failed lap again; True when it carries on (the held stop at the place may be replaced)."""
