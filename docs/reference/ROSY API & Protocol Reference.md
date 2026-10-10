@@ -1825,6 +1825,8 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 
 `POST /api/fleet/robots/{robot_id}/trip`의 선택 필드 `start_at: place_id`는 관제에서 고른 출발·복귀 장소다. 이 필드는 `repeat: false`, `to: start_at`, 하나 이상의 다른 `via` 장소와 함께 사용한다. 잘못된 조합은 422 유효성 오류다. Fleet은 계획 시 현재 `LOCALIZED` 지도 자세가 그 장소에서 0.05 m 이내인지 검사하고, `POST /api/fleet/trips/{plan_id}/start`에서 새 자세로 다시 검사한다. 멀면 422 `TRIP_START_PLACE_MISMATCH`와 `{place, distance_m, limit_m}`를 반환하며 출발하지 않는다. D-517 구역 규칙이 정지를 다른 장소로 옮겨야 하는 경로는 시작 시 422 `TRIP_START_PLACE_MOVED`로 거절한다. 필드가 없는 기존 trip의 동작은 같다. CORE API와 envelope 1.0은 바뀌지 않는다.
 
+AI PC의 `ai_observer`는 열린 trip 중 `GET /api/fleet/trips`와 필요할 때 `GET /api/fleet/site-map/active`를 읽고 `POST /api/fleet/ai/facts`에 `kind: "trip_route_check"`를 보낼 수 있다(D-577 개정, v1.197). `value`는 `{status: "ON_ROUTE"|"OFF_ROUTE"|"UNKNOWN", offset_m?, limit_m?, reason?}`이고 `evidence`는 `trip_id`, `map_version`, `pose_source`, `pose_age_s`, 가능한 경우 `edge_id`를 담는다. 이 사실은 `shadow`이며 Fleet의 정지 권한이나 CORE 안전 명령을 대체하지 않는다.
+
 ## 10.9 Site Fleet LAN discovery
 
 The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full

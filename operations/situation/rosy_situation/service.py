@@ -1,6 +1,7 @@
 """D-577 3·4·10: `rosy-situation`, the AI PC situation service — reads Fleet, posts facts, never acts.
 
-Every second it reads ``GET /api/fleet/state``, ``/api/fleet/traffic`` and ``/api/fleet/line-stuck`` and the
+Every second it reads ``GET /api/fleet/state``, ``/api/fleet/traffic``, ``/api/fleet/line-stuck`` and
+``/api/fleet/trips``; an open trip also loads the active site map once per map version. It reads the
 event cursor ``GET /api/fleet/events?after_id=`` (a new stuck event brings the next read forward), runs the
 deterministic analyzers on that snapshot and posts their facts to ``POST /api/fleet/ai/facts`` as the
 ``ai_observer`` role: at most 32 per request, 2 requests a second, a 256-fact queue that drops the oldest.
@@ -33,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
 TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
@@ -79,6 +80,7 @@ class Situation:
         self._last_beat: Optional[float] = None
         self._posts: deque = deque()
         self.input_lag_s: Optional[float] = None
+        self._route_map: Optional[dict] = None
         from rosy_situation.incident_context import ContextDraft
         self.context_draft = ContextDraft()
 
@@ -118,6 +120,16 @@ class Situation:
         for key, path in (("state", "/api/fleet/state"), ("traffic", "/api/fleet/traffic"),
                           ("line_stuck", "/api/fleet/line-stuck")):
             snapshot[key] = self.fleet.call(path)
+        try:
+            snapshot["trips"] = self.fleet.call("/api/fleet/trips")
+            open_trips = snapshot["trips"].get("open") or []
+            if open_trips and (self._route_map is None or
+                               any(t.get("map_version") != self._route_map.get("version") for t in open_trips)):
+                self._route_map = self.fleet.call("/api/fleet/site-map/active")
+            snapshot["route_map"] = self._route_map if open_trips else None
+        except (OSError, ValueError) as exc:
+            _LOG.warning("trip route read failed: %s", exc)
+            snapshot["trips"], snapshot["route_map"] = {}, None
         if any((str(row.get("robot_id") or ""), str(row.get("stuck_id") or "")) not in self.context_draft.seen
                for row in (snapshot["line_stuck"].get("pending") or [])):
             context = {"map": None, "cameras": {}}

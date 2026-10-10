@@ -9,6 +9,7 @@ export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우�
 export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
 /** D-577 3 AI PC fact kinds (shadow: shown, never acted on here). */
 export const AI_FACT_LABEL = {
+  trip_route_check: 'AI 경로 편차 확인',
   wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
   waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
   unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
