@@ -212,6 +212,7 @@
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 | D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
 
 ## 계획·결과 문서
 
@@ -290,6 +291,7 @@
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 - [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
+- [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)

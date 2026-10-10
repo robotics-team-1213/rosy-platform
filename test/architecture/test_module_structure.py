@@ -115,15 +115,6 @@ SIZE_VERDICTS = {
         "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
         "Re-judge on further growth",
     ),
-    "core/gateway/core/services.py": (
-        603,
-        "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
-        "D-541 adds only the trip_lease import, field, build_trip_lease call and kwarg; lease logic and "
-        "wiring live in core/trip_lease.py (fleet_loss_wiring pattern). services.py stays CORE composition. "
-        "On next growth, split: move the pure config parsers (_battery/_power/_traffic_policy_config, "
-        "_simulation_docking, _seeded_dock_database) to core/*_wiring.py, re-exporting _battery_config for "
-        "tests. Budget and allowance unchanged",
-    ),
     "fleet/fleet/server/trip_runner.py": (
         751,
         "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
