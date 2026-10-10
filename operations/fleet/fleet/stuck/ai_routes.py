@@ -47,7 +47,7 @@ def _front_view(board, robot_id: str, stuck_id: Optional[str], wall: float) -> O
 
 
 def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guard, authorize,
-                            require_named_operator, clients: Callable[[], dict],
+                            require_named_operator, clients: Callable[[], dict], traffic: Callable[[], object],
                             rosy_cam: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None) -> None:
     @app.get("/api/fleet/ai/first", dependencies=read_guard, tags=["ai"])
     def ai_first_view() -> dict:
@@ -64,6 +64,11 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
         if loop is not None and loop.problems is not None:
             out += [{"problem_id": p["problem_id"], "kind": p["kind"], "robot_id": p["robot_id"]}
                     for p in loop.problems.open.values()]
+        service = traffic()
+        cycle = sorted((service.view() or {}).get("wait_cycle") or ()) if service is not None else []
+        if cycle and all(first.on(r) for r in cycle):        # D-610 7: the cycle as one problem
+            out.append({"problem_id": "deadlock:" + ":".join(cycle), "kind": "deadlock", "robot_id": cycle[0],
+                        "cycle": cycle, "avoidable": {r: list(service.avoidable.get(r, ())) for r in cycle}})
         return out
 
     @app.get("/api/fleet/ai/problems", dependencies=read_guard, tags=["ai"])
@@ -97,7 +102,7 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
             episodes.episodes, 20, rid, wall - 600.0)
         views = {"front": front or _front_view(line_stuck, rid, stuck_id, wall),
                  "rosy_cam": None if rosy_cam is None else await rosy_cam(rid)}
-        return {**problem, "stuck_id": stuck_id, "context": context(row), "built_at": wall,
+        return {**problem, "stuck_id": stuck_id or problem_id, "context": context(row), "built_at": wall,
                 "history": [{k: h.get(k) for k in ("opened_at", "problem_id", "kind", "decision", "tier", "verdict",
                                                    "core_code", "outcome")} for h in history],
                 "views": {name: view for name, view in views.items() if view is not None}}
