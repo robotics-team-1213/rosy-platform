@@ -2,7 +2,7 @@
 
 - 날짜: 2026-10-10
 - 결정: [D-577](../adr/D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md), [D-438](../adr/D-438-fleet-stuck-resolver-rules-model-human.md), P6 크기 규칙 [D-362](../adr/D-362-per-code-type-file-size-budget.md)
-- 계기: `fleet` 패키지 크기 판정이 D-577 때문에 두 번 다시 매겨졌다(51672 → 51848 → 52306(main, 다른 세션 증가) → 52655). 두 번 모두 Fleet 판단 코드가 커져서다. D-577의 분리 조건을 두 번째로 넘었다.
+- 계기: `fleet` 패키지 크기 판정이 D-577 때문에 두 번 다시 매겨졌다(51672 → 51848 → 52306(main, 다른 세션 증가) → 52740). 두 번 모두 Fleet 판단 코드가 커져서다. D-577의 분리 조건을 두 번째로 넘었다.
 
 ## 규칙
 

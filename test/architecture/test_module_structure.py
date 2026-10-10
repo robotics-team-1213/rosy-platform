@@ -218,9 +218,9 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_655,
-        "split: re-judged at 52655 on 2026-10-10 after D-577 Safety-Review AI proposal gates and the 연동 상태 "
-        "supervision fold (+191 over 52306, own lines; main grew 158 more after that re-judge (D-601 trip start), "
+        52_740,
+        "split: re-judged at 52740 on 2026-10-10 after D-577 Safety-Review AI proposal gates and the 연동 상태 "
+        "supervision fold (+190 over 52306, own lines; main grew 244 more after that re-judge (D-601 trip start, D-573 6 crosswalk holds, D-596), "
         "measured together on top of main; independent re-judge 2026-10-10, critic: agree, mostly display in "
         "line-stuck.js/ai_facts.py, gate delta in stuck_lane_lost.py tightens acting). This is the second acting "
         "growth past D-577's split condition: no further line_stuck/stuck_*/ai_facts growth lands before the move "
@@ -679,7 +679,8 @@ SIZE_VERDICTS = {
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
-        832,
+        993,
+        "accept: re-judged at 993 on 2026-10-10 (self-judged at merge, Safety-Review deploy freeze): +11 over 832+150 from D-596 amendment b 위치 찍기 LED blob start (313e8e6ca) on main; feat/d577-chain-supervision adds no console.js line (its 연동 상태 poll lives in line-stuck.js). Next console.js growth moves a block out first. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/cell_job_store.py": (
