@@ -56,9 +56,11 @@ SURFACES = (
 )
 
 HANGUL = re.compile(r"[가-힣]")
-RETIRED_TERMS = re.compile(r"(?i:profile|capability)|Navigation|hardware 모드|프로필")
+RETIRED_TERMS = re.compile(r"(?i:profile|capability|line-follow)|Navigation|hardware 모드|프로필")
 ENUM_WORDS = (r"IDLE|MANUAL|NAVIGATION|DOCKING|EMERGENCY|RUNNING|HOLDING|"
-              r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE")
+              r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE|"
+              # Lane-follow modes and D-20 formation shapes (2026-10-10 console walkthrough).
+              r"CAMERA_LINE|IR_LINE|LINE_FOLLOW|TRACKING|COLUMN|GRID|CIRCLE|TRAIL")
 BARE_ENUMS = re.compile(r"(?<![A-Za-z0-9_])(" + ENUM_WORDS + r")(?![A-Za-z0-9_])")
 ENUM_ONLY = re.compile(ENUM_WORDS)  # used with fullmatch
 
@@ -368,7 +370,7 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("operations/fleet/fleet/server/web/roster.js", ': "오프라인",', ': "OFFLINE",'),
+    ("operations/fleet/fleet/server/web/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
     ("middleware/ui/robot/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
     ("middleware/ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
     ("middleware/ui/robot/panels/console/line-follow.js",
@@ -394,8 +396,6 @@ ENUM_TEXT_ALLOWLIST: dict[tuple[str, str], str] = {
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
     ("middleware/ui/robot/panels/host/operations.js", '${data.state || "상태 미확인"}'):
         "Host Agent release state is shown as received; no sanctioned Korean map exists yet",
-    ("operations/fleet/fleet/server/web/roster.js", '${result.result?.state || "CORE 응답 확인"}'):
-        "CORE line-follow result state in the event log, shown as received; no Korean map exists yet",
 }
 
 
@@ -451,7 +451,7 @@ def test_the_lint_catches_what_it_is_meant_to_catch():
                     "상태 UNDOCKED", "WAITING", "STALE 수신"):
         literal = planted if HANGUL.search(planted) else f"{planted} 수신"
         assert RETIRED_TERMS.search(literal) or BARE_ENUMS.search(literal), planted
-    for clean in ("내비게이션 지원", "실행 모드", "도킹 기능", "대형 유지 중일 때만", "OFF 추종", "CPU 부하"):
+    for clean in ("내비게이션 지원", "실행 모드", "도킹 기능", "대형이 멈췄을 때만", "OFF 추종", "CPU 부하"):
         assert not (RETIRED_TERMS.search(clean) or BARE_ENUMS.search(clean)), clean
 
 
@@ -460,7 +460,7 @@ def test_the_lint_catches_what_it_is_meant_to_catch():
     ("middleware/ui/robot/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
     ("middleware/ui/robot/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
     ("middleware/ui/robot/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
-    ("operations/fleet/fleet/server/web/formation.js", '"대형 유지 중일 때만"', '"HOLDING일 때만"'),
+    ("operations/fleet/fleet/server/web/formation.js", "대형 재개는 대형이 멈췄을 때만", "대형 재개는 HOLDING일 때만"),
 ])
 def test_reverting_a_fixed_string_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one US-009 fix and the lint sees it."""
