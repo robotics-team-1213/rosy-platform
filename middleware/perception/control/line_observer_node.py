@@ -129,8 +129,8 @@ class LineObserverNode(Node):
         # accepted camera_profile record; NaN (default) = no override.
         self.declare_parameter('camera_pitch_rad_override', math.nan, _READ_ONLY)
         self.declare_parameter('camera_height_m_override', math.nan, _READ_ONLY)
-        for key in ('camera_pitch_uncertainty_rad_override', 'camera_height_uncertainty_m_override'):
-            self.declare_parameter(key, math.nan, _READ_ONLY)   # the accepted record's bands (D-491 amendment)
+        self.declare_parameter('camera_pitch_uncertainty_rad_override', math.nan, _READ_ONLY)  # record bands,
+        self.declare_parameter('camera_height_uncertainty_m_override', math.nan, _READ_ONLY)   # D-491 amendment
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)

@@ -90,9 +90,9 @@ def test_class_extent_counts_only_the_cells_the_camera_sees():
     y = np.arange(-0.10, 0.1001, 0.005)
     grid = np.zeros((len(x), len(y)), np.uint8)
     seen = np.zeros_like(grid, bool)
-    seen[:, np.abs(y) <= 0.03] = True                  # near the robot only the middle is in view
+    seen[:, np.abs(y) <= 0.02] = True                  # near the robot only the middle is in view
     grid[(x >= 0.15) & (x <= 0.25)] = 1
-    grid[:, np.abs(y) > 0.03] = 0
+    grid[:, np.abs(y) > 0.02] = 0
     assert crosswalk_class_extent(grid, x, y) is None
     near, far = crosswalk_class_extent(grid, x, y, seen)
     assert 0.14 <= near <= 0.16 and 0.24 <= far <= 0.26
