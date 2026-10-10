@@ -149,3 +149,16 @@ def test_map_bridges_a_cut_way_when_the_lane_goes_on_and_defers_reorient_in_a_na
     assert debug["strategy"] != "drivable_map_bridge"
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=170.0, guide_pivot_ok=False)[2]
     assert not debug["strategy"].startswith("drivable_reorient") and debug.get("reorient_deferred")
+
+
+def test_no_turn_circle_creeps_along_the_way_then_holds():
+    # architect 2026-10-10: off the ring-entry turn spots a pivot becomes a <= 0.07 m creep, then HOLD
+    steer, way = DrivableSteer(), _lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.04, x_max=0.33)
+    kw = dict(guide_deg=60.0, guide_pivot_ok=False)
+    debug = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), **kw)[2]
+    assert debug["strategy"] == "drivable_creep", debug
+    error, confidence, debug = steer.update(way, 2, G, XO, HALF, (0.08, 0.0, 0.0), (0.08, 0.0, 0.0), **kw)
+    assert error is None and debug["reason"] == "creep_done", debug
+    debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=170.0, guide_here_deg=170.0,
+                                   guide_pivot_ok=False)[2]
+    assert debug["reason"] == "wrong_way_hold", debug

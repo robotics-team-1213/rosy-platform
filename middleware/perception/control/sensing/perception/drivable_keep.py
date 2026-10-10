@@ -22,7 +22,7 @@ WALL_MAX_AGE_S = 0.5
 
 
 #: A route guide older than this (by the camera stamp) is not used.
-GUIDE_MAX_AGE_S = 1.5
+GUIDE_MAX_AGE_S = 3.0   # the guide prior carries gaps up to 3 s (architect 2026-10-10)
 
 
 def parse_guide(raw, now):

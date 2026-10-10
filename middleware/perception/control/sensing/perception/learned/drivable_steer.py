@@ -26,6 +26,7 @@ DrivableSteer per camera frame: the newest way's target moved into the current p
 from __future__ import annotations
 
 import math
+import time
 
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
@@ -72,7 +73,9 @@ PIVOT_MAX_RAD = 1.75
 #: a route prior within this of straight ahead means "keep going" (no exit turn)
 GUIDE_STRAIGHT_DEG = 25.0
 #: beyond this the robot faces against the lane: reorient in place first
-GUIDE_REVERSE_DEG = 100.0
+GUIDE_REVERSE_DEG = 90.0
+#: re-acquire creep limits (camera nearest row 0.112 m - body front 0.042 m)
+CREEP_MAX_M, CREEP_MAX_S = 0.07, 5.0
 #: after a crosswalk zone is seen, no pivot or exit turn for this much travel
 CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
@@ -265,6 +268,7 @@ class DrivableSteer:
         self._edges = []
         self._pivot_yaw = None
         self._crosswalk_pose = None
+        self._creep_from = self._creep_target = None
         self._lost_since = None
 
     def reset(self):
@@ -273,6 +277,22 @@ class DrivableSteer:
         self._crosswalk_pose = None
         self._edges = []
         self._lost_since = None
+
+    def _creep(self, info, pose, source_pose, half):
+        """Re-acquire instead of an in-place turn where the turn circle does not fit: creep along the
+        last valid way at most CREEP_MAX_M (camera nearest row - body front) for CREEP_MAX_S, then
+        HOLD for Fleet (architect deadlock design 2026-10-10)."""
+        now = time.monotonic()
+        if self._creep_from is None:
+            self._creep_from = (pose, now)
+        start, since = self._creep_from
+        moved = 0.0 if pose is None or start is None else math.hypot(pose[0] - start[0], pose[1] - start[1])
+        target = info.get("target_m") or self._creep_target
+        if target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
+            return None, None, dict(info, strategy="none", reason="creep_done")
+        self._creep_target = target
+        tx, ty = _to_current(target, source_pose, pose)
+        return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
 
     def lost(self, stamp):
         """No fresh way this frame: forget the latch only after FORGET_S without one."""
@@ -327,11 +347,10 @@ class DrivableSteer:
             # wrong way is judged on the lane direction here, not 0.25 m ahead (a hairpin ahead is a turn)
             here = guide_deg if guide_here_deg is None else guide_here_deg
             if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
-                # facing against the lane where the map says the body's sweep circle does not fit
-                # (a straight 0.16 m lane): no turn here, drive on to where it fits (user 2026-10-10)
-                side = info["exit"] = None
-                self._pivot = self._side = None
-                info["reorient_deferred"] = True
+                # facing against the lane where the turn circle does not fit (a 0.16 m lane, not one of
+                # the ring-entry turn spots): no U-turn in the lane, HOLD for Fleet (architect 2026-10-10)
+                self._smoothed = self._pivot = self._side = None
+                return None, None, dict(info, strategy="none", reason="wrong_way_hold", reorient_deferred=True)
             elif abs(here) > GUIDE_REVERSE_DEG:
                 # facing against the lane: turn in place toward its direction (user 2026-10-10: when
                 # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
@@ -353,6 +372,8 @@ class DrivableSteer:
                 # an arc that rolls forward onto the line ahead (9dfk 20261010T043756Z_rosy_41 crossed one)
                 self._smoothed = None
                 error = -PIVOT_ERROR if want == "left" else PIVOT_ERROR
+                if guide_deg is not None and not guide_pivot_ok:
+                    return self._creep(info, current_pose, source_pose, half)
                 return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_pivot_" + want, guided=True)
             elif side is not None and side != want:
                 side = info["exit"] = None      # an opening against the route is not taken
@@ -389,6 +410,8 @@ class DrivableSteer:
             # D-344 §12 amendment 3), then the normal rules
             self._smoothed = self._pivot = None
             error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
+            if guide_deg is not None and not guide_pivot_ok:
+                return self._creep(info, current_pose, source_pose, half)
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
         if self._in_crosswalk(current_pose):
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
@@ -414,6 +437,8 @@ class DrivableSteer:
         if self._pivot is not None:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
+            if guide_deg is not None and not guide_pivot_ok:
+                return self._creep(info, current_pose, source_pose, half)
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_pivot_{self._pivot}")
         if (guide_deg is not None and bridge and (info["target_m"] is None or ahead < PIVOT_AHEAD_M)
                 and (wall_ahead_m is None or wall_ahead_m - WALL_STANDOFF_M >= PIVOT_AHEAD_M)):
@@ -424,6 +449,8 @@ class DrivableSteer:
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
+        if ahead >= PIVOT_RELEASE_M:
+            self._creep_from = self._creep_target = None   # way re-acquired: the next creep starts fresh
         strategy, target = "drivable_centre", info["target_m"]
         if ahead < LOOKAHEAD_M and side is not None:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
