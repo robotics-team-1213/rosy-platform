@@ -305,12 +305,13 @@ class DrivableSteer:
             self._creep_from = (pose, now)
         start, since = self._creep_from
         moved = 0.0 if pose is None or start is None else math.hypot(pose[0] - start[0], pose[1] - start[1])
-        if info.get("target_m") is not None:
-            self._creep_target = (info["target_m"], source_pose)
+        target = info["exit_point_m"].get(info["exit"]) if info.get("exit") else info.get("target_m")
+        if target is not None:
+            self._creep_target = (target, source_pose)   # toward the opening the map agrees with
         ctx = self._ctx
         if ctx.get("s") is not None and any(k == "creep" and abs(ctx["s"] - fs) < REPEAT_S_M for fs, k in self._failed):
             return None, None, dict(info, strategy="none", reason="repeat_failed")
-        if ctx.get("guide") and (not ctx.get("fresh") or abs(ctx.get("here", 0.0)) >= CREEP_HEADING_DEG):
+        if ctx.get("guide") and not info.get("exit") and (not ctx.get("fresh") or abs(ctx.get("here", 0.0)) >= CREEP_HEADING_DEG):
             return None, None, dict(info, strategy="none", reason="creep_heading")
         if self._creep_target is None or moved > CREEP_MAX_M or now - since > CREEP_MAX_S:
             if ctx.get("s") is not None:
@@ -476,7 +477,9 @@ class DrivableSteer:
             if guide_deg is not None and not guide_pivot_ok:
                 return self._creep(info, current_pose, source_pose, half)
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
-        if self._in_crosswalk(current_pose):
+        if self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
+            # (only where the map lane goes straight on: g10-9dfk held 822 frames "crosswalk straight"
+            # into the wall at the SW 90-degree corner, the corner's transverse line read as bars)
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
             # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
             # and crosses (p8/p10: pivots at the bottom-road crosswalk became U-turns).

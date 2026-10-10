@@ -191,3 +191,13 @@ def test_a_failed_creep_is_not_repeated_at_the_same_route_distance():
     steer.update(np.zeros_like(closed), 2, G, XO, HALF, (0.0, 0.0, 0.0), (0.2, 0.0, 0.0), **kw)   # creep_done
     debug = steer.update(closed, 3, G, XO, HALF, (0.2, 0.0, 0.0), (0.2, 0.0, 0.0), **dict(kw, guide_s=2.05))[2]
     assert debug["reason"] == "repeat_failed", debug
+
+
+def test_a_map_corner_is_not_a_crosswalk_hold_and_creeps_toward_the_opening():
+    # g10-9dfk SW corner: transverse line read as crosswalk bars, guide 83 deg left, opening left
+    steer = DrivableSteer()
+    corner = _lane(HALF, -HALF, x_max=0.13) | _lane(0.5, 0.02, x_max=0.3)
+    steer.crosswalk((0.0, 0.0, 0.0))
+    error, _, debug = steer.update(corner, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), guide_deg=83.0,
+                                   guide_here_deg=80.0, guide_pivot_ok=False)
+    assert debug["strategy"] != "drivable_crosswalk_straight" and error is not None and error < 0, debug
