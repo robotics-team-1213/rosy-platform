@@ -390,10 +390,14 @@ def main(args=None):
     finally:
         if node is not None:
             if getattr(node, 'motor_ready_pub', None) is not None:
-                node.motor_ready_pub.publish(Bool(data=False))
+                try:
+                    node.motor_ready_pub.publish(Bool(data=False))
+                except Exception:  # SIGINT already invalidated the context
+                    pass
             node.driver.terminate()
             node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
