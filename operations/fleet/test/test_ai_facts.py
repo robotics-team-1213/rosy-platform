@@ -88,6 +88,13 @@ def test_only_ai_observer_may_post_facts(tmp_path):
         assert client.post("/api/fleet/ai/heartbeat", headers=_auth(token), json={}).status_code == 403
 
 
+def test_only_ai_observer_can_read_a_case_that_may_contain_camera_frames(tmp_path):
+    client = TestClient(_app(tmp_path)[0])
+    assert client.get("/api/fleet/ai/case/closed", headers=_auth(VIEWER)).status_code == 403
+    assert client.get("/api/fleet/ai/case/closed", headers=_auth(OPERATOR)).status_code == 403
+    assert client.get("/api/fleet/ai/case/closed", headers=_auth(AI)).status_code == 404
+
+
 def test_incident_context_is_accepted_only_as_shadow(tmp_path):
     app, robot, _ = _app(tmp_path)
     client = TestClient(app)
