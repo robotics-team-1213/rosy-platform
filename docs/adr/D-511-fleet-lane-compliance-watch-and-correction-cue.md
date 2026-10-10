@@ -115,3 +115,14 @@
 3. **역주행 방향은 D-587 표식 방향이 먼저다.** 방향이 있으면 그것으로 판정하고 이동 거리 조건 없이 1 s 뒤 바뀐다. 방향이 없을 때만 5 cm 이동 방향과 `wrong_way_min_m`을 쓴다.
 4. **횡단보도 구역은 lane-cue로 보내지 않는다.** D-573에 따라 Fleet 지도 구역은 D-517 권한의 `crosswalks[]`(현장 지도 `rosy.site_map/1` 모양 `{id, polygon, approach, lanes, revision}`)로만 CORE의 구역 목록 하나에 들어간다(소유: D-573 브랜치). 개정 1의 `crosswalk_ahead`는 Fleet 판정과 콘솔에만 남는다. 개정 1 3항의 CORE 쪽 `fleet_map` 구역 저장은 하지 않는다.
 5. **막힘 응답(D-577)은 해결기 소유 세션이 정한다.** 개정 1 4항의 `XW` 규칙은 main에 있고, 그 파일의 소유 세션이 옮기거나 바꾼다.
+
+### 개정 3 — CORE lane-cue D-430 검토 반영 (2026-10-10, feat/core-fleet-lane-cue)
+
+독립 Safety-Review는 REJECT였다. 고친 내용은 다음과 같다(재검토 대기, `fleet_lane_cue_enabled`는 계속 false).
+
+1. 신호 판단은 IR 감시 뒤, 몸 정지(D-422) 앞에 둔다. 제자리 회전이면 의도 twist를 `(0, w)`로 두어 회전 원으로 잰다. 회전은 LOST 래치, D-364 NOMINAL 지면, 카메라 신선(FOLLOW) 조건을 모두 지난 뒤에만 낸다.
+2. 회전은 `pose_stamp` 시점 odom yaw + 각도를 목표로 CORE가 odom으로 잰다. 10° 안이면 끝이다. 예산 |각도|+30°, 시간 |각도|/속도+2 s를 넘으면 래치 HOLD `fleet_turn_unconfirmed`. 같은 부호 2회·0.5 s 뒤에만 시작하고, 교차로 지시·arc·횡단보도 구역 중엔 시작하지 않는다.
+3. OFF_MAP과 회전 중 신호 만료(`fleet_cue_lost`)는 래치 HOLD다(fail-closed). 같은 epoch의 ON_LANE/ON_LINE 신호, D-407 막힘 결정, 모드 변경만 푼다.
+4. Fleet 현장 등록 토큰(D-555 3 자리)만 보낼 수 있다. `(fleet_epoch, seq)`는 만료와 무관하게 유지하고, `pose_stamp`가 1.5 s 넘게 오래되면 거절한다. 사건 `nav.lane_cue`.
+5. 옆 신호는 |offset| ≥ 0.05 m가 같은 쪽 2회일 때만 쓰고 후진하지 않는다. **차로 밖 로봇을 선을 넘어 차로 안으로 들이는 것은 이 신호가 아니라 D-468 복귀의 몫이다.** 이 신호는 쪽을 알려 주고, 선 위에서는 IR이 이긴다.
+6. Fleet은 403·404·500·501을 "받을 수 없는 로봇"으로 보고 60 s 동안 보내지 않는다.
