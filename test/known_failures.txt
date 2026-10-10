@@ -6,3 +6,4 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
+test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current  # main c27b5937f: perception/control/line_observer_node.py 776 lines past its 608+150 verdict (fix/drivable-keep-lap, perception owner re-judges)
