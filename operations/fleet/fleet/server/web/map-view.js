@@ -445,6 +445,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const t = fitTransform(bounds, fw, fh, 32);
     const turn = quarterTurn(rot, fw, fh);
     const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
+    view.siteToWorld = (x, y) => { const p = turn.unpoint(x, y); return { x: (p.x - t.ox) / t.scale, y: (t.oy - p.y) / t.scale }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
@@ -797,6 +799,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         life.check();
       }
       view.traffic = traffic;
+      // D-577 (d): the AI facts (shadow) beside a wait-cycle row; read only while a cycle is shown.
+      view.trafficAi = traffic.wait_cycle?.length
+        ? (await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null))?.facts || [] : [];
     } catch (err) {
       if (err.name === "AbortError") return;
       if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;

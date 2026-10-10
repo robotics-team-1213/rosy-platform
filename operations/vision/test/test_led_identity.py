@@ -19,8 +19,9 @@ def _blinking(t: float) -> bool:
 def _frame(lit: dict) -> np.ndarray:
     image = np.full((240, 320, 3), 90, np.uint8)
     for blob, color in lit.items():
-        x, y = int(blob.x_px) + 22, int(blob.y_px)  # the rear lamp sits in the ring
-        image[y - 4:y + 4, x - 6:x + 6] = color
+        # The rear lamp sits in the ring; its lit area is ~1.3 r^2 (site 2026-10-10: ~800 px at r 25).
+        x, y = int(blob.x_px) + 22, int(blob.y_px)
+        image[y - 8:y + 8, x - 10:x + 10] = color
     return image
 
 
@@ -132,3 +133,26 @@ def test_a_caution_lamp_decodes_like_the_amber_identify():
     decoy = _decide(_samples(caution, color="amber"))
     assert decoy["state"] == "matched" and (decoy["x"], decoy["y"]) == (RIGHT.map_x, RIGHT.map_y)
     assert _decide(_samples(caution, color="blue"))["reason"] == "none"
+
+
+def test_a_dim_floor_glow_beside_the_robot_is_read():
+    """led-identity/3, site ceiling_north 2026-10-10 11:23 (rosy_40 asked blue): the lamp lights the
+    floor ~1.8 blob radii from the robot centre, pale (HSV ~120/85/135). The /2 ring (to 1.6 r) and
+    floors (S 110, V 150) read 0.0005 on vs 0.0 off and answered "none"."""
+    glow = (135, 90, 90)                                          # BGR of HSV (120, 85, 135)
+
+    def frame(on: bool) -> np.ndarray:
+        image = np.full((240, 320, 3), 90, np.uint8)
+        if on:
+            x, y = int(LEFT.x_px + 1.8 * LEFT.radius_px), int(LEFT.y_px)
+            image[y - 7:y + 7, x - 9:x + 9] = glow
+        return image
+
+    samples = [sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                            blobs=(LEFT, RIGHT), color="blue") for i in range(19)]
+    result = _decide(samples)
+    assert result["state"] == "matched" and (result["x"], result["y"]) == (LEFT.map_x, LEFT.map_y)
+    old = LedConfig(min_saturation=110, min_value=150, ring_outer=1.6)
+    assert decide([sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                                blobs=(LEFT, RIGHT), color="blue", config=old) for i in range(19)],
+                  not_before=0.0, not_after=6.0, now=6.0, config=old)["reason"] == "none"

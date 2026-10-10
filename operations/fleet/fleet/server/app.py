@@ -541,6 +541,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
@@ -558,7 +559,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
-        config=lane_compliance_config or LaneComplianceConfig(), identity=identity)
+        config=lane_compliance_config or LaneComplianceConfig(), identity=identity,
+        clients=console.clients)   # D-511 rev 1: the return cue
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
@@ -598,6 +600,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):

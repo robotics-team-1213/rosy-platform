@@ -22,6 +22,7 @@ _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
     "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
     "calibration_source", "place_markers", "marker_yaw_offset_deg",
+    "auto_tune",  # D-589: Vision only; Fleet reads the same file and ignores it
 }
 CREDENTIAL_KINDS = ("static", "paired")
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")

@@ -194,6 +194,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # D-472/D-596: one request per colour per source (IdentityService); CORE and rosy-face keep the final safety decision.
     if identity is None:
         identity = IdentityService(console.clients, tracking=tracking)
+    if map_pose is not None and identity.map_pose is None:   # D-596 amendment: where to look, as app.py
+        identity.map_pose = map_pose.arbitrated_pose
     app.state.identity = identity
 
     # D-540 9: moving routes need a named operator; stops (WAIT/ABORT, formation stop) stay open.

@@ -294,6 +294,9 @@ class TrackingService:
                 "relearn_seq": state.relearn_seq,
                 # D-600: floor the background has not seen yet (a robot stood there while it learned).
                 "unknown_floor": [area.model_dump() for area in payload.unknown_floor] if fresh else [],
+                # D-589 8: the camera's recognition tuning as Vision last reported it.
+                "tuning": (payload.tuning.model_dump(mode="json")
+                           if fresh and payload.tuning is not None else None),
             })
             seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
                      if d.marker_id is None]

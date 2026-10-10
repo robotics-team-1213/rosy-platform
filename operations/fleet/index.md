@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(situation): D-577 (d) 교착·livelock·정체 분석기와 교착 행 조치
+- 2026-10-10 · uncommitted · feat(fleet): D-511 rev 1 return loop
 - 2026-10-10 · uncommitted · feat(situation): D-577 (c) rosy-situation 골격과 Fleet ai_observer 사실(shadow)
 - 2026-10-10 · uncommitted · uiux(fleet): D-577 (b) 막힘 행의 근거 그림과 알림
 - 2026-10-10 · uncommitted · fix(fleet): D-595 지도 맞춤 고정과 교정 어긋남 경고
-- 2026-10-10 · uncommitted · feat(fleet): D-596 LED 신원 확인 켜기
-- 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background

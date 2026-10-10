@@ -79,7 +79,9 @@ OPERATOR_LANE_MODES = ("line", "between", "lane", "edge_left", "centre", "keep")
 OPERATOR_GROUND_SOURCES = ("PINKY", "NOMINAL")
 #: D-397 operator layer, same physical range as calibration_store.check_values camera_profile.
 OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
-                   "camera_height_m_override": (0.02, 0.2)}
+                   "camera_height_m_override": (0.02, 0.2),
+                   "camera_pitch_uncertainty_rad_override": (0.0, 0.05),
+                   "camera_height_uncertainty_m_override": (0.0, 0.02)}
 #: Same values as paint_worker.TARGETS (kept literal: this module must import without numpy/cv2).
 LEARNED_PAINT_TARGETS = ("lane_marking", "drivable")
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
