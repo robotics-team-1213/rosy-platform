@@ -1,19 +1,18 @@
 * { box-sizing: border-box; }
-
 .connection-guide { margin: var(--space-3) var(--space-5); }
-.connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-flat); }
+.connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-flat); }
 .connection-guide[hidden] { display: none; }
 .connection-guide > div { flex: 1 1 16rem; min-width: 0; }
 .connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
-.connection-guide p { margin: 0; color: var(--ink-quiet); }
-.connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-button); color: var(--ink); }
+.connection-guide p { margin: 0; color: var(--text-secondary); }
+.connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-button); color: var(--text-primary); }
 .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-#estop-feedback { margin: var(--space-2) var(--space-5) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
+#estop-feedback { margin: var(--space-2) var(--space-5) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); background: var(--surface-flat); }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
 .start-point-camera { grid-column: 1 / -1; }
-.install-step { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
+.install-step { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
 .install-step h3 { margin: 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .field-rectified canvas.picking { cursor: crosshair; outline: var(--focus-ring-width) solid var(--focus-ring); }
 @media (width < 64rem) {
@@ -31,9 +30,9 @@
 #peer-status { min-width: 0; max-width: 100%; white-space: normal; }
 .peer-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
 .peer-list[hidden] { display: none; }
-.peer-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--line-10); }
+.peer-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border-subtle); }
 .peer-identity { min-width: 0; flex: 1 1 14rem; display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
-.peer-identity small, .peer-owner-note { color: var(--ink-quiet); }
+.peer-identity small, .peer-owner-note { color: var(--text-secondary); }
 .peer-owner-note { max-width: 100%; overflow-wrap: anywhere; }
 .peer-owner-link { min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 #camera-calibration .vision-preview { margin-top: var(--space-3); }
@@ -58,22 +57,22 @@
   .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-html { min-width: 320px; background: var(--ground); }
+html { min-width: 320px; background: var(--surface-canvas); }
 
 body {
   margin: 0;
   min-height: 100dvh;
-  color: var(--ink);
+  color: var(--text-primary);
   font-family: var(--body);
-  background: var(--ground);
+  background: var(--surface-canvas);
   text-rendering: optimizeLegibility;
 }
 
 /* D-406 — 설치·보정 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
 .install-tools { margin-top: var(--space-3); }
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
-.vision-controls select { flex: 1; }
-.vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
+.vision-controls select { flex: 1; min-width: 0; }
+.vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
 .vision-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .vision-frame img[hidden], .vision-image-stage[hidden], .vision-corner-overlay[hidden], .vision-corner-modes[hidden], #vision-corner-hint[hidden] { display: none; }
 .vision-image-stage { position: relative; width: 100%; line-height: 0; }
@@ -91,19 +90,19 @@ body {
 .vision-corner-overlay [data-corner-handle] { fill: var(--ground); stroke: var(--series-primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: all; cursor: move; touch-action: none; user-select: none; }
 .vision-corner-overlay [data-corner-handle]:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .vision-corner-modes { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 var(--space-2); }
-.vision-frame p { margin: var(--space-3); color: var(--ink-quiet); text-align: center; }
-.vision-adjustments { margin-top: var(--space-3); border-top: 1px solid var(--line-10); padding-top: var(--space-2); }
-.vision-adjustments summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; color: var(--ink); }
+.vision-frame p { margin: var(--space-3); color: var(--text-secondary); text-align: center; }
+.vision-adjustments { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
+.vision-adjustments summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; color: var(--text-primary); }
 .vision-adjustments summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .adjustment-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.adjustment-columns fieldset { min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); }
-.adjustment-columns legend { padding-inline: var(--space-1); color: var(--ink); font-size: var(--text-label); }
+.adjustment-columns fieldset { min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); }
+.adjustment-columns legend { padding-inline: var(--space-1); color: var(--text-primary); font-size: var(--text-label); }
 .adjustment-columns .hint { margin: 0 0 var(--space-2); }
 .corner-grid, .lens-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.corner-grid label, .lens-grid label, .aspect-control { display: grid; gap: var(--space-1); color: var(--ink-quiet); font-size: var(--text-micro); }
+.corner-grid label, .lens-grid label, .aspect-control { display: grid; gap: var(--space-1); color: var(--text-secondary); font-size: var(--text-micro); }
 .corner-grid input, .lens-grid input, .aspect-control select { width: 100%; }
 .aspect-control { margin-top: var(--space-3); max-width: 12rem; }
-.adjustment-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); color: var(--ink-quiet); font-size: var(--text-micro); }
+.adjustment-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); color: var(--text-secondary); font-size: var(--text-micro); }
 
 @media (width < 64rem) {
   .vision-corner-overlay [data-corner-handle] { stroke-width: 2; }
@@ -116,7 +115,7 @@ body {
 #field-accept[hidden], #field-dismiss[hidden], #vision-frame[hidden] { display: none; }
 .field-rectified { margin: var(--space-2) 0 0; }
 .field-rectified[hidden] { display: none; }
-.field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--ground-deep); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
+.field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--surface-recessed); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
 .field-rectified figcaption { margin-top: var(--space-1); }
 /* D-375 지도 맞춤: 겹침 캔버스는 원본 img 와 같은 object-fit 으로 같은 자리에 놓인다. */
 .vision-lane-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
@@ -126,11 +125,11 @@ body {
 .field-options { margin-top: var(--space-2); }
 .field-options summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; }
 .field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-.field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .field-options legend { padding-inline: var(--space-1); font-size: var(--text-label); }
-.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--ink-quiet); font-size: var(--text-micro); }
-.field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
-.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--ink); background: var(--surface-flat); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
+.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--text-secondary); font-size: var(--text-micro); }
+.field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-flag); }
+.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
 .field-mismatch[hidden] { display: none; }
 /* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
 .map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
@@ -140,7 +139,7 @@ body {
 
 .brand { display: flex; flex-direction: column; line-height: var(--leading-dense); }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
-.brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); letter-spacing: var(--track-label); }
+.brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); letter-spacing: var(--track-label); }
 
 .topbar .spacer { flex: 1; }
 
@@ -152,20 +151,20 @@ body {
   gap: var(--space-2);
   margin: 0;
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--line-14);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   font-size: var(--text-label);
   line-height: var(--leading-body);
 }
 .dispatch-control > div { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.dispatch-control strong { color: var(--ink); white-space: nowrap; }
-.dispatch-control small { color: var(--ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dispatch-control strong { color: var(--text-primary); white-space: nowrap; }
+.dispatch-control small { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
-.dispatch-control strong { color: var(--ink); }
-.dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
-#cancel-all-result { margin: 0; color: var(--ink); }
-#cancel-all-details { color: var(--ink); }
+.dispatch-control strong { color: var(--text-primary); }
+.dispatch-control small { color: var(--text-secondary); line-height: var(--leading-body); }
+#cancel-all-result { margin: 0; color: var(--text-primary); }
+#cancel-all-details { color: var(--text-primary); }
 #dispatch-rearm[hidden] { display: none; }
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }
@@ -197,7 +196,6 @@ main {
   body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 27rem)); }
   /* D-540 3 — 문서는 스크롤하지 않는다. 지도 열은 머리 아래 높이를 채우고 레일 하나만 스크롤한다.
      큐와 로봇 목록은 자기 높이 상한과 자체 스크롤이 없다. */
-  ui-shell:has(> #fleet-main) { height: 100dvh; }
   #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }  /* holds its .sr-only boxes */
   #fleet-main > .console-secondary { grid-auto-rows: max-content; }  /* rows fit their panel: a shrunk camera panel never runs under the next */
@@ -221,12 +219,15 @@ main {
   .ops-block > .log-panel { grid-column: 1; }
   .ops-block > .console-diagnostics { grid-column: 2; }
 }
-
-
-
+/* A fixed frame needs enough height; its map uses the space left by actual controls. */
+@media (width >= 64rem) and (height >= 40rem) {
+  ui-shell:has(> #fleet-main) { height: 100dvh; }
+  #fleet-main > .console-primary > .panel { flex: 1 1 auto; }
+  #fleet-main .map-stage { flex: 1; min-height: 0; }
+}
 .panel {
   background: var(--panel-fill);
-  border: 1px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   padding: var(--space-4) var(--space-4) var(--space-4);
 }
@@ -238,26 +239,25 @@ main {
 
 .panel h2 { font-weight: var(--weight-emphasis); font-size: var(--text-title); margin: 0 0 var(--space-3); }
 
-.map-head { display: flex; flex-wrap: nowrap; align-items: baseline; gap: var(--space-3); min-width: 0; }
-.map-head > div:first-child, .map-head > ui-button { flex: 0 0 auto; }
+.map-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
+.map-head > div:first-child, .map-head > ui-button { flex: 0 1 auto; max-width: 100%; min-width: 0; }
 /* 늦게 들어오는 카메라 교정 설명이 배지를 늘려 지도를 아래로 밀지 않게 한다. */
 #map-tag { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-head .spacer { flex: 1; }
 /* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
 .trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
-.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--ink-quiet); }
+.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--text-secondary); }
 .trail-control > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-.trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-raised); }
 .trail-robots { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); } .trail-panel .hint { margin: 0; font-size: var(--text-micro); }
 @media (width < 40rem) {
-  .map-head { flex-wrap: wrap; }
   #map-tag { flex: 1 1 100%; }
 }
 
 .map-stage { position: relative; }
 /* D-493 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
    운영자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
-.map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--ground-deep); border-radius: var(--radius-button); }
+.map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--surface-recessed); border-radius: var(--radius-button); }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]):has(> .map-birdseye:not([hidden])) > #map-canvas { display: none; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]):has(> .map-birdseye:not([hidden])) > .map-empty {
@@ -286,13 +286,13 @@ main {
   gap: var(--space-2);
   padding: var(--space-4);
   border-radius: var(--radius-button);
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
   text-align: center;
   pointer-events: none;
 }
 .map-empty[hidden], .legend[hidden] { display: none; }
-.map-empty strong { color: var(--ink); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
-.map-empty p { max-width: 34ch; margin: 0; color: var(--ink-quiet); font-size: var(--text-micro); line-height: var(--leading-copy); }
+.map-empty strong { color: var(--text-primary); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
+.map-empty p { max-width: 34ch; margin: 0; color: var(--text-secondary); font-size: var(--text-micro); line-height: var(--leading-copy); }
 .map-empty-icon { width: var(--text-display); height: var(--text-display); opacity: var(--disabled-opacity); }
 
 #map-canvas {
@@ -307,7 +307,7 @@ main {
   /* 격자 한 칸은 5 cm 다. 보간하면 벽이 번져 어디가 통로인지 읽을 수 없다. */
   image-rendering: pixelated;
   border-radius: var(--radius-button);
-  border: 1px solid var(--line-14);
+  border: 1px solid var(--border-default);
   background: var(--raster-unknown);
   cursor: crosshair;
 }
@@ -323,14 +323,14 @@ main {
 .hint {
   margin: var(--space-3) 0 0;
   font-size: var(--text-label);
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   line-height: var(--leading-copy);
 }
 
-.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
 .legend span { display: inline-flex; align-items: center; gap: var(--space-1); }
 /* padding: 0 — `.sw.robot` 견본이 로스터 카드 `.robot` 의 안쪽 여백을 물려받지 않게 한다. */
-.legend i { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: var(--radius-control); border: 1px solid var(--line-14); }
+.legend i { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: var(--radius-control); border: 1px solid var(--border-default); }
 /* D-359 §4.2 — 지형 견본은 캔버스와 같은 raster 토큰이다. */
 .sw.free { background: var(--raster-free); }
 .sw.uncertain { background: var(--raster-uncertain); }
@@ -352,8 +352,8 @@ main {
 .roster > * { flex-shrink: 0; }
 
 .robot {
-  border: 1px solid var(--line-10);
-  border-left: 3px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-2) var(--space-3);
@@ -375,25 +375,25 @@ main {
 .robot.s2 { border-left-color: var(--robot-3); }
 /* 로봇 정체색은 클래스로 돈다 — CSP 아래에서 style 속성은 적용되지 않는다. 지도의
    삼각형도 같은 순서로 색을 고르므로 카드의 띠와 지도의 로봇이 맞물린다. */
-.robot.selected { background: var(--ground); border-color: var(--line-30); }
+.robot.selected { background: var(--surface-canvas); border-color: var(--border-strong); }
 /* 오프라인은 흐림이 아니라 조용한 글자와 점선 테다(D-359 §5.5). */
-.robot.offline { color: var(--ink-quiet); border-style: dashed; }
+.robot.offline { color: var(--text-secondary); border-style: dashed; }
 
 .robot-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .robot-head b, .robot-head h3 { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
 .robot-head h3 { margin: 0; }
 .robot-head .spacer { flex: 1; }
 /* D-517 10 — 운행 상태 한 줄. 이름 줄 바로 아래, 값과 같은 mono 글자. */
-.robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); overflow-wrap: anywhere; }
+.robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
 /* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
 .robot[data-collapsed] { padding: 0; }
 .robot-line { all: unset; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
   width: 100%; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); cursor: pointer; }
 .robot-line b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
-.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--ink-quiet); }
+.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
 .robot-line-battery strong { font-family: var(--mono); font-size: var(--text-label); }
 .robot-fold { all: unset; box-sizing: border-box; min-height: var(--target-secondary); padding: 0 var(--space-2);
-  border-radius: var(--radius-control); color: var(--ink-quiet); font-size: var(--text-label); cursor: pointer; }
+  border-radius: var(--radius-control); color: var(--text-secondary); font-size: var(--text-label); cursor: pointer; }
 
 .facts {
   display: grid;
@@ -410,16 +410,16 @@ main {
   .facts div[data-fact="battery"] { flex: 0 1 70px; }
   .facts div[data-fact="safety"] { flex: 0 1 60px; }
 }
-.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
+.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--text-secondary); }
 /* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
-.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */
-.card-trip { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-10); }
-.card-trip label { display: grid; gap: var(--space-1); font-size: var(--text-label); color: var(--ink-quiet); }
+.card-trip { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
+.card-trip label { display: grid; gap: var(--space-1); font-size: var(--text-label); color: var(--text-secondary); }
 .card-trip select { width: 100%; min-width: 0; }
 .card-trip p { margin: 0; }
 .convoy-form-wrap > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; padding-block: var(--space-2); }
@@ -435,7 +435,7 @@ main {
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
 .signal-cards { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
 .signal {
-  border: 1px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--series-primary);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
@@ -446,20 +446,20 @@ main {
 .lamps { display: flex; gap: var(--space-2); align-items: center; }
 .lamp {
   width: 0.85rem; height: 0.85rem; border-radius: var(--radius-flag);
-  border: 1px solid var(--line-30);
-  background: var(--ground-deep);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-recessed);
 }
 .lamp.red.on { background: var(--status-crit); border-color: var(--status-crit); }
 .lamp.yellow.on { background: var(--status-warn); border-color: var(--status-warn); }
 .lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
 
 .signal-body { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
-.signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
+.signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
 
 
 /* D-415 — 로그 뷰어: 펼침 패널, 기본 8줄, 지우기 버튼. */
 .log-panel { margin-top: var(--space-3); }
-.log-panel > summary { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--ink-quiet); cursor: pointer; margin-bottom: var(--space-2); }
+.log-panel > summary { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--text-secondary); cursor: pointer; margin-bottom: var(--space-2); }
 /* D-493 — 지우기는 기록 머리 줄 오른쪽에 선다(따로 한 줄을 쓰지 않는다). */
 .log-panel { position: relative; }
 .log-toolbar { position: absolute; top: 0; right: 0; display: flex; }
@@ -470,13 +470,13 @@ main {
   margin-top: var(--space-2);
   font-family: var(--mono);
   font-size: var(--text-micro);
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   min-height: calc(var(--text-micro) * var(--leading-copy) * 8);
   max-height: calc(var(--text-micro) * var(--leading-copy) * 24);
   overflow-y: auto;
   line-height: var(--leading-copy);
   padding: var(--space-2);
-  border: 1px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-flat);
 }
@@ -484,7 +484,7 @@ main {
 .log ui-empty { margin: auto 0; }
 .log div { border-bottom: 1px solid var(--line-06); padding: var(--space-1) 0; }
 /* D-202 — 나쁜 줄은 채워진다. 경보 글자(2.24:1)가 아니라 위험 채움 + 종이 잉크. */
-.log div.bad { color: var(--ink-on-crit); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
+.log div.bad { color: var(--text-on-danger); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
@@ -506,20 +506,20 @@ main {
 .signals:not(:has(> .signal-cards > *)) { min-height: 0; }
 
 /* D-415 — 신호등 빈 상태 */
-.signal-empty { color: var(--ink-quiet); font-size: var(--text-label); padding: var(--space-2) 0; }
+.signal-empty { color: var(--text-secondary); font-size: var(--text-label); padding: var(--space-2) 0; }
 
 /* D-415 — 진단 패널 */
-.console-diagnostics { margin-top: var(--space-3); border-top: 1px solid var(--line-10); padding-top: var(--space-2); }
-.console-diagnostics > summary { font-family: var(--mono); font-size: var(--text-label); color: var(--ink-quiet); cursor: pointer; margin-bottom: var(--space-2); }
+.console-diagnostics { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
+.console-diagnostics > summary { font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); cursor: pointer; margin-bottom: var(--space-2); }
 .diag-readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); font-size: var(--text-micro); }
-.diag-readout dt { font-family: var(--mono); color: var(--ink-quiet); letter-spacing: var(--track-label); }
-.diag-readout dd { margin: 0; font-family: var(--mono); color: var(--ink); overflow-wrap: break-word; }
+.diag-readout dt { font-family: var(--mono); color: var(--text-secondary); letter-spacing: var(--track-label); }
+.diag-readout dd { margin: 0; font-family: var(--mono); color: var(--text-primary); overflow-wrap: break-word; }
 
 .note {
   margin: var(--space-3) 0 0;
   padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--line-14);
-  color: var(--ink-quiet);
+  border-left: 2px solid var(--border-default);
+  color: var(--text-secondary);
   font-size: var(--text-micro);
   line-height: var(--leading-copy);
 }
@@ -557,7 +557,7 @@ main {
 
 .formation {
   margin-top: var(--space-4);
-  border: 1px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-3) var(--space-4);
@@ -582,7 +582,7 @@ main {
   font-family: var(--mono);
   font-size: var(--text-micro);
   letter-spacing: var(--track-label);
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
 }
 .formation-form select,
 .formation-form input { width: 100%; }
@@ -600,7 +600,7 @@ main {
 
 /* FOR-001 Robot Selection — 대형 폼의 멤버 선택. 간격은 단일 파일의 스케일을 따른다. */
 .member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
-.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; min-width: 0; font-size: var(--text-label); color: var(--ink); }
+.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; min-width: 0; font-size: var(--text-label); color: var(--text-primary); }
 /* .formation-form input 의 width:100% 가 체크박스까지 늘려 로봇 id 를 낱자로 접었다. */
 .formation-form .member-list input { width: auto; flex: none; }
 .member-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -609,7 +609,7 @@ main {
 /* Many robots (10, 100): the follower boxes are a bounded list like a multi-select; 로봇 찾기 narrows it. */
 .member-list { max-height: 12rem; overflow-y: auto; } .member-list label[hidden] { display: none; }
 .robot-filter { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); align-items: center;
-  margin-top: var(--space-2); font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
+  margin-top: var(--space-2); font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--text-secondary); }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
@@ -622,7 +622,7 @@ main {
   padding: var(--space-2);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
-  border: 1px solid var(--line-10);
+  border: 1px solid var(--border-subtle);
 }
 .warning-queue {
   border-left: 4px solid var(--status-warn);
@@ -643,14 +643,14 @@ main {
   background: var(--ground-raise);
   margin-bottom: var(--space-1);
   border-radius: var(--radius-control);
-  color: var(--ink);
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 .issue-list li[data-decision]:not([data-decision=""]) { padding: 0; }
 /* D-540 3 — 결정이 있는 행은 펼침 단추다. 펼친 자리에 그 결정이 열린다(한 번에 하나). */
 .queue-row { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: var(--target-secondary);
   padding: var(--space-2); border-radius: var(--radius-control); cursor: pointer; overflow-wrap: anywhere; }
-.queue-row::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--ink-quiet); }
+.queue-row::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--text-secondary); }
 .queue-row[aria-expanded="true"]::before { content: "▾"; }
 .queue-row:focus-visible, .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -660,27 +660,27 @@ main {
 
 /* D-407 판단 요청 — 큐 행의 펼침. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
 .stuck-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
-  border: 1px solid var(--line-10); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
+  border: 1px solid var(--border-subtle); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
 .stuck-item.offline { border-left-color: var(--status-warn); }
 .stuck-item ui-tag { max-width: 100%; white-space: normal; line-height: var(--leading-copy); }
 .stuck-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .stuck-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; }
 .stuck-facts div { display: flex; gap: var(--space-1); align-items: baseline; }
-.stuck-facts dt { font-size: var(--text-label); color: var(--ink-quiet); }
-.stuck-resolver { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
-.stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); }
-.stuck-facts dd.stuck-fact-unknown { color: var(--ink-quiet); }
+.stuck-facts dt { font-size: var(--text-label); color: var(--text-secondary); }
+.stuck-resolver { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
+.stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); }
+.stuck-facts dd.stuck-fact-unknown { color: var(--text-secondary); }
 /* D-577 8: the stuck's one evidence picture, below the answers so they stay at rail scroll 0 (D-540 7). */
 .stuck-evidence { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .stuck-evidence img { display: block; max-width: 100%; max-height: 120px; width: auto; object-fit: contain; border-radius: var(--radius-button); }
-.stuck-evidence figcaption { font-size: var(--text-label); color: var(--ink-quiet); }
+.stuck-evidence figcaption { font-size: var(--text-label); color: var(--text-secondary); }
 .stuck-actions, .stuck-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .stuck-actions ui-button, .stuck-confirm-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
-.stuck-confirm { padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
-.stuck-confirm p { margin: 0 0 var(--space-2); color: var(--ink); }
-.stuck-result { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
+.stuck-confirm { padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); }
+.stuck-confirm p { margin: 0 0 var(--space-2); color: var(--text-primary); }
+.stuck-result { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
 /* D-202 — 거부는 채운다(경보 글자 대신 위험 채움 + 종이 잉크). */
-.stuck-result[data-kind="bad"] { color: var(--ink-on-crit); background: var(--status-crit);
+.stuck-result[data-kind="bad"] { color: var(--text-on-danger); background: var(--status-crit);
   padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
 
 .incident-panel .robot-head { margin-bottom: var(--space-2); }
@@ -695,16 +695,16 @@ main {
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   padding: var(--space-2); background: var(--surface-raised); border-radius: var(--radius-control); }
-.discovery-list small { color: var(--ink-quiet); }
-.discovery-state { margin-left: auto; color: var(--ink-quiet); }
-.discovery-state.verified_online { color: var(--ink); }
+.discovery-list small { color: var(--text-secondary); }
+.discovery-state { margin-left: auto; color: var(--text-secondary); }
+.discovery-state.verified_online { color: var(--text-primary); }
 .discovery-state.conflict { color: var(--status-crit); }
-.discovery-state.enrolled { color: var(--ink); }
+.discovery-state.enrolled { color: var(--text-primary); }
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
 .site-path { margin: var(--space-2) 0; }
 .site-path > summary { cursor: pointer; min-height: var(--target-secondary); padding-block: var(--space-2); font-weight: var(--weight-label); }
-.site-path > summary span { color: var(--ink-quiet); }
+.site-path > summary span { color: var(--text-secondary); }
 .site-path > summary span[data-kind="warn"] { color: var(--status-warn); }
 .site-path > summary span[data-kind="crit"] { color: var(--status-crit); }
 .site-path[open] ul { margin-top: var(--space-2); }
@@ -719,29 +719,29 @@ main {
 .address-drift .enroll-alarm { margin: 0; }
 .enroll-move-check[hidden] { display: none; }
 .enroll-move-check p { margin: var(--space-1) 0; }
-.enroll-move-address-label { font-size: var(--text-label); color: var(--ink-quiet); }
-.enroll-move-address { font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-label); color: var(--ink); }
+.enroll-move-address-label { font-size: var(--text-label); color: var(--text-secondary); }
+.enroll-move-address { font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-label); color: var(--text-primary); }
 .address-movable { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .address-movable li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .address-movable li span { font-family: var(--mono); font-size: var(--text-label); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--ink); background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }
 .enroll-result[data-kind="bad"] { color: var(--status-crit); }
 .enrolled-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .enrolled-list li { display: flex; flex-direction: column; gap: var(--space-1); }
-.enrolled-list small { color: var(--ink-quiet); }
+.enrolled-list small { color: var(--text-secondary); }
 .enroll-dialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 /* D-341 카메라 연결 승인: 지문·자격 ID는 등폭으로 크게, API가 준 4자 묶음 그대로. */
-.camera-link { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
+.camera-link { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
 .camera-link h3, .camera-link h4 { margin: var(--space-3) 0 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .camera-id { font-family: var(--mono); letter-spacing: var(--track-wide); overflow-wrap: anywhere; }
 .camera-list li { align-items: flex-start; }
 .camera-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.camera-confirm { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
+.camera-confirm { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); }
 .camera-confirm p { margin: var(--space-1) 0; }
 .camera-confirm-values { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); align-items: baseline; margin: var(--space-2) 0; }
-.camera-confirm-values dt { color: var(--ink-quiet); }
+.camera-confirm-values dt { color: var(--text-secondary); }
 .camera-confirm-values dd { margin: 0; font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-emphasis); letter-spacing: var(--track-wide); overflow-wrap: anywhere; }
 /* 좁은 창: 이름표를 값 위에 둬 값이 한 줄로 남는다(묶음 중간에서 끊지 않는다). */
 @media (width < 30rem) {

@@ -1,13 +1,13 @@
 /* D-204 셸 — 배치만 정한다. 색과 크기는 토큰만 쓴다(D-129, D-203). */
-html { min-height: 100%; background: var(--ground); }
+html { min-height: 100%; background: var(--surface-canvas); }
 /* Role surfaces do not load dashboard/styles.css; explicit display rules must respect hidden. */
 [hidden] { display: none !important; }
 body {
   min-width: 320px;
   min-height: 100dvh;
   margin: 0;
-  color: var(--ink);
-  background: var(--ground);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
   font: var(--weight-regular) var(--text-body)/var(--leading-copy) var(--body);
 }
 .surface-switch { display: flex; gap: var(--space-3); }
@@ -23,7 +23,7 @@ body {
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-switch a:hover { color: var(--ink); background: var(--surface-flat); }
+.surface-switch a:hover { color: var(--text-primary); background: var(--surface-flat); }
 .surface-switch a[aria-current="page"] {
   color: var(--brand-rose);
   border-color: var(--brand-rose);
@@ -40,7 +40,7 @@ body {
   font-weight: var(--weight-emphasis);
   text-underline-offset: 0.2em;
 }
-.surface-auth-link:hover { color: var(--ink); background: var(--brand-rose-wash); }
+.surface-auth-link:hover { color: var(--text-primary); background: var(--brand-rose-wash); }
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
@@ -65,7 +65,7 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-panel);
   background: var(--surface-flat);
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }

@@ -37,8 +37,8 @@
   top: var(--space-2);
   left: var(--space-2);
   padding: var(--inset-skip-link);
-  color: var(--ink);
-  background: var(--ground);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
   border: var(--focus-ring-width) solid var(--focus-ring);
   border-radius: var(--radius-button);
   transform: translateY(-150%);
@@ -87,7 +87,7 @@ ui-button {
   padding: 0 var(--inset-button);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
-  color: var(--ink);
+  color: var(--text-primary);
   background: transparent;
   font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
   text-align: center;
@@ -121,7 +121,7 @@ a.docs-link {
 a.docs-link { min-height: var(--target-secondary); }
 
 a.docs-link:hover {
-  color: var(--ink);
+  color: var(--text-primary);
   border-color: var(--ink);
 }
 
@@ -145,7 +145,7 @@ ui-button[kind="segment"] {
 ui-button[kind="segment"][aria-pressed="true"],
 ui-button[kind="segment"][aria-selected="true"],
 ui-button[kind="segment"].active {
-  color: var(--ink);
+  color: var(--text-primary);
   background: var(--ground-card-2);
   border-color: transparent;
   font-weight: var(--weight-strong);
@@ -219,12 +219,12 @@ ui-button[disabled]:is(:not([reason]), [reason=""]) { opacity: var(--disabled-op
    동안 바탕색 안쪽 테를 얻는다. 표면은 눌림을 outline이나 status 색으로 덧칠하지
    않고 aria-pressed="true"를 단다. */
 ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):hover {
-  color: var(--ink);
+  color: var(--text-primary);
   border-color: var(--ink);
 }
 
 ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):active {
-  color: var(--ink);
+  color: var(--text-primary);
   background: var(--ground-card-2);
 }
 
@@ -249,7 +249,7 @@ ui-button[reason]:not([reason=""]) {
 }
 
 ui-button[disabled][reason]:not([reason=""]) {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   background: transparent;
   border-color: var(--surface-line);
   border-style: dashed;
@@ -261,7 +261,7 @@ ui-button > small[data-reason],
 ui-button[kind] > small[data-reason] {
   display: block;
   max-width: 100%;
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body);
   white-space: normal;
 }
@@ -301,7 +301,7 @@ textarea.ui-field {
   padding: 0 var(--inset-field);
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
-  color: var(--ink);
+  color: var(--text-primary);
   background: var(--field-bg);
   font: var(--weight-regular) var(--text-body)/var(--leading-control) var(--body);
   font-variant-numeric: tabular-nums;
@@ -374,7 +374,7 @@ input.ui-field[type="checkbox"]:checked::before { visibility: visible; }
 /* US-009 — 꺼진 빈 상자가 켜진 빈 상자와 똑같이 보였다. 비활성 테는 점선이다(사유 있는
    비활성 버튼·unavailable 증거와 같은 어휘). 색은 그대로 `--ink-quiet`라 3:1을 지키고 흐리지 않는다. */
 input.ui-field[type="checkbox"]:disabled {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   border-style: dashed;
   cursor: not-allowed;
 }
@@ -448,10 +448,10 @@ ui-tag[hidden] { display: none; }
   font: var(--weight-strong) var(--text-title)/var(--leading-body) var(--body);
   overflow-wrap: anywhere;
 }
-.ui-task-meta { color: var(--ink-quiet); font-size: var(--text-label); }
+.ui-task-meta { color: var(--text-secondary); font-size: var(--text-label); }
 .ui-task-next { max-width: 70ch; line-height: var(--leading-copy); }
 .ui-task-row details { margin-top: var(--inset-workspace-bar); }
-.ui-task-row summary { cursor: pointer; color: var(--ink-quiet); }
+.ui-task-row summary { cursor: pointer; color: var(--text-secondary); }
 .ui-task-row p { overflow-wrap: anywhere; }
 .ui-task-row details > :not(summary) { margin-top: var(--gap-task-detail); }
 
@@ -469,14 +469,14 @@ ui-tag[status="warn"] {
 }
 
 ui-tag[status="crit"] {
-  color: var(--ink-on-crit);
+  color: var(--text-on-danger);
   border-color: transparent;
   background: var(--status-crit);
 }
 
 ui-text {
   font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 ui-text[scale="unit"] {
@@ -495,18 +495,18 @@ ui-text[scale="label"] {
 ui-text[scale="value"] {
   font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 ui-text[scale="title"] {
   font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body);
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 ui-text[scale="display"] {
   font: var(--weight-emphasis) var(--text-display)/var(--leading-flat) var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 ui-status {
@@ -629,7 +629,7 @@ ui-chip {
   padding: var(--inset-chip);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  color: var(--ink);
+  color: var(--text-primary);
   background: var(--scrim);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--mono);
   letter-spacing: var(--track-label);
@@ -641,7 +641,7 @@ ui-triage {
   gap: var(--gap-triage);
   width: 100%;
   margin: 0;
-  color: var(--ink);
+  color: var(--text-primary);
   font: var(--weight-emphasis) var(--text-body)/var(--leading-control) var(--body);
 }
 
@@ -666,7 +666,7 @@ ui-triage small {
 ui-evidence {
   display: inline-flex;
   align-items: center;
-  color: var(--ink);
+  color: var(--text-primary);
   font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
@@ -693,8 +693,8 @@ ui-shell {
   flex-direction: column;
   flex: 1;
   min-height: 100dvh;
-  color: var(--ink);
-  background: var(--ground);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
   font-family: var(--body);
   font-size: var(--text-body);
 }
@@ -716,7 +716,7 @@ ui-topbar {
   min-height: var(--topbar-height);
   padding: var(--inset-topbar);
   border-bottom: 1px solid var(--surface-line);
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
 }
 
 ui-shell[grammar="focal"] ui-topbar {
@@ -738,7 +738,7 @@ ui-brand {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 ui-brand a {
@@ -809,7 +809,7 @@ dialog.ui-confirm {
   padding: var(--inset-dialog);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);
-  color: var(--ink);
+  color: var(--text-primary);
   background: var(--surface-raised);
 }
 

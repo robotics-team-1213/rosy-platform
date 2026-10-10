@@ -38,6 +38,8 @@ Static Fleet console UI (vanilla ES modules, no build step), served at `/console
 
 ### Working In This Directory
 
+- Read DESIGN.md color-role laws and shared component catalog before UI changes (D-624). Paint belongs to shared/web tokens and components; surfaces own placement and actions. Keep gallery and responsive/accessibility checks aligned.
+
 - CSP is `style-src 'self'; script-src 'self'` (`static_routes.py` `CONSOLE_CSP`): no inline scripts, no `style=` attributes, no `el.style.x =`. Express colour and layout with classes.
 - A new asset must be added to the allowlist in `../static_routes.py`; unlisted files are not served.
 - Robot pose is in the shared `map` frame (TF `map` to `<ns>base_footprint`); never introduce per-robot map frames in the drawing code.

@@ -11,7 +11,7 @@
   align-items: stretch;
   padding: 0 var(--space-5);
   border-bottom: 1px solid var(--surface-line);
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
 }
 .hero-strip > div { padding: var(--space-3) var(--space-4); }
 .hero-copy { flex: 0 1 auto; max-width: 14rem; min-width: 0; display: flex; align-items: center; padding-left: 0; }
@@ -26,7 +26,7 @@
 /* 식별자는 제목 아래가 아니라 옆이다 — 한 줄에서 이름과 계보를 같이 읽는다. */
 .hero-copy h1 em {
   min-width: 0;
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   overflow: hidden;
@@ -43,16 +43,16 @@
 }
 .hero-label { flex: none; }
 .hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
-.hero-state .sequence, .hero-safety > span:last-child { color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
+.hero-state .sequence, .hero-safety > span:last-child { color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 .hero-safety.safe strong { color: var(--nominal); }
 .hero-safety.danger strong { color: var(--status-crit); }
-.hero-safety.unverified strong { color: var(--ink-quiet); }
+.hero-safety.unverified strong { color: var(--text-secondary); }
 /* 편대 역할 — 계기 셋의 네 번째 칸. 대형에 속해 있을 때만 나타난다(D-280:
    빈 상태는 말하지 않는다). 색은 쓰지 않는다 — 역할은 경보가 아니고,
    리더·팔로워는 단어로 충분히 다르다(D-82 예산 안 씀). */
 /* D-396: 목표 좌표 — 내비게이션 줄의 오른쪽, 뮤트색 모노 */
 .navigation-goal {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   margin-left: var(--space-2);
@@ -60,7 +60,7 @@
 
 /* D-396: 텔레오퍼레이션 속도 — 패드 아래 한 줄, 누르는 동안만 보인다 */
 .teleop-speed {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
 }
@@ -81,13 +81,13 @@
 .telemetry-grid strong[data-pending],
 .navigation-line b[data-pending],
 .hero-state strong[data-pending] {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
 }
 
 /* D-396: 이벤트 심각도 — 위험은 채움, 주의는 색, info 는 뮤트 */
 .event-severity[data-severity="crit"] {
   background: var(--status-crit);
-  color: var(--ink-on-crit);
+  color: var(--text-on-danger);
   padding: 0 var(--space-1);
   border-radius: var(--radius-control);
 }
@@ -108,7 +108,7 @@
 }
 .hero-formation[hidden] { display: none; }
 .hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
-.hero-formation > span:last-child { color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
+.hero-formation > span:last-child { color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 
 /* ---- 영역 셋 --------------------------------------------------------------
    폭은 역할이 정한다. 감지는 숫자 세 칸이 들어갈 만큼, 조작은 되돌릴 수 없는
@@ -137,7 +137,7 @@
 /* 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다(Law 2).
    관측은 창이므로 가장 어둡다 — 지도 래스터가 그 위에 뜬다. */
 .region-sense { background: var(--surface-flat); border-right: 1px solid var(--surface-line); overflow-y: auto; }
-.region-observe { background: var(--ground-deep); }
+.region-observe { background: var(--surface-recessed); }
 .region-act {
   gap: var(--space-3);
   padding-bottom: var(--space-3);
@@ -156,7 +156,7 @@
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--surface-line);
 }
-.region-head h2 { margin: 0; color: var(--ink); font-size: var(--text-label); letter-spacing: var(--track-label); }
+.region-head h2 { margin: 0; color: var(--text-primary); font-size: var(--text-label); letter-spacing: var(--track-label); }
 .region-head span {
   min-width: 0;
   color: var(--nominal-quiet);
@@ -178,7 +178,7 @@
   background: var(--surface-line);
   overflow: hidden;
 }
-.telemetry-grid article { min-width: 0; padding: var(--space-2); background: var(--ground); }
+.telemetry-grid article { min-width: 0; padding: var(--space-2); background: var(--surface-canvas); }
 .telemetry-grid span, .telemetry-grid strong, .telemetry-grid small { display: block; }
 /* 잘린 좌표는 좌표가 아니다. 낡은 값에는 나이가 따라붙어 칸보다 길어지므로
    자르지 않고 접는다 — 감지 영역에는 남는 높이가 있고, 없는 것은 폭이다. */
@@ -215,12 +215,12 @@
 }
 .capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .capability-item b { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); }
-.capability-item small { grid-column: 1 / -1; color: var(--ink); font-size: var(--text-label); line-height: var(--leading-body); }
+.capability-item small { grid-column: 1 / -1; color: var(--text-primary); font-size: var(--text-label); line-height: var(--leading-body); }
 /* 가용은 정상이므로 색이 없다. 제약과 차단만 색을 쓴다(D-82). */
 .capability-item[data-state="constrained"] b { color: var(--status-warn); }
 .capability-item[data-state="blocked"] b { color: var(--status-crit); }
 /* CORE-only은 설정이지 고장이 아니다 — 차단이어도 색을 쓰지 않는다(D-161, D-82). */
-.capability-item[data-cause="runtime"] b { color: var(--ink-quiet); }
+.capability-item[data-cause="runtime"] b { color: var(--text-secondary); }
 
 /* ---- 관측 — 격자가 먼저다 -------------------------------------------------
    도구는 제목 줄의 한 행이고 범례는 캔버스 아래 한 줄이다. 격자 위에
@@ -233,7 +233,7 @@
   height: clamp(190px, 31dvh, 290px);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
   overflow: hidden;
 }
 .vision-stage::before {
@@ -246,14 +246,14 @@
 }
 .vision-stage[data-state="live"]::before { border-color: color-mix(in srgb, var(--nominal) 52%, transparent); }
 .vision-stage[data-state="stale"]::before { border-color: color-mix(in srgb, var(--status-warn) 62%, transparent); }
-#vision-frame { width: 100%; height: 100%; display: block; object-fit: contain; background: var(--ground-deep); }
+#vision-frame { width: 100%; height: 100%; display: block; object-fit: contain; background: var(--surface-recessed); }
 .vision-empty {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   letter-spacing: var(--track-wide);
 }
@@ -262,16 +262,16 @@
 .vision-reticle i:first-child { left: 50%; top: 42%; width: 1px; height: 16%; }
 .vision-reticle i:last-child { left: 46%; top: 50%; width: 8%; height: 1px; }
 .vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--surface-line); }
-.vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--ground); }
+.vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--surface-canvas); }
 .vision-meta dt { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
-.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--ink); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--text-primary); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .map-stage {
   position: relative;
   flex: 1;
   min-height: 0;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  background: var(--ground-deep);
+  background: var(--surface-recessed);
   overflow: hidden;
 }
 #map-canvas { display: block; width: 100%; height: 100%; }
@@ -282,7 +282,7 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   pointer-events: none;
 }
@@ -290,7 +290,7 @@
 .panel-heading > .map-tools { flex: 0 1 auto; min-width: 0; }
 .map-tools { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 .map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: 0; }
-.map-hint { margin: 0; min-width: 0; color: var(--ink-quiet); font-size: var(--text-label); line-height: var(--leading-body); }
+.map-hint { margin: 0; min-width: 0; color: var(--text-secondary); font-size: var(--text-label); line-height: var(--leading-body); }
 .map-legend {
   display: flex;
   flex-wrap: wrap;
@@ -298,7 +298,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
 }
 .map-legend li { display: flex; align-items: center; gap: var(--space-2); }
@@ -357,7 +357,7 @@
 }
 .line-follow-modes ui-button { border-right: 1px solid var(--surface-line); }
 .line-follow-modes ui-button:last-child { border-right: 0; }
-.line-follow-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.line-follow-message { min-height: 1.4em; margin: 0; color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* 사실 격자는 감지 영역(272px)에 산다 — 두 단으로 좁힌다(D-201). 칸 규칙은
    운용·점검 어디서든 같은 모양이다. */
@@ -399,7 +399,7 @@
    4칸을 넘친다(1366×600). 화살표 아래 라벨로 쌓는다 — 사유가 붙은 비활성 모양과 같다. */
 .teleop-pad ui-button { flex-direction: column; gap: 0; }
 
-.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* ===========================================================================
    4. 점검 — 절차 문법(concept 16 §7.2)
@@ -430,8 +430,8 @@
   background: var(--surface-flat);
   scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
 }
-.inspect .panel h2 { font-size: var(--text-title); letter-spacing: 0; text-transform: none; color: var(--ink); }
-.inspect .panel h3 { font-size: var(--text-body); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.inspect .panel h2 { font-size: var(--text-title); letter-spacing: 0; text-transform: none; color: var(--text-primary); }
+.inspect .panel h3 { font-size: var(--text-body); letter-spacing: 0; text-transform: none; color: var(--text-primary); }
 
 .system-identity { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
 .system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--surface-line); }
@@ -480,7 +480,7 @@
 .host-card h3, .settings-card h3 { margin: 0; font: var(--weight-label) var(--text-body)/var(--leading-label) var(--body); }
 /* 값이 오지 않은 카드는 흐려지고 그렇게 말한다. 아무 말 없는 정상 카드처럼
    보이면 안 된다. */
-.host-card[data-available="false"] { border-style: dashed; color: var(--ink-quiet); }
+.host-card[data-available="false"] { border-style: dashed; color: var(--text-secondary); }
 .host-card[data-available="false"] .host-facts,
 .host-card[data-available="false"] .device-list { display: none; }
 .host-card[data-available="false"] .host-note { color: var(--status-warn); }
@@ -512,7 +512,7 @@
 .device-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .device-test { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 /* 오래된 측정은 흐리다 — 판정은 서버가 내린 `stale`이다(D-72 S4). */
-.host-card[data-stale="true"] .device-list { color: var(--ink-quiet); }
+.host-card[data-stale="true"] .device-list { color: var(--text-secondary); }
 
 .ros-network-facts {
   display: grid;
@@ -523,7 +523,7 @@
   background: var(--surface-line);
   overflow: hidden;
 }
-.ros-network-facts article { min-width: 0; padding: var(--space-3); background: var(--ground); }
+.ros-network-facts article { min-width: 0; padding: var(--space-3); background: var(--surface-canvas); }
 .ros-network-facts strong { display: block; margin-top: var(--space-2); overflow: hidden; font: var(--weight-regular) var(--text-value)/var(--leading-control) var(--body); text-overflow: ellipsis; white-space: nowrap; }
 .ros-network-facts small { display: block; margin-top: var(--space-1); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 
@@ -546,7 +546,7 @@
 .traffic-tx .network-sparkline polyline { stroke: var(--series-secondary); }
 
 .ros-graph-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 0.72fr); gap: var(--space-3); }
-.graph-stage, .risk-tape { border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); }
+.graph-stage, .risk-tape { border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .graph-stage { position: relative; min-height: 330px; padding: var(--space-5) var(--space-2) var(--space-2); }
 .graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 .graph-legend i { width: 32px; height: 1px; background: var(--surface-line); }
@@ -567,7 +567,7 @@
 .risk-tape li { padding: var(--space-2); border-left: 2px solid var(--status-crit); background: var(--status-crit-a07); }
 .risk-tape li strong, .risk-tape li span { display: block; }
 .risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
-.risk-tape li span { margin-top: var(--space-1); color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
+.risk-tape li span { margin-top: var(--space-1); color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 /* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
 .risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
@@ -581,7 +581,7 @@
   padding: var(--space-4);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  background: var(--ground);
+  background: var(--surface-canvas);
 }
 .settings-card form { display: grid; gap: var(--space-2); }
 .settings-row { display: flex; gap: var(--space-2); }
@@ -702,6 +702,6 @@
 }
 .hitl-escalation p {
   margin: 0 0 var(--space-4) 0;
-  color: var(--ink);
+  color: var(--text-primary);
   font-size: var(--text-body);
 }

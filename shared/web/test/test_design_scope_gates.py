@@ -50,6 +50,54 @@ _ROSE = re.compile(r"--brand-rose(?:-wash)?\b")
 _GROUND = re.compile(r"var\((--ground-soft|--ground-card)\)")
 _FULL_VIEWPORT_VH = re.compile(r"(?<![\da-z])100vh\b")
 
+# D-624: direct paint declarations have a role; data/mix expressions keep their palette.
+COLOR_ROLES = {
+    "color": {"--ink": "--text-primary", "--ink-quiet": "--text-secondary",
+              "--ink-on-crit": "--text-on-danger"},
+    "background": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
+    "background-color": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
+    "border-color": {"--line-10": "--border-subtle", "--line-14": "--border-default",
+                     "--line-30": "--border-strong"},
+}
+
+
+def direct_colour_roles(css: str) -> list[str]:
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    bad = []
+    for prop, roles in COLOR_ROLES.items():
+        for palette, role in roles.items():
+            pattern = rf"(?<![\w-]){prop}\s*:\s*var\({palette}\)(?=\s*[;}}])"
+            if re.search(pattern, css):
+                bad.append(f"{prop}: {palette} -> {role}")
+    return bad
+
+
+def test_direct_colour_declarations_use_semantic_roles():
+    bad = []
+    for row in _web_rows():
+        for page, css in registry._style_sources(registry.REPO, row["path"]):
+            bad.extend(f"{page.relative_to(registry.REPO)}: {error}" for error in direct_colour_roles(css))
+    assert bad == [], "\n".join(bad)
+
+
+def test_semantic_colour_guard_preserves_data_and_mix_expressions():
+    assert direct_colour_roles("a { color: var(--ink); background: var(--ground); }")
+    assert direct_colour_roles("a { color: var(--text-primary); background: var(--surface-canvas); }") == []
+    assert direct_colour_roles("a { color: color-mix(in oklab, var(--ink) 80%, transparent); }") == []
+    assert direct_colour_roles("a { stroke: var(--series-primary); color: var(--status-warn); }") == []
+    assert direct_colour_roles("/* color: var(--ink); */") == []
+
+
+def test_semantic_colour_aliases_keep_existing_theme_values():
+    import token_themes
+
+    text = token_themes.read()
+    body = token_themes.derived_body(text)
+    aliases = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;", body))
+    for primitive, role in {**COLOR_ROLES["color"], **COLOR_ROLES["background"], **COLOR_ROLES["border-color"]}.items():
+        assert aliases[role] == primitive
+        assert primitive in aliases or all(primitive[2:] in p for p in token_themes.palettes(text).values())
+
 
 def test_review_app_rose_is_confined_to_its_wordmark():
     path = registry.REPO / "learning/training/perception/dataset/review_app_web/app.css"

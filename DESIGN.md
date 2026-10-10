@@ -163,6 +163,26 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## Colors
 
+### 반드시 지키는 색상 법칙 (D-624)
+
+색은 값보다 역할을 먼저 정한다. `shared/web/tokens.css`가 원시 색의 유일한 출처이며, 모든 웹 화면은 `/common/tokens.css`를 읽는다. 파일 안에서 **팔레트 → 파생 → 역할 → 컴포넌트** 순서로 나눈다. `token.css` 사본이나 화면별 팔레트를 추가하지 않는다.
+
+| 역할 | 토큰 | 사용 기준 |
+|---|---|---|
+| 화면 바탕 | `--surface-canvas` | 페이지와 작업 캔버스의 기본 바탕 |
+| 들어간 면 | `--surface-recessed` | 영상·지도처럼 내용이 안으로 들어가는 면 |
+| 보고 / 조작 면 | `--surface-flat` / `--surface-raised` | 기존 면 위계를 따른다 |
+| 본문 / 보조 글 | `--text-primary` / `--text-secondary` | 중요도와 읽는 순서, 상태 의미를 대신하지 않는다 |
+| 위험 채움 위 글 | `--text-on-danger` | 위험 색 위에서 읽히는 글; 일반 본문에 쓰지 않는다 |
+| 경계선 | `--border-subtle` / `--border-default` / `--border-strong` | 행 구분 / 면 구분 / 강조 경계. 안전 신호를 대신하지 않는다 |
+| 명령 / 입력 / 포커스 | `--button-*` / `--field-*` / `--focus-ring` | 공용 컴포넌트가 소유한다 |
+| 위험 / 주의 / 정상 | `--status-crit` / `--status-warn` / `--nominal*` | 확인된 임계만 색으로 강조; 미확인은 정상으로 칠하지 않는다 |
+| 데이터 / 지도 / 브랜드 | `--series-*`, `--robot-*`, `--raster-*`, `--brand-rose*` | 데이터 정체성·지형·제품 식별을 상태 색과 섞지 않는다 |
+
+새 화면은 먼저 목적·주 동작·현재 상태·복귀 동작을 정하고, 그 다음 위 역할을 선택한다. 색만으로 상태를 전하지 않고 글자·형태·출처·신선도를 함께 보여 준다. 같은 목적의 조작은 같은 공용 부품을 사용한다. 예외는 `surfaces.yaml`에 사유와 범위를 등록하고 해당 ADR을 연결한다.
+
+변경자는 원시 색 금지, 역할 우선, 테마 키·대비·native parity 시험을 원격으로 실행한다. 새 역할은 ADR·사용처·시험을 같은 커밋에 넣는다. G1 시험 통과와 G2 화면 검증, G3 사용자 작업 검토를 구분해 기록한다. 모든 표면의 G2/G3가 없으면 제품 전체 디자인 완료로 선언하지 않는다.
+
 색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 OKLCH에서 생성했다.
 
 ### Primary
@@ -297,6 +317,8 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 등록부(`surfaces.yaml`)의 `grammar` 칸이 [`ui.js`](shared/web/ui.js)의 `GRAMMARS`와 같은지 계약 시험이 대조한다. 웹이 아닌 다섯째 문법 **intent**(로봇 얼굴, concept 16 §7.4)은 LCD 표면이 소유한다.
 
 ## Components
+
+공용 구현은 [`shared/web/ui.js`](shared/web/ui.js)·[`components.css`](shared/web/components.css), 실행 가능한 견본은 로봇 `/styleguide`의 [`스타일 갤러리`](middleware/ui/robot/styleguide.html)다. 새 컴포넌트 모음이나 화면별 버튼·입력 사본을 만들지 않는다. 갤러리에서 색상 역할, 다섯 버튼 종류, 입력, 상태, 증거, 읽기·되읽기, 작업 행·작업 선택을 함께 비교한다. 부품 변경은 사용 화면·갤러리·접근성/반응형 시험을 같은 변경에서 맞춘다.
 
 모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 

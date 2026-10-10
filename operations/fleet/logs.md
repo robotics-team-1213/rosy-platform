@@ -3137,3 +3137,9 @@
 - Change: Fresh raw incident preview, per-frame backdrop cache, download/decode freshness and invalidation; validated map heading reaches AI case and console; actual Fleet command and CORE receipt shown separately.
 - Evidence: Remote validation pending. Existing D-468 aligned-boundary comparison and D-595 frozen calibration remain authoritative.
 - Gate: SOURCE; no new motion permission, AI-first activation or physical acceptance.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.

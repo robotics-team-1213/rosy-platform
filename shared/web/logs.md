@@ -681,3 +681,9 @@
 - 변경: `surfaces.yaml` `console` 항목의 `app_name`·`app_name_en`·`short_name`과 `icons/console.svg` `<title>`을 `Rosy Fleet`으로. id·아이콘 파일 이름은 그대로. 워드마크 cqi 주석에서 옛 이름을 뺐다.
 - 증거: `shared/web/test/` 통과(브랜치 시험 기록).
 - gate 변화: 이름만. 소비 표면별 G2/G3는 별도다.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.

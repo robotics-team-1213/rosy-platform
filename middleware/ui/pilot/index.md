@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
 - 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
 - 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
 - 2026-10-09 · uncommitted · uiux(pilot): 브랜드에서 안전하게 접속 홈으로 복귀
 - 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
-- 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완

@@ -16,12 +16,12 @@ label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-a { color: var(--ink); }
+a { color: var(--text-primary); }
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }
 .map-scroll-hint[hidden] { display: none; }
-#site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-control); }
+#site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }
 #site-map-svg .plane-border { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; pointer-events: none; }
 #site-map-svg.has-plane .edge { stroke: var(--series-primary); }
@@ -57,7 +57,7 @@ a { color: var(--ink); }
 #robot-layer .robot-tip { fill: currentColor; }
 #robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
-#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); background: var(--surface-flat); }
 @media (width < 64rem) {
   .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
   .form { grid-template-columns: 1fr; }

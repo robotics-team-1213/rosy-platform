@@ -365,3 +365,9 @@
 - 변경: 이름표를 실제 호스트 진입점 `/`에 연결하고 경기 필드로 건너뛰는 링크·본문 초점 대상을 추가했다.
 - 증거: 로컬 Chromium 320/1366px에서 홈 클릭, 건너뛰기 대상, 정지 버튼과 가로 넘침 0을 확인했다.
 - gate 변화: 없음. 실제 경기 호스트·두 로봇 정지 readback은 별도.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.

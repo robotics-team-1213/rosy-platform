@@ -83,6 +83,15 @@ def test_shared_controls_are_the_only_painted_components():
     assert not RAW_SIZE.findall(css)
 
 
+def test_component_gallery_covers_shared_variants_and_compositions():
+    gallery = (registry.REPO / "middleware/ui/robot/styleguide.html").read_text(encoding="utf-8")
+    assert set(re.findall(r'<ui-button\b[^>]*kind="([a-z]+)"', gallery)) == _kinds()
+    for name in ("ui-workspace-bar", "ui-task-row", "ui-readback"):
+        assert f'class="{name}"' in gallery
+    ids = set(re.findall(r'\bid="([^"]+)"', gallery))
+    assert set(re.findall(r'href="#([^"]+)"', gallery)) <= ids
+
+
 def test_shared_status_component_owns_accessibility_and_palette_states():
     css = COMPONENTS.read_text(encoding="utf-8")
     script = UI.read_text(encoding="utf-8")
