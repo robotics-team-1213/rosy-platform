@@ -272,6 +272,13 @@ async function refreshIncidents() {
         ? "Pinky 앞 카메라: 사건 종료 후 이미지는 보존되지 않음"
         : "Pinky 앞 카메라: 진행 중 한 장은 위 개입 목록에서 확인 · 종료 후 이미지는 보존되지 않음");
       const ai = report.evidence.ai_facts || [];
+      const draft = ai.find(f => f.kind === "incident_context");
+      if (draft) {
+        const names = {line_marking: "차선 표시 또는 인식", obstacle: "전방 장애물", unknown: "원인 미확정"};
+        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 신뢰도 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
+        for (const item of draft.value.support || []) incidentLine(detail, `${item.source} ${item.field}: ${JSON.stringify(item.value)}`);
+        incidentLine(detail, `추가 확인: ${(draft.value.missing || []).join(", ")}`);
+      }
       incidentLine(detail, ai.length ? `AI 참고: ${ai.map(f => `${f.kind} (${f.stage}, ${Math.round(f.confidence * 100)}%)`).join(" · ")}`
         : "AI 참고: 사건 시작 ±5초 사실 없음");
       incidentLine(detail, report.actions.length ? `조치: ${report.actions.map(a => `${a.decision} ${a.accepted === 1 ? "수락" : a.accepted === 0 ? "거절" : "결과 미확인"}`).join(" · ")}`
