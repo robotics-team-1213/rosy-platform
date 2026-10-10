@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from core_common.robot_body import PINKY_PRO
+from core_common.robot_body import NOMINAL_BODY
 
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
@@ -62,7 +62,7 @@ EDGE_MEMORY_POINTS = 1200
 #: only edges this near are remembered (the ground projection error grows with range)
 EDGE_MEMORY_MAX_X_M = 0.25
 #: URDF body (D-424), base_footprint
-BODY_HALF_M = PINKY_PRO.half_width_m
+BODY_HALF_M = NOMINAL_BODY.half_width_m
 #: a remembered boundary point this close to the path robot->target blocks that target
 CROSS_TOL_M = 0.015
 #: the way's near centre is the median centre of its rows within this of its nearest row
