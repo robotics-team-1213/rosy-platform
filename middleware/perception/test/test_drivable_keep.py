@@ -90,6 +90,18 @@ def test_a_missing_way_before_commit_stays_stale():
     assert last["reason"] == "drivable_way_stale"
 
 
+@pytest.mark.parametrize("rejection", ["off_route", "no_source_pose"])
+def test_rejected_way_drops_the_path_before_a_missing_frame(rejection):
+    steer, ways, last, *_rest = _commit_centre()
+    pose_at = _pose if rejection == "off_route" else lambda _stamp: None
+    guide = (0.0, 0.3, True, 0.0, 0.3, 0.0) if rejection == "off_route" else None
+    keep_step(steer, ways, last, G, XO, HALF, pose_at, 0.3, None, guide)
+    assert last["expected_path_state"] == "dropped"
+    ways.way = None
+    step, decided = _step(steer, ways, last, 0.4)
+    assert step is None and decided is False
+
+
 def test_crosswalk_straight_then_a_missing_way_does_not_hold():
     steer, ways, last, *_rest = _commit_centre()
     ways.way = None

@@ -89,6 +89,7 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
             extra.update(guide_s=s, guide_fresh=fresh)
             if fresh and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M:
                 # off the map's road: the camera's carpet is no lane, HOLD for Fleet (D-607 R7)
+                _remember_path(last, path.update(None, stamp, {}))
                 last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
                             drivable_steer=dict(off_route_m=round(guide[4], 3)))
                 return None, True
@@ -96,10 +97,8 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         source = pose_at(way_stamp)
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
                                                source, pose_at(stamp), **extra)
-        if source is not None:
-            # near_centre_m is the way frame's body point, so the hypothesis uses that pose.
-            # Control time stays monotonic; cached inferences count as one observation.
-            _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp))
+        # Missing source odometry drops the hypothesis; cached inferences count once.
+        _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp))
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)
