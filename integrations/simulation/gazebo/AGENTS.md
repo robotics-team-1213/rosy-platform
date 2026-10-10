@@ -46,7 +46,10 @@ ros2 launch gz_sim gz_multi.launch.py robots:=3 mode:=slam headless:=true
 - One Gazebo server; per-robot RSP, spawn, and ros_gz bridge with namespaced `cmd_vel`.
 - Do not assume mapper `scan_topic` is namespaced — override per robot if needed.
 - `CMakeLists.txt` exits on aarch64. Pi images do not ship Gazebo.
-- A Fleet that drives SIM robots passes `--site-config integrations/simulation/gazebo/config/fleet_sim_site.yaml` (in-process harnesses: `TripConfig.from_mapping` of its `fleet.trip`). SIM CORE has no front preview, so without it D-601 refuses every lane plan `TRIP_LANE_CAMERA_UNAVAILABLE`. New SIM Fleet scripts use this file and join `SIM_FLEETS` in `operations/fleet/test/test_fleet_sim_site_d601.py`.
+- A Fleet that drives SIM robots passes one of two shared site configs (`--site-config`; in-process harnesses: `TripConfig.from_mapping` of its `fleet.trip`), chosen by whether its SIM has a camera:
+  - `config/fleet_sim_site.yaml` (`lane_camera_check: false`): no camera (`gz_multi`, `start_camera:=false`). CORE has no front preview, so D-601 would refuse every lane plan `TRIP_LANE_CAMERA_UNAVAILABLE`.
+  - `config/fleet_sim_camera_site.yaml` (`lane_camera_check: true`): camera launches (`map_v2_fleet_lane`, `map_v2_fleet_real`, d495_real-style harness copies). They run `sim_jpeg_relay.py` (installed from `tools/`; `camera/front` -> `camera/preview/compressed`), so `/api/v1/vision/front/status` is live. The relay publishes only the display JPEG, never `road/observation`, so `traffic_policy` does not change.
+  - New SIM Fleet scripts join `SIM_FLEETS` (and new camera launches `CAMERA_LAUNCHES`) in `operations/fleet/test/test_fleet_sim_site_d601.py`.
 
 ### Testing Requirements
 

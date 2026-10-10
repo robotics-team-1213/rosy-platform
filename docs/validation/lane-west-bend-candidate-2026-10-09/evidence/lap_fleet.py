@@ -26,7 +26,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
 # D-601 B: the shared SIM Fleet site config (lane_camera_check false: no front preview in SIM).
-SIM_SITE = REPO/'integrations/simulation/gazebo/config/fleet_sim_site.yaml'
+SIM_SITE = REPO/'integrations/simulation/gazebo/config/fleet_sim_camera_site.yaml'
 sys.path[:0] = [str(REPO/'operations/fleet'), str(REPO/'contracts/foundation')]
 from fleet.localization.map_pose import MapPose  # noqa: E402
 from fleet.server.app import create_app  # noqa: E402
