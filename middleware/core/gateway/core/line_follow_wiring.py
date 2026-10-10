@@ -43,6 +43,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
     if removed:
         raise ValueError(f"line_follow.{', line_follow.'.join(removed)} was removed (D-507 9); "
                          "declare the walked site floor as line_follow.site_floor_map_id: <map_id>")
+    if "crosswalk_look_s" in raw:   # D-573 rev 3: no alias, an old overlay fails closed loudly
+        raise ValueError("line_follow.crosswalk_look_s was removed (D-573 rev 3); "
+                         "use line_follow.crosswalk_clear_s (default 5.0 s of continuous clear)")
     defaults = LineFollowConfig()
     return LineFollowConfig(
         cruise_speed=float(raw.get("cruise_speed", defaults.cruise_speed)),
@@ -90,7 +93,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "crosswalk_max_uncertainty_m", defaults.crosswalk_max_uncertainty_m)),
         crosswalk_gate_enabled=_flag(raw, "crosswalk_gate_enabled", defaults.crosswalk_gate_enabled),
         fleet_lane_cue_enabled=_flag(raw, "fleet_lane_cue_enabled", defaults.fleet_lane_cue_enabled),
-        crosswalk_look_s=float(raw.get("crosswalk_look_s", defaults.crosswalk_look_s)),
+        crosswalk_clear_s=float(raw.get("crosswalk_clear_s", defaults.crosswalk_clear_s)),
         crosswalk_look_min_scans=_whole(raw, "crosswalk_look_min_scans", defaults.crosswalk_look_min_scans),
         crosswalk_report_s=float(raw.get("crosswalk_report_s", defaults.crosswalk_report_s)),
         crosswalk_cross_speed=float(raw.get("crosswalk_cross_speed", defaults.crosswalk_cross_speed)),

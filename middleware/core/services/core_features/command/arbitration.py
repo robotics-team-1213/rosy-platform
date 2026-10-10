@@ -47,7 +47,10 @@ _ALLOWED: dict[Mode, set[Mode]] = {
     Mode.NAVIGATION: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
     # MANUAL(3) outranks DOCKING(4): the operator can always take the robot.
     Mode.DOCKING: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
-    Mode.EMERGENCY: {Mode.IDLE},
+    # SAF-001: only release_emergency() leaves EMERGENCY, and only with the latch
+    # released after it. POST /mode IDLE used to leave it with the latch still set
+    # (8kcn 2026-10-10), and release then refused "not in EMERGENCY".
+    Mode.EMERGENCY: set(),
 }
 
 

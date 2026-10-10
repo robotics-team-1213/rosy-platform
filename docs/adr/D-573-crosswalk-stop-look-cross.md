@@ -230,6 +230,7 @@
        4. R2(앞 물체 후진)에는 횡단보도 검사가 없다.
        5. 인식이 `crosswalk_uncertainty_m`을 내기 전까지(플래그 기본 꺼짐) R3/R6는 닫혀 있다.
        6. 지도만으로 `null`을 내려면 ADR이 필요하다.
+     - **개정 2 (2026-10-10, D-491 개정 2026-10-10 "카메라 구간 입장은 앞뒤 한도로", Safety-Review 대상).** 위 3항의 "차선 옆 불확실도가 0.015 m를 넘는 프레임도 받지 않는다"와 검토 남은 항목 6을 바꾼다. 감시 구간 프레임은 차선 옆 불확실도가 있고 D-491 옆 상한 `MAX_LATERAL_M`(0.024 m, IR이 경계 도색을 읽는 거리에서 유도) 이하이면 받는다. 앞뒤는 지금처럼 `crosswalk_uncertainty_m`이 정한다. 그래서 현장 프레임(옆 0.024, 앞뒤 ≤ 0.058)은 감시 구간에 들고, 횡단보도가 없으면 `null`, 있으면 `inside`·`ahead`가 된다. `null`·`unknown`의 뜻은 바뀌지 않았다. 옆 상한을 넘거나 없는 프레임은 여전히 `not_watched`다. IR 쉼 corridor는 옆 거리 + odom 표류로 재고 0.124 m(IR이 경계 도색을 읽는 거리)를 넘지 않는다. corridor는 영상 시각 진행선 기준이고(후속: 저장한 좌·우 경계로 묶기), 쉼 거리 상한의 앞뒤 여유는 2 × 0.015 m 그대로다(닫힌 쪽). Fleet 지도 구역을 다시 들이면 `along` 키가 필요하다.
 
 7. **Fleet 화면.** D-517 10항 틀 안에서 새 패널 없이 한다.
    - **현장 지도 편집기.**
@@ -368,6 +369,15 @@
 - 게이트는 D-491 목록의 `fleet_map` 구역도 무장한다. 그래서 카메라가 횡단보도를 놓쳐도 서고, 보고, 건넌다.
 - 9dfk는 첫 막대에서 IR `lane_departure`로 HOLD했고 Fleet은 WAIT로 답했다(막다른 길). 이제 Fleet 해결기는 지도의 횡단보도 위·앞 막대 0.15 m 안의 `lane_lost`·`no_motion` 막힘에 RESUME 한 번(`XW`)을 보낸다. CORE가 다시 검사하고 게이트가 다시 본다. 두 번째 막힘은 사람에게 간다.
 
+### 개정 3 (2026-10-10) — 5 s 동안 계속 비면 건넌다
+
+사용자 결정(2026-10-10): "횡단보도 검출 이후엔 사람이 없으면 5초 이상 그러면 지나가야 해. 그 로직도 빠르게 넣어."
+
+- 2항 "건너는 조건"의 보기 창을 `crosswalk_look_s` 1.0 s에서 설정 `line_follow.crosswalk_clear_s`(기본 5.0 s)로 바꾼다. `crosswalk_look_min_scans` 기본은 10 Hz × 5 s × 0.8 = 40이다.
+- 창 안의 모든 스캔이 지금의 판정(LiDAR 반사, 가장자리 지속 필터, 구역·대기 띠·출구)으로 "빔"이어야 한다. 사람, UNKNOWN(반사 없음·가림·사각), 오래된 스캔이 하나라도 오면 창을 처음부터 다시 연다. 비었음은 관찰해야 하고 시간만으로는 건너지 않는다.
+- 비워진 창이 도는 동안에는 사람에게 올리지 않는다(`crosswalk_blocked`는 창이 없을 때만 연다). `crosswalk_report_s`는 `crosswalk_clear_s`보다 커야 하고, 설정 검사가 같거나 작은 값을 거부한다. 기본 10 s > 5 s라서 처음부터 빈 횡단보도는 사람에게 가지 않는다.
+- E-Stop, D-422 몸 정지, 통행권, `obstacle_mode: path` 요구는 그대로다. 스냅숏 필드는 바뀌지 않는다(`look_progress`의 분모가 `crosswalk_clear_s`가 된다).
+- 구현 `feat/crosswalk-clear-5s`, CORE 정지 경로라 Safety-Review 대상이다.
 ### 개정 (2026-10-10, 저녁): XW 제거
 
 XW removed after independent Safety-Review 2026-10-10 — RESUME at a crosswalk only after CORE arms Fleet-map zones and reports a looked-and-clear armed zone, trip robots excluded, with its own Safety-Review. Fleet 판단기는 Fleet 지도 횡단보도 위의 `lane_lost`·`no_motion` 막힘에 `RESUME`(XW) 대신 R5 `WAIT` + 사람(`crosswalk_human`)을 보낸다(D-577 개정 2026-10-10 저녁 6항).

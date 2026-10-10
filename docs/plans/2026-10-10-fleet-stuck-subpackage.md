@@ -2,7 +2,7 @@
 
 - 날짜: 2026-10-10
 - 결정: [D-577](../adr/D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md), [D-438](../adr/D-438-fleet-stuck-resolver-rules-model-human.md), P6 크기 규칙 [D-362](../adr/D-362-per-code-type-file-size-budget.md)
-- 계기: `fleet` 패키지 크기 판정이 D-577 때문에 두 번 다시 매겨졌다(51672 → 51848 → 52306(main, 다른 세션 증가) → 52740). 두 번 모두 Fleet 판단 코드가 커져서다. D-577의 분리 조건을 두 번째로 넘었다.
+- 계기: `fleet` 패키지 크기 판정이 D-577 때문에 다시 매겨졌다(51672 → 51848 → 52550). Fleet 판단 코드가 커져서이고, D-577의 분리 조건을 두 번째로 넘었다. 지금 `fleet`은 52550줄이다.
 
 ## 규칙
 
@@ -12,11 +12,13 @@
 
 | 지금 (`operations/fleet/fleet/server/`) | 옮긴 뒤 (`operations/fleet/fleet/stuck/`) | 줄 수 (2026-10-10) |
 |---|---|---|
-| `line_stuck.py` | `board.py` | 403 |
-| `stuck_resolver.py` | `resolver.py` | 589 |
-| `stuck_resolver_loop.py` | `loop.py` | 164 |
-| `stuck_lane_lost.py` | `lane_lost.py` | 152 |
-| `ai_facts.py` | `ai_facts.py` | 328 |
+| `line_stuck.py` | `board.py` | 396 |
+| `stuck_resolver.py` | `resolver.py` | 600 |
+| `stuck_resolver_loop.py` | `loop.py` | 165 |
+| `stuck_lane_lost.py` | `lane_lost.py` | 149 |
+| `ai_facts.py` | `ai_facts.py` | 292 |
+
+합계 1602줄. 옮긴 뒤 `fleet`은 약 50948줄이다(52550 − 1602).
 
 `fleet/fleet/stuck`는 `SIZE_UNITS`에 크기 단위로 넣는다(`test/architecture/test_module_structure.py`). 그 줄 수는 `fleet` 합계에서 빠지고, 단위 자체가 판정과 +150 허용을 갖는다. 같은 변경에서 `fleet` 판정을 다시 잰다.
 
