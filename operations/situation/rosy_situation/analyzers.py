@@ -21,6 +21,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from rosy_situation.deadlock import TrafficWatch
+
 VERSION = "1"
 SOURCE = f"analyzer:stuck_scene@{VERSION}"
 TTL_S = 3.0
@@ -55,6 +57,7 @@ class Analyzer:
         self._primed = False
         self._proposed: set[tuple] = set()
         self.proposals: list[dict] = []            # this cycle's new proposals (service posts them)
+        self._traffic = TrafficWatch()             # D-577 (d) deadlock/livelock/stall, shadow
 
     def __call__(self, snapshot: dict) -> list[dict]:
         now = float(snapshot.get("observed_at") or 0.0)
@@ -138,4 +141,7 @@ class Analyzer:
                                    "confidence": confidence, "source": SOURCE, "observed_at": now, "ttl_s": 6.0,
                                    "evidence": {"cause": cause, "detail": stuck.get("detail"),
                                                 "facts": sorted(kinds)}})
-        return facts
+        # After the proposals: the traffic facts are shadow and never shape a proposal. A robot stalled
+        # in both views is said once (the line-follow one, which knows the HOLD reason).
+        said = {(f["kind"], f["robot_ids"][0]) for f in facts}
+        return facts + [f for f in self._traffic(snapshot) if (f["kind"], f["robot_ids"][0]) not in said]
