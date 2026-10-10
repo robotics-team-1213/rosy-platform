@@ -21,7 +21,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 AI, OPERATOR, VIEWER = "ai-token", "operator-token", "viewer-token"
-AI_PATHS = {"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat"}
+AI_PATHS = {"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat", "/api/fleet/ai/proposals"}
 MOTION_CALLS = {"follow", "swarm_cancel", "navigation_cancel", "navigation_goal", "line_follow_mode",
                 "line_stuck_decision", "estop", "identify_lamp", "line_follow_junction", "trip_lease"}
 
@@ -199,3 +199,38 @@ def test_a_stalled_fact_write_does_not_delay_the_emergency_stop(tmp_path, monkey
     status, elapsed = asyncio.run(main())
     assert status == 200 and elapsed < 0.5, elapsed
     assert ("estop",) in robot.calls
+
+
+def test_acting_stage_only_for_configured_robots_and_kinds():
+    board = ai_facts.AiFactsBoard(acting=frozenset({"rosy_41"}))
+    board.heartbeat(ai_facts.AiHeartbeat(service_version="t", owner_mode="shared"))
+    now = board.wall()
+
+    def fact(kind, rid):
+        return ai_facts.AiFact(kind=kind, robot_ids=[rid], value={"x": 1}, confidence=0.8, evidence={},
+                               source="analyzer:stuck_scene@1", observed_at=now, ttl_s=3.0)
+
+    board.accept([fact("rear_blocked", "rosy_41"), fact("rear_blocked", "rosy_40"),
+                  fact("stalled", "rosy_41")], "ai-pc")
+    assert [f["kind"] for f in board.acting_facts("rosy_41")] == ["rear_blocked"]
+    assert board.acting_facts("rosy_40") == []
+
+
+def test_proposal_is_kept_for_an_acting_robot_only_and_expires(tmp_path):
+    app, _, _ = _app(tmp_path)
+    board = app.state.ai_facts
+    board.acting = frozenset({"rosy_01"})
+    client = TestClient(app)
+    _beat(client)
+    body = {"robot_id": "rosy_01", "stuck_id": "s-1", "decision": "BACK_AND_RETRY", "reason": "no_motion_back_off",
+            "confidence": 0.6, "evidence": {}, "source": "analyzer:stuck_scene@1",
+            "observed_at": time.time(), "ttl_s": 6.0}
+    assert client.post("/api/fleet/ai/proposals", headers=_auth(OPERATOR), json=body).status_code == 403
+    assert client.post("/api/fleet/ai/proposals", headers=_auth(AI), json=body).json() == {"state": "queued"}
+    assert board.proposal("rosy_01")["decision"] == "BACK_AND_RETRY" and board.waiting("rosy_01")
+    other = client.post("/api/fleet/ai/proposals", headers=_auth(AI), json={**body, "robot_id": "rosy_02"})
+    assert other.json() == {"state": "robot_not_acting"}
+    bad = client.post("/api/fleet/ai/proposals", headers=_auth(AI), json={**body, "decision": "GO"})
+    assert bad.status_code == 422
+    board.wall = lambda: time.time() + 7.0                     # past ttl_s: expired, rules answer
+    assert board.proposal("rosy_01") is None

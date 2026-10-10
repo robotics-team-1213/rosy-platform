@@ -111,4 +111,32 @@
 3. **남은 항목 1 닫힘.** 위 「남은 항목」 1(LEGACY odom 자세)은 이 개정과 같은 브랜치에서 닫혔다. D-573 횡단보도 관문을 켜는 릴리스와 같이 가야 한다.
 4. **AI PC.** AI 사실은 이 개정에서도 shadow다(6·7항 그대로). `rosy-situation`(구현 (c))의 분석기는 아직 비어 있어 `no_motion` 막힘에 대한 사실을 내지 않는다. 사람 단계 행에 사실을 붙이는 경로는 (c)의 `ai_facts[]` 그대로다. `ai_facts_acting`은 7항 관문(재생 평가·Gazebo·shadow 3 운행일) 전에는 켜지 않는다. 사용자 승인은 그 관문 하나를 채울 뿐이다.
 
+### 개정 (2026-10-10, 오후): AI PC 판단 경로 — 분석기 사실이 Fleet 후진 답을 멈춘다
+
+사용자 지시(2026-10-10): "로직에서 우리가 멈추게 되거나 어떤 상황 때문에 전혀 안 움직이는 게 5초 이상 지속되면, 이를 fleet 서버를 통해서 ai pc에서 이걸 어떻게 처리할지에 대해서 판단받고 이를 처리하게 하는 등의 로직이 필요할 것 같아. 신호등 진입을 관제 PC의 신호등을 보고 하듯이." 조정 세션은 이 지시를 9dfk(`rosy_41`)·8kcn(`rosy_40`) 차선 주행에서 AI PC 실시간 경로를 켜는 사용자 승인으로 전했다. 이 승인은 7항 켜는 관문의 (1)–(3)(재생 평가·Gazebo·shadow 3 운행일)을 이 두 로봇, 아래 두 종류에 한해 건너뛴다. 위 개정 4항의 "`ai_facts_acting`은 7항 관문 전에는 켜지 않는다"를 이만큼 고친다.
+
+1. **분석기 (d) 첫 조각 `analyzer:stuck_scene@1`.** AI PC `rosy-situation`이 Fleet 폴링 스냅샷만으로 세 사실을 낸다(프레임 없음, 결정론). 3항 종류 목록에 `rear_blocked`·`path_blocked_by_robot`을 더한다.
+   - `rear_blocked`: 열린 막힘의 `rear_state: blocked`(허브 사건), 또는 CORE가 후진을 `rear_blocked`로 거절한 뒤 로봇이 odom으로 0.05 m 넘게 움직이지 않은 동안(최대 120 s). 근거는 CORE 자신의 판정이다.
+   - `path_blocked_by_robot`: 막힌 로봇의 앞 띠(R1과 같은 0.383 m × ±0.15 m)에 동료 몸이 있다. D-395 신뢰 지도 자세(보고된 `localization`, LEGACY 아님)로만 잰다. 로봇마다 다른 odom 원점을 비교하지 않는다.
+   - `stalled`(기존 종류): 차선 주행이 켜져 있고 열린 막힘 없이 명령 0·이동 0.05 m 미만이 20 s. CORE가 5 s 보고에서 빼는 HOLD(저조도·과노출, 아래 4항)를 Fleet에 보이게 한다. shadow다.
+2. **행동 단계(7항 (2)만).** 현장 설정 `fleet.stuck_resolver.ai_facts_acting`(로봇 id 목록, 기본 빈 목록)에 적은 로봇에서 `rear_blocked`·`path_blocked_by_robot` 사실은 `stage: acting`이다. 살아 있는 동안(`ttl_s` 3 s, 서비스 `present`) 판단기가 그 로봇에 보낼 후진 답(R2·R3·R6 `BACK_AND_RETRY`)은 R5 `WAIT` + 사람(`<cause>_hold:ai:<kind>`)이 된다. 다른 답을 새로 만들지 않는다. AI가 없거나 사실이 없으면 지금 규칙 그대로이고, CORE D-407 재검사도 그대로다. 이 개정은 `rosy_40`·`rosy_41`을 적는 것을 승인한다.
+3. **AI PC 설치.** 사용자 단위 `rosy-situation.service`(`MemoryMax=2G`, `CPUQuota=100%`, `Nice=10`), `owner_mode` `shared`(분석기만, GPU 없음). 현장 사용자 파일에 `ai_observer` 주체 `ai-pc-situation` 하나. 서비스는 관제 PC의 `.local` 이름과 사이트 CA로 LAN을 통해 Fleet에 닿는다(tailnet grant 없음). 같은 PC의 다른 작업(SAM 작업자 GPU 약 2 GB, Nav2·rosbridge, 원격 pytest)을 건드리지 않는다. 비전(Qwen3-VL, 6항·D-492)은 V0·V1과 소유자 동의 전이라 설치하지 않았다.
+4. **저조도·과노출 HOLD는 5 s 막힘 보고에 넣지 않는다.** CORE는 무효 영상에서 매 틱 복구를 초기화한다("Invalid vision cannot authorize obstacle back-off", D-407). 막힘으로 올리면 R6 후진이 나가므로 넣지 않고, 1항 `stalled` 사실로 Fleet에 보인다. 사람 단계 행으로 올리는 것은 CORE 변경(막힘 원인과 R5 전용 상세)이 필요한 후속이다.
+5. **현장 관찰(2026-10-10 00:39–00:47Z, 릴리스 081).** 9dfk `stuck-d5b3c15f7783`(`obstacle_ahead`, 경기장 왼쪽 위 모서리)은 3 s 만에 R2 `BACK_AND_RETRY`를 받았고 CORE가 `rear_blocked`로 거절했다. 다른 후보가 없어 4 s 뒤 사람(`no_rule`)에게 갔고, 아무도 답하지 않아 20 s 뒤 스스로 풀렸다. 앞·뒤가 모두 막힌 모서리에서 남는 움직임은 제자리 회전뿐인데, 이것은 AI 사실이 만들 수 없는 답(7항)이고 별도 규칙·Safety-Review 대상이다. 8kcn `stuck-61efc8e8473d`의 R1 `WAIT`은 두 로봇 모두 LEGACY(odom) 자세에서 `peer_ahead`가 참이었기 때문이다. R1은 지금 odom 자세를 서로 비교하므로 동료가 없는데도 `WAIT`할 수 있다(남은 항목 4).
+
+남은 항목에 더한다:
+
+4. 판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다. 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
+
+### 개정 (2026-10-10, 사용자 결정): AI PC 제안 → Fleet 검증 후 실행
+
+사용자 결정(2026-10-10, 조정 세션 전달): "AI PC 제안 → Fleet 검증 후 실행". 이 결정은 **제안 통로 하나에 한해** 3항의 "사실만, 명령 단어는 거절"을 바꾼다. 사실 통로(`POST /api/fleet/ai/facts`)는 그대로 명령 단어를 거절한다.
+
+1. **제안.** AI PC는 열린 막힘 하나에 CORE가 이미 받는 결정 단어 하나(`WAIT`|`BACK_AND_RETRY`|`YIELD`|`ABORT`|`RESUME`|`MANUAL`)를 이유·근거·신뢰도와 함께 `POST /api/fleet/ai/proposals`로 올린다(`ai_observer`, `ttl_s` ≤ 8 s). Fleet은 `fleet.stuck_resolver.ai_facts_acting` 로봇의 것만, AI가 `present`일 때만, 로봇마다 가장 새 것 하나만 메모리에 둔다.
+2. **Fleet 검증(봉투만).** 판단기가 그 막힘을 처음 본 뒤 `ai_wait_s`(5 s) 동안 제안을 기다린다. 제안이 오면 한 번 판정한다: `stuck_id` 일치, 신선도(`ttl_s`), 원인별 허용 단어(`lane_lost`·`no_motion`: `WAIT`·`BACK_AND_RETRY`·`ABORT`; `obstacle_ahead`: 여기에 `RESUME`; `crosswalk_blocked`: 없음 — 사람), trip 로봇은 `WAIT`만, `BACK_AND_RETRY`는 R2·R3·R6와 같은 전제(로컬 복구 켜짐, 시도·규칙 예산, 횡단보도, 뒤 띠 동료(신뢰 지도 자세), 지도 자세 신선도, `rear_state: blocked` 아님), 같은 막힘에서 CORE가 AI 답을 거절한 적 없음. `YIELD`(Fleet meet 기하가 필요)와 `MANUAL`(사람에게 넘김)은 AI 제안으로 나가지 않는다. 통과하면 CORE에 그 결정으로 보낸다(`tier: ai`, `rule: ai`). AI의 `WAIT`은 R5처럼 사람 행도 올린다(`ai_wait:<reason>`).
+3. **되돌아감.** 제안이 없거나 늦거나(5 s), 검증에 떨어지거나, CORE가 거절하면 지금 규칙(R1–R6)이 답한다. AI가 없으면 기다리지 않는다.
+4. **감사.** 모든 제안의 판정(`forwarded` 또는 거절 이유)과 CORE 결과를 `fleet_ai_proposals`(`--tasks-db`)에 남기고, 보낸 답은 `fleet_line_stuck_answers`에 `tier: ai`로 남는다. `GET /api/fleet/ai`가 최근 판정 64개를 보인다.
+5. **CORE가 최종이다.** 모든 답은 지금처럼 D-407 재검사를 지난다. AI 제안은 안전 기능이 아니다(D-430).
+6. **AI PC 제안기(`analyzer:stuck_scene@1`).** 결정론이다: 뒤가 막혔으면(`rear_blocked`) 또는 앞에 로봇이 있으면 `WAIT`, 아니면 `BACK_AND_RETRY`. 막힘·결정·이유 조합마다 한 번 보낸다. 비전 모델은 아직 쓰지 않는다(D-492 V0·V1 전).
+
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.
