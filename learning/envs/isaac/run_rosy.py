@@ -59,10 +59,10 @@ def main():
     # Kit's default immediate exit(0) would hide exceptions raised below.
     app_config = {"headless": args.headless, "fast_shutdown": False}
     if args.headless:
-        app_config.update(width=640, height=480, anti_aliasing=0)
+        app_config.update(width=640, height=480, anti_aliasing=0,
+                          extra_args=['--/app/extensions/excluded=["isaacsim.gui.menu"]'])
     simulation_app = SimulationApp(app_config)
     guard = None
-    headless_menu = None
     wheel_drives = []
     watchdog_ready = False
     try:
@@ -74,12 +74,6 @@ def main():
         from pxr import Gf, PhysicsSchemaTools, Sdf, Usd, UsdGeom, UsdPhysics
 
         manager = omni.kit.app.get_app().get_extension_manager()
-        if args.headless:
-            import omni.kit.menu.utils
-
-            headless_menu = omni.kit.menu.utils.get_instance()
-            # Its file-menu callback outlives USD teardown in the installed 5.1 SDK.
-            manager.set_extension_enabled_immediate("isaacsim.gui.menu", False)
         for name in ("isaacsim.asset.importer.urdf", "isaacsim.ros2.bridge", "omni.graph.scriptnode",
                      "isaacsim.core.nodes", "isaacsim.robot.wheeled_robots"):
             manager.set_extension_enabled_immediate(name, True)
@@ -268,12 +262,6 @@ def main():
                 guard.reset()
                 if watchdog_ready:
                     force_zero_wheels(og.Controller, wheel_drives)
-            if headless_menu is not None:
-                # Remove delayed menu callbacks while the USD context still exists.
-                omni.timeline.get_timeline_interface().stop()
-                headless_menu.clear_menu_data()
-                headless_menu.rebuild_menus()
-                simulation_app.update()
         finally:
             command_watchdog.ACTIVE_WATCHDOG = None
             simulation_app.close()
