@@ -29,6 +29,8 @@ except OFF_MAP: a HOLD needs no odom alignment, and OFF_MAP is sent exactly when
 robot (re-review 1). A pivot's sign is locked at its start and its progress is the signed odom turn
 since then, so a turn near 180 deg ends on progress, not on a wrapped angle (re-review 3). A junction
 left ``aborted`` keeps pivots off until the mode changes. Enabling needs ``obstacle_mode: path``.
+While a D-407 stuck record is open the cue stands down (no pivot, no side steering; a latch still
+holds): the stuck answer is the one channel then.
 """
 from __future__ import annotations
 
@@ -198,6 +200,11 @@ class LaneCueMixin:
         """None (the keep drives), ("hold", reason), ("turn", angular, reason) or ("side", side)."""
         if self._cue_latch is not None:
             return ("hold", self._cue_latch)
+        if self._recovery.status(now) is not None:
+            # An open D-407 stuck: its answer (Fleet's REALIGN, a human) owns the robot. No pivot or
+            # side steering until it closes; a running pivot is dropped, not latched.
+            self._pivot, self._cue_streak = None, {}
+            return None
         cue = self._fresh_cue(now)
         if self._pivot is not None:
             if self._lane_cue_busy(now):

@@ -324,3 +324,23 @@ def test_no_pivot_while_lost_or_on_nominal_ground():
 def test_enabling_needs_the_path_obstacle_mode():
     with pytest.raises(ValueError, match="obstacle_mode path"):
         LineFollowConfig(fleet_lane_cue_enabled=True, obstacle_mode="sector")
+
+
+def test_the_cue_stands_down_while_a_stuck_is_open():
+    rig = Rig()
+    open_stuck = {"stuck_id": "s1"}
+    status = rig.m._recovery.status
+    rig.m._recovery.status = lambda now: open_stuck if open_stuck else status(now)
+    rig.cue("ON_LINE", 1, side="left", offset_m=-0.06)
+    rig.cue("ON_LINE", 2, side="left", offset_m=-0.06)
+    rig.m._lane_cue_plan(rig.t, 1.0)
+    assert rig.m._lane_cue_plan(rig.t, 1.0) is None                    # no side steering
+    rig.cue("WRONG_WAY", 3, turn_deg=-170.0)
+    rig.wait(0.5)
+    rig.cue("WRONG_WAY", 4, turn_deg=-170.0)
+    assert rig.m._lane_cue_plan(rig.t, 1.0) is None and rig.m._pivot is None
+    rig.cue("OFF_MAP", 5)
+    rig.m._recovery.status = status
+    assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")   # latch unchanged
+    rig.m._recovery.status = lambda now: open_stuck
+    assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")
