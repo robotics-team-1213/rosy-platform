@@ -76,4 +76,4 @@ def test_manual_or_another_mission_is_busy(core):
 
 def test_capability_flag(core):
     client, _services = core
-    assert client.get("/api/v1/capabilities", headers=VIEWER).json()["motion"] == {"rotate_to": True}
+    assert client.get("/api/v1/system/capabilities", headers=VIEWER).json()["motion"] == {"rotate_to": True}

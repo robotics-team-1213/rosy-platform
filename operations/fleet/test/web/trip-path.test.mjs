@@ -45,6 +45,9 @@ test('D-601 start check: 출발 가능, 방향 반대, 차선 밖, with numbers 
   assert.equal(tripStartReason({role: 'operator', plan, active: {version: 4}, running: null}), '');
   const away = {...plan, start_check: {code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 178}};
   assert.match(tripStartReason({role: 'operator', plan: away, active: {version: 4}, running: null}), /^방향 반대\(178°\) · /);
+  const turned = {...plan, start_check: {code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 178, auto_align: true}};
+  assert.equal(tripStartReason({role: 'operator', plan: turned, active: {version: 4}, running: null}), '');  // D-603
+  assert.equal(startCheckText(turned.start_check), '방향 반대(178°) · 출발 때 자동 정렬');
   assert.match(tripErrorText('TRIP_HEADING_CONFLICT', {heading_err_deg: 178}), /방향 반대\(178°\)$/);
   assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.12}), /차선 밖 12 cm$/);
   assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE'), /카메라/);

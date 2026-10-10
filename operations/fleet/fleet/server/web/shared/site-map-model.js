@@ -37,6 +37,9 @@ export const TRIP_ERROR_LABEL = {
   TRIP_START_HEADING_MISMATCH: '로봇이 첫 차로 방향과 다르게 서 있습니다 · 차로 방향으로 돌려 세우세요',
   TRIP_START_OFF_LANE: '로봇이 첫 차로 밖에 있습니다 · 차로 위로 옮기세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
+  // D-603 출발 자동 정렬
+  TRIP_ALIGN_REFUSED: '로봇이 제자리 회전을 거절했습니다 · 주변을 비우거나 직접 돌려 세우세요',
+  TRIP_ALIGN_ABORTED: '제자리 회전이 중간에 멈췄습니다 · 로봇 주변을 확인하세요',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
@@ -145,6 +148,7 @@ export function planIsCurrent(plan, active) {
 /** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
 export function startCheckText(check) {
   if (!check?.code) return '출발 가능';
+  if (check.auto_align) return `${startCheckText({...check, auto_align: false})} · 출발 때 자동 정렬`;
   if (check.code === 'TRIP_START_OFF_LANE') return `차선 밖 ${Math.round((check.off_lane_m || 0) * 100)} cm`;
   const err = Math.abs(check.heading_err_deg ?? NaN);
   if (!Number.isFinite(err)) return '방향 모름';
@@ -411,7 +415,7 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
-  if (plan.start_check?.code) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
+  if (plan.start_check?.code && !plan.start_check.auto_align) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
   return '';
 }
 

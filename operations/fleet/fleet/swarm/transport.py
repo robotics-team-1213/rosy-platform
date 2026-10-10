@@ -308,6 +308,18 @@ class HttpRobotClient:
             "/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=self._headers()
         ))
 
+    async def rotate_to(self, delta_deg: float, operator_name: str) -> dict:
+        """D-603 ``POST /api/v1/motion/rotate_to``: CORE turns in place by ``delta_deg`` (its odom, its
+        defaults: 5 deg tolerance, 20 deg/s, 10 s). Only the trip loop asks, at a trip start."""
+        return await self._post("/api/v1/motion/rotate_to",
+                                {"delta_deg": delta_deg, "operator_name": operator_name})
+
+    async def rotate_to_status(self) -> dict:
+        return await self._get("/api/v1/motion/rotate_to")
+
+    async def rotate_to_stop(self) -> dict:
+        return self._check(await self._http.delete("/api/v1/motion/rotate_to", headers=self._headers()))
+
     async def line_follow(self) -> dict:
         """D-143 ``GET /api/v1/line-follow``: selected mode and status."""
         return await self._get("/api/v1/line-follow")

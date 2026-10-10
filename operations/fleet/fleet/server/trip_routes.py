@@ -166,6 +166,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         body["start_check"] = start_check(active[2], body["segments"], *pose, runner.config.start_heading_tol_deg)
+        if (runner.config.auto_align and body["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
+                and body["start_check"]["heading_err_deg"] is not None):
+            body["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
         return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}
