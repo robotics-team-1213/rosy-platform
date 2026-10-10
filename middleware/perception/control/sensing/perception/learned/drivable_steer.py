@@ -44,7 +44,9 @@ BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
-EXIT_TIE_M = 0.03
+EXIT_TIE_M = 0.10
+#: a side whose LiDAR shows a wall nearer than this (lateral, within 0.35 m ahead) is no exit
+SIDE_WALL_M = 0.20
 #: the way's nearest row may start at most this far beyond the frame's bottom row
 NEAR_GAP_M = 0.04
 #: a wall ahead counts as the way's end this much before it (the body front is 0.042 m)
@@ -177,7 +179,7 @@ class DrivableSteer:
             self.reset()
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None):
+               wall_ahead_m=None, side_clear_m=None):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -188,6 +190,14 @@ class DrivableSteer:
         if wall_ahead_m is not None and info["target_m"] is not None:
             info["wall_ahead_m"] = round(wall_ahead_m, 3)
             info["ahead_m"] = min(info["ahead_m"], round(wall_ahead_m - WALL_STANDOFF_M, 3))
+        if side_clear_m:
+            # A wall beside the robot is no road (the floor between a wall corner and the tape reads as
+            # an opening); keep right only between real openings (D-384 2).
+            open_sides = [k for k in info["exit_reach_m"] if side_clear_m.get(k) is None or side_clear_m[k] >= SIDE_WALL_M]
+            for key in ("exit", "seen_exit"):
+                if info.get(key) is not None and info[key] not in open_sides:
+                    info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
+            info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
