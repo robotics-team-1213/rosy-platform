@@ -700,7 +700,7 @@ pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ x: start.x, y: start.y, yaw }), signals: [owner.signal] });
       if (!owner.current() || !life.current()) return;
-      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${pose.state}`, "good");
+      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
       mapView.refreshGuide?.();
     }, onError: (err) => log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad")});
 });
