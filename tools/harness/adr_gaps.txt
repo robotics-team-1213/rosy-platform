@@ -29,6 +29,10 @@ D-605 reserved in another active branch (refs/adr/D-605); remove when it lands
 D-602 reserved by another session (refs/adr/D-602), not yet on main; remove when it lands
 D-603 reserved by another session (refs/adr/D-603), not yet on main; remove when it lands
 D-605 reserved by another session (refs/adr/D-605), not yet on main; remove when it lands
+D-610 reserved by another session (AI-first problem resolution), not yet on this branch; remove when it lands
+D-611 reserved by another session (evidence mode hold: learned paint primary, denoise when late), not yet on this branch; remove when it lands
+D-612 reserved by another session (perception blind-spot registry), not yet on this branch; remove when it lands
+D-613 reserved by another session (Fleet finite one lap trip from operator start place), not yet on this branch; remove when it lands
 D-610 reserved for AI-first problem resolution in another active branch (refs/adr/D-610); remove when it lands
 D-611 reserved for learned paint evidence mode in another active branch (refs/adr/D-611); remove when it lands
 D-612 reserved for perception blind-spot registry in another active branch (refs/adr/D-612); remove when it lands
