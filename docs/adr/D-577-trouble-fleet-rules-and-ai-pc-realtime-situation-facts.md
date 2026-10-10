@@ -128,4 +128,15 @@
 
 4. 판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다. 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
 
+### 개정 (2026-10-10, 사용자 결정): AI PC 제안 → Fleet 검증 후 실행
+
+사용자 결정(2026-10-10, 조정 세션 전달): "AI PC 제안 → Fleet 검증 후 실행". 이 결정은 **제안 통로 하나에 한해** 3항의 "사실만, 명령 단어는 거절"을 바꾼다. 사실 통로(`POST /api/fleet/ai/facts`)는 그대로 명령 단어를 거절한다.
+
+1. **제안.** AI PC는 열린 막힘 하나에 CORE가 이미 받는 결정 단어 하나(`WAIT`|`BACK_AND_RETRY`|`YIELD`|`ABORT`|`RESUME`|`MANUAL`)를 이유·근거·신뢰도와 함께 `POST /api/fleet/ai/proposals`로 올린다(`ai_observer`, `ttl_s` ≤ 8 s). Fleet은 `fleet.stuck_resolver.ai_facts_acting` 로봇의 것만, AI가 `present`일 때만, 로봇마다 가장 새 것 하나만 메모리에 둔다.
+2. **Fleet 검증(봉투만).** 판단기가 그 막힘을 처음 본 뒤 `ai_wait_s`(5 s) 동안 제안을 기다린다. 제안이 오면 한 번 판정한다: `stuck_id` 일치, 신선도(`ttl_s`), 원인별 허용 단어(`lane_lost`·`no_motion`: `WAIT`·`BACK_AND_RETRY`·`ABORT`; `obstacle_ahead`: 여기에 `RESUME`; `crosswalk_blocked`: 없음 — 사람), trip 로봇은 `WAIT`만, `BACK_AND_RETRY`는 R2·R3·R6와 같은 전제(로컬 복구 켜짐, 시도·규칙 예산, 횡단보도, 뒤 띠 동료(신뢰 지도 자세), 지도 자세 신선도, `rear_state: blocked` 아님), 같은 막힘에서 CORE가 AI 답을 거절한 적 없음. `YIELD`(Fleet meet 기하가 필요)와 `MANUAL`(사람에게 넘김)은 AI 제안으로 나가지 않는다. 통과하면 CORE에 그 결정으로 보낸다(`tier: ai`, `rule: ai`). AI의 `WAIT`은 R5처럼 사람 행도 올린다(`ai_wait:<reason>`).
+3. **되돌아감.** 제안이 없거나 늦거나(5 s), 검증에 떨어지거나, CORE가 거절하면 지금 규칙(R1–R6)이 답한다. AI가 없으면 기다리지 않는다.
+4. **감사.** 모든 제안의 판정(`forwarded` 또는 거절 이유)과 CORE 결과를 `fleet_ai_proposals`(`--tasks-db`)에 남기고, 보낸 답은 `fleet_line_stuck_answers`에 `tier: ai`로 남는다. `GET /api/fleet/ai`가 최근 판정 64개를 보인다.
+5. **CORE가 최종이다.** 모든 답은 지금처럼 D-407 재검사를 지난다. AI 제안은 안전 기능이 아니다(D-430).
+6. **AI PC 제안기(`analyzer:stuck_scene@1`).** 결정론이다: 뒤가 막혔으면(`rear_blocked`) 또는 앞에 로봇이 있으면 `WAIT`, 아니면 `BACK_AND_RETRY`. 막힘·결정·이유 조합마다 한 번 보낸다. 비전 모델은 아직 쓰지 않는다(D-492 V0·V1 전).
+
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.
