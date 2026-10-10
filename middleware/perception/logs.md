@@ -1417,7 +1417,8 @@
 - 증거: `test_drivable_preview.py`, `shared/web/test/test_line_decision_chain.py`, `test_panel_copy_evidence_browser.py::test_camera_decision_chain_names_the_layer_that_stops`. 원격 pytest(모델 PC) 영향 범위 4422 통과, 실패 2건은 known_failures. 브라우저 시험은 모델 PC Chromium에서 181 통과, 실패 7건은 main 9ad37190e에서도 같은 7건. 기록 프레임 전후 그림 X:\DevTemp\preview-drivable\*_pair.jpg.
 - gate 변화: SOURCE. 장치 반영은 아직 없다.
 
-## 2026-10-10 — map_v2_fleet 곡률 학습 파생 맵
+## 2026-10-10 · bb6347eba · feat(sim): map_v2_fleet 곡률 학습 파생 맵
 
-- 사용자 요청으로 training-curved 맵을 생성한다. 동쪽 S자 도색과 그래프에 같은 변형을 적용하고 외곽 사각 벽은 시각·충돌 모두 흰색 0.30 m로 둔다. 원본 STL·실물 기준 맵은 유지한다. 벽/차선 접점에 검은 간격을 만들지 않는다.
-- 검증: 모델 PC에서 선행 시험 3건이 미구현 자산 때문에 실패한 것을 확인했다. 구현 후보의 원격 시험은 이어 수행한다. Isaac/Gazebo 실행·학습·실물 주행은 이 변경의 증거가 아니다.
+- 변경: 사용자 요청으로 training-curved 맵을 생성한다. 동쪽 S자 도색과 그래프에 같은 변형을 적용하고 외곽 사각 벽은 시각·충돌 모두 흰색 0.30 m로 둔다. 원본 STL·실물 기준 맵은 유지한다. 벽/차선 접점에 검은 간격을 만들지 않는다.
+- 증거: 모델 PC에서 선행 시험 3건의 미구현 실패를 확인한 뒤 bb6347eba의 맵·그래프·런치 관련 원격 pytest 57 passed, known_failures 0 new/0 known. Isaac/Gazebo 실행·학습·실물 주행은 이 변경의 증거가 아니다.
+- gate 변화: 없음. 파생 맵 자산·호스트 계약만 검증했다.
