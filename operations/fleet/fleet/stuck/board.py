@@ -10,6 +10,8 @@ to the operator verbatim. The clearances and preview seq live only in the
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import sqlite3
 import time
@@ -19,8 +21,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from .sqlite_policy import configure_connection
-from .stuck_resolver import ResolverConfig, peer_ahead
+from fleet.server.sqlite_policy import configure_connection
+from .lane_lost import peer_ahead
+from .resolver import ResolverConfig
 
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",
@@ -48,8 +51,11 @@ class LineStuckBoard:
         self._log = log
         self._observed_at: Optional[float] = None
         self._resolver: dict[tuple[str, str], dict] = {}
+        # D-577 8: one front-camera frame per open stuck, memory only (never disk, bus or event).
+        self._previews: dict[tuple[str, str], dict] = {}
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
+        self.ai_view: Optional[Callable[[str], dict]] = None   # D-577 8: AI chip + live facts (shadow)
         self.map_pose: Optional[Callable[[str], object]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
@@ -69,8 +75,31 @@ class LineStuckBoard:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
-        for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
-            del self._resolver[key]
+        for notes in (self._resolver, self._previews):
+            for key in [k for k in notes if k[0] == robot_id and k[1] != keep]:
+                del notes[key]
+
+    def is_open(self, robot_id: str, stuck_id: str) -> bool:
+        entry = self._open.get(robot_id)
+        return entry is not None and entry["stuck_id"] == stuck_id
+
+    def keep_preview(self, robot_id: str, stuck_id: str, jpeg: bytes, status: dict) -> None:
+        """D-577 8: hold this stuck's one picture until the stuck closes (a closed one is not kept)."""
+        if self.is_open(robot_id, stuck_id) and (robot_id, stuck_id) not in self._previews:
+            age_ms = status.get("age_ms")
+            self._previews[(robot_id, stuck_id)] = {
+                "jpeg": bytes(jpeg), "sequence": status.get("sequence"), "source": status.get("source"),
+                "age_at_fetch_s": age_ms / 1000.0 if isinstance(age_ms, (int, float)) else 0.0,
+                "fetched_at": self._clock()}
+
+    def preview(self, robot_id: str, stuck_id: str) -> Optional[dict]:
+        kept = self._previews.get((robot_id, stuck_id))
+        if kept is None:
+            return None
+        return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": kept["sequence"],
+                "source": kept["source"], "media_type": "image/jpeg",
+                "age_s": round(kept["age_at_fetch_s"] + max(0.0, self._clock() - kept["fetched_at"]), 2),
+                "jpeg_base64": base64.b64encode(kept["jpeg"]).decode("ascii")}
 
     def observed_age_s(self) -> Optional[float]:
         """Seconds since the last gather (None = never gathered since start)."""
@@ -119,6 +148,22 @@ class LineStuckBoard:
 
     def episodes(self, limit: int = 100) -> list[dict]:
         return self._log.episodes(limit) if self._log is not None else []
+
+    def reports(self, limit: int = 100) -> list[dict]:
+        return self._log.reports(limit) if self._log is not None else []
+
+    def traffic_reports(self, limit: int = 100) -> list[dict]:
+        return self._log.traffic_reports(limit) if self._log is not None else []
+
+    def review(self, robot_id: str, stuck_id: str, *, principal_id: str,
+               root_cause: str, note: str) -> bool:
+        return self._log.review(robot_id, stuck_id, principal_id=principal_id,
+                                root_cause=root_cause, note=note) if self._log is not None else False
+
+    def review_traffic_fact(self, fact_row: int, *, principal_id: str,
+                            root_cause: str, note: str) -> bool:
+        return self._log.review_traffic_fact(fact_row, principal_id=principal_id,
+                                             root_cause=root_cause, note=note) if self._log is not None else False
 
     def _now_iso(self) -> str:
         return datetime.fromtimestamp(self._wall(), timezone.utc).isoformat(timespec="milliseconds")
@@ -213,6 +258,8 @@ class LineStuckBoard:
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {
             **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
+        if self.ai_view is not None:
+            shown.update(self.ai_view(robot_id))
         return shown
 
     def pending(self) -> list[dict]:
@@ -302,6 +349,22 @@ class LineStuckAnswerLog:
                        escalation_code TEXT,
                        pose_x REAL, pose_y REAL, pose_yaw REAL, pose_state TEXT, pose_age_s REAL,
                        UNIQUE (robot_id, stuck_id))""")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_incident_reviews (
+                       review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
+                       at TEXT NOT NULL, principal_id TEXT NOT NULL,
+                       root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_incident_reviews_stuck "
+                "ON fleet_incident_reviews(robot_id, stuck_id)")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_ai_fact_reviews (
+                       review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       fact_row INTEGER NOT NULL, at TEXT NOT NULL,
+                       principal_id TEXT NOT NULL, root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_ai_fact_reviews_fact ON fleet_ai_fact_reviews(fact_row)")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -360,6 +423,141 @@ class LineStuckAnswerLog:
                 "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?",
                 (limit,)).fetchall()
         return [dict(row) for row in found]
+
+    def reports(self, limit: int = 100) -> list[dict]:
+        """Read-only, source-separated incident records for operator review and offline learning."""
+        with closing(self._connect()) as connection:
+            episodes = connection.execute(
+                "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?", (limit,)).fetchall()
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            reports = []
+            for episode in episodes:
+                row = dict(episode)
+                robot_id, stuck_id = row["robot_id"], row["stuck_id"]
+                answers = [dict(item) for item in connection.execute(
+                    """SELECT at, decision, principal_id, accepted, outcome, code, tier, escalated
+                       FROM fleet_line_stuck_answers WHERE robot_id=? AND stuck_id=? ORDER BY answer_id""",
+                    (robot_id, stuck_id))]
+                reviews = [dict(item) for item in connection.execute(
+                    """SELECT at, principal_id, root_cause, note FROM fleet_incident_reviews
+                       WHERE robot_id=? AND stuck_id=? ORDER BY review_id""", (robot_id, stuck_id))]
+                opened = datetime.fromisoformat(row["opened_at"]).timestamp()
+                camera = None
+                if "sighting_audit" in tables:
+                    # shortcut: only a nearby accepted sighting is joined; use a recording index for image review.
+                    seen = connection.execute(
+                        """SELECT source_id, seq, captured_at, received_at FROM sighting_audit
+                           WHERE robot_id=? AND captured_at BETWEEN ? AND ?
+                           ORDER BY ABS(captured_at - ?) LIMIT 1""",
+                        (robot_id, opened - 5, opened + 5, opened)).fetchone()
+                    if seen is not None:
+                        camera = dict(seen)
+                ai = []
+                if "fleet_ai_facts" in tables:
+                    draft = connection.execute(
+                        """SELECT kind, robot_ids, value, confidence, evidence, source, observed_at, stage
+                           FROM fleet_ai_facts WHERE kind='incident_context'
+                             AND json_extract(evidence, '$.stuck_id')=?
+                             AND observed_at BETWEEN ? AND ?
+                           ORDER BY observed_at DESC LIMIT 20""",
+                        (stuck_id, opened - 5, opened + 120)).fetchall()
+                    for fact in draft:
+                        item = dict(fact)
+                        item["robot_ids"] = json.loads(item["robot_ids"])
+                        if robot_id in item["robot_ids"]:
+                            item["value"] = json.loads(item["value"])
+                            item["evidence"] = json.loads(item["evidence"])
+                            ai.append(item)
+                            break
+                    candidates = connection.execute(
+                        """SELECT kind, robot_ids, value, confidence, evidence, source, observed_at, stage
+                           FROM fleet_ai_facts WHERE kind!='incident_context' AND observed_at BETWEEN ? AND ?
+                           ORDER BY observed_at DESC LIMIT 50""", (opened - 5, opened + 5)).fetchall()
+                    for fact in candidates:
+                        item = dict(fact)
+                        item["robot_ids"] = json.loads(item["robot_ids"])
+                        if robot_id in item["robot_ids"]:
+                            item["value"] = json.loads(item["value"])
+                            item["evidence"] = json.loads(item["evidence"])
+                            ai.append(item)
+                            if len(ai) == 3:
+                                break
+                reports.append({"schema": "rosy.incident.v1", "id": f"line_stuck:{robot_id}:{stuck_id}",
+                                "stuck_id": stuck_id,
+                                "classification": "line_stuck", "robot_ids": [robot_id],
+                                "opened_at": row["opened_at"], "closed_at": row["closed_at"],
+                                "evidence": {
+                                    "core": {key: row[key] for key in ("cause", "phase_at_open", "held_s_max",
+                                                                           "attempts_max", "local_enabled_at_open")},
+                                    "fleet": {key: row[key] for key in ("source", "trip_busy_at_open",
+                                                                            "peer_ahead_at_open", "pose_x", "pose_y",
+                                                                            "pose_yaw", "pose_state", "pose_age_s",
+                                                                            "close_reason", "resolved_by", "escalation_code")},
+                                    "rosy_cam": camera, "ai_facts": ai,
+                                    "front_image": {"status": "requestable_while_open" if row["closed_at"] is None
+                                                    else "not_retained"}},
+                                "actions": answers, "reviews": reviews})
+        return reports
+
+    def review(self, robot_id: str, stuck_id: str, *, principal_id: str,
+               root_cause: str, note: str) -> bool:
+        with closing(self._connect()) as connection, connection:
+            found = connection.execute(
+                "SELECT 1 FROM fleet_line_stuck_episodes WHERE robot_id=? AND stuck_id=?",
+                (robot_id, stuck_id)).fetchone()
+            if found is None:
+                return False
+            connection.execute(
+                """INSERT INTO fleet_incident_reviews (robot_id, stuck_id, at, principal_id, root_cause, note)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (robot_id, stuck_id, datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                 principal_id, root_cause, note))
+        return True
+
+    def traffic_reports(self, limit: int = 100) -> list[dict]:
+        """Durable AI situation facts, kept distinct from CORE line-stuck episodes."""
+        with closing(self._connect()) as connection:
+            if not connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_ai_facts'").fetchone():
+                return []
+            facts = connection.execute(
+                """SELECT fact_row, kind, robot_ids, value, confidence, evidence, source,
+                          observed_at, ttl_s, stage, rule_input FROM fleet_ai_facts
+                   WHERE kind IN ('wait_cycle_confirmed', 'wait_cycle_stale_input',
+                                  'waiting_but_moving', 'livelock', 'stalled', 'unknown_occupancy_long')
+                   ORDER BY fact_row DESC LIMIT ?""", (limit,)).fetchall()
+            reports = []
+            for fact in facts:
+                row = dict(fact)
+                row["robot_ids"] = json.loads(row["robot_ids"])
+                row["value"] = json.loads(row["value"])
+                row["evidence"] = json.loads(row["evidence"])
+                reviews = [dict(item) for item in connection.execute(
+                    """SELECT at, principal_id, root_cause, note FROM fleet_ai_fact_reviews
+                       WHERE fact_row=? ORDER BY review_id""", (row["fact_row"],))]
+                reports.append({"schema": "rosy.incident.v1", "id": f"ai_fact:{row['fact_row']}",
+                                "classification": row["kind"], "robot_ids": row["robot_ids"],
+                                "opened_at": datetime.fromtimestamp(row["observed_at"], timezone.utc).isoformat(),
+                                "evidence": {"ai_fact": row, "fleet": None, "core": None,
+                                             "rosy_cam": None, "front_image": {"status": "not_retained"}},
+                                "actions": [], "reviews": reviews})
+        return reports
+
+    def review_traffic_fact(self, fact_row: int, *, principal_id: str,
+                            root_cause: str, note: str) -> bool:
+        with closing(self._connect()) as connection, connection:
+            if not connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_ai_facts'").fetchone():
+                return False
+            if not connection.execute(
+                    "SELECT 1 FROM fleet_ai_facts WHERE fact_row=?", (fact_row,)).fetchone():
+                return False
+            connection.execute(
+                """INSERT INTO fleet_ai_fact_reviews (fact_row, at, principal_id, root_cause, note)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (fact_row, datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                 principal_id, root_cause, note))
+        return True
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)

@@ -14,7 +14,7 @@ from functools import partial
 from typing import Callable, Literal, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Query, Request, Response
+from fastapi import Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
@@ -22,7 +22,7 @@ from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
@@ -53,6 +53,13 @@ class LineStuckDecisionRequest(BaseModel):
 class LineStuckClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class IncidentReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    root_cause: Literal["line_marking", "obstacle", "robot_fault", "localization",
+                        "traffic_wait", "unknown"]
+    note: str = Field(max_length=1000)
 
 
 class IdentifyLampRequest(BaseModel):
@@ -120,8 +127,11 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    # D-509: CORE battery evidence goes stale after 5 s, so refresh each second off the request
+    # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
-        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse)
+        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
+        refresh_s=1.0, max_age_s=5.0)
     lane = getattr(app.state, "lane_compliance", None)
 
     async def gathered() -> dict:
@@ -137,7 +147,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
-        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.2)
+        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.5)
                                        for row in rows if row["online"]))
         power_values = iter(power)
         for row in rows:
@@ -188,9 +198,11 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no robot served a map"})
         return grid
 
-    # D-472: one robot at a time (IdentityService); CORE and rosy-face keep the final safety decision.
+    # D-472/D-596: one request per colour per source (IdentityService); CORE and rosy-face keep the final safety decision.
     if identity is None:
         identity = IdentityService(console.clients, tracking=tracking)
+    if map_pose is not None and identity.map_pose is None:   # D-596 amendment: where to look, as app.py
+        identity.map_pose = map_pose.arbitrated_pose
     app.state.identity = identity
 
     # D-540 9: moving routes need a named operator; stops (WAIT/ABORT, formation stop) stay open.
@@ -214,10 +226,59 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
+    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_evidence(robot_id: str, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")) -> dict:
+        # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
+        # memory until the stuck closes. A failed read is not kept: the next read asks again.
+        if not board.is_open(robot_id, stuck_id):
+            raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
+                                                         "message": f"{robot_id} has no open stuck {stuck_id}"})
+        shown = board.preview(robot_id, stuck_id)
+        if shown is None:
+            fetch = getattr(console.clients().get(robot_id), "front_frame", None)
+            try:
+                if fetch is None:
+                    raise RobotApiError(robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "no camera client")
+                jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+            except (RobotApiError, httpx.HTTPError, OSError, asyncio.TimeoutError) as exc:
+                raise HTTPException(status_code=404, detail={
+                    "code": "STUCK_PREVIEW_UNAVAILABLE",
+                    "message": getattr(exc, "code", type(exc).__name__)}) from exc
+            board.keep_preview(robot_id, stuck_id, jpeg, status)
+            shown = board.preview(robot_id, stuck_id)
+            if shown is None:   # the stuck closed while the robot answered
+                raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
+                                                             "message": f"{stuck_id} closed"})
+        return shown
+
     @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
         # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
         return {"episodes": board.episodes(limit)}
+
+    @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
+    def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
+        return {"reports": board.reports(limit), "traffic_reports": board.traffic_reports(limit)}
+
+    @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
+              tags=["line-stuck"])
+    def review_traffic_fact(body: IncidentReviewRequest,
+                            fact_row: int = Path(ge=1, le=2**63 - 1),
+                            principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        if not board.review_traffic_fact(fact_row, principal_id=principal.principal_id,
+                                         root_cause=body.root_cause, note=body.note):
+            raise HTTPException(status_code=404, detail={"code": "INCIDENT_NOT_FOUND"})
+        return {"reviewed": True}
+
+    @app.post("/api/fleet/incidents/{robot_id}/{stuck_id}/review", dependencies=operator_guard,
+              tags=["line-stuck"])
+    def review_incident(robot_id: str, stuck_id: str, body: IncidentReviewRequest,
+                        principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        if not board.review(robot_id, stuck_id, principal_id=principal.principal_id,
+                            root_cause=body.root_cause, note=body.note):
+            raise HTTPException(status_code=404, detail={"code": "INCIDENT_NOT_FOUND"})
+        return {"reviewed": True}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])

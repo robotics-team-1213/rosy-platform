@@ -1,0 +1,696 @@
+{
+  "A_threshold_arcoff": {
+    "config": {
+      "name": "A_threshold_arcoff",
+      "model": "threshold",
+      "every_n": 2,
+      "comp": false,
+      "latency_ms": 0,
+      "arc_enabled": false,
+      "start": "2026-10-09T23:49:47+09:00"
+    },
+    "model_revision": null,
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "unexpected",
+      "junction_place": "SE",
+      "junction_reason": null,
+      "line_reason": "junction_unexpected",
+      "stop_sent": true
+    },
+    "keep_frames": 477,
+    "learned_frames": 0,
+    "learned_ratio": null,
+    "paint_source_used": {
+      "threshold": 477
+    },
+    "paint_reuse": {},
+    "paint_mask_age_s_p50_p90": null,
+    "state_reason_counts": {
+      "TRACKING/tracking": 184,
+      "OFF/mode_off": 81,
+      "RECOVERING/junction_bending": 56,
+      "RECOVERING/junction_approaching": 48,
+      "RECOVERING/junction_turning": 35,
+      "HOLD/camera_line_not_visible": 26,
+      "RECOVERING/junction_advancing": 17,
+      "HOLD/obstacle_ahead": 12,
+      "RECOVERING/stuck_back_off": 10,
+      "TRACKING/lane_edge_right": 8,
+      "HOLD/junction_bend_blocked": 4,
+      "HOLD/junction_waiting": 4,
+      "RECOVERING/junction_stopping": 3,
+      "WAITING/no_observation": 1,
+      "RECOVERING/junction_reacquiring": 1,
+      "HOLD/junction_reacquiring": 1,
+      "HOLD/junction_unexpected": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {
+      "ring_s": {
+        "ticks": 143,
+        "max_abs_radial_error_m": 0.1948,
+        "min_proxy_clearance_m": -0.1894,
+        "negative_proxy_ticks": 132
+      }
+    },
+    "gt_last": [
+      -0.3691,
+      -0.3158,
+      -0.5457
+    ],
+    "gt_path_m": 1.785,
+    "rtf": 0.983,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "B_threshold_arcon": {
+    "config": {
+      "name": "B_threshold_arcon",
+      "model": "threshold",
+      "every_n": 2,
+      "comp": false,
+      "latency_ms": 0,
+      "arc_enabled": true,
+      "start": "2026-10-09T23:53:39+09:00"
+    },
+    "model_revision": null,
+    "result": "arrived",
+    "reason": null,
+    "trip_detail": {},
+    "keep_frames": 618,
+    "learned_frames": 0,
+    "learned_ratio": null,
+    "paint_source_used": {
+      "threshold": 618
+    },
+    "paint_reuse": {},
+    "paint_mask_age_s_p50_p90": null,
+    "state_reason_counts": {
+      "TRACKING/tracking": 199,
+      "RECOVERING/lane_arc": 121,
+      "RECOVERING/junction_approaching": 56,
+      "RECOVERING/junction_bending": 55,
+      "HOLD/camera_line_not_visible": 51,
+      "OFF/mode_off": 50,
+      "RECOVERING/junction_turning": 49,
+      "RECOVERING/stuck_back_off": 33,
+      "HOLD/obstacle_ahead": 17,
+      "LOST/camera_reselection_required": 9,
+      "HOLD/junction_stop": 5,
+      "HOLD/junction_waiting": 4,
+      "RECOVERING/junction_stopping": 4,
+      "WAITING/no_observation": 2,
+      "TRACKING/lane_edge_left": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 121,
+    "ring": {
+      "ring_s": {
+        "ticks": 37,
+        "max_abs_radial_error_m": 0.0212,
+        "min_proxy_clearance_m": -0.0158,
+        "negative_proxy_ticks": 29
+      },
+      "ring_e": {
+        "ticks": 50,
+        "max_abs_radial_error_m": 0.0225,
+        "min_proxy_clearance_m": -0.0172,
+        "negative_proxy_ticks": 47
+      },
+      "ring_n": {
+        "ticks": 33,
+        "max_abs_radial_error_m": 0.0154,
+        "min_proxy_clearance_m": -0.0073,
+        "negative_proxy_ticks": 18
+      }
+    },
+    "gt_last": [
+      -0.514,
+      0.1548,
+      -2.2304
+    ],
+    "gt_path_m": 2.981,
+    "rtf": 0.889,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "C_28e8454d_n4comp_lat300": {
+    "config": {
+      "name": "C_28e8454d_n4comp_lat300",
+      "model": "/srv/rosy/store/models/accepted/lane-seg-20261006-28e8454d",
+      "every_n": 4,
+      "comp": true,
+      "latency_ms": 300,
+      "arc_enabled": true,
+      "start": "2026-10-09T23:55:51+09:00"
+    },
+    "model_revision": "lane-seg-20261006-28e8454d",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 255,
+    "learned_frames": 249,
+    "learned_ratio": 0.976,
+    "paint_source_used": {
+      "learned": 249,
+      "denoise_fallback": 6
+    },
+    "paint_reuse": {
+      "warped": 246,
+      "unwarped": 3
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.75
+    ],
+    "state_reason_counts": {
+      "TRACKING/tracking": 99,
+      "OFF/mode_off": 78,
+      "HOLD/camera_line_not_visible": 53,
+      "RECOVERING/stuck_back_off": 38,
+      "LOST/camera_reselection_required": 8,
+      "HOLD/junction_waiting": 4,
+      "HOLD/obstacle_ahead": 3,
+      "WAITING/camera_no_observation": 1,
+      "HOLD/stuck_resumed": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2725,
+      -0.1757,
+      -1.5975
+    ],
+    "gt_path_m": 0.58,
+    "rtf": 0.899,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "D_62db9403_n4comp_lat300": {
+    "config": {
+      "name": "D_62db9403_n4comp_lat300",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 4,
+      "comp": true,
+      "latency_ms": 300,
+      "arc_enabled": true,
+      "start": "2026-10-09T23:57:11+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 181,
+    "learned_frames": 176,
+    "learned_ratio": 0.972,
+    "paint_source_used": {
+      "learned": 176,
+      "denoise_fallback": 5
+    },
+    "paint_reuse": {
+      "warped": 174,
+      "unwarped": 2
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.75
+    ],
+    "state_reason_counts": {
+      "OFF/mode_off": 81,
+      "TRACKING/tracking": 79,
+      "HOLD/camera_line_not_visible": 27,
+      "RECOVERING/stuck_back_off": 10,
+      "WAITING/no_observation": 1,
+      "HOLD/junction_waiting": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.27,
+      -0.0076,
+      -1.796
+    ],
+    "gt_path_m": 0.25,
+    "rtf": 0.888,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "E_v11_n4comp_lat300": {
+    "config": {
+      "name": "E_v11_n4comp_lat300",
+      "model": "/home/rosy/rosy_d567_ws/model_candidates/v11",
+      "every_n": 4,
+      "comp": true,
+      "latency_ms": 300,
+      "arc_enabled": true,
+      "start": "2026-10-09T23:58:17+09:00"
+    },
+    "model_revision": "lane-seg-20261006-5f5ddcd9",
+    "result": "stopped",
+    "reason": "stall",
+    "trip_detail": {
+      "stall_s": 20.0,
+      "progress_m": 0.591,
+      "stop_sent": true
+    },
+    "keep_frames": 364,
+    "learned_frames": 357,
+    "learned_ratio": 0.981,
+    "paint_source_used": {
+      "learned": 357,
+      "denoise_fallback": 7
+    },
+    "paint_reuse": {
+      "warped": 355,
+      "unwarped": 2
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.75
+    ],
+    "state_reason_counts": {
+      "LOST/camera_reselection_required": 116,
+      "TRACKING/tracking": 108,
+      "OFF/mode_off": 82,
+      "HOLD/camera_line_not_visible": 51,
+      "RECOVERING/stuck_back_off": 26,
+      "HOLD/obstacle_ahead": 4,
+      "WAITING/camera_no_observation": 1,
+      "WAITING/no_observation": 1
+    },
+    "first_stop": {
+      "sim_t": 48.005,
+      "state": "HOLD",
+      "reason": "camera_line_not_visible",
+      "gt": [
+        -1.2703,
+        -0.3739,
+        -1.552
+      ],
+      "dist_before_m": 0.512
+    },
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2714,
+      -0.3156,
+      -1.552
+    ],
+    "gt_path_m": 0.675,
+    "rtf": 0.963,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "F_62db9403_n2nocomp_lat300": {
+    "config": {
+      "name": "F_62db9403_n2nocomp_lat300",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 2,
+      "comp": false,
+      "latency_ms": 300,
+      "arc_enabled": true,
+      "start": "2026-10-09T23:59:46+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "arrived",
+    "reason": null,
+    "trip_detail": {},
+    "keep_frames": 552,
+    "learned_frames": 0,
+    "learned_ratio": 0.0,
+    "paint_source_used": {
+      "denoise_fallback": 552
+    },
+    "paint_reuse": {},
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.625
+    ],
+    "state_reason_counts": {
+      "TRACKING/tracking": 179,
+      "RECOVERING/lane_arc": 132,
+      "RECOVERING/junction_bending": 62,
+      "OFF/mode_off": 55,
+      "RECOVERING/junction_approaching": 49,
+      "RECOVERING/junction_turning": 37,
+      "HOLD/camera_line_not_visible": 28,
+      "HOLD/junction_stop": 16,
+      "HOLD/obstacle_ahead": 13,
+      "RECOVERING/stuck_back_off": 9,
+      "HOLD/junction_waiting": 5,
+      "RECOVERING/junction_stopping": 3,
+      "WAITING/camera_no_observation": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 132,
+    "ring": {
+      "ring_s": {
+        "ticks": 40,
+        "max_abs_radial_error_m": 0.0371,
+        "min_proxy_clearance_m": -0.0318,
+        "negative_proxy_ticks": 30
+      },
+      "ring_e": {
+        "ticks": 56,
+        "max_abs_radial_error_m": 0.0423,
+        "min_proxy_clearance_m": -0.037,
+        "negative_proxy_ticks": 56
+      },
+      "ring_n": {
+        "ticks": 36,
+        "max_abs_radial_error_m": 0.0328,
+        "min_proxy_clearance_m": -0.0246,
+        "negative_proxy_ticks": 26
+      }
+    },
+    "gt_last": [
+      -0.4842,
+      0.1608,
+      -2.298
+    ],
+    "gt_path_m": 2.822,
+    "rtf": 0.973,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "G_62db9403_n4comp_lat300_arcoff": {
+    "config": {
+      "name": "G_62db9403_n4comp_lat300_arcoff",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 4,
+      "comp": true,
+      "latency_ms": 300,
+      "arc_enabled": false,
+      "start": "2026-10-10T00:01:37+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 185,
+    "learned_frames": 179,
+    "learned_ratio": 0.968,
+    "paint_source_used": {
+      "learned": 179,
+      "denoise_fallback": 6
+    },
+    "paint_reuse": {
+      "warped": 178,
+      "unwarped": 1
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.75
+    ],
+    "state_reason_counts": {
+      "OFF/mode_off": 83,
+      "TRACKING/tracking": 58,
+      "HOLD/camera_line_not_visible": 26,
+      "RECOVERING/stuck_back_off": 10,
+      "HOLD/obstacle_ahead": 7,
+      "HOLD/junction_waiting": 4
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2701,
+      0.0172,
+      -1.646
+    ],
+    "gt_path_m": 0.225,
+    "rtf": 0.98,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "H_62db9403_n1_lat0": {
+    "config": {
+      "name": "H_62db9403_n1_lat0",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 1,
+      "comp": false,
+      "latency_ms": 0,
+      "arc_enabled": true,
+      "start": "2026-10-10T00:05:29+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "stopped",
+    "reason": "junction",
+    "trip_detail": {
+      "junction_state": "aborted",
+      "junction_place": "B_SW",
+      "junction_reason": "stuck",
+      "stop_sent": true
+    },
+    "keep_frames": 390,
+    "learned_frames": 245,
+    "learned_ratio": 0.628,
+    "paint_source_used": {
+      "learned": 245,
+      "denoise_fallback": 145
+    },
+    "paint_reuse": {
+      "unwarped": 245
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.125,
+      0.375
+    ],
+    "state_reason_counts": {
+      "TRACKING/tracking": 205,
+      "OFF/mode_off": 76,
+      "HOLD/camera_line_not_visible": 72,
+      "HOLD/junction_bend_blocked": 43,
+      "RECOVERING/junction_bending": 39,
+      "RECOVERING/stuck_back_off": 10,
+      "HOLD/obstacle_ahead": 7,
+      "WAITING/no_observation": 1,
+      "WAITING/camera_no_observation": 1,
+      "HOLD/junction_aborted": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -0.9032,
+      -0.5281,
+      -0.2546
+    ],
+    "gt_path_m": 1.046,
+    "rtf": 0.866,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "I_62db9403_n1comp_lat300": {
+    "config": {
+      "name": "I_62db9403_n1comp_lat300",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 1,
+      "comp": true,
+      "latency_ms": 300,
+      "arc_enabled": true,
+      "start": "2026-10-10T00:07:09+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 191,
+    "learned_frames": 183,
+    "learned_ratio": 0.958,
+    "paint_source_used": {
+      "learned": 183,
+      "denoise_fallback": 8
+    },
+    "paint_reuse": {
+      "warped": 183
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.5,
+      0.625
+    ],
+    "state_reason_counts": {
+      "OFF/mode_off": 82,
+      "TRACKING/tracking": 73,
+      "HOLD/camera_line_not_visible": 25,
+      "RECOVERING/stuck_back_off": 10,
+      "HOLD/obstacle_ahead": 3,
+      "WAITING/camera_no_observation": 2
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2698,
+      -0.0124,
+      -1.8372
+    ],
+    "gt_path_m": 0.255,
+    "rtf": 0.973,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "J_28e8454d_n1_lat0": {
+    "config": {
+      "name": "J_28e8454d_n1_lat0",
+      "model": "/srv/rosy/store/models/accepted/lane-seg-20261006-28e8454d",
+      "every_n": 1,
+      "comp": false,
+      "latency_ms": 0,
+      "arc_enabled": true,
+      "start": "2026-10-10T00:08:12+09:00"
+    },
+    "model_revision": "lane-seg-20261006-28e8454d",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 194,
+    "learned_frames": 188,
+    "learned_ratio": 0.969,
+    "paint_source_used": {
+      "learned": 188,
+      "denoise_fallback": 6
+    },
+    "paint_reuse": {
+      "unwarped": 188
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.125,
+      0.125
+    ],
+    "state_reason_counts": {
+      "OFF/mode_off": 78,
+      "TRACKING/tracking": 77,
+      "HOLD/camera_line_not_visible": 27,
+      "RECOVERING/stuck_back_off": 10,
+      "HOLD/obstacle_ahead": 2,
+      "HOLD/junction_waiting": 2,
+      "WAITING/camera_no_observation": 1
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2708,
+      -0.197,
+      -1.5852
+    ],
+    "gt_path_m": 0.44,
+    "rtf": 0.971,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "K_62db9403_n4comp_lat0": {
+    "config": {
+      "name": "K_62db9403_n4comp_lat0",
+      "model": "/home/rosy/rosy-ml/scratch/rosy26-training-20261006/intake/lane-seg-20261006-62db9403",
+      "every_n": 4,
+      "comp": true,
+      "latency_ms": 0,
+      "arc_enabled": true,
+      "start": "2026-10-10T00:09:16+09:00"
+    },
+    "model_revision": "lane-seg-20261006-62db9403",
+    "result": "stopped",
+    "reason": "junction_unexpected",
+    "trip_detail": {
+      "junction_state": "waiting",
+      "junction_place": null,
+      "junction_reason": null,
+      "line_reason": "junction_waiting",
+      "stop_sent": true
+    },
+    "keep_frames": 178,
+    "learned_frames": 176,
+    "learned_ratio": 0.989,
+    "paint_source_used": {
+      "learned": 176,
+      "denoise_fallback": 2
+    },
+    "paint_reuse": {
+      "warped": 172,
+      "unwarped": 4
+    },
+    "paint_mask_age_s_p50_p90": [
+      0.375,
+      0.5
+    ],
+    "state_reason_counts": {
+      "OFF/mode_off": 81,
+      "TRACKING/tracking": 62,
+      "HOLD/camera_line_not_visible": 25,
+      "RECOVERING/stuck_back_off": 10,
+      "HOLD/junction_waiting": 3,
+      "WAITING/camera_no_observation": 2
+    },
+    "first_stop": null,
+    "lane_arc_ticks": 0,
+    "ring": {},
+    "gt_last": [
+      -1.2701,
+      0.012,
+      -1.5744
+    ],
+    "gt_path_m": 0.231,
+    "rtf": 0.966,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  }
+}

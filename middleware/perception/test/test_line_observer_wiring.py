@@ -95,14 +95,14 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     exec(compile(ast.Module(body=methods, type_ignores=[]), '<camera-route-callback>', 'exec'), namespace)
     params = dict(require_camera_controls_stable=False, camera_lane_mode='keep',
                   lane_half_width_m=0.0925, paint_source='threshold',
-                  camera_ground_source='GAZEBO', lane_corner_turning=True)
+                  camera_ground_source='GAZEBO', lane_corner_turning=True, crosswalk_uncertainty_enabled=False)
     inbox = RouteContextInput()
     inbox.receive(json.dumps(dict(v=1, seq=7, place_id='bend-1', map_id='map-1',
                                   stamp_s=10.0, valid_until_s=10.8, kind='bend',
                                   ahead_m=[0.1, 0.4])))
     node = SimpleNamespace(
         get_parameter=lambda key: SimpleNamespace(value=params[key]),
-        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None,
+        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None, _drivable_steer=None,
         _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
         _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
         _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,
@@ -271,8 +271,10 @@ def test_route_modes_need_a_graph_and_a_route():
     assert params["lane_graph_path"] == ""
     assert params["route"] == []
     assert params["route_start"] == []
-    assert "RouteCameraFollower" in source and "RouteMapFollower" in source
-    assert "RouteHybridFollower" in source
+    builder = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
+    assert "build_route_follower(mode, graph_path, route, route_start," in source
+    assert "RouteCameraFollower" in builder and "RouteMapFollower" in builder
+    assert "RouteHybridFollower" in builder
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
     assert "route modes need lane_graph_path, route and route_start" in source
 
@@ -282,9 +284,9 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     lane_graph_path directory (the map_v2_fleet bundle), and the overlay
     maps route_ab to the route follower."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
-    build = source.split("def _build_route_follower", 1)[1].split("\n    def _ground", 1)[0]
+    build = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
     assert "PaintMap.from_bundle(os.path.dirname(graph_path))" in build
-    assert "RouteHybridFollower(" in build
+    assert "RouteHybridFollower if mode == 'route_ab'" in build
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
     assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
     assert "'route_ab': self._route_follower," in source
@@ -311,7 +313,7 @@ def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time
                            get_logger=lambda: SimpleNamespace(warning=warnings.append))
     namespace = {'simulation_ground_allowed': lambda **kw: (
         kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time']),
-        'yaml': yaml, 'open': open, 'RouteCameraFollower': lambda *a, **kw: built}
+        'yaml': yaml, 'build_route_follower': lambda *a, **kw: built}
     exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-admission>', 'exec'), namespace)
     follower = namespace['_build_route_follower'](node, 'route_a')
     assert (follower is built) is admitted

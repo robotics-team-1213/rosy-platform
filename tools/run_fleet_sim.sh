@@ -90,7 +90,7 @@ done
 echo "========================================================="
 echo "Press Ctrl+C to stop all processes."
 
-python3 operations/fleet/fleet/cli.py console --robots "$ROBOTS_YAML"
+python3 operations/fleet/fleet/cli.py console --robots "$ROBOTS_YAML" \n    --site-config integrations/simulation/gazebo/config/fleet_sim_site.yaml
 
 # Cleanup on exit
 kill $(jobs -p) 2>/dev/null || true

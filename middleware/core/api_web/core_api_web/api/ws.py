@@ -249,6 +249,8 @@ def _reference_from(frame: dict):
     robot_id = payload.get("robot_id")
     map_id = payload.get("map_id")
     frame = payload.get("frame")
+    anchor, for_robot_id = payload.get("anchor"), payload.get("for_robot_id")
+    anchor_hold = payload.get("anchor_hold")
     if not isinstance(pose, dict) or not isinstance(robot_id, str) or not robot_id:
         return None
     try:
@@ -260,6 +262,9 @@ def _reference_from(frame: dict):
             # 영원히 참이 되어, 스트림이 멀쩡한 대형이 영구 HOLD 에 앉는다.
             map_id=map_id if isinstance(map_id, str) and map_id else None,
             frame=frame if isinstance(frame, str) and frame else None,
+            anchor=anchor if isinstance(anchor, str) and anchor else None,
+            for_robot_id=for_robot_id if isinstance(for_robot_id, str) and for_robot_id else None,
+            anchor_hold=anchor_hold if isinstance(anchor_hold, str) and anchor_hold else None,
         )
     except (KeyError, TypeError, ValueError):
         return None

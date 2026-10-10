@@ -50,7 +50,14 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
-    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")  # fixture repos never go to the test hosts
+
+    def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
+        # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
+        # already runs on one (D-584), so the inner pytest runs in the fixture worktree.
+        return [land.remote_pytest.capture([sys.executable, "-m", "pytest", *inv, *land.remote_pytest.PYTEST_TAIL],
+                                           log, cwd=repo) for inv, log in zip(invocations, logs)]
+
+    monkeypatch.setattr(land.remote_pytest, "run", fake_run)
     return main, wt
 
 
@@ -108,6 +115,12 @@ def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, s
     assert calls == [[["pkg/test"]], second_round]
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
     assert (main / "pkg/a.py").read_text() == "x = 2\n"
+
+
+def test_browser_flag_refused_not_run_locally(repos):
+    _, wt = repos
+    with pytest.raises(land.Stop, match="D-584"):
+        land.run_tests(wt, type("A", (), {"browser": True, "node": False})(), [["pkg/test"]], wt.parent, 1)
 
 
 def test_dirty_worktree_refused(repos):

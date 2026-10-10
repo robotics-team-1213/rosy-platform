@@ -1,4 +1,4 @@
-"""D-457 2: corner markers win; an approved record is used only for its source, map, lens and aspect."""
+"""D-457 2, D-595: an approved record wins and is used only for its source, map, lens and aspect; corner markers only without one."""
 
 import json
 from pathlib import Path
@@ -88,8 +88,13 @@ def test_malformed_record_is_unusable(record):
     assert _from(record) is None
 
 
-def test_corner_markers_win_over_the_record():
-    marker = choose(CAMERA, MARKERS, RECORD, frame_size=(640, 360), lens=None)
-    assert marker.revision == "cal-v3" and marker.track_bounds_m == (0.0, 0.0, 4.0, 2.0)
+def test_the_approved_record_wins_over_per_frame_corner_markers():
+    # D-595: an accepted record is frozen; corner markers in the frame never re-fit it.
+    assert choose(CAMERA, MARKERS, RECORD, frame_size=(640, 360), lens=None).revision == "paint-3f9a1c2b7d40"
     assert choose(CAMERA, {}, RECORD, frame_size=(640, 360), lens=None).revision == "paint-3f9a1c2b7d40"
+    # Without a usable record the four markers of the frame still calibrate it.
+    marker = choose(CAMERA, MARKERS, None, frame_size=(640, 360), lens=None)
+    assert marker.revision == "cal-v3" and marker.track_bounds_m == (0.0, 0.0, 4.0, 2.0)
+    other_map = {**RECORD, "map_id": "elsewhere"}
+    assert choose(CAMERA, MARKERS, other_map, frame_size=(640, 360), lens=None).revision == "cal-v3"
     assert choose(CAMERA, {30: MARKERS[30]}, None, frame_size=(640, 360), lens=None) is None

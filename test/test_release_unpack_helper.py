@@ -351,3 +351,48 @@ def test_a_fresh_release_directory_gets_a_fresh_mtime(tmp_path, releases):
 
     assert completed.returncode == 0, completed.stderr
     assert (releases / "2026.01.01-001").stat().st_mtime > time.time() - 600
+
+
+# --- D-553 addendum 3: delta payloads ---------------------------------------
+
+def _delta(tmp_path: Path, releases: Path, base_sums: str | None = None) -> Path:
+    base = releases / "2026.10.01-001"
+    (base / "install" / "pkg").mkdir(parents=True)
+    (base / "install" / "pkg" / "a.py").write_text("old a\n")
+    (base / "install" / "pkg" / "b.py").write_text("b\n")
+    (base / "SHA256SUMS.sig").write_text("base signature\n")
+    _sha256sums(base)
+    digest = base_sums or hashlib.sha256((base / "SHA256SUMS").read_bytes()).hexdigest()
+    delta = tmp_path / "delta"
+    (delta / "install" / "pkg").mkdir(parents=True)
+    (delta / "install" / "pkg" / "a.py").write_text("new a\n")
+    (delta / "SHA256SUMS").write_text("new sums\n")
+    (delta / "SHA256SUMS.sig").write_text("new signature\n")
+    (delta / ".rosy-delta-base").write_text(f"2026.10.01-001\n{digest}\n")
+    archive = tmp_path / "2026.10.01-002.tar.gz"
+    _pack(delta, archive)
+    return archive
+
+
+def test_a_delta_is_laid_over_a_copy_of_its_base(tmp_path, releases):
+    archive = _delta(tmp_path, releases)
+    completed = _run("2026.10.01-002", archive, releases)
+    assert completed.returncode == 0, completed.stderr
+    new = releases / "2026.10.01-002"
+    assert (new / "install" / "pkg" / "a.py").read_text() == "new a\n"
+    assert (new / "install" / "pkg" / "b.py").read_text() == "b\n"
+    assert (new / "SHA256SUMS").read_text() == "new sums\n"
+    assert (new / "SHA256SUMS.sig").read_text() == "new signature\n"
+    assert not (new / ".rosy-delta-base").exists()
+    # the base stays untouched: it is the rollback target
+    assert (releases / "2026.10.01-001" / "install" / "pkg" / "a.py").read_text() == "old a\n"
+
+
+def test_a_delta_whose_base_differs_or_is_missing_is_refused(tmp_path, releases):
+    archive = _delta(tmp_path, releases, base_sums="0" * 64)
+    completed = _run("2026.10.01-002", archive, releases)
+    assert completed.returncode != 0 and "DELTA_BASE_MISMATCH" in completed.stderr
+    assert not (releases / "2026.10.01-002").exists()
+    shutil.rmtree(releases / "2026.10.01-001")
+    completed = _run("2026.10.01-002", archive, releases)
+    assert completed.returncode != 0 and "DELTA_BASE_MISSING" in completed.stderr

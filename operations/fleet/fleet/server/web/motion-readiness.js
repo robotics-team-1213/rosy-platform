@@ -21,3 +21,9 @@ export function formationReason(robots, leader, members) {
   }
   return '';
 }
+
+// Field check 2026-10-10: with only manual-only robots (CAP-001 runtime.maps.occupancy false) the console
+// still asked /api/fleet/map every 30 s and logged a 404 each time. True only when every robot says so.
+export function noRobotServesGrid(robots) {
+  return robots.length > 0 && robots.every(robot => robot.capabilities?.runtime?.maps?.occupancy === false);
+}

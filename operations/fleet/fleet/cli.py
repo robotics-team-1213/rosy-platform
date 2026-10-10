@@ -363,7 +363,9 @@ def _resolve_optional_site_config(args) -> None:
 
 def _hub_link(args) -> dict | None:
     """D-555: what robots receive with a hub credential, or None when not configured."""
-    hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
+    hostname, ca = getattr(args, "hub_link_hostname", None) or None, getattr(args, "hub_link_ca", None)
+    if ca is not None and str(ca) in ("", "."):
+        ca = None                      # compose passes "" when the site leaves the hub link unset
     if hostname is None and ca is None:
         return None
     from core_common.protocol.discovery_txt import HOSTNAME
@@ -520,12 +522,16 @@ def run_console(args: argparse.Namespace) -> None:
             sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
             if enrollment_store is not None else console.robot_ids, store=store,
         )
+        if enrollment_store is None:
+            sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
 
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+        # D-587 2: identified ceiling markers projected through the approved record are sightings.
+        sighting_service.approved_revision = tracking_service.approved_revision
     hub_link = _hub_link(args)
     # D-555: enrolled robots pair at runtime, so the route is up whenever that can happen.
     enrolled_hub = (enrollment_store is not None and event_store is not None and bool(console_token)
@@ -555,7 +561,7 @@ def run_console(args: argparse.Namespace) -> None:
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
             discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
-            hub_link=hub_link if enrolled_hub else None)
+            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -584,11 +590,15 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
+    stuck_resolver_enrolled = _stuck_resolver_enrolled(args)
     if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
             for ep in endpoints if ep.resolver_token}
-        if not stuck_resolver_clients:
+        if stuck_resolver_enrolled:
+            print("stuck resolver answers enrolled robots with Fleet's credential: "
+                  + ", ".join(sorted(stuck_resolver_enrolled)), file=sys.stderr)
+        if not stuck_resolver_clients and not stuck_resolver_enrolled:
             print("note: stuck resolver on, but no robot has a resolver_token; "
                   "every stuck goes to the console (no_resolver_token)", file=sys.stderr)
         else:
@@ -620,6 +630,8 @@ def run_console(args: argparse.Namespace) -> None:
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
+                     stuck_resolver_enrolled=stuck_resolver_enrolled,
+                     ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -660,6 +672,25 @@ def _goal_lease_ttl_s(args) -> float:
     return float(value)
 
 
+def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
+    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
+    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
+    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
+        ids = section.get(key) or []
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"stuck resolver config: {exc}")
+    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
+        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
+    return frozenset(ids)
+
+
 def _trip_config(args):
     """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
     import yaml
@@ -693,6 +724,7 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
+            site_maps.import_source = Path(source)
             # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
             # report; the default "site" would filter every sighting (map pose UNKNOWN).
             site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
@@ -745,6 +777,9 @@ def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
 
     kept = []
     for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
         unknown = set(source.robot_ids) - known
         if unknown - retired:
             sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")

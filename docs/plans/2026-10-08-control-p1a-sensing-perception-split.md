@@ -30,6 +30,12 @@
 - 단위로 세면 `lane_keep.py`(600)와 `lane_bev.py`(653)의 파일 판정은 바뀌지 않는다. 파일 판정은 파일 단위로 계속 받는다.
 - `line_observer_node.py` 판정 608은 이 단계가 착지할 때까지 늘지 않는다.
 
+### 2026-10-10 추가: learned 단위
+
+- `SIZE_UNITS`에 `perception/control/sensing/perception/learned`를 더한다. 학습 모델 백엔드(manifest, runner, paint worker, drivable way와 조향, shadow, slots)다. 판정은 `accept`, 기준선 2270, 허용 +150이다.
+- 부모 단위 `perception/control/sensing/perception`은 learned 줄을 뺀 9895로 다시 판정한다. 12004 판정의 독립 검토가 "다음 증가 때 learned를 따로 단위로 둔다"고 적은 조건을 따른 것이다.
+- 계기: D-597 개정 3(`a85739fcb`)이 부모를 12165로 늘려 12004+150을 넘었다. import 경로, colcon 패키지, CORE 명령 소유는 바뀌지 않는다.
+
 ## 순서와 검증
 
 1. **1단계.** `SIZE_UNITS`에 한 줄, 새 단위 판정 한 개를 더하고 `control` 판정 수치를 낮춘다. 이 작업은 `refactor/control-perception-size-unit` 단독 브랜치에서 한다. 동작 변경은 없다. 같은 브랜치에서 `middleware/perception/control/sensing/perception/AGENTS.md`와 `middleware/perception/AGENTS.md`에 이 크기 단위를 한 줄씩 적는다.

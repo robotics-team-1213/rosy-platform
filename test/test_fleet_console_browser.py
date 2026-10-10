@@ -46,7 +46,8 @@ def _robot(robot_id: str, pose: dict, **extra) -> dict:
     row = {
         "robot_id": robot_id, "online": True, "goal": None, "queued": None,
         "yielding": None, "error": None,
-        "state": {"robot_id": robot_id, "mode": "NAVIGATION", "navigation": "NAVIGATING",
+        # A Nav2 robot reports its map; the console draws only map poses (field check 2026-10-10).
+        "state": {"robot_id": robot_id, "mode": "NAVIGATION", "navigation": "NAVIGATING", "map_id": "map",
                   "pose": pose, "battery": {"percent": 90}, "safety": {"estop": False}},
     }
     row.update(extra)
@@ -178,7 +179,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         roster = page.inner_text("#roster")
         assert "끊김" in roster, "연결이 끊긴 팔로워의 증거 태그가 없다"
         assert "지연" not in roster, "정상 스트림(4.8 Hz)에 지연 태그가 붙었다 — 정상은 무색이어야 한다"
-        assert "0.60m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
+        assert "0.60 m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
         # D-540 3: every robot has a card; the nominal ones are one line, the exception is open.
         assert [card.get_attribute("data-robot-id")
                 for card in page.locator("#roster article:not([data-collapsed])").all()] == ["rosy_03"]
@@ -294,7 +295,7 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
         arm = page.locator("#formation-start")
         assert arm.get_attribute("disabled") == (None if supported else "")
         if not supported:
-            assert "수동 주행만 지원" in page.inner_text("#formation-detail")
+            assert "수동 주행만 지원" in page.inner_text("#formation-why")
         assert not errors
         browser.close()
 
@@ -671,11 +672,11 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
         robot['state']['safety']['estop'] = False
         robot['state']['line_follow']['mode'] = 'CAMERA_LINE'
-        fallback = page.get_by_role('button', name='IR 추적 선택', exact=True)
+        fallback = page.get_by_role('button', name='IR 차선 추종으로 전환…', exact=True)
         fallback.wait_for()
         fallback.click()
         robot['state']['line_follow']['mode'] = 'OFF'
-        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 추적 선택")')
+        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
@@ -712,8 +713,9 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
-def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url, width, height):
-    """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
+def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url, width, height):
+    """D-421 / D-540 6 (user decision 2026-10-10) — 전체 주행 취소는 확인 없이 바로 나가고(멈춤), 보낸 대수와
+    로봇별 결과, 물리 정지 미확인을 쓴다. 래치(비상 정지)는 걸지 않는다."""
     from playwright.sync_api import sync_playwright
 
     step_ok = {"ok": True}
@@ -755,21 +757,15 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#cancel-all").click()
-        dialog = page.locator('dialog.ui-confirm')
-        dialog.wait_for()
-        confirms = [dialog.inner_text()]
-        stop = page.locator("#estop").bounding_box()
-        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        save_temp_screenshot(page, "fleet_cancel_all_confirm.png" if width == 1920 else f"fleet_cancel_all_confirm_{width}.png")
-        dialog.locator('ui-button[kind=quiet]').click()
-        declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
+        assert page.locator("#cancel-all").get_attribute("kind") == "quiet"
         assert page.locator("#cancel-all-result").is_hidden()
         page.locator("#cancel-all").click()
-        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.locator('dialog.ui-confirm').count() == 0  # a stop never waits behind a dialog
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
         page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
         summary = page.locator("#cancel-all-result")
+        assert summary.inner_text().startswith("전체 주행 취소를 보냈습니다 · 3대")
         assert "1/3 · 물리 정지 미확인" in summary.inner_text()
         result_box = summary.bounding_box()
         assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
@@ -788,9 +784,7 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 
-    assert "비상 정지 래치는 걸지 않습니다" in confirms[0]
-    assert declined == []
-    assert ("POST", "/api/fleet/cancel-all") in posts
+    assert [post for post in posts if post[1] == "/api/fleet/cancel-all"] == [("POST", "/api/fleet/cancel-all")]
     assert ("POST", "/api/fleet/estop") not in posts
 
 
@@ -802,8 +796,7 @@ def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url)
         browser, page, errors = _open_console(p, api)
         page.set_viewport_size({"width": 320, "height": 568})
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#cancel-all").click()
-        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.locator("#cancel-all").click()  # no confirm: a stop goes at once (D-540 6)
         result = page.locator("#cancel-all-result")
         expect(result).to_contain_text("주행 취소 결과 확인 불가")
         expect(result).to_contain_text("로봇 상태를 다시 확인하세요")
@@ -996,7 +989,7 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('formation-state')?.textContent"
-            " === '유지 중'"
+            " === '멈춤 · 재개 대기'"
         )
         assert page.locator("#formation-state").get_attribute("status") == "warn"
         assert page.locator("#formation-state").get_attribute("title") == "HOLDING"
@@ -1026,7 +1019,7 @@ def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(cons
         browser, page, errors = _open_console(p, api)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '유지 중'")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '멈춤 · 재개 대기'")
         assert page.locator("#formation-resume").is_disabled()
         assert "비상 정지" in page.inner_text("#formation-detail")
         assert "safety.estop" not in page.inner_text("#formation-detail")
@@ -1388,11 +1381,11 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         browser.close()
 
 
-def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
+def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url):
     from playwright.sync_api import sync_playwright
 
     # 카메라를 재조준한 뒤의 조감도: 정지 로봇의 추적 차이(offset_m)가 3폴링 연속 한계를
-    # 넘으면 낡은 교정으로 실영상을 얹지 않고 미터 눈금으로 돌아간다(map-view drawSiteView).
+    # 넘으면 경고만 한다. D-595: 그림은 수락된 보정 그대로다(폴링마다 바뀌지 않는다).
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT,
         "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
@@ -1431,18 +1424,26 @@ def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
                                    "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        # The 1 s tracking poll keeps the network busy; networkidle never comes (timed out on main too).
+        page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
         tag = page.inner_text("#map-tag")
-        assert "Rosy Cam 평면 영상" not in tag and "브라우저 보정(대체)" not in tag, tag
-        # 낡은 교정이므로 실영상(빨강)을 캔버스에 얹지 않았다 — 미터 눈금 바탕이다.
-        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
-                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
-                             "return p[0] < 100 && p[1] < 100; }")
+        assert "paint-test" in tag, tag
+        # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
+        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
+        pixel = page.evaluate("""async () => {
+          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
+          const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          const p = project(t, 0.25, 0.75);
+          return [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data];
+        }""")
+        assert pixel[0] > 150 and pixel[1] < 100, pixel
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
-                             ".includes('미터 눈금')")
+                             ".includes('맵 고정을 다시 하세요')")
         assert not errors
         browser.close()
 
@@ -1764,7 +1765,9 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         )
         assert page.locator(".queues-panel").is_visible()
         assert "릴레이 끊김" in page.inner_text("#critical-list")
-        assert "rosy_03" in page.inner_text("#critical-head")
+        # D-540 3: the robot is named once, in its row; the head counts (names stay in its title).
+        assert "rosy_03" in page.inner_text("#critical-list")
+        assert "rosy_03" in page.locator("#critical-head small").get_attribute("title")
         browser.close()
 
 
@@ -2230,7 +2233,7 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         )
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
+        fallback = page.get_by_role("button", name="IR 차선 추종으로 전환…", exact=True)
         fallback.wait_for(state="visible")
         fallback.click()
         dialog = page.locator('dialog.ui-confirm')
@@ -2239,7 +2242,7 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         dialog.locator('ui-button[kind=quiet]').click()
         browser.close()
 
-    assert "rosy_01" in confirm and "IR 추적" in confirm and "요청할까요?" in confirm
+    assert "rosy_01" in confirm and "IR 차선 추종" in confirm and "요청할까요?" in confirm
     assert not [method_path for method_path in posts if method_path[0] == "POST"]
     assert errors == []
 
@@ -2697,7 +2700,7 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (1366, 768), (390, 844)])
 def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, height):
-    """D-359 US-008 capture: "포함 로봇" sat below the checkbox row (centred on a wrapped list at
+    """D-359 US-008 capture: the member label (now "팔로워") sat below the checkbox row (centred on a wrapped list at
     1366/390; at wide widths it could flow into the previous row). The label shares the first
     row of the member list and stands to its left."""
     from playwright.sync_api import sync_playwright
@@ -2706,7 +2709,8 @@ def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, hei
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 3")
+        # Follower boxes leave the leader out: three robots, two boxes.
+        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 2")
         boxes = page.evaluate("""() => {
           const r = (n) => n.getBoundingClientRect().toJSON();
           return {label: r(document.querySelector('.member-label')),
@@ -3631,7 +3635,9 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
         goal = page.locator('#roster ui-button[data-goal-robot-id]').first
         goal.wait_for()
-        page.wait_for_function(f'() => document.querySelector("#formation-reform")?.getAttribute("reason") === "{named}"')
+        # D-540 6: the block says the cause once; every button it holds says "위 사유".
+        page.wait_for_function(f'() => document.querySelector("#formation-why")?.textContent.includes("{named}")')
+        assert page.locator("#formation-reform").get_attribute("reason") == "위 사유"
         assert goal.get_attribute("reason") == named
         assert page.locator("#formation-stop").get_attribute("reason") != named
         assert page.locator("#formation-stop").get_attribute("disabled") is None

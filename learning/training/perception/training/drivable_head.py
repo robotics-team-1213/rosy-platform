@@ -16,7 +16,22 @@ Direct CLI export is held until this head is called inside the trusted D-464
 IndexedReview training admission. The dataset needs exactly one class with role "drivable"; its other classes only
 count as "not drivable", and its ignore_index pixels are left out. Val IoU is
 scored where the lane model says background (the only pixels the head can
-change); the IoU over all labelled pixels is reported beside it.
+change); the IoU over all labelled pixels is reported beside it, and the outside-band FP:
+the fraction of label-0 pixels in rows that hold drivable labels (D-554 item 9 band, not
+walls) that the model calls drivable, and the near-centre drivable fraction (rows of the
+bottom 40 %, cols 110-210) predicted vs labelled. D-566: pos_weight balances the loss (train
+non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_lambda * FP.
+FP and the near-centre fraction are scored after the robot's lane-bounded post-process
+(lane_mask.lane_bounded_drivable, D-566 item 4, blocking beyond both lines per row, D-576); the
+raw model values are kept as *_raw. val_beyond_line_fp: label-0 pixels beyond lane_left /
+lane_right on rows showing both (lane_mask.beyond_boundary) predicted drivable (D-576), so only
+frames with lane classes count; val_beyond_line_coverage gives how many val frames that was.
+
+Head variants (D-566 item 5, ``training.head``): "local" (default) is a 3x3 conv on the last
+decoder features. "context" adds the lane model's bottleneck features through dilated 3x3
+convs at 1/16 scale (receptive field about the frame width) so the head can see which side of
+a line the road is; "context_lane" also feeds the lane model's class probabilities. All three
+produce the same single logit s, so the lane channels above are unchanged.
 """
 
 from __future__ import annotations
@@ -26,10 +41,13 @@ import copy
 if __name__ == "__main__":
     raise SystemExit("v13-drivable training requires trusted owner IndexedReview admission")
 
+import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
+from control.sensing.perception.learned.lane_mask import beyond_boundary, lane_bounded_drivable  # D-566/D-576
 
 # State-dict names of the pinky-lane-segmentation LaneUNet -> rosy_lane_model.LaneUNet.
 KEY_RENAMES = ((".body.", "."), ("middle.", "bottleneck."))
@@ -131,18 +149,64 @@ def verify_candidate_lane_parity(parent_onnx, candidate_onnx, frames, *, ignore_
             "ambiguous_pixels": ambiguous}
 
 
+HEADS = ("local", "context", "context_lane")
+
+
+def lane_features_and_bottleneck(lane: LaneUNet, x):
+    """LaneUNet.features(x) plus its bottleneck output (N x 16*base x H/16 x W/16)."""
+    e1 = lane.enc1(x)
+    e2 = lane.enc2(lane.pool(e1))
+    e3 = lane.enc3(lane.pool(e2))
+    e4 = lane.enc4(lane.pool(e3))
+    b = lane.bottleneck(lane.pool(e4))
+    d4 = lane.dec4(torch.cat([lane.up4(b), e4], 1))
+    d3 = lane.dec3(torch.cat([lane.up3(d4), e3], 1))
+    d2 = lane.dec2(torch.cat([lane.up2(d3), e2], 1))
+    return lane.dec1(torch.cat([lane.up1(d2), e1], 1)), b
+
+
+def _cbr(cin, cout, k=3, dilation=1):
+    return [nn.Conv2d(cin, cout, k, padding=dilation * (k // 2), dilation=dilation, bias=False),
+            nn.BatchNorm2d(cout), nn.ReLU(inplace=True)]
+
+
+class ContextHead(nn.Module):
+    """Bottleneck context (dilations 1, 2, 4 at 1/16 scale: 15 cells = 240 px) upsampled onto
+    the last decoder features, optionally with the lane class probabilities, -> logit s."""
+
+    def __init__(self, width: int, deep: int, lane_classes: int = 0, mid: int = 32):
+        super().__init__()
+        self.context = nn.Sequential(*_cbr(deep, mid, 1), *_cbr(mid, mid), *_cbr(mid, mid, dilation=2),
+                                     *_cbr(mid, mid, dilation=4))
+        # 1x1 fuse first so the full-resolution 3x3 costs what the local head costs.
+        self.fuse = nn.Sequential(*_cbr(width + mid + lane_classes, width, 1), *_cbr(width, width),
+                                  nn.Conv2d(width, 1, 1))
+
+    def forward(self, features, deep, lane=None):
+        context = F.interpolate(self.context(deep), size=features.shape[-2:], mode="bilinear",
+                                align_corners=False)
+        parts = [features, context] + ([] if lane is None else [lane.softmax(1)])
+        return self.fuse(torch.cat(parts, 1))
+
+
 class LaneWithDrivable(nn.Module):
     """1x3xHxW -> 1x(C+1)xHxW logits: the lane model's C channels, then drivable."""
 
-    def __init__(self, lane: LaneUNet, *, ignore_top: int = 0):
+    def __init__(self, lane: LaneUNet, *, ignore_top: int = 0, head: str = "local"):
         super().__init__()
         if not 0 <= ignore_top < HEIGHT:
             raise ValueError(f"ignore_top must be in [0, {HEIGHT - 1}]")
-        self.lane, self.ignore_top = lane, int(ignore_top)
+        if head not in HEADS:
+            raise ValueError(f"head must be one of {HEADS}")
+        self.lane, self.ignore_top, self.head = lane, int(ignore_top), head
         width = lane.head.in_channels
-        self.drivable = nn.Sequential(
-            nn.Conv2d(width, width, 3, padding=1, bias=False), nn.BatchNorm2d(width),
-            nn.ReLU(inplace=True), nn.Conv2d(width, 1, 1))
+        if head == "local":
+            self.drivable = nn.Sequential(
+                nn.Conv2d(width, width, 3, padding=1, bias=False), nn.BatchNorm2d(width),
+                nn.ReLU(inplace=True), nn.Conv2d(width, 1, 1))
+        else:
+            self.drivable = ContextHead(width, lane.bottleneck[-2].num_features,
+                                        lane.head.out_channels if head == "context_lane" else 0)
 
     def train(self, mode: bool = True):
         super().train(mode)
@@ -152,9 +216,14 @@ class LaneWithDrivable(nn.Module):
     def drivable_logit(self, x):
         """(lane logits, head logit s) for the same features."""
         with torch.no_grad():
-            features = self.lane.features(x)
+            if self.head == "local":
+                features = self.lane.features(x)
+            else:
+                features, deep = lane_features_and_bottleneck(self.lane, x)
             lane = self.lane.head(features)
-        return lane, self.drivable(features)
+        if self.head == "local":
+            return lane, self.drivable(features)
+        return lane, self.drivable(features, deep, lane if self.head == "context_lane" else None)
 
     def forward(self, x):
         lane, s = self.drivable_logit(x)
@@ -185,16 +254,22 @@ def _drivable_index(dataset) -> int:
     return found[0]
 
 
+NEAR_ROWS, NEAR_COLS = slice(144, 240), slice(110, 211)  # bottom 40 %, centre cols (D-563/D-566)
+
+
+
 def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_size, device,
-               log=print) -> dict:
-    """Adam on the head only, BCE on labelled pixels; ends with the best val drivable IoU's weights."""
+               log=print, pos_weight=None, fp_lambda=1.0) -> dict:
+    """Adam on the head only, BCE on labelled pixels; ends with the best epoch's weights
+    (val drivable IoU - fp_lambda * outside-band FP)."""
     index, ignore = _drivable_index(train_ds), train_ds.ignore_index
     if _drivable_index(val_ds) != index:
         raise ValueError("train and val disagree on the drivable class index")
     model = model.to(device)
     drivable_channel = model.lane.head.out_channels
     opt = torch.optim.Adam(model.drivable.parameters(), lr=lr)
-    bce = nn.BCEWithLogitsLoss(reduction="none")
+    bce = nn.BCEWithLogitsLoss(reduction="none", pos_weight=(
+        None if pos_weight is None else torch.tensor(float(pos_weight), device=device)))
     loader = dict(batch_size=batch_size, num_workers=0)
     train_dl = torch.utils.data.DataLoader(train_ds, shuffle=True, **loader)
     val_dl = torch.utils.data.DataLoader(val_ds, **loader)
@@ -215,6 +290,15 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             total, count = total + loss.item() * len(x), count + len(x)
         model.eval()
         counts = {"all": [0, 0], "lane_background": [0, 0]}
+        band_fp = {"post": [0, 0], "raw": [0, 0]}
+        near = {"post": [0, 0, 0], "raw": [0, 0, 0]}  # predicted drivable, labelled drivable, pixels
+        beyond_fp = {"post": [0, 0], "raw": [0, 0]}
+        coverage = [0, 0]  # val frames with beyond-line label pixels, val frames (D-576 on a union)
+        roles, names = {}, {c["name"]: c["index"] for c in val_ds.classes}
+        for c in val_ds.classes:
+            roles.setdefault(c["role"], []).append(c["index"])
+        boundary = ((names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names)
+                    else None)
         with torch.no_grad():
             for x, y in val_dl:
                 x, y = x.to(device), y.to(device)
@@ -227,19 +311,55 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                 for name, scope in (("all", keep), ("lane_background", keep & lane_bg)):
                     counts[name][0] += int((pred & truth & scope).sum())
                     counts[name][1] += int(((pred | truth) & scope).sum())
+                post = torch.from_numpy(np.stack([lane_bounded_drivable(
+                    a, drivable_channel, roles.get("lane_marking", ()), ignore_top=model.ignore_top,
+                    through_idxs=roles.get("ignore", ()), boundary=boundary)
+                    for a in answer.cpu().numpy()])).to(device)
+                band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
+                beyond = None if boundary is None else (
+                    torch.from_numpy(beyond_boundary(y.cpu().numpy(), *boundary)).to(device) & (y == 0) & keep)
+                coverage[0] += 0 if beyond is None else int(beyond.flatten(1).any(1).sum())
+                coverage[1] += len(y)
+                for kind, p in (("post", post), ("raw", pred)):
+                    if beyond is not None:
+                        beyond_fp[kind][0] += int((p & beyond).sum())
+                        beyond_fp[kind][1] += int(beyond.sum())
+                    band_fp[kind][0] += int((p & band).sum())
+                    band_fp[kind][1] += int(band.sum())
+                    near[kind][0] += int(p[..., NEAR_ROWS, NEAR_COLS].sum())
+                    near[kind][1] += int(truth[..., NEAR_ROWS, NEAR_COLS].sum())
+                    near[kind][2] += p[..., NEAR_ROWS, NEAR_COLS].numel()
         ious = {k: (i / u if u else None) for k, (i, u) in counts.items()}
         iou = ious["lane_background"]
         row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou,
-               "val_drivable_iou_all": ious["all"]}
+               "val_drivable_iou_all": ious["all"],
+               **{"val_outside_band_fp" + suffix: f[0] / f[1] if f[1] else None
+                  for suffix, f in (("", band_fp["post"]), ("_raw", band_fp["raw"]))},
+               **{"val_beyond_line_fp" + suffix: f[0] / f[1] if f[1] else None
+                  for suffix, f in (("", beyond_fp["post"]), ("_raw", beyond_fp["raw"]))},
+               # Frames without lane classes (map-projected labels) add no beyond pixels: the FP is over
+               # the frames that have them, and this says how many that was.
+               "val_beyond_line_coverage": {"frames": coverage[0], "val_frames": coverage[1]},
+               **{"val_near_centre_drivable" + suffix: {"pred": n[0] / n[2], "label": n[1] / n[2]}
+                  if n[2] else None for suffix, n in (("", near["post"]), ("_raw", near["raw"]))}}
+        row["score"] = None if iou is None else iou - fp_lambda * (row["val_outside_band_fp"] or 0.0)
         history.append(row)
-        if iou is not None and (best is None or iou > best["val_drivable_iou"]):
+        if iou is not None and (best is None or row["score"] > best["score"]):
             best, best_state = row, copy.deepcopy(model.drivable.state_dict())
         if log:
             fmt = lambda v: "-" if v is None else f"{v:.3f}"  # noqa: E731
             log(f"epoch {epoch}/{epochs} loss {row['train_loss']:.4f} "
-                f"drivable={fmt(iou)} (all labelled pixels {fmt(ious['all'])})")
+                f"drivable={fmt(iou)} (all labelled pixels {fmt(ious['all'])}) "
+                f"outside-band FP {fmt(row['val_outside_band_fp'])}")
     if best_state is not None:
         model.drivable.load_state_dict(best_state)
     return {"history": history, "best_epoch": best["epoch"] if best else None,
             "val_drivable_iou": best["val_drivable_iou"] if best else None,
-            "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None}
+            "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None,
+            **{k: best[k] if best else None for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
+                                                      "val_beyond_line_fp", "val_beyond_line_fp_raw",
+                                                      "val_beyond_line_coverage", "val_near_centre_drivable",
+                                                      "val_near_centre_drivable_raw")},
+            "selection": {"score": "val_drivable_iou - fp_lambda * val_outside_band_fp",
+                          "fp_lambda": fp_lambda, "pos_weight": pos_weight,
+                          "head": model.head}}

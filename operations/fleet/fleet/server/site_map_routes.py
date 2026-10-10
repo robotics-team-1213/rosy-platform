@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Optional
 
+import yaml
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
-from fleet.site_map import SiteMap
+from fleet.site_map import SiteMap, crosswalks_from_lane_graph
 
 #: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
@@ -67,6 +68,18 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
         return view
+
+    @app.get("/api/fleet/site-map/lane-graph-crosswalks", dependencies=read_guard, tags=["site-map"])
+    def site_map_lane_graph_crosswalks() -> dict:
+        """D-573 1: the import lane graph's crosswalks for the editor to merge into the draft."""
+        source = site_maps.import_source
+        if source is None:
+            raise site_map_error(404, "SITE_MAP_NO_LANE_GRAPH", "no --site-map-import lane graph is configured")
+        try:
+            crosswalks = crosswalks_from_lane_graph(source)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError) as exc:
+            raise site_map_error(422, "SITE_MAP_NO_LANE_GRAPH", f"the lane graph cannot be read: {type(exc).__name__}") from exc
+        return {"source": source.name, "crosswalks": [c.model_dump(mode="json") for c in crosswalks]}
 
     @app.get("/api/fleet/site-map/draft", dependencies=read_guard, tags=["site-map"])
     def site_map_draft() -> dict:

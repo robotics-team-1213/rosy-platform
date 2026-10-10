@@ -5,6 +5,15 @@ export const PLACE_KIND_LABEL = {
   junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
+/** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
+export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
+/** D-577 3 AI PC fact kinds (shadow: shown, never acted on here). */
+export const AI_FACT_LABEL = {
+  wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
+  waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
+  unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
+  incident_context: '사건 원인 초안',
+};
 export const TRIP_ERROR_LABEL = {
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
@@ -23,7 +32,12 @@ export const TRIP_ERROR_LABEL = {
   TRIP_ROBOT_CAPS_UNKNOWN: '로봇이 주행 능력(종류·주행 방식)을 알리지 않습니다 · 새 이미지가 필요합니다',
   TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
   TRIP_SITE_FLOOR_MISMATCH: '로봇의 현장 바닥 선언이 활성 지도와 다릅니다 · 로봇 설정을 확인하세요',
-  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
+  // D-601: 꺼져 있으면 관제가 출발 때 카메라 차선 주행을 켠다; 남는 거절은 IR 차선 주행이나 모르는 상태
+  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇이 IR 차선 주행 중이거나 차선 주행 상태를 알 수 없습니다 · 차선 주행을 끈 뒤 다시 출발하세요',
+  TRIP_LANE_CAMERA_UNAVAILABLE: '로봇 앞 카메라 영상이 들어오지 않아 차선 주행을 할 수 없습니다 · 카메라를 확인하세요',
+  TRIP_START_HEADING_MISMATCH: '로봇이 첫 차로 방향과 다르게 서 있습니다 · 차로 방향으로 돌려 세우세요',
+  TRIP_START_OFF_LANE: '로봇이 첫 차로 밖에 있습니다 · 차로 위로 옮기세요',
+  TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
@@ -84,6 +98,7 @@ export const TRIP_REASON_LABEL = {
   TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
   lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
+  TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
@@ -94,6 +109,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
+  SITE_MAP_NO_LANE_GRAPH: '가져올 lane_graph가 설정되지 않았거나 읽을 수 없습니다',
   // D-494 6 teach
   TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
   TEACH_NOT_RECORDING: '기록 중이 아닙니다',
@@ -127,8 +143,21 @@ export function planIsCurrent(plan, active) {
   return Boolean(plan && active && plan.map_version === active.version);
 }
 
+/** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
+export function startCheckText(check) {
+  if (!check?.code) return '출발 가능';
+  if (check.code === 'TRIP_START_OFF_LANE') return `차선 밖 ${Math.round((check.off_lane_m || 0) * 100)} cm`;
+  const err = Math.abs(check.heading_err_deg ?? NaN);
+  if (!Number.isFinite(err)) return '방향 모름';
+  return `${err > 90 ? '방향 반대' : '방향 어긋남'}(${err.toFixed(0)}°)`;
+}
+
 export function tripErrorText(code, detail = {}) {
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
+  if (/HEADING_CONFLICT|START_HEADING_MISMATCH/.test(code || '') && detail?.heading_err_deg != null)
+    return `${base} · ${startCheckText({...detail, code: 'heading'})}`;
+  if (/START_OFF_(LANE|MAP)/.test(code || '') && detail?.off_lane_m != null)
+    return `${base} · ${startCheckText({...detail, code: 'TRIP_START_OFF_LANE'})}`;
   if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
     return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
   if (code !== 'TRIP_NO_ROUTE') return base;
@@ -358,7 +387,8 @@ export function tripRefusalText(error) {
 }
 /** "3개 차로 · 2.10 m · 약 14 s · 지도 v4" for a computed plan. */
 export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`;
+  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+    + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 /** '' when a repeat trip may start from ``start``; otherwise why not (role and robot checks are the caller's). */
 export function repeatTripReason({active, running, start}) {
@@ -382,6 +412,7 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
+  if (plan.start_check?.code) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
   return '';
 }
 
@@ -511,9 +542,12 @@ export function trafficDrawing(traffic, active, trips = []) {
   for (const signal of traffic.signals || []) {
     for (const row of signal.approaches || []) {
       if (!row.stop_line) continue;
+      const count = countdownText(row);
+      const occupancy = occupancyLampText(signal, row);  // D-525 rev 6: the zone state in words
       signals.push({ x: row.stop_line.x, y: row.stop_line.y, angle: row.stop_line.yaw, lamp: row.lamp,
         label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id,
-        count: countdownText(row), approach: row.approach });
+        count, approach: row.approach,
+        text: occupancy || (count ? `${signalLampText(row.lamp)} ${count}` : signalLampText(row.lamp)) });
     }
   }
   const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
@@ -525,6 +559,27 @@ export function trafficDrawing(traffic, active, trips = []) {
 const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
 export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
 
+/** D-525 rev 6 the occupancy-mode zone state: "비어 있음", "점유 예정 · rosy_01", "점유 중 · rosy_01". */
+function occupancyStateText(occupancy) {
+  const who = occupancy?.holder ? ` · ${occupancy.holder}` : "";
+  return { free: "비어 있음", reserved: `점유 예정${who}`, occupied: `점유 중${who}` }[occupancy?.state]
+    || "상태 모름 · 적색";
+}
+
+/** D-525 rev 6: one approach's lamp in words in occupancy mode (never colour alone): "초록 · 비어 있음",
+ * "주황 · 점유 예정 · rosy_01", "적 · 점유 중 · rosy_01"; the holder's own approach while reserved is
+ * "초록 · 진입 차례 · rosy_01". null outside occupancy mode or with a config error. */
+export function occupancyLampText(signal, row) {
+  if (signal?.mode !== "occupancy" || signal.errors?.length) return null;
+  const occupancy = signal.occupancy || {};
+  if (row?.lamp === "green") {
+    return occupancy.state === "reserved" ? `초록 · 진입 차례${occupancy.holder ? ` · ${occupancy.holder}` : ""}`
+      : "초록 · 비어 있음";
+  }
+  if (row?.lamp === "yellow") return `주황 · ${occupancyStateText(occupancy)}`;
+  return `적 · ${occupancyStateText(occupancy)}`;
+}
+
 /** D-525 rev 3 T-map style seconds for one approach: "7" (exact), "≥7" (a lower bound), "" (unknown). */
 export function countdownText(row) {
   const s = row?.lamp === "red" ? row?.green_in_s ?? row?.left_s : row?.left_s;
@@ -535,7 +590,8 @@ export function countdownText(row) {
 /** Robot card text for the next signal on its route: "신호 sig 적 · 녹색까지 ≥7 s · 정지선 0.40 m". */
 export function signalAheadText(ahead) {
   if (!ahead) return "";
-  const lamp = signalLampText(ahead.lamp);
+  const lamp = ahead.mode === "occupancy"
+    ? occupancyLampText(ahead, { lamp: ahead.lamp }) : signalLampText(ahead.lamp);
   const wait = ahead.lamp !== "green" && typeof ahead.green_in_s === "number"
     ? ` · 녹색까지 ${ahead.exact ? "" : "≥"}${Math.ceil(ahead.green_in_s)} s` : "";
   const where = ahead.distance_m >= 0 ? ` · 정지선 ${ahead.distance_m.toFixed(2)} m` : " · 교차로 안";
@@ -553,6 +609,7 @@ export function signalWait(traffic, robotId) {
 /** "가상 신호 · 녹 5 s" for one signal row of /traffic. */
 export function signalText(signal) {
   if (signal.errors?.length) return `${signal.signal_id} · 설정 오류 · 늘 적색`;
+  if (signal.mode === "occupancy") return `가상 신호 ${signal.signal_id} · 점유 기반(기본) · ${occupancyStateText(signal.occupancy)}`;
   const word = { green: "녹", yellow: "황", all_red: "전체 적색" }[signal.aspect] || signal.aspect;
   const left = typeof signal.left_s === "number" ? ` ${Math.ceil(signal.left_s)} s` : "";
   const mode = { hold: " · 유지", all_red: " · 운영자 전체 적색" }[signal.mode] || "";
@@ -574,6 +631,9 @@ export function trafficCardLine(traffic, robotId) {
     parts.push(convoy.follows ? `대열 · ${convoy.follows} 뒤${typeof convoy.gap_m === "number" ? ` ${convoy.gap_m.toFixed(1)} m` : ""}`
       : `대열 · ${convoy.leader} 위치 모름 · 고정 블록`);
   }
+  // D-517 9: the leader's card names who laps behind it (the follower's card names the leader above).
+  const behind = (traffic.robots || []).filter((row) => row.convoy?.leader === robotId).map((row) => row.robot_id);
+  if (behind.length) parts.push(`대열 리더 · ${behind.join(", ")} 따라옴`);
   const held = (traffic.units || []).some((unit) => unit.state === "UNKNOWN" && (unit.holders || []).includes(robotId));
   const unit = waitingUnit(traffic, robotId);
   const signal = signalWait(traffic, robotId);
@@ -586,7 +646,9 @@ export function trafficCardLine(traffic, robotId) {
   } else if (robot.waiting_for?.length && !(convoy?.follows && robot.waiting_for.join() === convoy.follows)) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
   const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);  // D-517 5 (M4)
   if (resolver?.trigger === "wait_cycle") {
-    parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
+    parts.push(`교착 · ${RESOLVER_DECISION_LABEL[resolver.decision] || RESOLVER_DECISION_LABEL.human}`);
+  } else if (traffic.wait_cycle?.includes(robotId)) {
+    parts.push("대기 순환 후보 · 지속 여부 확인 중");
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   const advice = robot.advice;  // D-551: display-only signal advice to CORE
@@ -618,7 +680,10 @@ export function trafficAttention(traffic, robotId, clock, now) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
     const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
-    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
+    const confirmed = resolver.some((row) => row.trigger === "wait_cycle");
+    items.push(confirmed
+      ? { severity: "crit", decision: "deadlock", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` }
+      : { severity: "warn", text: `: 대기 순환 후보 — ${[...cycle, cycle[0]].join(" → ")} · 지속 여부 확인 중` });
   }
   if (mine?.trigger === "unknown") {
     items.push({ severity: "crit", text: ": 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요" });
@@ -642,4 +707,33 @@ export function trafficAttention(traffic, robotId, clock, now) {
 /** "고리 2/3대" per repeat loop, or '' when no repeat trip runs. */
 export function loopCapacityText(traffic) {
   return (traffic?.loop_capacity || []).map((loop) => `고리 ${loop.robots.length}/${loop.capacity}대`).join(" · ");
+}
+
+/** D-573 1: append one waiting band (map metres, mm-rounded) to crosswalk ``id``; the server
+ * checks it reaches the lane and stays on the site floor when the draft is saved. */
+export function addApproach(map, id, points) {
+  if (points.length < 3) throw new Error('대기 띠는 점이 세 개 이상이어야 합니다');
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk) throw new Error(`없는 횡단보도 ${id}`);
+  if ((crosswalk.approach || []).length >= 4) throw new Error('대기 띠는 횡단보도마다 4개까지입니다');
+  const mm = value => Math.round(value * 1000) / 1000;
+  crosswalk.approach = [...(crosswalk.approach || []), points.map(([x, y]) => [mm(x), mm(y)])];
+  return next;
+}
+
+export function removeApproach(map, id, index) {
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk?.approach?.[index]) throw new Error('지울 대기 띠가 없습니다');
+  crosswalk.approach.splice(index, 1);
+  return next;
+}
+
+/** D-573 1: lane_graph crosswalks replace the draft's polygons by id; drawn bands are kept. */
+export function mergeCrosswalks(map, imported) {
+  const next = copy(map);
+  const had = new Map((next.crosswalks || []).map(item => [item.id, item]));
+  next.crosswalks = imported.map(item => ({...copy(item), approach: had.get(item.id)?.approach || []}));
+  return next;
 }

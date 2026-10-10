@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
-- 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
-- 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
-- 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
-- 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프
+- 2026-10-10 · uncommitted · docs(route): D-609 계획-실행-완료 증거 파이프라인
+- 2026-10-10 · uncommitted · feat(fleet): D-601 trip 출발이 카메라 차선 주행을 켜고 출발 자세·차선 카메라를 본다
+- 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시
+- 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
+- 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토

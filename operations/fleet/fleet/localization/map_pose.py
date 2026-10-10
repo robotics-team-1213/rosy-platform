@@ -10,12 +10,20 @@ Between sightings the pose is the anchor composed with the rigid odom delta sinc
 States: LOCALIZED; DEGRADED when the bridge is longer than `max_dead_reckon_m` or turned more
 than `max_bridge_turn_deg`, the anchor is older than `max_anchor_age_s`, or a sighting disagreed
 with the bridged prediction by more than `max_jump_m` / `max_jump_deg` (it re-anchors and needs
-`RECOVER_AFTER` consistent sightings; so does a first anchor); UNKNOWN when never anchored or
+`RECOVER_AFTER` consistent sightings; so does a first anchor; sightings more than
+`max_anchor_age_s` apart reset that count unless odom stood still between them); UNKNOWN when never anchored or
 odom is older than `max_odom_age_s`. An odom gap longer than `max_odom_age_s`, odom resuming
 after such staleness, or a step faster than `max_speed_mps` / `max_turn_rate_dps` (a CORE
 restart resets odom to 0) drops the anchor: the pose stays UNKNOWN until the next sighting.
 A caller that knows the active map frame passes it: a sighting for another frame is counted and
 ignored, and an anchor in another frame reads DEGRADED.
+
+Operator pin (D-593): a named operator may set the anchor by hand (`add_pin`). It pairs with the
+newest odom sample (fresh within `max_odom_age_s`), reads LOCALIZED at once and is bridged by odom
+under the same limits as a sighting anchor (`max_dead_reckon_m`, `max_bridge_turn_deg`,
+`max_anchor_age_s`). The next sighting is checked against it like any anchor: a disagreement
+beyond `max_jump_m` / `max_jump_deg` reads DEGRADED. Sightings captured before the pin are dropped.
+`anchor_source` names the anchor kind (`sighting` | `operator_pin`).
 
 Path and turn are summed per received sample (chord, |dyaw|), so they are lower bounds that
 depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-494 appendix).
@@ -36,6 +44,8 @@ from typing import Mapping, Optional
 
 LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
 SIGHTING, BRIDGED = "sighting", "bridged"
+#: D-593: an anchor set by a named operator on the console map.
+OPERATOR_PIN = "operator_pin"
 #: A sighting further ahead of `now` than this is refused (as the sighting ingest does).
 MAX_SIGHTING_FUTURE_S = 0.05
 #: D-494 3: consecutive consistent sightings that end a DEGRADED episode (and confirm a first anchor).
@@ -45,6 +55,9 @@ ODOM_BUFFER = 256
 #: Allowance on top of `max_speed_mps * dt` for odom noise before a step counts as an odom reset.
 ODOM_STEP_MARGIN_M = 0.05
 ODOM_TURN_MARGIN_RAD = 0.1
+#: Odom path / turn since the anchor at or below which the robot stood still (odom jitter).
+STILL_PATH_M = 0.02
+STILL_TURN_RAD = math.radians(2.0)
 #: Sightings waiting for odom per robot (3.2 s at 10 Hz); the oldest goes first when full.
 PENDING_SIGHTINGS = 32
 
@@ -146,6 +159,10 @@ class MapPose:
     sightings_filtered_map_id: int = 0
     #: D-517 4: CORE's stamp of the newest odom sample in this pose (the authority's ``pose_stamp``).
     odom_stamp: Optional[float] = None
+    #: D-593: what set the anchor, `sighting` or `operator_pin`; None without one.
+    anchor_source: Optional[str] = None
+    #: D-593: summed |odom heading change| since the anchor (deg), the turn twin of `dead_reckon_m`.
+    bridge_turn_deg: float = 0.0
 
 
 def _wrap(angle: float) -> float:
@@ -217,6 +234,7 @@ class _Anchor:
     odom: _Odom
     captured_at: float
     map_id: Optional[str]
+    kind: str = SIGHTING
 
 
 class MapPoseTracker:
@@ -234,6 +252,7 @@ class MapPoseTracker:
         self._consistent = 0
         self._refused = 0
         self._refused_reason: Optional[str] = None
+        self._epoch = 0   # D-581: odom resets so far (odom_to_map)
 
     @property
     def sourced(self) -> bool:
@@ -253,6 +272,16 @@ class MapPoseTracker:
         return any(math.dist(o.pose[:2], base.pose[:2]) > min_m
                    or abs(_wrap(o.pose[2] - base.pose[2])) > min_rad
                    for o in self._odom if o.stamp >= since)
+
+    def odom_to_map(self) -> Optional[tuple[Pose, Pose, float, int]]:
+        """D-581: (map <- odom of the current anchor, newest odom pose, the anchor's captured_at,
+        odom epoch); None unanchored. The epoch counts odom resets: a transform from another epoch
+        belongs to an odom frame that no longer exists. Read beside `pose()` (may it be used)."""
+        if self._anchor is None or not self._odom:
+            return None
+        anchor = self._anchor
+        return (compose(anchor.map_pose, relative(anchor.odom.pose, (0.0, 0.0, 0.0))),
+                self._odom[-1].pose, anchor.captured_at, self._epoch)
 
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
@@ -306,6 +335,24 @@ class MapPoseTracker:
         self._resolve(now)
         return True
 
+    def add_pin(self, pose: Pose, now: float, map_id: Optional[str] = None) -> Optional[str]:
+        """D-593: anchor on an operator's map pose at the newest odom sample.
+
+        Returns None when anchored, else why not: `ODOM_STALE` (no odom within `max_odom_age_s`
+        of `now`) or `POSE_INVALID`. Pending sightings captured before `now` are dropped."""
+        if not _finite(*pose, now):
+            return "POSE_INVALID"
+        self._resolve(now)
+        latest = self._odom[-1] if self._odom else None
+        if latest is None or not 0.0 <= now - latest.stamp <= self.config.max_odom_age_s:
+            return "ODOM_STALE"
+        while self._pending and self._pending[0].captured_at < now:
+            self._pending.popleft()
+        self._anchor = _Anchor((float(pose[0]), float(pose[1]), _wrap(float(pose[2]))), latest, now,
+                               map_id, OPERATOR_PIN)
+        self._degraded, self._consistent = False, RECOVER_AFTER
+        return None
+
     def pose(self, now: float, active_map_id: Optional[str] = None) -> MapPose:
         cfg = self.config
         self._resolve(now)
@@ -317,7 +364,7 @@ class MapPoseTracker:
             return MapPose(None, None, None, UNKNOWN, None, 0.0, None, **diag)
         anchor_age = max(0.0, now - anchor.captured_at)
         if latest.stamp <= anchor.odom.stamp:
-            (x, y, yaw), source, bridged, turned = anchor.map_pose, SIGHTING, 0.0, 0.0
+            (x, y, yaw), source, bridged, turned = anchor.map_pose, anchor.kind, 0.0, 0.0
             age = anchor_age
         else:
             x, y, yaw = compose(anchor.map_pose, relative(anchor.odom.pose, latest.pose))
@@ -328,9 +375,11 @@ class MapPoseTracker:
                     or (active_map_id is not None and anchor.map_id != active_map_id)
                     or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
-                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, **diag)
+                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind,
+                       bridge_turn_deg=math.degrees(turned), **diag)
 
     def _reset(self, since: float) -> None:
+        self._epoch += 1
         self._odom.clear()
         self._anchor = None
         while self._pending and self._pending[0].captured_at < since:
@@ -362,6 +411,8 @@ class MapPoseTracker:
         cfg = self.config
         seen = (sighting.x, sighting.y, sighting.yaw)
         anchor = self._anchor
+        if anchor is not None and sighting.captured_at < anchor.captured_at:
+            return                            # D-593: seen before the operator pin it would undo
         if anchor is not None and anchor.map_id != sighting.map_id:
             anchor = None                     # another map frame: start over from this sighting
         if anchor is None:
@@ -370,9 +421,14 @@ class MapPoseTracker:
             predicted = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))
             jumped = (math.dist(predicted[:2], seen[:2]) > cfg.max_jump_m
                       or abs(_wrap(predicted[2] - seen[2])) > math.radians(cfg.max_jump_deg))
-            stretched = (odom.path_m - anchor.odom.path_m > cfg.max_dead_reckon_m
-                         or odom.turn_rad - anchor.odom.turn_rad > math.radians(cfg.max_bridge_turn_deg)
-                         or sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s)
+            path = odom.path_m - anchor.odom.path_m
+            turn = odom.turn_rad - anchor.odom.turn_rad
+            # A robot that stood still since the anchor has no odom drift to bound: two agreeing
+            # sightings any time apart re-localize it (site 2026-10-10: rosy_40 parked, marker read
+            # 1 frame in 8, never LOCALIZED again). Same odom epoch is implied: a reset drops the anchor.
+            still = path <= STILL_PATH_M and turn <= STILL_TURN_RAD
+            stretched = (path > cfg.max_dead_reckon_m or turn > math.radians(cfg.max_bridge_turn_deg)
+                         or (sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s and not still))
             if jumped:
                 self._degraded, self._consistent = True, 0
             else:

@@ -656,3 +656,59 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
     open_token_access(page)
     page.locator("#token-save").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+
+
+def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):
+    """D-573 1/7: crosswalk polygons are read-only on the map; the operator draws a waiting band
+    on the draft, the named save keeps it, and deleting it saves an empty band list."""
+    from playwright.sync_api import expect
+
+    page, store, _robot = page_site
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)  # active map, read-only
+    page.select_option("#map-source", "draft")
+    page.locator("#map-viewport").scroll_into_view_if_needed()
+    zone = page.locator('#site-map-svg [data-crosswalk="cw2"]')
+    zone.dispatch_event("click")  # the east lane line runs over the polygon's centre
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw2")
+    expect(page.locator("#crosswalk-form")).to_be_visible()
+    expect(page.locator("#crosswalk-lanes")).to_contain_text("east")
+    page.locator("#band-draw").click()
+    zone.evaluate("e => e.scrollIntoView({block: 'center'})")  # the button sits below the map, the topbar above
+    box = zone.bounding_box()
+    # North of cw2: the lane runs along x; screen up is map +y at view turn 0.
+    for fx, fy in ((0.1, 0.05), (0.9, 0.05), (0.9, -0.45), (0.1, -0.45)):
+        page.mouse.click(box["x"] + box["width"] * fx, box["y"] + box["height"] * fy)
+    expect(page.locator("#site-map-svg .band-draft")).to_have_count(1)
+    page.locator("#band-finish").click()
+    expect(page.locator("#crosswalk-band option")).to_have_count(1)
+    expect(page.locator("#site-map-svg .crosswalk-approach")).to_have_count(1)
+    page.locator("#save-draft").click()
+    expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    saved = store.draft_view()
+    assert saved["saved_by"] == "bob" and len(saved["map"]["crosswalks"][1]["approach"]) == 1
+    assert len(saved["map"]["crosswalks"][1]["approach"][0]) == 4
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / "site-map-crosswalk-band.png"), full_page=True)
+    page.locator("#band-delete").click()
+    expect(page.locator("#crosswalk-band option")).to_have_count(0)
+    page.locator("#save-draft").click()
+    expect(page.locator("#notice")).to_contain_text("초안을 저장했습니다")
+    assert store.draft_view()["map"]["crosswalks"][1]["approach"] == []
+    assert store.active()[0] == 1  # the draft only; activation stays a separate named step
+
+
+def test_viewer_sees_crosswalks_without_band_tools(page_site):
+    from playwright.sync_api import expect
+
+    page, _store, _robot = page_site
+    page.locator("#console-token").fill("viewer-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)
+    page.locator("#map-viewport").scroll_into_view_if_needed()
+    page.locator('#site-map-svg [data-crosswalk="cw1"]').dispatch_event("click")
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
+    expect(page.locator("#crosswalk-form")).to_be_hidden()
+    expect(page.locator("#import-crosswalks")).to_be_disabled()

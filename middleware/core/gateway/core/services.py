@@ -493,6 +493,7 @@ class CoreServices:
             map_id_provider=lambda: state.map_id,
             # D-559 trail: own pose, the NAVIGATION slot and the D-422 judge of line follow.
             pose_provider=state.pose_sample, obstacle_gap=line_follow.obstacle_gap,
+            odom_provider=state.odom_sample,  # D-581 Fleet-anchored trail steers in odom
             twist_sink=lambda t: command.set_nav_twist(None if t is None else Twist(*t)),
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
