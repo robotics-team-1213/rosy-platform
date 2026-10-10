@@ -688,3 +688,15 @@ def test_d577_r5_wait_is_resent_once_after_a_transport_failure():
     assert r.result(again[0], code="ROBOT_UNREACHABLE") == Escalate(
         "rosy_01", "stuck-1", "lane_lost_hold:local_disabled")
     assert r.step(2.0, [row]) == []
+
+
+# ---- D-577 개정 2026-10-10: acting AI facts only stop a back-off ----
+
+def test_d577_acting_ai_fact_turns_a_back_off_into_r5_wait_and_a_human():
+    row = _row(stuck=_stuck())
+    row["ai_facts"] = [{"kind": "rear_blocked", "robot_ids": ["rosy_01"], "stage": "acting"}]
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "WAIT", "R5",
+                                         escalate="obstacle_ahead_hold:ai:rear_blocked")]
+    plain = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert plain.step(0.0, [_row(stuck=_stuck())]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]

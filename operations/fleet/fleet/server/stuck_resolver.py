@@ -280,6 +280,9 @@ class StuckResolver:
         if sid in chain.answered:
             return self._next_segment(row, rows)
         rule = self._rule(row, stuck, rows, chain)
+        ai = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
+        if ai is not None and rule is not None and rule[1] == "BACK_AND_RETRY":
+            rule = ("R5", "WAIT", f"ai:{ai}")         # D-577 7 (2): an acting AI fact only stops a back-off
         if rule is not None and rule[1] == "ESCALATE":
             return self._escalate(chain, rid, sid, "meet")
         if rule is not None and rule[1] == "RESUME":

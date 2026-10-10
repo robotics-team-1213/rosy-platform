@@ -33,6 +33,8 @@ class StuckResolverLoop:
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        #: D-577 7: live acting AI facts about a robot (`AiFactsBoard.acting_facts`, app.py sets it).
+        self.ai_facts: Callable[[str], list] = lambda _robot_id: []
         self.wake = asyncio.Event()
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
@@ -58,6 +60,9 @@ class StuckResolverLoop:
         pose = self.map_pose(row["robot_id"])
         if pose is not None:
             extra["map_pose"] = pose
+        facts = self.ai_facts(row["robot_id"])
+        if facts:
+            extra["ai_facts"] = facts
         return {**row, **extra} if extra else row
 
     async def run(self) -> None:

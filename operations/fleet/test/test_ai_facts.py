@@ -199,3 +199,18 @@ def test_a_stalled_fact_write_does_not_delay_the_emergency_stop(tmp_path, monkey
     status, elapsed = asyncio.run(main())
     assert status == 200 and elapsed < 0.5, elapsed
     assert ("estop",) in robot.calls
+
+
+def test_acting_stage_only_for_configured_robots_and_kinds():
+    board = ai_facts.AiFactsBoard(acting=frozenset({"rosy_41"}))
+    board.heartbeat(ai_facts.AiHeartbeat(service_version="t", owner_mode="shared"))
+    now = board.wall()
+
+    def fact(kind, rid):
+        return ai_facts.AiFact(kind=kind, robot_ids=[rid], value={"x": 1}, confidence=0.8, evidence={},
+                               source="analyzer:stuck_scene@1", observed_at=now, ttl_s=3.0)
+
+    board.accept([fact("rear_blocked", "rosy_41"), fact("rear_blocked", "rosy_40"),
+                  fact("stalled", "rosy_41")], "ai-pc")
+    assert [f["kind"] for f in board.acting_facts("rosy_41")] == ["rear_blocked"]
+    assert board.acting_facts("rosy_40") == []

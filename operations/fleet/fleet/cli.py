@@ -629,6 +629,7 @@ def run_console(args: argparse.Namespace) -> None:
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
+                     ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -669,9 +670,10 @@ def _goal_lease_ttl_s(args) -> float:
     return float(value)
 
 
-def _stuck_resolver_enrolled(args) -> frozenset:
-    """``fleet.stuck_resolver.enrolled_robots`` of ``--site-config``: enrolled robot ids (D-361) the
-    resolver answers with Fleet's enrolled CORE credential. Empty (default) = none, as before."""
+def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
+    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
+    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
+    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
     import yaml
 
     try:
@@ -679,11 +681,11 @@ def _stuck_resolver_enrolled(args) -> frozenset:
         if getattr(args, "site_config", None) is not None:
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
         section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
-        ids = section.get("enrolled_robots") or []
+        ids = section.get(key) or []
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"stuck resolver config: {exc}")
     if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
-        sys.exit("stuck resolver config: fleet.stuck_resolver.enrolled_robots must be a list of robot ids")
+        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
     return frozenset(ids)
 
 
