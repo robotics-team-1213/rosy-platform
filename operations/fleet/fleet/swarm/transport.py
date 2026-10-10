@@ -373,17 +373,22 @@ class HttpRobotClient:
         """CORE ``GET /api/v1/vision/front/status`` (D-601 B: ``available`` = the front camera is live)."""
         return await self._get("/api/v1/vision/front/status")
 
-    async def front_frame(self) -> tuple[bytes, dict]:
+    async def front_frame(self, *, overlay: bool = True) -> tuple[bytes, dict]:
         """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
         status = await self.front_status()
         if not status.get("available") or not status.get("sequence"):
             raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
                                 "front camera preview is missing or stale")
-        resp = await self._http.get("/api/v1/vision/front/frame", params={"sequence": status["sequence"]},
+        params = {"sequence": status["sequence"]}
+        if not overlay:
+            if not status.get("raw_available") or not status.get("raw_sequence"):
+                raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "raw front frame unavailable")
+            params = {"sequence": status["raw_sequence"], "overlay": "false"}
+        resp = await self._http.get("/api/v1/vision/front/frame", params=params,
                                     headers=self._headers())
         if resp.status_code >= 400:
             self._check(resp)
-        return resp.content, status
+        return resp.content, status if overlay else {**status, "overlay": "none", "sequence": status["raw_sequence"]}
 
     async def fleet_link_put(self, body: dict) -> dict:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""

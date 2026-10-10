@@ -26,6 +26,9 @@ def context(row: Mapping, stuck: Optional[Mapping] = None) -> dict:
     stuck = stuck if stuck is not None else line_follow.get("stuck") or {}
     return {"cause": stuck.get("cause"), "detail": stuck.get("detail"), "phase": stuck.get("phase"),
             "attempts": stuck.get("attempts"), "rear_state": stuck.get("rear_state"),
+            "state_age_s": row.get("state_age_s"),
+            "clearance_m": {k: stuck.get(k) for k in ("front_clearance_m", "rear_clearance_m",
+                                                       "turn_clearance_m", "rear_blind_m")},
             "line_follow": {k: line_follow.get(k) for k in ("mode", "state", "reason")},
             "crosswalk": line_follow.get("crosswalk"), "map_pose": row.get("map_pose"),
             "localization": state.get("localization"), "trip": bool(row.get("trip")),
