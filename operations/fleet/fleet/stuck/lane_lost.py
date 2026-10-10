@@ -5,9 +5,11 @@ Pure, split out of stuck_resolver.py (size budget); StuckResolver._rule calls la
 
 from __future__ import annotations
 
+import time
 from typing import Iterable, Mapping, Optional
 
-from fleet.stuck.resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
+from fleet.stuck.resolver import Answer, ResolverConfig
+from fleet.stuck.peer_pose import _map_pose, _peer_in_band
 from fleet.site_map import _inside, _point_segment
 
 #: D-573 1 / D-577 1: R3 holds within this of a site-map crosswalk. Robot URDF rear 0.076 m + the
@@ -84,7 +86,8 @@ def _trusted_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    return _peer_in_band(row, others, config, sign, pose_of=_trusted_map_pose, strict=True)
+    pose_of = fleet_pose_of(rows, config) or _trusted_map_pose
+    return _peer_in_band(row, others, config, sign, pose_of=pose_of, strict=True)
 
 
 def _trusted_map_pose(row: Mapping):
@@ -97,14 +100,20 @@ def _trusted_map_pose(row: Mapping):
 
 
 #: D-577 개정 2026-10-10: the CORE words an AI PC proposal may carry per stuck cause. YIELD needs Fleet's
-#: meet geometry and MANUAL hands the robot to a person: neither comes from the AI PC. RESUME never on a
-#: lost lane (D-438 §3). A trip robot takes only WAIT (D-517 5). crosswalk_blocked is a person's (D-573).
-AI_WORDS = {"lane_lost": ("WAIT", "BACK_AND_RETRY", "ABORT"), "no_motion": ("WAIT", "BACK_AND_RETRY", "ABORT"),
-            "obstacle_ahead": ("WAIT", "BACK_AND_RETRY", "RESUME", "ABORT")}
+#: meet geometry and MANUAL hands the robot to a person: neither comes from the AI PC. RESUME never: the
+#: rules never RESUME a stuck and the AI is stricter (Safety-Review 2026-10-10). A trip robot takes only
+#: WAIT (D-517 5). crosswalk_blocked is a person's (D-573).
+AI_WORDS = {cause: ("WAIT", "BACK_AND_RETRY", "ABORT") for cause in ("lane_lost", "no_motion", "obstacle_ahead")}
 
 
 def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfig, painted=None) -> Optional[str]:
-    """Why Fleet refuses this proposal (then its rules answer), or None to forward it to CORE."""
+    """Why Fleet refuses this proposal (then its rules answer), or None to forward it to CORE.
+
+    Safety-Review 2026-10-10 (user: keep AI acting, strengthen the checks): the AI may only make Fleet more
+    restrictive. WAIT always passes the envelope. ABORT (lane following off, IDLE) only outside a crosswalk
+    zone CORE reports (an idle robot in a zone is a person's, D-573). BACK_AND_RETRY only when every R3
+    precondition holds (strict: no R6 peer waiver), no acting AI fact is live for the robot, the rear is not
+    ``blocked`` and, with a peer ahead, R1 was tried first. RESUME is not an AI word."""
     cause, decision = stuck.get("cause"), proposal["decision"]
     if row.get("trip") and decision != "WAIT":
         return "trip"
@@ -112,22 +121,25 @@ def ai_proposal_invalid(proposal, row, stuck, rows, chain, config: ResolverConfi
         return "word_not_allowed"
     if "ai" in chain.retired:
         return "core_refused_before"
-    if decision != "BACK_AND_RETRY":
+    if decision == "WAIT":
         return None
-    if stuck.get("rear_state") == "blocked":
+    line_follow = (row.get("state") or {}).get("line_follow") or {}
+    if "crosswalk" not in line_follow:
+        return "crosswalk_unknown"
+    if line_follow["crosswalk"] is not None:            # D-573 6: CORE `state: unknown` is not "outside"
+        crosswalk = line_follow["crosswalk"]
+        return "crosswalk_unknown" if isinstance(crosswalk, Mapping) and crosswalk.get("state") == "unknown" \
+            else "crosswalk"
+    if decision == "ABORT":
+        return None
+    fact = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
+    if fact is not None:
+        return f"ai_fact:{fact}"
+    if stuck.get("rear_state") == "blocked":          # BACK_AND_RETRY from here on
         return "rear_blocked"
-    if cause == "obstacle_ahead":
-        if not stuck.get("local_enabled"):
-            return "local_disabled"
-        if int(stuck.get("attempts") or 0) >= int(stuck.get("max_attempts") or 0):
-            return "attempts"
-        if chain.rule_answers >= config.rule_budget:
-            return "rule_budget"
-        if ((row.get("state") or {}).get("line_follow") or {}).get("crosswalk") is not None:
-            return "crosswalk"
-        return "peer_behind" if peer_behind(row, rows, config) else None
-    return lane_lost_hold(row, stuck, rows, chain, config, rule="R3" if cause == "lane_lost" else "R6",
-                          painted=painted)
+    if cause == "obstacle_ahead" and "R1" not in chain.retired and peer_ahead(row, rows, config):
+        return "peer_ahead"                           # the rules send R1 WAIT first
+    return lane_lost_hold(row, stuck, rows, chain, config, rule="R3", painted=painted)
 
 
 def ai_answer(resolver, now, row, stuck, rows, chain):
@@ -143,10 +155,24 @@ def ai_answer(resolver, now, row, stuck, rows, chain):
     if proposal is None:
         waiting = row.get("ai_wait") and now - chain.seen_at < resolver.config.ai_wait_s
         return "wait" if waiting else None
-    if _judge(resolver, chain, proposal, now, None, row, stuck, rows) != "forwarded":
+    verdict = _judge(resolver, chain, proposal, now, None, row, stuck, rows)
+    if verdict is not None and verdict != "forwarded" and proposal["decision"] == "ABORT":
+        # Safety-Review 2026-10-10: the AI wanted the robot stopped; a held ABORT stops it (R5 WAIT) and hands
+        # it to a person instead of letting the rules move it in the same tick.
+        return Answer(rid, sid, "WAIT", "R5", escalate=f"ai_abort_held:{verdict}")
+    if verdict != "forwarded":
         return None
     decision = proposal["decision"]
-    return Answer(rid, sid, decision, "ai", escalate=f"ai_wait:{proposal['reason']}" if decision == "WAIT" else None)
+    # A WAIT holds and an ABORT idles the robot: both also raise the human row (D-577 1 R5 shape).
+    escalate = {"WAIT": "ai_wait", "ABORT": "ai_abort"}.get(decision)
+    return Answer(rid, sid, decision, "ai", escalate=f"{escalate}:{proposal['reason']}" if escalate else None)
+
+
+def ai_late(resolver, now, row, chain) -> None:
+    """A proposal for a stuck already answered (or yielding): audit it, act on nothing."""
+    proposal = row.get("ai_proposal")
+    if proposal is not None:
+        _judge(resolver, chain, proposal, now, "after_answer")
 
 
 def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=None) -> Optional[str]:
@@ -157,5 +183,24 @@ def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=N
     if verdict is None:
         verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, resolver.config,
                                       resolver._painted()) or "forwarded"
-    resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
+    resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": time.time()})   # D-610 10: wall
     return verdict
+
+
+def fleet_pose(row: Mapping, config: ResolverConfig) -> Optional[tuple[float, float, float]]:
+    """D-577 남은 항목 4: Fleet's own map pose of a robot, LOCALIZED and fresh, else None."""
+    pose = row.get("map_pose")
+    if not isinstance(pose, Mapping) or pose.get("state") != "LOCALIZED" or pose.get("x") is None:
+        return None
+    age = pose.get("age_s")
+    if not isinstance(age, (int, float)) or not 0.0 <= age <= config.pose_max_age_s:
+        return None
+    return float(pose["x"]), float(pose["y"]), float(pose.get("yaw") or 0.0)
+
+
+def fleet_pose_of(rows, config: ResolverConfig):
+    """D-577 남은 항목 4: with Fleet map poses (Rosy Cam, the loop's ``map_pose``) peers are judged on
+    them only, since robots' odom origins differ; None where Fleet has none (simulation, tests)."""
+    if any(other.get("map_pose") is not None for other in rows):
+        return lambda row: fleet_pose(row, config)
+    return None

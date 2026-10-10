@@ -29,7 +29,7 @@ FACT_KINDS = ("wait_cycle_confirmed", "wait_cycle_stale_input", "waiting_but_mov
               "unknown_occupancy_long", "lane_obs_vs_range", "lane_conf_collapse", "shadow_active_drift",
               "pose_vs_paint", "pose_sources_disagree", "obstacle_identity",
               # D-577 개정 2026-10-10 (analyzer stuck_scene): the field stuck causes
-              "rear_blocked", "path_blocked_by_robot", "incident_context")
+              "rear_blocked", "path_blocked_by_robot", "incident_context", "trip_route_check")
 #: D-577 7 (2) under the user's go 2026-10-10: these kinds, for the robots in
 #: ``fleet.stuck_resolver.ai_facts_acting``, turn a resolver back-off into R5 WAIT + a human. Nothing else.
 ACTING_KINDS = frozenset({"rear_blocked", "path_blocked_by_robot"})
@@ -92,6 +92,8 @@ class AiHeartbeat(BaseModel):
     gpu_used_mib: Optional[int] = Field(default=None, ge=0)
     mem_used_mib: Optional[int] = Field(default=None, ge=0)
     input_lag_s: Optional[float] = Field(default=None, ge=0)
+    #: The git commit the AI PC service runs from (deploy/ai_pc/README.md), shown on the console.
+    build_commit: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{7,40}(-dirty)?$")
 
 
 class AiProposal(BaseModel):
@@ -101,13 +103,16 @@ class AiProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     robot_id: str = Field(min_length=1, max_length=96)
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
-    decision: Literal["WAIT", "BACK_AND_RETRY", "YIELD", "ABORT", "RESUME", "MANUAL"]
+    # D-610 4: LINE_OFF/STOP (stalled), IDENTIFY/STOP (pose_lost), REPLAN (deadlock) for `<kind>:...` problem ids.
+    decision: Literal["WAIT", "BACK_AND_RETRY", "YIELD", "ABORT", "RESUME", "MANUAL", "LINE_OFF", "STOP", "IDENTIFY",
+                      "REPLAN"]
     reason: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_:.-]+$")
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: dict[str, Any] = Field(default_factory=dict)
     source: str = Field(pattern=r"^(analyzer:[a-z0-9_.-]+@[A-Za-z0-9_.-]+|vlm:[A-Za-z0-9_.:@/-]+)$", max_length=128)
     observed_at: float
     ttl_s: float = Field(gt=0.0, le=8.0)
+    body: dict[str, Any] = Field(default_factory=dict)    # D-610 7: REPLAN {blocked_edges: [...]}
 
 
 class AiFactLog:
@@ -168,7 +173,13 @@ class AiFactsBoard:
         self._beat: Optional[tuple[float, dict]] = None
         self._facts: deque = deque(maxlen=256)
         self._proposals: dict[str, dict] = {}            # robot id -> newest proposal
-        self.verdicts: deque = deque(maxlen=64)            # judged proposals, newest last (GET /api/fleet/ai)
+        # Judged proposals, newest last; GET /api/fleet/ai shows 64, the console counts the last hour.
+        self.verdicts: deque = deque(maxlen=1024)
+        #: Supervision row (app.py sets it once the resolver exists): resolver on/off, per-robot credential
+        #: presence, AI acting flag and last resolver answer. Never a secret.
+        self.chain: Callable[[], dict] = lambda: {"resolver": False, "robots": []}
+        self.first = None                                   # D-610 3: `ai_first.AiFirst` (app.py)
+        self._problems: dict[str, dict] = {}                # D-610 4: stalled/pose_lost/deadlock proposals by id
         self._posts: deque = deque()
 
     def heartbeat(self, beat: AiHeartbeat) -> dict:
@@ -219,10 +230,28 @@ class AiFactsBoard:
         status = self.status()
         if status["state"] != "present" or status["owner_mode"] == "owner_busy":
             return "absent" if status["state"] != "present" else "owner_busy"
-        if proposal.robot_id not in self.acting:
+        if not self._acting(proposal.robot_id):
             return "robot_not_acting"
+        if proposal.stuck_id.split(":", 1)[0] in ("stalled", "pose_lost", "deadlock"):
+            self._problems[proposal.stuck_id] = proposal.model_dump()
+            return "queued"
         self._proposals[proposal.robot_id] = proposal.model_dump()
         return "queued"
+
+    def _acting(self, robot_id: str) -> bool:
+        return robot_id in self.acting or self.first is not None and self.first.on(robot_id)
+
+    def problem_proposal(self, problem_id: str) -> Optional[dict]:
+        row = self._problems.get(problem_id)
+        if row is None or self.status()["state"] != "present" or row["observed_at"] + row["ttl_s"] < self.wall():
+            return None
+        return row
+
+    def profiles(self) -> list:
+        """D-610 5: the heartbeat's loaded VLM profiles while the service is present and the owner allows it."""
+        status = self.status()
+        return list(status.get("model_profiles") or ()) if (
+            status["state"] == "present" and status["owner_mode"] == "available") else []
 
     def proposal(self, robot_id: str) -> Optional[dict]:
         """The resolver's AI input: this robot's newest proposal while live and the service is present."""
@@ -234,17 +263,46 @@ class AiFactsBoard:
     def waiting(self, robot_id: str) -> bool:
         """Fleet gives the AI PC its time (ResolverConfig.ai_wait_s) only for an acting robot while present."""
         status = self.status()
-        return robot_id in self.acting and status["state"] == "present" and status["owner_mode"] != "owner_busy"
+        return self._acting(robot_id) and status["state"] == "present" and status["owner_mode"] != "owner_busy"
 
     def acting_facts(self, robot_id: str) -> list[dict]:
         """D-577 7: the resolver's AI input, live ``acting`` facts about this robot (first id) only."""
         return [fact for fact in self.live(robot_id) if fact["stage"] == "acting" and fact["robot_ids"][0] == robot_id]
 
-    def robot_view(self, robot_id: str) -> dict:
-        """What a stuck queue row carries: the AI chip and this robot's live facts."""
+    def note_outcome(self, robot_id: str, stuck_id: str, decision: str, outcome: str) -> None:
+        """CORE's reply to a forwarded proposal, on the in-memory verdict (the table gets it too)."""
+        for verdict in reversed(self.verdicts):
+            if (verdict["robot_id"], verdict["stuck_id"], verdict["decision"]) == (robot_id, stuck_id, decision)                     and verdict["verdict"] == "forwarded":
+                verdict["outcome"] = outcome
+                return
+
+    def counts(self, window_s: float = 3600.0) -> dict:
+        """Proposals judged in the window: accepted (CORE took it), refused (CORE did not), held (Fleet's
+        gates kept it back), pending (forwarded, no reply yet)."""
+        counts = {"accepted": 0, "held": 0, "refused": 0, "pending": 0}
+        since = self.clock() - window_s
+        for verdict in self.verdicts:
+            if verdict["judged_at"] >= since:
+                counts[_outcome_class(verdict)] += 1
+        return counts
+
+    def robot_view(self, robot_id: str, stuck_id: Optional[str] = None) -> dict:
+        """What a stuck queue row carries: the AI chip, this robot's live facts and, for this stuck, the
+        newest AI proposal with Fleet's verdict and CORE's outcome."""
         status = self.status()
+        proposal = next(({key: verdict.get(key) for key in ("decision", "reason", "verdict", "outcome")}
+                         | {"class": _outcome_class(verdict)}
+                         for verdict in reversed(self.verdicts) if verdict["robot_id"] == robot_id
+                         and verdict["stuck_id"] == stuck_id), None)
         return {"ai": {"state": status["state"], "owner_mode": status["owner_mode"]},
-                "ai_facts": self.live(robot_id)}
+                "ai_facts": self.live(robot_id), "ai_proposal": proposal}
+
+
+def _outcome_class(verdict: dict) -> str:
+    if verdict["verdict"] != "forwarded":
+        return "held"
+    outcome = verdict.get("outcome")
+    return "pending" if outcome is None else "accepted" if outcome == "accepted" else "refused"
 
 
 def install_ai_routes(app, *, read_guard, authorize, db_path: Optional[Path],
@@ -289,6 +347,7 @@ def install_ai_routes(app, *, read_guard, authorize, db_path: Optional[Path],
 
     @app.get("/api/fleet/ai", dependencies=read_guard, tags=["ai"])
     def ai_status() -> dict:
-        return {"status": board.status(), "facts": board.live(), "proposals": list(board.verdicts)}
+        return {"status": board.status(), "facts": board.live(), "proposals": list(board.verdicts)[-64:],
+                "chain": {**board.chain(), "proposals_1h": board.counts()}}
 
     return board

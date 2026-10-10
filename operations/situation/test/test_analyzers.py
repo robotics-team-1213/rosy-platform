@@ -68,6 +68,42 @@ def test_facts_pass_fleet_validation():
         AiFact.model_validate(fact).check(1000.0)
 
 
+def test_trip_route_fact_checks_only_the_planned_edge_and_reports_stale_as_unknown():
+    from fleet.stuck.ai_facts import AiFact
+
+    route_map = {"version": 5, "map": {"edges": [{"id": "east", "polyline": [[0, 0], [1, 0]],
+                                                 "width_m": 0.2}]}}
+    trip = {"robot_id": "r", "trip_id": "t", "map_version": 5, "segment_index": 0,
+            "body_half_width_m": 0.0566, "updated_at": 1000.0, "pose_observed_at": 1000.0,
+            "plan": {"segments": [{"edge_id": "east", "forward": True, "s_from": 0.2, "s_to": 0.8}]},
+            "pose": {"x": 0.5, "y": 0.0, "state": "LOCALIZED", "source": "sighting", "age_s": 0.1}}
+    analyzer = Analyzer()
+
+    def check(pose, site_map=route_map, route=trip):
+        snapshot = {**_snap(1000.0, [_row("r", mode="OFF")]), "trips": {"open": [{**route, "pose": pose}]},
+                    "route_map": site_map}
+        fact = analyzer(snapshot)[0]
+        AiFact.model_validate(fact).check(1000.0)
+        return fact["value"]
+
+    assert check(trip["pose"])["status"] == "ON_ROUTE"
+    assert check({**trip["pose"], "y": 0.05}) == {
+        "status": "OFF_ROUTE", "offset_m": 0.05, "limit_m": 0.043}
+    assert check({**trip["pose"], "y": 0.12})["status"] == "OFF_ROUTE"
+    assert check({**trip["pose"], "x": 0.95})["status"] == "OFF_ROUTE"  # beyond planned s_to
+    assert check({**trip["pose"], "age_s": 2.0})["status"] == "UNKNOWN"
+    assert check(trip["pose"], {**route_map, "version": 6})["status"] == "UNKNOWN"
+    assert check(trip["pose"], route={**trip, "segment_index": 99})["status"] == "UNKNOWN"
+    no_body = {key: value for key, value in trip.items() if key != "body_half_width_m"}
+    assert check(trip["pose"], route=no_body)["status"] == "UNKNOWN"
+    for updated in (990.0, 1002.0, None, float("nan"), float("inf")):
+        assert check(trip["pose"], route={**trip, "pose_observed_at": updated})["status"] == "UNKNOWN"
+    assert check(trip["pose"], route={k: v for k, v in trip.items() if k != "pose_observed_at"})["status"] == "UNKNOWN"
+    assert check(trip["pose"], route={**trip, "pose_observed_at": 997.0, "updated_at": 1000.0})["status"] == "UNKNOWN"
+    for age in (-1.0, float("nan"), float("inf")):
+        assert check({**trip["pose"], "age_s": age})["status"] == "UNKNOWN"
+
+
 def test_one_proposal_per_stuck_wait_when_the_rear_is_blocked():
     a = Analyzer()
     stuck = {"robot_id": "r", "stuck_id": "s1", "cause": "no_motion", "detail": "lane_departure"}

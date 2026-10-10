@@ -1518,6 +1518,14 @@ For another track, put its files under `ROSY_SITE_CONFIG_DIR` and point the flag
 at `/run/rosy-config/...` (a `MAP_ID=` prefix limits a Fleet lane file to one
 `map_id`). Removing the flags turns the feature off (404 on both routes).
 
+The Compose stack also passes Fleet `--vision-url https://vision:$ROSY_VISION_PORT`:
+every 60 s (`--calibration-drift-interval-s`, `0` disables) Fleet reads each source's
+current map proposal with a preview lease it signs itself and compares it with the
+operator-approved tracking calibration (`tracking_calibrations`). The per-source
+`calibration_drift` verdict rides `GET /api/fleet/tracking`, so the console bird's-eye
+can warn and drop the camera background with no robot in view. Display only; it never
+feeds sightings, goals, or driving.
+
 ## RTX 5080 GPU preflight
 
 The current `vision` image runs the CPU ArUco pipeline. The site Compose file

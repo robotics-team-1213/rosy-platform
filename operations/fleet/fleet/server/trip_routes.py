@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
 from fleet.routing.snap import PlanError
-from fleet.routing.trip import PlanRequest, plan_trip
+from fleet.routing.trip import ARRIVED_M, PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.routing.execute import arc_id, plan_body
@@ -70,6 +70,8 @@ class TripRequest(BaseModel):
     execute: bool = False
     #: D-517 2: lap ``via`` then ``to`` again and again; the cycle is place ids.
     repeat: bool = False
+    # A finite lap starts and ends at the operator's chosen place.
+    start_at: Optional[PlaceRef] = None
     #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
     convoy: Optional[TripConvoy] = None
 
@@ -79,6 +81,9 @@ class TripRequest(BaseModel):
             raise ValueError("repeat needs a place id in to and at least one via place")
         if self.convoy is not None and not self.repeat:
             raise ValueError("convoy needs repeat")
+        if self.start_at is not None and (self.repeat or self.to != self.start_at or not self.via
+                                          or self.start_at in self.via):
+            raise ValueError("start_at needs a finite trip via another place back to start_at")
         return self
 
 
@@ -135,6 +140,15 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if pose is None or pose[2] is None:
             record({"error": "TRIP_POSE_UNTRUSTED", "detail": {"pose_state": pose_state}})
             raise _refuse("TRIP_POSE_UNTRUSTED", {"pose_state": pose_state})
+        if body.start_at is not None:
+            if body.start_at not in active[2].places:
+                record({"error": "TRIP_UNKNOWN_PLACE", "detail": {"place": body.start_at}})
+                raise _refuse("TRIP_UNKNOWN_PLACE", {"place": body.start_at})
+            distance = math.dist(pose[:2], active[2].place_xy(body.start_at))
+            if distance > ARRIVED_M:
+                detail = {"place": body.start_at, "distance_m": round(distance, 3), "limit_m": ARRIVED_M}
+                record({"error": "TRIP_START_PLACE_MISMATCH", "detail": detail})
+                raise _refuse("TRIP_START_PLACE_MISMATCH", detail)
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
@@ -166,6 +180,9 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         body["start_check"] = start_check(active[2], body["segments"], *pose, runner.config.start_heading_tol_deg)
+        if (runner.config.auto_align and body["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
+                and body["start_check"]["heading_err_deg"] is not None):
+            body["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
         return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}

@@ -44,8 +44,9 @@ from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
-from .sensing.perception.drivable_keep import keep_step, scan_summary
-from .sensing.perception.learned.drivable_steer import DrivableSteer
+from .sensing.perception.drivable.drivable_keep import keep_step, parse_guide, scan_summary
+from .sensing.perception.drivable.drivable_steer import DrivableSteer
+from .sensing.perception.evidence_mode import EvidenceModes
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -112,6 +113,9 @@ class LineObserverNode(Node):
         self.declare_parameter('learned_paint_max_age_s', 0.9, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dxy_m', 0.10, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dyaw_rad', 0.40, _READ_ONLY)
+        # D-588: drop learned lane pixels the model put on a wall; a model without a wall class is
+        # not used (denoise fallback) while this is on.
+        self.declare_parameter('learned_paint_floor_gate', True, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
@@ -172,10 +176,11 @@ class LineObserverNode(Node):
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
         self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
+        self._evidence_modes = EvidenceModes()
         # D-597 amendment 2: with the drivable target, keep steers from the way itself.
         self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
                                 and self._paint_worker.target == 'drivable' else None)
-        self._wall_ahead = None
+        self._wall_ahead = self._lane_guide = None
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -228,6 +233,8 @@ class LineObserverNode(Node):
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
             if self._drivable_steer is not None:   # D-597 amendment 2: a wall beyond the model's view
                 self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
+                self.create_subscription(String, 'line/lane_guide', lambda m: setattr(   # route prior (D-511 rev 2)
+                    self, '_lane_guide', parse_guide(m.data, self._stamp())), 10)
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
             self.create_subscription(
@@ -393,18 +400,26 @@ class LineObserverNode(Node):
         threads = int(self.get_parameter('learned_paint_threads').value)
         if every_n < 1 or threads < 1:
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
+        floor_gate = bool(self.get_parameter('learned_paint_floor_gate').value)
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
-            folder, threads=threads, allow_spinning=False)) if pointer else None
+            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning, target=target)
 
+    def _drop_learned_paint(self):
+        """Forget a learned mask and the D-611 latch. The next fresh mask is paint at once."""
+        if self._paint_worker is not None:
+            self._paint_worker.reset()
+        self._evidence_modes.reset()
+
     def _paint_for(self, frame, ground, stamp=None):
-        """(paint mask or None, source actually used) for one keep frame (D-408)."""
+        """(paint mask or None, source actually used) for one keep frame (D-408, D-611)."""
         source = str(self.get_parameter('paint_source').value)
         if source == 'threshold' or ground is None:
-            if self._paint_worker is not None:
-                self._paint_worker.reset()
+            self._drop_learned_paint()
+            self._evidence_modes.choose_lane(
+                armed=False, model_fresh=False, learned_ok=False, denoise_ok=False)
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
             every_n = int(self.get_parameter('learned_paint_every_n').value)
@@ -427,8 +442,15 @@ class LineObserverNode(Node):
             reuse = self._paint_worker.reuse
             if compensate and motion is None and reuse and reuse['paint_warp_skipped'] == 'off':
                 reuse['paint_warp_skipped'] = 'no_odom'
-            if mask is not None:
+            # D-611: one missing mask falls back immediately. Returning takes two fresh frames,
+            # so a mask that lands every other frame does not swap the paint each time.
+            chosen = self._evidence_modes.choose_lane(
+                armed=True, model_fresh=mask is not None, learned_ok=mask is not None, denoise_ok=True)
+            if chosen == 'learned' and mask is not None:
                 return mask, 'learned_drivable' if self._paint_worker.used_paint_kind == 'drivable' else 'learned'
+            return denoise_white_mask(frame, ground.horizon_row), 'denoise_fallback'
+        self._evidence_modes.choose_lane(
+            armed=False, model_fresh=False, learned_ok=False, denoise_ok=True, unarmed='denoise')
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
 
@@ -465,8 +487,7 @@ class LineObserverNode(Node):
             self._publish('CAMERA_LINE', None, stamp=(
                 float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
             self._keep_last_stamp = None
-            if self._paint_worker is not None:
-                self._paint_worker.reset()
+            self._drop_learned_paint()
             return
         try:
             frame = image_msg_to_frame(msg)
@@ -475,16 +496,15 @@ class LineObserverNode(Node):
                 self._lane_keeper.reset()
                 self._between_keeper.reset()
                 self._keep_last_stamp = None
-                if self._paint_worker is not None:
-                    self._paint_worker.reset()
+                self._drop_learned_paint()
                 source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                 self._publish('CAMERA_LINE', None, stamp=source_stamp,
                               quality=dict(valid=False, reason=reason))
                 self._publish_debug(msg, frame, None)
                 return
             mode = str(self.get_parameter('camera_lane_mode').value)
-            if mode != 'keep' and self._paint_worker is not None:
-                self._paint_worker.reset()
+            if mode != 'keep':
+                self._drop_learned_paint()
             if mode == 'line':
                 observation = detect_lane_error(
                     frame,
@@ -521,7 +541,7 @@ class LineObserverNode(Node):
                     # D-597 amendment 2: the drivable way is steered from directly (odometry moves its target,
                     # latest_way drops it after stale_s), so a gap or a pivot keeps the mask and the pivot latch.
                     if self._paint_worker is not None and self._drivable_steer is None:
-                        self._paint_worker.reset()
+                        self._drop_learned_paint()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
@@ -536,7 +556,7 @@ class LineObserverNode(Node):
                         step, decided = keep_step(
                             self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,
                             self._lane_keeper._x_offset, float(self.get_parameter('lane_half_width_m').value),
-                            self._odom_history.pose_at, image_stamp, self._wall_ahead)
+                            self._odom_history.pose_at, image_stamp, self._wall_ahead, self._lane_guide)
                     except Exception as exc:  # noqa: BLE001 - a steering bug holds the robot, never kills the node
                         self.get_logger().error(f'drivable steer failed: {exc!r}', throttle_duration_sec=5.0)
                         self._drivable_steer.reset()
@@ -554,9 +574,15 @@ class LineObserverNode(Node):
                                                       if self._paint_worker is not None else None),
                               paint_drivable=(self._paint_worker.used_drivable
                                               if self._paint_worker is not None else None),
+                              paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
+                                                if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
+                              evidence_mode=self._evidence_modes.lane,
+                              evidence_rows=self._evidence_modes.rows(
+                                  crosswalk=self._lane_keeper.last.get('crosswalk') is not None,
+                                  stop_line=False, obstacle=False),
                               corner_turning=bool(self.get_parameter('lane_corner_turning').value),
                               ground=self._ground_label(), stamp=image_stamp,
                               route_context_v=1,

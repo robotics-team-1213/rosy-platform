@@ -33,6 +33,10 @@ services:
       - ROSY_SITE_DISCOVERY_TOKEN
       - --vision-preview-secret-env
       - ROSY_VISION_PREVIEW_SECRET
+      # Calibration-drift watch: Fleet reads Vision's D-375 map proposal server-side
+      # (site CA via SSL_CERT_FILE, "vision" SAN on the site leaf) every 60 s.
+      - --vision-url
+      - https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}
       - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml
@@ -76,6 +80,9 @@ services:
       # D-524 Service Control key, targets, known_hosts: Fleet only, outside the config dir
       # that Vision also mounts. Docker creates it empty when absent; Fleet then answers 503.
       - /etc/rosy/fleet-host-control:/run/rosy-fleet-host-control:ro
+      # D-530 read-only reports. Absent dirs come up empty; the hosts route then returns null.
+      - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
+      - /var/lib/rosy-host-state:/var/lib/rosy-host-state:ro
       # NSS queries host Avahi; directory bind follows socket replacement after daemon restart.
       - type: bind
         source: /run/avahi-daemon

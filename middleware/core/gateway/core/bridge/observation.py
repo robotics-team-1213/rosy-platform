@@ -182,7 +182,7 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     config = line.config
     path = config.obstacle_mode == "path"
     try:
-        if getattr(line, "wants_crosswalk_scan", False):  # D-573: every ray (no return = unknown)
+        if line.wants_crosswalk_scan:  # D-573: every ray (no return = unknown)
             line.observe_crosswalk_scan(scan_rays(sample, forward_deg=config.lidar_forward_deg),
                                         range_min=_range_min(sample), received_at=received_at)
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear

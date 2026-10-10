@@ -126,7 +126,7 @@
 
 남은 항목에 더한다:
 
-4. 판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다. 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
+4. ~~판단기 R1 `peer_ahead`와 meet 규칙은 LEGACY 로봇의 odom 자세를 지도 자세처럼 쓴다.~~ **R1·뒤 띠는 닫힘(2026-10-10, `feat/ai-pc-judge`).** Fleet 지도 자세(Rosy Cam 목격, `MapPoseService`)가 있는 현장에서는 R1 앞 띠와 R3·R6 뒤 띠를 그 자세(`LOCALIZED`, 2 s 이내)로만 잰다. 지도 자세 서비스가 없는 설정(시뮬레이션·시험)만 예전처럼 로봇 자세를 쓴다. meet 규칙은 아직 남았다. 아래는 원래 기록: 현장 두 로봇은 모두 LEGACY이고 Fleet 지도 자세는 지금 `UNKNOWN`(천장 카메라 목격 없음)이다. R1은 신뢰 지도 자세로만 재야 한다. Safety-Review와 함께 고친다.
 
 ### 개정 (2026-10-10, 사용자 결정): AI PC 제안 → Fleet 검증 후 실행
 
@@ -139,8 +139,29 @@
 5. **CORE가 최종이다.** 모든 답은 지금처럼 D-407 재검사를 지난다. AI 제안은 안전 기능이 아니다(D-430).
 6. **AI PC 제안기(`analyzer:stuck_scene@1`).** 결정론이다: 뒤가 막혔으면(`rear_blocked`) 또는 앞에 로봇이 있으면 `WAIT`, 아니면 `BACK_AND_RETRY`. 막힘·결정·이유 조합마다 한 번 보낸다. 비전 모델은 아직 쓰지 않는다(D-492 V0·V1 전).
 
+### 개정 (2026-10-10, 저녁, Safety-Review 대상): 소유자 동의 기록, AI 제안 관문 강화, 연동 상태
+
+사용자 결정(2026-10-10): 현장 AI PC의 `rosy-situation`은 지금처럼 `shared` 모드로 돌고 `rosy_40`·`rosy_41`은 AI 실행(`fleet.stuck_resolver.ai_facts_acting`) 로봇으로 남는다. 대신 검사를 강화한다. AI PC 소유자 동의(D-492 4항)는 사용자가 2026-10-10에 주었다.
+
+1. **AI 제안은 판단기 규칙과 같은 관문을 지난다.** 위 개정 2항의 "봉투만" 검사에서 `ABORT`·`RESUME`은 어떤 전제도 보지 않았다(`stuck_lane_lost.py`). 이제 AI는 Fleet을 더 제한적으로만 만든다.
+   - `WAIT`은 봉투(원인별 단어, trip, CORE 거절 이력)만 본다.
+   - 그 밖의 단어는 CORE가 `line_follow.crosswalk`를 보고하고 그 값이 null일 때만 보낸다(`crosswalk_unknown`·`crosswalk`). 횡단보도 안의 멈춘 로봇은 사람이 맡는다(D-573).
+   - `ABORT`(차선 추종 끔, IDLE)는 위를 지나면 보내고, 같은 주기에 사람 행 `ai_abort:<reason>`을 올린다.
+   - `RESUME`은 AI 단어가 아니다(어느 원인에서도 `word_not_allowed`). 규칙도 막힘에 `RESUME`을 보내지 않는다(아래 6항: XW 제거). 위 개정 2항의 `obstacle_ahead`: `RESUME` 허용을 이 항이 바꾼다.
+   - `BACK_AND_RETRY`는 R3 전제 전부(로컬 복구 켜짐, 시도·규칙 예산, 횡단보도, 지도 자세 신선도, 신뢰 지도 자세의 뒤 띠)를 만족해야 한다. R6의 `peer_unknown` 면제는 AI에 주지 않는다. 그 로봇에 살아 있는 acting AI 사실이 있으면 보내지 않는다(`ai_fact:<kind>`). `rear_state: blocked`가 아니어야 하고, 앞에 동료가 있으면 R1 `WAIT`이 먼저다(`peer_ahead`).
+   - 보류된 AI `ABORT`는 같은 주기에 규칙의 움직이는 답으로 넘어가지 않고 R5 `WAIT` + 사람(`ai_abort_held:<판정>`)이 된다. 이미 답한(또는 비켜 가는) 막힘에 온 제안은 감사에만 남긴다(`after_answer`).
+   - 속성 시험(무작위 행 1000개): 보낸 AI `BACK_AND_RETRY`마다 R3 관문이 열려 있고(신뢰 지도 자세 동료 행 포함), AI `RESUME` 없음, trip 로봇에는 `WAIT`만.
+2. **연동 상태.** `GET /api/fleet/ai`에 `chain`(판단기 켜짐, 로봇별 자격 유무 `enrolled|token|none` — 비밀은 내보내지 않는다, AI 실행 여부, 마지막 판단기 답과 시각, 1시간 제안 수 `accepted|held|refused|pending`)을 더한다. 관제 화면은 레일 끝 「대형·신호·기록」의 「진단」 옆 접힘 「연동 상태」에 보인다. D-540 2항이 머리를 한 줄로 묶고, 레일은 예외가 없을 때 상태를 접힘으로 두기 때문이다. 문제는 지금처럼 큐 행으로 나온다.
+3. **막힘 행에 제안 결과.** 막힘 행은 그 막힘의 가장 새 AI 제안과 Fleet 판정, CORE 결과를 한 줄로 보인다("AI 제안 대기: CORE 수락", "AI 제안 중단: Fleet 보류 (횡단보도 여부 모름)").
+4. **AI PC 배포 추적.** heartbeat에 `build_commit`(서비스가 도는 git 커밋)을 더한다. `deploy/ai_pc/deploy-situation.sh <커밋>`이 커밋마다 분리 worktree를 만들어 그 커밋에서 돌린다(`deploy/ai_pc/README.md` 「상황 서비스」). 현장 AI PC 재배포는 이 절차로 따로 한다.
+5. CORE D-407 재검사는 그대로 마지막이다. AI 제안은 안전 기능이 아니다(D-430).
+6. **XW 제거.** XW removed after independent Safety-Review 2026-10-10 — RESUME at a crosswalk only after CORE arms Fleet-map zones and reports a looked-and-clear armed zone, trip robots excluded, with its own Safety-Review. Fleet 지도 횡단보도 위의 `lane_lost`·`no_motion` 막힘은 trip 여부와 AI 제안에 앞서 R5 `WAIT` + 사람(`crosswalk_human`)이다.
+
 **Related:** D-2, D-18, D-356, D-361, D-379, D-395, D-407, D-430, D-434, D-438, D-492, D-493, D-495, D-503, D-511, D-516, D-517, D-523, D-540, D-541, D-568, D-573.
 
 ### 개정 (2026-10-10): 사건 원인 초안의 맥락
 
 AI PC는 열린 차선 정지마다 한 번 `GET /api/fleet/site-map/active`, `GET /api/fleet/sightings`를 읽고 기존 state 및 line-stuck 센서 필드와 함께 `incident_context` 사실을 남긴다. 이 사실은 `analyzer:incident_context@1`의 shadow 출력이며 CORE 원인을 검증된 근본 원인으로 승격하지 않는다. `value.cause_draft`는 `line_marking|obstacle|unknown`, `support[]`에는 CORE·신선한 Rosy Cam 관측 메타데이터·신뢰할 수 있는 지도 위치·센서값을 출처별로, `missing[]`에는 빠진 증거를 넣는다. `no_motion`이면서 전방 거리 센서가 0.3 m 이하일 때만 낮은 신뢰도의 `obstacle` 초안을 낸다. 지도 위치는 `localization.trusted=true`, `legacy=false`인 경우에만 비교한다. 프레임은 요청하거나 해석하지 않으며 `camera_frame_interpreted=false`와 `interpreted_front_image` 부족을 명시한다. 사람의 append-only 검토는 D-608 보고서에서 별도로 남긴다. 이 사실은 resolver의 acting kind나 motion proposal 입력이 아니다. 영상 모델과 실제 이미지 해석은 기존 V0·V1 및 소유자 동의 관문을 유지한다.
+### 개정 (2026-10-10): 한 바퀴 trip 경로 그림자 판정
+
+AI PC `rosy-situation`은 열린 Fleet trip과 그 계획 구간, 활성 지도를 읽고 계획에 포함된 구간의 중심선까지 거리를 자체 계산한다. 새 `trip_route_check` 사실은 `ON_ROUTE`·`OFF_ROUTE`·`UNKNOWN`, 편차·차로 반폭, trip ID·지도 버전·자세 출처/나이를 기록한다. 지도 버전 불일치나 1.5 s 넘게 오래된 자세는 `UNKNOWN`이다. 이는 **Fleet과 같은 지도 자세를 입력받는 별도 계산**이며 독립 카메라/물리 참값이 아니다. AI 사실은 그림자 기록·관제 표시만 한다. Fleet의 D-494 경로 이탈 정지와 CORE 몸체 정지는 AI PC가 없어도 동작해야 하며, 이 사실은 `ACTING_KINDS`에 넣지 않는다. 실제 경로 무이탈의 증명은 독립 현장 영상·차체 경계·정지 거리 확인이 필요하다.

@@ -82,19 +82,26 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
-#: docs/plans/2026-10-10-core-line-follow-size-unit.md
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md,
+#: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
+              "core/services/core_features/line_follow/recovery/stuck",
+              "core/services/core_features/line_follow/recovery/stuck/realign",
               "core/services/core_features/line_follow/arc",
+              "core/services/core_features/line_follow/cue",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
               "fleet/fleet/traffic",
+              "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "perception/control/sensing/perception",
-              "perception/control/sensing/perception/learned")
+              "perception/control/sensing/perception/learned",
+              "perception/control/sensing/perception/drivable")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -144,6 +151,14 @@ SIZE_VERDICTS = {
         "occupancy signals add the per-period zone occupancy and its row fields; the occupancy rules live in "
         "signal_phase.py (zone_occupancy, occupancy_lamps), lane_traffic only stores and shows them. Re-judge on further growth",
     ),
+    "fleet/fleet/localization": (
+        1_707,
+        "split: judged at 1707 on 2026-10-10 when it left the fleet package total "
+        "(docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): the pure "
+        "position/lane judgement of Fleet - D-395 arbiter (arbiter, cues, trust, service_logic, pose_request), "
+        "D-494 3 map_pose, D-511 lane_compliance and lap_context (rev 6). No transport, asyncio or robot "
+        "call (test_boundaries); the service loops stay in fleet/server. Re-judge after +150.",
+    ),
     "fleet/fleet/traffic": (
         1884,
         "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
@@ -170,13 +185,14 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        1781,
-        "accept: 1617 after the pure move + R1 fix (D-607 P0 per docs/plans/2026-10-10-fleet-stuck-subpackage.md, "
-        "re-judged 2026-10-10) + D-608 incident reports "
-        "merged from main +170 (board.py reports/reviews +168, ai_facts incident_context +2), - 6 XW rule removed "
-        "(3f1cae86d). D-608 grew server/line_stuck.py during the move freeze: next growth moves LineStuckAnswerLog "
-        "reports/reviews into stuck/reports.py by a dated plan. Independent re-judge 2026-10-10, critic: agree. "
-        "+150 allowance measured from 1781",
+        2800,
+        "accept: measured at 2800 on 2026-10-10 after the named reports seam in "
+        "docs/plans/2026-10-10-fleet-stuck-subpackage.md was applied: LineStuckAnswerLog and _resolution "
+        "are in reports.py, board.py keeps memory state. D-610 separates AI policy, case transport, "
+        "problem watch, outcome tracking and episode storage into existing small owner files; "
+        "resolver.py remains pure. Independent review by integration_review: agree on this boundary, "
+        "no new size unit or budget change. Next growth separates ai_facts HTTP routes from its journal "
+        "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,
@@ -228,7 +244,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_324,
+        50_834,
+        "split: independently re-judged at 50834 on 2026-10-10 by snapshot_review, excluding registered traffic, localization and stuck units; trip admission, AI wiring, drift diagnostics and UI retain their existing owners. Existing observe/server/UI split obligations and +150 remain. Previous verdict: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
+        "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
+        "D-511 rev 3-6 (+179) - 1707. +150 allowance measured from 49802. Previously "
         "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
         "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
         "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "
@@ -285,7 +304,7 @@ SIZE_VERDICTS = {
         "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
         "view/observation presentation and D-577 lane-lost handling. The former stays in web "
         "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
-        "without adding a motion or transport owner. The resolver file has its own split verdict; "
+        "without adding a motion or transport owner. The resolver was split later; "
         "the package +150 allowance remains. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
@@ -596,7 +615,7 @@ SIZE_VERDICTS = {
         "gained the install call; verdict unchanged; re-judged again when the pairing security "
         "fixes and the console camera-approval section (web/camera-pairing.js under the D-362 "
         "web budget, its node and host tests) joined; verdict unchanged; re-judged "
-        "2026-10-01 at 23166 (main had reached 22797 with D-392 work) after the robot-address drift "
+        "2026-10-01 at 23166 (main had reached 22800 with D-392 work) after the robot-address drift "
         "audit joined as its own modules (server/address_drift.py pure classifier, web/address-drift.js "
         "pure copy) plus its route in ingest_routes.py and tests, then at 23237 after the "
         "review fix made move-address re-pair with the screen code (enrollment.py) and dropped bulk "
@@ -675,8 +694,8 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged",
     ),
     "fleet/fleet/cli.py": (
-        705,
-        "accept: measured at 705 after moving fleet.traffic zone, signal and authority YAML parsers "
+        871,
+        "split: independently re-judged at 871 on 2026-10-10 by snapshot_review; drift, AI and trip configuration remains entrypoint wiring. Connection/session parser extraction is due and unimplemented; original budgets remain. Previous verdict: measured at 705 after moving fleet.traffic zone, signal and authority YAML parsers "
         "to traffic/config.py. The CLI keeps entrypoint and session argument wiring; extract its "
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
@@ -870,7 +889,10 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1251,
+        1255,
+        "accept: re-judged at 1255 on 2026-10-10 (console.py grew to 1255 after the D-581 " +
+        "follow-ups; the drift-watch merge adds no console.py lines). " +
+        "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1251 on 2026-10-10 for D-581: the app injects the anchor relay "
         "factory, while console keeps its existing formation lifecycle and reads relay status; "
         "relay construction and anchoring live in fleet/swarm/anchor.py. "
@@ -980,16 +1002,32 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_098,
-        "split: re-judged at 2093, 2098 after merging main (D-520 motion_admit.py +5), on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
-        "the binding follow-up of the 2987 verdict (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, "
-        "2026-10-08 section): junction.py, junction_approach.py and junction_bend.py moved with git mv into "
-        "recovery/junction/ (gate.py, approach.py, bend.py), its own SIZE_UNITS entry; 3040 before the move = "
-        "2093 + 947; merging main brought D-520's motion_admit.py +5 (2098) and junction.py +12. Pure move, no shim, no behaviour change. What stays is D-407 stuck, D-468 lane return, "
-        "D-476 bridge and the shared D-507 6 motion_admit.py (lane_bridge and lane_return_decision use it); "
-        "every file below 600 (largest stuck_recovery.py 573); all LineFollowManager mixins under the single "
-        "manager lock and generation, no own lock, thread, store or publisher; CORE CommandManager stays the "
-        "final cmd_vel publisher. The +150 allowance is measured from 2098.",
+        1_292,
+        "split: re-judged at 1292 on 2026-10-10 (independent re-judge 2026-10-10, critic agent, read-only: AGREE WITH "
+        "CONDITIONS, conditions applied) when D-407 stuck "
+        "code moved into recovery/stuck/ (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 "
+        "section), its own SIZE_UNITS entry; the 2098 verdict's junction move stands. What stays is D-468 lane "
+        "return, D-476 bridge, D-546 pose request and the shared D-507 6 motion_admit.py; every file below 600; "
+        "all LineFollowManager mixins under the single manager lock and generation, no own lock, thread, store "
+        "or publisher; CORE CommandManager stays the final cmd_vel publisher. The +150 allowance is measured "
+        "from 1292.",
+    ),
+    "core/services/core_features/line_follow/recovery/stuck/realign": (
+        289,
+        "accept: independently judged at 289 on 2026-10-10 by snapshot_review: focused D-607 REALIGN "
+        "subpackage under the same manager lock, no new publisher; reuses cue odom pivot and stuck "
+        "clearance. Dated addendum: docs/plans/2026-10-07-line-follow-recovery-subpackage.md. "
+        "Re-judge after +150.",
+    ),
+    "core/services/core_features/line_follow/recovery/stuck": (
+        1_031,
+        "accept: registered at 1031 on 2026-10-10 when D-407 stuck code left recovery "
+        "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 section; independent re-judge "
+        "2026-10-10, critic agent, read-only: AGREE WITH CONDITIONS, conditions applied): stuck_recovery.py 540 (state machine), stuck_wiring.py 362 (manager glue), "
+        "trail.py 66 (ForwardTrail), progress_watch.py 61 (D-607 odom progress watch), __init__.py 2. Mixins of "
+        "LineFollowManager under its one lock and generation; no own lock, thread, store or publisher; CORE "
+        "CommandManager stays the final cmd_vel publisher. D-607 realign joins as its own sub-unit "
+        "recovery/stuck/realign/ by its own dated addendum. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
         959,
@@ -1015,7 +1053,8 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core/services/core_features/localization": (
-        922,
+        1080,
+        "accept: independently re-judged at 1080 on 2026-10-10 by snapshot_review: D-603 rotate_to joins the existing localization mission lifecycle; clearance and final commands remain with their CORE owners. Re-judge after +150. Previous verdict: "
         "accept: independently re-judged at 922 on 2026-10-09 (read-only safety reviewer); "
         "docs/plans/2026-10-09-core-localization-size-unit.md registers assist, halt, mission, "
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
@@ -1030,24 +1069,47 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow": (
-        2_957,
-        "accept: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
+        3_018,
+        "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
+        "had required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
+        "Earlier: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
         "(read-only critic agent); docs/plans/2026-10-10-core-line-follow-size-unit.md registers the rest of "
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
+    "perception/control/sensing/perception/drivable": (
+        810,
+        "accept: keep steering from the learned drivable way (drivable_steer.py moved from learned/, "
+        "drivable_keep.py, drivable_preview.py) is its own size unit inside the P1a perception unit, by the "
+        "2026-10-10 drivable addendum of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. "
+        "Judged at 810 on 2026-10-10. New steering features (driving context, map corner arc) go here; "
+        "drivable_steer.py splits before 600. Re-judge on growth past +150.",
+    ),
+    "core/services/core_features/line_follow/cue": (
+        376,
+        "split: judged at 376 on 2026-10-10 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
+        "size-unit.md, cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS): lane_cue.py 320 (D-511 Fleet lane cue, a "
+        "LaneCueMixin of LineFollowManager under its lock) and odom_pivot.py 55 (pure, camera-independent turn in "
+        "place; D-607 P3 REALIGN imports it from recovery/stuck/realign, one direction stuck -> cue). The "
+        "manager calls _init_lane_cue (start and mode change), _lane_cue_plan, _lane_cue_turn, _lane_cue_view, "
+        "_lane_cue_spot_running, reads _cue_latch and _cue_spot_turning, interprets the plan tuple "
+        "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
+    ),
     "perception/control/sensing/perception/learned": (
-        2_270,
+        2272,
+        "accept: independently re-judged at 2272 on 2026-10-10 by snapshot_review: drivable paint and floor gating remain in the model runner/manifest owner, including the gated fallback; steering remains the separate drivable unit and CORE retains commands. Re-judge after +150. Previous verdict: "
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "
         "when D-597 amendment 3 (a85739fcb, boundary memory on the pure-pursuit arc) took the parent "
         "past 12004+150. Import path, colcon package and CORE command ownership do not change. "
-        "Re-judge on growth past +150.",
+        "Re-judged at 1982 on 2026-10-10: drivable_steer.py (548) left for the drivable unit "
+        "(drivable addendum), learned had reached 2520. Re-judge on growth past +150.",
     ),
     "perception/control/sensing/perception": (
-        9_895,
+        9_934,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1061,7 +1123,12 @@ SIZE_VERDICTS = {
         "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
         "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
         "learned backend it serves; the split plan is unchanged. (independent re-judge 2026-10-10, critic: agree - growth is in learned/; next growth registers perception/control/sensing/perception/learned as its own SIZE_UNITS entry via a P1a plan addendum, leaving the parent at ~9891). Re-judged at 9895 on 2026-10-10: learned/ (2270) left this unit "
-        "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named.",
+        "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named. Re-judged at "
+        "10152 on 2026-10-10 for the drivable camera preview (drivable_preview.py: the steered way, target, "
+        "exit and decision-chain rows drawn from keep_debug; follow_preview, drivable_keep and road +3 each), "
+        "camera evidence drawing that belongs in this unit; the split plan is unchanged. Re-judged at 9934 "
+        "on 2026-10-10: drivable_keep.py and drivable_preview.py left for the drivable unit (drivable "
+        "addendum); measured after merging local main.",
     ),
     "control": (
         34_619,
@@ -1222,10 +1289,9 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1268,
-        "accept: re-judged at 1268 on 2026-10-10 for D-596 rev 2026-10-10: the identify refusal now names its reason "
-        "(CAUTION_ACTIVE, ESTOP, ...) for CORE to hand to Fleet; it stays with the one process that owns the lamp. "
-        "Previously re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        1273,
+        "accept: independently re-judged at 1273 on 2026-10-10 by snapshot_review; mixed-install lamp fallback retains one presentation owner and zero growth allowance. Previous verdict: re-judged at 1270 on 2026-10-10 for D-583. The mixed-install fallback tries the turn-signal argument, then the D-546 recovery argument, then the three-argument lamp. Zero growth allowance remains. Previously "
+        "re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
         "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
         "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
         "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "

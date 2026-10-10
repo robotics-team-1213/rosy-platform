@@ -1011,3 +1011,9 @@
 - 변경: 인식 콜백이 마지막 발행 seq 대신 그 순간 CORE의 지시/호 seq를 확인한다. 다른 번호의 관측은 즉시 무효화하고 교차로 감지는 버린다.
 - 증거: gateway 관련 46 passed, 독립 안전 검토, 문서/구조 36 passed. ROS 그래프는 미검증.
 - gate 변화: P1 SOURCE 후보.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전을 인계에 싣는다
+- 변경: `face_inputs_payload`가 stuck·reason·angular·junction으로 `signal`을 만든다. 없는 필드는 신호 없음.
+- 증거: `test_face_inputs.py`.
+- gate 변화: SOURCE.
+- 결정: D-583

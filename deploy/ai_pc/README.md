@@ -22,3 +22,16 @@ GPU가 정상이고 Model PC에서 승인된 digest·revision과 최소 비식�
 
 4. 손으로 먼저 본다: `cd ~/rosy-platform/operations/fleet && set -a && . ~/.config/rosy/signal-agent.env && set +a && python3 -m fleet.traffic.signal_agent`. 관제 화면 신호 카드에서 운영자가 "AI 요청"을 눌러야 요청이 받아들여진다(그 전에는 409 `SIGNAL_NOT_DEMAND` 경고만 찍힌다).
 5. 유닛: `cp rosy-signal-agent.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user start rosy-signal-agent.service`. 기록은 `journalctl --user -u rosy-signal-agent.service`. 끄면 5 s 뒤 Fleet이 자동 순환으로 돌아간다.
+
+## 상황 서비스 (D-577, rosy-situation)
+
+`rosy-situation.service`는 Fleet 상태를 읽고 사실·제안만 `ai_observer`로 올린다(로봇 주소·토큰 없음). AI PC 소유자 동의(D-492)는 사용자가 2026-10-10에 주었다. `owner_mode`는 `~/.config/rosy/situation-owner-mode`(`shared`)다.
+
+**알려진 커밋에서만 돌린다.** 서비스는 시작할 때 자기 git 커밋을 읽어 heartbeat의 `build_commit`으로 보낸다. 관제 화면 「연동 상태」와 `GET /api/fleet/ai`의 `status.build_commit`에 보인다. 끝에 `-dirty`가 붙으면 그 PC에서 `operations/situation` 파일이 고쳐진 것이다.
+
+1. 배포할 커밋을 정한다(`origin/main`에 있는 것, 대개 착지한 main).
+2. AI PC `ai` 계정에서: `sh ~/rosy-platform/deploy/ai_pc/deploy-situation.sh <커밋>`. 커밋마다 `~/rosy-situation/<sha>`에 분리 worktree를 만들고, `~/rosy-situation/current`를 옮기고, 유닛을 그 커밋 것으로 복사해 다시 띄운다. `~/rosy-platform` 체크아웃(신호 제어기가 씀)은 바꾸지 않는다.
+3. 관제 화면 「연동 상태」의 AI PC 버전이 그 sha인지, heartbeat 나이가 6 s 미만인지 본다.
+4. 되돌리기: 이전 sha로 2를 다시 한다. 오래된 worktree는 `git -C ~/rosy-platform worktree remove ~/rosy-situation/<sha>`로 지운다.
+
+`~/.config/rosy/situation.env`(`FLEET_URL`, `FLEET_TOKEN_FILE`, `FLEET_CA`)와 토큰 파일은 배포가 건드리지 않는다.

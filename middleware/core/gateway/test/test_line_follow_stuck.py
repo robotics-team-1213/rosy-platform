@@ -5,7 +5,7 @@ import pytest
 from core.bridge import traffic_gate
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 from core_features.traffic_policy import TrafficPolicyManager
 
 GEOMETRY = dict(body_lidar_x_m=-0.017, body_rear_x_m=-0.076, body_rotation_radius_m=0.08257)

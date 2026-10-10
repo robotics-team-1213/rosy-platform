@@ -96,7 +96,7 @@ class Client:
 def test_monitor_sends_cue_off_lane_and_clears_once():
     clock = [100.0]
     client = Client()
-    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m"))
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
                                     config=LaneComplianceConfig(off_map_pad_m=0.5),
                                     wall=lambda: clock[0], clients=lambda: {"r1": client})
@@ -105,13 +105,33 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
         clock[0] += 0.5
     assert monitor.view("r1")["return"]["state"] == OFF_LANE
     assert client.sent and client.sent[-1]["state"] == OFF_LANE and client.sent[-1]["side"] == "left"
+    assert client.sent[-1]["pose_stamp"] == 5.0
     assert client.sent[-1]["ttl_s"] <= 1.0 and "guide" in client.sent[-1] and "crosswalk_ahead" not in client.sent[-1]
-    poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m")
+    poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=6.0)
     for _ in range(6):
         asyncio.run(monitor.tick())
         clock[0] += 0.5
     states = [b["state"] for b in client.sent]
     assert states.count(ON_LANE) == 1 and states[-1] == ON_LANE
+
+
+def test_resolver_never_resumes_at_a_mapped_crosswalk_it_waits_for_a_human():
+    # XW removed after independent Safety-Review 2026-10-10: RESUME at a crosswalk could drive across with
+    # no look for people (CORE gate off) or override a "person present" hold. WAIT + a human instead.
+    from fleet.stuck.resolver import Answer, ResolverConfig, StuckResolver
+    for cause in ("no_motion", "lane_lost"):
+        for trip in (False, True):
+            resolver = StuckResolver(ResolverConfig())
+            resolver.at_crosswalk = lambda rid: rid == "r1"
+            row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
+                "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": cause, "local_enabled": True,
+                                                 "attempts": 0, "max_attempts": 2}, "crosswalk": None}}}
+            if trip:
+                row["trip"] = True
+            row["ai_proposal"] = {"robot_id": "r1", "stuck_id": "s1", "decision": "BACK_AND_RETRY",
+                                  "reason": "x", "confidence": 0.9, "evidence": {},
+                                  "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+            assert resolver.step(0.0, [row]) == [Answer("r1", "s1", "WAIT", "R5", escalate="crosswalk_human")]
 
 
 def test_resolver_never_auto_resumes_at_a_mapped_crosswalk():
@@ -123,3 +143,88 @@ def test_resolver_never_auto_resumes_at_a_mapped_crosswalk():
         "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": "no_motion"}}}}
     answers = resolver.step(0.0, [row])
     assert not any(getattr(a, "decision", None) == "RESUME" and getattr(a, "rule", None) == "XW" for a in answers)
+
+
+def test_a_refused_cue_is_not_counted_as_sent():
+    clock = [100.0]
+
+    class Refusing(Client):
+        async def line_follow_lane_cue(self, body):
+            self.sent.append(body)
+            return {"accepted": False, "reason": "pose_stale"}
+
+    client = Refusing()
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5),
+                                    wall=lambda: clock[0], clients=lambda: {"r1": client})
+    for _ in range(4):
+        asyncio.run(monitor.tick())
+        clock[0] += 0.5
+    assert client.sent and monitor._cue_sent.get("r1") is None and monitor._cue_refused["r1"] == "pose_stale"
+
+
+def test_no_cue_while_the_robot_has_an_open_stuck_except_off_map():
+    clock = [100.0]
+    client = Client()
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5), wall=lambda: clock[0],
+                                    clients=lambda: {"r1": client}, stuck_open=lambda rid: True)
+    for _ in range(4):
+        asyncio.run(monitor.tick())
+        clock[0] += 0.5
+    assert monitor.view("r1")["return"]["state"] == OFF_LANE and client.sent == []
+
+
+def test_turn_spot_only_on_a_configured_spot():
+    cfg = LaneComplianceConfig.from_mapping({"turn_spots": [{"x": 0.5, "y": 0.0}], "turn_spot_tolerance_m": 0.018})
+    assert classify(0.51, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is True
+    assert classify(0.53, 0.0, 0.0, 0.0, GRAPH, CW, cfg).turn_spot is False
+    assert classify(0.5, 0.0, 0.0, 0.0, GRAPH, CW).turn_spot is False          # none configured
+
+
+def test_site_example_turn_spots_parse():
+    import yaml
+    from pathlib import Path
+    example = Path(__file__).resolve().parents[3] / "deploy" / "site" / "fleet-site.yaml.example"
+    cfg = LaneComplianceConfig.from_mapping(yaml.safe_load(example.read_text(encoding="utf-8"))["fleet"]["lane_compliance"])
+    assert len(cfg.turn_spots) == 4 and cfg.turn_spot_tolerance_m == 0.018 and cfg.wrong_way is False
+
+
+def test_lap_context_names_the_next_feature_and_headings():
+    from types import SimpleNamespace
+    from fleet.localization.lap_context import build_lap, context
+
+    class _Arc(SimpleNamespace):
+        def point_at(self, s):
+            s = min(max(s, 0.0), self.length_m)
+            return self.x0 + s * math.cos(self.h), self.y0 + s * math.sin(self.h), self.h
+
+    arcs = {f"a{i}": _Arc(edge_id=f"e{i}", length_m=1.0, end_place=f"p{i}", h=i * math.pi / 2,
+                          x0=[0, 1, 1, 0][i], y0=[0, 0, 1, 1][i]) for i in range(4)}
+    lap = build_lap(SimpleNamespace(arcs=arcs, out_of={"p0": ("a1", "x")}), ["a0", "a1", "a2", "a3"],
+                    crosswalks=(),
+                    turn_spots=[(1.0, 0.5)])
+    c = context(lap, "a0", 0.5, 0.01, 0.1, 0.3)
+    assert c["next"] == {"kind": "junction", "ds_m": c["next"]["ds_m"], "action": "left", "ref": "p0"}
+    assert abs(c["next"]["ds_m"] - 0.5) < 0.02 and abs(c["heading_deg"]) < 1e-6
+    c = context(lap, "a1", 0.2, 0.0, 0.1, 0.3)
+    assert c["next"]["kind"] == "turn_spot" and abs(c["next"]["ds_m"] - 0.3) < 0.02
+    assert c["heading_ahead_deg"] == 90.0 and context(lap, "zz", 0.1, 0.0, 0.1, 0.3) is None
+
+
+def test_site_example_lap_builds_on_map_v5():
+    import json
+    import yaml
+    from pathlib import Path
+    from fleet.localization.lap_context import build_lap
+    root = Path(__file__).resolve().parents[3]
+    raw = yaml.safe_load((root / "deploy/site/fleet-site.yaml.example").read_text(encoding="utf-8"))
+    cfg = LaneComplianceConfig.from_mapping(raw["fleet"]["lane_compliance"])
+    site = SiteMap.model_validate(json.loads((root / "deploy/site/site-maps/map_v2_fleet-v5.json").read_text(encoding="utf-8")))
+    cws = [(c.id, [tuple(p) for p in c.polygon]) for c in site.crosswalks]
+    lap = build_lap(build_graph(site), cfg.lap_arcs, cws, cfg.turn_spots)
+    kinds = [f[1] for f in lap.features]
+    assert lap is not None and cfg.guide_context is False
+    assert kinds.count("crosswalk") == 2 and kinds.count("ring_entry") == 2 and 7.0 < lap.length_m < 7.8

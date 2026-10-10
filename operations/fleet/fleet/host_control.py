@@ -8,6 +8,7 @@ every host, its own included, through one forced-command SSH key; the host's
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import subprocess
@@ -51,6 +52,15 @@ class HostControlError(Exception):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+def read_json_object(path: Path) -> dict | None:
+    """Read one status object. Missing, unreadable, or non-object is absence, not health."""
+    try:
+        body = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    return body if isinstance(body, dict) else None
 
 
 def catalogue() -> dict:

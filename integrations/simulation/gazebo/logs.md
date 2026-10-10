@@ -287,3 +287,8 @@
 - 변경: `config/fleet_sim_site.yaml`(`fleet.trip.lane_camera_check: false`)을 두고 SIM에서 Fleet을 띄우는 곳 여섯(`tools/run_fleet_sim.sh`, `tools/validation/fleet_gazebo/run.py`, `tools/sim/d395_s1_bench.py`, d407 `console.sh`, lap_fleet.py 둘)이 이 파일을 읽는다. SIM 런치는 road_observer를 띄우지 않아 CORE `vision/front/status`가 언제나 `available: false`다.
 - 증거: `operations/fleet/test/test_fleet_sim_site_d601.py`(설정 적재, 여섯 곳 참조, 미리보기 없는 FakeRobot의 lane 계획 200).
 - gate 변화: 없음. SIM 실주행 재확인은 하지 않았다.
+## 2026-10-10 · 5aa301e83 · feat(sim): 카메라 SIM 런치가 앞 미리보기를 낸다 (D-605, D-601 B)
+- 변경: `map_v2_fleet_lane`·`map_v2_fleet_real`과 d495_real·closed_loop 하네스 사본이 `sim_jpeg_relay.py`(gz_sim이 `tools/`에서 설치, `use_sim_time` 없음)를 띄운다. 카메라 SIM Fleet(d407 console.sh, lap_fleet.py 둘)은 `config/fleet_sim_camera_site.yaml`(`lane_camera_check: true`), `gz_multi` Fleet 셋은 `fleet_sim_site.yaml`(`false`). `run_fleet_sim.sh`·d407 `console.sh`의 글자 그대로 `
+` 줄 이음(e789581de)을 고쳤다.
+- 증거: 모델 PC `map_v2_fleet_lane`(domain 91, port 8199): `vision/front/status` `available: true`, `source GZ`, `age_ms` 41–150, sequence 157→176(약 5 fps). `GET /api/v1/traffic` `mode DISABLED` 그대로. 30 s CPU tick: 릴레이 18(코어 한 개의 0.6%), CORE 2780, gz 1602. `use_sim_time` 켠 릴레이는 20 s에 477 tick(약 24%)이었다. 테스트 `operations/fleet/test/test_fleet_sim_site_d601.py`.
+- gate 변화: 없음. 카메라 SIM에서 Fleet lane trip 실주행은 하지 않았다.

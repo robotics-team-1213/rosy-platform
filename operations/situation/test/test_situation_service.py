@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+from concurrent.futures import Future
+from email.message import Message
 
 from rosy_situation import service
 from rosy_situation.service import Situation
@@ -48,19 +50,203 @@ def _fact(n):
             "evidence": {"line": n}, "source": "analyzer:stub@0", "observed_at": 1.0, "ttl_s": 5.0}
 
 
+def test_available_model_reads_one_case_and_posts_its_answer_without_logging_images(tmp_path):
+    class Cases(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/ai/problems":
+                self.calls.append((path, body))
+                return {"problems": [{"problem_id": "s-1", "robot_id": "pinky", "kind": "stuck"}]}
+            if path == "/api/fleet/ai/case/s-1":
+                self.calls.append((path, body))
+                return {"problem_id": "s-1", "robot_id": "pinky", "kind": "stuck",
+                        "views": {"front": {"jpeg_b64": "secret-image"},
+                                  "rosy_cam": {"jpeg_b64": "secret-image"}}}
+            return super().call(path, body)
+
+    class Model:
+        def profile(self):
+            return "qwen3-vl:8b-instruct@abc:d610-v1"
+
+        def judge(self, case, now):
+            assert case["problem_id"] == "s-1"
+            return {"robot_id": "pinky", "stuck_id": "s-1", "decision": "WAIT", "reason": "blocked",
+                    "confidence": 0.8, "source": "vlm:qwen3-vl:8b-instruct@abc:d610-v1",
+                    "observed_at": now, "ttl_s": 6, "evidence": {}}
+
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    fleet, clock = Cases(), Clock()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          wall=clock, vlm=Model(), executor=Immediate())
+    situation.step()  # load the profile off the polling thread
+    clock.now += 2
+    situation.step()  # report the profile, start one case
+    situation.step()  # send the answer
+    assert fleet.paths().count("/api/fleet/ai/case/s-1") == 1
+    assert fleet.paths().count("/api/fleet/ai/proposals") == 1
+    assert any(body["model_profiles"] == [Model().profile()] for path, body in fleet.calls
+               if path == "/api/fleet/ai/heartbeat")
+    assert all("secret-image" not in path.read_text() for path in (tmp_path / "state" / "logs").glob("*"))
+
+
+def test_ai_cycle_reads_signed_vision_frame_into_case_without_logging_lease(tmp_path):
+    class Cases(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/ai/problems":
+                return {"problems": [{"problem_id": "s-1"}]}
+            if path == "/api/fleet/ai/case/s-1":
+                return {"problem_id": "s-1", "views": {"front": {"jpeg_b64": "front"},
+                        "rosy_cam": {"frame_path": "/api/vision/sources/ceiling/frame", "lease": "secret-lease"}}}
+            return super().call(path, body)
+
+        def frame(self, path, lease):
+            assert (path, lease) == ("/api/vision/sources/ceiling/frame", "secret-lease")
+            self.calls.append(("frame", None))
+            return {"frame_id": "ceiling:7", "captured_at": 100.0, "jpeg_b64": "secret-image"}
+
+    class Model:
+        def judge(self, case, _now):
+            assert case["views"]["rosy_cam"]["jpeg_b64"] == "secret-image"
+            return None
+
+    fleet = Cases()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", vlm=Model())
+    situation._ai_cycle()
+    assert fleet.paths().count("frame") == 1
+    assert not any("secret-lease" in path.read_text() or "secret-image" in path.read_text()
+                   for path in (tmp_path / "state" / "logs").glob("*"))
+
+
+def test_vision_frame_lease_cannot_be_sent_to_an_arbitrary_path():
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    for path in ("https://elsewhere.example/image", "/api/vision/sources/cam/frame?to=elsewhere",
+                 "/api/fleet/state", "/api/vision/sources/../frame"):
+        try:
+            fleet.frame(path, "secret-lease")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(path)
+
+
+def test_signed_vision_frame_requires_map_crop_and_exact_headers(monkeypatch):
+    headers = Message()
+    for key, value in (("Content-Type", "image/jpeg"), ("X-Frame-Rectified", "map-crop"),
+                       ("X-Frame-Seq", "7"), ("X-Frame-Captured-At", "100.5")):
+        headers[key] = value
+
+    class Reply:
+        def __init__(self):
+            self.headers = headers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _limit):
+            return b"\xff\xd8frame\xff\xd9"
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "https://fleet.example/api/vision/sources/ceiling/frame"
+            assert request.headers["Authorization"] == "Bearer secret-lease"
+            return Reply()
+
+    monkeypatch.setattr(service.urllib.request, "build_opener", lambda *_handlers: Opener())
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    frame = fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    assert frame == {"frame_id": "ceiling:7", "captured_at": 100.5,
+                     "jpeg_b64": "/9hmcmFtZf/Z"}
+    headers.replace_header("X-Frame-Rectified", "false")
+    try:
+        fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("raw Vision frame accepted")
+
+
+def test_model_unload_removes_advertised_profile(tmp_path):
+    class Model:
+        loaded = True
+
+        def profile(self):
+            return "model@digest" if self.loaded else None
+
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    fleet, clock, model = FakeFleet(), Clock(), Model()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          vlm=model, executor=Immediate())
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile == "model@digest"
+    model.loaded = False
+    clock.now += 30
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile is None
+
+
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):
     fleet = FakeFleet(events=[{"audit_id": 5, "type": "nav.pose"}, {"audit_id": 7, "type": "nav.pose"}])
     _service(tmp_path, fleet).step()
-    assert fleet.paths()[:5] == ["/api/fleet/ai/heartbeat", "/api/fleet/state", "/api/fleet/traffic",
-                                 "/api/fleet/line-stuck", "/api/fleet/events"]
+    assert fleet.paths()[:6] == ["/api/fleet/ai/heartbeat", "/api/fleet/state", "/api/fleet/traffic",
+                                 "/api/fleet/line-stuck", "/api/fleet/trips", "/api/fleet/events"]
     again = FakeFleet()
     _service(tmp_path, again).step()
     assert any(p.startswith("/api/fleet/events?after_id=7&") for p, _ in again.calls)
 
 
+def test_open_trip_reads_the_route_map_once_and_passes_it_to_the_analyzer(tmp_path):
+    class RouteFleet(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/trips":
+                self.calls.append((path, body))
+                return {"open": [{"robot_id": "r", "map_version": 5}]}
+            if path == "/api/fleet/site-map/active":
+                self.calls.append((path, body))
+                return {"version": 5, "map": {"edges": []}}
+            return super().call(path, body)
+
+    fleet, seen = RouteFleet(), []
+    situation = _service(tmp_path, fleet, analyzers=lambda snapshot: seen.append(snapshot) or [])
+    situation.step()
+    situation.step()
+    assert len(seen) == 2 and seen[1]["route_map"]["version"] == 5
+    assert fleet.paths().count("/api/fleet/site-map/active") == 1
+
+
 def test_a_stuck_event_brings_the_next_read_forward(tmp_path):
     fleet = FakeFleet(events=[{"audit_id": 1, "type": "nav.line_stuck_opened"}])
     assert _service(tmp_path, fleet).step() == 0.0
+
+
+def test_snapshot_observation_time_includes_http_read_delay(tmp_path):
+    wall = Clock()
+
+    class SlowFleet(FakeFleet):
+        def call(self, path, body=None):
+            wall.now += 1.0
+            return super().call(path, body)
+
+    situation = _service(tmp_path, SlowFleet())
+    situation.wall = wall
+    snapshot, _ = situation._read()
+    assert snapshot["observed_at"] == wall.now == 105.0
 
 
 def test_open_stuck_reads_context_once_and_posts_shadow_draft(tmp_path):
@@ -204,3 +390,19 @@ def test_the_service_talks_to_a_real_fleet_as_ai_observer_and_moves_nothing(tmp_
         server.should_exit = True
         worker.join(timeout=20)
         listener.close()
+
+
+def test_heartbeat_reports_the_build_commit(tmp_path):
+    fleet = FakeFleet()
+    (tmp_path / "mode").write_text("shared")
+    Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=Clock(), commit="0123456789ab").step()
+    beat = next(body for path, body in fleet.calls if path == "/api/fleet/ai/heartbeat")
+    assert beat["build_commit"] == "0123456789ab"
+
+
+def test_build_commit_reads_git_or_is_none(tmp_path):
+    import re
+
+    assert service.build_commit(tmp_path) is None              # not a checkout
+    commit = service.build_commit()
+    assert commit is None or re.fullmatch(r"[0-9a-f]{7,40}(-dirty)?", commit)

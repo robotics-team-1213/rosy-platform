@@ -1,6 +1,7 @@
 """D-577 3·4·10: `rosy-situation`, the AI PC situation service — reads Fleet, posts facts, never acts.
 
-Every second it reads ``GET /api/fleet/state``, ``/api/fleet/traffic`` and ``/api/fleet/line-stuck`` and the
+Every second it reads ``GET /api/fleet/state``, ``/api/fleet/traffic``, ``/api/fleet/line-stuck`` and
+``/api/fleet/trips``; an open trip also loads the active site map once per map version. It reads the
 event cursor ``GET /api/fleet/events?after_id=`` (a new stuck event brings the next read forward), runs the
 deterministic analyzers on that snapshot and posts their facts to ``POST /api/fleet/ai/facts`` as the
 ``ai_observer`` role: at most 32 per request, 2 requests a second, a 256-fact queue that drops the oldest.
@@ -22,24 +23,44 @@ Run (stdlib only; systemd unit ``deploy/ai_pc/rosy-situation.service``, installe
 from __future__ import annotations
 
 import json
+import base64
 import logging
+import math
 import os
+import re
 import ssl
+import subprocess
 import time
 import urllib.error
 import urllib.request
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
 TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")
 _LOG = logging.getLogger("rosy_situation")
+
+
+def build_commit(where: Path = Path(__file__).resolve().parent) -> Optional[str]:
+    """The git commit this code runs from (``-dirty`` when the service's own files differ), or None.
+
+    Fleet shows it on the console's 연동 상태 row; deploy/ai_pc/deploy-situation.sh puts each commit in its own
+    detached worktree so the answer is exact."""
+    try:
+        head = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=where, capture_output=True,
+                              text=True, timeout=5, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=where, capture_output=True,
+                               text=True, timeout=5, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return f"{head}-dirty" if dirty else head
 
 
 def analyze(snapshot: dict) -> list[dict]:
@@ -62,13 +83,40 @@ class Fleet:
         with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
             return json.loads(response.read())
 
+    def frame(self, path: str, lease: str) -> dict:
+        if not isinstance(path, str) or not re.fullmatch(r"/api/vision/sources/[A-Za-z0-9_-]+/frame", path):
+            raise ValueError("invalid Vision frame path")
+        if not isinstance(lease, str) or not lease:
+            raise ValueError("missing Vision frame lease")
+        request = urllib.request.Request(self._url + path, headers={"Authorization": f"Bearer {lease}"})
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, request, fp, code, msg, headers, newurl):
+                return None
+
+        opener = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=self._ssl))
+        with opener.open(request, timeout=TIMEOUT_S) as response:
+            if response.headers.get_content_type() != "image/jpeg":
+                raise ValueError("Vision response is not JPEG")
+            if response.headers.get("X-Frame-Rectified") != "map-crop":
+                raise ValueError("Vision frame is not a map crop")
+            seq = response.headers.get("X-Frame-Seq")
+            captured_at = float(response.headers.get("X-Frame-Captured-At") or "nan")
+            if not seq or not seq.isdigit() or not math.isfinite(captured_at):
+                raise ValueError("Vision frame headers invalid")
+            jpeg = response.read(2_000_001)
+            if not jpeg or len(jpeg) > 2_000_000:
+                raise ValueError("Vision frame size invalid")
+            return {"frame_id": f"{path.split('/')[4]}:{seq}",
+                    "captured_at": captured_at,
+                    "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
+
 
 class Situation:
     def __init__(self, fleet, state_dir: Path, owner_mode_file: Path, *,
                  clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time,
-                 analyzers: Callable[[dict], list] = analyze) -> None:
+                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None, vlm=None, executor=None) -> None:
         self.fleet, self.state_dir, self.owner_mode_file = fleet, Path(state_dir), Path(owner_mode_file)
-        self.clock, self.wall, self.analyzers = clock, wall, analyzers
+        self.clock, self.wall, self.analyzers, self.commit = clock, wall, analyzers, commit
         self.queue: deque = deque(maxlen=QUEUE)        # oldest dropped first (D-577 4)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._cursor_file = self.state_dir / "cursor.json"
@@ -79,8 +127,16 @@ class Situation:
         self._last_beat: Optional[float] = None
         self._posts: deque = deque()
         self.input_lag_s: Optional[float] = None
+        self._route_map: Optional[dict] = None
         from rosy_situation.incident_context import ContextDraft
         self.context_draft = ContextDraft()
+        self.vlm = vlm
+        self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="rosy-vlm")
+        self._profile = None
+        self._profile_task = None
+        self._case_task = None
+        self._case_seen: dict[str, float] = {}
+        self._profile_retry_at = 0.0
 
     def owner_mode(self) -> str:
         try:
@@ -107,8 +163,9 @@ class Situation:
         self._last_beat = now
         try:
             self.fleet.call("/api/fleet/ai/heartbeat", {
-                "service_version": __version__, "model_profiles": [], "owner_mode": mode,
-                "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s})
+                "service_version": __version__, "model_profiles": [self._profile] if mode == "available" and self._profile else [], "owner_mode": mode,
+                "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s,
+                "build_commit": self.commit})
         except (OSError, ValueError) as exc:
             _LOG.warning("heartbeat failed: %s", exc)
 
@@ -118,6 +175,16 @@ class Situation:
         for key, path in (("state", "/api/fleet/state"), ("traffic", "/api/fleet/traffic"),
                           ("line_stuck", "/api/fleet/line-stuck")):
             snapshot[key] = self.fleet.call(path)
+        try:
+            snapshot["trips"] = self.fleet.call("/api/fleet/trips")
+            open_trips = snapshot["trips"].get("open") or []
+            if open_trips and (self._route_map is None or
+                               any(t.get("map_version") != self._route_map.get("version") for t in open_trips)):
+                self._route_map = self.fleet.call("/api/fleet/site-map/active")
+            snapshot["route_map"] = self._route_map if open_trips else None
+        except (OSError, ValueError) as exc:
+            _LOG.warning("trip route read failed: %s", exc)
+            snapshot["trips"], snapshot["route_map"] = {}, None
         if any((str(row.get("robot_id") or ""), str(row.get("stuck_id") or "")) not in self.context_draft.seen
                for row in (snapshot["line_stuck"].get("pending") or [])):
             context = {"map": None, "cameras": {}}
@@ -151,6 +218,7 @@ class Situation:
         self.cursor = int(events.get("next_cursor", self.cursor))
         self._cursor_file.write_text(json.dumps({"after_id": self.cursor}))
         self.input_lag_s = round(self.clock() - started, 3)
+        snapshot["observed_at"] = self.wall()
         return snapshot, stuck_event
 
     def _flush(self) -> None:
@@ -178,6 +246,7 @@ class Situation:
         """One cycle; returns the seconds until the next (0 after a stuck event)."""
         started = self.clock()
         mode = self.owner_mode()
+        self._ai(mode)
         self._heartbeat(mode)
         if mode == "owner_busy":
             return PERIOD_S
@@ -202,6 +271,59 @@ class Situation:
                 _LOG.warning("proposal not sent: %s", exc)
         return 0.0 if stuck_event else max(0.0, PERIOD_S - (self.clock() - started))
 
+    def _ai(self, mode: str) -> None:
+        """Poll one model job without delaying Fleet reads, heartbeat or the rule fallback."""
+        if self.vlm is None or mode != "available":
+            return
+        if self._case_task is not None and self._case_task.done():
+            try:
+                self._case_task.result()
+            except Exception as exc:  # noqa: BLE001 - a bad case or model response must not stop Fleet polling
+                _LOG.warning("vlm case failed: %s", type(exc).__name__)
+            self._case_task = None
+        if self._profile_task is not None and self._profile_task.done():
+            try:
+                self._profile = self._profile_task.result()
+            except (OSError, ValueError) as exc:
+                _LOG.warning("vlm profile unavailable: %s", exc)
+                self._profile = None
+            self._profile_task = None
+            self._profile_retry_at = self.clock() + 30.0
+        if self._profile is None or self.clock() >= self._profile_retry_at:
+            if self._profile_task is None and self._case_task is None and self.clock() >= self._profile_retry_at:
+                self._profile_task = self._executor.submit(self.vlm.profile)
+            return
+        if self._case_task is None:
+            self._case_task = self._executor.submit(self._ai_cycle)
+
+    def _ai_cycle(self) -> None:
+        problems = self.fleet.call("/api/fleet/ai/problems").get("problems") or []
+        now = self.clock()
+        for problem in problems:
+            pid = str(problem.get("problem_id") or "")
+            if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
+                self._case_seen[pid] = now
+                case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                if self.owner_mode() != "available":
+                    return
+                for member in [case, *(case.get("members") or {}).values()]:
+                    view = (member.get("views") or {}).get("rosy_cam") or {}
+                    if view.get("frame_path"):
+                        try:
+                            member["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                        except (OSError, ValueError, KeyError) as exc:
+                            _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
+                            member["views"].pop("rosy_cam", None)
+                if self.owner_mode() != "available":
+                    return
+                proposal = self.vlm.judge(case, self.wall())
+                if proposal is not None and self.owner_mode() == "available":
+                    self.fleet.call("/api/fleet/ai/proposals", proposal)
+                    self._log("proposals", proposal)
+                break
+        if len(self._case_seen) > 256:
+            self._case_seen = {pid: at for pid, at in self._case_seen.items() if now - at < 60.0}
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -210,9 +332,10 @@ def main() -> None:
     state = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_STATE", "~/.local/state/rosy-situation")))
     owner = Path(os.path.expanduser(os.environ.get("ROSY_SITUATION_OWNER_MODE", "~/.config/rosy/situation-owner-mode")))
     from rosy_situation.analyzers import Analyzer
+    from rosy_situation.vlm import Vlm
 
     service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner,
-                        analyzers=Analyzer())
+                        analyzers=Analyzer(), commit=build_commit(), vlm=Vlm())
     while True:
         time.sleep(service.step())
 

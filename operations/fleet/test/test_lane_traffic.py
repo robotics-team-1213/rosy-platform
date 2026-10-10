@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 
 import pytest
 
 from fleet.localization.map_pose import MapPose
 from fleet.routing.execute import ends_at_place, plan_body
+from fleet.routing.graph import build_graph
 from fleet.routing.trip import PlanRequest, plan_trip
+from fleet.site_map import SiteMap
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
@@ -63,24 +66,33 @@ class Fleet:
         self.p[robot_id].pose = MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, anchor_age_s)
 
 
-def _setup(ids=("a", "b"), **config):
+def _setup(ids=("a", "b"), site=None, **config):
     fleet = Fleet(ids)
     store = SiteMapStore(None, clock=lambda: fleet.now)
-    store.import_if_empty(demo_site(), source="test")
+    store.import_if_empty(site or demo_site(), source="test")
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(**config))
     return runner, store, fleet
 
 
-def _trip(runner, store, fleet, robot_id, arc_id, s, to="start_n", via=("start_s",), repeat=True, plan_id=None):
+def _trip(runner, store, fleet, robot_id, arc_id, s, to="start_n", via=("start_s",), repeat=True,
+          plan_id=None, start_at=None):
     graph = store.active()[2]
     arc = graph.arcs[arc_id]
     fleet.at(robot_id, arc, s)
-    plan = plan_trip(graph, PlanRequest(store.active()[0], arc.point_at(s), to, via=tuple(via)), store.routing_config)
+    pose = arc.point_at(s)
+    if start_at is not None:
+        x, y = graph.place_xy(start_at)
+        pose = x, y, pose[2]
+        fleet.p[robot_id].pose = MapPose(x, y, pose[2], "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+    plan = plan_trip(graph, PlanRequest(store.active()[0], pose, to, via=tuple(via)), store.routing_config)
     plan_id = plan_id or robot_id
+    request = {"to": to, "via": list(via), "repeat": repeat}
+    if start_at is not None:
+        request["start_at"] = start_at
     store.record_plan(plan_id=plan_id, robot_id=robot_id, principal_id="bob", map_version=plan.map_version,
-                      request={"to": to, "via": list(via), "repeat": repeat}, result={"plan": plan_body(plan)})
+                      request=request, result={"plan": plan_body(plan)})
     return run(runner.start(plan_id, "bob"))
 
 
@@ -121,6 +133,56 @@ def test_each_robot_runs_its_own_trip_and_busy_means_that_robot():
     assert any(u["state"] == "OCCUPIED" and u["holders"] == ["a"] for u in view["units"])
     run(runner.cancel("a", "bob"))  # an operator stop ends that robot's trip only
     assert runner.view("a")["state"] == "canceled" and runner.view("b")["state"] == "running"
+
+
+def test_two_finite_laps_return_to_their_own_start_and_stop():
+    site = demo_site().body()
+    graph = build_graph(SiteMap.model_validate(site), version=1)
+    west = graph.arcs["west:fwd"]
+    start_s = next(place for place in site["places"] if place["id"] == "start_s")
+    s = west.project(start_s["x"], start_s["y"])[1]
+    start_s["x"], start_s["y"] = west.point_at(s)[:2]  # a body-safe start for the round trip
+    runner, store, fleet = _setup(site=SiteMap.model_validate(site))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N),
+          repeat=False, start_at="start_n")
+    _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S),
+          to="start_s", via=("start_n",), repeat=False, start_at="start_s")
+    assert {trip["robot_id"] for trip in runner.open_trips()} == {"a", "b"}
+    for robot_id, stop in (("a", "start_n"), ("b", "start_s")):
+        view = runner.view(robot_id)
+        assert view["repeat"] is False and view["plan"]["actions"][-1]["place_id"] == stop
+        assert view["plan"]["actions"][-1]["action"] == "stop"
+    _ticks(runner, fleet)
+    assert runner.view("a")["state"] == runner.view("b")["state"] == "running"
+    for robot_id, stop in (("a", "start_n"), ("b", "start_s")):
+        live, tail = _to_tail(runner, store, fleet, robot_id)
+        _ticks(runner, fleet)
+        assert fleet.p[robot_id].sent[-1][0:2] == ("stop", stop)
+        fleet.at(robot_id, live.arc(tail), live.segments[tail]["s_to"])
+        _ticks(runner, fleet)
+        assert runner.view(robot_id)["state"] == "arrived"
+    assert runner.open_trips() == []
+
+
+def test_finite_lap_refuses_start_when_body_is_outside_the_first_lane():
+    runner, store, fleet = _setup(ids=("a",))
+    graph = store.active()[2]
+    x, y = graph.place_xy("start_n")
+    arc = graph.arcs["east:fwd"]
+    yaw = arc.project(x, y)[2]
+    plan = plan_trip(graph, PlanRequest(store.active()[0], (x, y, yaw), "start_n", via=("start_s",)),
+                     store.routing_config)
+    store.record_plan(plan_id="a", robot_id="a", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "start_n", "via": ["start_s"], "repeat": False, "start_at": "start_n"},
+                      result={"plan": plan_body(plan)})
+    fleet.p["a"].pose = MapPose(x - 0.04 * math.sin(yaw), y + 0.04 * math.cos(yaw), yaw,
+                                "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+
+    with pytest.raises(TripError) as err:
+        run(runner.start("a", "bob"))
+    assert err.value.code == "TRIP_START_BODY_OUTSIDE_ROUTE"
+    assert err.value.detail["body_margin_m"] < 0
+    assert runner.open_trips() == []
 
 
 def test_a_slow_robot_never_holds_another_back():

@@ -7,6 +7,7 @@ the screenshots.
 """
 
 import json
+import time
 
 import pytest
 
@@ -46,6 +47,29 @@ PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m"
 
 def _card(page, robot_id):
     return page.locator(f'#roster article[data-robot-id="{robot_id}"]')
+
+
+def test_running_trip_shows_and_clears_ai_route_warning_without_deadlock(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    fact = {"kind": "trip_route_check", "robot_ids": ["rosy_01"], "observed_at": time.time(),
+            "ttl_s": 5, "confidence": 0.8, "value": {"status": "OFF_ROUTE", "offset_m": 0.05, "limit_m": 0.03},
+            "evidence": {"trip_id": LEAD["trip_id"], "map_version": LEAD["map_version"]}}
+    api = {**API, "/api/fleet/ai": {"facts": [fact]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        warning = page.locator("#warning-list li").filter(has_text="AI 경로 편차 관찰")
+        expect(warning).to_have_count(1)
+        expect(warning).to_contain_text("rosy_01")
+        expect(warning).to_contain_text("허용 경계보다 2 cm 밖")
+        # The real polling request reads the new judgement; no operator action is required.
+        api["/api/fleet/ai"] = {"facts": [{**fact, "observed_at": page.evaluate("Date.now() / 1000"),
+                                         "value": {"status": "ON_ROUTE"}}]}
+        page.clock.run_for(1500)
+        expect(warning).to_have_count(0)
+        assert not posts and not errors
+        browser.close()
 
 
 def _open_form(page, robot_id):

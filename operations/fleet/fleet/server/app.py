@@ -135,9 +135,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
                ai_facts_acting: frozenset = frozenset(),
+               ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
+               calibration_drift_watch=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
@@ -295,6 +297,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 not isinstance(source, str) or not source for source in vision_sources):
             raise ValueError("vision preview sources must be unique non-empty ids")
 
+    # The drift watch's verdicts ride the tracking snapshot's source rows, so it is a
+    # misconfiguration to start one without the tracking service it is meant to inform.
+    if calibration_drift_watch is not None and tracking is None:
+        raise ValueError("calibration drift watch requires the tracking service")
+
     if localization_service is not None:
         # D-395 P2-6: the console badge reads the service's ladder (needs_human).
         console.set_localization_view(localization_service.view)
@@ -327,6 +334,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         mission_model_turn_worker_task = None
         localization_task = None
         signal_task = None
+        calibration_drift_task = None
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
@@ -335,6 +343,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
+        if calibration_drift_watch is not None:
+            calibration_drift_task = asyncio.create_task(calibration_drift_watch.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
                       if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
@@ -374,13 +384,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task):
+                               lease_task, path_task, calibration_drift_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            if calibration_drift_watch is not None:
+                await calibration_drift_watch.aclose()
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
             if callable(close_observation_source):
                 await close_observation_source()
@@ -561,7 +573,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
         config=lane_compliance_config or LaneComplianceConfig(), identity=identity,
-        clients=console.clients)   # D-511 rev 1: the return cue
+        clients=console.clients,   # D-511 rev 1: the return cue
+        # An open CORE stuck owns the robot (D-577 REALIGN); the board is built further down.
+        stuck_open=lambda robot_id: (getattr(app.state, "line_stuck", None) is not None
+                                     and app.state.line_stuck.view(robot_id) is not None))
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
@@ -576,6 +591,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                            db_path=task_service.store.path if task_service else None,
                                            acting=ai_facts_acting)
     app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
+    from fleet.stuck.ai_first import AiFirst
+    from fleet.stuck.episodes import ProblemLog
+    app.state.ai_first = ai_first or AiFirst()
+    app.state.ai_facts.first, app.state.ai_first.profiles = app.state.ai_first, app.state.ai_facts.profiles
+    app.state.ai_episodes = ProblemLog(task_service.store.path if task_service else None)   # D-610 9
+    app.state.ai_first.human_classes = app.state.ai_episodes.active
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
@@ -604,6 +625,31 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
+        from fleet.stuck.problems import ProblemWatch
+        resolver_core.ai_first = app.state.ai_first               # D-610: AI-first robots, closed loop, P2 kinds
+        app.state.stuck_resolver.episodes, app.state.stuck_resolver.problems = app.state.ai_episodes, ProblemWatch()
+    from fleet.stuck.ai_routes import install_ai_first_routes, rosy_cam_lease
+    install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
+                            loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
+                            read_guard=read_guard, authorize=authorize, require_named_operator=require_named_operator,
+                            clients=console.clients,
+                            rosy_cam=lambda rid: rosy_cam_lease(rid, sightings, map_pose,
+                                                                vision_signer, vision_sources),
+                            pose=map_pose.stuck_pose,
+                            deadlock_case=lambda: getattr(app.state.trip_runner.traffic.ai_replan, "case", None))
+
+    def ai_chain() -> dict:   # D-577 supervision row: credential presence only, never a secret
+        enrolled = console.clients() if stuck_resolver_enrolled else {}
+
+        def credential(rid: str) -> str:
+            if rid in (stuck_resolver_clients or {}):
+                return "token"
+            return "enrolled" if rid in stuck_resolver_enrolled and rid in enrolled else "none"
+        return {"resolver": getattr(app.state, "stuck_resolver", None) is not None,
+                "robots": [{"robot_id": rid, "credential": credential(rid), "ai_acting": rid in ai_facts_acting,
+                            "last_answer": app.state.line_stuck.last_resolver_answer(rid)}
+                           for rid in console.robot_ids]}
+    app.state.ai_facts.chain = ai_chain
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(
@@ -653,6 +699,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    from fleet.stuck.deadlock import AiReplan   # D-610 7: the AI PC picks a wait cycle's replan, Fleet checks it
+    trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     from fleet.server.map_pose_service import install_map_pin_route  # D-593
     install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)

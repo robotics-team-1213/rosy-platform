@@ -19,9 +19,8 @@ NCNN_FAMILIES = ("yolov8", "yolo11")  # raw detection heads, not end-to-end/NMS 
 TASKS = ("lane_seg", "object_det")
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # D-373 d9
 OBJECT_ROLE = "object"  # D-423: the one role of every object_det class (lane ROLES stay closed)
-# D-423 §2.2 class contract v1 (user-chosen 2026-10-02): names and order are fixed;
-# a different list is a new contract, not a new model.
-OBJECT_CLASSES = ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person_feet")
+# D-602 replaces D-423 §2.2's last name: person_feet is not a class. Order is fixed.
+OBJECT_CLASSES = ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person")
 # Output layout per task. yolo_cxcywh_scores: [1, 4 + C, A], centre-size boxes in
 # model-input pixels then C class scores in 0..1 (an ultralytics export; NMS outside).
 LAYOUTS = {"lane_seg": "nchw_logits", "object_det": "yolo_cxcywh_scores"}

@@ -88,7 +88,7 @@ OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_no
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
                            "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
                            "learned_paint_motion_compensation", "learned_paint_target",
-                           "crosswalk_uncertainty_enabled")
+                           "learned_paint_floor_gate", "crosswalk_uncertainty_enabled")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -106,7 +106,7 @@ def operator_overlay_problem(data) -> Optional[str]:
             and params["camera_ground_source"] not in OPERATOR_GROUND_SOURCES):
         return f"camera_ground_source must be one of {list(OPERATOR_GROUND_SOURCES)}"
     for key in ("allow_nominal_ground", "debug_overlay", "learned_paint_motion_compensation",
-                "crosswalk_uncertainty_enabled"):
+                "learned_paint_floor_gate", "crosswalk_uncertainty_enabled"):
         if key in params and type(params[key]) is not bool:
             return f"{key} must be true or false"
     if "nominal_camera_profile_path" in params:

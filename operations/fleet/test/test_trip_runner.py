@@ -323,6 +323,26 @@ def test_the_fake_core_follows_the_junction_contract():
 
 # ---- start checks ---------------------------------------------------------------------
 
+def test_pinky_trip_exposes_body_width_for_ai_route_check():
+    from core_common.robot_body import NOMINAL_BODY
+
+    runner, store, ports = _setup(_free_map("lane"), caps=LANE)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    view = run(runner.start("p1", "bob"))
+    assert view["body_half_width_m"] == pytest.approx(NOMINAL_BODY.half_width_m)
+    assert view["pose_observed_at"] == ports.now
+
+    async def delayed_junction(robot_id):
+        ports.now += 3.0
+        return ports.core.status()
+
+    ports.junction_state = delayed_junction
+    sampled_at = ports.now
+    run(runner.tick())
+    assert view["pose_observed_at"] == sampled_at
+    assert view["updated_at"] >= sampled_at + 3.0
+
+
 def test_start_refuses_with_every_d491_code_in_order():
     runner, store, ports = _setup()
     assert _code(runner.start("nope", "bob")) == "TRIP_PLAN_UNKNOWN"
@@ -353,6 +373,20 @@ def test_start_refuses_with_every_d491_code_in_order():
     assert _code(runner.start("p1", "bob")) == "TRIP_ALREADY_STARTED"
     _plan(store, ports, "ring_s:fwd", 0.1, "NE", plan_id="p2")
     assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
+
+
+def test_one_lap_start_rechecks_selected_place_before_opening_a_lease():
+    runner, store, ports = _setup()
+    graph = store.active()[2]
+    arc = graph.arcs["ring_s:fwd"]
+    x, y, yaw = arc.point_at(0.1)
+    ports.at(arc, 0.1)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw), goal="NW"),
+                     store.routing_config)
+    store.record_plan(plan_id="lap", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "NW", "via": ["SE"], "start_at": "NW"}, result={"plan": plan_body(plan)})
+    assert _code(runner.start("lap", "bob")) == "TRIP_START_PLACE_MISMATCH"
+    assert runner.running() is None
 
 
 
@@ -726,6 +760,7 @@ def test_off_lane_beyond_half_the_width_stops_the_trip():
     _ticks(runner, ports)
     view = runner.view("p1")
     assert view["state"] == "stopped" and view["detail"]["off_lane_m"] == pytest.approx(0.11)
+    assert ports.canceled == ["rosy_60"] and view["detail"]["stop_sent"] is True
 
 
 def test_no_progress_for_stall_s_stops_and_holds_the_robot():

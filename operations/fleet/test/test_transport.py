@@ -192,6 +192,21 @@ def test_d601_the_trip_start_puts_camera_line_and_reads_the_front_camera_status(
                     ("GET", "/api/v1/vision/front/status", None)]
 
 
+def test_d603_rotate_to_posts_the_turn_and_reads_and_stops_it():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content) if request.content else None))
+        return httpx.Response(202 if request.method == "POST" else 200, json={"kind": "rotate_to", "state": "running"})
+
+    client = _client(handler)
+    assert run(client.rotate_to(-170.5, "kim"))["state"] == "running"
+    run(client.rotate_to_status())
+    run(client.rotate_to_stop())
+    assert seen == [("POST", "/api/v1/motion/rotate_to", {"delta_deg": -170.5, "operator_name": "kim"}),
+                    ("GET", "/api/v1/motion/rotate_to", None), ("DELETE", "/api/v1/motion/rotate_to", None)]
+
+
 def test_line_stuck_decision_posts_the_id_and_answer_and_keeps_cores_refusal():
     seen = {}
 

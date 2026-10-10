@@ -33,7 +33,7 @@ def write(tmp_path, doc):
 
 def test_object_det_is_a_task_with_the_user_chosen_class_contract():
     assert TASKS == ("lane_seg", "object_det")
-    assert OBJECT_CLASSES == ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person_feet")
+    assert OBJECT_CLASSES == ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person")
 
 
 def test_valid_object_det_manifest_loads(tmp_path):
@@ -59,7 +59,7 @@ def _classes(names):
     {"layout": "nchw_logits", "classes": _classes(OBJECT_CLASSES)},          # lane layout
     {"layout": "yolo_cxcywh_scores", "classes": _classes(OBJECT_CLASSES[:5])},  # a class missing
     {"layout": "yolo_cxcywh_scores", "classes": _classes(OBJECT_CLASSES[::-1])},  # order changed
-    {"layout": "yolo_cxcywh_scores", "classes": _classes(OBJECT_CLASSES[:5] + ("person",))},
+    {"layout": "yolo_cxcywh_scores", "classes": _classes(OBJECT_CLASSES[:5] + ("person_feet",))},
     {"layout": "yolo_cxcywh_scores", "classes": [
         {"index": i, "name": n, "role": "background"} for i, n in enumerate(OBJECT_CLASSES)]},
 ])

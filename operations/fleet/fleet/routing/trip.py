@@ -105,7 +105,7 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
             else:
                 segments.append((arc_id, s_from, s_to))
         at, done = (segments[-1][0], segments[-1][2]), done + len(via) + 1
-    return _assemble(graph, segments, eta, config)
+    return _assemble(graph, segments, eta, config, request.goal if isinstance(request.goal, str) else None)
 
 
 def _mid_lane(graph: Graph, place: str) -> bool:
@@ -162,7 +162,7 @@ def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal
     return Goal(point, on_arcs=on_arcs), None
 
 
-def _assemble(graph: Graph, segments, eta: float, config: RoutingConfig) -> Plan:
+def _assemble(graph: Graph, segments, eta: float, config: RoutingConfig, goal_place: str | None = None) -> Plan:
     places: list[str] = []
     actions: list[tuple[str | None, str, float]] = []
     for index, (arc_id, s_from, s_to) in enumerate(segments):
@@ -174,7 +174,7 @@ def _assemble(graph: Graph, segments, eta: float, config: RoutingConfig) -> Plan
             theta = turn_deg(arc.end_tangent, graph.arcs[segments[index + 1][0]].start_tangent)
             actions.append((arc.end_place, classify(theta, config), round(theta, 1)))
     final = graph.arcs[segments[-1][0]]
-    end_place = final.end_place if math.isclose(segments[-1][2], final.length_m, abs_tol=1e-9) else None
+    end_place = final.end_place if math.isclose(segments[-1][2], final.length_m, abs_tol=1e-9) else goal_place
     actions.append((end_place, STOP, 0.0))
     return Plan(
         segments=tuple((graph.arcs[a].edge_id, graph.arcs[a].forward, round(s0, 4), round(s1, 4))

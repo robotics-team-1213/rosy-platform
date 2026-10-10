@@ -87,7 +87,7 @@ def test_yolo_lines_use_the_contract_class_order_and_skip_unlabelled():
 def test_yolo_lines_use_the_given_class_order():
     boxes = [{'label': 'person', 'bbox_xyxy': [0, 0, 10, 10]}]
     assert OB.to_yolo_lines(boxes, (20, 20), classes=('car', 'person'))[0].startswith('1 ')
-    assert OB.to_yolo_lines(boxes, (20, 20)) == []      # default stays D-423 v1
+    assert OB.to_yolo_lines(boxes, (20, 20))[0].startswith(f"{OBJECT_CLASSES.index('person')} ")
 
 
 def test_merge_review_accepts_only_the_given_classes():

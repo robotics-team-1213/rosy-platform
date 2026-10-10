@@ -1,0 +1,216 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "camloss": 1035.059,
+  "camloss_end": 1037.503,
+  "cues": {
+   "sent": 52,
+   "turn_spot_true": 10,
+   "signs": {
+    "+": 5,
+    "-": 5
+   },
+   "refused": [
+    {
+     "accepted": false,
+     "reason": "pose_stale"
+    }
+   ]
+  },
+  "pivots_started": 1,
+  "latched": [],
+  "start_err_gt_deg": 161.1,
+  "pivot_last_view": {
+   "turned_deg": 166.3,
+   "remaining_deg": 11.7,
+   "ticks": 141
+  },
+  "pivot_duration_sim_s": 7.1,
+  "end_reason": "tracking",
+  "end_err_odom_deg": -31.9,
+  "end_err_gt_deg": -31.5,
+  "odom_turned_deg": 167.0,
+  "pivot_xy_drift_m": 0.0006,
+  "pivot_cmds": 355,
+  "pivot_sign_changes": 0,
+  "reasons_during_pivot": [
+   "fleet_wrong_way_turn"
+  ],
+  "reacquire_hold_seen": false,
+  "after_reacquire": [
+   "TRACKING",
+   "tracking"
+  ],
+  "reacquire_s": 0.0,
+  "after": [
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ],
+   [
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    "TRACKING",
+    "lane_edge_right"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   null,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   1030.899,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   1031.024,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1031.522,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   1031.889,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1032.015,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   1032.136,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1032.259,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   1039.362,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1043.24,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1044.43,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1044.929,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1045.945,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1046.61,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1047.589,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1048.319,
+   "TRACKING",
+   "lane_edge_right"
+  ],
+  [
+   1048.93,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   1051.693,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   1054.575,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   1057.367,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/camimg_spot0",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.213,
+   0.221,
+   5.811946409141117
+  ],
+  "lane": 2.670353755551324,
+  "spot": 0,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 2.5,
+  "camloss_proc": "image_bridge",
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": false,
+  "box": false,
+  "seed": 110,
+  "spot_xy": [
+   -0.213,
+   0.221
+  ],
+  "lane_deg": 153.0
+ },
+ "capability_at_end": false
+}

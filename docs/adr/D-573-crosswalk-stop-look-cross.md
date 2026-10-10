@@ -378,3 +378,6 @@
 - 비워진 창이 도는 동안에는 사람에게 올리지 않는다(`crosswalk_blocked`는 창이 없을 때만 연다). `crosswalk_report_s`는 `crosswalk_clear_s`보다 커야 하고, 설정 검사가 같거나 작은 값을 거부한다. 기본 10 s > 5 s라서 처음부터 빈 횡단보도는 사람에게 가지 않는다.
 - E-Stop, D-422 몸 정지, 통행권, `obstacle_mode: path` 요구는 그대로다. 스냅숏 필드는 바뀌지 않는다(`look_progress`의 분모가 `crosswalk_clear_s`가 된다).
 - 구현 `feat/crosswalk-clear-5s`, CORE 정지 경로라 Safety-Review 대상이다.
+### 개정 (2026-10-10, 저녁): XW 제거
+
+XW removed after independent Safety-Review 2026-10-10 — RESUME at a crosswalk only after CORE arms Fleet-map zones and reports a looked-and-clear armed zone, trip robots excluded, with its own Safety-Review. Fleet 판단기는 Fleet 지도 횡단보도 위의 `lane_lost`·`no_motion` 막힘에 `RESUME`(XW) 대신 R5 `WAIT` + 사람(`crosswalk_human`)을 보낸다(D-577 개정 2026-10-10 저녁 6항).

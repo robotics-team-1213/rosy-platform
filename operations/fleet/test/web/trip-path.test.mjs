@@ -2,11 +2,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip, tripErrorText, tripRefusalText,
+  oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip,
+  tripErrorText, tripRefusalText,
   tripStartReason,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
+
+test('one lap uses a finite trip via a different stop and returns to its start', () => {
+  const map = {places: [{id: 'W_mid', kind: 'stop'}, {id: 'E_mid', kind: 'stop'}]};
+  assert.deepEqual(oneLapBody(map, 'W_mid', 'E_mid'),
+    {to: 'W_mid', via: ['E_mid'], repeat: false, start_at: 'W_mid'});
+  assert.equal(oneLapReason({active: {map}, running: null, start: 'W_mid', via: 'E_mid'}), '');
+  assert.match(oneLapReason({active: {map}, running: null, start: 'W_mid', via: 'W_mid'}), /서로 다른/);
+  assert.throws(() => oneLapBody(map, 'W_mid', 'W_mid'));
+});
 
 test('plan and start call the D-494 routes with the escaped id', async () => {
   const calls = [];
@@ -45,6 +55,9 @@ test('D-601 start check: 출발 가능, 방향 반대, 차선 밖, with numbers 
   assert.equal(tripStartReason({role: 'operator', plan, active: {version: 4}, running: null}), '');
   const away = {...plan, start_check: {code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 178}};
   assert.match(tripStartReason({role: 'operator', plan: away, active: {version: 4}, running: null}), /^방향 반대\(178°\) · /);
+  const turned = {...plan, start_check: {code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: 178, auto_align: true}};
+  assert.equal(tripStartReason({role: 'operator', plan: turned, active: {version: 4}, running: null}), '');  // D-603
+  assert.equal(startCheckText(turned.start_check), '방향 반대(178°) · 출발 때 자동 정렬');
   assert.match(tripErrorText('TRIP_HEADING_CONFLICT', {heading_err_deg: 178}), /방향 반대\(178°\)$/);
   assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.12}), /차선 밖 12 cm$/);
   assert.match(tripErrorText('TRIP_LANE_CAMERA_UNAVAILABLE'), /카메라/);

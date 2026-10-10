@@ -293,6 +293,45 @@ def test_caution_and_calibration_keep_their_strip_during_a_call():
     assert calibrating["strip"] == fs.CALIBRATING_STRIP
 
 
+def test_a_plain_line_hold_stays_a_caution_until_the_robot_asks_fleet():
+    hold = fs.screen_for(**READY, core=core(caution=["line_follow_hold"]))
+    asking = fs.screen_for(**READY, core=core(caution=["line_follow_hold"], signal="ask",
+                                               robot_mode="NAVIGATION", face="happy"))
+
+    assert hold["strip"] == fs.CAUTION_TEXT["line_follow_hold"] and hold["strip_tone"] == "caution"
+    assert asking["strip"] == "?" and asking["face"] == "happy"
+
+
+def test_asking_fleet_shows_a_question_mark_and_wakes_standby():
+    answer = fs.screen_for(**READY, core=core(power_mode="standby", signal="ask",
+                                               robot_mode="NAVIGATION", nav_state="BLOCKED",
+                                               face="happy"))
+
+    assert answer["kind"] == fs.FACE and answer["awake"] and answer["backlight"] == 100
+    assert answer["strip"] == "?" and answer["face"] == "happy"
+
+
+def test_a_committed_turn_names_the_side_under_the_face():
+    left = fs.screen_for(**READY, core=core(robot_mode="NAVIGATION", signal="left", face="happy"))
+    right = fs.screen_for(**READY, core=core(robot_mode="NAVIGATION", signal="right", face="happy"))
+
+    assert left["strip"] == "Left" and right["strip"] == "Right"
+    assert left["face"] == right["face"] == "happy"
+
+
+def test_caution_and_a_call_keep_their_strip_over_a_question():
+    caution = fs.screen_for(**READY, core=core(caution=["dock_failed"], signal="ask"))
+    call = fs.screen_for(**READY, core=core(signal="ask", robot_id="rosy_26"), test="identify_blue")
+    stopped = fs.screen_for(**READY, core=core(estop=True, signal="ask"))
+    recovery = fs.screen_for(**READY, core=core(recovery="retrace", signal="ask",
+                                                 caution=["line_follow_hold"]))
+
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
+    assert call["strip"] == "CALL rosy_26"
+    assert stopped["kind"] == fs.STOPPED
+    assert recovery["strip"] == fs.RECOVERY_TEXT["retrace"]
+
+
 def test_the_lcd_robot_id_pattern_matches_identity():
     from core_common.identity import ROBOT_ID_PATTERN
 

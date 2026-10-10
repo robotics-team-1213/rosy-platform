@@ -6,7 +6,7 @@
          [--pitch-sigma-deg 1.0] [--min-line-iou 0.3] [--calibration-root DIR] [--tool-commit SHA]
 
 --session is a D-356 recording (bag/*.mcap: camera/front, odom); --video/--sidecar is the
-bag_to_video.py output. --ceiling is a ceiling_record.py recording after ceiling_pose.py detect
+bag_to_video.py output. --ceiling is a ceiling_record.py recording after tools/capture/ceiling_poses.py
 (poses.jsonl, calibration.json). Review, canaries and finalize are lane_derived_drivable.py's
 sheets / import-verdicts / finalize on the same --out (its verify_dataset knows this schema).
   overlays --out DIR --dest PNG [--count 24]   sample label overlays for a quick look

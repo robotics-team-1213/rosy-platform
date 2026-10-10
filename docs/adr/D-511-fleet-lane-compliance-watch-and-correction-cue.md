@@ -96,7 +96,7 @@
 3. **CORE(`fleet_lane_cue_enabled`, 기본 false, Pinky true).** CAMERA_LINE이 이미 달리는 틱에서, 앞 물체·IR 낡음·IR 가운데 정지를 지난 뒤에만 읽는다. 움직임을 시작하지 않는다.
    - `ON_LINE`·`OFF_LANE`: IR이 선을 못 볼 때(또는 꺼짐) `side`를 IR 가장자리 가지로 넣는다(4항 그대로). IR이 본 쪽이 이긴다.
    - `OFF_LANE`이고 재진입점이 45° 넘게 옆: 그쪽으로 제자리 회전한 다음 차로 유지가 이어 간다.
-   - `WRONG_WAY`: `turn_deg`가 30° 안이 될 때까지 제자리 회전한다. 차로 0.185 m, 몸 회전 반지름 0.088 m(URDF)라 차로 안에서 돈다. 각도가 없으면 HOLD `fleet_wrong_way`.
+   - `WRONG_WAY`: `turn_deg`가 30° 안이 될 때까지 제자리 회전한다. (개정 4에서 바뀜: 차로 안에서는 돌지 않는다. 회전 원 0.0926 m(`robot_body` URDF 0.08257 m + 패드 0.010 m)가 차로 안쪽 반폭 0.080 m보다 넓다.) 각도가 없으면 HOLD `fleet_wrong_way`.
    - `OFF_MAP`: HOLD `fleet_off_map`. 콘솔이 CRIT으로 알리고 사람이 판단한다(D-577 AI PC 제안 경로는 그 브랜치가 잇는다).
    - `crosswalk_ahead`: `pose_age_s` 전의 odom 자세에 `fleet_map` 구역 하나를 D-491 구역 목록에 넣는다(같은 id는 새 것으로 바꾼다). D-491 IR 쉼과 D-573 서고-보고-건너기가 카메라 구역과 같은 목록에서 이 구역을 쓴다. 카메라 구역이 흔들려도 건넌다.
    - IR, 몸 기준 정지, D-573 게이트, D-517 권한이 모두 이긴다. 결정→움직임 입력이므로 D-430 Safety-Review 대상이다.
@@ -115,3 +115,45 @@
 3. **역주행 방향은 D-587 표식 방향이 먼저다.** 방향이 있으면 그것으로 판정하고 이동 거리 조건 없이 1 s 뒤 바뀐다. 방향이 없을 때만 5 cm 이동 방향과 `wrong_way_min_m`을 쓴다.
 4. **횡단보도 구역은 lane-cue로 보내지 않는다.** D-573에 따라 Fleet 지도 구역은 D-517 권한의 `crosswalks[]`(현장 지도 `rosy.site_map/1` 모양 `{id, polygon, approach, lanes, revision}`)로만 CORE의 구역 목록 하나에 들어간다(소유: D-573 브랜치). 개정 1의 `crosswalk_ahead`는 Fleet 판정과 콘솔에만 남는다. 개정 1 3항의 CORE 쪽 `fleet_map` 구역 저장은 하지 않는다.
 5. **막힘 응답(D-577)은 해결기 소유 세션이 정한다.** 개정 1 4항의 `XW` 규칙은 main에 있고, 그 파일의 소유 세션이 옮기거나 바꾼다.
+
+### 개정 3 — CORE lane-cue D-430 검토 반영 (2026-10-10, feat/core-fleet-lane-cue)
+
+독립 Safety-Review는 REJECT였다. 고친 내용은 다음과 같다(재검토 대기, `fleet_lane_cue_enabled`는 계속 false).
+
+1. 신호 판단은 IR 감시 뒤, 몸 정지(D-422) 앞에 둔다. 제자리 회전이면 의도 twist를 `(0, w)`로 두어 회전 원으로 잰다. 회전은 LOST 래치, D-364 NOMINAL 지면, 카메라 신선(FOLLOW) 조건을 모두 지난 뒤에만 낸다.
+2. 회전은 `pose_stamp` 시점 odom yaw + 각도를 목표로 CORE가 odom으로 잰다. 10° 안이면 끝이다. 예산 |각도|+30°, 시간 |각도|/속도+2 s를 넘으면 래치 HOLD `fleet_turn_unconfirmed`. 같은 부호 2회·0.5 s 뒤에만 시작하고, 교차로 지시·arc·횡단보도 구역 중엔 시작하지 않는다.
+3. OFF_MAP과 회전 중 신호 만료(`fleet_cue_lost`)는 래치 HOLD다(fail-closed). 같은 epoch의 ON_LANE/ON_LINE 신호, D-407 막힘 결정, 모드 변경만 푼다.
+4. Fleet 현장 등록 토큰(D-555 3 자리)만 보낼 수 있다. `(fleet_epoch, seq)`는 만료와 무관하게 유지하고, `pose_stamp`가 1.5 s 넘게 오래되면 거절한다. 사건 `nav.lane_cue`.
+5. 옆 신호는 |offset| ≥ 0.05 m가 같은 쪽 2회일 때만 쓰고 후진하지 않는다. **차로 밖 로봇을 선을 넘어 차로 안으로 들이는 것은 이 신호가 아니라 D-468 복귀의 몫이다.** 이 신호는 쪽을 알려 주고, 선 위에서는 IR이 이긴다.
+6. Fleet은 403·404·500·501을 "받을 수 없는 로봇"으로 보고 60 s 동안 보내지 않는다.
+
+재검토(APPROVE-WITH-CHANGES) 반영:
+- OFF_MAP은 odom 정합 없이 받는다. Fleet은 로봇을 놓친 뒤에 OFF_MAP을 보내므로 그 자세 시각은 늘 오래되었다. HOLD에는 정합이 필요 없다. Fleet은 `accepted: false`를 보낸 것으로 치지 않고 다음 틱에 다시 보낸다.
+- 회전 부호는 시작할 때 고정하고, 끝은 시작 뒤 odom 부호 진행량으로 잰다. 180° 근처에서 Fleet 부호가 뒤집혀도 디바운스가 끊기지 않는다(|각도| ≥ 150°면 앞 부호 유지). 신호 사이가 1 s를 넘으면 디바운스를 새로 센다.
+- 회전 중 교차로 지시·arc·횡단보도 구역이 생기면 래치 HOLD `fleet_turn_interrupted`다. 교차로가 `aborted`로 남으면 모드를 바꿀 때까지 회전을 시작하지 않는다.
+- 켜려면 `obstacle_mode: path`가 필요하다(설정 검사).
+- 받는 자리는 D-555 3 현장 등록 자리(화면 코드 토큰 + `site:` 라벨)다. 라벨은 자리를 좁힐 뿐 Fleet을 인증하지 않는다. D-550이 hub 주체를 정하면 전용 grant로 바꾼다.
+
+### 개정 4 — 역주행은 회전 자리에서만 돈다 (2026-10-10, [D-607](D-607-stuck-deadlock-realign.md) 교착 ADR과 합의)
+
+- 실제 회전 원은 0.0926 m(`core_common.robot_body`: URDF 0.08257 m + `SWEEP_PAD_M` 0.010 m)이고 차로 안쪽 반폭 0.080 m보다 넓다. 차로 안 U턴은 들어가지 않는다.
+- `LaneCueRequest`에 `turn_spot: bool`(기본 false)을 더한다. Fleet은 지도로 확인한 회전 자리(링 진입 네 곳, 현장 YAML `fleet.lane_compliance.turn_spots`) 안 `turn_spot_tolerance_m`(0.018 m, D-587 자세 한계)일 때만 true를 싣는다. false면 필드를 빼서 필드를 모르는 CORE(엄격 스키마)에는 보내지 않는다. Fleet은 400·422도 받을 수 없는 로봇으로 본다.
+- CORE는 WRONG_WAY에서 `turn_spot`이 true일 때만 제자리 회전한다. 아니면 래치 HOLD `fleet_wrong_way`이고 Fleet(D-577 REALIGN)이 푼다. 역방향으로 계속 달리지도, 차로 안에서 돌지도 않는다.
+- 사용자 결정(D-607 개정 메모, 선택 (b)): 링 진입 네 자리 (−0.213, 0.221)·(−0.519, 0.201)·(−0.524, −0.242)·(−0.214, −0.264)를 회전 자리로 쓴다. 회전 원 가장자리가 칠한 선을 테이프 폭 0.025 m까지 넘을 수 있고(실측 1–2 cm), 회전 중에는 D-344 §12 IR 가운데 면제에 기댄다. 허용 오차는 D-607의 0.018 m다. 값은 `deploy/site/fleet-site.yaml.example`에 있고 현장에는 설치 도우미로 넣는다. `line_follow.fleet_lane_cue_enabled`는 Safety-Review와 Gazebo 시나리오를 통과할 때까지 false다.
+- 교착 해소와 IR 가운데 면제는 [D-607](D-607-stuck-deadlock-realign.md)(Proposed)이 정한다. IR 가운데 면제도 회전 자리에서만이다. 이 개정은 lane-cue 쪽 규칙만 적는다.
+
+### 개정 5 — 회전 자리 회전은 카메라를 잃어도 끝낸다 (2026-10-10, D-607 개정 1)
+
+사용자 지시(2026-10-10): "그럼 그 문제를 해결해 줄래". Gazebo에서 175–180° 역주행 회전이 끝나지 않았다. 카메라가 45–57°에서 선을 잃고, 회전은 카메라가 FOLLOW일 때만 나갔다.
+
+1. 회전 자리(`turn_spot`)의 WRONG_WAY 회전은 **시작할 때만** 카메라 FOLLOW, LOST 래치, NOMINAL 지면 조건이 필요하다.
+2. 한 틱이라도 돈 뒤에는 카메라를 잃거나 LOST가 되어도 계속 돈다. 그동안 다음이 계속 적용된다: D-344 §12 IR 가운데 면제(회전 자리에서만), 매 틱 D-422 회전 원 몸 정지, odom yaw 목표와 부호 고정, 예산 |각도|+30°·시간 |각도|/속도+2 s(넘으면 래치 HOLD `fleet_turn_unconfirmed`), Fleet 신호 신선도(`fleet_cue_lost`), 막힘 중 물러서기, D-517 권한과 D-573 게이트. D-468·D-407 복귀와 교차로 게이트는 그 틱에 끼지 않는다. 카메라가 그 자리에서 교차로를 보는 것은 막지 않고, 걸린 교차로 지시(armed·unexpected·aborted), arc, 횡단보도 구역만 막는다(래치 `fleet_turn_interrupted`).
+3. 회전이 10° 안으로 끝나면 카메라가 2 s 안에 다시 차선을 따라야 달린다. 그동안은 HOLD `fleet_turn_reacquire`이고, 넘으면 래치 HOLD `fleet_turn_no_lane`으로 Fleet을 기다린다.
+4. 회전 자리 밖 WRONG_WAY는 바뀌지 않는다(래치 HOLD `fleet_wrong_way`).
+5. 회전 기계는 카메라와 무관한 `odom_pivot.OdomPivot` 하나다. D-607 P3 REALIGN 회전이 이것을 다시 쓴다.
+
+### 개정 6 — 한 바퀴 경로의 주행 맥락 (2026-10-10)
+
+lane-cue에 선택 필드 `context`를 더한다. 사전 정보이고 움직임 명령이 아니다. 필드는 `{route: "lap", segment_id, s_m, lap_m, heading_deg, ahead_m (0.25), heading_ahead_deg, offset_m, next: {kind: junction|ring_entry|crosswalk|turn_spot|corner, ds_m, action: left|right|straight|stop_look|turn_spot, ref}, pose_age_s, anchor_age_s}`이다.
+- 한 바퀴는 현장 YAML `fleet.lane_compliance.lap_arcs`(지도 v5 8자, 7.38 m)다. 방향은 지도 일방 방향이고, `action`은 그 자리의 지도상 방향 변화다.
+- 엄격 스키마라 Fleet은 `guide_context: true`일 때만 보낸다. 기본값은 false이고, 로봇 CORE가 이 필드를 알 때 켠다. 400·422는 받을 수 없는 로봇으로 본다.

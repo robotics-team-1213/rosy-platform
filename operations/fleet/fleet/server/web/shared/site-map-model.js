@@ -9,12 +9,33 @@ export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우�
 export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
 /** D-577 3 AI PC fact kinds (shadow: shown, never acted on here). */
 export const AI_FACT_LABEL = {
+  trip_route_check: 'AI 경로 편차 확인',
   wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
   waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
   unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
   incident_context: '사건 원인 초안',
 };
+
+/** Newest live AI observation for this open trip; UNKNOWN clears an older deviation. */
+export function routeAttention(trip, facts, now) {
+  if (!trip) return [];
+  const newest = (facts || []).filter(fact => fact.kind === 'trip_route_check'
+    && fact.robot_ids?.includes(trip.robot_id) && fact.evidence?.trip_id === trip.trip_id
+    && fact.evidence?.map_version === trip.map_version && Number.isFinite(fact.observed_at))
+    .reduce((last, fact) => !last || fact.observed_at >= last.observed_at ? fact : last, null);
+  if (!newest || !Number.isFinite(newest.ttl_s) || newest.ttl_s <= 0 || newest.ttl_s > 5
+    || newest.observed_at > now / 1000 + 1 || newest.observed_at + newest.ttl_s < now / 1000
+    || newest.value?.status !== 'OFF_ROUTE') return [];
+  const {offset_m, limit_m} = newest.value;
+  if (!Number.isFinite(offset_m) || offset_m < 0 || !Number.isFinite(limit_m) || offset_m <= limit_m) return [];
+  const cm = Math.round((offset_m - limit_m) * 100);
+  return [{severity: 'warn', text: `: AI 경로 편차 관찰 — 허용 경계보다 ${cm} cm 밖 · 위치 확인 필요`}];
+}
 export const TRIP_ERROR_LABEL = {
+  TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
+  TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',
+  TRIP_BODY_UNKNOWN: '로봇 차체 폭을 확인할 수 없어 출발할 수 없습니다',
+  TRIP_START_BODY_OUTSIDE_ROUTE: '로봇 차체가 첫 차로 경계를 넘었습니다 · 위치를 조정하세요',
   TRIP_START_OFF_MAP: '로봇이 차로 위에 없습니다',
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
   TRIP_OFF_MAP: '찍은 점에서 차로 폭 두 배 안에 차로가 없습니다',
@@ -38,6 +59,9 @@ export const TRIP_ERROR_LABEL = {
   TRIP_START_HEADING_MISMATCH: '로봇이 첫 차로 방향과 다르게 서 있습니다 · 차로 방향으로 돌려 세우세요',
   TRIP_START_OFF_LANE: '로봇이 첫 차로 밖에 있습니다 · 차로 위로 옮기세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
+  // D-603 출발 자동 정렬
+  TRIP_ALIGN_REFUSED: '로봇이 제자리 회전을 거절했습니다 · 주변을 비우거나 직접 돌려 세우세요',
+  TRIP_ALIGN_ABORTED: '제자리 회전이 중간에 멈췄습니다 · 로봇 주변을 확인하세요',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
@@ -146,6 +170,7 @@ export function planIsCurrent(plan, active) {
 /** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
 export function startCheckText(check) {
   if (!check?.code) return '출발 가능';
+  if (check.auto_align) return `${startCheckText({...check, auto_align: false})} · 출발 때 자동 정렬`;
   if (check.code === 'TRIP_START_OFF_LANE') return `차선 밖 ${Math.round((check.off_lane_m || 0) * 100)} cm`;
   const err = Math.abs(check.heading_err_deg ?? NaN);
   if (!Number.isFinite(err)) return '방향 모름';
@@ -372,6 +397,23 @@ export function repeatTripBody(map, start, leader = '') {
     ...(leader ? {convoy: {leader}} : {})};
 }
 
+/** A finite circuit through another stop, ending at the selected starting place. */
+export function oneLapBody(map, start, via) {
+  const stops = (map?.places || []).filter(place => ['start', 'stop'].includes(place.kind)).map(place => place.id);
+  if (!stops.includes(start) || !stops.includes(via) || start === via) {
+    throw new Error('출발·경유 정지 장소를 서로 다르게 고르세요');
+  }
+  return {to: start, via: [via], repeat: false, start_at: start};
+}
+
+export function oneLapReason({active, running, start, via}) {
+  if (!active) return '활성 지도가 없습니다';
+  if (running) return '이 로봇은 이미 운행 중입니다';
+  const stops = (active.map?.places || []).filter(place => ['start', 'stop'].includes(place.kind));
+  if (stops.length < 2) return '한 바퀴에는 정지 장소가 두 곳 이상 필요합니다';
+  return start && via && start !== via ? '' : '서로 다른 출발·경유 장소를 고르세요';
+}
+
 // D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
 // the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
 const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
@@ -412,7 +454,7 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
-  if (plan.start_check?.code) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
+  if (plan.start_check?.code && !plan.start_check.auto_align) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
   return '';
 }
 

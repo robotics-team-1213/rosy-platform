@@ -1020,7 +1020,7 @@ class LineStuckStatus(BaseModel):
     """D-407 open lane stuck: the console answers it by ``stuck_id``."""
 
     stuck_id: str
-    cause: str                # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4) | no_motion
+    cause: str  # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4) | no_motion | no_progress | dithering (D-607)
     phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
     held_s: float = 0.0
     attempts: int = 0
@@ -1029,7 +1029,7 @@ class LineStuckStatus(BaseModel):
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
-    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; no_motion: HOLD reason
+    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; else the (last) HOLD reason
     detail: Optional[str] = None
 
 
@@ -1079,9 +1079,9 @@ class LineFollowStatus(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _crosswalk_key_means_reported(cls, data):
-        # A parsed copy (Fleet hub snapshot, D-555) keeps the key: absent stays "not watched" (D-577 R3).
-        if isinstance(data, dict) and "crosswalk" in data and "crosswalk_reported" not in data:
-            data = {**data, "crosswalk_reported": True}
+        # Only the key says "reported" (hub copy, D-555); a bare flag is not null=outside (D-577 R3).
+        if isinstance(data, dict):
+            data = {**data, "crosswalk_reported": "crosswalk" in data}
         return data
 
     @model_serializer(mode="wrap")

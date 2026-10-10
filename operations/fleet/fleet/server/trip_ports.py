@@ -60,6 +60,15 @@ class LaneJunctionPort(Protocol):
     async def front_camera(self, robot_id: str) -> dict:
         """D-601 B: ``GET /api/v1/vision/front/status``."""
 
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
+        """D-603: ``POST /api/v1/motion/rotate_to`` (the trip start's alignment turn)."""
+
+    async def rotate_status(self, robot_id: str) -> dict:
+        """D-603: ``GET /api/v1/motion/rotate_to``."""
+
+    async def rotate_stop(self, robot_id: str) -> dict:
+        """D-603: ``DELETE /api/v1/motion/rotate_to``."""
+
 
 class HttpLaneJunction:
     """D-494 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
@@ -121,6 +130,15 @@ class HttpLaneJunction:
     async def front_camera(self, robot_id: str) -> dict:
         return await self._client(robot_id).front_status()
 
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
+        return await self._client(robot_id).rotate_to(delta_deg, operator_name)
+
+    async def rotate_status(self, robot_id: str) -> dict:
+        return await self._client(robot_id).rotate_to_status()
+
+    async def rotate_stop(self, robot_id: str) -> dict:
+        return await self._client(robot_id).rotate_to_stop()
+
 
 @dataclass(frozen=True)
 class TripConfig:
@@ -156,6 +174,9 @@ class TripConfig:
     start_heading_tol_deg: float = 20.0
     #: D-601 B: a lane plan needs the robot's front preview live; false only where none exists (SIM).
     lane_camera_check: bool = True
+    #: D-603: a start refused TRIP_START_HEADING_MISMATCH on its lane asks CORE ``rotate_to`` first
+    #: (off until field-accepted).
+    auto_align: bool = False
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -176,9 +197,9 @@ class TripConfig:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
-            if item.name == "lane_camera_check":
+            if item.name in ("lane_camera_check", "auto_align"):
                 if not isinstance(value, bool):
-                    raise ValueError("fleet.trip.lane_camera_check must be true or false")
+                    raise ValueError(f"fleet.trip.{item.name} must be true or false")
                 continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
@@ -560,7 +581,9 @@ class LiveTrip:
         return self.graph.arcs[arc_id(self.segments[index])]
 
     def place(self, index: int) -> Optional[str]:
-        return ends_at_place(self.graph, self.segments[index])
+        place = ends_at_place(self.graph, self.segments[index])
+        return (place if place is not None or self.view["repeat"] or index != len(self.segments) - 1
+                else self.view["plan"]["actions"][-1]["place_id"])
 
     def progress(self, index: int, s: float) -> float:
         """Metres along the whole plan."""

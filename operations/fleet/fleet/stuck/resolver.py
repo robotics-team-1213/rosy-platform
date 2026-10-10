@@ -12,6 +12,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Optional, Union
 
+from fleet.stuck.peer_pose import _map_pose
+
 #: CORE codes that mean "this answer was judged and refused": try the next candidate.
 REFUSED = "STUCK_DECISION_REFUSED"
 #: The stuck changed under us: drop this answer, re-read state.
@@ -90,39 +92,6 @@ def _mode_of(row: Mapping) -> str:
     return str(((row.get("state") or {}).get("line_follow") or {}).get("mode") or "")
 
 
-def _pose_of(row: Mapping) -> Optional[tuple[float, float, float]]:
-    pose = (row.get("state") or {}).get("pose") or {}
-    try:
-        return float(pose["x"]), float(pose["y"]), float(pose.get("yaw", 0.0))
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
-def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
-    """Painted-map xy. A legacy snapshot has no localization block (D-395).
-
-    LOCALIZED + map is the same xy. An odom-frame pose is not the painted track,
-    and the twist integrator in body_stop is the command, not this pose.
-    """
-    from fleet.localization.trust import LEGACY, TRUSTED, classify
-
-    state = row.get("state")
-    if not row.get("online", True) or not isinstance(state, Mapping):
-        return None
-    verdict = classify(state)
-    if verdict not in (LEGACY, TRUSTED):
-        return None
-    if "localization" in row:
-        # Console owns the D-395 restart grace. Null raw localization is not
-        # legacy while its current badge says the map pose is untrusted.
-        badge = row["localization"]
-        if not isinstance(badge, Mapping) or badge.get("trusted") is not True:
-            return None
-        if (badge.get("legacy") is True) != (verdict == LEGACY):
-            return None
-    return _pose_of(row)
-
-
 def _hold_xy(plan, painted):
     room = next((item for item in painted.rooms if item.id == plan.room_id), None)
     return None if room is None else room.hold_xy
@@ -174,6 +143,7 @@ class StuckResolver:
         self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
         #: D-573 개정 2026-10-10: robot_id -> on / at a mapped crosswalk (the lane monitor's view).
         self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
+        self.ai_first = None                          # D-610 3: `ai_first.AiFirst` (app.py), None = D-577 only
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -195,7 +165,8 @@ class StuckResolver:
              or answer.rule == "ai" and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
-        if answer.decision == "RESUME" and answer.rule != "meet":
+        if answer.decision == "RESUME" and answer.rule != "meet" and not (    # D-610 2: a re-stuck goes back to the AI
+                answer.rule == "ai" and self.ai_first is not None and self.ai_first.on(answer.robot_id)):
             chain.resume_id = answer.stuck_id
 
     def result(self, answer: Answer, *, code: Optional[str]) -> Optional[Escalate]:
@@ -288,11 +259,17 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "calibration")
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
+        from fleet.stuck.lane_lost import ai_answer, ai_late
+
         if sid in chain.answered:
+            ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
-        from fleet.stuck.lane_lost import ai_answer
+        from fleet.stuck.ai_first import ai_answer    # D-610: AI-first robots, else the D-577 path
+        if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
+            # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
+            return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
         if proposed is not None:
@@ -567,24 +544,3 @@ class StuckResolver:
 
         return peer_ahead(row, rows, self.config)
 
-
-def _peer_in_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
-                  sign: float, *, pose_of=_pose_of, strict: bool = False) -> Optional[bool]:
-    me = pose_of(row)
-    if me is None:
-        return None
-    x0, y0, yaw = me
-    c, s = math.cos(yaw), math.sin(yaw)
-    for other in rows:
-        if other is row or not other.get("online", True):
-            continue
-        pose = pose_of(other)
-        if pose is None:
-            if strict:
-                return None
-            continue
-        dx, dy = pose[0] - x0, pose[1] - y0
-        ahead, side = sign * (c * dx + s * dy), -s * dx + c * dy
-        if 0.0 < ahead <= config.peer_reach_m + config.peer_radius_m and abs(side) <= config.peer_band_half_width_m:
-            return True
-    return False

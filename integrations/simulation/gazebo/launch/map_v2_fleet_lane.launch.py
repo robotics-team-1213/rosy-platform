@@ -142,6 +142,17 @@ def generate_launch_description():
                 "tag_size_m": 0.05,
             }],
         ),
+        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
+        # Display JPEG only; no road/observation, so traffic_policy is untouched.
+        Node(
+            package="gz_sim",
+            executable="sim_jpeg_relay.py",
+            name="sim_jpeg_relay",
+            output="screen",
+            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
+            # subscription cost ~24% of a core against <1% without (2026-10-10).
+            remappings=[("camera/image_raw", "camera/front")],
+        ),
         Node(
             package="core",
             executable="core",
