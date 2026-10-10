@@ -244,10 +244,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
+<<<<<<< HEAD
         49_802,
         "split: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
         "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
         "D-511 rev 3-6 (+179) - 1707. +150 allowance measured from 49802. Previously "
+=======
+        51_507,
+        "split: re-judged at 51507 on 2026-10-10 (independent reviewer: agree): finite-lap "
+        "admission, planner and shadow-fact UI remain in existing Fleet owners (+183). "
+        "Existing localization registration and observe split obligations remain. Previously "
+>>>>>>> refs/integration/a864f6/latest-one-lap-current
         "split: re-judged at 51324 on 2026-10-10 (critic: agree): 51085 after the fleet/fleet/stuck move + "
         "D-608 incident review console +239 (console.js +181, console_routes +32, other web +26). Next "
         "lane_compliance growth registers fleet/fleet/localization (1567). +150 allowance measured from 51324. "

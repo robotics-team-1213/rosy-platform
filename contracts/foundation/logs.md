@@ -593,6 +593,7 @@
 - gate 변화: SOURCE. DEVICE는 열림.
 - 결정: D-583
 
+
 ## 2026-10-10 · uncommitted · fix: nominal body selection
 
 - 변경: nominal_body_for(kind)는 알려진 기종의 공칭 차체만 반환하고 알 수 없는 기종은 None으로 거절한다. Fleet 출발 검사가 이를 공유한다.
