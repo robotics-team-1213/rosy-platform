@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7655,3 +7655,9 @@ osy-d395-s1d\`.
 - 변경: 가드가 이미 읽던 PC health(메모리 여유·스왑·부하·코어·가동·멈춘 유닛)를 status.json resources로 남긴다. GET /api/fleet/hosts가 읽기 전용 guard·drift를 붙인다(없거나 객체가 아니면 null). 설치·보정 작업 호스트 서비스가 그 수치를 보여주고, D-524의 닫힌 동작(10분 재부팅·취소·허용 유닛 재시작·정지)만 확인 뒤에 보낸다. 프로세스 종료와 로봇 재부팅은 없다. API v1.197. D-524·D-530·D-540은 Proposed인 채로 화면 문장만 고쳤다. 구현 9a9faf0e5, 시험 격리 23d5baa37.
 - 증거: AI PC 원격 pytest 143 passed, 2 warnings. known_failures 0 new, 0 known (X:/DevTemp/host-health/run-1.txt, HEAD 23d5baa37). 첫 실행은 AI PC에 있던 rosy-host-state status.json을 빈 값으로 기대해 1 failed였고, 없는 경로를 보게 고친 뒤 통과했다.
 - gate 변화: SOURCE만. 현장 가드 파일·Fleet 컨테이너 마운트·실제 재부팅은 하지 않았다. 화면은 현장 관제에 아직 없다.
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.

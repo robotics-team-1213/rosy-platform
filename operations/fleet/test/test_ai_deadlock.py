@@ -147,7 +147,9 @@ def test_missing_ai_reply_falls_back_after_the_bounded_wait(monkeypatch):
     runner.traffic._clock = lambda: fleet.now
     _routable(monkeypatch, runner)
     runner.traffic.ai_replan = AiReplan(_first(), _Board(None))
-    _ticks(runner, fleet, n=CYCLE_PERIODS + 18)
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 22)
+    assert runner.view("b")["hold"] is None
+    _ticks(runner, fleet, n=4)
     assert runner.view("b")["hold"]["reason"] == "replan"
     assert "replan_confirmed_by" not in runner.view("b")["detail"]
 

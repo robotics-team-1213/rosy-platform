@@ -250,6 +250,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # heading within 30 deg of the turn when containment gives one) that count as reacquired,
   # and the actuation + odom latency the in-place turn stops early for (then settles in 5 deg).
   junction_reacquire_frames: 3
+  junction_signal_enabled: false  # D-620: supervised Fleet query, 3s unanswered right fallback
   junction_turn_lead_s: 0.15
   junction_still_linear: 0.01      # m/s; odom below this (and the angular one) for 0.2 s = standing still
   junction_still_angular: 0.05     # rad/s; checked before the turn and before it counts as settled

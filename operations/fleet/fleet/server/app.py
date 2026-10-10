@@ -700,6 +700,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    if hub is not None:
+        from fleet.server.junction_signal import signal_for
+        hub.junction_signal = partial(signal_for, traffic=trip_runner.traffic, poses=map_pose,
+                                      site_maps=site_maps)
     from fleet.stuck.deadlock import AiReplan   # D-610 7: the AI PC picks a wait cycle's replan, Fleet checks it
     trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     from fleet.server.map_pose_service import install_map_pin_route  # D-593
