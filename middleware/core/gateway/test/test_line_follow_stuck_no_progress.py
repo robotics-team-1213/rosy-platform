@@ -1,5 +1,6 @@
 """D-407 개정 / D-607 (2026-10-10): line-follow commands motion but odom stays put -> a Fleet-only
 stuck (cause no_progress, or dithering with >= 2 sign flips). Detection never changes the motion."""
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -51,7 +52,8 @@ class _Traffic:
 
 def _manager(**overrides):
     events = _Events()
-    m = LineFollowManager(events, config=LineFollowConfig(**{**BODY, **overrides}), clock=lambda: 0.0,
+    config = LineFollowConfig(**{**BODY, "progress_watch_enabled": True, **overrides})
+    m = LineFollowManager(events, config=config, clock=lambda: 0.0,
                           angular_ceiling=lambda: 0.5)
     m.bind_recovery(console_linked=lambda: True, calibration_active=lambda: False,
                     linear_ceiling=lambda: 0.15, preview_seq=lambda: 1)
@@ -59,8 +61,10 @@ def _manager(**overrides):
     return m, events
 
 
-def _drive(m, start, stop, *, error=lambda t: 0.0, x=lambda t: 0.0, lane=lambda t: True, traffic=None):
-    """20 Hz: odom at x(t), a camera frame when lane(t), one tick through the real traffic seam."""
+def _drive(m, start, stop, *, error=lambda t: 0.0, x=lambda t: 0.0, lane=lambda t: True, traffic=None, gate=None):
+    """20 Hz: odom at x(t), a camera frame when lane(t), one tick through the real traffic seam.
+
+    gate(m, decision) stands in for a manager gate's output (status reason + zeroed twist)."""
     traffic, command, t, issued = traffic or _Traffic(), _Command(), start, []
     while t < stop - 1e-9:
         m.observe_clearance(1.0, received_at=t)
@@ -71,7 +75,8 @@ def _drive(m, start, stop, *, error=lambda t: 0.0, x=lambda t: 0.0, lane=lambda 
         if lane(t):
             m.observe(LineObservation(source=CAM, stamp=t, visible=True, error=error(t), confidence=0.9),
                       received_at=t, source_now=t)
-        traffic_gate.apply_line_candidate(m, traffic, command, m.tick(t + 0.01), t + 0.01)
+        decision = m.tick(t + 0.01)
+        traffic_gate.apply_line_candidate(m, traffic, command, gate(m, decision) if gate else decision, t + 0.01)
         issued.append(command.twist)
         t = round(t + 0.05, 6)
     return issued
@@ -118,8 +123,8 @@ def test_normal_driving_never_opens_one():
     assert events.named("nav.line_stuck_opened") == []
 
 
-def test_slow_creep_under_restuck_m_in_restuck_s_is_no_progress():
-    m, events = _manager()
+def test_slow_creep_under_restuck_m_in_restuck_s_is_no_progress_when_enabled():
+    m, events = _manager(no_progress_creep_enabled=True)
     _drive(m, 0.0, 19.0, x=lambda t: 0.013 * t)                        # 0.065 m per 5 s: moving
     assert events.named("nav.line_stuck_opened") == []
     _drive(m, 19.0, 21.5, x=lambda t: 0.013 * t)                       # 0.26 m in 20 s < 0.30
@@ -179,3 +184,67 @@ def test_a_d468_owned_tick_still_opens_it():
         m._local_owned_tick(6.0)
     assert [o["cause"] for o in events.named("nav.line_stuck_opened")] == ["no_progress"]
     assert m.status().stuck.cause == "no_progress"
+
+
+def test_off_by_default_nothing_opens():
+    """Until Fleet answers these causes (D-607 P1), the default is exactly today's behaviour."""
+    assert LineFollowConfig().progress_watch_enabled is False
+    assert LineFollowConfig().no_progress_creep_enabled is False
+    m, events = _manager(progress_watch_enabled=False)
+    _drive(m, 0.0, 12.0, error=lambda t: 0.3 if int(t) % 2 else -0.3)
+    assert events.named("nav.line_stuck_opened") == []
+
+
+def test_off_by_default_a_d468_owned_tick_is_unchanged(monkeypatch):
+    m, events = _manager(progress_watch_enabled=False)
+    calls = []
+    monkeypatch.setattr(m, "_stuck_input", lambda now: calls.append(now))
+    with m._lock:
+        m._still_since = 1.0
+        m._local_owned_tick(6.0)
+    assert calls == [] and m._still_since is None and m.status().stuck is None
+
+
+def test_slow_creep_is_not_a_stuck_by_default():
+    m, events = _manager()
+    _drive(m, 0.0, 25.0, x=lambda t: 0.013 * t)
+    assert events.named("nav.line_stuck_opened") == []
+
+
+def test_config_loader_reads_both_flags():
+    from core.line_follow_wiring import _line_follow_config
+    config = _line_follow_config({"progress_watch_enabled": True, "no_progress_creep_enabled": True})
+    assert config.progress_watch_enabled is True and config.no_progress_creep_enabled is True
+    with pytest.raises(ValueError, match="progress_watch_enabled must be true or false"):
+        _line_follow_config({"progress_watch_enabled": "true"})
+
+
+def test_an_authority_hold_is_not_a_stuck():
+    """D-517 4: authority_required with no authority zeroes every tick (reason authority_none)."""
+    m, events = _manager(authority_required=True)
+    _drive(m, 0.0, 12.0)
+    assert m.status().reason.startswith("authority_")
+    assert events.named("nav.line_stuck_opened") == []
+
+
+def _gated(reason):
+    def gate(m, decision):
+        m._status = m._status.model_copy(update={"state": "HOLD", "reason": reason, "linear": 0.0, "angular": 0.0})
+        return replace(decision, linear=0.0, angular=0.0)
+    return gate
+
+
+@pytest.mark.parametrize("reason", ["junction_waiting", "junction_stop", "crosswalk_looking", "crosswalk_zone_lost"])
+def test_a_junction_or_crosswalk_hold_is_not_a_stuck(reason):
+    m, events = _manager()
+    _drive(m, 0.0, 12.0, gate=_gated(reason))
+    assert events.named("nav.line_stuck_opened") == []
+
+
+def test_a_gate_hold_mid_window_restarts_it():
+    """Driving, then a crosswalk stop: the stop never counts toward no_progress."""
+    m, events = _manager()
+    _drive(m, 0.0, 3.0)
+    _drive(m, 3.0, 12.0, gate=_gated("crosswalk_looking"))
+    _drive(m, 12.0, 16.0, x=lambda t: 0.03 * (t - 12.0))
+    assert events.named("nav.line_stuck_opened") == []

@@ -179,7 +179,9 @@ class LineFollowConfig:
     # 2026-10-10 사용자: 활성 차선 주행에서 명령이 이만큼 0 이면 원인과 무관하게 막힘을 열어 Fleet 에
     # 묻는다(원인 no_motion, 상세 = HOLD 사유). 0 = 끔. 로컬 후진 대체 없음: Fleet 답 또는 사람만.
     stuck_report_s: float = 5.0
+    progress_watch_enabled: bool = False  # D-607 no_progress/dithering; on only once Fleet answers them (P1)
     no_progress_yaw_deg: float = 30.0  # 2026-10-10: no_progress/dithering also need |net yaw| below this
+    no_progress_creep_enabled: bool = False  # 20 s creep (< recovery_restuck_m in recovery_restuck_s) too
     recovery_back_m: float = 0.08
     recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
@@ -324,7 +326,7 @@ class LineFollowConfig:
             raise ValueError("lane_auto_min_manual_angular must be nonnegative")
         if type(self.max_angular_follows_manual) is not bool:
             raise ValueError("max_angular_follows_manual must be a boolean")
-        for name in ('ir_guard_enabled', 'authority_required'):
+        for name in ('ir_guard_enabled', 'authority_required', 'progress_watch_enabled', 'no_progress_creep_enabled'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         guard = (self.ir_guard_edge_error, self.ir_guard_turn, self.ir_guard_speed_scale)

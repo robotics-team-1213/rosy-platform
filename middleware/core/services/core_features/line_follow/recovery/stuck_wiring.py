@@ -169,8 +169,8 @@ class StuckRecoveryMixin:
     def _local_owned_tick(self, now: float) -> None:
         """D-468 owns the tick: no_motion restarts, but D-607 no_progress/dithering still opens (D-468 then hands back)."""
         self._still_since = None
-        inp = self._stuck_input(now)
-        if self._recovery.stuck_id is None and inp.cause in REPORT_ONLY:
+        inp = self._config.progress_watch_enabled and self._stuck_input(now)  # off: D-468 exactly as before
+        if inp and self._recovery.stuck_id is None and inp.cause in REPORT_ONLY:
             self._recovery.step(inp)
             self._status = self._status.model_copy(update={"stuck": self._stuck_status(now)})
 
@@ -292,9 +292,9 @@ class StuckRecoveryMixin:
                 and now - self._still_since >= report_s):
             # 2026-10-10 user: any reason the robot stays still this long goes to Fleet.
             cause, detail = "no_motion", self._status.reason
-        elif cause is None and report_s > 0.0 and config.body_stop_known:  # half URDF body length
-            cause = self._progress.cause(now, report_s, (config.body_front_x_m - config.body_rear_x_m) / 2,
-                math.radians(config.no_progress_yaw_deg), config.recovery_restuck_s, config.recovery_restuck_m)
+        elif cause is None and report_s > 0.0 and config.body_stop_known and config.progress_watch_enabled:
+            cause = self._progress.cause(now, report_s, (config.body_front_x_m - config.body_rear_x_m) / 2, config.no_progress_yaw_deg,
+                config.no_progress_creep_enabled and config.recovery_restuck_s, config.recovery_restuck_m)
             detail = self._progress.reason or self._status.reason
         ceiling = self._provided("linear_ceiling")
         blind = None
