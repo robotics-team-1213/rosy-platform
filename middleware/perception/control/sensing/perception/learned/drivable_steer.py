@@ -74,7 +74,7 @@ CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
 NEAR_BAND_M = 0.06
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
-EXIT_NEAR_M = 0.10
+EXIT_NEAR_M = 0.05
 #: without a way this long, the pivot latch and smoothing are forgotten
 FORGET_S = 1.5
 SMOOTHING = 0.5
@@ -145,9 +145,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
             near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
-            far = int(np.argmax(np.where(hit, xs, -np.inf)))
-            reach[side] = float(xs[far])
-            # the point to arc toward: where the way leaves the view on that side, farthest out
+            # aim at the middle of the opening, not its far end: the far end cut the inside corner
+            # (9dfk 20261010T030423Z_rosy_41 left the lane twice at the NE spoke turning right)
+            idx = np.flatnonzero(hit)
+            far = int(idx[np.argsort(xs[idx])[len(idx) // 2]])
+            reach[side] = float(xs[hit].max())
             out["exit_point_m"][side] = (round(float(xs[far]), 3),
                                                        round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:

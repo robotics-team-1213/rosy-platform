@@ -7,7 +7,7 @@ register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { cardExpanded, createRoster, mustExpand } = await import("../../fleet/server/web/roster.js");
 const { openDecisionKey, queueRowText } = await import("../../fleet/server/web/queues.js");
-const { replanView } = await import("../../fleet/server/web/trip-replan.js");
+const { deadlockView, replanView } = await import("../../fleet/server/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
 
@@ -76,6 +76,30 @@ test("replan slot: confirm needs an operator and a plan; cancel (a stop) needs o
   assert.equal(spec.confirmReason, "다시 계산한 경로가 없습니다");
   assert.equal(spec.cancelReason, "");
   assert.match(spec.facts, /PLAN_NO_ROUTE/);
+});
+
+test("deadlock slot (D-577 d): Fleet's decision per robot, AI facts for this robot, existing trip routes only", () => {
+  const traffic = { wait_cycle: ["a", "b", "signal:z1"], resolver: [
+    { robot_id: "a", trigger: "wait_cycle", decision: "replan" }, { robot_id: "b", trigger: "wait_cycle", decision: "wait" }] };
+  const facts = [{ kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.7, observed_at: 1 },
+    { kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.8, observed_at: 2 },  // newest wins
+    { kind: "wait_cycle_stale_input", robot_ids: ["a", "b"], confidence: 0.7, observed_at: 0 },
+    { kind: "waiting_but_moving", robot_ids: ["c"], confidence: 0.8 }];
+  const held = { trip_id: "t1", robot_id: "a", hold: { reason: "replan", plan: { places: [] } } };
+  assert.deepEqual(deadlockView(traffic, held, facts, "a", { operator: true }), {
+    lines: ["a · 해결기 다른 길 계획", "b · 해결기 다른 로봇 대기", "AI 참고 · 낡은 입력의 교착일 수 있음 · a, b · 신뢰도 80%"],
+    confirmReason: "", cancelReason: "" });
+  const named = deadlockView(traffic, held, [], "a", { operator: true, named: "이름 있는 운영자 로그인이 필요합니다" });
+  assert.equal(named.confirmReason, "이름 있는 운영자 로그인이 필요합니다");   // a move needs a named operator
+  assert.equal(named.cancelReason, "");                                    // a stop stays open
+  assert.equal(named.lines.at(-1), "AI 사실 없음");
+  const running = deadlockView(traffic, { trip_id: "t2", robot_id: "b", hold: null }, facts, "b", { operator: true });
+  assert.equal(running.confirmReason, "확인할 바뀐 경로가 없습니다");
+  assert.equal(running.cancelReason, "");
+  const none = deadlockView({ wait_cycle: ["a", "b"], resolver: [] }, null, [], "a", { operator: false });
+  assert.equal(none.lines[0], "a · 해결기 판단 전");
+  assert.equal(none.confirmReason, "운영자 권한이 필요합니다");
+  assert.equal(deadlockView(traffic, null, [], "a", { operator: true }).cancelReason, "열린 운행이 없습니다");
 });
 
 test("a later row of the same robot hides the name and its colon", () => {
