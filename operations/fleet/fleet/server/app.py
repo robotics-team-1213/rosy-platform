@@ -560,7 +560,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
         config=lane_compliance_config or LaneComplianceConfig(), identity=identity,
-        clients=console.clients)   # D-511 rev 1: the return cue
+        clients=console.clients,   # D-511 rev 1: the return cue
+        # An open CORE stuck owns the robot (D-577 REALIGN); the board is built further down.
+        stuck_open=lambda robot_id: (getattr(app.state, "line_stuck", None) is not None
+                                     and app.state.line_stuck.view(robot_id) is not None))
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,

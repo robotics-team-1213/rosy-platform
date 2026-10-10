@@ -62,9 +62,12 @@ logger = logging.getLogger("fleet.lane_compliance")
 class LaneComplianceMonitor:
     def __init__(self, robot_ids: Callable[[], Iterable[str]], *, poses, site_maps,
                  config: LaneComplianceConfig = LaneComplianceConfig(), identity=None,
-                 wall: Callable[[], float] = time.time, clients: Optional[Callable] = None) -> None:
+                 wall: Callable[[], float] = time.time, clients: Optional[Callable] = None,
+                 stuck_open: Optional[Callable[[str], bool]] = None) -> None:
         self.config = config
         self._clients = clients          # () -> {robot_id: HttpRobotClient}; None = observe only
+        #: robot -> an open CORE stuck (D-407): its answer owns the robot, the cue stands down.
+        self._stuck_open = stuck_open or (lambda robot_id: False)
         self._returns: dict[str, ReturnTracker] = {}
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
@@ -179,6 +182,8 @@ class LaneComplianceMonitor:
             return                     # still on the lane: nothing to guide, nothing to clear
         if self._cue_mute.get(robot_id, 0.0) > now:
             return
+        if state != OFF_MAP and self._stuck_open(robot_id):
+            return                     # D-577 REALIGN / a human answers the stuck; one channel at a time
         send = getattr((self._clients() or {}).get(robot_id), "line_follow_lane_cue", None)
         if send is None:
             return

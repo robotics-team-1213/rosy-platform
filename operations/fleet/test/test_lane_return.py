@@ -147,3 +147,16 @@ def test_a_refused_cue_is_not_counted_as_sent():
         asyncio.run(monitor.tick())
         clock[0] += 0.5
     assert client.sent and monitor._cue_sent.get("r1") is None and monitor._cue_refused["r1"] == "pose_stale"
+
+
+def test_no_cue_while_the_robot_has_an_open_stuck_except_off_map():
+    clock = [100.0]
+    client = Client()
+    poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=5.0))
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5), wall=lambda: clock[0],
+                                    clients=lambda: {"r1": client}, stuck_open=lambda rid: True)
+    for _ in range(4):
+        asyncio.run(monitor.tick())
+        clock[0] += 0.5
+    assert monitor.view("r1")["return"]["state"] == OFF_LANE and client.sent == []
