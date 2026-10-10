@@ -3031,7 +3031,7 @@
 - Evidence: AI PC remote pytest red first (X:/DevTemp/feat-d577-ai-pc-situation-skeleton/red.txt, collection errors), then test_ai_facts + situation tests + node web units 26 passed, including an in-process real Fleet over HTTP.
 - Gate: SOURCE. Shadow only. Installing on the AI PC waits for the owner's consent.
 
-## 2026-10-10 · feat/fleet-lane-return · feat(fleet): D-511 개정 1 복귀 고리
+## 2026-10-10 · uncommitted · feat(fleet): D-511 rev 1 return loop
 
 - Change: lane monitor `return` (ON_LANE/ON_LINE/OFF_LANE/OFF_MAP/WRONG_WAY, debounced) from the Rosy Cam map pose + site map; `POST /api/v1/line-follow/lane-cue` to robots at 2 Hz with side/bearing/turn and a `fleet_map` crosswalk zone; resolver RESUME (`XW`) for a lost-like stuck at a mapped crosswalk; console one line. API v1.189.
 - Evidence: offline replay of Fleet D-594 paths p5-p10 (X:/DevTemp/fleet-lane-return/replay.py); remote pytest lane/resolver/console suites green.
