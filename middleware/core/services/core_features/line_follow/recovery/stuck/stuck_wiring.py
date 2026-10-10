@@ -17,9 +17,10 @@ from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
-from core_features.line_follow.progress_watch import ProgressWatch
+from core_features.line_follow.recovery.stuck.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
-from core_features.line_follow.recovery.stuck_recovery import REPORT_ONLY, ForwardTrail, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck.stuck_recovery import REPORT_ONLY, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
 #: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
 #: the fail-closed default: no console link, a calibration session, a zero linear limit.
@@ -167,9 +168,11 @@ class StuckRecoveryMixin:
         self._progress.reset()
 
     def _local_owned_tick(self, now: float) -> None:
-        """D-468 owns the tick: no_motion restarts, but D-607 no_progress/dithering still opens (D-468 then hands back)."""
+        """D-468 owns the tick: no_motion restarts, but D-607 no_progress/dithering still opens.
+
+        D-468 then hands the tick back (its stuck precedence). Off: D-468 exactly as before."""
         self._still_since = None
-        inp = self._config.progress_watch_enabled and self._stuck_input(now)  # off: D-468 exactly as before
+        inp = self._config.progress_watch_enabled and self._stuck_input(now)
         if inp and self._recovery.stuck_id is None and inp.cause in REPORT_ONLY:
             self._recovery.step(inp)
             self._status = self._status.model_copy(update={"stuck": self._stuck_status(now)})
@@ -293,8 +296,10 @@ class StuckRecoveryMixin:
             # 2026-10-10 user: any reason the robot stays still this long goes to Fleet.
             cause, detail = "no_motion", self._status.reason
         elif cause is None and report_s > 0.0 and config.body_stop_known and config.progress_watch_enabled:
-            cause = self._progress.cause(now, report_s, (config.body_front_x_m - config.body_rear_x_m) / 2, config.no_progress_yaw_deg,
-                config.no_progress_creep_enabled and config.recovery_restuck_s, config.recovery_restuck_m)
+            half_body_m = (config.body_front_x_m - config.body_rear_x_m) / 2  # URDF, not a literal
+            creep_s = config.recovery_restuck_s if config.no_progress_creep_enabled else None
+            cause = self._progress.cause(now, report_s, half_body_m, config.no_progress_yaw_deg,
+                                         creep_s, config.recovery_restuck_m)
             detail = self._progress.reason or self._status.reason
         ceiling = self._provided("linear_ceiling")
         blind = None

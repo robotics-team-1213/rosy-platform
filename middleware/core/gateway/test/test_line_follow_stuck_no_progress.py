@@ -9,7 +9,7 @@ from core.bridge import traffic_gate
 from core_common.robot_body import PINKY_PRO as B
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
-from core_features.line_follow.progress_watch import ProgressWatch
+from core_features.line_follow.recovery.stuck.progress_watch import ProgressWatch
 
 BODY = dict(body_front_x_m=B.front_x_m, body_rear_x_m=B.rear_x_m, body_half_width_m=B.half_width_m,
             body_rotation_radius_m=B.rotation_radius_m, body_lidar_x_m=B.lidar_x_m)

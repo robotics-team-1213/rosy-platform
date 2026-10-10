@@ -17,7 +17,7 @@ from core_features.line_follow.crosswalk_report import CrosswalkReportMixin
 from core_features.line_follow.lane_cue import LaneCueMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
-from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
+from core_features.line_follow.recovery.stuck.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.recovery.lane_return_wiring import LaneReturnMixin
 from core_features.line_follow.route_context import route_context as build_route_context
 from core_features.line_follow.model import (  # noqa: F401 — re-exported

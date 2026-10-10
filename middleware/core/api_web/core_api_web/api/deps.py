@@ -33,7 +33,7 @@ from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_features.line_follow import LineFollowMode
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused as LineStuckRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused as LineStuckRefused
 from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
