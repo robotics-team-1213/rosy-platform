@@ -129,6 +129,8 @@ class FleetAgent:
         self._degraded_logged_at: dict = {}
         self._stable = False
         self._end_reason = ""
+        self.junction_signal_request = lambda: None
+        self.junction_signal_answer = lambda answer: False
 
     @property
     def connected(self) -> bool:
@@ -417,6 +419,8 @@ class FleetAgent:
             except ValueError:
                 env = None
             if env is not None and env.type == EnvelopeType.HEARTBEAT:
+                if 'junction_signal' in env.payload:
+                    self.junction_signal_answer(env.payload['junction_signal'])
                 # A heartbeat reply names itself; resynchronise the queue on it so a reply
                 # the hub skipped cannot shift later attributions. Events it skipped are
                 # unanswered: they go back to the buffer.
@@ -443,6 +447,10 @@ class FleetAgent:
                 if code in SESSION_FATAL_ERRORS and (
                         answers == EnvelopeType.HEARTBEAT or code == "PAIRING_INVALID"):
                     logger.error("Fleet hub ended the session: %s", code)
+                    request = self.junction_signal_request()
+                    if request is not None:
+                        self.junction_signal_answer(dict(request_id=request, lamp='unknown',
+                                                         may_enter=False, reason='link_rejected'))
                     self.enabled = False
                     self.connected = False
                     await self._abort(ws)
@@ -505,7 +513,8 @@ class FleetAgent:
         while self.enabled:
             try:
                 snap = self.state.snapshot()
-                hb = HeartbeatPayload(state_snapshot=snap)
+                hb = HeartbeatPayload(state_snapshot=snap,
+                                      junction_signal_request=self.junction_signal_request())
                 env = Envelope(type=EnvelopeType.HEARTBEAT, payload=hb.model_dump(mode="json"))
                 # One heartbeat outstanding at a time: clear before sending so only the
                 # reply to this one can wake us.

@@ -377,6 +377,23 @@ class TrafficService:
         return {"robot_id": robot_id, **ahead, "virtual": True, "advisory": True, "mode": signal["mode"],
                 "occupancy": signal["occupancy"], **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
 
+    def junction_signal(self, robot_id: str, approach: Optional[str] = None) -> dict:
+        """D-620: cached signal advice; never creates or enlarges a movement authority."""
+        ahead = self.signal_ahead(robot_id)
+        if ahead is not None:
+            return dict(lamp='green' if ahead['lamp'] == 'green' else 'red',
+                        may_enter=ahead['lamp'] == 'green' and ahead['may_enter'] is True,
+                        reason='trip_signal')
+        matches = [p for p in self._signals.values() if approach in dict(p.phases)]
+        if len(matches) != 1:
+            return dict(lamp='unknown', may_enter=False, reason='signal_unmapped')
+        row = self._signal_row(matches[0], None)
+        lamp = next(a['lamp'] for a in row['approaches'] if a['approach'] == approach)
+        holder = row['occupancy']['holder']
+        clear = not row['zone_busy'] or holder == robot_id
+        return dict(lamp='green' if lamp == 'green' else 'red',
+                    may_enter=lamp == 'green' and clear and not row['errors'], reason='approach_signal')
+
     def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
         """Operator verb (D-525 4): ``occupancy`` (rev 6, the default), ``cycle``, ``hold``, ``all_red``,
         ``demand`` (rev 4) or ``set_aspect`` (green for one approach while the operator is present).
