@@ -1033,8 +1033,8 @@ SIZE_VERDICTS = {
     "core/services/core_features/line_follow": (
         3_018,
         "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
-        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independent re-judge "
-        "2026-10-10 required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
+        "had required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
         "Earlier: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
         "(read-only critic agent); docs/plans/2026-10-10-core-line-follow-size-unit.md registers the rest of "
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
@@ -1044,11 +1044,12 @@ SIZE_VERDICTS = {
     "core/services/core_features/line_follow/cue": (
         376,
         "split: judged at 376 on 2026-10-10 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
-        "size-unit.md, cue addendum; independent review requested): lane_cue.py 320 (D-511 Fleet lane cue, a "
+        "size-unit.md, cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS): lane_cue.py 320 (D-511 Fleet lane cue, a "
         "LaneCueMixin of LineFollowManager under its lock) and odom_pivot.py 55 (pure, camera-independent turn in "
-        "place; D-607 P3 REALIGN may import it from recovery, as recovery imports line_follow.clearance). The "
-        "manager touches only _init_lane_cue, _lane_cue_plan, _lane_cue_turn, _lane_cue_view, "
-        "_lane_cue_spot_running and _cue_spot_turning. Re-judge after +150.",
+        "place; D-607 P3 REALIGN imports it from recovery/stuck/realign, one direction stuck -> cue). The "
+        "manager calls _init_lane_cue (start and mode change), _lane_cue_plan, _lane_cue_turn, _lane_cue_view, "
+        "_lane_cue_spot_running, reads _cue_latch and _cue_spot_turning, interprets the plan tuple "
+        "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
     "perception/control/sensing/perception/learned": (
         2_270,
