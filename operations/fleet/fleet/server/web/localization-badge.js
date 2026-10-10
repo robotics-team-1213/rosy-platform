@@ -9,7 +9,7 @@ export function localizationTag(loc, guideRow) {
   const site = loc.legacy ? guideRow?.pose : null;
   if (site && SITE_POSE_STATE[site.state]) {
     return { text: `위치 ${SITE_POSE_STATE[site.state]}`, cls: site.state === "LOCALIZED" ? "" : "warn",
-      title: `Fleet 지도 자세 · ${site.state}` };
+      title: `Fleet MapPose · ${site.state}` };
   }
   const cls = loc.needs_human ? "crit" : loc.legacy || !loc.trusted ? "warn" : "";
   const title = loc.legacy ? "localization: null" : `${loc.state} · ${loc.pose_frame}`;

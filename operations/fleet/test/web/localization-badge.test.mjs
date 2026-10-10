@@ -39,7 +39,7 @@ test("a robot without D-395 that Fleet's MapPose places shows the MapPose state,
   // Field 2026-10-10: rosy_40 (motor mode) was LOCALIZED by camera and the badge said 위치 상태 미보고.
   const legacy = row({ state: null, pose_frame: null, legacy: true, label: "위치 상태 미보고" });
   assert.deepEqual(localizationTag(legacy, { pose: { x: 1, y: 2, state: "LOCALIZED" } }),
-    { text: "위치 확정", cls: "", title: "Fleet 지도 자세 · LOCALIZED" });
+    { text: "위치 확정", cls: "", title: "Fleet MapPose · LOCALIZED" });
   assert.equal(localizationTag(legacy, { pose: { x: 1, y: 2, state: "DEGRADED" } }).cls, "warn");
   assert.equal(localizationTag(legacy, { pose: null }).text, "위치 상태 미보고");
   assert.equal(localizationTag(row(), { pose: { state: "DEGRADED" } }).text, "위치 확정");  // D-395 robot: its own
