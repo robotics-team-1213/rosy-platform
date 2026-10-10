@@ -14,9 +14,9 @@ class JunctionSignalMixin:
 
     def _signal_before_entry(self):
         j = self._junction or {}
-        return (j.get('state') == 'waiting' or (j.get('signal_owned') and (
-            j.get('state') == 'armed' or (j.get('state') == 'turning'
-                                        and j.get('sub') == 'stopping' and 'pivot_basis' not in j))))
+        return (j.get('state') == 'waiting' or (j.get('signal_owned')
+                and not (self._junction_signal or {}).get('entered')
+                and j.get('state') in ('armed', 'approaching', 'turning', 'advancing')))
 
     def junction_signal_request(self):
         with self._lock:
@@ -85,6 +85,9 @@ class JunctionSignalMixin:
                       s['id'], s['state'])
         return j
 
-    def _signal_entered(self, j):
-        if j.get('signal_owned') and self._junction_signal is not None:
+    def _signal_committed(self, decision):
+        j = self._junction or {}
+        if (j.get('signal_owned') and self._junction_signal is not None
+                and (decision.linear or decision.angular)):
             self._junction_signal.update(entered=True, state='entered')
+        return decision

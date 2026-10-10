@@ -518,7 +518,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
             j['target'] = _wrap(base+math.radians(j['turn_deg']))
             error = _wrap(j['target']-pose.yaw)
             j.update(sub='rotating', phase_at=now, limit=abs(error)/floor+TURN_TIME_MARGIN_S)
-            self._signal_entered(j)
         error = _wrap(j['target']-pose.yaw)
         if j['sub'] == 'rotating':
             # Review M6: stop early by what the commanded rate turns during the latency.

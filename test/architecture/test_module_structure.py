@@ -961,7 +961,13 @@ SIZE_VERDICTS = {
     ),
     "core/services/core_features/line_follow/manager.py": (
         763,
-        "accept: re-judged at 763 on 2026-10-10 for the site deploy (self-judged; NEEDS the independent re-judge): "
+        "accept: reviewed by adr_record on 2026-10-10 at 792, within the existing 763+150 allowance. "
+        "D-620 adds one final-decision commit call after authority and crosswalk; episode state remains "
+        "in junction/signal.py. Lane-cue and crosswalk-report state already live in LaneCueMixin and "
+        "CrosswalkReportMixin; this call adds no manager-owned state, writer or thread. Original baseline "
+        "763 and all budgets remain; further stateful growth must stay in those dedicated mixins. "
+        "The final-decision fix is implemented by this reviewer and needs the parent's separate diff review. "
+        "Previous verdict: re-judged at 763 on 2026-10-10 for the site deploy (self-judged; NEEDS the independent re-judge): "
         "growth from D-573 6 crosswalk gate report, drivable boundary memory and the restored lane-cue wiring "
         "(f20de97ca); still one line-follow decision/loss owner, no new writer. Next growth moves the lane-cue "
         "and crosswalk-report state into their own mixins. Previously accept at 605: one line-follow decision and loss owner; recovery already lives in separate "
