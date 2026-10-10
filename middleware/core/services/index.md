@@ -17,6 +17,7 @@
 | D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-476 | 차선을 잃으면 곧바로 멈추지 않고, 알던 차로의 연장선을 짧게 잇는다(예상 도로 bridge) |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 
 ## 계획·결과 문서
 
@@ -39,7 +40,7 @@
 ## 최근 기록
 
 - 2026-10-10 · uncommitted · feat: robot situation inquiry
+- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · uncommitted · fix(core): preserve high-gain curvature at angular saturation
 - 2026-10-09 · uncommitted · fix(core): D-531 굽이 단계 문맥 발행
 - 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
-- 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)

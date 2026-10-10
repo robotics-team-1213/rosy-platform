@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.202
+**Version:** v1.203
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -913,6 +913,33 @@ Fleet 응답: `welcome`(성공, 장기 토큰 발급) / `error(PAIRING_INVALID)`
 { "type": "heartbeat",
   "payload": { "state_snapshot": { "...": "/ws/state 스키마 동일" } } }
 ```
+
+### 7.3.1 교차로 신호 질의 (D-620, v1.202)
+
+명시적 `line_follow.junction_signal_enabled:true`인 CAMERA_LINE 시험은 지시 없는
+교차로에서 정지한 에피소드의 UUID hex(32자)를 선택 필드
+`payload.junction_signal_request`로 보낸다. 기본값은 `null`이고 기존 heartbeat는 그대로 유효하다.
+HELLO로 인증된 해당 로봇 신원만 조회한다. Fleet 답은 heartbeat 선택 필드다:
+
+```json
+{"type":"heartbeat","payload":{"junction_signal":{"request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","lamp":"red","may_enter":false,"reason":"approach_signal"}}}
+```
+
+`lamp`는 `green|red|unknown`, `may_enter`는 엄격한 boolean, `reason`은 최대 96자다.
+Fleet는 기존 trip 신호/통행권을 사용하거나, 2초 이내 지도 자세의 진행 방향 차로 안에서
+다음 장소까지 0.6m 이내인 접근로의 기존 신호표를 사용한다. 지도/신호 없음·조회 오류는
+`unknown/false` 응답이다. 답변은 통행권을 만들거나 늘리지 않는다.
+
+CORE는 `green && may_enter:true`인 수신 후 2초 이내 답을 우측 진입 선택에 사용한다.
+응답이 한 번도 없는 정지 에피소드는 3초 뒤 기존 D-495 `right/turn_deg:-90`을 한 번 선택한다.
+적색·미확인·진입 불허·만료 답·잘못된 상관 답·Fleet ERROR·pairing 거부는 대기한다.
+실제 회전 전 적색은 fallback도 취소한다. 이전 ID·OFF·회전 시작 뒤 답은 다음 회전을 만들지 않는다.
+모든 CORE 회전/장애물/횡단보도/통행권/정지 검사는 유지한다. 무응답 fallback은 현장 감독 시험에 한정한다.
+
+상태 API의 `line_follow.junction`에 선택 필드 `signal_request_id`와 `signal_state`를 추가한다.
+상태는 `waiting|red|unknown|green|fallback|entered` 또는 `null`이다.
+CORE journal에는 요청 ID별 질의, 답 변화, 우측 선택을 기록한다.
+`entered`는 회전 단계 시작이며 실물 이동 증거는 별도다.
 
 ## 7.4 이벤트 전달
 
@@ -2744,6 +2771,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
+
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
 | v1.201 | 2026-10-10 | Behavioural + Additive (D-407 개정·D-607, feat/stuck-no-progress-dithering): CORE 막힘 `cause` 에 `no_progress`·`dithering` 추가(§8 `nav.line_stuck_opened` 행). 새 설정 `line_follow.progress_watch_enabled`(기본 `false`, YAML 불리언), `line_follow.no_progress_yaw_deg`(기본 30, 양수), `line_follow.no_progress_creep_enabled`(기본 `false`). 켜져 있을 때 명령은 있는데 odom 이 `stuck_report_s` 동안 몸 길이 절반 미만·|yaw| 30° 미만이면 연다(기어감 플래그를 켜면 20 s 에 0.30 m 미만도). 꺼져 있으면 동작 변화 없음. 의도한 대기(교차로·권한·횡단보도·신호/교통 게이트)는 세지 않는다. 답 전까지 보고만 한다(움직임 변화 없음). D-468 로컬 복귀 틱에서도 열린다. 상태 `line_follow.stuck.cause`·`detail` 도 같은 값. v1.195–v1.198 은 main, v1.199 는 D-607 REALIGN 브랜치, v1.200 은 D-511 lane cue. |
 | v1.200 | 2026-10-10 | Additive (D-511 개정 1·2, feat/core-fleet-lane-cue, D-430 Safety-Review 대상): `POST /api/v1/line-follow/lane-cue` — Fleet 현장 등록 토큰(D-555 3 자리: 화면 코드 출처 + `site:` 라벨, 공유 dev 토큰 거절, 그 밖 403)만. `LaneCueRequest` `{cue_id, fleet_epoch, seq, ttl_s (0 < s ≤ 2), pose_stamp (CORE 벽시계 odom 시각, D-517 권한과 같음), state: ON_LANE\|ON_LINE\|OFF_LANE\|OFF_MAP\|WRONG_WAY, side?, bearing_deg?, turn_deg?, lane_heading_deg?, offset_m?, edge_id?, guide?: {ahead_m, heading_ahead_deg?, curvature_1pm, to_end_m, next_place_id, ring}, turn_spot? (기본 false), context?: {route: lap, segment_id, s_m, lap_m, heading_deg, ahead_m, heading_ahead_deg, offset_m?, next?: {kind, ds_m, action, ref?}, pose_age_s?, anchor_age_s?} (D-511 개정 6, 저장·표시만)}`, 응답 `{accepted, reason}`(`disabled`|`stale`|`epoch_busy`|`odom_stale`|`pose_stale`|`pose_future`). `(fleet_epoch, seq)`는 만료와 무관하게 유지(옛 seq는 늘 stale), 다른 epoch는 신선한 신호·회전·래치가 없을 때만. `pose_stamp`가 최신 odom보다 1.5 s 넘게 오래되면 거절(OFF_MAP은 정합 없이 받음). 회전 부호는 시작 때 고정, 끝은 odom 진행량. 켜려면 `obstacle_mode: path`. 설정 `line_follow.fleet_lane_cue_enabled`(기본 false, Pinky false). CAMERA_LINE에서 IR 감시 뒤, 몸 정지(D-422) 앞에서 판단하고 회전은 LOST 래치·NOMINAL 지면·카메라 신선 조건을 모두 지난 뒤에만 낸다: ON_LINE/OFF_LANE은 IR이 선을 못 볼 때 `\|offset_m\| ≥ 0.05` 같은 쪽 2회 연속이면 차로 가운데 쪽 IR 가장자리 조향(후진 없음, 사유 `fleet_cue_left\|right`); WRONG_WAY는 `turn_spot`이 true일 때만(아니면 래치 HOLD `fleet_wrong_way`, 회전 원 0.0926 m > 차로 안쪽 반폭 0.080 m) `turn_deg` > 30°이면, 그리고 OFF_LANE(재진입 방위 > 45°)은 같은 부호 2회·0.5 s 뒤 `pose_stamp` 시점 odom yaw + 각도를 목표로 제자리 회전(10° 안이면 끝, 예산 \|각도\|+30°, 시간 \|각도\|/속도+2 s를 넘으면 래치 HOLD `fleet_turn_unconfirmed`; 교차로 지시·arc·횡단보도 구역 중엔 시작 안 함). OFF_MAP, 회전 중 신호 만료(`fleet_cue_lost`)는 래치 HOLD — 같은 epoch의 ON_LANE/ON_LINE 신호, D-407 막힘 결정(STUCK_DECIDE), 모드 변경만 푼다. 모드 변경·E-stop은 신호를 지운다. 사건 `nav.lane_cue`. `guide`는 저장·표시만. 횡단보도 구역은 이 경로로 오지 않는다(D-573 권한 `crosswalks[]`). `GET /line-follow` `lane_cue`(신선한 신호·래치·회전이 있을 때) |

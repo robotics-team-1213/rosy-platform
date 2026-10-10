@@ -257,6 +257,7 @@ class LineFollowConfig:
     # D-495 bounded junction turn (review M5/M6): consecutive fresh confident lane frames that
     # count as reacquired, and the actuation/odom latency the turn stops early for.
     junction_reacquire_frames: int = 3
+    junction_signal_enabled: bool = False  # D-620: paired Fleet query + 3s unanswered right fallback
     junction_turn_lead_s: float = 0.15
     # Review L3: odom speeds below which the robot counts as standing still (turn start/settle).
     junction_still_linear: float = 0.01
@@ -435,6 +436,8 @@ class LineFollowConfig:
                              "path (D-573 2)")
 
     def _check_junction(self) -> None:
+        if type(self.junction_signal_enabled) is not bool:
+            raise ValueError("junction_signal_enabled must be a boolean")
         if type(self.lost_resume_frames) is not int or not 1 <= self.lost_resume_frames <= 20:
             raise ValueError("lost_resume_frames must be a whole number in [1, 20]")
         if not _finite(self.lost_resume_s) or not 0.0 <= self.lost_resume_s <= 10.0:
