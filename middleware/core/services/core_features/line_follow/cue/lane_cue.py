@@ -16,7 +16,8 @@ the D-517 authority cap it afterwards like any decision. Per state:
   without ``turn_deg``) WRONG_WAY is a latched HOLD ``fleet_wrong_way`` for Fleet: the robot neither
   keeps driving the wrong way nor turns in the lane.
 - WRONG_WAY on a ``turn_spot`` (``turn_deg``) and OFF_LANE with the re-entry point more than
-  ``PIVOT_BEARING_DEG`` off the nose: after two cues of the same sign at least ``DEBOUNCE_S`` apart, turn in place to an odom yaw
+  ``PIVOT_BEARING_DEG`` off the nose: after two cues of the same sign at least ``DEBOUNCE_S``
+  apart, turn in place to an odom yaw
   target = odom yaw at the cue's ``pose_stamp`` + the angle. The pivot is bounded on CORE: turned
   angle <= |angle| + 30 deg and time <= |angle| / rate + 2 s (``odom_pivot``), else a latched
   HOLD ``fleet_turn_unconfirmed``. No pivot starts while a junction instruction, an arc or a crosswalk
@@ -84,6 +85,7 @@ class LaneCueMixin:
         self._cue_streak: dict = {}                # pivot: (sign, first_at, count); side: (side, count)
         self._pivot: Optional[dict] = None
         self._cue_latch: Optional[str] = None
+        self._cue_spot_turning = False        # this tick returned a turn-spot pivot (manager reads it)
         self._pivot_spot, self._pivot_reason = False, None
         self._cue_reacquire_until: Optional[float] = None
 
@@ -146,7 +148,8 @@ class LaneCueMixin:
         old = self._cue_streak.get("ww")
         if cue["state"] != "WRONG_WAY" or (old and now - old[2] > STREAK_GAP_S):
             old = None
-        self._cue_streak["ww"] = ((old[0], old[1] + 1, now) if old else (now, 1, now)) if cue["state"] == "WRONG_WAY" else None
+        wrong_way = cue["state"] == "WRONG_WAY"
+        self._cue_streak["ww"] = ((old[0], old[1] + 1, now) if old else (now, 1, now)) if wrong_way else None
         side = cue.get("side") if (cue["state"] in ("ON_LINE", "OFF_LANE") and cue.get("offset_m") is not None
                                    and abs(cue["offset_m"]) >= SIDE_MIN_OFFSET_M) else None
         old = self._cue_streak.get("side")
