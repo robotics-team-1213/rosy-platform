@@ -153,7 +153,7 @@ class TripRunner(TripAdmission, TripProgress):
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-            pose = await self._pose_checks(robot_id, graph, plan["segments"])
+            pose, enable = await self._pose_checks(robot_id, graph, plan["segments"], start=True)
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
@@ -199,7 +199,22 @@ class TripRunner(TripAdmission, TripProgress):
             else:
                 self._describe(live)
             self._save(live)
+            if enable:  # D-601 A: last, lease held and the trip open, so every end turns it OFF again
+                await self._start_line(live)
             return live.view
+
+    async def _start_line(self, live: LiveTrip) -> None:
+        """D-601 A: turn CORE's camera line on (it moves at once; the first tick, under this lock after
+        the start, sends the next place's instruction). A refusal ends the trip failed and answers the start."""
+        try:
+            await self._call(self._junction.start_camera_line(live.view["robot_id"]))
+        except _ROBOT_ERRORS as exc:
+            detail = {"error": _code(exc), "status": getattr(exc, "status", None)}
+            await self._stop(live, "failed", "TRIP_LINE_FOLLOW_START_FAILED", detail)
+            raise TripError(409, "TRIP_LINE_FOLLOW_START_FAILED", detail) from exc
+        live.view["detail"]["line_follow_started"] = True
+        await self._after_send(live)  # a cancel or E-stop that landed meanwhile stops it again
+        self._save(live)
 
     async def cancel(self, trip_id: str, principal_id: Optional[str], reason: Optional[str] = None) -> dict:
         """Immediate: no wait for a tick in flight (that tick halts again if its send lands after)."""

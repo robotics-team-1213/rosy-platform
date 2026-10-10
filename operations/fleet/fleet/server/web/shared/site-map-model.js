@@ -23,7 +23,12 @@ export const TRIP_ERROR_LABEL = {
   TRIP_ROBOT_CAPS_UNKNOWN: '로봇이 주행 능력(종류·주행 방식)을 알리지 않습니다 · 새 이미지가 필요합니다',
   TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
   TRIP_SITE_FLOOR_MISMATCH: '로봇의 현장 바닥 선언이 활성 지도와 다릅니다 · 로봇 설정을 확인하세요',
-  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
+  // D-601: 꺼져 있으면 관제가 출발 때 카메라 차선 주행을 켠다; 남는 거절은 IR 차선 주행이나 모르는 상태
+  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇이 IR 차선 주행 중이거나 차선 주행 상태를 알 수 없습니다 · 차선 주행을 끈 뒤 다시 출발하세요',
+  TRIP_LANE_CAMERA_UNAVAILABLE: '로봇 앞 카메라 영상이 들어오지 않아 차선 주행을 할 수 없습니다 · 카메라를 확인하세요',
+  TRIP_START_HEADING_MISMATCH: '로봇이 첫 차로 방향과 다르게 서 있습니다 · 차로 방향으로 돌려 세우세요',
+  TRIP_START_OFF_LANE: '로봇이 첫 차로 밖에 있습니다 · 차로 위로 옮기세요',
+  TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
@@ -84,6 +89,7 @@ export const TRIP_REASON_LABEL = {
   TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
   lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
+  TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
@@ -128,8 +134,21 @@ export function planIsCurrent(plan, active) {
   return Boolean(plan && active && plan.map_version === active.version);
 }
 
+/** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
+export function startCheckText(check) {
+  if (!check?.code) return '출발 가능';
+  if (check.code === 'TRIP_START_OFF_LANE') return `차선 밖 ${Math.round((check.off_lane_m || 0) * 100)} cm`;
+  const err = Math.abs(check.heading_err_deg ?? NaN);
+  if (!Number.isFinite(err)) return '방향 모름';
+  return `${err > 90 ? '방향 반대' : '방향 어긋남'}(${err.toFixed(0)}°)`;
+}
+
 export function tripErrorText(code, detail = {}) {
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
+  if (/HEADING_CONFLICT|START_HEADING_MISMATCH/.test(code || '') && detail?.heading_err_deg != null)
+    return `${base} · ${startCheckText({...detail, code: 'heading'})}`;
+  if (/START_OFF_(LANE|MAP)/.test(code || '') && detail?.off_lane_m != null)
+    return `${base} · ${startCheckText({...detail, code: 'TRIP_START_OFF_LANE'})}`;
   if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
     return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
   if (code !== 'TRIP_NO_ROUTE') return base;
@@ -359,7 +378,8 @@ export function tripRefusalText(error) {
 }
 /** "3개 차로 · 2.10 m · 약 14 s · 지도 v4" for a computed plan. */
 export function planSummaryText(plan) {
-  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`;
+  return `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s · 지도 v${plan.map_version}`
+    + (plan.start_check ? ` · ${startCheckText(plan.start_check)}` : '');
 }
 /** '' when a repeat trip may start from ``start``; otherwise why not (role and robot checks are the caller's). */
 export function repeatTripReason({active, running, start}) {
@@ -383,6 +403,7 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
+  if (plan.start_check?.code) return `${startCheckText(plan.start_check)} · ${TRIP_ERROR_LABEL[plan.start_check.code]}`;
   return '';
 }
 
