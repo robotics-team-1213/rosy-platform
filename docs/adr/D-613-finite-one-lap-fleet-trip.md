@@ -14,4 +14,6 @@ D-517의 `repeat: true`는 계속 도는 운행이다. 현장 `map_v2_fleet` v5�
 
 ### Consequences and evidence
 
+`W_mid`와 `E_mid`처럼 차선의 끝이 아닌 이름 있는 장소도 유한 trip의 도착점이다. 계획의 마지막 `actions[].place_id`에 선택한 장소 ID를 보존하고, Fleet은 그 ID로 마지막 차선의 `stop_after_m` 정지 명령을 보낸다. 반복 lap은 기존의 차선 끝 장소 기준을 유지한다. 좌표만 지정한 차선 중간 목적지는 안전한 정지 장소로 승격하지 않아 `LANE_END_NOT_A_PLACE`로 거절한다. 두 유한 trip의 분리된 출발·정지와 기존 반복 lap은 원격 시험으로 확인하고, 실제 정지 거리는 DEVICE·FIELD에서 검증한다.
+
 API reference v1.197의 Fleet `/trip` 요청과 시작 거절이 추가된다. CORE API·envelope 1.0은 바뀌지 않는다. SOURCE·원격 호스트 테스트·Gazebo·DEVICE·FIELD는 별도 증거다. 두 로봇 `arrived`와 실제 원위치 정지, 독립 경계·간격 측정 전에는 목표를 완료로 표기하지 않는다.
