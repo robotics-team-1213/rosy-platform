@@ -599,3 +599,9 @@
 - 변경: nominal_body_for(kind)는 알려진 기종의 공칭 차체만 반환하고 알 수 없는 기종은 None으로 거절한다. Fleet 출발 검사가 이를 공유한다.
 - 증거: 원격 회귀시험에서 선택 함수 부재를 재현했다. 수정 후 원격 재검증 대기.
 - gate 변화: 없음. 실기기 차체 이탈 방지 증거가 아니다.
+
+## 2026-10-10 ? uncommitted ? feat: shared situation direction (D-619)
+
+- Change: Shared situation-v1 validates mobility/manipulation observations bound to caller-owned frames; model verification remains unverified.
+- Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
+- Gate: SOURCE; live Fleet image and physical acceptance remain separate.

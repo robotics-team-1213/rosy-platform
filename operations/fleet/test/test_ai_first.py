@@ -12,7 +12,7 @@ from site_map_fixture import painted_track
 from test_stuck_resolver import _row, _stuck
 from fleet.stuck.ai_first import AiFirst, problem_key
 from fleet.stuck.ai_routes import rosy_cam_lease
-from fleet.stuck.closed_loop import reopen
+from fleet.stuck.closed_loop import context, reopen
 from fleet.stuck.episodes import ProblemLog
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.problems import ProblemWatch
@@ -289,3 +289,13 @@ def test_judged_at_is_wall_clock_on_the_d577_path_too():
                 "ttl_s": 6.0}
     r.step(0.0, [_with(_row(stuck=_stuck()), proposal)])
     assert abs(r.ai_verdicts[-1]["judged_at"] - time.time()) < 60
+
+
+def test_case_context_carries_task_safety_and_unknown_measurements():
+    value = context({'state_age_s': 0.7, 'state': {'mode': 'EMERGENCY',
+                    'line_follow': {'mode': 'OFF', 'stuck': {'cause': 'lane_lost'}}}})
+    assert value['current_mode'] == 'EMERGENCY'
+    assert value['task_intent']['task'] == 'lane_follow_recovery'
+    assert value['task_intent']['trip_active'] is False
+    assert value['state_age_s'] == 0.7
+    assert value['clearance_m']['front_clearance_m'] is None
