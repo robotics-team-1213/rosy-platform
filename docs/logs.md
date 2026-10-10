@@ -7615,3 +7615,9 @@ osy-d395-s1d\`.
 - 변경: 첫 간선이 lane인 trip 출발에서 로봇이 OFF면 모든 검사·lease·trip 열림 뒤 마지막으로 Fleet이 CAMERA_LINE을 켠다(끝에서는 언제나 OFF). 출발 정렬 검사 `TRIP_START_HEADING_MISMATCH`(20°)·`TRIP_START_OFF_LANE`, 계획 `start_check`와 콘솔 "출발 가능/방향 반대(178°)/차선 밖 5 cm", 앞 카메라 미리보기가 없으면 `TRIP_LANE_CAMERA_UNAVAILABLE`(`fleet.trip.lane_camera_check`, SIM은 false). trip_runner 시작 검사·진행 판정을 trip_admission/trip_progress로 옮김. API v1.192. 자동 제자리 정렬은 후속(CORE 목표 yaw 회전 미션 필요).
 - 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new), 가드(module_structure·safety_separation·robot_literals·behavior_test_ownership·web_dialog·line_follow_contract_docs·harness·shared/web) 0 new(fleet 패키지 크기는 main에서 이미 known). 독립 리뷰 critic APPROVE WITH FIXES, HIGH 2·MEDIUM 1 고침.
 - gate 변화: SOURCE만. 현장(rosy_40 카메라 거절, 반대로 선 로봇, 꺼진 로봇 출발·끝) 확인과 SIM 사이트 설정 `lane_camera_check: false`는 별도.
+
+## 2026-10-10 · uncommitted · docs(isaac): D-606 모델 PC Isaac Lab 환경 준비
+
+- 변경: 5.1/v2.3.2 버전 핀, 별도 후보 환경, RAM·의존성·ROS·물리 정지·RL 비교 게이트를 ADR로 결정했다.
+- 증거: 모델 PC 읽기 점검에서 CUDA와 Jazzy 확인, 물리 RAM 15 GiB와 Isaac venv pip check 실패 확인. docs/validation/model-pc-isaac-rl-2026-10-10/result.md.
+- gate 변화: 없음. RL 실행·ROS-SIM은 HOLD; 실물·현장 별도.
