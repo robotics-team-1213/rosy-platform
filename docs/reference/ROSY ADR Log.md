@@ -598,3 +598,4 @@
 | D-607 | 막힘을 더 넓게 찾고 차로 안에서는 돌지 않는다: CORE 새 원인 `no_progress`·`dithering`(Fleet R8 `WAIT`+사람), Fleet 규칙만 고르는 `REALIGN`(PIVOT·KTURN; 신뢰 지도 자세·조작표·자세 불확실성; CORE 회전 원 0.0926+0.02·뒤 띠 0.06·2회 재확인; AI 제안 불가), 앞뒤 막힘 R7 제한 회전, 역주행은 회전 자리에서만(D-511 WRONG_WAY 개정), trip 로봇은 WAIT만, lane cue는 막힘 중 물러남 | Proposed (2026-10-10; P1–P5 단계별 Safety-Review, CORE 계약 rosy-e1 확인 대기) |
 | D-613 | 관제에서 고른 출발·복귀 장소와 경유 장소의 유한 한 바퀴 trip: `start_at`으로 계획·시작 때 0.05 m 근접성 재검사, 구역 정지 이동 거절, 두 로봇 별도 trip·Fleet/CORE 권한 유지 | Proposed (2026-10-10, SOURCE 후보; 시험·DEVICE·FIELD 별도) |
 | D-614 | crop128 v2 (`451f0f85`)를 로봇 paint 주행 시험 모델로 바로 적용: 원본 ONNX 해시 유지, `lane-seg-*` 시험 이름·crop 매니페스트, 9dfk·8kcn 정지 확인 뒤 원자 포인터 전환·이전 포인터 보존; D-554 intake/운영 승격과 실물 수용은 별도 | Accepted (2026-10-10, 사용자 결정; DEVICE 읽기·재생·FIELD 증거 별도) |
+| D-616 | 개발용 연속 차선추종 시험은 시간·무이동·CORE HOLD로 세션을 끊지 않고 관찰한다: 기존 operator hold lease, 전경 연결, CORE 보호 유지, OFF/연결 손실 종료, 자동 재무장·안전 우회 없음 | Accepted (2026-10-10, 사용자 결정; SOURCE·시험·실물 증거 별도) |
