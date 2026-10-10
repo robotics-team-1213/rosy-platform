@@ -14,11 +14,12 @@ class _Ways:
     def __init__(self, way):
         self.way = way
         self.used_crosswalk = None
+        self.stamp = 0.0
 
     def latest_way(self, _age):
         if self.way is None:
             return None
-        return self.way, 0.0
+        return self.way, self.stamp
 
 
 def _pose(_stamp):
@@ -36,9 +37,20 @@ def _commit_centre():
     info = None
     for index in range(3):
         stamp = index * 0.1
+        ways.stamp = stamp
         error, confidence, info = solo.update(way, stamp, G, XO, HALF, _pose(stamp), _pose(stamp))
         step, decided = _step(steer, ways, last, stamp)
     return steer, ways, last, step, decided, error, confidence, info
+
+
+def test_cached_way_cannot_commit_three_frames_of_evidence():
+    steer, ways, last = DrivableSteer(), _Ways(_lane(HALF, -HALF)), {}
+    for stamp in (0.0, 0.1, 0.2):
+        _step(steer, ways, last, stamp)
+    assert last["expected_path_state"] is None
+    ways.way = None
+    step, decided = _step(steer, ways, last, 0.3)
+    assert step is None and decided is False
 
 
 def test_a_fresh_centre_way_returns_the_steer_error_and_a_live_path():

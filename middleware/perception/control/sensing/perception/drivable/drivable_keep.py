@@ -98,8 +98,8 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
                                                source, pose_at(stamp), **extra)
         if source is not None:
             # near_centre_m is the way frame's body point, so the hypothesis uses that pose.
-            # The stamp is this frame's, so a later hold cannot look like time running backwards.
-            _remember_path(last, path.update(source, stamp, info))
+            # Control time stays monotonic; cached inferences count as one observation.
+            _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp))
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)

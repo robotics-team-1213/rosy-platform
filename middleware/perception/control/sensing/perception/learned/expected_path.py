@@ -84,8 +84,9 @@ class ExpectedPath:
         self._stamp = None
         self._loss_pose = None
         self._loss_stamp = None
+        self._observation_stamp = None
 
-    def update(self, pose, stamp, info):
+    def update(self, pose, stamp, info, *, observation_stamp=None):
         """Accept one way frame. A committed path stays until three new headings agree."""
         if pose is None or stamp is None:
             self._clear()
@@ -98,6 +99,10 @@ class ExpectedPath:
         if _forbidden(info):
             self._clear()
             return self._view("dropped")
+        observed = stamp if observation_stamp is None else observation_stamp
+        if self._observation_stamp is not None and observed <= self._observation_stamp:
+            return self._steer(pose, "live") if self._committed else self._view(None)
+        self._observation_stamp = observed
         heading = _centre_heading(pose, info)
         if heading is None:
             if self._committed:
