@@ -303,7 +303,7 @@ SIZE_VERDICTS = {
         "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
         "view/observation presentation and D-577 lane-lost handling. The former stays in web "
         "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
-        "without adding a motion or transport owner. The resolver file has its own split verdict; "
+        "without adding a motion or transport owner. The resolver was split later; "
         "the package +150 allowance remains. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "

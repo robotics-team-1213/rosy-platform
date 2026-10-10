@@ -3071,3 +3071,9 @@
 - Change: 유한 trip의 마지막 이름 있는 중간 장소를 계획 action과 실행 place에 보존해 Fleet이 그 장소의 `stop_after_m` 정지를 보낸다. 반복 lap의 중간 장소는 기존처럼 통과하고, 좌표만 지정한 중간 종료는 계속 거절한다 (D-613).
 - Evidence: 원격 `test_lane_traffic.py`, `test_routing.py`, `test_trip_runner.py`, `test_site_map_trip.py` 183 passed; `known_failures.py` NEW 0, KNOWN 0 (`X:/DevTemp/one-lap-midstop-2/run-1.txt`).
 - Gate: SOURCE. 실제 두 로봇 동시 한 바퀴·정지 거리·차체 여유는 ROS-SIM·DEVICE·FIELD 별도.
+
+## 2026-10-10 · uncommitted · refactor(fleet): isolate stuck peer pose checks
+
+- Change: move trusted map pose and front/back peer-band helpers from stuck_resolver.py into stuck_peer_pose.py; preserve the resolver import surface and decisions.
+- Evidence: focused stuck resolver/API tests 137 passed; structure size checks 2 passed. Main at 5d93a9255 had both size failures before this split.
+- Gate: SOURCE and host tests only; no field robot action or changed motion contract.
