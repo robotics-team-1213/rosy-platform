@@ -104,9 +104,29 @@ def test_inspect_passes_with_valid_image(tmp_path):
         f"Package: {name}\nStatus: install ok installed\n\n"
         for name in verify_mounted_image.DISPLAY_APT_PACKAGES), encoding="utf-8")
     _add_lamp_and_camera(root)
+    _add_login_probe_and_defaults(root, release_dir)
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
+
+
+def _add_login_probe_and_defaults(root, release_dir):
+    """D-193 login code, D-247 hardware probe/test units and token-free CORE defaults."""
+    system = root / "etc/systemd/system"
+    wants = system / "multi-user.target.wants"
+    for unit in (verify_mounted_image.LOGIN_UNIT, *verify_mounted_image.HW_PROBE_UNITS,
+                 verify_mounted_image.HW_TEST_SERVICE, verify_mounted_image.HW_TEST_PATH):
+        (system / unit).write_text("mock", encoding="utf-8")
+    for unit in (verify_mounted_image.LOGIN_UNIT, *verify_mounted_image.HW_PROBE_UNITS,
+                 verify_mounted_image.HW_TEST_PATH):
+        (wants / unit).write_text("mock", encoding="utf-8")
+    for relative in (verify_mounted_image.LOGIN_ISSUE_LINK, verify_mounted_image.LOGIN_COMMAND,
+                     verify_mounted_image.HW_PROBE_COMMAND):
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_text("mock", encoding="utf-8")
+    defaults = release_dir / verify_mounted_image.CORE_DEFAULTS
+    defaults.parent.mkdir(parents=True, exist_ok=True)
+    defaults.write_text("auth: {}\n", encoding="utf-8")
 
 
 def _add_lamp_and_camera(root):
