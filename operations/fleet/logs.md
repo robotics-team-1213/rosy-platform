@@ -3108,3 +3108,9 @@
 - 변경: 기존 CORE 요청으로 1초 꺼짐 뒤 2초 연속 점등. 완전한 파랑 꺼짐-켜짐-꺼짐 증거는 예상 자리 밖에서도 이름을 붙인다. 미확인 로봇은 30초마다 source별 한 대씩 재요청하며 초기 신원 미상도 포함한다. 지도 기준점과 주행 권한은 변경하지 않는다.
 - 증거: 원격 RED 5건으로 누락을 재현, 원격 통합 373 passed / 3 skipped. C 램프 시각표 포함 최종 시험은 별도 로그에 기록한다.
 - Gate: SOURCE. 정식 착지·푸시·사이트/로봇 payload 적용·실제 두 대 LED 식별·추종 주행은 미확인.
+
+## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
+
+- Change: D-619 uses raw front frames, calibrated ceiling metadata, task intent/current mode and sensor age; optional shared assessment validation preserves legacy proposals and D-577 authority. Qwen exact prompt and image hashes are recorded; no corner or arm acceptance claimed.
+- Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
+- Gate: SOURCE; live Fleet image and physical acceptance remain separate.

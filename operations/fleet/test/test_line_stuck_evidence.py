@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import base64
+import asyncio
+import httpx
+import pytest
 from hashlib import sha256
 
 from fastapi.testclient import TestClient
@@ -112,7 +115,8 @@ def test_the_preview_needs_a_site_credential(tmp_path):
     assert client.get("/api/fleet/robots/rosy_01/line-stuck/evidence?stuck_id=stuck-abc").status_code == 401
 
 
-def test_the_robot_client_reads_status_then_the_frame_of_that_sequence():
+@pytest.mark.parametrize("overlay", [True, False])
+def test_the_robot_client_reads_status_then_the_frame_of_that_sequence(overlay):
     import asyncio
 
     import httpx
@@ -124,17 +128,19 @@ def test_the_robot_client_reads_status_then_the_frame_of_that_sequence():
     def handler(request):
         seen.append((request.url.path, dict(request.url.params), request.headers.get("authorization")))
         if request.url.path == "/api/v1/vision/front/status":
-            return httpx.Response(200, json={"available": True, "sequence": 812, "age_ms": 400, "source": "front"})
+            return httpx.Response(200, json={"available": True, "sequence": 812, "age_ms": 400, "source": "front",
+                                            "raw_available": True, "raw_sequence": 811})
         return httpx.Response(200, content=JPEG, headers={"Content-Type": "image/jpeg"})
 
     endpoint = RobotEndpoint("rosy_01", "http://robot:8080", "op-token")
     client = HttpRobotClient(endpoint, http=httpx.AsyncClient(transport=httpx.MockTransport(handler),
                                                              base_url=endpoint.base_url))
-    data, status = asyncio.run(client.front_frame())
+    data, status = asyncio.run(client.front_frame(overlay=overlay))
 
-    assert data == JPEG and status["sequence"] == 812
+    assert data == JPEG and status["sequence"] == (812 if overlay else 811)
+    params = {"sequence": "812"} if overlay else {"sequence": "811", "overlay": "false"}
     assert seen == [("/api/v1/vision/front/status", {}, "Bearer op-token"),
-                    ("/api/v1/vision/front/frame", {"sequence": "812"}, "Bearer op-token")]
+                    ("/api/v1/vision/front/frame", params, "Bearer op-token")]
 
     stale = HttpRobotClient(endpoint, http=httpx.AsyncClient(
         transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"available": False, "sequence": 0})),
@@ -145,3 +151,13 @@ def test_the_robot_client_reads_status_then_the_frame_of_that_sequence():
         assert exc.code == "CAMERA_FRAME_UNAVAILABLE"
     else:
         raise AssertionError("a stale camera must not yield a frame")
+
+
+def test_raw_frame_request_does_not_substitute_an_annotated_image():
+    from fleet.swarm.transport import HttpRobotClient
+    endpoint = RobotEndpoint("rosy_01", "http://robot:8080", "op-token")
+    client = HttpRobotClient(endpoint, http=httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"available": True, "sequence": 1, "raw_available": False})),
+        base_url=endpoint.base_url))
+    with pytest.raises(RobotApiError, match="raw front frame unavailable"):
+        asyncio.run(client.front_frame(overlay=False))
