@@ -29,6 +29,7 @@ from core_features.line_follow.crosswalk_gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
+from core_common.robot_body import inside_body
 
 Warn = Callable[[str], None]
 
@@ -194,6 +195,11 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 max_range=max(BODY_POINTS_RANGE_M,
                               config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
                 self_mask=config.lidar_self_mask)
+            if config.body_stop_known:
+                # D-424: current returns strictly inside the body are self reflections; keep its outline.
+                points = tuple((x, y) for x, y in points if not inside_body(
+                    x + config.body_lidar_x_m, y, config.body_front_x_m, config.body_rear_x_m,
+                    config.body_half_width_m, config.body_rotation_radius_m, strict=True))
             line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
         if line.wants_return_scan:
             from core_common.robot_body import RobotBody
