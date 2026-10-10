@@ -92,6 +92,7 @@ class AiHeartbeat(BaseModel):
     gpu_used_mib: Optional[int] = Field(default=None, ge=0)
     mem_used_mib: Optional[int] = Field(default=None, ge=0)
     input_lag_s: Optional[float] = Field(default=None, ge=0)
+    build_commit: Optional[str] = Field(default=None, max_length=64)    # D-610 6 (rosy-b3): deployed commit
 
 
 class AiProposal(BaseModel):
@@ -101,13 +102,16 @@ class AiProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     robot_id: str = Field(min_length=1, max_length=96)
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
-    decision: Literal["WAIT", "BACK_AND_RETRY", "YIELD", "ABORT", "RESUME", "MANUAL"]
+    # D-610 4: LINE_OFF/STOP (stalled), IDENTIFY/STOP (pose_lost), REPLAN (deadlock) for `<kind>:...` problem ids.
+    decision: Literal["WAIT", "BACK_AND_RETRY", "YIELD", "ABORT", "RESUME", "MANUAL", "LINE_OFF", "STOP", "IDENTIFY",
+                      "REPLAN"]
     reason: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_:.-]+$")
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: dict[str, Any] = Field(default_factory=dict)
     source: str = Field(pattern=r"^(analyzer:[a-z0-9_.-]+@[A-Za-z0-9_.-]+|vlm:[A-Za-z0-9_.:@/-]+)$", max_length=128)
     observed_at: float
     ttl_s: float = Field(gt=0.0, le=8.0)
+    body: dict[str, Any] = Field(default_factory=dict)    # D-610 7: REPLAN {blocked_edges: [...]}
 
 
 class AiFactLog:
@@ -169,6 +173,8 @@ class AiFactsBoard:
         self._facts: deque = deque(maxlen=256)
         self._proposals: dict[str, dict] = {}            # robot id -> newest proposal
         self.verdicts: deque = deque(maxlen=64)            # judged proposals, newest last (GET /api/fleet/ai)
+        self.first = None                                   # D-610 3: `ai_first.AiFirst` (app.py)
+        self._problems: dict[str, dict] = {}                # D-610 4: stalled/pose_lost/deadlock proposals by id
         self._posts: deque = deque()
 
     def heartbeat(self, beat: AiHeartbeat) -> dict:
@@ -219,10 +225,28 @@ class AiFactsBoard:
         status = self.status()
         if status["state"] != "present" or status["owner_mode"] == "owner_busy":
             return "absent" if status["state"] != "present" else "owner_busy"
-        if proposal.robot_id not in self.acting:
+        if not self._acting(proposal.robot_id):
             return "robot_not_acting"
+        if proposal.stuck_id.split(":", 1)[0] in ("stalled", "pose_lost", "deadlock"):
+            self._problems[proposal.stuck_id] = proposal.model_dump()
+            return "queued"
         self._proposals[proposal.robot_id] = proposal.model_dump()
         return "queued"
+
+    def _acting(self, robot_id: str) -> bool:
+        return robot_id in self.acting or self.first is not None and self.first.on(robot_id)
+
+    def problem_proposal(self, problem_id: str) -> Optional[dict]:
+        row = self._problems.get(problem_id)
+        if row is None or self.status()["state"] != "present" or row["observed_at"] + row["ttl_s"] < self.wall():
+            return None
+        return row
+
+    def profiles(self) -> list:
+        """D-610 5: the heartbeat's loaded VLM profiles while the service is present and the owner allows it."""
+        status = self.status()
+        return list(status.get("model_profiles") or ()) if (
+            status["state"] == "present" and status["owner_mode"] == "available") else []
 
     def proposal(self, robot_id: str) -> Optional[dict]:
         """The resolver's AI input: this robot's newest proposal while live and the service is present."""
@@ -234,7 +258,7 @@ class AiFactsBoard:
     def waiting(self, robot_id: str) -> bool:
         """Fleet gives the AI PC its time (ResolverConfig.ai_wait_s) only for an acting robot while present."""
         status = self.status()
-        return robot_id in self.acting and status["state"] == "present" and status["owner_mode"] != "owner_busy"
+        return self._acting(robot_id) and status["state"] == "present" and status["owner_mode"] != "owner_busy"
 
     def acting_facts(self, robot_id: str) -> list[dict]:
         """D-577 7: the resolver's AI input, live ``acting`` facts about this robot (first id) only."""

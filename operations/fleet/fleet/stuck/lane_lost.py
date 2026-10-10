@@ -5,6 +5,7 @@ Pure, split out of stuck_resolver.py (size budget); StuckResolver._rule calls la
 
 from __future__ import annotations
 
+import time
 from typing import Iterable, Mapping, Optional
 
 from fleet.stuck.resolver import Answer, ResolverConfig, _map_pose, _peer_in_band
@@ -157,5 +158,5 @@ def _judge(resolver, chain, proposal, now, verdict, row=None, stuck=None, rows=N
     if verdict is None:
         verdict = ai_proposal_invalid(proposal, row, stuck, rows, chain, resolver.config,
                                       resolver._painted()) or "forwarded"
-    resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": now})
+    resolver.ai_verdicts.append({**proposal, "verdict": verdict, "judged_at": time.time()})   # D-610 10: wall
     return verdict
