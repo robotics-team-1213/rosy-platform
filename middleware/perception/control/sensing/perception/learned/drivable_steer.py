@@ -294,7 +294,7 @@ class DrivableSteer:
         return True
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None,
-               wall_ahead_m=None, side_clear_m=None, guide_deg=None):
+               wall_ahead_m=None, side_clear_m=None, guide_deg=None, guide_pivot_ok=True):
         """(error, confidence, debug) or (None, None, debug) for no target. wall_ahead_m: base_link x
         of the nearest LiDAR return in the body's straight strip (None: unknown or nothing); the
         model sees floor only out to ~0.37 m, so a wall beyond its view still closes the way."""
@@ -318,20 +318,32 @@ class DrivableSteer:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
         ahead, side = info["ahead_m"], info["exit"]
+        bridge = False
         if guide_deg is not None:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
             # the map knows which way the road goes where the camera sees two openings or none.
             info["guide_deg"] = round(guide_deg, 1)
-            if abs(guide_deg) > GUIDE_REVERSE_DEG:
+            bridge = abs(guide_deg) < GUIDE_STRAIGHT_DEG
+            if abs(guide_deg) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
+                # facing against the lane where the map says the body's sweep circle does not fit
+                # (a straight 0.16 m lane): no turn here, drive on to where it fits (user 2026-10-10)
+                side = info["exit"] = None
+                self._pivot = self._side = None
+                info["reorient_deferred"] = True
+            elif abs(guide_deg) > GUIDE_REVERSE_DEG:
                 # facing against the lane: turn in place toward its direction (user 2026-10-10: when
                 # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
                 # S-curve top and drove the loop backwards)
                 self._smoothed = self._pivot = self._side = None
                 error = -PIVOT_ERROR if guide_deg > 0 else PIVOT_ERROR
                 return error, PIVOT_CONFIDENCE, dict(info, strategy="drivable_reorient_" + ("left" if guide_deg > 0 else "right"))
-            want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG else ("left" if guide_deg > 0 else "right")
+            want = None if abs(guide_deg) < GUIDE_STRAIGHT_DEG or info.get("reorient_deferred") else (
+                "left" if guide_deg > 0 else "right")
             if want is None:
-                side = info["exit"] = None if ahead >= PIVOT_AHEAD_M else side
+                # the map lane goes on: no exit turn or pivot; a way cut short (blue tape, cable)
+                # is bridged along the lane below (user 2026-10-10: the map is the route reference)
+                side = info["exit"] = None
+                self._pivot = self._side = None
             elif want in info["exit_reach_m"]:
                 side = info["exit"] = want
             elif ahead < LOOKAHEAD_M:
@@ -401,6 +413,12 @@ class DrivableSteer:
             self._smoothed = None
             error = -PIVOT_ERROR if self._pivot == "left" else PIVOT_ERROR
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_pivot_{self._pivot}")
+        if (guide_deg is not None and bridge and (info["target_m"] is None or ahead < PIVOT_AHEAD_M)
+                and (wall_ahead_m is None or wall_ahead_m - WALL_STANDOFF_M >= PIVOT_AHEAD_M)):
+            # map bridge: the camera way ends but the map lane goes straight on and no wall is near
+            self._smoothed = None
+            error = pursuit_error(LOOKAHEAD_M, LOOKAHEAD_M * math.tan(math.radians(guide_deg)), ONE_CONFIDENCE)
+            return error, ONE_CONFIDENCE, dict(info, strategy="drivable_map_bridge")
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")

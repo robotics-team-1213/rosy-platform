@@ -139,3 +139,13 @@ def test_route_guide_picks_the_side_and_turns_at_a_blind_corner():
 def test_facing_against_the_route_reorients_in_place():
     error, confidence, debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=-170.0)
     assert debug["strategy"] == "drivable_reorient_right" and error > 0 and confidence == PIVOT_CONFIDENCE
+
+
+def test_map_bridges_a_cut_way_when_the_lane_goes_on_and_defers_reorient_in_a_narrow_lane():
+    cut = _lane(HALF, -HALF, x_max=0.13)              # blue tape across the lane
+    debug = DrivableSteer().update(cut, 1, G, XO, HALF, guide_deg=3.0)[2]
+    assert debug["strategy"] == "drivable_map_bridge"
+    debug = DrivableSteer().update(cut, 1, G, XO, HALF, guide_deg=3.0, wall_ahead_m=0.15)[2]
+    assert debug["strategy"] != "drivable_map_bridge"
+    debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=170.0, guide_pivot_ok=False)[2]
+    assert not debug["strategy"].startswith("drivable_reorient") and debug.get("reorient_deferred")
