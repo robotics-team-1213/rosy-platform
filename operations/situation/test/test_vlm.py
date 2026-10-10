@@ -30,6 +30,8 @@ def _post(answer, fail=None):
         calls.append((url, body, timeout))
         if fail is not None:
             raise fail
+        if body.get("format", {}).get("required") == ["observation"]:
+            return {"message": {"content": json.dumps({"observation": "A wall meets the carpeted floor."})}}
         if url.endswith("/api/show"):
             return {"digest": "abcdef0123456789"}
         return {"message": {"content": json.dumps(answer)}}
@@ -136,3 +138,18 @@ def test_model_parameters_are_bounded_recorded_and_change_profile(monkeypatch):
         monkeypatch.setenv('ROSY_VLM_OPTIONS', invalid)
         with pytest.raises(ValueError):
             Vlm()
+
+
+def test_each_image_is_observed_without_task_priors_before_context_judgement():
+    post, calls = _post({"decision": "WAIT"})
+    case = {**_case(), "context": {"operator_report": "there is a corner and enough room"}}
+    proposal = Vlm(post=post, get=RUNNING).judge(case, 100.0)
+    assert len(calls) == 3
+    for _, body, _ in calls[:2]:
+        assert len(body["messages"][0]["images"]) == 1
+        assert "enough room" not in body["messages"][0]["content"]
+    assert "images" not in calls[-1][1]["messages"][0]
+    assert "enough room" in calls[-1][1]["messages"][0]["content"]
+    assert len(proposal["evidence"]["prompt"]["calls"]) == 3
+    assert {row["description"] for row in proposal["evidence"]["assessment"]["observations"]} == {
+        "A wall meets the carpeted floor."}
