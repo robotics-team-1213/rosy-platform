@@ -45,6 +45,8 @@ ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
 EXIT_TIE_M = 0.03
+#: the way's nearest row may start at most this far beyond the frame's bottom row
+NEAR_GAP_M = 0.04
 #: a side opening counts as an exit only once its near end is within this of the nearest way row
 EXIT_NEAR_M = 0.10
 #: without a way this long, the pivot latch and smoothing are forgotten
@@ -74,6 +76,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
     out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={})
     if not rows.size:
+        return out
+    # The way must start under the robot: floor that begins only beyond a gap is past a line
+    # (9dfk 20261010T002541Z pivoted on the ring's island line, then drove into the island).
+    if float(_row_x([rows.max()], ground, x_offset)[0]) > float(_row_x([height - 1], ground, x_offset)[0]) + NEAR_GAP_M:
+        out["reason"] = "way_beyond_line"
         return out
     first = np.argmax(way[rows], axis=1)
     last = width - 1 - np.argmax(way[rows, ::-1], axis=1)
@@ -188,7 +195,7 @@ class DrivableSteer:
             return error, PIVOT_CONFIDENCE, dict(info, strategy=f"drivable_pivot_{self._pivot}")
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
-            return None, None, dict(info, strategy="none", reason="drivable_closed")
+            return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
         strategy, target = "drivable_centre", info["target_m"]
         if ahead < LOOKAHEAD_M and side is not None:
             # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
