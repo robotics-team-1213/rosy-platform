@@ -39,8 +39,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · fix(core): bounded lane search
 - 2026-10-10 · uncommitted · feat: robot situation inquiry
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · uncommitted · fix(core): preserve high-gain curvature at angular saturation
 - 2026-10-09 · uncommitted · fix(core): D-531 굽이 단계 문맥 발행
-- 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)

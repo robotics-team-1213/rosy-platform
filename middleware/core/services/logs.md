@@ -932,7 +932,7 @@
 - Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
 - Gate: SOURCE; deployment and model accuracy are separate evidence.
 
-## 2026-10-10 - fix/lap-search-reviewed - Bounded lane search
+## 2026-10-10 · uncommitted · fix(core): bounded lane search
 
 - Change: Freeze verified same-corridor search bearing and search both directions without resetting the existing attempt or time budget.
 - Evidence: Remote return suite 128 passed, 0 NEW on d49e9740e; independent lap_review APPROVE WITH NOTES for the combined diff.
