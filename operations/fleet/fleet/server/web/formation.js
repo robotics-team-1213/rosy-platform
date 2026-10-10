@@ -26,17 +26,17 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
   el("formation-shape").replaceChildren(...Object.entries(FORMATION_SHAPE_LABEL).map(([value, label]) =>
     Object.assign(new Option(label, value), { title: value })));
   // 꺼진 버튼은 "위 사유"이고 원인은 #formation-why 한 줄이 말한다.
-  function setOff(id, off) {
+  function setOff(id, off, reason) {
     const button = el(id);
     button.disabled = off;
-    if (off) button.setAttribute("reason", ABOVE);
+    if (off) button.setAttribute("reason", reason);
     else button.removeAttribute("reason");
   }
 
   // D-540 9: 대형을 열고·바꾸고·재개하는 것은 움직임이다. 해제(formation-stop)는 멈춤이라 열려 있다.
   function setButtons(why, off) {
     const named = namedReason();
-    for (const [id, value] of Object.entries(off)) setOff(id, value || (named !== "" && id !== "formation-stop"));
+    for (const [id, value] of Object.entries(off)) setOff(id, value || (named !== "" && id !== "formation-stop"), ABOVE);
     el("formation-why").textContent = named ? [named, why].filter(Boolean).join(" · ") : why;
   }
 
@@ -56,7 +56,6 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       input.type = "checkbox";
       input.value = id;
       input.checked = !unchecked.has(id);
-      input.disabled = Boolean(view.formation?.active);
       input.addEventListener("change", () => { if (input.checked) unchecked.delete(id); else unchecked.add(id); });
       // 좁은 칸에서는 줄임표로 자르고 전체 id 는 title 로 남긴다.
       const name = document.createElement("span");
