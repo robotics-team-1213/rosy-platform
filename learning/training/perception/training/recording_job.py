@@ -22,8 +22,10 @@ for path in (PERCEPTION, PERCEPTION / "dataset"):
 
 def validate_config(cfg):
     from store import safe_name
-    if set(cfg) != {"store", "name", "recordings", "harvest", "label", "trainer"}:
+    if set(cfg) - {"incidents"} != {"store", "name", "recordings", "harvest", "label", "trainer"}:
         raise JobError("recording config needs store/name/recordings/harvest/label/trainer")
+    if "incidents" in cfg and (not isinstance(cfg["incidents"], str) or not cfg["incidents"].strip()):
+        raise JobError("incidents must name a Fleet export file")
     if not safe_name(cfg["name"]) or not isinstance(cfg["recordings"], list) or not cfg["recordings"]:
         raise JobError("safe dataset name and nonempty recordings required")
     if not isinstance(cfg["harvest"], list):
@@ -89,7 +91,11 @@ def inputs(cfg):
                 ("harvest.py", "catalog.py", "autolabel.py", "build.py", "labels.py", "geometry.py")]
     scripts += [PERCEPTION / "store.py", PERCEPTION / "operator_ssh.py"]
     # Child trainer independently hashes its own source and deployment gate.
-    return {"config": cfg, "source_files": {p.relative_to(PERCEPTION).as_posix(): sha(p) for p in scripts}}
+    signature = {"config": cfg, "source_files": {p.relative_to(PERCEPTION).as_posix(): sha(p) for p in scripts}}
+    if "incidents" in cfg:
+        signature["incidents_sha256"] = sha(Path(cfg["incidents"]))
+        signature["source_files"]["dataset/incident_feedback.py"] = sha(PERCEPTION / "dataset/incident_feedback.py")
+    return signature
 
 
 def evaluation(cfg):
@@ -212,6 +218,27 @@ def prepare(cfg, out, *, runner=execute, builder=None):
             catalog.save(target, rows)
             return receipt({"catalog": str(target)}, [target, *raw_files])
         original = job.step("catalog", catalog_stage)
+        feedback = None
+        if "incidents" in cfg:
+            def feedback_stage(attempt):
+                from incident_feedback import bind
+                export = Path(cfg["incidents"])
+                incidents = json.loads(export.read_text(encoding="utf-8-sig"))
+                bind(incidents, {"schema": "rosy.recording.stuck_markers/1", "markers": []})
+                sessions, sources = [], [export]
+                for row in recordings:
+                    marker = Path(row["raw"]) / "stuck_markers.json" if "raw" in row else None
+                    if marker is None or not marker.is_file():
+                        sessions.append({"session": row["session"], "status": "missing_markers"})
+                        continue
+                    bound = bind(incidents, json.loads(marker.read_text(encoding="utf-8-sig")))
+                    sessions.append({"session": row["session"], "status": "linked", "feedback": bound})
+                    sources.append(marker)
+                target = out / "incident-feedback.json"
+                target.write_text(json.dumps({"schema": "rosy.recording.incident_feedback_job/1",
+                                              "sessions": sessions}, indent=2), encoding="utf-8")
+                return receipt({"incident_feedback": str(target)}, [target, *sources])
+            feedback = job.step("incident-feedback", feedback_stage)
         labelled = []
         for index, row in enumerate(recordings):
             def label_stage(attempt, row=row, index=index):
@@ -238,6 +265,9 @@ def prepare(cfg, out, *, runner=execute, builder=None):
             # Detect a source changed by another process during the label invocation.
             job.step("catalog", catalog_stage)
 
+        if feedback:
+            job.step("incident-feedback", feedback_stage)
+
         def build_stage(attempt):
             doc, folder = builder(list(map(Path, labelled)), cfg["store"], cfg["name"],
                                   exclude_eval=[evalset])
@@ -255,8 +285,9 @@ def prepare(cfg, out, *, runner=execute, builder=None):
             training_config = out / "training-config.json"
             training_config.write_text(json.dumps(trainer, indent=2), encoding="utf-8")
             return receipt({"dataset": trainer["dataset"], "catalog": str(target),
-                            "training_config": str(training_config)},
-                           [target, training_config, *files_under(folder)])
+                            "training_config": str(training_config), **(feedback or {})},
+                           [target, training_config, *files_under(folder),
+                            *([Path(feedback["incident_feedback"])] if feedback else [])])
         return job.step("build", build_stage)
 
 
