@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from control.sensing.perception.learned.drivable_steer import (
+from control.sensing.perception.drivable.drivable_steer import (
     PIVOT_CONFIDENCE, PIVOT_ERROR, DrivableSteer, way_target)
 
 G = SimpleNamespace(height_m=0.0575, pitch_rad=0.195, focal_px=281.6, principal_x=160.0, principal_y=120.0)
@@ -82,7 +82,7 @@ def test_a_wall_beside_the_robot_is_no_exit_and_open_sides_keep_right():
 
 
 def test_a_bend_inner_edge_does_not_block_the_arc_but_a_line_across_does():
-    from control.sensing.perception.learned.drivable_steer import _crosses
+    from control.sensing.perception.drivable.drivable_steer import _crosses
     # left bend: inner edge points on a circle of radius 0.3 - 0.08 around (0, 0.3); the arc to a
     # target on the lane centre circle (radius 0.3) keeps 0.08 m from it
     inner = [(0.22 * math.sin(a), 0.3 - 0.22 * math.cos(a)) for a in np.linspace(0.0, 1.2, 30)]
@@ -117,7 +117,7 @@ def test_a_way_beyond_a_line_with_side_walls_known_holds_without_error():
 
 
 def test_pursuit_error_realises_the_arc_under_cores_law():
-    from control.sensing.perception.learned.drivable_steer import (
+    from control.sensing.perception.drivable.drivable_steer import (
         CORE_CRUISE_MPS, CORE_CURVE_SLOWDOWN, CORE_MIN_CONFIDENCE, CORE_STEERING_GAIN, pursuit_error)
     x, y, conf = 0.25, 0.05, 0.9
     error = pursuit_error(x, y, conf)
@@ -174,7 +174,7 @@ def test_driving_context_rules(monkeypatch):
     both = _lane(0.5, -0.5, x_max=0.15) | _lane(0.03, -0.03, x_max=0.33)
     assert DrivableSteer().update(both, 1, G, XO, HALF, guide_deg=10.0)[2]["exit"] is None
     # (c2) a target off the map heading for >= 2 s: HOLD and request realign
-    import control.sensing.perception.learned.drivable_steer as ds
+    import control.sensing.perception.drivable.drivable_steer as ds
     clock = iter([0.0, 0.0, 3.0, 3.0, 3.0, 3.0])
     monkeypatch.setattr(ds.time, "monotonic", lambda: next(clock, 3.0))
     steer, lane = DrivableSteer(), _lane(HALF, -HALF)

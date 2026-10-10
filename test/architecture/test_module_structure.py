@@ -94,7 +94,8 @@ SIZE_UNITS = ("core/services/core_features/line_follow",
               "fleet/fleet/traffic",
               "fleet/fleet/stuck",
               "perception/control/sensing/perception",
-              "perception/control/sensing/perception/learned")
+              "perception/control/sensing/perception/learned",
+              "perception/control/sensing/perception/drivable")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -1037,17 +1038,26 @@ SIZE_VERDICTS = {
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
+    "perception/control/sensing/perception/drivable": (
+        810,
+        "accept: keep steering from the learned drivable way (drivable_steer.py moved from learned/, "
+        "drivable_keep.py, drivable_preview.py) is its own size unit inside the P1a perception unit, by the "
+        "2026-10-10 drivable addendum of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. "
+        "Judged at 810 on 2026-10-10. New steering features (driving context, map corner arc) go here; "
+        "drivable_steer.py splits before 600. Re-judge on growth past +150.",
+    ),
     "perception/control/sensing/perception/learned": (
-        2_270,
+        1_982,
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "
         "when D-597 amendment 3 (a85739fcb, boundary memory on the pure-pursuit arc) took the parent "
         "past 12004+150. Import path, colcon package and CORE command ownership do not change. "
-        "Re-judge on growth past +150.",
+        "Re-judged at 1982 on 2026-10-10: drivable_steer.py (548) left for the drivable unit "
+        "(drivable addendum), learned had reached 2520. Re-judge on growth past +150.",
     ),
     "perception/control/sensing/perception": (
-        10_152,
+        9_934,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1064,7 +1074,9 @@ SIZE_VERDICTS = {
         "for its own SIZE_UNITS entry (plan addendum 2026-10-10), as that condition named. Re-judged at "
         "10152 on 2026-10-10 for the drivable camera preview (drivable_preview.py: the steered way, target, "
         "exit and decision-chain rows drawn from keep_debug; follow_preview, drivable_keep and road +3 each), "
-        "camera evidence drawing that belongs in this unit; the split plan is unchanged.",
+        "camera evidence drawing that belongs in this unit; the split plan is unchanged. Re-judged at 9934 "
+        "on 2026-10-10: drivable_keep.py and drivable_preview.py left for the drivable unit (drivable "
+        "addendum); measured after merging local main.",
     ),
     "control": (
         34_619,

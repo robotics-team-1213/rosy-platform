@@ -31,9 +31,9 @@ PY = "install/lib/python3.12/site-packages/control/"
 
 
 @pytest.mark.parametrize("changed, expected", [
-    ([PY + "sensing/perception/learned/drivable_steer.py", PY + "line_observer_node.py", "manifest.json",
+    ([PY + "sensing/perception/drivable/drivable_steer.py", PY + "line_observer_node.py", "manifest.json",
       "install/.rosy-release"], ("camera", False)),
-    ([PY + "sensing/perception/learned/drivable_steer.py", PY + "sensing/body.py"], ("full", False)),
+    ([PY + "sensing/perception/drivable/drivable_steer.py", PY + "sensing/body.py"], ("full", False)),
     ([PY + "ir_adc_node.py"], ("full", False)),
     (["install/share/control/launch/camera_preview.launch.py"], ("full", False)),
     (["deploy/robot/native/rosy-camera.service"], ("full", True)),
@@ -107,7 +107,7 @@ PYTHON3 = shutil.which("python3")
 robot = pytest.mark.skipif(os.name == "nt" or not (BASH and OPENSSL and PYTHON3),
                            reason="needs Linux bash, openssl and python3 (the robot side)")
 BASE, NEW = "2026.10.10-001", "2026.10.10-002"
-STEER = PY + "sensing/perception/learned/drivable_steer.py"
+STEER = PY + "sensing/perception/drivable/drivable_steer.py"
 RUNTIME = "1" * 64
 
 

@@ -11,7 +11,7 @@ import math
 import cv2
 import numpy as np
 
-from .drivable_preview import draw_drivable, drivable
+from .drivable.drivable_preview import draw_drivable, drivable
 from .lane_topology import lane_hypotheses
 
 

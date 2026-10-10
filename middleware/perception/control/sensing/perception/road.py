@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 from .lane import LaneObservation
-from .drivable_preview import drivable
+from .drivable.drivable_preview import drivable
 from .follow_preview import draw_follow_evidence
 
 

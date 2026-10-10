@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from control.sensing.perception.drivable_keep import keep_step, parse_guide
-from control.sensing.perception.learned.drivable_steer import DrivableSteer
+from control.sensing.perception.drivable.drivable_keep import keep_step, parse_guide
+from control.sensing.perception.drivable.drivable_steer import DrivableSteer
 
 
 def test_off_route_guide_holds_before_the_camera_way_is_used():
