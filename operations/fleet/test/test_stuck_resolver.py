@@ -834,7 +834,7 @@ def test_d577_ai_moving_words_need_every_r3_precondition(decision, stuck, extra,
 
 
 def test_d577_ai_back_off_holds_for_an_untrusted_peer_pose_and_resume_is_never_an_ai_word():
-    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0))             # LEGACY odom pose: not a map pose
+    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0), localization=None)  # LEGACY odom pose: not a map pose
     no_motion = _trusted(_ai_row(_proposal(), _stuck(cause="no_motion"), wait=False))
     assert _judged(None, no_motion, peer)[0] == "peer_unknown"
     legacy = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
