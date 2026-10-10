@@ -586,3 +586,9 @@
 - 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
 - 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
 - gate 변화: 없음.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 표시
+- 변경: `drive_signal`과 램프 다섯 번째 인자. 화면은 `?`, `Left`, `Right`. 복구가 질문보다 위다. 차선 유지 문장만 질문이 대신한다.
+- 증거: foundation 화면·램프 시험. 장치 점등 없음.
+- gate 변화: SOURCE. DEVICE는 열림.
+- 결정: D-583

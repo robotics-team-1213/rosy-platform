@@ -202,6 +202,7 @@ def test_scan_bridge_feeds_self_masked_body_points():
         return_scan = "unset"
         clearance = "unset"
         wants_body_points = True
+        wants_crosswalk_scan = False
 
         def observe_body_points(self, points, *, range_min, received_at):
             self.body = (points, range_min)
