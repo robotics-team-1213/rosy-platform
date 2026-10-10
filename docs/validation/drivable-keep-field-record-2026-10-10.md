@@ -1,6 +1,6 @@
 # drivable keep 주행 현장 기록 (2026-10-10)
 
-**Updated:** 2026-10-10 12:40 KST (1판)
+**Updated:** 2026-10-10 12:45 KST (2판)
 
 살아 있는 현장 기록이다. 다른 `docs/validation` 항목과 달리 하루 동안 이어서 고친다. 문제마다 증상, 원인, 해결, 상태를 적고 새 회차·커밋이 나오면 같은 항목을 갱신한다. 실제 Pinky 두 대(9dfk=rosy_41, 8kcn=rosy_40)를 천장 카메라 정답으로 잰 값이다. 이 기록 하나가 현장 수용을 대신하지 않는다.
 
@@ -24,6 +24,10 @@
 | 10 | Fleet 쪽 (토큰, 5초 정지, AI PC) | 일부 고침 |
 | 11 | 릴리스 속도 | 진행 중 |
 | 12 | 도로 밖에서 선 하나를 보고 앞 카펫 전체가 drivable | 열림 |
+| 13 | 세션 간 합의 (rosy-b3, rosy-7b, rosy-dd) | 합의, 구현 중 |
+| 14 | `ir_guard`는 `site_floor_map_id`가 있으면 끌 수 없음 | 제약 확인, 롤백됨 |
+| 15 | 8kcn rosy-io가 릴리스 100 활성화 재시작에서 죽음 | 처리 중 |
+| 16 | 선 너머 영역은 우리 길이 아니다 (사용자 규칙) | 진행 중 |
 
 ## 2. 문제별 기록
 
@@ -52,7 +56,8 @@
 
 - **증상:** p12-9dfk 모든 프레임에서 zone producer가 None(미확인: 의뢰 서술). p12는 0.00 m, 정답 2점(확인).
 - **원인:** NOMINAL 바닥에서 불확실도가 null이라 횡단보도 구역이 CORE까지 안 올라감(미확인).
-- **해결:** 사용자 결정: Fleet 지도와 카메라 구역으로 처리. `feat/fleet-lane-return`: `4061ee6ca` D-511 rev 1 지도 횡단보도 구역 + D-491/D-573 개정, `e366d12b1` crosswalk 클래스 구역이 본 셀을 세고 NOMINAL 바닥 override band(확인). 카메라 불확실도는 보정에서. 임시로 9dfk `ir_guard` off(미확인).
+- **해결:** 사용자 결정: Fleet 지도와 카메라 구역으로 처리. `feat/fleet-lane-return`: `4061ee6ca` D-511 rev 1 지도 횡단보도 구역 + D-491/D-573 개정, `e366d12b1` crosswalk 클래스 구역이 본 셀을 세고 NOMINAL 바닥 override band(확인). 카메라 불확실도는 보정에서. 임시로 9dfk `ir_guard` off 시도는 실패했다(14번).
+- **계약 합의(13번):** 횡단보도 불확실도는 계약 필드 `crosswalk_uncertainty_m`으로 CORE에 전달한다.
 - **상태:** 열림(주행 검증 전).
 
 ### 5. 리뷰어 지적
@@ -90,7 +95,7 @@
 
 - **증상:** 카메라 프런트엔드가 다룬 뒤 timeout. rosy-io가 03:19:33 UTC부터 inactive(재시작 실패: battery_publisher가 읽기 전용 `/var/crash`에서 실패), LiDAR 정체, q3-8kcn 0 m(확인: drive.txt dist 0.00 m).
 - **원인:** 카메라는 재장착이 필요한 연결 문제, rosy-io는 읽기 전용 파일시스템(둘 다 미확인).
-- **해결:** 카메라는 재장착 + 전원 사이클(02:40 UTC)로 고침. rosy-io 재시작은 조향 에이전트가 처리 중.
+- **해결:** 카메라는 재장착 + 전원 사이클(02:40 UTC)로 고침. rosy-io는 릴리스 100 활성화 재시작 때 죽었다(샌드박스에서 `/var/crash` 읽기 전용). 15번 참조.
 - **상태:** 카메라 고침, rosy-io 열림.
 
 ### 10. Fleet 쪽
@@ -111,6 +116,35 @@
 - **원인:** drivable이 로봇 위치 기준(2번과 같음). 어느 선이 내 선인지 모델이 모름.
 - **해결(결정):** 사용자 결정: 교착은 즉시 Fleet로 보낸다. Fleet이 미리 연속 경로 안내(차선 상태·쪽, 예상 방향·곡률, 다음 교차로 우측 유지, 앞 횡단보도, 링 반시계)와 구체적 복귀 동작을 주고, 로봇은 이를 사전정보로 쓴다. `feat/fleet-lane-return`에서 개발 중.
 - **상태:** 열림.
+
+### 13. 세션 간 합의 (2026-10-10, 조율자 전달)
+
+- **rosy-b3 소유:** CORE 횡단보도 gate/zone/report, Fleet stuck resolver/ai_facts. rosy-b3가 `no_motion + lane_departure` → `BACK_AND_RETRY`를 새 브랜치로 추가한다(Safety-Review 필요, D-494 3 개정으로 Fleet MapPose 사용). q3-9dfk에서 resolver가 이 조합에 WAIT을 답해 60 s 넘게 멈춘 사례가 근거다(12:23:32 `stuck-3eb7c8b6fd63` no_motion/lane_departure, WAIT at held 16.35 s, 확인: `for-rosy-b3.md`).
+- **계약 필드:** `LaneContainmentEvidence`에 `crosswalk_uncertainty_m`(along-track MAX 경계)을 추가한다. 이 모델은 strict(extra=forbid)라 일찍 내보내면 릴리스 100에서 containment 전부가 버려진다. 그래서 우리 쪽 발행은 기본 꺼진 플래그 뒤에 둔다.
+- **측정(along-track MAX):** 0.022 m @0.16, 0.029 @0.20, 0.039 @0.25, 0.058 @0.33 m (`X:\DevTemp\drivable-lap\for-rosy-b3.md`, 값은 미재검증).
+- **rosy-7b / rosy-dd:** D-587 MapPose(yaw 포함)가 10:49부터 가동. 정확도 ±2~4 cm, ±3~5°, 지연 0.4~0.8 s. rosy_41의 NO_POSE는 마커 41 반사(무광 재인쇄 필요). 횡단보도 유령은 배경 유령이라 마스크 재학습이 필요하다(전부 미확인, 전달 내용).
+- **상태:** 합의, 구현은 각 소유 세션에서 진행 중.
+
+### 14. `ir_guard`는 `site_floor_map_id`가 있으면 끌 수 없다
+
+- **증상:** 9dfk에서 `ir_guard`를 끄자 CORE가 시작하지 못했고 롤백했다. IR은 복구됨.
+- **원인:** D-507 9항 제약: 현장 바닥 지도 id가 설정된 동안 `ir_guard` 비활성은 허용되지 않는다(전달 내용, ADR 본문은 미확인).
+- **해결:** 4번의 "임시 `ir_guard` off"는 철회. 횡단보도 IR 정지는 Fleet 지도/카메라 구역 경로(4, 13번)로만 푼다.
+- **상태:** 제약 확인, IR 복구됨.
+
+### 15. 8kcn rosy-io가 릴리스 100 활성화 재시작에서 죽음
+
+- **증상:** 릴리스 100 활성화 재시작 뒤 rosy-io 중지, LiDAR 정체(9번 증상과 같은 사건).
+- **원인:** 샌드박스에서 `/var/crash`가 읽기 전용이라 battery_publisher가 실패(전달 내용, 미확인).
+- **해결:** debugger 에이전트가 `fix/rosy-io-restart-after-activation`에서 처리 중.
+- **상태:** 열림.
+
+### 16. 선 너머 영역은 우리 길이 아니다 (사용자 규칙)
+
+- **규칙(사용자):** 차선 선 너머 영역은 절대 우리 길이 아니다. 2, 12번의 근본 대응이다.
+- **구현 계획:** 한쪽 경계 차단, 시작 쪽 결정 유지(seed side commitment), 경로가 선을 건너면 거부(path-crosses-lane veto). `fix/drivable-keep-lap`에서 진행 중이며 이 판에서 커밋은 아직 확인하지 못했다.
+- **검증:** 릴리스 102에서 q4 주행 중(q4-9dfk 12:33:48, q4-8kcn 12:33:49 시작, 기록 시점에 천장 정답 0점). 결과는 다음 갱신에서 채운다.
+- **상태:** 진행 중.
 
 ## 3. 타임라인
 
@@ -171,6 +205,8 @@
 | q2 | 12:11 | 8kcn | 0.20 | 1 | 7 | 0 | 098 | |
 | q3 | 12:20 | 9dfk | 2.51 | 9 | 9 | 0 | 100 | 링 교착 (8번) |
 | q3 | 12:20 | 8kcn | 0.00 | 2 | 0 | 0 | 100 | rosy-io 정지 (9번) |
+
+q4(릴리스 102, 12:33 시작, 9dfk/8kcn)는 진행 중이라 행을 아직 넣지 않았다.
 
 `truth.py` 기준: 차선 반폭 0.0925 m, 몸통 반폭 0.0566 m, 안쪽 테이프 가장자리 0.08 m. 점수는 천장 카메라 표본이라 거리와 비례하지 않는다.
 
