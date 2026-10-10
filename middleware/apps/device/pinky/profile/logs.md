@@ -31,3 +31,9 @@
 - 증거: `tools/calibration/test/test_urdf_nominal.py`.
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD — 보정 없는 로봇의 차선 투영 척도 약 5 % 변화(재생: target-on-paint 1.5 → 5.5 %).
 - 결정: D-397 Proposed.
+
+## 2026-10-10 · 6d2d65dce · fix(pinky_pro): 차선 순항 0.10 m/s
+
+- 변경: D-344 개정, 순항 0.10 m/s와 steering_gain 2.0으로 경로 곡률 유지. 현장 8kcn의 옛 거리 덮어쓰기를 제거하여 D-591 몸 기준 판정을 적용.
+- 증거: 원격 AI PC에서 관련 시험 95 passed, known_failures 비교 0 NEW. 0.10 m/s에서 벽 여유 0.048 m 통과, 0.015 m 정지. 두 실물 설정 적용과 CORE 재시작 확인, X: follow-speed-clearance 세션에 증거 보관.
+- gate 변화: SOURCE/원격 시험 확인. 장치 설정 적용 확인, 물리 주행 수용 HOLD(안전 데이터 disconnected, 8kcn IR stale, 9dfk 몸 여유 0.0186 m).
