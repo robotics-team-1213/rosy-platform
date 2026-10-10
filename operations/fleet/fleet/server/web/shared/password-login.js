@@ -10,7 +10,7 @@ const TEMPLATE = `
            autocapitalize="none" spellcheck="false" placeholder="아이디" aria-label="아이디">
     <input class="ui-field password-login-field" data-login="password" type="password"
            autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호">
-    <label class="password-login-remember"><input type="checkbox" data-login="remember"> 이 브라우저 기억(30일)</label>
+    <label class="ui-check password-login-remember"><input class="ui-field" type="checkbox" data-login="remember"> 이 브라우저 기억(30일)</label>
     <ui-button kind="primary" type="button" data-login="submit">로그인</ui-button>
     <span class="password-login-error" data-login="error" role="alert" hidden></span>
   </div>
