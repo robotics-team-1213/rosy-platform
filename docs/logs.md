@@ -7673,3 +7673,9 @@ osy-d395-s1d\`.
 - 변경: 위 설계/계획 커밋의 원격 검증 결과를 기록했다. 제품 코드·계약·설정 변경은 없다.
 - 증거: 커밋 be92428a1을 모델 PC에 보내 `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 실행, 121 성공 표시·exit 0. known_failures는 0 NEW/0 known. 네 문서 교차 링크·시험 경로 확인 및 append-only 기준 log의 커밋 blob 보존을 확인했다.
 - gate 변화: 없음. 원격 실행의 기존 상태/검증 branch 경고는 독립 실물 수용이 아니다. 설계 문서의 목표 폴더·Prediction·world model 학습/추론은 구현·설치하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 도메인 개요 3단계·내부 책임 최대 5단계 구조안
+
+- 변경: 후속 사용자 요청에 따라 플랫폼 목표 트리를 최대 5단계로 개정했다. CORE runtime/관문, Drive·Arm 계획/제어/복구/Safety, local 실행 수명, world 상태 projection, 행동 예측 inference, world model 학습/평가를 구분하고 폴더 승격·파일 유지·보류 기준을 계획에 반영했다.
+- 증거: 현재 gateway·line-follow·OMX 모듈 안내와 기존 분리 기준 대조, tracked source 최대 5 depth inventory. 네 문서 교차 링크와 목표 트리 depth≤5 확인, harness lint 0 errors/25 기존 freshness warnings. 원격 문서 계약 결과는 후보 커밋 검증 뒤 기록한다.
+- gate 변화: 없음. Proposed 문서 개정이며 소스/실제 폴더 이동·새 패키지 생성·장치 활성화·main 착지·push는 하지 않는다.

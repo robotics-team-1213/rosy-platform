@@ -2,13 +2,15 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** ROSY의 공통 제품 정체성에 맞춰 책임 분류를 최대 3 depth로 정돈하고 세계 상태와 행동 예측을 권한·근거·학습 수명에 맞게 연결한다.
+**Goal:** ROSY의 공통 제품 정체성에 맞춰 3단계 도메인 개요와 필요한 내부 책임을 최대 5 depth로 정돈하고 세계 상태와 행동 예측을 권한·근거·학습 수명에 맞게 연결한다.
 
 **Architecture:** [플랫폼 설계](2026-10-11-rosy-platform-identity-and-structure-design.md)의 `middleware/operations/learning` 세 파트와 공용 계약·adapter를 유지한다. 제안된 `control`, `devices`, `prediction` 배치는 후속 ADR에서 확정한 뒤 필요한 소스 단위만 이동한다. 세계 상태는 관측의 projection, world model은 예측 생산자다.
 
 **Tech Stack:** 기존 Python/ROS 2 Jazzy/ament/wheel, platform manifest, remote pytest, 기존 episode/registry 도구. world model 기술·가중치·GPU 요구는 아직 선정하지 않았다.
 
 **상태:** Proposed, 2026-10-11, 기준 `81b6ed879`, `docs/core-responsibility-plan`. 문서 완료가 코드 이동·모델 학습·배포·실물 수용을 뜻하지 않는다.
+
+**개정:** 후속 사용자 요청으로 책임 분류 상한을 5단계로 조정했다. 현행 소스의 이동과 실제 namespace 깊이는 별도 검증하며, 4·5단계의 후보를 일괄 생성하지 않는다.
 
 ---
 
@@ -20,19 +22,19 @@
 
 **대상:** root `AGENTS.md`, `README.md`, `PRODUCT.md`, `CONCEPTS.md`, `tools/harness/platform_parts.yaml`, package/setup/entry point/launch와 이 설계.
 
-1. tracked file 기준 최대 3 depth inventory를 만든다. 각 root의 package/import prefix, 실제 소비자, writer, deployment profile, Safety tag를 연결한다. scratch 결과는 X 관리 세션에 둔다.
+1. tracked file 기준 3 depth 개요와 최대 5 depth 상세 inventory를 만든다. 각 root의 package/import prefix, 실제 소비자, writer, deployment profile, Safety tag를 연결한다. 책임 holder와 Python/ament 내부 경로를 구분하고 scratch 결과는 X 관리 세션에 둔다.
 2. source와 Accepted/Proposed 계약, 설치 runtime을 구분한다. 세 파트의 import table, safety anchors, `colcon_roots`와 각 설치 closure를 확인한다.
-3. 제안된 이름마다 유지/변경 이유와 비용을 기록한다. 큰 혼재 단위는 `core/services`, `perception/control`, `apps/device`부터 선정한다.
+3. 제안된 이름마다 유지/변경 이유와 비용을 기록한다. 큰 혼재 단위는 `core/services`, `perception/control`, `apps/device`부터 선정한다. 4·5단계 후보마다 요구사항·서로 다른 코드 역할·실제 소비자를 적고 `폴더 승격 / 기존 파일 유지 / 실소비자 전까지 보류`로 판정한다.
 4. 기존 구조 시험을 커밋된 기준으로 원격 실행한다: `test/architecture/test_platform_parts.py`, `test_platform_dependency_boundaries.py`, `test_module_structure.py`, `test_colcon_roots.py`, `test_safety_separation.py`(모두 `test/architecture/` 아래). NEW를 별도 main 기준과 비교한다.
 
-**완료:** 최대 3단계 목표와 실제 경로의 차이, 소유권·호환 경계가 기록돼 있다.
+**완료:** 3단계 개요/최대 5단계 책임 목표와 실제 경로의 차이, 깊이를 늘릴 근거, 소유권·호환 경계가 기록돼 있다.
 
 ## S1. 이름·소유권·migration 계약을 결정한다
 
 **대상:** 설계의 목표 트리·이전표, 후속 ADR/ADR Log, 관련 root/module 안내.
 
 1. `middleware/control/{drive,arm}`, `middleware/devices/{pinky,omx}`, `core/api`, `operations/prediction/world_model` 후보를 D-427/D-429/D-430과 대조한다. 새 writer/process가 생기지 않음을 계약에 명시한다.
-2. 선택된 단위의 `현재 경로→목적 경로→caller→package→entry point→launch→deploy→tests→safety→rollback` 표를 작성한다. physical 3-depth와 언어 내부 경로 예외를 명시한다.
+2. 선택된 단위의 `현재 경로→목적 경로→caller→package→entry point→launch→deploy→tests→safety→rollback` 표를 작성한다. 목표 책임 depth≤5와 실제 namespace/ament filesystem 경로를 각각 적는다. 폴더 수나 깊이 때문에 추가 process/store/lock이 생기지 않음을 확인한다.
 3. 공통 제품 정의·폴더 기준이 확정된 변경에 한해 root 안내·README·CONCEPTS를 정렬한다. umbrella/저장소의 같은 shared-git 문구를 바꿀 이유는 없으므로 건드리지 않는다.
 4. schema/namespace/토픽/ROS package 외부 식별자 변경은 소스 이동과 분리한다. API 변경이 필요한 경우에만 schema/reference를 함께 수정한다.
 
@@ -45,6 +47,7 @@
 1. common 계약·장치별 owner/guard·Drive 복구와 곡률·Arm 궤적/복구의 책임을 먼저 고정한다.
 2. 하나의 응집 단위만 이동하고 caller·설치·테스트·manifest를 같은 변경에서 완료한다. 기존 슬롯·lock·transaction의 원자성을 보존한다.
 3. `perception/control`은 센서-only 활성 경계를 먼저 확인한다. legacy control/planning/escape 계산은 실제 소비자를 확인한 뒤 옮기고 legacy publisher를 활성화하지 않는다.
+   공통 local 실행 수명과 도메인 recovery, 프로세스 runtime lifecycle과 명령 attempt lifecycle은 구분한다. Drive recovery의 lane_return/stuck/realign을 나눠도 같은 generation·lock·budget과 소유자를 보존한다.
 4. 원격 회귀와 Safety 독립 리뷰, 실제 패키지 설치/import 검증을 완료한 단위만 다음으로 진행한다.
 
 **완료:** 코드 위치가 제어 authority를 우회하지 않고 새 Drive/Arm 등록에 CORE 복사나 도메인 역의존이 필요하지 않는다.
