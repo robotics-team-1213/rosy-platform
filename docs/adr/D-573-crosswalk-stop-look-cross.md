@@ -327,3 +327,7 @@
 
 - 게이트는 D-491 목록의 `fleet_map` 구역도 무장한다. 그래서 카메라가 횡단보도를 놓쳐도 서고, 보고, 건넌다.
 - 9dfk는 첫 막대에서 IR `lane_departure`로 HOLD했고 Fleet은 WAIT로 답했다(막다른 길). 이제 Fleet 해결기는 지도의 횡단보도 위·앞 막대 0.15 m 안의 `lane_lost`·`no_motion` 막힘에 RESUME 한 번(`XW`)을 보낸다. CORE가 다시 검사하고 게이트가 다시 본다. 두 번째 막힘은 사람에게 간다.
+
+### 개정 (2026-10-10, 저녁): XW 제거
+
+XW removed after independent Safety-Review 2026-10-10 — RESUME at a crosswalk only after CORE arms Fleet-map zones and reports a looked-and-clear armed zone, trip robots excluded, with its own Safety-Review. Fleet 판단기는 Fleet 지도 횡단보도 위의 `lane_lost`·`no_motion` 막힘에 `RESUME`(XW) 대신 R5 `WAIT` + 사람(`crosswalk_human`)을 보낸다(D-577 개정 2026-10-10 저녁 6항).

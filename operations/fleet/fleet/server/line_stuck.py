@@ -53,7 +53,7 @@ class LineStuckBoard:
         self._previews: dict[tuple[str, str], dict] = {}
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
-        self.ai_view: Optional[Callable[[str], dict]] = None   # D-577 8: AI chip + live facts (shadow)
+        self.ai_view: Optional[Callable[[str, str], dict]] = None   # D-577 8: AI chip, facts, proposal
         self.map_pose: Optional[Callable[[str], object]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
@@ -241,8 +241,15 @@ class LineStuckBoard:
         shown["resolver"] = None if note is None else {
             **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
         if self.ai_view is not None:
-            shown.update(self.ai_view(robot_id))
+            shown.update(self.ai_view(robot_id, entry["stuck_id"]))
         return shown
+
+    def last_resolver_answer(self, robot_id: str) -> Optional[dict]:
+        """The resolver's newest audited answer or hand-off for this robot (supervision row)."""
+        row = next((a for a in reversed(self._answers)
+                    if a["robot_id"] == robot_id and a["principal_id"] == "fleet-resolver"), None)
+        return None if row is None else {key: row[key] for key in
+                                         ("stuck_id", "decision", "tier", "rule", "accepted", "code", "escalated", "at")}
 
     def pending(self) -> list[dict]:
         return [self.view(robot_id) for robot_id in sorted(self._open)]

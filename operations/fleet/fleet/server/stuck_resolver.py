@@ -285,15 +285,17 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "calibration")
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
+        from fleet.server.stuck_lane_lost import ai_answer, ai_late
+
         if sid in chain.answered:
+            ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
-        if (stuck.get("cause") in LOST_LIKE and "XW" not in chain.retired and chain.resume_id is None
-                and self.at_crosswalk(rid)):
-            # D-573 개정 2026-10-10 (user): a crosswalk is a stop, then a crossing, never a WAIT dead end.
-            # The stuck already stood stuck_report_s (> crosswalk_look_s); CORE re-checks the RESUME and
-            # its D-573 gate (Fleet map zone) looks again. A second stuck goes to a human.
-            return Answer(rid, sid, "RESUME", "XW")
-        from fleet.server.stuck_lane_lost import ai_answer
+        if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
+            # XW removed after independent Safety-Review 2026-10-10: a RESUME here could cross with no look for
+            # people (CORE gate off) or override a "person present" hold. Stop and hand it to a person, trip or
+            # not, before any AI proposal or rule. RESUME at a crosswalk needs CORE-armed Fleet-map zones that
+            # report looked-and-clear, trip robots excluded, and its own Safety-Review.
+            return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
 
         proposed = ai_answer(self, now, row, stuck, rows, chain)
         if proposed is not None:

@@ -52,6 +52,7 @@ const ESCALATION_REASON = Object.freeze({
   estop: "비상정지",
   calibration: "보정 중",
   no_resolver_token: "자동 판단 토큰 없음",
+  crosswalk_human: "횡단보도 위 — 사람이 확인",
   // D-577 1: R5 held the robot (WAIT) instead of backing off after a lost lane.
   "lane_lost_hold:peer_behind": "차선 잃음 — 뒤에 다른 로봇",
   "lane_lost_hold:attempts": "차선 잃음 — 후진 시도 소진",
@@ -74,13 +75,62 @@ const ESCALATION_REASON = Object.freeze({
   "no_motion_hold:rule_budget": "멈춤 — 자동 판단 횟수 소진",
 });
 
+// D-577 Safety-Review 2026-10-10: why Fleet held an AI PC proposal back (then its rules answered).
+const AI_HELD_REASON = Object.freeze({
+  trip: "운행 중 로봇은 대기만",
+  word_not_allowed: "이 막힘에 쓸 수 없는 답",
+  core_refused_before: "CORE가 이 막힘에서 AI 답을 거절함",
+  stuck_mismatch: "다른 막힘의 제안",
+  after_answer: "이미 답한 막힘",
+  crosswalk: "횡단보도 안",
+  crosswalk_unknown: "횡단보도 여부 모름",
+  rear_blocked: "뒤가 막힘",
+  peer_ahead: "앞에 다른 로봇",
+  peer_behind: "뒤에 다른 로봇",
+  peer_unknown: "주변 로봇 위치 모름",
+  pose: "Fleet 위치 오래됨",
+  local_disabled: "로컬 복구 꺼짐",
+  attempts: "후진 시도 소진",
+  rule_budget: "자동 판단 횟수 소진",
+  refused: "후진 거절됨",
+});
+
+const AI_CLASS_TEXT = Object.freeze({
+  accepted: "CORE 수락", refused: "CORE 거절", pending: "CORE 답 기다림", held: "Fleet 보류",
+});
+
+/** Fleet's hold reason for an AI proposal, in operator words (an acting AI fact names its kind). */
+export function aiHeldText(verdict) {
+  if (typeof verdict === "string" && verdict.startsWith("ai:")) return `AI 사실 ${verdict.slice(3)}`;
+  if (typeof verdict === "string" && verdict.startsWith("ai_fact:")) return `AI 사실 ${verdict.slice(8)}`;
+  return AI_HELD_REASON[verdict] || verdict;
+}
+
+/** D-577: the newest AI proposal for this stuck, with Fleet's verdict and CORE's outcome. */
+export function aiProposalText(proposal) {
+  if (!proposal) return "";
+  const word = DECISION_LABEL[proposal.decision] || proposal.decision;
+  const why = proposal.class === "held" ? ` (${aiHeldText(proposal.verdict)})`
+    : proposal.class === "refused" ? ` (CORE 응답 ${proposal.outcome})` : "";
+  return `AI 제안 ${word}: ${AI_CLASS_TEXT[proposal.class] || proposal.class}${why}`;
+}
+
+function escalationText(code) {
+  const ai = /^(ai_wait|ai_abort|ai_abort_held):(.*)$/.exec(code);
+  if (ai?.[1] === "ai_abort_held") return `AI 중단 제안 보류 — 멈춰 둠 (${aiHeldText(ai[2])})`;
+  if (ai) return `AI ${ai[1] === "ai_wait" ? "대기" : "중단"} 제안 (${ai[2]})`;
+  const held = /^(\w+)_hold:ai:(.*)$/.exec(code);
+  if (held) return `자동 후진 보류 — AI 사실 ${held[2]}`;
+  return ESCALATION_REASON[code] || code;
+}
+
 /** One line about what the Fleet resolver did for this stuck. */
 export function resolverText(note) {
   if (!note) return "";
   if (note.escalated) {
     if (note.escalated === "human_claimed") return "운영자가 맡음";
     const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
-    const why = code ? `CORE 응답 ${code}` : ESCALATION_REASON[note.escalated] || note.escalated;
+    const why = code ? `CORE 응답 ${code}` : escalationText(note.escalated);
     if (note.decision) return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision} — 사람 확인 필요 (${why})`;
     return `자동 판단 불가 — 사람 확인 필요 (${why})`;
   }
@@ -97,7 +147,62 @@ export function aiLines(stuck) {
     : AI_STATE_TEXT[ai.state] || "AI 판단 없음";
   const facts = (stuck.ai_facts || []).map((fact) => `AI 사실 ${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`
     + ` · ${fact.source} · 근거 ${JSON.stringify(fact.evidence)}`);
-  return [chip, ...facts];
+  const proposal = aiProposalText(stuck.ai_proposal);
+  return proposal ? [chip, proposal, ...facts] : [chip, ...facts];
+}
+
+const CREDENTIAL_TEXT = Object.freeze({ enrolled: "등록 자격", token: "판단 토큰", none: "자격 없음" });
+const OWNER_MODE_TEXT = Object.freeze({ available: "사용 가능", shared: "공유", owner_busy: "소유자 사용 중" });
+
+const secondsAgo = (iso, nowMs) => {
+  const at = Date.parse(iso);
+  return Number.isFinite(at) ? `${Math.max(0, Math.round((nowMs - at) / 1000))}초 전` : "";
+};
+
+/** D-577 연동 상태: [label, text] rows from GET /api/fleet/ai (presence only, never a secret). */
+export function chainRows(body, nowMs = Date.now()) {
+  const chain = body?.chain;
+  const status = body?.status;
+  if (!chain || !status) return [["연동", "확인할 수 없음"]];
+  const rows = [["자동 판단", chain.resolver ? "켜짐" : "꺼짐"]];
+  for (const robot of chain.robots || []) {
+    const last = robot.last_answer;
+    const answer = !last ? "답 없음"
+      : last.decision === "ESCALATE" ? `사람에게 (${escalationText(last.escalated)})`
+        : `${last.rule || last.tier} ${DECISION_LABEL[last.decision] || last.decision}`;
+    rows.push([robot.robot_id, [CREDENTIAL_TEXT[robot.credential] || robot.credential,
+      robot.ai_acting ? "AI 제안 실행" : "AI 사실만", `마지막 ${answer}`,
+      last ? secondsAgo(last.at, nowMs) : ""].filter(Boolean).join(" · ")]);
+  }
+  rows.push(["AI PC", status.state === "present"
+    ? [`신호 ${status.age_s}초 전`, OWNER_MODE_TEXT[status.owner_mode] || status.owner_mode,
+      typeof status.input_lag_s === "number" ? `입력 지연 ${status.input_lag_s.toFixed(1)}초` : "",
+      `버전 ${status.service_version} @ ${status.build_commit || "커밋 모름"}`].filter(Boolean).join(" · ")
+    : status.age_s == null ? "없음 (신호 받은 적 없음)" : `없음 (마지막 신호 ${status.age_s}초 전)`]);
+  const n = chain.proposals_1h || {};
+  rows.push(["AI 제안 1시간", `수락 ${n.accepted ?? 0} · 보류 ${n.held ?? 0} · 거절 ${n.refused ?? 0}`
+    + ` · 답 기다림 ${n.pending ?? 0}`]);
+  return rows;
+}
+
+/** D-577 연동 상태 fold (D-540: the header stays one line, status sits beside 진단 at the rail end).
+ * Reads GET /api/fleet/ai every 2 s while the fold is open (a locked page shows "확인할 수 없음"). */
+function watchChainStatus({ scope, call }) {
+  const fold = globalThis.document?.getElementById("chain-status");
+  if (!fold) return;
+  async function refresh() {
+    if (!fold.open) return;
+    const body = await call("/api/fleet/ai").catch(() => null);
+    document.getElementById("chain-readout").replaceChildren(...chainRows(body).flatMap(([label, text]) => {
+      const dt = document.createElement("dt");
+      const dd = document.createElement("dd");
+      dt.textContent = label;
+      dd.textContent = text;
+      return [dt, dd];
+    }));
+  }
+  scope.listen(fold, "toggle", refresh);
+  scope.interval(refresh, 2000);
 }
 
 const OUTCOME_TEXT = Object.freeze({
@@ -250,6 +355,7 @@ export function refusalText(robotId, decision, err) {
 
 export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "",
   notify = browserAlert }) {
+  watchChainStatus({ scope, call });
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const alerted = new Map();

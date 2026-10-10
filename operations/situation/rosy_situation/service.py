@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import ssl
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -40,6 +41,21 @@ MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")
 _LOG = logging.getLogger("rosy_situation")
+
+
+def build_commit(where: Path = Path(__file__).resolve().parent) -> Optional[str]:
+    """The git commit this code runs from (``-dirty`` when the service's own files differ), or None.
+
+    Fleet shows it on the console's 연동 상태 row; deploy/ai_pc/deploy-situation.sh puts each commit in its own
+    detached worktree so the answer is exact."""
+    try:
+        head = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=where, capture_output=True,
+                              text=True, timeout=5, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=where, capture_output=True,
+                               text=True, timeout=5, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return f"{head}-dirty" if dirty else head
 
 
 def analyze(snapshot: dict) -> list[dict]:
@@ -66,9 +82,9 @@ class Fleet:
 class Situation:
     def __init__(self, fleet, state_dir: Path, owner_mode_file: Path, *,
                  clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time,
-                 analyzers: Callable[[dict], list] = analyze) -> None:
+                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None) -> None:
         self.fleet, self.state_dir, self.owner_mode_file = fleet, Path(state_dir), Path(owner_mode_file)
-        self.clock, self.wall, self.analyzers = clock, wall, analyzers
+        self.clock, self.wall, self.analyzers, self.commit = clock, wall, analyzers, commit
         self.queue: deque = deque(maxlen=QUEUE)        # oldest dropped first (D-577 4)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._cursor_file = self.state_dir / "cursor.json"
@@ -106,7 +122,8 @@ class Situation:
         try:
             self.fleet.call("/api/fleet/ai/heartbeat", {
                 "service_version": __version__, "model_profiles": [], "owner_mode": mode,
-                "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s})
+                "gpu_used_mib": None, "mem_used_mib": None, "input_lag_s": self.input_lag_s,
+                "build_commit": self.commit})
         except (OSError, ValueError) as exc:
             _LOG.warning("heartbeat failed: %s", exc)
 
@@ -189,7 +206,7 @@ def main() -> None:
     from rosy_situation.analyzers import Analyzer
 
     service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner,
-                        analyzers=Analyzer())
+                        analyzers=Analyzer(), commit=build_commit())
     while True:
         time.sleep(service.step())
 

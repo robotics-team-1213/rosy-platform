@@ -151,9 +151,11 @@ class StuckResolverLoop:
                                message=f"unexpected client error ({type(exc).__name__})")
         else:
             self._board.record(**record, accepted=True, outcome=result.get("outcome"))
-        if answer.rule == "ai" and self.ai_board is not None and self.ai_board.log is not None:
-            await asyncio.to_thread(self.ai_board.log.set_outcome, answer.robot_id, answer.stuck_id,
-                                    answer.decision, code or "accepted")
+        if answer.rule == "ai" and self.ai_board is not None:
+            self.ai_board.note_outcome(answer.robot_id, answer.stuck_id, answer.decision, code or "accepted")
+            if self.ai_board.log is not None:
+                await asyncio.to_thread(self.ai_board.log.set_outcome, answer.robot_id, answer.stuck_id,
+                                        answer.decision, code or "accepted")
         self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="ai" if answer.rule == "ai" else "rule",
                                   rule=answer.rule, decision=answer.decision, escalated=None)
         escalation = self._resolver.result(answer, code=code)

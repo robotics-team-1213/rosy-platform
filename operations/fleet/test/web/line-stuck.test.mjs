@@ -6,7 +6,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
-  CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, alertsDue, confirmText, decisionButtons, evidenceCaption,
+  CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
 } = await import("../../fleet/server/web/line-stuck.js");
 
@@ -175,4 +175,45 @@ test("D-577 8: one alert when a stuck row appears, one more when it goes 30 s un
   assert.deepEqual(alertsDue(seen, []), []);
   assert.equal(seen.size, 0);                       // a closed stuck forgets its alerts
   assert.deepEqual(alertsDue(seen, row(null)).map((a) => a.kind), ["new"]);
+});
+
+test("D-577: the stuck row says what Fleet did with the AI proposal", () => {
+  assert.equal(aiProposalText(null), "");
+  assert.equal(aiProposalText({ decision: "ABORT", verdict: "crosswalk_unknown", class: "held" }),
+    "AI 제안 중단: Fleet 보류 (횡단보도 여부 모름)");
+  assert.equal(aiProposalText({ decision: "BACK_AND_RETRY", verdict: "ai_fact:rear_blocked", class: "held" }),
+    "AI 제안 후진 후 재시도: Fleet 보류 (AI 사실 rear_blocked)");
+  assert.equal(aiProposalText({ decision: "BACK_AND_RETRY", verdict: "forwarded", outcome: "STUCK_DECISION_REFUSED",
+    class: "refused" }), "AI 제안 후진 후 재시도: CORE 거절 (CORE 응답 STUCK_DECISION_REFUSED)");
+  assert.equal(aiProposalText({ decision: "WAIT", verdict: "forwarded", outcome: "accepted", class: "accepted" }),
+    "AI 제안 대기: CORE 수락");
+  assert.deepEqual(aiLines({ ai: { state: "present", owner_mode: "shared" },
+    ai_proposal: { decision: "WAIT", verdict: "forwarded", outcome: null, class: "pending" } }),
+  ["AI 판단 있음", "AI 제안 대기: CORE 답 기다림"]);
+  assert.match(resolverText({ escalated: "ai_abort:scene_blocked", rule: "ai", decision: "ABORT" }),
+    /AI 중단 제안 \(scene_blocked\)/);
+  assert.match(resolverText({ escalated: "ai_abort_held:crosswalk_unknown", rule: "R5", decision: "WAIT" }),
+    /AI 중단 제안 보류 — 멈춰 둠 \(횡단보도 여부 모름\)/);
+});
+
+test("D-577 연동 상태: resolver, credential presence, AI PC heartbeat and hourly counts", () => {
+  const now = Date.parse("2026-10-10T03:00:10Z");
+  const rows = chainRows({
+    status: { state: "present", age_s: 1.2, owner_mode: "shared", input_lag_s: 0.42, service_version: "0.2.0",
+      build_commit: "0123456789ab" },
+    chain: { resolver: true, proposals_1h: { accepted: 3, held: 2, refused: 1, pending: 0 }, robots: [
+      { robot_id: "rosy_40", credential: "enrolled", ai_acting: true,
+        last_answer: { decision: "WAIT", rule: "R5", tier: "rule", at: "2026-10-10T03:00:00Z" } },
+      { robot_id: "rosy_41", credential: "none", ai_acting: false, last_answer: null }] },
+  }, now);
+  assert.deepEqual(rows, [
+    ["자동 판단", "켜짐"],
+    ["rosy_40", "등록 자격 · AI 제안 실행 · 마지막 R5 대기 · 10초 전"],
+    ["rosy_41", "자격 없음 · AI 사실만 · 마지막 답 없음"],
+    ["AI PC", "신호 1.2초 전 · 공유 · 입력 지연 0.4초 · 버전 0.2.0 @ 0123456789ab"],
+    ["AI 제안 1시간", "수락 3 · 보류 2 · 거절 1 · 답 기다림 0"],
+  ]);
+  assert.equal(chainRows({ status: { state: "absent", age_s: null }, chain: { resolver: false, robots: [] } })[1][1],
+    "없음 (신호 받은 적 없음)");
+  assert.deepEqual(chainRows(null), [["연동", "확인할 수 없음"]]);
 });

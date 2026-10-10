@@ -749,3 +749,128 @@ def test_d577_no_ai_proposal_in_time_falls_back_to_the_rules():
     assert r.step(4.0, [_ai_row()]) == []
     assert r.step(5.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
     assert r.ai_verdicts == []
+
+
+# ---- D-577 개정 2026-10-10 Safety-Review: every AI proposal passes the rules' gates ----
+
+def _judged(proposal, row, *rows):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(10.0, [row, *rows])
+    return r.ai_verdicts[0]["verdict"], [a for a in actions if isinstance(a, Answer) and a.rule == "ai"]
+
+
+def _with(row, **line_follow):
+    row["state"]["line_follow"].update(line_follow)
+    return row
+
+
+@pytest.mark.parametrize("decision", ["ABORT", "BACK_AND_RETRY"])
+def test_d577_ai_abort_resume_back_off_hold_where_a_crosswalk_is_unknown_or_occupied(decision):
+    row = _ai_row(_proposal(decision), wait=False)
+    del row["state"]["line_follow"]["crosswalk"]
+    assert _judged(None, row)[0] == "crosswalk_unknown"
+    row = _with(_ai_row(_proposal(decision), wait=False), crosswalk={"zone_id": "cw-1"})
+    assert _judged(None, row)[0] == "crosswalk"
+
+
+def test_d577_forwarded_ai_abort_also_raises_a_human_row():
+    verdict, sent = _judged(None, _ai_row(_proposal("ABORT", reason="scene_blocked"), wait=False))
+    assert verdict == "forwarded"
+    assert sent == [Answer("rosy_01", "stuck-1", "ABORT", "ai", escalate="ai_abort:scene_blocked")]
+
+
+@pytest.mark.parametrize("decision, stuck, extra, verdict", [
+    ("BACK_AND_RETRY", _stuck(local=False), {}, "local_disabled"),
+    ("BACK_AND_RETRY", _stuck(attempts=2), {}, "attempts"),
+    ("BACK_AND_RETRY", None, {"map_pose": {"state": "LOCALIZED", "age_s": 5.0}}, "pose"),
+    ("BACK_AND_RETRY", None, {"map_pose": {"state": "DEGRADED", "age_s": 0.1}}, "pose"),
+    ("BACK_AND_RETRY", None, {"ai_facts": [{"kind": "rear_blocked", "robot_ids": ["rosy_01"], "stage": "acting"}]},
+     "ai_fact:rear_blocked"),
+    ("BACK_AND_RETRY", None, {"ai_facts": [{"kind": "path_blocked_by_robot", "robot_ids": ["rosy_01"],
+                                            "stage": "acting"}]}, "ai_fact:path_blocked_by_robot"),
+])
+def test_d577_ai_moving_words_need_every_r3_precondition(decision, stuck, extra, verdict):
+    row = _ai_row(_proposal(decision), stuck, wait=False)
+    row.update(extra)
+    assert _judged(None, row) == (verdict, [])
+
+
+def test_d577_ai_back_off_holds_for_an_untrusted_peer_pose_and_resume_is_never_an_ai_word():
+    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0))             # LEGACY odom pose: not a map pose
+    no_motion = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
+    assert _judged(None, no_motion, peer)[0] == "peer_unknown"   # R6's waiver is not the AI's
+    for cause in ("obstacle_ahead", "lane_lost", "no_motion"):   # the rules never RESUME a stuck
+        assert _judged(None, _ai_row(_proposal("RESUME"), _stuck(cause=cause), wait=False)) == (
+            "word_not_allowed", [])
+
+
+@pytest.mark.parametrize("stuck, setup, verdict", [
+    (None, lambda row: row["state"]["line_follow"].pop("crosswalk"), "crosswalk_unknown"),
+    (None, lambda row: row.update(trip=True), "trip"),
+    (_stuck(cause="crosswalk_blocked"), lambda row: None, "word_not_allowed"),
+])
+def test_d577_a_held_ai_abort_stops_with_r5_wait_and_a_human_not_the_rules_motion(stuck, setup, verdict):
+    row = _ai_row(_proposal("ABORT"), stuck, wait=False)
+    setup(row)
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(10.0, [row]) == [Answer("rosy_01", "stuck-1", "WAIT", "R5", escalate=f"ai_abort_held:{verdict}")]
+    assert [v["verdict"] for v in r.ai_verdicts] == [verdict]
+
+
+def test_d577_a_proposal_after_the_stuck_was_answered_is_audited_not_acted_on():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    answer = r.step(10.0, [_ai_row(wait=False)])
+    assert answer == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    r.sent(answer[0], 10.0)
+    assert r.step(11.0, [_ai_row(_proposal("ABORT"), wait=False)]) == []
+    assert r.step(12.0, [_ai_row(_proposal("ABORT"), wait=False)]) == []
+    assert [v["verdict"] for v in r.ai_verdicts] == ["after_answer"]
+
+
+def test_d577_ai_back_off_with_a_peer_ahead_waits_for_r1_first():
+    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0))
+    peer["state"]["localization"] = _frame("map")
+    row = _ai_row(_proposal(), wait=False)
+    row["state"]["localization"] = _frame("map")
+    assert _judged(None, row, peer)[0] == "peer_ahead"
+
+
+def test_d577_ai_never_forwards_a_moving_word_the_r3_gate_would_hold():
+    import random
+
+    from fleet.server.stuck_lane_lost import lane_lost_hold
+    from fleet.server.stuck_resolver import _Chain
+
+    rng = random.Random(577)
+    for _ in range(1000):
+        cause = rng.choice(["obstacle_ahead", "lane_lost", "no_motion"])
+        decision = rng.choice(["WAIT", "BACK_AND_RETRY", "RESUME", "ABORT"])
+        stuck = _stuck(cause=cause, local=rng.random() < 0.7, attempts=rng.randint(0, 2))
+        if rng.random() < 0.3:
+            stuck["rear_state"] = "blocked"
+        row = _ai_row(_proposal(decision), stuck, wait=False)
+        if rng.random() < 0.3:
+            row["map_pose"] = {"state": rng.choice(["LOCALIZED", "DEGRADED"]), "age_s": rng.uniform(0, 4)}
+        crosswalk = rng.choice(["absent", None, {"zone_id": "cw"}])
+        if crosswalk == "absent":
+            del row["state"]["line_follow"]["crosswalk"]
+        else:
+            row["state"]["line_follow"]["crosswalk"] = crosswalk
+        if rng.random() < 0.3:
+            row["trip"] = True
+        rows = [row] + ([_row("rosy_02", pose=(rng.uniform(-0.4, 0.4), rng.uniform(-0.2, 0.2), 0.0))]
+                        if rng.random() < 0.6 else [])
+        if rng.random() < 0.5:                                # trusted map poses: the peer band is real
+            for each in rows:
+                each["state"]["localization"] = _frame("map")
+        r = StuckResolver(ResolverConfig(), painted=painted_track)
+        for answer in r.step(10.0, rows):
+            if not isinstance(answer, Answer) or answer.rule != "ai":
+                continue
+            assert not row.get("trip") or answer.decision == "WAIT"
+            assert answer.decision != "RESUME"
+            if answer.decision == "BACK_AND_RETRY":
+                assert lane_lost_hold(row, stuck, rows, _Chain(0.0, ""), ResolverConfig()) is None
+                assert stuck.get("rear_state") != "blocked"
+            if answer.decision != "WAIT":
+                assert row["state"]["line_follow"].get("crosswalk", "absent") is None

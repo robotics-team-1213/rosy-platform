@@ -108,16 +108,20 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
     assert states.count(ON_LANE) == 1 and states[-1] == ON_LANE
 
 
-def test_resolver_resumes_a_stuck_at_a_mapped_crosswalk_once():
+def test_resolver_never_resumes_at_a_mapped_crosswalk_it_waits_for_a_human():
+    # XW removed after independent Safety-Review 2026-10-10: RESUME at a crosswalk could drive across with
+    # no look for people (CORE gate off) or override a "person present" hold. WAIT + a human instead.
     from fleet.server.stuck_resolver import Answer, ResolverConfig, StuckResolver
-    resolver = StuckResolver(ResolverConfig())
-    resolver.at_crosswalk = lambda rid: rid == "r1"
-    row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
-        "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": "no_motion"}}}}
-    [answer] = resolver.step(0.0, [row])
-    assert isinstance(answer, Answer) and (answer.decision, answer.rule) == ("RESUME", "XW")
-    resolver.sent(answer, 0.0)
-    resolver.result(answer, code=None)
-    row["state"]["line_follow"]["stuck"] = {"stuck_id": "s2", "cause": "no_motion"}
-    [again] = resolver.step(1.0, [row])
-    assert getattr(again, "reason", None) == "restuck_after_resume"   # a human, not a WAIT loop
+    for cause in ("no_motion", "lane_lost"):
+        for trip in (False, True):
+            resolver = StuckResolver(ResolverConfig())
+            resolver.at_crosswalk = lambda rid: rid == "r1"
+            row = {"robot_id": "r1", "online": True, "state": {"line_follow": {
+                "mode": "CAMERA_LINE", "stuck": {"stuck_id": "s1", "cause": cause, "local_enabled": True,
+                                                 "attempts": 0, "max_attempts": 2}, "crosswalk": None}}}
+            if trip:
+                row["trip"] = True
+            row["ai_proposal"] = {"robot_id": "r1", "stuck_id": "s1", "decision": "BACK_AND_RETRY",
+                                  "reason": "x", "confidence": 0.9, "evidence": {},
+                                  "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+            assert resolver.step(0.0, [row]) == [Answer("r1", "s1", "WAIT", "R5", escalate="crosswalk_human")]

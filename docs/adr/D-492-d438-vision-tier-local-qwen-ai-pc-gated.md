@@ -90,6 +90,10 @@
 - 구현은 다음 호스트 시험을 갖춘다: 정체별 규칙표 답(2항 표), `unknown`(형식 오류·저신뢰·시간 초과·프레임 시각 거부)이 정체 열 없는 답과 같음, `lane_lost`·R1 막힘에서 질의 없음, 정체 사실로 `RESUME`·`ABORT`·`MANUAL` 이 나오지 않음, 그림자 기록이 콘솔 답 목록에 섞이지 않음.
 - 켜기는 V0 결과 파일과 V1 기록으로만 판정한다.
 
+### 개정 (2026-10-10): 소유자 동의
+
+AI PC 소유자 동의(4항)는 사용자가 2026-10-10에 주었다. 지금 그 PC에서 도는 것은 D-577 `rosy-situation`(`shared` 모드, 결정론 분석기, GPU 없음, `MemoryMax=2G`)이고, `rosy_40`·`rosy_41`에 대해 AI 실행(D-577 개정 2026-10-10 저녁의 강화된 관문)이 켜져 있다. 비전 정체 사실(Qwen3-VL 상주, R4)은 여전히 V0·V1 관문 뒤다. 이 동의로 Tailscale grant나 Ollama 상주를 새로 열지 않는다.
+
 **Related:** D-2, D-59, D-231, D-379, D-392, D-399, D-407, D-427, D-429, D-430, D-434, D-438, D-442, D-465, D-475, D-503.
 
 **External references:** [PX4 safety (failsafe) configuration](https://docs.px4.io/main/en/config/safety.html), [DriveVLM (arXiv 2402.12289)](https://arxiv.org/abs/2402.12289), [Figure Helix](https://www.figure.ai/news/helix), [GR00T N1 (arXiv 2503.14734)](https://arxiv.org/abs/2503.14734), [V-JEPA 2 (arXiv 2506.09985)](https://arxiv.org/abs/2506.09985). 외부 자료는 구조 비교 근거이며 Rosy 장비의 동작 증거가 아니다.
