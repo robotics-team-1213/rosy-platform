@@ -95,7 +95,7 @@ class LaneComplianceMonitor:
                                for r in movers), return_exceptions=True)
         active = self._site_maps.active()
         graph = active[2] if active is not None else None
-        crosswalks = ([(c.id, [tuple(p) for p in c.polygon]) for c in active[1].crosswalks]
+        crosswalks = ([(c.id, [tuple(p) for p in c.polygon]) for c in getattr(active[1], "crosswalks", ())]
                       if active is not None else [])
         bounds = map_bounds(graph, cfg.off_map_pad_m)
         now = self._wall()

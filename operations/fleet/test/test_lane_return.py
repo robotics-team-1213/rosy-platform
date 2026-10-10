@@ -25,7 +25,7 @@ def test_classify_states_and_side():
     assert classify(0.5, 0.0, 0.0, 0.0, GRAPH, CW).state == ON_LANE
     line = classify(0.5, 0.06, 0.0, 0.0, GRAPH, CW)
     assert line.state == ON_LINE and line.side == "right"       # left of the lane: centre is right
-    off = classify(0.5, -0.3, 0.0, 0.0, GRAPH, CW)
+    off = classify(0.5, -0.3, 0.0, 0.0, GRAPH, CW, LaneComplianceConfig(off_map_pad_m=0.5))
     assert off.state == OFF_LANE and off.side == "left" and off.bearing_deg > 0
     assert classify(5.0, 0.0, 0.0, 0.0, GRAPH, CW).state == OFF_MAP
     assert classify(0.5, 0.0, math.pi, math.pi, GRAPH, CW).state == WRONG_WAY
@@ -91,6 +91,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
     client = Client()
     poses = Poses(MapPose(0.5, -0.3, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m"))
     monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=Maps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5),
                                     wall=lambda: clock[0], clients=lambda: {"r1": client})
     for _ in range(4):
         asyncio.run(monitor.tick())
