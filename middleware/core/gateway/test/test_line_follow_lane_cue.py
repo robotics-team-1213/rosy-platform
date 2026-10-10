@@ -201,3 +201,31 @@ def test_api_only_the_fleet_site_token_may_post_and_the_wiring_answers(core_clie
     site = _token(svc, "site", "operator", "pair-physical", "site:rosy-site")
     reply = client.post("/api/v1/line-follow/lane-cue", json=body, headers=site)
     assert reply.status_code == 200 and reply.json() == {"accepted": False, "reason": "odom_stale"}
+
+
+PINKY = dict(body_lidar_x_m=-0.017, body_rear_x_m=-0.076, body_rotation_radius_m=0.08257,
+             body_half_width_m=0.05655, body_front_x_m=0.04205, body_ultrasonic_x_m=0.0267,
+             obstacle_mode="path", cruise_speed=0.04, obstacle_path_horizon_m=0.30,
+             obstacle_corridor_half_width_m=0.072, obstacle_release_s=0.0)
+
+
+def test_the_body_stop_measures_the_pivot_on_its_rotation_circle():
+    """D-430 review 2: a point beside the body (inside the rotation circle, off the straight path)
+    lets the keep drive straight but holds the cue's turn in place."""
+    rig = Rig(**PINKY)
+    beside = [(0.0, 0.075 + 0.002 * k) for k in range(3)]       # LiDAR frame, left of the body
+
+    def step(dt=0.1):
+        rig.t += dt
+        rig.feed()
+        rig.m.observe_body_points(beside, range_min=0.05, received_at=rig.t)
+        rig.m.observe_scan_points(beside, received_at=rig.t)
+        return rig.m.tick(rig.t + 0.01)
+
+    assert step().linear > 0                                        # straight: nothing in the path
+    rig.cue("WRONG_WAY", 1, turn_deg=170.0)
+    step()
+    rig.t += 0.5
+    rig.cue("WRONG_WAY", 2, turn_deg=170.0)
+    d = step()
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason != "fleet_wrong_way_turn"
