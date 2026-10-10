@@ -532,10 +532,11 @@ main {
   main { grid-template-columns: minmax(0, 1fr); }
   .console-primary, .console-secondary { display: contents; }
   .queues-panel { order: 0; }
-  .panel[aria-labelledby="roster-heading"] { order: 1; }
-  .panel[aria-labelledby="map-heading"] { order: 2; }
-  .vision-preview { order: 3; }
-  .ops-block { order: 4; }
+  .panel[aria-labelledby="map-heading"] { order: 1; }
+  .incident-panel { order: 2; }
+  .panel[aria-labelledby="roster-heading"] { order: 3; }
+  .vision-preview { order: 4; }
+  .ops-block { order: 5; }
 }
 
 
