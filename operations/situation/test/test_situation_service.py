@@ -82,6 +82,20 @@ def test_a_stuck_event_brings_the_next_read_forward(tmp_path):
     assert _service(tmp_path, fleet).step() == 0.0
 
 
+def test_snapshot_observation_time_includes_http_read_delay(tmp_path):
+    wall = Clock()
+
+    class SlowFleet(FakeFleet):
+        def call(self, path, body=None):
+            wall.now += 1.0
+            return super().call(path, body)
+
+    situation = _service(tmp_path, SlowFleet())
+    situation.wall = wall
+    snapshot, _ = situation._read()
+    assert snapshot["observed_at"] == wall.now == 105.0
+
+
 def test_open_stuck_reads_context_once_and_posts_shadow_draft(tmp_path):
     class ContextFleet(FakeFleet):
         def call(self, path, body=None):

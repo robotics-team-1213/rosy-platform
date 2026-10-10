@@ -74,7 +74,7 @@ def test_trip_route_fact_checks_only_the_planned_edge_and_reports_stale_as_unkno
     route_map = {"version": 5, "map": {"edges": [{"id": "east", "polyline": [[0, 0], [1, 0]],
                                                  "width_m": 0.2}]}}
     trip = {"robot_id": "r", "trip_id": "t", "map_version": 5, "segment_index": 0,
-            "body_half_width_m": 0.0566,
+            "body_half_width_m": 0.0566, "updated_at": 1000.0,
             "plan": {"segments": [{"edge_id": "east", "forward": True, "s_from": 0.2, "s_to": 0.8}]},
             "pose": {"x": 0.5, "y": 0.0, "state": "LOCALIZED", "source": "sighting", "age_s": 0.1}}
     analyzer = Analyzer()
@@ -96,6 +96,11 @@ def test_trip_route_fact_checks_only_the_planned_edge_and_reports_stale_as_unkno
     assert check(trip["pose"], route={**trip, "segment_index": 99})["status"] == "UNKNOWN"
     no_body = {key: value for key, value in trip.items() if key != "body_half_width_m"}
     assert check(trip["pose"], route=no_body)["status"] == "UNKNOWN"
+    for updated in (990.0, 1002.0, None, float("nan"), float("inf")):
+        assert check(trip["pose"], route={**trip, "updated_at": updated})["status"] == "UNKNOWN"
+    assert check(trip["pose"], route={k: v for k, v in trip.items() if k != "updated_at"})["status"] == "UNKNOWN"
+    for age in (-1.0, float("nan"), float("inf")):
+        assert check({**trip["pose"], "age_s": age})["status"] == "UNKNOWN"
 
 
 def test_one_proposal_per_stuck_wait_when_the_rear_is_blocked():
