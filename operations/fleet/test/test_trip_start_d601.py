@@ -201,3 +201,46 @@ def test_b_the_camera_check_can_be_turned_off_for_sim():
     run(runner.camera_check("rosy_60"))
     with pytest.raises(ValueError):
         TripConfig(lane_camera_check=1)
+
+
+def test_d604_the_capability_line_camera_answers_the_check_without_a_call():
+    from fleet.server.console_view import TripCaps
+    runner, _store, ports = _setup()
+    calls = []
+
+    async def counted(robot_id):
+        calls.append(robot_id)
+        return {"available": True}
+
+    ports.front_camera = counted
+    live = TripCaps("pinky_pro", frozenset({"lane"}), 0.1,
+                    line_camera={"available": True, "age_ms": 40, "source": "DEVICE"})
+    run(runner.camera_check("rosy_60", live))
+    for camera, stale in (({"available": False, "age_ms": 9000, "source": "DEVICE"}, True),
+                          ({"available": False, "age_ms": None, "source": "NONE"}, False)):
+        with pytest.raises(TripError) as err:
+            run(runner.camera_check("rosy_60", dataclasses.replace(live, line_camera=camera)))
+        assert err.value.code == "TRIP_LANE_CAMERA_UNAVAILABLE"
+        assert err.value.detail == {"stale": stale, "age_ms": camera["age_ms"], "source": camera["source"]}
+    assert calls == []                                   # no robot call while the caps carry it
+    run(runner.camera_check("rosy_60", dataclasses.replace(live, line_camera=None)))  # older CORE
+    run(runner.camera_check("rosy_60"))
+    assert calls == ["rosy_60", "rosy_60"]               # falls back to front/status
+
+
+def test_d604_the_plan_route_reads_the_line_camera_from_capabilities(tmp_path):
+    from test_site_map_trip import OPERATOR, _app, _on_ring_s
+    from test_trip_caps import _caps, _robot_caps
+    from fleet.server.console_view import trip_caps
+
+    caps = _caps(junction_turn=True)
+    caps["line_follow"] = {"camera": {"available": False, "age_ms": None, "source": "NONE"}}
+    assert trip_caps(caps).line_camera == caps["line_follow"]["camera"]
+    assert trip_caps(_caps()).line_camera is None and trip_caps({**_caps(), "line_follow": 1}).line_camera is None
+    client, _tasks, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+    robot.front_status_value = {"available": True}   # front/status says live, capabilities say dead
+    _robot_caps(robot, caps)
+    dead = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+    assert dead.status_code == 422 and dead.json()["detail"]["code"] == "TRIP_LANE_CAMERA_UNAVAILABLE"
+    assert dead.json()["detail"]["detail"]["source"] == "NONE"
