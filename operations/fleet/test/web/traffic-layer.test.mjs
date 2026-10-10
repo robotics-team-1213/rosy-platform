@@ -91,7 +91,7 @@ test('queue rows: wait cycle and 30 s UNKNOWN are critical, a long merge wait an
     [{severity: 'crit', text: ': 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요'}]);
   const cycle = {...TRAFFIC, wait_cycle: ['rosy_01', 'rosy_05']};
   assert.deepEqual(trafficAttention(cycle, 'rosy_05', {}, 0),
-    [{severity: 'crit', text: ': 교착 — rosy_01 → rosy_05 → rosy_01 서로 기다림 · 운영자 판단 필요'}]);
+    [{severity: 'crit', decision: 'deadlock', text: ': 교착 — rosy_01 → rosy_05 → rosy_01 서로 기다림 · 운영자 판단 필요'}]);
   const resolved = {...cycle, resolver: [
     {robot_id: 'rosy_01', trigger: 'wait_cycle', decision: 'wait', cycle: ['rosy_01', 'rosy_05']},
     {robot_id: 'rosy_05', trigger: 'wait_cycle', decision: 'replan', cycle: ['rosy_01', 'rosy_05'], blocked_edges: ['ring_n']}]};

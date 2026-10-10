@@ -245,3 +245,67 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
         _shot(page, "console-stuck-evidence-1024x768.png")
         assert not errors
         browser.close()
+
+
+def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_routes(site):
+    """D-577 (d): a wait-cycle row opens on Fleet's resolver decision and the AI facts (shadow). `바뀐 경로로 계속`
+    posts confirm-replan, `운행 취소` posts cancel (no confirm step), `로봇 카드 열기` opens the card and posts
+    nothing. No other route is called."""
+    from playwright.sync_api import sync_playwright
+
+    running = {**HELD, "trip_id": "t-rosy_03", "plan_id": "t-rosy_03", "robot_id": "rosy_03", "hold": None}
+    cycle = ["rosy_02", "rosy_03"]
+    api = {**API,
+           "/api/fleet/traffic": {**API["/api/fleet/traffic"], "wait_cycle": cycle, "resolver": [
+               {"robot_id": "rosy_02", "trigger": "wait_cycle", "decision": "replan", "cycle": cycle,
+                "blocked_edges": ["e1"]},
+               {"robot_id": "rosy_03", "trigger": "wait_cycle", "decision": "wait", "cycle": cycle}]},
+           "/api/fleet/trips": {"running": HELD, "trips": [HELD, running], "open": [HELD, running]},
+           "/api/fleet/ai": {"status": {"state": "present"}, "proposals": [], "facts": [
+               {"kind": "wait_cycle_confirmed", "robot_ids": cycle, "value": {"held_s": 4.0}, "confidence": 0.9,
+                "evidence": {}, "source": "analyzer:traffic_watch@1", "observed_at": 0, "ttl_s": 3,
+                "stage": "shadow"}]}}
+    posts = []
+    answers = {"/api/fleet/trips/t-rosy_02/confirm-replan": (200, {**HELD, "hold": None}),
+               "/api/fleet/trips/t-rosy_03/cancel": (200, {**running, "state": "canceled"})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        page.clock.run_for(1500)
+
+        def slot_of(robot_id):
+            page.locator(f'li[data-key="{robot_id}|deadlock"] > .queue-row').click()
+            page.clock.run_for(300)
+            return page.locator(f'[data-decision-slot="{robot_id}|deadlock"]')
+
+        slot = slot_of("rosy_02")
+        text = slot.inner_text()
+        assert "rosy_02 · 해결기 다른 길 계획" in text and "rosy_03 · 해결기 다른 로봇 대기" in text
+        assert "AI 참고 · 교착 확인 (모두 멈춤) · rosy_02, rosy_03 · 신뢰도 90%" in text
+        _shot(page, "console-deadlock-1440x900.png")
+        slot.locator('ui-button[data-replan="confirm"]').click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts:
+                break
+        assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
+
+        card = page.locator('#roster article[data-robot-id="rosy_03"]')
+        card.locator(".robot-fold").click()
+        assert card.get_attribute("data-collapsed") == ""
+        slot = slot_of("rosy_03")
+        assert slot.locator('ui-button[data-replan="confirm"]').get_attribute("reason") == "확인할 바뀐 경로가 없습니다"
+        slot.locator('ui-button[data-replan="cancel"]').click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if ("/api/fleet/trips/t-rosy_03/cancel", None) in posts:
+                break
+        assert ("/api/fleet/trips/t-rosy_03/cancel", None) in posts
+        before = list(posts)
+        page.locator('[data-decision-slot="rosy_03|deadlock"] ui-button[data-replan="card"]').click()
+        page.clock.run_for(300)
+        assert card.get_attribute("data-collapsed") is None
+        assert posts == before
+        assert {path for path, _ in posts} <= {"/api/fleet/trips/t-rosy_02/confirm-replan",
+                                                "/api/fleet/trips/t-rosy_03/cancel"}
+        assert not errors
+        browser.close()

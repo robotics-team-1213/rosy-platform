@@ -65,7 +65,7 @@
 
 ### Consequences
 
-- API Reference v1.191: `/trip`(B·D), `/trips/{plan_id}/start`(A·D) 행과 변경 이력 한 줄. 로봇 API는 바뀌지 않는다.
+- API Reference v1.192: `/trip`(B·D), `/trips/{plan_id}/start`(A·D) 행과 변경 이력 한 줄. 로봇 API는 바뀌지 않는다.
 - 사이트 설정 `fleet.trip.start_heading_tol_deg`·`fleet.trip.lane_camera_check`가 생긴다. SIM 사이트 설정은 `lane_camera_check: false`가 필요하다.
 - Fleet 패키지 줄 수: 이 브랜치가 +약 150(seam 모듈 머리 34, 기능 약 115). 패키지 판정은 main에서 이미 51848+150을 넘어 `test/known_failures.txt`에 있다. 다시 판정하는 일은 패키지 주인이 한다.
 - trip_runner의 시작 검사와 진행 판정은 `server/trip_admission.py`·`server/trip_progress.py`로 옮겼다(크기 판정 seam, 동작 변화 없음).

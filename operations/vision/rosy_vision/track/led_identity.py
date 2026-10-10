@@ -33,7 +33,7 @@ from typing import Mapping, Sequence
 import cv2
 import numpy as np
 
-PROCESSOR_REVISION = "led-identity/2"
+PROCESSOR_REVISION = "led-identity/3"
 #: D-472 4: Fleet's window is at most 6 s; a little slack for clock rounding.
 MAX_WINDOW_S = 6.5
 #: Frames kept per challenge (6 s at 10 fps); a faster camera stops sampling, then reads as frames missing.
@@ -47,10 +47,14 @@ DEFAULT_HUES: Mapping[str, tuple[int, int]] = {"blue": (105, 135), "amber": (4, 
 @dataclass(frozen=True)
 class LedConfig:
     hues: Mapping[str, tuple[int, int]] = field(default_factory=lambda: dict(DEFAULT_HUES))
-    min_saturation: int = 110
-    min_value: int = 150
+    # led-identity/3 (site ceiling_north 2026-10-10 11:23, rosy_40 asked blue): the lamp lights the
+    # floor beside the robot, its glow centred ~1.8 blob radii out and mostly S 60-110 / V 120-150.
+    # The /2 values (S>=110, V>=150, ring to 1.6 r) read ring shares 0.0005 on / 0.0 off: "none".
+    # These read 0.039 on / 0.003 off on the same frames.
+    min_saturation: int = 60
+    min_value: int = 120
     ring_inner: float = 0.6       # x blob radius
-    ring_outer: float = 1.6       # x blob radius
+    ring_outer: float = 2.6       # x blob radius
     on_fraction: float = 0.02     # lit share of the ring at or above: on
     off_fraction: float = 0.005   # at or below: off; between: unsure
     min_off_s: float = 0.8
