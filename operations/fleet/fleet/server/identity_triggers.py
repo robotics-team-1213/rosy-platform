@@ -28,8 +28,6 @@ from typing import Mapping, Optional
 #: An odom pose this close to (0, 0) after one farther than ODOM_RESET_FROM_M is an odom reset.
 ODOM_RESET_AT_M = 0.05
 ODOM_RESET_FROM_M = 0.3
-#: D-596 7: auto_min_interval_s times this, by automatic requests since the marker was last seen
-#: (30 s, 2 min, then 5 min while it stays hidden).
 #: Blobs scored below this are not a robot (site 2026-10-10: 0.054 on a lane line next to the
 #: robot's last place made rosy_41 look found; robots and D-547 guesses score 0.35-1.0).
 MIN_BLOB_SCORE = 0.1
