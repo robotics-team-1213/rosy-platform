@@ -252,7 +252,12 @@ def test_route_needs_a_named_operator():
     assert refused.status_code == 403
 
 
-def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path):
+def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    # The route reads absolute host paths. A test PC may already have them.
+    monkeypatch.setattr(routes, "GUARD_STATUS", tmp_path / "missing-guard.json")
+    monkeypatch.setattr(routes, "DRIFT_STATUS", tmp_path / "missing-drift.json")
     client = _client(helper_from_config(tmp_path))
     missing = client.post("/api/fleet/hosts/site/control", json={
         "action": "reboot", "operator_confirmed": True})
