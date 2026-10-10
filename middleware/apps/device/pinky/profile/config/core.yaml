@@ -47,8 +47,8 @@ line_follow:
   # D-573 amendment (user decision 2026-10-10 "지금 켜기"): the crosswalk gate (stop, look, cross)
   # is on for Pinky Pro; it needs obstacle_mode: path (above) and the D-597 camera crosswalk zone.
   crosswalk_gate_enabled: true
-  # D-511 rev 1 (user 2026-10-10): Fleet tells the robot it is off the lane / map / wrong way.
-  fleet_lane_cue_enabled: true
+  # D-511 rev 1: Fleet lane cue; off until its D-430 Safety-Review (coordinator 2026-10-10).
+  fleet_lane_cue_enabled: false
   # D-344 §12 amendment (2026-10-10): a drivable pivot or sharp arc (D-597 amendment 2) commands
   # under 0.01 m/s; the side IR steer-away only fought it (9dfk on a ring-entry speed bump).
   ir_guard_min_linear: 0.01
