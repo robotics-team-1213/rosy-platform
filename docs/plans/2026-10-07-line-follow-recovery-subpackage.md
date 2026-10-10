@@ -58,3 +58,21 @@ D-495 교차로 동작 브랜치가 main에 들어간 뒤에 한다. 같은 시�
 - 크기: `SIZE_UNITS`에 `core_features/line_follow/recovery/junction`을 더하고 파일은 가장 안쪽 단위로 센다. 옮긴 뒤 `recovery` 2093, `junction` 947(`__init__.py` 2줄 포함). main 병합(D-520) 뒤 2098, 959. 두 판정은 독립 재판정을 받는다.
 - 독립 검토: critic 에이전트(읽기 전용) 2026-10-08 승인(APPROVE WITH CHANGES, 요구 문구 반영). recovery 2093, junction 947.
 - 검증: `test_line_junction.py`, `test_junction_approach.py`, `test_junction_bend.py`, `test_junction_turn_site_basis.py`, gateway `test_line_junction_api.py`, `test_line_follow*.py`, Fleet `test_trip_runner.py`, `test/architecture`. `test/known_failures.py`가 새 실패 0이어야 한다.
+
+## 후속 (2026-10-10): D-407 막힘 코드를 `recovery/stuck/` 하위 패키지로
+
+**이유.** D-407 개정·D-607(`no_progress`·`dithering`, 브랜치 `feat/stuck-no-progress-dithering`)이 `recovery`(2098 판정, 상한 2248)와 `stuck_recovery.py`(600줄 상한)를 상한에 딱 맞춰 채웠다. 독립 크기 재판정(2026-10-10)은 그 맞추기(120자 넘는 줄 5개)를 거절했다. 막힘 코드는 상태 기계, 매니저 연결, 지나온 길, odom 진행 감시로 한 덩어리이고, 다른 recovery 코드와는 매니저 결정 경로만 같이 쓴다.
+
+| 지금 | 옮긴 뒤 |
+|------|---------|
+| `recovery/stuck_recovery.py` | `recovery/stuck/stuck_recovery.py` (ForwardTrail 뺌) |
+| `recovery/stuck_recovery.py`의 `ForwardTrail` | `recovery/stuck/trail.py` |
+| `recovery/stuck_wiring.py` | `recovery/stuck/stuck_wiring.py` |
+| `line_follow/progress_watch.py` | `recovery/stuck/progress_watch.py` (쓰는 곳은 `stuck_wiring.py` 하나) |
+
+- `git mv`와 `ForwardTrail` 클래스 이동만 한다. 동작, API, 설정 키, 이벤트 이름은 바꾸지 않는다. 재수출 shim은 두지 않는다. `stuck/__init__.py`는 설명 문자열뿐이다.
+- import는 같은 변경에서 고친다: `line_follow/manager.py`, `recovery/lane_return_pose_request.py`, `core_api_web/api/deps.py`, 시험 `test_line_stuck_recovery.py`, `test_crosswalk_gate.py`, `test_lane_return_pose_request.py`, gateway `test_line_follow_stuck.py`, `test_line_follow_stuck_no_progress.py`. 증거 경로 `tools/harness/sim2real_gaps.yaml` G-07(`stuck/stuck_recovery.py:322`)과 생성 문서 `docs/reference/sim2real-gaps.md`도.
+- 같은 변경에서 재판정이 거절한 120자 넘는 줄 다섯 개를 120자 이하로 되돌린다.
+- 지키는 것은 위와 같다. 막힘 믹스인은 그대로 `LineFollowManager`의 믹스인이고 매니저 잠금 하나와 generation 하나를 쓴다. 자기 잠금, 스레드, 저장소, 발행자는 없다. 최종 `cmd_vel` 발행자는 CORE CommandManager다. `recovery`의 D-468·D-476·`motion_admit.py`는 `stuck`을 import하지 않는다(`lane_return_pose_request.py`의 `AnswerRefused`만 예외).
+- 크기: `SIZE_UNITS`에 `core_features/line_follow/recovery/stuck`을 더한다. 로컬 main 병합 뒤(2026-10-10) `line_follow` 3086(2957 판정, 상한 3107), `recovery` 1292, `stuck` 1031(`stuck_recovery.py` 540, `stuck_wiring.py` 362, `trail.py` 66, `progress_watch.py` 61, `__init__.py` 2), `junction` 1038. `recovery`와 `stuck` 두 판정은 착지 전에 독립 재판정을 받는다.
+- 검증: `test_line_stuck_recovery.py`, `test_crosswalk_gate.py`, `test_lane_return*.py`, gateway `test_line_follow*.py`, `test_line_follow_stuck*.py`, `test/architecture`. `test/known_failures.py`가 새 실패 0이어야 한다.

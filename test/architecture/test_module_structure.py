@@ -88,6 +88,7 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 SIZE_UNITS = ("core/services/core_features/line_follow",
               "core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
+              "core/services/core_features/line_follow/recovery/stuck",
               "core/services/core_features/line_follow/arc",
               "core/services/core_features/localization",
               "core/services/core_features/swarm",
@@ -966,16 +967,23 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_098,
-        "split: re-judged at 2093, 2098 after merging main (D-520 motion_admit.py +5), on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
-        "the binding follow-up of the 2987 verdict (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, "
-        "2026-10-08 section): junction.py, junction_approach.py and junction_bend.py moved with git mv into "
-        "recovery/junction/ (gate.py, approach.py, bend.py), its own SIZE_UNITS entry; 3040 before the move = "
-        "2093 + 947; merging main brought D-520's motion_admit.py +5 (2098) and junction.py +12. Pure move, no shim, no behaviour change. What stays is D-407 stuck, D-468 lane return, "
-        "D-476 bridge and the shared D-507 6 motion_admit.py (lane_bridge and lane_return_decision use it); "
-        "every file below 600 (largest stuck_recovery.py 573); all LineFollowManager mixins under the single "
-        "manager lock and generation, no own lock, thread, store or publisher; CORE CommandManager stays the "
-        "final cmd_vel publisher. The +150 allowance is measured from 2098.",
+        1_292,
+        "split: re-judged at 1292 on 2026-10-10 (independent re-judge required before landing) when D-407 stuck "
+        "code moved into recovery/stuck/ (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 "
+        "section), its own SIZE_UNITS entry; the 2098 verdict's junction move stands. What stays is D-468 lane "
+        "return, D-476 bridge, D-546 pose request and the shared D-507 6 motion_admit.py; every file below 600; "
+        "all LineFollowManager mixins under the single manager lock and generation, no own lock, thread, store "
+        "or publisher; CORE CommandManager stays the final cmd_vel publisher. The +150 allowance is measured "
+        "from 1292.",
+    ),
+    "core/services/core_features/line_follow/recovery/stuck": (
+        1_031,
+        "accept: registered at 1031 on 2026-10-10 when D-407 stuck code left recovery "
+        "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 section; independent re-judge "
+        "required before landing): stuck_recovery.py 540 (state machine), stuck_wiring.py 362 (manager glue), "
+        "trail.py 66 (ForwardTrail), progress_watch.py 61 (D-607 odom progress watch), __init__.py 2. Mixins of "
+        "LineFollowManager under its one lock and generation; no own lock, thread, store or publisher; CORE "
+        "CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
         959,
