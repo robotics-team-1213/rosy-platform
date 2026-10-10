@@ -48,7 +48,7 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import MapPlane, map_plane_jpeg, rectify_jpeg
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, rectify_jpeg
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -396,7 +396,7 @@ class IngestServer:
             try:
                 settings = PreviewRectification.from_mapping(lease["rectification"])
                 if settings.mode == "map":
-                    return await self._map_plane_response(source, frame, age)
+                    return await self._map_plane_response(source, frame, age, lease.get("crop_map"))
                 if settings.mode == "auto":
                     # D-484: swap the lease's corners for the calibration's accepted quad.
                     field = self._field_corners(source)
@@ -437,7 +437,8 @@ class IngestServer:
             **_lens_header(self.source_lens(source)),
         })
 
-    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float) -> Response:
+    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
+                                  crop_map: list[float] | None = None) -> Response:
         """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
 
         The warp runs off the event loop, once per (frame, record revision) for all readers.
@@ -459,16 +460,23 @@ class IngestServer:
         plane: MapPlane | None = await asyncio.shield(cached[2])
         if plane is None:
             return _plane_unavailable()
-        min_x, min_y, max_x, max_y = plane.bounds_m
-        return _http_response(200, plane.jpeg, extra={
+        jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
+        if crop_map is not None:
+            cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
+            if cropped is None:
+                return _plane_unavailable()
+            jpeg, size, bounds = cropped
+            rectified = "map-crop"
+        min_x, min_y, max_x, max_y = bounds
+        return _http_response(200, jpeg, extra={
             "Content-Type": "image/jpeg", "Cache-Control": "no-store",
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
             "X-Frame-Captured-At": str(frame.captured_at),
-            "X-Frame-Width": str(plane.size[0]),
-            "X-Frame-Height": str(plane.size[1]),
+            "X-Frame-Width": str(size[0]),
+            "X-Frame-Height": str(size[1]),
             "X-Frame-Rotation-Deg": "0",
-            "X-Frame-Rectified": "map",
+            "X-Frame-Rectified": rectified,
             "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
             "X-Frame-Calibration": plane.revision,
             **_lens_header(self.source_lens(source)),
