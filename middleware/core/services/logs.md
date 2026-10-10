@@ -937,3 +937,9 @@
 - Change: Freeze verified same-corridor search bearing and search both directions without resetting the existing attempt or time budget.
 - Evidence: Remote return suite 128 passed, 0 NEW on d49e9740e; independent lap_review APPROVE WITH NOTES for the combined diff.
 - Gate: Source regression evidence only; new source DEVICE/FIELD pending.
+
+## 2026-10-11 · uncommitted · fix(core): fresh lane boundary evidence (D-623)
+
+- Change: Current inquiry carries pose-aligned lane boundary revision after three consistent new observations; stale data and camera motion do not advance the revision.
+- Evidence: Independent source review approved; remote regression pending.
+- Gate: SOURCE only; CORE motion authority and safety checks unchanged; DEVICE/FIELD pending.

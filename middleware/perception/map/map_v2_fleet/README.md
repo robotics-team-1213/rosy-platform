@@ -8,6 +8,32 @@
 | `scripts/stl_scene.py` | ROS-free parser. Splits the STL into 0.1 mm paint and the 5 mm wall ring (4 boxes). Transform: R_x(+90 deg), mm to m, centred. |
 | `scripts/build_world.py` | Writes `worlds/map_v2_fleet.world` and `meshes/road_lines.stl`. Output is byte-deterministic. |
 | `maps/map_v2_fleet.{pgm,yaml}` | Nav2 map of the perimeter only, at 5 mm cells (the walls are 5 mm thick). |
+| `training-curved/` | Generated training derivative: deeper east S-bend, white 0.30 m wall ring, matching paint mesh and lane graph. |
+
+## Curved training variant
+
+`scripts/build_world.py` also writes `training-curved/`. The east S-bend gets a smooth lateral
+offset (up to 39 mm) over x=0.30–1.20 m; the roundabout, junctions, crosswalks, parking,
+reference squares and 2.81 x 1.26 m outer rectangle stay in place. The lane graph uses
+the same deformation as the paint mesh. Collision and visual wall heights are both 0.30 m.
+The existing perimeter occupancy map remains applicable because the wall footprints do not move.
+
+White wall faces and lane paint share the same material brightness. The existing outer paint
+is retained, with no artificial dark gap or blue seam tape to make wall/paint separation easier.
+The [recorded wall-as-lane failure](../../../../docs/validation/perception-real-video/2026-09-24/p04_0492_wall_ahead_BOTH.jpg)
+is a reference for this ambiguity; matching colours alone is not calibrated camera rendering
+or proof that perception handles it. The original CAD, measured-map assets and camera profile
+remain the physical-map reference. The training derivative is not a replacement for field coordinates.
+
+After building the ROS workspace, select the world and its matching graph together:
+
+```bash
+ros2 launch gz_sim map_v2_fleet_real.launch.py map_variant:=training-curved gazebo_gui:=true
+```
+
+The normal launch still defaults to the original real-profile map. The variant supplies map assets;
+Isaac import, trained policies, signal enforcement and two-robot Fleet completion require separate
+integration and runtime validation. The existing simulation CORE overlay has traffic policy disabled.
 
 ## Regenerate
 

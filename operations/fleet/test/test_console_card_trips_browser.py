@@ -211,13 +211,13 @@ def test_an_unnamed_operator_sees_why_moves_are_off_and_can_still_cancel(site): 
 
 def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa: F811
     """D-540 7 with the card form open: no horizontal overflow of the rail or the document, button words on
-    one line, the rail is still the one scroll at 1024 and up, E-stop on the first screen."""
+    one line, tall wide windows keep the map in one frame, short windows flow, E-stop on the first screen."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, [])
         _open_form(page, "rosy_02")
-        for width, height in [(1920, 1080), (1440, 900), (1024, 768), (390, 844)]:
+        for width, height in [(1920, 1080), (1440, 900), (1024, 768), (1366, 600), (390, 844), (320, 568)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1500)
             form = _card(page, "rosy_02").locator(".card-trip")
@@ -227,8 +227,19 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
               return rail.scrollWidth <= rail.clientWidth + 1; }"""), width
             assert page.evaluate("""() => [...document.querySelectorAll('.card-trip ui-button, .card-trip select')]
               .every((node) => node.scrollWidth <= node.clientWidth + 1 && node.getBoundingClientRect().height < 80)"""), width
-            if width >= 1024:
+            if width >= 1024 and height >= 640:
                 assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert page.evaluate("""() => { const primary = document.querySelector('.console-primary');
+                  const stage = document.querySelector('#map-stage').getBoundingClientRect();
+                  return primary.scrollHeight <= primary.clientHeight + 1 && stage.height >= 200;
+                }"""), (width, height)
+            elif width >= 1024:
+                assert page.evaluate("document.querySelector('ui-shell').getBoundingClientRect().height > innerHeight")
+            assert page.evaluate("""() => [...document.querySelectorAll('.map-head > *')]
+              .filter((node) => node.offsetParent).every((node) => {
+                const child = node.getBoundingClientRect(), head = node.parentElement.getBoundingClientRect();
+                return child.left >= head.left - 1 && child.right <= head.right + 1;
+              })"""), (width, height)
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
             # One atomic scroll: a 1 s poll may rebuild the card between a locator's resolve and its action.

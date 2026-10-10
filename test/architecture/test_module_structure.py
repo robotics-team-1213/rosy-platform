@@ -224,8 +224,8 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_668,
-        "split: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
+        10_871,
+        "split: independently re-judged by design_consistency_review at 10871 on 2026-10-11: D-624 expands the existing shared-component gallery and semantic CSS roles with bounded map-evidence containment, no duplicate component library or new runtime/command owner. Keep package +150 and the sibling map goal-gate / D-362 P2 app-binding extraction obligations. Previous verdict: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
         "navigation-map UI in the existing map owner (map.js 534, panels/console/map.js 207: "
         "trusted-localization and safe-stop goal gating, path/route evidence, map identity, mobile stage); "
         "every asset under 800, no transport or command path. Next growth: move pathEvidence/setPath/"
@@ -779,8 +779,8 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_388,
-        "accept: independently reviewed by adr_record at 1388 on 2026-10-10: D-620 adds two optional junction status fields, an optional correlated heartbeat request and strict JunctionSignalAnswer validation in the canonical protocol contract. No I/O or decision policy is added; moving this one answer elsewhere would split the public protocol source and add imports. Keep the zero-growth file allowance; re-review every further growth, and split by protocol message family with preserved public imports if runtime logic or a second contract owner appears. Previous verdict: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
+        1_389,
+        "accept: independently re-judged by review_recovery_fresh at 1389 on 2026-10-11: D-623 adds only optional LineStuckStatus.inquiry for current camera-boundary evidence; same public contract owner, no I/O or execution policy; zero-growth allowance and message-family split conditions unchanged. Previous verdict: independently reviewed by adr_record at 1388 on 2026-10-10: D-620 adds two optional junction status fields, an optional correlated heartbeat request and strict JunctionSignalAnswer validation in the canonical protocol contract. No I/O or decision policy is added; moving this one answer elsewhere would split the public protocol source and add imports. Keep the zero-growth file allowance; re-review every further growth, and split by protocol message family with preserved public imports if runtime logic or a second contract owner appears. Previous verdict: re-judged at 1375 on 2026-10-10 (self-judged; +1 restores LineFollowStatus.lane_cue dropped by a merge, f20de97ca). Previously re-judged at 1374: +8 for one before-validator on "
         "LineFollowStatus so a parsed copy (Fleet hub snapshot, D-555) keeps the crosswalk key; same owner, "
         "no new type. Previously "
         "accept: merge on 2026-10-10 of two judged additions, measured after the merge: D-573 (c) "

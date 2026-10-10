@@ -329,6 +329,7 @@ class StuckRecoveryMixin:
                 "source": obs.source.value, "visible": obs.visible, "error": obs.error,
                 "confidence": obs.confidence, "age_s": None if age is None else round(age, 3)},
             preview_seq=self._provided("preview_seq"),
+            lane_boundary=self._return_evidence.boundary_change(self.return_evidence(now=now)),
         )
 
     def _apply_recovery(self, now: float, decision: LineFollowDecision) -> LineFollowDecision:

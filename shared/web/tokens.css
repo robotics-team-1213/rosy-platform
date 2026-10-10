@@ -244,43 +244,53 @@
   /* D-466 — 절차 작업을 고르는 사이드바 열. 넓은 단에서만 칸으로 쓴다. */
   --sidebar-track: minmax(13rem, 18rem);
 
+  /* ---- 색상 역할(D-624) — 팔레트 값 대신 사용 목적을 고른다 ----------- */
+  --surface-canvas: var(--ground);
+  --surface-recessed: var(--ground-deep);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-quiet);
+  --text-on-danger: var(--ink-on-crit);
+  --border-subtle: var(--line-10);
+  --border-default: var(--line-14);
+  --border-strong: var(--line-30);
+
   /* ---- 면 — 표면이 위계다(concept 16 Law 2) ---------------------------
    * 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다.
    */
   --surface-flat: var(--ground-soft);
   --surface-raised: var(--ground-card);
-  --surface-line: var(--line-14);
+  --surface-line: var(--border-default);
   --surface-sheen: var(--line-06);
 
   /* ---- 정상 — 색이 아니다(D-82) ---------------------------------------
    * 계기의 안전 구간에는 아무것도 칠하지 않는다. status 집합은 임계에만
    * 쓰이므로, '정상'을 말할 때는 이 둘을 쓴다.
    */
-  --nominal: var(--ink);
-  --nominal-quiet: var(--ink-quiet);
+  --nominal: var(--text-primary);
+  --nominal-quiet: var(--text-secondary);
 
   /* ---- 컴포넌트 — 콘솔의 어휘 ------------------------------------------
    * 주 명령은 초록이 아니라 가장 밝은 중립이다. 초록은 경보 예산이고,
    * 정상에는 색이 없다.
    */
   --button-primary-bg: var(--ink);
-  --button-primary-ink: var(--ground);
-  --button-secondary-bg: var(--ground);
-  --button-secondary-ink: var(--ink);
+  --button-primary-ink: var(--surface-canvas);
+  --button-secondary-bg: var(--surface-canvas);
+  --button-secondary-ink: var(--text-primary);
   --button-irreversible-bg: var(--status-crit);
-  --button-irreversible-ink: var(--ink-on-crit);
+  --button-irreversible-ink: var(--text-on-danger);
 
-  --field-bg: var(--ground);
-  --field-line: var(--line-14);
+  --field-bg: var(--surface-canvas);
+  --field-line: var(--border-default);
   --field-invalid: var(--status-crit);
 
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
 
-  --flag-line: var(--line-14);
+  --flag-line: var(--border-default);
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
-  --flag-danger-ink: var(--ink-on-crit);
+  --flag-danger-ink: var(--text-on-danger);
 
   /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다. */
   --gauge-track: color-mix(in oklab, var(--ink) 8%, transparent);

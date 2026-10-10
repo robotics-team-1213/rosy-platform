@@ -81,8 +81,11 @@ export async function fetchMapPlane(call, source, held, signal) {
 // rectified 는 false | true | "auto"(D-484 필드 경계 자동 보정)다.
 export function frameBadge({ ok, status, frameState, ageMs, rectified }) {
   if (ok) {
-    const age = Number(ageMs);
-    if (Number.isFinite(age) && age > FRAME_LATE_MS) {
+    const age = ageMs === null || ageMs === undefined || ageMs === "" ? NaN : Number(ageMs);
+    if (!Number.isFinite(age) || age < 0) {
+      return { state: "stale", label: "영상 시각 미확인", kind: "warn", detail: "촬영 시각을 확인할 수 없어 영상을 지웠습니다." };
+    }
+    if (frameState === "stale" || age > FRAME_LATE_MS) {
       return { state: "stale", label: "영상 지연", kind: "warn",
         detail: `최신 프레임이 ${Math.round(age / 100) / 10} s 전 것입니다.` };
     }
@@ -157,7 +160,7 @@ export function resolveSavedProfile(storage, source, lensKind) {
 const PLANE_RETRY_MS = 30000;
 const PLANE_ERROR_MS = 5000;
 export function createPlaneFeed({ scope, visionView, onChange, now = Date.now }) {
-  let frame = null, busy = false, retryAt = 0, cancelExpiry = () => {};
+  let frame = null, busy = false, retryAt = 0, cancelExpiry = () => {}, generation = 0;
   function drop() {
     cancelExpiry();
     cancelExpiry = () => {};
@@ -167,10 +170,12 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
     return had;
   }
   async function refresh(wanted = true) {
-    if (!wanted) { if (drop()) onChange(); return; }
+    if (!wanted) { generation += 1; if (drop()) onChange(); return; }
     if (busy || now() < retryAt) return;
     busy = true;
     const life = scope.capture();
+    const startedGeneration = generation;
+    const requestedAt = now();
     try {
       const got = await visionView.fetchPlane();
       if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; drop(); return; }
@@ -179,7 +184,13 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
       const image = new Image();
       image.src = url;
       const decoded = await image.decode().then(() => true, () => false);
-      if (!life.current() || !decoded) { URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return; }
+      if (!life.current() || startedGeneration !== generation || !decoded) {
+        URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return;
+      }
+      const ageMs = got.ageMs + now() - requestedAt;
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_LATE_MS) {
+        URL.revokeObjectURL(url); drop(); return;
+      }
       if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
         URL.revokeObjectURL(url);
         retryAt = now() + PLANE_RETRY_MS;
@@ -188,8 +199,8 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane,
-        calibrationRevision: got.calibrationRevision, ageMs: got.ageMs };
-      cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - got.ageMs) || 0);
+        calibrationRevision: got.calibrationRevision, ageMs };
+      cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
     } catch (error) {
       if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
     } finally {
@@ -248,11 +259,13 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   let currentLensInfo = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
+  let cancelFrameExpiry = () => {};
   function pausePreview() {
     previewLifetime.abort(); previewLifetime = new AbortController();
     if (busy?.kind === "frame") busy = false;
   }
   scope.onDispose(() => {
+    cancelFrameExpiry();
     pausePreview();
     busy = false;
     refreshTimer?.();
@@ -265,6 +278,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   });
 
   function showState(label, kind = "neutral", detail = label) {
+    cancelFrameExpiry();
     status.textContent = label;
     status.setAttribute("status", kind);
     message.textContent = detail;
@@ -274,6 +288,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     frame.dataset.state = kind;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = null;
+    for (const listener of frameListeners) listener({ state: "stale", source: select.value });
   }
 
   function readProfile() {
@@ -447,6 +462,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     const source = select.value;
     if (!source) return;
     const work = {kind: "frame"}; busy = work;
+    const requestedAt = Date.now();
     try {
       if (!lease || Date.now() >= leaseExpiresAt) {
         const issued = await call("/api/fleet/vision/lease", {
@@ -488,7 +504,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
         frameState: response.headers.get("X-Frame-State"),
         ageMs: response.headers.get("X-Frame-Age-Ms"),
       });
-      if (!response.ok) {
+      if (!response.ok || badge.state !== "live") {
         if (badge.state === "unauthorized") lease = null;
         showState(badge.label, badge.kind, badge.detail);
         return;
@@ -497,27 +513,36 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       life.check();
       if (!current() || source !== select.value) return;
       const nextUrl = URL.createObjectURL(blob);
+      const nextImage = new Image();
+      nextImage.src = nextUrl;
+      const decoded = await nextImage.decode().then(() => true, () => false);
+      if (!current() || source !== select.value) { URL.revokeObjectURL(nextUrl); return; }
+      const frameAge = Number(response.headers.get("X-Frame-Age-Ms")) + Date.now() - requestedAt;
+      if (!decoded || !Number.isFinite(frameAge) || frameAge > FRAME_LATE_MS) {
+        URL.revokeObjectURL(nextUrl);
+        showState("영상 만료", "warn", "새 프레임을 기다립니다."); return;
+      }
+      cancelFrameExpiry();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = nextUrl;
-      // 배지를 영상과 같은 순간에 바꾼다 — decode 를 기다리는 동안 옛 배지가 남지 않게.
+      // Decode before replacing the visible frame; its old expiry must not revoke the new URL.
       status.textContent = badge.label;
       status.setAttribute("status", badge.kind);
       message.textContent = badge.detail;
       image.src = nextUrl;
       image.hidden = false;
       stage.hidden = false;
-      await image.decode().catch(() => {});
-      life.check();
-      if (!current() || source !== select.value) return;
       updateCornerOverlay();
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw" && !rawOnly);
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw" || rawOnly);
       el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       const seq = response.headers.get("X-Frame-Seq");
-      const frameAge = response.headers.get("X-Frame-Age-Ms");
-      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl,
-        lens: currentLensInfo, ageMs: frameAge === null ? NaN : Number(frameAge), state: badge.state });
+      for (const listener of frameListeners) listener({ image: nextImage, previewElement: image, rectified, source, seq, url: nextUrl,
+        lens: currentLensInfo, ageMs: frameAge, state: badge.state });
+      cancelFrameExpiry();
+      cancelFrameExpiry = scope.timeout(() => showState("영상 만료", "warn", "새 프레임을 기다립니다."),
+        Math.max(0, FRAME_LATE_MS - frameAge));
     } catch (error) {
       if (error.name === "AbortError" || !current()) return;
       lease = null;

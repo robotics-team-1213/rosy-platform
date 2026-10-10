@@ -17,7 +17,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
 from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -36,8 +36,10 @@ REAL_CAMERA_X_OFFSET_M = 0.03317
 def generate_launch_description():
     gz_share = get_package_share_directory("gz_sim")
     control_share = get_package_share_directory("control")
-    world = os.path.join(
-        control_share, "map", "map_v2_fleet", "worlds", "map_v2_fleet_real.world")
+    map_bundle = PathJoinSubstitution([
+        control_share, "map", "map_v2_fleet", LaunchConfiguration("map_variant")])
+    world = PathJoinSubstitution([map_bundle, "worlds", "map_v2_fleet_real.world"])
+    map_graph = PathJoinSubstitution([map_bundle, "lane_graph.yaml"])
     line_config = os.path.join(control_share, "config", "line_follow.yaml")
     default_core_overlay = os.path.join(
         gz_share, "config", "map_v2_fleet_core.yaml")
@@ -66,6 +68,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument("map_variant", default_value=".", choices=[".", "training-curved"]),
         DeclareLaunchArgument("gazebo_gui", default_value="false"),
         # The device streams 8 fps (teleop_20260919_151213).
         DeclareLaunchArgument("camera_update_rate", default_value="8"),
@@ -95,10 +98,8 @@ def generate_launch_description():
                     LaunchConfiguration("camera_lane_mode"), value_type=str),
                 "debug_overlay": ParameterValue(
                     LaunchConfiguration("debug_overlay"), value_type=bool),
-                "debug_lane_graph": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                "lane_graph_path": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                "debug_lane_graph": map_graph,
+                "lane_graph_path": map_graph,
                 "route": ParameterValue(
                     LaunchConfiguration("route"), value_type=List[str]),
                 "route_start": ParameterValue(

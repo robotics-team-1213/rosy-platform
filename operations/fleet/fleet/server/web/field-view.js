@@ -291,9 +291,10 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
 
   let sizeSource = null;
   scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
-    lastFrame = frame;
+    lastFrame = frame.state === "live" ? frame : null;
     const { calibrations = [], siteMap = null } = view.planeContext?.() || {};
-    planes.refresh(Boolean(view.layers.rectified) && planeCalibrationsFor(calibrations, siteMap, frame.source).length > 0);
+    planes.refresh(frame.state === "live" && Boolean(view.layers.rectified)
+      && planeCalibrationsFor(calibrations, siteMap, frame.source).length > 0);
     if (frame.source !== sizeSource) {
       sizeSource = frame.source;
       loadSize(frame.source);
