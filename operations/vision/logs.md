@@ -474,3 +474,9 @@
 - 변경: led-identity/4. 여러 blob 중 끊기지 않는 단일 트랙의 꺼짐-1초 이상 연속 켜짐-꺼짐을 판정한다. 다중 후보·짧은 반짝임·가림을 거절하고 기존 점멸/단일 blob 폴백은 유지한다.
 - 증거: 원격 회귀 테스트; 실제 천장 영상 수용은 미확인.
 - Gate: SOURCE, DEVICE/FIELD 미완료.
+
+## 2026-10-10 LED sampling restores calibrated image position
+- Symptom: LED sampling inverted a height-corrected robot point as a floor point; edge-of-image samples were displaced.
+- Change: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
+- Regression: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote verification follows.
+
