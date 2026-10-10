@@ -76,6 +76,11 @@ class LaneComplianceConfig:
     #: Ceiling pose error bound for the zone (m): D-587 calibration residual p90 0.018 m + marker
     #: height 0.02-0.03 m -> 0.012-0.019 m at the bottom road (validation 2026-10-10).
     crosswalk_uncertainty_m: float = 0.035
+    #: D-511 rev 2: the guidance looks this far along the lane (m).
+    guide_ahead_m: float = 0.4
+    #: D-511 rev 2: a map pose guides only while its sighting anchor is this fresh (s); D-587 poses
+    #: are +-3 cm / +-5 deg within 1 s (localization session, 2026-10-10).
+    guide_anchor_max_s: float = 1.5
     #: Send the return cue (``POST /line-follow/lane-cue``) to the robot; off = observe only.
     return_cue: bool = True
 
@@ -83,7 +88,8 @@ class LaneComplianceConfig:
         if not isinstance(self.return_cue, bool):
             raise ValueError("fleet.lane_compliance.return_cue must be true or false")
         for name in ("line_half_width_m", "off_map_pad_m", "off_map_unseen_s", "return_persist_s",
-                     "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m", "crosswalk_uncertainty_m"):
+                     "wrong_way_min_m", "entry_ahead_m", "crosswalk_ahead_m", "crosswalk_uncertainty_m", "guide_ahead_m",
+                     "guide_anchor_max_s"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 <= value <= 10.0:
                 raise ValueError(f"fleet.lane_compliance.{name} must be a number within [0, 10]")
@@ -229,6 +235,8 @@ class ReturnSample:
     #: D-491/D-573 zone ``{id, near_m, far_m, uncertainty_m, source}`` of the crosswalk ahead (or under
     #: the body) along the lane from base_footprint; None when none is near.
     crosswalk_ahead: Optional[dict] = None
+    #: D-511 rev 2: ``{ahead_m, heading_ahead_deg, curvature_1pm, to_end_m, next_place_id, ring}``.
+    guide: Optional[dict] = None
 
 
 def map_bounds(graph, pad_m: float) -> Optional[tuple]:
@@ -268,11 +276,12 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
         state = ON_LINE
     else:
         state = OFF_LANE
-    if travel is not None and state != OFF_LANE:
-        # Every lane under the body runs against the travel: wrong way. At a junction a lane
+    facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
+    if facing is not None and state != OFF_LANE:
+        # Every lane under the body runs against the robot: wrong way. At a junction a lane
         # within 90 deg is always under the body, so turning there is not.
         under = [t for a, d, _, t in projected if d - body_half_width_m < a.width_m / 2.0]
-        if under and min(abs(_wrap(t - travel)) for t in under) > math.radians(180.0 - config.heading_gate_deg):
+        if under and min(abs(_wrap(t - facing)) for t in under) > math.radians(180.0 - config.heading_gate_deg):
             state = WRONG_WAY
     ex, ey, _ = arc.point_at(s + config.entry_ahead_m)
     heading = yaw if yaw is not None else travel
@@ -288,9 +297,17 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
     ahead = (crosswalk_ahead(arc, s, crosswalks, config.crosswalk_ahead_m, body_front_m,
                              config.crosswalk_uncertainty_m)
              if crosswalks and state in (ON_LANE, ON_LINE) else None)
+    # D-511 rev 2 route guidance (a prior, never a command): the lane shape just ahead.
+    _, _, t_ahead = arc.point_at(s + config.guide_ahead_m)
+    guide = {"ahead_m": config.guide_ahead_m,
+             "heading_ahead_deg": None if heading is None else round(math.degrees(_wrap(t_ahead - heading)), 1),
+             "curvature_1pm": round(_wrap(t_ahead - tangent) / config.guide_ahead_m, 3),
+             "to_end_m": round(max(0.0, arc.length_m - s), 3), "next_place_id": arc.end_place,
+             "ring": arc.edge_id.startswith("ring")}   # ponytail: ring edges are named ring*; a map flag if not
     return ReturnSample(state, arc.edge_id, round(offset, 4), side,
                         None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
-                        None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead)
+                        None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead,
+                        guide)
 
 
 #: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.
@@ -343,11 +360,12 @@ class ReturnTracker:
             self.state, self.since = state, t
 
     def update(self, t: float, x: Optional[float], y: Optional[float], yaw: Optional[float],
-               graph, crosswalks=(), moving: bool = True, bounds=None) -> ReturnSample:
+               graph, crosswalks=(), moving: bool = True, bounds=None, unseen_counts: bool = True) -> ReturnSample:
         cfg = self.config
         if x is None or y is None:
             self._candidate = None
-            if moving and self._seen_at is not None and t - self._seen_at >= cfg.off_map_unseen_s:
+            if (unseen_counts and moving and self._seen_at is not None
+                    and t - self._seen_at >= cfg.off_map_unseen_s):
                 self._set(OFF_MAP, t)
             return ReturnSample(UNSEEN)
         self._seen_at = t
@@ -361,6 +379,7 @@ class ReturnTracker:
             self._candidate = (raw.state, t, (x, y))
         state, since_t, (sx, sy) = self._candidate
         if (t - since_t >= cfg.return_persist_s
-                and (state != WRONG_WAY or math.hypot(x - sx, y - sy) >= cfg.wrong_way_min_m)):
+                and (state != WRONG_WAY or yaw is not None
+                     or math.hypot(x - sx, y - sy) >= cfg.wrong_way_min_m)):
             self._set(state, t)
         return raw

@@ -29,8 +29,11 @@ def test_classify_states_and_side():
     assert off.state == OFF_LANE and off.side == "left" and off.bearing_deg > 0
     assert classify(5.0, 0.0, 0.0, 0.0, GRAPH, CW).state == OFF_MAP
     assert classify(0.5, 0.0, math.pi, math.pi, GRAPH, CW).state == WRONG_WAY
-    # turning in place (body yaw reversed, travel still along) is not wrong way yet
-    assert classify(0.5, 0.0, math.pi, 0.0, GRAPH, CW).state == ON_LANE
+    # D-587 yaw wins over motion: a body turned back is wrong way; turned along is not
+    assert classify(0.5, 0.0, math.pi, 0.0, GRAPH, CW).state == WRONG_WAY
+    assert classify(0.5, 0.0, 0.0, math.pi, GRAPH, CW).state == ON_LANE
+    guide = classify(0.5, 0.0, 0.0, None, GRAPH, CW).guide
+    assert guide["next_place_id"] == "B" and abs(guide["to_end_m"] - 1.5) < 1e-6 and guide["ring"] is False
 
 
 def test_crosswalk_is_on_lane_and_hinted_ahead():
@@ -99,7 +102,7 @@ def test_monitor_sends_cue_off_lane_and_clears_once():
         clock[0] += 0.5
     assert monitor.view("r1")["return"]["state"] == OFF_LANE
     assert client.sent and client.sent[-1]["state"] == OFF_LANE and client.sent[-1]["side"] == "left"
-    assert client.sent[-1]["ttl_s"] <= 1.0
+    assert client.sent[-1]["ttl_s"] <= 1.0 and "guide" in client.sent[-1] and "crosswalk_ahead" not in client.sent[-1]
     poses.pose = MapPose(0.3, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m")
     for _ in range(6):
         asyncio.run(monitor.tick())
