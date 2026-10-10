@@ -82,7 +82,6 @@ ALLOWED = Counter({
     ("bridge/observation.py", "getattr", "msg", '"header"'): 1,
     # Accepted (D-573): line-follow doubles without the crosswalk-gate property read as not
     # asking (gate default off); the probe only gates scan forwarding, never motion.
-    ("bridge/observation.py", "getattr", "line", '"wants_crosswalk_scan"'): 1,
     # Accepted (D-555): optional public link state on the injected FleetAgent; a double without
     # the fields reads as armed / never relinked (boot behaviour). Decides only when SAF-003
     # counts the link, never motion.
