@@ -206,6 +206,7 @@ FENCED = [
     ("post", "/api/v1/line-follow/stuck/decision", {"stuck_id": "s", "decision": "MANUAL"}),
     ("post", "/api/v1/line-follow/stuck/decision", {"stuck_id": "s", "decision": "YIELD",
                                                      "yield_m": 0.1, "yield_turn_rad": 0.2}),
+    ("post", "/api/v1/line-follow/stuck/decision", {"stuck_id": "s", "decision": "REALIGN"}),
     ("post", "/api/v1/swarm/follow", {"target_robot_id": "rosy_02"}),
     ("post", "/api/v1/docking/dock", {"dock": "d1"}),
     ("post", "/api/v1/docking/undock", None),
