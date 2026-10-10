@@ -1513,6 +1513,8 @@ D-610 deadlock cases appear in `/api/fleet/ai/problems` after a stable wait cycl
 
 예시의 `queued`와 최종 `verdict`를 구분한다. 아래는 계약 시험용 상황이며 실제 현장 모델 판단 결과는 별도 증거로 기록한다.
 
+Qwen 프롬프트 `d618-v1`은 `evidence.seen`에 실제 보이는 차선 경계·벽/코너·장애물/빈 공간과 불확실한 부분을 구체적으로 설명하도록 요구한다. 입력 `context.cause`를 영상 정답으로 취급하거나 카메라 이름만 반복하지 않는다. 이 요구는 프롬프트 계약이며 기하학적 정확성을 자동 보증하지 않는다. 모델 설명과 실제 영상의 일치 여부는 예시 검토와 현장 수용에서 확인한다.
+
 | 입력 상황 | AI 응답 예 | Fleet 최종 결과 예 | 운영자가 받을 내용 |
 |---|---|---|---|
 | 벽 앞 차선 상실, 뒤쪽 통로가 보임 | `BACK_AND_RETRY`, `reason: rear_clear`, `evidence.seen: rear corridor visible` | D-577 후진 전제 충족 시 `forwarded`, CORE 응답 후 `outcome` 기록 | 판단 영상 ID·모델·근거와 CORE 수락 여부 |
