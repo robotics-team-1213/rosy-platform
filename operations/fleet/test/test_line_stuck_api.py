@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from hashlib import sha256
 
 import httpx
@@ -15,6 +16,8 @@ from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.server.sighting_store import SightingStore
+from fleet.server.ai_facts import AiFactLog
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -546,3 +549,38 @@ def test_episode_list_route_is_read_guarded_and_lists_recent(tmp_path):
     assert listed.status_code == 200, listed.text
     [episode] = listed.json()["episodes"]
     assert episode["stuck_id"] == "stuck-abc" and episode["close_reason"] == "cleared"
+
+
+def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
+    robot = FakeRobot("rosy_01", state=_state())
+    client, _ = _named_app(_console(robot), tmp_path)
+    assert client.get("/api/fleet/incidents").status_code == 401
+    _row(client)
+    opened = client.get("/api/fleet/line-stuck/episodes", headers=_auth(VIEWER)).json()["episodes"][0]
+    at = datetime.fromisoformat(opened["opened_at"]).timestamp()
+    SightingStore(tmp_path / "fleet.sqlite3").save_sighting({
+        "robot_id": "rosy_01", "source_id": "ceiling_north", "seq": 7,
+        "captured_at": at, "received_at": at + 0.1})
+    AiFactLog(tmp_path / "fleet.sqlite3").append([{
+        "received_at": at, "principal_id": "ai-pc", "kind": "stalled",
+        "robot_ids": ["rosy_01"], "value": {"still_s": 21}, "confidence": 0.8,
+        "evidence": {"source": "state"}, "source": "analyzer:test@1", "observed_at": at,
+        "ttl_s": 3.0, "stage": "shadow"}])
+    response = client.get("/api/fleet/incidents", headers=_auth(VIEWER))
+    assert response.status_code == 200, response.text
+    [report] = response.json()["reports"]
+    assert report["classification"] == "line_stuck"
+    assert report["evidence"]["core"]["cause"] == "obstacle_ahead"
+    assert report["evidence"]["rosy_cam"]["source_id"] == "ceiling_north"
+    assert report["evidence"]["ai_facts"][0]["stage"] == "shadow"
+    assert report["evidence"]["front_image"]["status"] == "not_retained"
+    url = "/api/fleet/incidents/rosy_01/stuck-abc/review"
+    body = {"root_cause": "obstacle", "note": "floor box seen"}
+    assert client.post(url, json=body, headers=_auth(VIEWER)).status_code == 403
+    assert client.post(url, json={**body, "root_cause": "invented"}, headers=_auth(OPERATOR)).status_code == 422
+    assert client.post(url, json=body, headers=_auth(OPERATOR)).json() == {"reviewed": True}
+    [updated] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["reports"]
+    assert updated["reviews"][-1]["root_cause"] == "obstacle"
+    assert updated["reviews"][-1]["principal_id"] == "op-7"
+    assert client.post("/api/fleet/incidents/rosy_01/missing/review", json=body,
+                       headers=_auth(OPERATOR)).status_code == 404

@@ -1739,6 +1739,8 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 
 v1.136: 진행 중인 lane trip의 `detail.bend_candidate`는 읽기 전용 지도 굽이 **후보**다. 현재 활성 지도 버전이 trip과 같고, 자세가 `LOCALIZED`이며 나이 ≤0.30 s, dead reckoning ≤0.05 m, 현재 edge 중심선에서 ≤0.04 m, 투영 진행 거리 차 ≤0.05 m, 접선과 yaw 차 ≤15°일 때만 기록한다. 값은 `{map_id, map_version, arc_id, bend_in_m, heading_change_deg, map_offset_m}`이며 0.40 m 앞까지의 edge polyline에서 접선 변화 ≥15°와 전체 변화 ≤80°를 찾는다. 다음 tick에서 근거가 사라지거나 trip이 끝나면 삭제한다. CORE로 보내는 지시나 운동 허가가 아니며 페인트·벽·분기의 같은 경계 확인을 뜻하지 않는다.
 
+**D-608 Fleet 사건 보고서 (additive).** `GET /api/fleet/incidents?limit=1..100`(viewer+, 기본 20)은 `{reports:[...]}` 최신순이다. 각 `rosy.incident.v1` 행은 `id: "line_stuck:<robot_id>:<stuck_id>"`, `stuck_id`, `classification: "line_stuck"`, `robot_ids`, `opened_at`, `closed_at`, `evidence`(`core`, `fleet`, `rosy_cam`, `ai_facts`, `front_image`), `actions`, `reviews`를 가진다. `rosy_cam`은 같은 DB의 사건 시작 ±5 s 수락 관측 1건 또는 null, `ai_facts`는 같은 로봇·시간대의 최대 3건이며 둘 다 원인 확정 근거가 아니다. `front_image.status: "not_retained"`는 D-577의 메모리 한정 사진이 닫힌 뒤 남지 않았다는 뜻이다. `POST /api/fleet/incidents/{robot_id}/{stuck_id}/review`(이름 있는 operator)는 `{root_cause, note}`를 받는다. `root_cause`는 `line_marking|obstacle|robot_fault|localization|traffic_wait|unknown`, `note`는 최대 1000자다. 검토는 append-only이며 성공 `{reviewed:true}`, 사건 없음 404 `INCIDENT_NOT_FOUND`, 잘못된 본문 422다. 사건·검토는 움직임 권한이나 모델 승격 권한을 주지 않는다.
+
 Task status is the shared `FleetTaskStatus` enum: `REQUESTED`, `QUEUED`,
 `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`, `HOLD`, `CANCELED`,
 or `EXPIRED`. The normal path is `REQUESTED` → `QUEUED` → `ACCEPTED`; a queued

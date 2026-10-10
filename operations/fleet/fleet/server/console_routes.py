@@ -55,6 +55,13 @@ class LineStuckClaimRequest(BaseModel):
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
+class IncidentReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    root_cause: Literal["line_marking", "obstacle", "robot_fault", "localization",
+                        "traffic_wait", "unknown"]
+    note: str = Field(max_length=1000)
+
+
 class IdentifyLampRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     color: Optional[Literal["blue", "amber"]] = None  # None: the robot's configured colour
@@ -249,6 +256,19 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
         # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
         return {"episodes": board.episodes(limit)}
+
+    @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
+    def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
+        return {"reports": board.reports(limit)}
+
+    @app.post("/api/fleet/incidents/{robot_id}/{stuck_id}/review", dependencies=operator_guard,
+              tags=["line-stuck"])
+    def review_incident(robot_id: str, stuck_id: str, body: IncidentReviewRequest,
+                        principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        if not board.review(robot_id, stuck_id, principal_id=principal.principal_id,
+                            root_cause=body.root_cause, note=body.note):
+            raise HTTPException(status_code=404, detail={"code": "INCIDENT_NOT_FOUND"})
+        return {"reviewed": True}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])
