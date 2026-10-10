@@ -346,6 +346,9 @@ class LineStuckAnswerLog:
                        robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
                        at TEXT NOT NULL, principal_id TEXT NOT NULL,
                        root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_incident_reviews_stuck "
+                "ON fleet_incident_reviews(robot_id, stuck_id)")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -425,6 +428,7 @@ class LineStuckAnswerLog:
                 opened = datetime.fromisoformat(row["opened_at"]).timestamp()
                 camera = None
                 if "sighting_audit" in tables:
+                    # shortcut: only a nearby accepted sighting is joined; use a recording index for image review.
                     seen = connection.execute(
                         """SELECT source_id, seq, captured_at, received_at FROM sighting_audit
                            WHERE robot_id=? AND captured_at BETWEEN ? AND ?

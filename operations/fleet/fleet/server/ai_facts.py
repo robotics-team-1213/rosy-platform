@@ -124,6 +124,8 @@ class AiFactLog:
                        observed_at REAL NOT NULL, ttl_s REAL NOT NULL, stage TEXT NOT NULL,
                        rule_input INTEGER NOT NULL DEFAULT 0, human_choice TEXT)""")
             connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_ai_facts_observed_at ON fleet_ai_facts(observed_at)")
+            connection.execute(
                 """CREATE TABLE IF NOT EXISTS fleet_ai_proposals (
                        proposal_row INTEGER PRIMARY KEY AUTOINCREMENT, judged_at REAL NOT NULL,
                        robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL, decision TEXT NOT NULL, reason TEXT NOT NULL,

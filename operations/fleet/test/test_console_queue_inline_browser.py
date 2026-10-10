@@ -52,6 +52,7 @@ OFFLINE = _robot("rosy_04", online=False, error={"reachable": False, "code": "Co
 OFFLINE["state"] = None
 API = {
     "/api/fleet/session": {"principal_id": "bob", "role": "operator"},
+    "/api/fleet/incidents": {"reports": []},
     "/api/fleet/state": {"fleet": {"name": "site", "online": 3, "total": 4}, "ts": 0.0,
                          "robots": [_robot("rosy_01", line_stuck=STUCK), _robot("rosy_02"), _robot("rosy_03"),
                                     OFFLINE]},
@@ -63,6 +64,41 @@ API = {
                              "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
                              "relay": None},
 }
+
+
+def test_incident_report_shows_source_evidence_and_records_review(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    report = {"schema": "rosy.incident.v1", "id": "line_stuck:rosy_01:stuck-abc",
+              "stuck_id": "stuck-abc", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+              "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": None,
+              "evidence": {"core": {"cause": "obstacle_ahead", "phase_at_open": "ASKING",
+                                    "held_s_max": 12, "attempts_max": 1},
+                           "fleet": {"close_reason": None, "pose_state": "LOCALIZED", "pose_age_s": 0.4,
+                                     "resolved_by": None},
+                           "rosy_cam": {"source_id": "ceiling_north", "seq": 21,
+                                        "captured_at": 1791608400},
+                           "ai_facts": [{"kind": "stalled", "stage": "shadow", "confidence": 0.8}],
+                           "front_image": {"status": "not_retained"}},
+              "actions": [], "reviews": []}
+    posts = []
+    api = {**API, "/api/fleet/incidents": {"reports": [report]}}
+    answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        item = page.locator("#incident-list li")
+        expect(item).to_have_count(1)
+        item.locator("summary").click()
+        expect(item).to_contain_text("Rosy Cam: ceiling_north")
+        expect(item).to_contain_text("AI 참고: stalled (shadow, 80%)")
+        expect(item).to_contain_text("이미지는 보존되지 않음")
+        item.locator("select").select_option("obstacle")
+        item.locator("input").fill("현장 상자 확인")
+        item.locator("button[type=submit]").click()
+        assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
+        assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
+        assert not errors
+        browser.close()
 
 # Elements that scroll on their own right now (the document is reported separately).
 SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
