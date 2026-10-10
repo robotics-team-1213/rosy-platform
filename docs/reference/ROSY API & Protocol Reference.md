@@ -1830,6 +1830,8 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 
 AI PC의 `ai_observer`는 열린 trip 중 `GET /api/fleet/trips`와 필요할 때 `GET /api/fleet/site-map/active`를 읽고 `POST /api/fleet/ai/facts`에 `kind: "trip_route_check"`를 보낼 수 있다(D-577 개정, v1.199). `value`는 `{status: "ON_ROUTE"|"OFF_ROUTE"|"UNKNOWN", offset_m?, limit_m?, reason?}`이고 `evidence`는 `trip_id`, `map_version`, `pose_source`, `pose_age_s`, 가능한 경우 `edge_id`를 담는다. 이 사실은 `shadow`이며 Fleet의 정지 권한이나 CORE 안전 명령을 대체하지 않는다.
 
+열린 Pinky Pro trip view는 `body_half_width_m`(m, D-424 URDF 공칭)을 싣는다. AI PC의 `trip_route_check`는 계획 선분의 `width_m/2 - body_half_width_m`를 `limit_m`으로 사용해 몸체 가장자리가 계획 구간 밖이면 `OFF_ROUTE`로 보고한다. 반폭이 없거나 유효하지 않으면 `UNKNOWN`이며 중심점 판정으로 대체하지 않는다. AI PC와 Fleet이 같은 지도 자세를 읽으므로 이 사실만으로 실제 차체 경계 침범이 없었다고 증명하지 않는다.
+
 ## 10.9 Site Fleet LAN discovery
 
 The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full
