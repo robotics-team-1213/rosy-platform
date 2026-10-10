@@ -41,11 +41,11 @@
 !middleware/devices/pinky/bringup/**
 !middleware/devices/pinky/profile/
 !middleware/devices/pinky/profile/**
-!middleware/apps/device/omx/
-!middleware/apps/device/omx/adapter/
-!middleware/apps/device/omx/adapter/**
-!middleware/apps/device/omx/profile/
-!middleware/apps/device/omx/profile/**
+!middleware/devices/omx/
+!middleware/devices/omx/adapter/
+!middleware/devices/omx/adapter/**
+!middleware/devices/omx/profile/
+!middleware/devices/omx/profile/**
 !middleware/core/
 !middleware/core/navigation/
 !middleware/core/navigation/**

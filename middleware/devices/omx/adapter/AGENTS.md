@@ -26,7 +26,7 @@ ROS-native OMX-AI profile boundary. Validates the selected model and emits the s
 | Directory | Purpose |
 |-----------|---------|
 | `omx_adapter/` | `profile.py` + CLI validator (see `omx_adapter/AGENTS.md`) |
-| `config/` | Device manifest only. The disabled arm profile is `middleware/apps/device/omx/profile` |
+| `config/` | Device manifest only. The disabled arm profile is `middleware/devices/omx/profile` |
 | `test/` | ROS-free profile/CLI tests (see `test/AGENTS.md`) |
 | `resource/` | ament index marker `omx_adapter` |
 
@@ -42,8 +42,8 @@ ROS-native OMX-AI profile boundary. Validates the selected model and emits the s
 ### Testing Requirements
 
 ```bash
-python3 -m pytest middleware/apps/device/omx/adapter/test/test_omx_profile.py -v
-python -m omx_adapter.cli middleware/apps/device/omx/profile/config/omx.disabled.yaml
+python3 -m pytest middleware/devices/omx/adapter/test/test_omx_profile.py -v
+python -m omx_adapter.cli middleware/devices/omx/profile/config/omx.disabled.yaml
 ```
 
 The CLI on the disabled profile must print `{}`.

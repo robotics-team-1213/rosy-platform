@@ -287,7 +287,7 @@ def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeyp
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, jog, event
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
-    repo = Path(__file__).resolve().parents[6]
+    repo = Path(__file__).resolve().parents[5]
     monkeypatch.setenv("ROSY_SIM_REPO", str(repo))
     spec = importlib.util.spec_from_file_location("cell_owner_entrypoint", repo / "deploy/robot/omx/run_cell_owner.py")
     cli = importlib.util.module_from_spec(spec)

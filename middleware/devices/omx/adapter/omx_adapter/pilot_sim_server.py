@@ -41,7 +41,7 @@ def main() -> None:
     cell_path = repo / "deploy/robot/omx/sim/cell_profile.yaml"
     cell = CellPlanningProfile.load(cell_path)
     source_hasher = hashlib.sha256()
-    for file in sorted((repo / "middleware/apps/device/omx/adapter/omx_adapter").glob("*.py")):
+    for file in sorted((repo / "middleware/devices/omx/adapter/omx_adapter").glob("*.py")):
         source_hasher.update(file.name.encode() + b"\0" + file.read_bytes())
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/controls.py").read_bytes())

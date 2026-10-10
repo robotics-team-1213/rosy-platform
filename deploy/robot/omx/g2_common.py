@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE_PATHS = (
     "contracts/foundation", "contracts/skill/src", "operations/execution/src",
     "operations/processes/palletizing/src", "middleware/skills/api/src",
-    "middleware/skills/manipulation/src", "middleware/apps/device/omx/adapter",
-    "middleware/apps/device/omx/agent/src", "integrations/robots/omx/src",
+    "middleware/skills/manipulation/src", "middleware/devices/omx/adapter",
+    "middleware/devices/omx/agent/src", "integrations/robots/omx/src",
     "operations/fleet",
 )
 

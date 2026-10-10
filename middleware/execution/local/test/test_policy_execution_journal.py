@@ -122,7 +122,7 @@ def test_same_server_goal_cannot_be_rebound_to_another_command(tmp_path):
 def test_original_runtime_dispatch_method_accepts_committed_sink_and_clears_terminal(tmp_path):
     # Execute unchanged dispatch methods from the actual ROS runtime source,
     # without importing unavailable rclpy. This is a host method seam, not ROS.
-    file = ROOT / 'middleware/apps/device/omx/adapter/omx_adapter/ros_runtime.py'
+    file = ROOT / 'middleware/devices/omx/adapter/omx_adapter/ros_runtime.py'
     tree = ast.parse(file.read_text(encoding='utf-8'))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef)
                and node.name == 'RosArmCommandRuntime')

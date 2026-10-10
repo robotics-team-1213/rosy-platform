@@ -164,10 +164,10 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     """The Device image ships the model-neutral OMX boundary without enabling hardware."""
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter" in dockerfile
+    assert "COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
-        ROOT / "middleware" / "apps" / "device" / "omx" / "profile" / "config" / "omx.disabled.yaml"
+        ROOT / "middleware" / "devices" / "omx" / "profile" / "config" / "omx.disabled.yaml"
     ).read_text(encoding="utf-8")
     assert "enabled: false" in disabled
     assert "hardware_plugin: \"\"" in disabled

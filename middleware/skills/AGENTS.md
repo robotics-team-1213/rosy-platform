@@ -23,7 +23,7 @@ ROS-free Skill wheels shared by agent and site compositions. They define invocat
 
 ### Testing Requirements
 
-Importers in `integrations/robots/omx/` and `middleware/apps/device/omx/agent/` are the consumers to run after a shape change.
+Importers in `integrations/robots/omx/` and `middleware/devices/omx/agent/` are the consumers to run after a shape change.
 
 ### Common Patterns
 

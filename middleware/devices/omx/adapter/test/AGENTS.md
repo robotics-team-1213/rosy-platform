@@ -32,7 +32,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest middleware/apps/device/omx/adapter/test/ -v
+python3 -m pytest middleware/devices/omx/adapter/test/ -v
 ```
 
 ### Common Patterns

@@ -139,8 +139,8 @@ COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/devices/pinky/description /opt/rosy_ws/src/sim/description
 COPY middleware/devices/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
 COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
-COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
-COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
+COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
+COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes

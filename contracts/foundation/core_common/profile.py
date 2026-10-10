@@ -33,11 +33,8 @@ def robot_config_dir(robot: str) -> Path:
             share = None  # not installed, or ament present but AMENT_PREFIX_PATH unset
     if share is not None:
         return Path(share) / "config"
-    middleware = Path(__file__).resolve().parents[3] / "middleware"
-    device = middleware / "devices"
+    device = Path(__file__).resolve().parents[3] / "middleware" / "devices"
     profiles = sorted(device.glob("*/profile/package.xml"))
-    # D-626: OMX remains at its old holder until the next migration unit.
-    profiles += sorted((middleware / "apps" / "device").glob("*/profile/package.xml"))
     source = next((xml.parent / "config" for xml in profiles
                    if f"<name>{robot}</name>" in xml.read_text(encoding="utf-8")),
                   device / robot / "profile" / "config")

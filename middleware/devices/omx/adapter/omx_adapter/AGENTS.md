@@ -35,7 +35,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest middleware/apps/device/omx/adapter/test/test_omx_profile.py -v
+python3 -m pytest middleware/devices/omx/adapter/test/test_omx_profile.py -v
 ```
 
 ### Common Patterns
@@ -46,7 +46,7 @@ python3 -m pytest middleware/apps/device/omx/adapter/test/test_omx_profile.py -v
 
 ### Internal
 
-- Config example: `middleware/apps/device/omx/profile/config/omx.disabled.yaml`
+- Config example: `middleware/devices/omx/profile/config/omx.disabled.yaml`
 
 ### External
 

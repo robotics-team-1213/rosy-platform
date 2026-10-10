@@ -10,7 +10,7 @@ from omx_adapter.command_owner import ArmCommandConfig, CommandDecision, JointSt
 from omx_adapter.pilot_sim_runtime import PilotSimRuntime
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[5]
 
 
 class Arm:
@@ -429,7 +429,7 @@ def test_sim_admission_is_the_cell_profile_within_the_urdf():
 
 
 def test_server_builds_admission_from_the_cell_profile_and_two_second_goals():
-    source = (ROOT / "middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_server.py").read_text(encoding="utf-8")
+    source = (ROOT / "middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py").read_text(encoding="utf-8")
     assert "CellPlanningProfile.load(cell_path)" in source
     assert "position_limits=sim_admission_limits(cell.position_limits, urdf_limits)" in source
     assert "max_goal_duration_s=GRIPPER_GOAL_MAX_DURATION_S" in source

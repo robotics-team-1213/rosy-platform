@@ -24,7 +24,7 @@ OMX on the robot: the ROS adapter, the profile, and the ROS-free agent compositi
 
 ### Testing Requirements
 
-`python -m pytest middleware/apps/device/omx/adapter/test -q` for the adapter. Agent tests follow `agent/AGENTS.md`.
+`python -m pytest middleware/devices/omx/adapter/test -q` for the adapter. Agent tests follow `agent/AGENTS.md`.
 
 ### Common Patterns
 

@@ -1,6 +1,6 @@
 # pinky
 
-**Parent context:** `../../apps/device/AGENTS.md`
+**Parent context:** `../AGENTS.md`
 **Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose

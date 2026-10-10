@@ -16,10 +16,10 @@ The current profile names OMX-AI as its target but is intentionally disabled.
 The measured joint map and hardware plugin stay empty.
 
 ```bash
-python -m omx_adapter.cli middleware/apps/device/omx/profile/config/omx.disabled.yaml
+python -m omx_adapter.cli middleware/devices/omx/profile/config/omx.disabled.yaml
 ```
 
-When running from a source checkout, set `PYTHONPATH=middleware/apps/device/omx/adapter`
+When running from a source checkout, set `PYTHONPATH=middleware/devices/omx/adapter`
 or build/source the ROS workspace first. The empty JSON contract from the
 disabled profile is expected. A non-empty contract is not physical acceptance.
 
