@@ -31,3 +31,12 @@
 - 이 ADR의 구현(d783ee15a, 04125b6ad, 952ea0509, 0a2ff2373, 14:21–14:53 KST)은 main 배포 동결 중에 착지했다. 이때 `server/line_stuck.py`가 +168줄 커졌는데, known_failures가 크기 시험 노드 전체를 실패로 적어 두어 드러나지 않았다(동결 위반).
 - 독립 재판정은 새 `fleet/fleet/stuck` 단위(1781줄) 안에서 이 증가를 받아들였다. 조건: 다음 증가 전에 `LineStuckAnswerLog`의 보고서·검토 부분을 날짜가 붙은 plan 문서에 따라 `stuck/reports.py`로 옮긴다.
 - D-607 P0 뒤 경로는 `operations/fleet/fleet/stuck/board.py`(옛 `server/line_stuck.py`)이다.
+
+### 개정 (2026-10-10): 녹화 작업의 사건 피드백 자료
+
+`recording_job.py`는 선택 설정 `incidents`로 운영자가 내보낸 Fleet 사건 파일을 받는다.
+기존 harvest가 만든 raw 세션의 `stuck_markers.json`과 정확한 사건 식별자를 연결하여
+`incident-feedback.json`을 작업 산출물로 남긴다. 원본 사건 파일·마커·산출물의 해시를
+작업 재개 시 다시 확인한다. 마커 없는 입력은 `missing_markers`로 표시한다. 이름과 자유
+메모는 제거하며, 원인 검토 후보를 trainer 라벨이나 평가 정답으로 자동 전달하지 않는다.
+설계·검증 범위는 `docs/plans/2026-10-10-recording-incident-feedback-design.md`에 둔다.
