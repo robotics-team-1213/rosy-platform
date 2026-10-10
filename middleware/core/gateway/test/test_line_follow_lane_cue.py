@@ -62,7 +62,7 @@ class Rig:
     def cue(self, state, seq, epoch="e", **extra):
         body = {"cue_id": f"c{seq}", "fleet_epoch": epoch, "seq": seq, "ttl_s": 1.0, "pose_stamp": WALL + self.fed,
                 "state": state, "side": None, "bearing_deg": None, "turn_deg": None, "lane_heading_deg": None,
-                "offset_m": None, "edge_id": None, "guide": None, **extra}
+                "offset_m": None, "edge_id": None, "guide": None, "turn_spot": True, **extra}
         return self.m.set_lane_cue(body, now=self.t)
 
 
@@ -344,3 +344,20 @@ def test_the_cue_stands_down_while_a_stuck_is_open():
     assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")   # latch unchanged
     rig.m._recovery.status = lambda now: open_stuck
     assert rig.m._lane_cue_plan(rig.t, 1.0) == ("hold", "fleet_off_map")
+
+
+def test_wrong_way_off_a_turn_spot_is_a_latched_hold_never_a_pivot():
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1, turn_deg=-170.0, turn_spot=False)
+    d = rig.step()
+    assert (d.linear, d.angular) == (0, 0) and rig.m.status().reason == "fleet_wrong_way"
+    rig.wait(3.0)
+    assert rig.step().linear == 0 and rig.m._pivot is None             # still held, Fleet silent
+    rig.cue("ON_LANE", 2)
+    assert rig.step().linear > 0
+
+
+def test_wrong_way_without_an_angle_is_latched_too():
+    rig = Rig()
+    rig.cue("WRONG_WAY", 1)
+    assert rig.step().linear == 0 and rig.m._cue_latch == "fleet_wrong_way"

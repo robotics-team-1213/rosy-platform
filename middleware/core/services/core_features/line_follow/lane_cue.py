@@ -11,8 +11,12 @@ the D-517 authority cap it afterwards like any decision. Per state:
   least ``SIDE_MIN_OFFSET_M`` on the same side twice in a row, the side takes the IR edge branch
   toward the lane centre (``cue_left``/``cue_right``, no back-creep). An IR reading wins. Bringing a
   robot that is outside the lane back across the paint is D-468's job, not this cue's.
-- WRONG_WAY (``turn_deg``) and OFF_LANE with the re-entry point more than ``PIVOT_BEARING_DEG`` off the
-  nose: after two cues of the same sign at least ``DEBOUNCE_S`` apart, turn in place to an odom yaw
+- WRONG_WAY: the turn circle (``robot_body`` 0.08257 m + 0.010 m pad = 0.0926 m) is wider than the
+  0.080 m inner lane half width, so a U-turn never fits in the lane. Off a Fleet ``turn_spot`` (or
+  without ``turn_deg``) WRONG_WAY is a latched HOLD ``fleet_wrong_way`` for Fleet: the robot neither
+  keeps driving the wrong way nor turns in the lane.
+- WRONG_WAY on a ``turn_spot`` (``turn_deg``) and OFF_LANE with the re-entry point more than
+  ``PIVOT_BEARING_DEG`` off the nose: after two cues of the same sign at least ``DEBOUNCE_S`` apart, turn in place to an odom yaw
   target = odom yaw at the cue's ``pose_stamp`` + the angle. The pivot is bounded on CORE: turned
   angle <= |angle| + ``BUDGET_PAD_DEG`` and time <= |angle| / rate + ``TIME_PAD_S``, else a latched
   HOLD ``fleet_turn_unconfirmed``. No pivot starts while a junction instruction, an arc or a crosswalk
@@ -216,9 +220,9 @@ class LaneCueMixin:
             return self._latch("fleet_off_map", now)
         angle = self._cue_angle(cue)
         streak = self._cue_streak.get("pivot")
+        if cue["state"] == "WRONG_WAY" and not (cue.get("turn_spot") and angle is not None):
+            return self._latch("fleet_wrong_way", now)      # rev 4: no in-lane U-turn; Fleet decides
         if angle is not None:
-            if cue["state"] == "WRONG_WAY" and cue.get("turn_deg") is None:
-                return ("hold", "fleet_wrong_way")
             if (streak and streak[2] >= 2 and now - streak[1] >= DEBOUNCE_S and self._cue_yaw0 is not None
                     and not self._lane_cue_busy(now)):
                 return self._pivot_start(now, streak[0] * abs(angle), cap)

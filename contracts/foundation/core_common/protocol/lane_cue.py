@@ -51,3 +51,6 @@ class LaneCueRequest(BaseModel):
     offset_m: Optional[float] = Field(None, ge=-10, le=10, allow_inf_nan=False)
     edge_id: Optional[str] = Field(None, max_length=128)
     guide: Optional[LaneGuide] = None
+    #: D-511 rev 4: Fleet checked on the map that the turn circle (0.0926 m) fits here; WRONG_WAY turns
+    #: in place only then, otherwise CORE holds (latched) for Fleet.
+    turn_spot: bool = False
