@@ -23,8 +23,11 @@ Run (stdlib only; systemd unit ``deploy/ai_pc/rosy-situation.service``, installe
 from __future__ import annotations
 
 import json
+import base64
 import logging
+import math
 import os
+import re
 import ssl
 import subprocess
 import time
@@ -79,6 +82,33 @@ class Fleet:
                                                   "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
             return json.loads(response.read())
+
+    def frame(self, path: str, lease: str) -> dict:
+        if not isinstance(path, str) or not re.fullmatch(r"/api/vision/sources/[A-Za-z0-9_-]+/frame", path):
+            raise ValueError("invalid Vision frame path")
+        if not isinstance(lease, str) or not lease:
+            raise ValueError("missing Vision frame lease")
+        request = urllib.request.Request(self._url + path, headers={"Authorization": f"Bearer {lease}"})
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, request, fp, code, msg, headers, newurl):
+                return None
+
+        opener = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=self._ssl))
+        with opener.open(request, timeout=TIMEOUT_S) as response:
+            if response.headers.get_content_type() != "image/jpeg":
+                raise ValueError("Vision response is not JPEG")
+            if response.headers.get("X-Frame-Rectified") != "map-crop":
+                raise ValueError("Vision frame is not a map crop")
+            seq = response.headers.get("X-Frame-Seq")
+            captured_at = float(response.headers.get("X-Frame-Captured-At") or "nan")
+            if not seq or not seq.isdigit() or not math.isfinite(captured_at):
+                raise ValueError("Vision frame headers invalid")
+            jpeg = response.read(2_000_001)
+            if not jpeg or len(jpeg) > 2_000_000:
+                raise ValueError("Vision frame size invalid")
+            return {"frame_id": f"{path.split('/')[4]}:{seq}",
+                    "captured_at": captured_at,
+                    "jpeg_b64": base64.b64encode(jpeg).decode("ascii")}
 
 
 class Situation:
@@ -245,24 +275,24 @@ class Situation:
         """Poll one model job without delaying Fleet reads, heartbeat or the rule fallback."""
         if self.vlm is None or mode != "available":
             return
-        if self._profile_task is not None and self._profile_task.done():
-            try:
-                self._profile = self._profile_task.result()
-            except (OSError, ValueError) as exc:
-                _LOG.warning("vlm profile unavailable: %s", exc)
-            self._profile_task = None
-            if self._profile is None:
-                self._profile_retry_at = self.clock() + 30.0
-        if self._profile is None:
-            if self._profile_task is None and self.clock() >= self._profile_retry_at:
-                self._profile_task = self._executor.submit(self.vlm.profile)
-            return
         if self._case_task is not None and self._case_task.done():
             try:
                 self._case_task.result()
             except Exception as exc:  # noqa: BLE001 - a bad case or model response must not stop Fleet polling
                 _LOG.warning("vlm case failed: %s", type(exc).__name__)
             self._case_task = None
+        if self._profile_task is not None and self._profile_task.done():
+            try:
+                self._profile = self._profile_task.result()
+            except (OSError, ValueError) as exc:
+                _LOG.warning("vlm profile unavailable: %s", exc)
+                self._profile = None
+            self._profile_task = None
+            self._profile_retry_at = self.clock() + 30.0
+        if self._profile is None or self.clock() >= self._profile_retry_at:
+            if self._profile_task is None and self._case_task is None and self.clock() >= self._profile_retry_at:
+                self._profile_task = self._executor.submit(self.vlm.profile)
+            return
         if self._case_task is None:
             self._case_task = self._executor.submit(self._ai_cycle)
 
@@ -274,6 +304,18 @@ class Situation:
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
                 case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                if self.owner_mode() != "available":
+                    return
+                for member in [case, *(case.get("members") or {}).values()]:
+                    view = (member.get("views") or {}).get("rosy_cam") or {}
+                    if view.get("frame_path"):
+                        try:
+                            member["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                        except (OSError, ValueError, KeyError) as exc:
+                            _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
+                            member["views"].pop("rosy_cam", None)
+                if self.owner_mode() != "available":
+                    return
                 proposal = self.vlm.judge(case, self.wall())
                 if proposal is not None and self.owner_mode() == "available":
                     self.fleet.call("/api/fleet/ai/proposals", proposal)

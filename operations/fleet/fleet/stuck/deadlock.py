@@ -23,12 +23,16 @@ class AiReplan:
     def __init__(self, first, board, episodes=None) -> None:
         self.first, self.board, self._log = first, board, SimpleNamespace(episodes=episodes)
         self._judged: set = set()
+        self.case = None
 
     def __call__(self, cycle: Sequence[str], avoidable: Mapping[str, Sequence[str]], now: float):
         members = sorted(cycle)
+        self.case = None
         if not members or not all(self.first.on(r) for r in members):
             return None
         pid = "deadlock:" + ":".join(members)
+        self.case = {"problem_id": pid, "kind": "deadlock", "robot_id": members[0],
+                     "context": {"cycle": members, "avoidable": {r: list(avoidable.get(r, ())) for r in members}}}
         proposal = self.board.problem_proposal(pid)
         if proposal is None or proposal["decision"] != "REPLAN":
             return None
@@ -56,6 +60,13 @@ class AiReplan:
         missing = self.first.evidence_invalid(proposal, pick)
         if missing is not None:
             return missing
+        evidence = (proposal.get("evidence") or {}).get("members") or {}
+        for member in pid.split(":")[1:]:
+            if member not in evidence:
+                return "evidence_missing:member"
+            missing = self.first.evidence_invalid({**proposal, "evidence": evidence[member]}, member)
+            if missing is not None:
+                return missing
         limit = self.first.limit(pick, pid, "REPLAN", now)
         if limit is not None:
             return limit

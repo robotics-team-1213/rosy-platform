@@ -15,7 +15,8 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
-from fleet.stuck.board import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.reports import LineStuckAnswerLog
 from fleet.server.sighting_store import SightingStore
 from fleet.stuck.ai_facts import AiFactLog
 from fleet.server.task_service import FleetTaskService

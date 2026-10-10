@@ -396,7 +396,7 @@ class IngestServer:
             try:
                 settings = PreviewRectification.from_mapping(lease["rectification"])
                 if settings.mode == "map":
-                    return await self._map_plane_response(source, frame, age, lease.get("crop_map"))
+                    return await self._map_plane_response(source, frame, age, lease)
                 if settings.mode == "auto":
                     # D-484: swap the lease's corners for the calibration's accepted quad.
                     field = self._field_corners(source)
@@ -438,7 +438,7 @@ class IngestServer:
         })
 
     async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
-                                  crop_map: list[float] | None = None) -> Response:
+                                  lease: Mapping | None = None) -> Response:
         """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
 
         The warp runs off the event loop, once per (frame, record revision) for all readers.
@@ -448,6 +448,10 @@ class IngestServer:
             return _plane_unavailable()
         record, map_id = reported
         revision = str(record.get("calibration_revision"))
+        crop_map = lease.get("crop_map") if lease else None
+        if crop_map is not None and (lease.get("crop_map_id") != map_id
+                                     or lease.get("crop_revision") != revision):
+            return _plane_unavailable()
         cached = self._plane_cache.get(source)
         if cached is None or cached[0] is not frame or cached[1] != revision:
             task = asyncio.ensure_future(asyncio.to_thread(

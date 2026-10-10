@@ -632,10 +632,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
                             loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
                             read_guard=read_guard, authorize=authorize, require_named_operator=require_named_operator,
-                            clients=console.clients, traffic=lambda: getattr(getattr(app.state, "trip_runner", None),
-                                                                              "traffic", None),
+                            clients=console.clients,
                             rosy_cam=lambda rid: rosy_cam_lease(rid, sightings, map_pose,
-                                                                vision_signer, vision_sources))
+                                                                vision_signer, vision_sources),
+                            pose=map_pose.stuck_pose,
+                            deadlock_case=lambda: getattr(app.state.trip_runner.traffic.ai_replan, "case", None))
 
     def ai_chain() -> dict:   # D-577 supervision row: credential presence only, never a secret
         enrolled = console.clients() if stuck_resolver_enrolled else {}

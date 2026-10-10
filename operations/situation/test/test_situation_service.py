@@ -6,6 +6,7 @@ import io
 import json
 import urllib.error
 from concurrent.futures import Future
+from email.message import Message
 
 from rosy_situation import service
 from rosy_situation.service import Situation
@@ -91,6 +92,113 @@ def test_available_model_reads_one_case_and_posts_its_answer_without_logging_ima
     assert any(body["model_profiles"] == [Model().profile()] for path, body in fleet.calls
                if path == "/api/fleet/ai/heartbeat")
     assert all("secret-image" not in path.read_text() for path in (tmp_path / "state" / "logs").glob("*"))
+
+
+def test_ai_cycle_reads_signed_vision_frame_into_case_without_logging_lease(tmp_path):
+    class Cases(FakeFleet):
+        def call(self, path, body=None):
+            if path == "/api/fleet/ai/problems":
+                return {"problems": [{"problem_id": "s-1"}]}
+            if path == "/api/fleet/ai/case/s-1":
+                return {"problem_id": "s-1", "views": {"front": {"jpeg_b64": "front"},
+                        "rosy_cam": {"frame_path": "/api/vision/sources/ceiling/frame", "lease": "secret-lease"}}}
+            return super().call(path, body)
+
+        def frame(self, path, lease):
+            assert (path, lease) == ("/api/vision/sources/ceiling/frame", "secret-lease")
+            self.calls.append(("frame", None))
+            return {"frame_id": "ceiling:7", "captured_at": 100.0, "jpeg_b64": "secret-image"}
+
+    class Model:
+        def judge(self, case, _now):
+            assert case["views"]["rosy_cam"]["jpeg_b64"] == "secret-image"
+            return None
+
+    fleet = Cases()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", vlm=Model())
+    situation._ai_cycle()
+    assert fleet.paths().count("frame") == 1
+    assert not any("secret-lease" in path.read_text() or "secret-image" in path.read_text()
+                   for path in (tmp_path / "state" / "logs").glob("*"))
+
+
+def test_vision_frame_lease_cannot_be_sent_to_an_arbitrary_path():
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    for path in ("https://elsewhere.example/image", "/api/vision/sources/cam/frame?to=elsewhere",
+                 "/api/fleet/state", "/api/vision/sources/../frame"):
+        try:
+            fleet.frame(path, "secret-lease")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(path)
+
+
+def test_signed_vision_frame_requires_map_crop_and_exact_headers(monkeypatch):
+    headers = Message()
+    for key, value in (("Content-Type", "image/jpeg"), ("X-Frame-Rectified", "map-crop"),
+                       ("X-Frame-Seq", "7"), ("X-Frame-Captured-At", "100.5")):
+        headers[key] = value
+
+    class Reply:
+        def __init__(self):
+            self.headers = headers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _limit):
+            return b"\xff\xd8frame\xff\xd9"
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == "https://fleet.example/api/vision/sources/ceiling/frame"
+            assert request.headers["Authorization"] == "Bearer secret-lease"
+            return Reply()
+
+    monkeypatch.setattr(service.urllib.request, "build_opener", lambda *_handlers: Opener())
+    fleet = service.Fleet("https://fleet.example", "ai-token")
+    frame = fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    assert frame == {"frame_id": "ceiling:7", "captured_at": 100.5,
+                     "jpeg_b64": "/9hmcmFtZf/Z"}
+    headers.replace_header("X-Frame-Rectified", "false")
+    try:
+        fleet.frame("/api/vision/sources/ceiling/frame", "secret-lease")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("raw Vision frame accepted")
+
+
+def test_model_unload_removes_advertised_profile(tmp_path):
+    class Model:
+        loaded = True
+
+        def profile(self):
+            return "model@digest" if self.loaded else None
+
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    fleet, clock, model = FakeFleet(), Clock(), Model()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          vlm=model, executor=Immediate())
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile == "model@digest"
+    model.loaded = False
+    clock.now += 30
+    situation._ai("available")
+    situation._ai("available")
+    assert situation._profile is None
 
 
 def test_reads_fleet_and_the_event_cursor_survives_a_restart(tmp_path):
