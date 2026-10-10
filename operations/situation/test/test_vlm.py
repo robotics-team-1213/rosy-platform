@@ -64,6 +64,12 @@ def test_model_profile_requires_a_running_model_with_a_digest():
         {"name": "qwen3-vl:8b-instruct"}]}).profile() is None
 
 
+def test_stuck_prompt_does_not_offer_unsupported_realign():
+    post, calls = _post({"decision": "REALIGN", "confidence": 0.8})
+    assert Vlm(post=post, get=RUNNING).judge(_case(), 100.0) is None
+    assert "REALIGN" not in calls[-1][1]["messages"][0]["content"]
+
+
 def test_vlm_uses_recent_outcomes_and_drops_nonfinite_confidence_or_bad_image():
     post, calls = _post({"decision": "WAIT", "confidence": 0.5})
     case = {**_case(), "history": [{"decision": "RESUME", "outcome": "failed"}]}
