@@ -402,7 +402,9 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         angular = max(-self._config.max_angular,
                       min(self._config.max_angular, -self._config.steering_gain * error))
         reason = "tracking"
-        if guard in ("left", "right"):
+        if guard in ("left", "right") and linear < self._config.ir_guard_min_linear:
+            pass  # D-344 §12 개정: turning in place (camera linear < ir_guard_min_linear), the camera turn stands
+        elif guard in ("left", "right"):
             # 경계선이 왼쪽 IR 밑이면 오른쪽(음의 각속도, REP-103)으로 비킨다.
             turn = min(self._config.ir_guard_turn, self._config.max_angular)
             angular = -turn if guard == "left" else turn
