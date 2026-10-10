@@ -35,6 +35,7 @@ class Rig:
 
     def feed(self, camera=True, ir_error=None):
         t, m = self.t, self.m
+        self.fed = t
         stamp = round(t * 1e9)
         m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0,
                               yaw=self.yaw, received_at=t)
@@ -51,7 +52,7 @@ class Rig:
         return self.m.tick(self.t + 0.01)
 
     def cue(self, state, seq, epoch="e", **extra):
-        body = {"cue_id": f"c{seq}", "fleet_epoch": epoch, "seq": seq, "ttl_s": 1.0, "pose_stamp": WALL + self.t,
+        body = {"cue_id": f"c{seq}", "fleet_epoch": epoch, "seq": seq, "ttl_s": 1.0, "pose_stamp": WALL + self.fed,
                 "state": state, "side": None, "bearing_deg": None, "turn_deg": None, "lane_heading_deg": None,
                 "offset_m": None, "edge_id": None, "guide": None, **extra}
         return self.m.set_lane_cue(body, now=self.t)
@@ -157,7 +158,7 @@ def test_ordering_epoch_and_pose_age():
     rig.feed()
     assert rig.cue("ON_LANE", 1, epoch="other")[0]                      # the old one expired
     body_old = rig.m.set_lane_cue({"cue_id": "x", "fleet_epoch": "other", "seq": 9, "ttl_s": 1.0,
-                                   "pose_stamp": WALL + rig.t - 2.0, "state": "ON_LANE"}, now=rig.t)
+                                   "pose_stamp": WALL + rig.fed - 2.0, "state": "ON_LANE"}, now=rig.t)
     assert body_old == (False, "pose_stale")
 
 
