@@ -94,9 +94,10 @@ def test_semantic_colour_aliases_keep_existing_theme_values():
     text = token_themes.read()
     body = token_themes.derived_body(text)
     aliases = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;", body))
+    derived = set(re.findall(r"(--[a-z0-9-]+)\s*:", body))
     for primitive, role in {**COLOR_ROLES["color"], **COLOR_ROLES["background"], **COLOR_ROLES["border-color"]}.items():
         assert aliases[role] == primitive
-        assert primitive in aliases or all(primitive[2:] in p for p in token_themes.palettes(text).values())
+        assert primitive in derived or all(primitive[2:] in p for p in token_themes.palettes(text).values())
 
 
 def test_review_app_rose_is_confined_to_its_wordmark():

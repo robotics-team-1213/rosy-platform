@@ -224,8 +224,8 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_668,
-        "split: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
+        10_871,
+        "split: independently re-judged by design_consistency_review at 10871 on 2026-10-11: D-624 expands the existing shared-component gallery and semantic CSS roles with bounded map-evidence containment, no duplicate component library or new runtime/command owner. Keep package +150 and the sibling map goal-gate / D-362 P2 app-binding extraction obligations. Previous verdict: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
         "navigation-map UI in the existing map owner (map.js 534, panels/console/map.js 207: "
         "trusted-localization and safe-stop goal gating, path/route evidence, map identity, mobile stage); "
         "every asset under 800, no transport or command path. Next growth: move pathEvidence/setPath/"

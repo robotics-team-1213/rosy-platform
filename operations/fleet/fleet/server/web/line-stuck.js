@@ -541,7 +541,8 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     }
     li.append(head, facts);
     const boundary = stuck.inquiry?.lane_boundary;
-    const boundaryText = boundary ? `차선 경계: ${boundary.state} · 변화 #${boundary.revision} · 같은 경계에서는 AI 재문의 대기` : "";
+    const boundaryLabel = {unknown: "관측 불가", baseline: "기준 설정", confirming: "변화 확인 중", confirmed: "변화 확인됨"}[boundary?.state] || "관측 불가";
+    const boundaryText = boundary ? `차선 경계: ${boundaryLabel} · 변화 #${boundary.revision} · 같은 경계에서는 AI 재문의 대기` : "";
     for (const text of [headingText(stuck.heading_review), boundaryText, fleetAnswerText(stuck.fleet_answer)].filter(Boolean)) {
       const line = document.createElement("p");
       line.className = "stuck-resolver";
