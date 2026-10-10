@@ -11,11 +11,10 @@ way_target   the way (frame-size mask, one inference) + ground plane -> the purs
              Per image row the way spans [first, last] columns; an edge on the frame border is
              unseen (open). Centre per row: both edges seen -> their middle; one seen -> that edge
              lane_half_width toward the open side; none -> the middle of the view. The pursuit
-             point is the median centre over the rows within ROW_BAND_M of the lookahead (or the
-             way's farthest rows when it ends nearer). ahead_m is how far the robot's own
-             corridor (|y| <= CORRIDOR_HALF_M) stays on the way.
+             point is the centre at arc length LOOKAHEAD_M, on the commanded curvature. ahead_m
+             is how far the robot's corridor (|y| <= CORRIDOR_HALF_M) stays on the way.
 DrivableSteer per camera frame: the newest way's target moved into the current pose by odometry
-             (the way is not re-warped), error = -y / lane_half_width (the keeper's contract).
+             (the way is not re-warped). The error holds that curvature at cruise_speed.
              Closed ahead (ahead_m < PIVOT_AHEAD_M) with an exit at a side of the view turns in
              place toward it (keep right when both sides are open, D-384 2): error +-PIVOT_ERROR
              at PIVOT_CONFIDENCE, which CORE's speed scale turns into ~0 linear. Released when
@@ -69,6 +68,8 @@ CROSS_TOL_M = 0.015
 CROSS_MIN_ALONG_M = 0.06
 #: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
 PIVOT_MAX_RAD = 1.75
+#: centre-line curvature asked of CORE stays inside the exit_segment bound (1/m, left +)
+MAX_TARGET_CURVATURE = 5.0
 #: after a crosswalk zone is seen, no pivot or exit turn for this much travel
 CROSSWALK_HOLD_M = 0.35
 #: the way's near centre is the median centre of its rows within this of its nearest row
@@ -95,6 +96,41 @@ def _col_y(cols, rows, ground):
     denominator = (ground.focal_px * math.sin(ground.pitch_rad)
                    + (np.asarray(rows, float) - ground.principal_y) * math.cos(ground.pitch_rad))
     return (ground.principal_x - np.asarray(cols, float)) * ground.height_m / np.maximum(denominator, 1e-9)
+
+
+def _centre_target(xs, centre, lookahead):
+    """(point, curvature, band). Station is arc length `lookahead` along the centre.
+    Curvature is that span's heading change when it bends with the chord and harder;
+    the chord wins for a return onto a straighter centre. The point is on that arc.
+    """
+    xs, centre = np.asarray(xs, float), np.asarray(centre, float)
+    order = np.argsort(xs)
+    keep = np.isfinite(xs[order]) & np.isfinite(centre[order]) & (xs[order] > 0.0)
+    order, band = order[keep], np.zeros(xs.shape, bool)
+    if order.size == 0:
+        return None, 0.0, band
+    sx, sy = xs[order], centre[order]
+    px, py = np.concatenate(([0.0], sx)), np.concatenate(([0.0], sy))
+    arc = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(px), np.diff(py)))))
+    reach = min(float(lookahead), float(arc[-1]))
+    near = np.abs(arc[1:] - reach) <= ROW_BAND_M
+    if not near.any():
+        near = np.zeros(sx.shape, bool)
+        near[int(np.argmin(np.abs(arc[1:] - reach)))] = True
+    tx, ty = float(np.median(sx[near])), float(np.median(sy[near]))
+    d2 = tx * tx + ty * ty
+    k_chord = 0.0 if d2 < 1e-6 else 2.0 * ty / d2
+    heading = np.arctan2(np.diff(py), np.diff(px))
+    walked = heading[arc[1:] <= reach + 1e-6]
+    k_path = 0.0
+    if walked.size >= 2 and reach > 1e-3:
+        k_path = math.atan2(math.sin(walked[-1] - walked[0]), math.cos(walked[-1] - walked[0])) / reach
+    k = k_path if abs(k_path) > abs(k_chord) and k_path * k_chord >= 0.0 else k_chord
+    k = float(max(-MAX_TARGET_CURVATURE, min(MAX_TARGET_CURVATURE, k)))
+    point = (reach, ty) if abs(k) < 1e-3 else (
+        math.sin(k * reach) / k, (1.0 - math.cos(k * reach)) / k)
+    band[order[near]] = True
+    return point, k, band
 
 
 def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead: float = LOOKAHEAD_M):
@@ -174,12 +210,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     near = xs <= float(xs.min()) + NEAR_BAND_M
     out["near_centre_m"] = (round(float(np.median(xs[near])), 3), round(float(np.median(centre[near])), 3))
-    pursuit = min(lookahead, float(xs.max()))
-    band = np.abs(xs - pursuit) <= ROW_BAND_M
-    if not band.any():
-        band = xs >= np.sort(xs)[-3:].min()
-    out["target_m"] = (round(float(np.median(xs[band])), 3), round(float(np.median(centre[band])), 3))
-    out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
+    point, curvature, band = _centre_target(xs, centre, lookahead)
+    if point is not None:
+        out["target_m"] = (round(point[0], 3), round(point[1], 3))
+        out["curvature_1pm"] = round(curvature, 3)
+        out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
     return out
 
 
@@ -209,24 +244,28 @@ def _crosses(points, tx, ty):
     return float(pts[first, 1])
 
 
-#: CORE line-follow law the error is shaped for (rosy_default.yaml line_follow; robot overlays):
+#: CORE line-follow law (rosy_default.yaml cruise 0.08). A 0.04 inverse held half the arc.
 #: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
-CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.04
+CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.08
+
+
+def error_for_k(curvature, confidence):
+    """CORE error whose command holds `curvature` (1/m, left +) at CORE_CRUISE_MPS."""
+    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
+    kc = abs(curvature) * speed
+    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0.0 else 1.0
+    return float(-math.copysign(min(1.0, error), curvature))
 
 
 def pursuit_error(tx, ty, confidence):
-    """The keep error whose CORE command drives the pure-pursuit arc to (tx, ty): curvature
+    """The keep error whose CORE command drives the arc to (tx, ty): curvature
     k = 2y/(x^2+y^2) and w/v = k under CORE's law (CORE keeps the curvature when it caps w).
     error = -y/half made CORE turn 5-30x tighter than the road (independent review: actual radius
     0.025 m vs road 0.25 m in turns), cutting corners onto lines (user 2026-10-10)."""
     d2 = tx * tx + ty * ty
     if d2 < 1e-6:
         return 0.0
-    k = 2.0 * ty / d2
-    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
-    kc = abs(k) * speed
-    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0 else 1.0
-    return float(-math.copysign(min(1.0, error), k))
+    return error_for_k(2.0 * ty / d2, confidence)
 
 
 def _to_world(point, pose):
@@ -391,8 +430,18 @@ class DrivableSteer:
         tx, ty = _to_current(target, source_pose, current_pose)
         # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
         # independent replay, p8 17 of 19 pivot episodes followed a clamp, wobble 4.3 -> 0.3 /min without.
-        self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
+        d2 = tx * tx + ty * ty
+        curvature = 0.0 if d2 < 1e-6 else 2.0 * ty / d2
+        self._smoothed = curvature if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * curvature
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
-        error = pursuit_error(tx, self._smoothed, confidence)
-        return error, confidence, dict(info, strategy=strategy, target_now_m=(round(tx, 3), round(self._smoothed, 3)))
+        error = error_for_k(self._smoothed, confidence)
+        length = math.hypot(tx, ty)
+        if abs(self._smoothed) < 1e-3:
+            shown = (length, ty)
+        else:
+            shown = (math.sin(self._smoothed * length) / self._smoothed,
+                     (1.0 - math.cos(self._smoothed * length)) / self._smoothed)
+        return error, confidence, dict(info, strategy=strategy,
+                                       target_now_m=(round(shown[0], 3), round(shown[1], 3)),
+                                       curvature_1pm=round(self._smoothed, 3))
 

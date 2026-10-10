@@ -532,10 +532,11 @@ main {
   main { grid-template-columns: minmax(0, 1fr); }
   .console-primary, .console-secondary { display: contents; }
   .queues-panel { order: 0; }
-  .panel[aria-labelledby="roster-heading"] { order: 1; }
-  .panel[aria-labelledby="map-heading"] { order: 2; }
-  .vision-preview { order: 3; }
-  .ops-block { order: 4; }
+  .panel[aria-labelledby="map-heading"] { order: 1; }
+  .incident-panel { order: 2; }
+  .panel[aria-labelledby="roster-heading"] { order: 3; }
+  .vision-preview { order: 4; }
+  .ops-block { order: 5; }
 }
 
 
@@ -684,8 +685,8 @@ main {
 
 .incident-panel .robot-head { margin-bottom: var(--space-2); }
 .incident-row.closed { border-left-color: var(--line-30); }
-.incident-row summary { cursor: pointer; min-height: var(--target-secondary); font-weight: 600; }
-.incident-row summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); }
+.incident-row summary { cursor: pointer; min-height: var(--target-secondary); font-weight: var(--weight-label); }
+.incident-row summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .incident-row p { margin: var(--space-2) 0; font-size: var(--text-label); }
 .incident-row form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--space-2); }
 .incident-row form > * { min-width: 0; }

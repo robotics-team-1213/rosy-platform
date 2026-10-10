@@ -57,6 +57,52 @@ def fake_build(dirs, store, name, **kwargs):
     return doc, final
 
 
+def test_incident_feedback_is_private_review_evidence_with_resume_integrity(tmp_path):
+    cfg = config(tmp_path)
+    raw = tmp_path / "raw" / "train-a"
+    (raw / "bag").mkdir(parents=True)
+    (raw / "session.json").write_text(json.dumps({"ended_at": "2026-10-10T00:01:00Z"}))
+    (raw / "bag" / "0.mcap").write_bytes(b"raw fixture")
+    marker = raw / "stuck_markers.json"
+    marker.write_text(json.dumps({"schema": "rosy.recording.stuck_markers/1",
+                                  "markers": [{"stuck_id": "stuck-a"}]}))
+    cfg["recordings"][0] = {"session": "train-a", "raw": str(raw)}
+    export = tmp_path / "incidents.json"
+    export.write_text(json.dumps({"reports": [{"schema": "rosy.incident.v1", "classification": "line_stuck",
+        "id": "line_stuck:pinky:stuck-a", "robot_ids": ["pinky"], "stuck_id": "stuck-a",
+        "evidence": {"core": {"cause": "lane_lost"}}, "reviews": [{"root_cause": "unknown",
+        "principal_id": "private-operator", "at": "2026-10-10T00:02:00Z", "note": "private-note"}]}]}))
+    cfg["incidents"] = str(export)
+    out = tmp_path / "job"
+    result = prepare(cfg, out, runner=fake_labels, builder=fake_build)
+    text = Path(result["incident_feedback"]).read_text()
+    sessions = json.loads(text)["sessions"]
+    assert sessions[0]["feedback"]["matches"][0]["review_state"] == "review_candidate"
+    assert sessions[1] == {"session": "train-b", "status": "missing_markers"}
+    assert "private-operator" not in text and "private-note" not in text
+    assert "incidents" not in json.loads(Path(result["training_config"]).read_text())
+    assert prepare(cfg, out, runner=fake_labels, builder=fake_build) == result
+    marker.write_text('{}')
+    with pytest.raises(JobError):
+        prepare(cfg, out, runner=fake_labels, builder=fake_build)
+
+
+def test_invalid_incident_export_fails_even_without_recording_markers(tmp_path):
+    cfg = config(tmp_path)
+    export = tmp_path / "incidents.json"
+    export.write_text('{}')
+    cfg["incidents"] = str(export)
+    with pytest.raises(ValueError, match="reports"):
+        prepare(cfg, tmp_path / "job", runner=fake_labels, builder=fake_build)
+
+
+def test_incident_export_path_requires_a_nonempty_string(tmp_path):
+    cfg = config(tmp_path)
+    cfg["incidents"] = True
+    with pytest.raises(JobError, match="incidents"):
+        validate_config(cfg)
+
+
 def test_interrupted_label_retry_skips_completed_sources(tmp_path):
     cfg = config(tmp_path)
     calls = []
