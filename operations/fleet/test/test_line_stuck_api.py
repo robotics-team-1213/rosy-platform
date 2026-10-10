@@ -605,7 +605,7 @@ def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
     assert reviewed["reviews"][-1]["note"] == "floor box seen"
     assert client.post("/api/fleet/incidents/facts/99999/review", json=body,
                        headers=_auth(OPERATOR)).status_code == 404
-    assert client.post("/api/fleet/incidents/facts/999999999999999999999/review", json=body,
+    assert client.post(f"/api/fleet/incidents/facts/{'9' * 21}/review", json=body,
                        headers=_auth(OPERATOR)).status_code == 422
     robot._state = _state(stuck=None)
     client.app.state.fleet_gather.max_age_s = 0.0
