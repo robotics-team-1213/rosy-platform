@@ -29,6 +29,8 @@ MAX_GAP_ROWS = 2
 CORRIDOR_HALF_M = 0.10
 #: Share of the corridor's cells a class row needs: the four bars alone cover about half of it.
 CLASS_ROW_FRACTION = 0.25
+#: a row needs this many seen corridor cells to be judged
+MIN_SEEN_CELLS = 3
 
 
 def _stripes(row: np.ndarray) -> bool:
@@ -62,13 +64,19 @@ def crosswalk_extent(grid: np.ndarray, x_rows: np.ndarray,
 
 
 def crosswalk_class_extent(grid: np.ndarray, x_rows: np.ndarray,
-                           y_cols: np.ndarray) -> tuple[float, float] | None:
+                           y_cols: np.ndarray, observable: np.ndarray | None = None) -> tuple[float, float] | None:
     """(near_m, far_m) ahead of base_link of the longest block of rows where the model's crosswalk
-    class (0/1 BirdsEye grid, as crosswalk_extent) covers CLASS_ROW_FRACTION of the corridor."""
-    lane = grid[:, np.abs(y_cols) <= CORRIDOR_HALF_M]
+    class (0/1 BirdsEye grid, as crosswalk_extent) covers CLASS_ROW_FRACTION of the corridor cells
+    the camera sees (`observable`; without it, of all corridor cells). Near the robot the camera
+    sees only part of the corridor: counting unseen cells as empty hid every crosswalk there
+    (9dfk 20261010T015707Z_rosy_41, 147-154 s: 0-1 rows instead of 17-28)."""
+    columns = np.abs(y_cols) <= CORRIDOR_HALF_M
+    lane = grid[:, columns]
     if not lane.shape[1]:
         return None
-    return _longest_block(np.flatnonzero(lane.mean(axis=1) >= CLASS_ROW_FRACTION), x_rows)
+    seen = (np.full(lane.shape, True) if observable is None else observable[:, columns]).sum(axis=1)
+    fraction = np.where(seen >= MIN_SEEN_CELLS, lane.sum(axis=1) / np.maximum(seen, 1), 0.0)
+    return _longest_block(np.flatnonzero(fraction >= CLASS_ROW_FRACTION), x_rows)
 
 
 def _longest_block(rows, x_rows) -> tuple[float, float] | None:
@@ -96,4 +104,4 @@ def keep_crosswalk(view, grid: np.ndarray, crosswalk_mask: np.ndarray | None,
         return found
     if not isinstance(crosswalk_mask, np.ndarray) or crosswalk_mask.shape != tuple(shape):
         raise ValueError("crosswalk_mask must be an array of the frame's height x width")
-    return crosswalk_class_extent(view.sample(crosswalk_mask > 0), view.x[:, 0], view.y[0, :])
+    return crosswalk_class_extent(view.sample(crosswalk_mask > 0), view.x[:, 0], view.y[0, :], view.observable)

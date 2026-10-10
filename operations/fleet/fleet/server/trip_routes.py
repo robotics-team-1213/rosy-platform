@@ -1,7 +1,8 @@
 """D-488 2 / D-490 5: ``POST /api/fleet/robots/{id}/trip`` plans and returns; it never drives.
 
-The robot's LOCALIZED map pose and the active site map go into the pure planner
-(``fleet.routing``). Every plan, refused or not, is a row in the site map store (D-490 8).
+The trip map pose (D-494 3 MapPose, else a robot-reported LOCALIZED map pose) and the active
+site map go into the pure planner (``fleet.routing``). Every plan, refused or not, is a row
+in the site map store (D-490 8).
 D-494 5: ``POST /api/fleet/trips/{plan_id}/start`` runs a stored plan through the trip loop
 (``trip_runner``); ``/cancel`` and ``/confirm-replan`` act on it and ``GET`` reads it. The
 plan request's ``execute: true`` stays 501: starting is always its own named-operator call.
@@ -25,7 +26,7 @@ from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.routing.execute import plan_body
-from fleet.server.trip_runner import PLAN_TTL_S, TripError
+from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
 from fleet.swarm.transport import RobotApiError
 
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]
@@ -117,14 +118,22 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if refused:
             record({"error": refused[0], "detail": refused[1]})
             raise _refuse(*refused)
-        try:
-            pose = await console.trusted_map_pose(robot_id)
-        except (HubError, RobotApiError, OSError) as exc:
-            record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
-            raise http_error(exc) from exc
+        # The trip loop's own map pose first (D-494 3, D-593 1): a motor-mode robot reports no
+        # localization, so its Rosy Cam MapPose is its only map pose. A robot-reported LOCALIZED
+        # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
+        map_pose = await runner.map_pose(robot_id)
+        pose_state = map_pose.state if map_pose is not None else None
+        if pose_state == LOCALIZED and map_pose.yaw is not None:
+            pose = (map_pose.x, map_pose.y, map_pose.yaw)
+        else:
+            try:
+                pose = await console.trusted_map_pose(robot_id)
+            except (HubError, RobotApiError, OSError) as exc:
+                record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
+                raise http_error(exc) from exc
         if pose is None or pose[2] is None:
-            record({"error": "TRIP_POSE_UNTRUSTED"})
-            raise _refuse("TRIP_POSE_UNTRUSTED")
+            record({"error": "TRIP_POSE_UNTRUSTED", "detail": {"pose_state": pose_state}})
+            raise _refuse("TRIP_POSE_UNTRUSTED", {"pose_state": pose_state})
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).

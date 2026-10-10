@@ -163,6 +163,7 @@ class MainActivity : ComponentActivity() {
         // The Wi-Fi now: "not connected" check, and the pairing-time subnet saved for diagnosis only.
         val lan = rememberLan()
         val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
+        val recognitionExposure by settings.recognitionExposure.collectAsStateWithLifecycle(initialValue = true)
         var showSettings by remember { mutableStateOf(false) }
         var showLan by remember { mutableStateOf(true) }
         var localError by remember { mutableStateOf<String?>(null) }
@@ -230,6 +231,8 @@ class MainActivity : ComponentActivity() {
                 locked = state.running,
                 lens = LensChoice.orDefault(lens),
                 onLens = { choice -> scope.launch { settings.saveLens(choice) } },
+                recognitionExposure = recognitionExposure,
+                onRecognitionExposure = { on -> scope.launch { settings.saveRecognitionExposure(on) } },
                 onSave = { p, siteName, fresh ->
                     // A settings edit keeps the pairing-time subnet; only a fresh pairing records the current one.
                     val subnet = if (fresh) lan?.subnet else null
