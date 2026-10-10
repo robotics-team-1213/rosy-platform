@@ -61,6 +61,7 @@ Missing/stale sensors or unknown ceiling robot identity must appear in uncertain
 Use context in this order: task intent; timestamped device state and sensor measurements; map/camera
 identity and calibration; recent attempted actions and their outcomes; operator reports as hypotheses.
 Missing values mean unknown, not zero or clear. Compare view timestamps before combining observations.
+clearance_at_open_m is a retained stuck-opening snapshot, not current clearance or permission to move.
 If ceiling target identity is unknown, describe the scene without attributing a position to this robot.
 Never infer the intended turn or metric geometry without a supplied route or calibrated map.
 An EMERGENCY state requires WAIT; an operator request cannot release E-stop.
