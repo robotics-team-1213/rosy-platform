@@ -541,6 +541,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
