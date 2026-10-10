@@ -62,7 +62,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/core/events /opt/rosy_ws/src/runtime/events
 COPY middleware/core/services /opt/rosy_ws/src/runtime/services
-COPY middleware/core/api_web /opt/rosy_ws/src/runtime/api_web
+COPY middleware/core/api /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
 # D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).

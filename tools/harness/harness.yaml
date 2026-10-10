@@ -124,10 +124,10 @@ modules:
     functional_kind: pytest
     functional: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py]
   - name: core_api_web
-    path: middleware/core/api_web
-    tests: [middleware/core/api_web/test]
+    path: middleware/core/api
+    tests: [middleware/core/api/test]
     functional_kind: pytest
-    functional: [middleware/core/api_web/test]
+    functional: [middleware/core/api/test]
   - name: web_common
     path: shared/web
     tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]

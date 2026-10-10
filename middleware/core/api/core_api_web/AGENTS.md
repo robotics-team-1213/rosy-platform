@@ -34,7 +34,7 @@ Python package holding the CORE HTTP/WebSocket surface: the FastAPI app factory,
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/core/api_web/test -q
+python -m pytest middleware/core/api/test -q
 ```
 
 Tests live in the sibling `../test/` and need `fastapi`, not rclpy.

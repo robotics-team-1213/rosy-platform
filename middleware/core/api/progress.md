@@ -6,11 +6,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "70 passed, 13 skipped (2026-09-28 Windows); D-316 optional CORE navigation correlation request is backward-compatible."
-    cmd: "python -m pytest src/runtime/api_web/test -q"
+    cmd: "python tools/remote/remote_pytest.py -- middleware/core/api/test -q"
   LOCAL:
     state: GO
     evidence: "70 passed, 13 skipped (2026-09-28 Windows); source-only request contract coverage."
-    cmd: "python -m pytest src/runtime/api_web/test -q"
+    cmd: "python tools/remote/remote_pytest.py -- middleware/core/api/test -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:

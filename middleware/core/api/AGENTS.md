@@ -39,7 +39,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/core/api_web/test -q
+python -m pytest middleware/core/api/test -q
 ```
 
 ## Dependencies

@@ -27,7 +27,7 @@
 
 ## 시험
 
-- `middleware/core/api_web/test`
+- `middleware/core/api/test`
 
 ## 최근 기록
 

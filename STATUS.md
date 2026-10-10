@@ -25,7 +25,7 @@
 | [core_common](contracts/foundation/progress.md) | CORE | b587404b (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_api_web](middleware/core/api_web/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |

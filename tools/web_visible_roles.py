@@ -32,7 +32,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 for _entry in (
     "middleware/core/gateway",
-    "middleware/core/api_web",
+    "middleware/core/api",
     "contracts/foundation",
     "middleware/core/events",
     "middleware/core/services",
