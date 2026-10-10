@@ -7697,3 +7697,9 @@ osy-d395-s1d\`.
 - 변경: 네 단위의 JSON 이전표와 기본 read-only preview/선택 holder 이동 도구를 준비했다. 참조 수정은 수동이며 API·OMX Safety 단위는 자동 이동을 차단한다. 기존 scanner를 재사용하고 삭제·stash·reset·광역 staging을 넣지 않았다.
 - 증거: 구현 전 e98e0aeed의 원격 RED 12 NEW(도구 미구현), 구현/시험 보강 f2f9945c7의 모델 PC 원격 도구/harness/network 계약 144 성공 표시·exit 0, known_failures 0 NEW/0 known. synthetic 등록 worktree의 실제 이동/역이동과 충돌·dirty·stale·link·ignored·Safety 거절 검증. 실제 네 단위 preview에서 tracked byte hash/index/status 무변경, ADR Log BOM/CRLF와 committed journal append-only 보존 확인.
 - gate 변화: 없음. SOURCE/원격 도구 증거이며 실제 제품 이동·책임 추출·설치·ARM64·DEVICE·FIELD·main 착지·push는 미실행이다.
+
+## 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
+
+- 변경: 후속 실행 요청에 따라 D-625 M3–M6의 package 보존 이전을 D-626으로 기록했다. 최신 main을 작업 브랜치에 병합하고 Safety/설치 보존 조건을 독립 리뷰로 확인했다.
+- 증거: 이전 전 3927f9a33의 모델 PC 원격 architecture/도구 계약 104 성공 표시·exit 0, known_failures 0 NEW/0 known. API Safety 1개·OMX Safety 5개와 Pinky deadman·Nav2 후보 출력·Docker 목적지 보존 조건을 리뷰했다. 변경 후 최종 리뷰와 시험은 각 이전 후보에서 기록한다.
+- gate 변화: 없음. 이전 실행 범위의 계약이며 실제 패키지 설치·장치·현장 수용을 올리지 않는다.
