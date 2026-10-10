@@ -80,3 +80,15 @@ test("the map draws the robot's own pose only when it is a LOCALIZED map pose, n
   assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: null } }), pose);  // pre-D-395 Nav2 robot
   assert.equal(robotMapPose({ state: null }), null);
 });
+
+test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {
+  const { pinPrefill } = await import("../../fleet/server/web/localization-badge.js");
+  const identity = { robots: [{ robot_id: "rosy_41", state: "CONFIRMED", x: 0.398, y: -0.499 },
+    { robot_id: "rosy_40", state: "UNKNOWN", x: null, y: null }] };
+  const degraded = { pose: { x: 0.962, y: -0.011, state: "DEGRADED" } };
+  assert.deepEqual(pinPrefill(identity, degraded, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.deepEqual(pinPrefill(identity, { pose: null }, "rosy_41"), { x: 0.398, y: -0.499 });
+  assert.equal(pinPrefill(identity, { pose: { x: 0.4, y: -0.5, state: "LOCALIZED" } }, "rosy_41"), null);
+  assert.equal(pinPrefill(identity, degraded, "rosy_40"), null);
+  assert.equal(pinPrefill(null, degraded, "rosy_41"), null);
+});
