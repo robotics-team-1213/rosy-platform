@@ -1,4 +1,4 @@
-# fleet logs
+﻿# fleet logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
