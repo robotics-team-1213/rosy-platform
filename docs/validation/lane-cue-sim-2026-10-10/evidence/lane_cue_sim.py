@@ -6,7 +6,9 @@ pair-physical operator token labelled ``site:``, made by run_sim.sh) at 2 Hz fro
 ground-truth pose (d495/gt) as Fleet's MapPose: each cue is judged from the pose sampled
 ``latency`` (uniform lat_min..lat_max s) ago and carries that sample's CORE ``odom_pose.stamp``
 (GET /robot/state), as Fleet's pose_stamp does. The recorder is the D-495 probe's (10 Hz CORE
-line-follow status incl. ``lane_cue`` and ``stuck``, /odom, ground truth, every /cmd_vel, events).
+line-follow status incl. ``stuck``, /odom, ground truth, every /cmd_vel, events). GET /line-follow
+does not carry ``lane_cue`` (LineFollowStatus has no such field), so a pivot is read from the status
+reason (fleet_*_turn), a latch from the HOLD reason, and starts/latches from ``nav.lane_cue`` events.
 
   python3 lane_cue_sim.py s1|s2|s3|s4 --out runs/<name> --site-token <ws>/lcsim/site_token
         [--lat-min 0.4 --lat-max 0.8] [--noise 3] [--exact180] [--box]
@@ -170,7 +172,7 @@ def reasons(rows, t0=None, t1=None):
     for r in rows:
         if (t0 is not None and r['wall'] < t0) or (t1 is not None and r['wall'] > t1):
             continue
-        k = (r.get('state'), r.get('reason'), (r.get('lane_cue') or {}).get('latch'))
+        k = (r.get('state'), r.get('reason'))
         if k != last:
             out.append((r.get('sim_t'), *k))
             last = k
@@ -235,8 +237,7 @@ def s1(p, a):
     rel_code = p.post_cue('ON_LANE', p.fresh())
     rel_wall = time.time()
     p.cue_fn = lambda s: dict(state='ON_LANE', pose_stamp=s[3])
-    released = p.wait(lambda r: r['wall'] > rel_wall and (r.get('lane_cue') or {}).get('latch') is None
-                      and r.get('reason') != 'fleet_off_map', 3, 'release')
+    released = p.wait(lambda r: r['wall'] > rel_wall and r.get('reason') != 'fleet_off_map', 3, 'release')
     p.sleep(4.0)
     moved_wall = time.time()
     # mode-change release
@@ -269,8 +270,7 @@ def s1(p, a):
     c['moved_after_release_m'] = disp(rows, rel_wall, moved_wall)[0]
     c['latched_again'] = latched2 is not None
     after = [r for r in rows if r['wall'] > mc_wall + 0.5]
-    c['mode_change_cleared'] = bool(after) and all((r.get('lane_cue') or {}).get('latch') is None
-                                                   and r.get('reason') != 'fleet_off_map' for r in after)
+    c['mode_change_cleared'] = bool(after) and all(r.get('reason') != 'fleet_off_map' for r in after)
     sm['timeline'] = reasons(rows)
     ok = (c['off_map_accepted'] and c['latch_after_post_s'] is not None and c['latch_after_post_s'] <= 1.0
           and c['hold_travel_m'] is not None and c['hold_travel_m'] <= 0.01 and c['nonzero_cmd_in_hold'] == 0
@@ -286,26 +286,28 @@ def s2(p, a):
     lane = wrap(p.get('gt')[2] + math.radians(a.turn))
     p.cue_fn = lambda s: dict(state='WRONG_WAY', pose_stamp=s[3],
                               turn_deg=round(deg(wrap(lane - s[2][2])) + p.rng.uniform(-2, 2), 2))
-    started = p.wait(lambda r: (r.get('lane_cue') or {}).get('pivot') is not None, 10, 'pivot start')
-    mid = p.wait(lambda r: ((r.get('lane_cue') or {}).get('pivot') or {}).get('turned_deg', 0) >= a.drop_deg
-                 or (r.get('lane_cue') or {}).get('latch') is not None, 12, 'mid-turn')
+    started = p.wait(is_turn, 10, 'pivot start')
+    y0 = (started or {}).get('odom')
+
+    def turned(r):
+        return abs(deg(wrap(r['odom'][2] - y0[2]))) if y0 and r.get('odom') else 0.0
+    mid = p.wait(lambda r: turned(r) >= a.drop_deg or latch_of(r), 12, 'mid-turn')
     p.cue_fn = None
     drop_wall = time.time()
-    p.action('fleet_drop', pivot=(p.last().get('lane_cue') or {}).get('pivot'))
+    p.action('fleet_drop', turned_deg=round(turned(p.last()), 1), reason=p.last().get('reason'))
     latched = p.wait(lambda r: r['wall'] > drop_wall and r.get('reason') in LATCHES, 6, 'latch')
     p.sleep(10.0)
     end = time.time()
     rows = rows_of(p)
     c = sm['checks']
     c['pivot_started'] = started is not None
-    c['turned_at_drop_deg'] = ((((mid or {}).get('lane_cue') or {}).get('pivot')) or {}).get('turned_deg')
+    c['turned_at_drop_deg'] = round(turned(mid), 1) if mid else None
     c['latch_reason'] = latched and latched.get('reason')
     lp = p.last_post or drop_wall
     s_lp, s_l = sim_at(rows, lp), (latched or {}).get('sim_t')
     c['latch_after_last_cue_sim_s'] = None if s_l is None or s_lp is None else round(s_l - s_lp, 2)
     c['latch_after_last_cue_wall_s'] = None if not latched else round(latched['wall'] - lp, 2)
-    turned = [((r.get('lane_cue') or {}).get('pivot') or {}).get('turned_deg') or 0 for r in rows]
-    c['max_turned_deg'] = max(turned) if turned else None
+    c['max_turned_deg'] = round(max((turned(r) for r in rows if started and r['wall'] >= started['wall']), default=0.0), 1)
     c['budget_deg'] = abs(a.turn) + 30
     if latched:
         c['travel_after_latch_m'], c['yaw_after_latch_deg'] = disp(rows, latched['wall'] + 0.3, end)
@@ -347,9 +349,27 @@ class FleetWrongWay:
                     turn_deg=round(turn, 2) if cur and self.state == 'WRONG_WAY' else None)
 
 
+def is_turn(r):
+    return r.get('reason') in ('fleet_wrong_way_turn', 'fleet_off_lane_turn')
+
+
+def latch_of(r):
+    return r.get('reason') if r and r.get('reason') in LATCHES else None
+
+
+def cue_events(p, action):
+    """``nav.lane_cue`` events of one action (pivot, latched, unlatched, state)."""
+    out = []
+    for line in open(p.out / 'events.jsonl'):
+        e = json.loads(line)
+        if 'nav.lane_cue' in json.dumps(e) and (e.get('data') or {}).get('action') == action:
+            out.append(e)
+    return out
+
+
 def pivot_rows(rows):
-    """Wall span of the first pivot (lane_cue.pivot present), or None."""
-    on = [r for r in rows if (r.get('lane_cue') or {}).get('pivot') is not None]
+    """First and last status row of the pivot (reason fleet_*_turn), or (None, None)."""
+    on = [r for r in rows if is_turn(r)]
     return (on[0], on[-1]) if on else (None, None)
 
 
@@ -360,9 +380,8 @@ def s3(p, a):
     p.cue_fn = ff
     end = time.time() + (14.0 if a.box else 30.0)
     while time.time() < end:
-        r = p.last()
-        lc = r.get('lane_cue') or {}
-        if not a.box and any((x.get('lane_cue') or {}).get('pivot') for x in rows_of(p)[-60:]) and lc.get('pivot') is None:
+        rs = rows_of(p)
+        if not a.box and any(is_turn(x) for x in rs) and not any(is_turn(x) for x in rs[-10:]):
             break                                                        # pivot over (done or latched)
         time.sleep(0.2)
     p.sleep(3.0)                                                         # Fleet keeps judging after
@@ -377,6 +396,9 @@ def s3(p, a):
     a0, a1 = pivot_rows(rows)
     c['pivot_started'] = a0 is not None
     if a.box:
+        ev = cue_events(p, 'pivot')                                      # held at once: no turn reason row
+        a0 = first(rows, lambda r: r['t'] >= ev[0]['t'] - 0.2) if ev else a0
+        c['pivot_started'] = a0 is not None
         ob = first(rows, lambda r: r.get('reason') == 'obstacle_ahead', after=(a0 or {}).get('wall', 0))
         c['obstacle_ahead_seen'] = ob is not None
         c['turning_reason_seen'] = any(r.get('reason') in ('fleet_wrong_way_turn',) for r in rows)
@@ -398,9 +420,9 @@ def s3(p, a):
     c['pivot_cmd_count'] = len(angs)
     c['pivot_sign_changes'] = sum(1 for u, v in zip(angs, angs[1:]) if (u > 0) != (v > 0))
     c['pivot_duration_sim_s'] = round(sim1 - sim0, 2)
-    end_row = first(rows, lambda r: (r.get('lane_cue') or {}).get('pivot') is None, after=a1['wall'])
+    end_row = first(rows, lambda r: not is_turn(r), after=a1['wall'])
     c['pivot_end_reason'] = end_row and end_row.get('reason')
-    c['latched'] = end_row and (end_row.get('lane_cue') or {}).get('latch')
+    c['latched'] = latch_of(end_row) or [e.get('data') for e in cue_events(p, 'latched')]
     # Settled pose 1 s after the pivot ended (before the keep drives far).
     settle = first(rows, lambda r: r['wall'] >= (end_row or a1)['wall'] + 0.6) or rows[-1]
     o0, o1, g0, g1 = a0['odom'], settle['odom'], a0['gt'], settle['gt']
@@ -409,8 +431,7 @@ def s3(p, a):
     c['yaw_err_odom_deg'] = round(deg(wrap(o1[2] - lane_odom)), 1)
     c['yaw_err_gt_deg'] = round(deg(wrap(g1[2] - LANE_F)), 1)
     c['start_err_gt_deg'] = round(deg(wrap(g0[2] - LANE_F)), 1)
-    c['max_turned_deg'] = max(((r.get('lane_cue') or {}).get('pivot') or {}).get('turned_deg') or 0 for r in rows)
-    c['pivots_started'] = sum(1 for l in open(p.out / 'events.jsonl') if '"pivot"' in l and 'nav.lane_cue' in l)
+    c['pivots_started'] = len(cue_events(p, 'pivot'))
     sm['timeline'] = reasons(rows)
     ok = (not c['latched'] and c['pivot_sign_changes'] == 0 and abs(c['yaw_err_odom_deg']) <= 10
           and abs(c['odom_turned_deg']) >= 150 and c['pivot_duration_sim_s'] >= 2.0 and c['pivots_started'] == 1)
@@ -431,17 +452,15 @@ def s4(p, a):
     end = time.time()
     rows = rows_of(p)
     c = sm['checks']
-    a0, _ = pivot_rows(rows)
-    c['pivot_started'] = a0 is not None
+    c['pivot_started'] = bool(cue_events(p, 'pivot'))
     c['stuck'] = stuck and stuck.get('stuck')
     open_rows = [r for r in rows if r['wall'] >= (stuck or {'wall': 1e18})['wall']]
-    c['pivot_while_stuck'] = sum(1 for r in open_rows if (r.get('lane_cue') or {}).get('pivot'))
-    c['latch_while_stuck'] = sorted({(r.get('lane_cue') or {}).get('latch') for r in open_rows} - {None})
+    c['pivot_while_stuck'] = sum(1 for r in open_rows if is_turn(r))
+    c['latch_while_stuck'] = sorted({latch_of(r) for r in open_rows} - {None})
     c['reasons_while_stuck'] = sorted({str(r.get('reason')) for r in open_rows})
     c['cue_reason_while_stuck'] = [x for x in c['reasons_while_stuck'] if x.startswith(('cue_', 'fleet_'))]
     c['yaw_change_while_stuck_deg'] = disp(rows, st_wall, end)[1]
-    c['events_pivot_latched'] = [json.loads(l).get('data') for l in open(p.out / 'events.jsonl')
-                                 if 'nav.lane_cue' in l and ('"latched"' in l or '"pivot"' in l)]
+    c['events_pivot_latched'] = [e.get('data') for e in cue_events(p, 'pivot') + cue_events(p, 'latched')]
     sm['timeline'] = reasons(rows)
     ok = (c['pivot_started'] and stuck is not None and c['pivot_while_stuck'] == 0 and not c['latch_while_stuck']
           and not c['cue_reason_while_stuck'] and (c['yaw_change_while_stuck_deg'] or 99) <= 5.0)
@@ -502,7 +521,7 @@ def main():
     a = ap.parse_args()
     p = CueProbe(a)
     sm = {'s1': s1, 's2': s2, 's3': s3, 's4': s4}[a.scenario](p, a)
-    sm.update(scenario=a.scenario, args=vars(a))
+    sm.update(scenario=a.scenario, args={k: v for k, v in vars(a).items() if k != 'token'})
     rows = rows_of(p)
     if len(rows) > 10 and rows[-1].get('sim_t') and rows[0].get('sim_t'):
         sm['rtf'] = round((rows[-1]['sim_t'] - rows[0]['sim_t']) / (rows[-1]['wall'] - rows[0]['wall']), 2)
