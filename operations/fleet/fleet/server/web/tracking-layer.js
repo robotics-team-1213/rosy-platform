@@ -119,6 +119,34 @@ export function calibrationDriftVerdict(history) {
   return recent.reduce((worst, row) => (!worst || row.distanceM > worst.distanceM ? row : worst));
 }
 
+// 서버 자동 검사(Fleet 추적 보정 감시): 로봇 관측 없이 승인 교정과 새 맞춤 제안을 주기
+// 비교한 서버 판정이 출처 상태에 실린다. 여러 출처가 낡았으면 가장 많이 어긋난 것 하나.
+export function serverCalibrationDrift(sources) {
+  let worst = null;
+  for (const source of sources || []) {
+    const drift = source?.calibration_drift;
+    if (!drift || drift.state !== "stale" || !finite(drift.max_move_m)) continue;
+    if (!worst || drift.max_move_m > worst.maxMoveM) {
+      worst = { sourceId: source.source_id, maxMoveM: drift.max_move_m,
+        rotationDeg: finite(drift.rotation_deg) ? drift.rotation_deg : null };
+    }
+  }
+  return worst;
+}
+
+// 조감도가 쓸 최종 판정: 로봇 표본 판정(정지 로봇 차이)이 살아 있으면 그것이 먼저다 —
+// 로봇이 카메라에 안 보이면(관측 0/0대) 표본 판정은 null이고 서버 판정으로 그린다.
+export function effectiveDriftVerdict(robotVerdict, sources) {
+  if (robotVerdict) {
+    return { origin: "robots", robotId: robotVerdict.robotId, distanceM: robotVerdict.distanceM };
+  }
+  const server = serverCalibrationDrift(sources);
+  return server
+    ? { origin: "server", sourceId: server.sourceId, distanceM: server.maxMoveM,
+        rotationDeg: server.rotationDeg }
+    : null;
+}
+
 // 다음 폴링의 정지 판정 재료 — 이번 표본의 MATCHED 자세를 robotId 별로 남긴다.
 export function rememberTrackingPoses(tracking) {
   const poses = new Map();

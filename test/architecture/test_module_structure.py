@@ -874,7 +874,10 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1251,
+        1255,
+        "accept: re-judged at 1255 on 2026-10-10 (console.py grew to 1255 after the D-581 " +
+        "follow-ups; the drift-watch merge adds no console.py lines). " +
+        "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1251 on 2026-10-10 for D-581: the app injects the anchor relay "
         "factory, while console keeps its existing formation lifecycle and reads relay status; "
         "relay construction and anchoring live in fleet/swarm/anchor.py. "

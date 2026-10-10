@@ -2592,6 +2592,12 @@
 - 결정: 없음 (D-276 파일 계약 유지, CLI role은 사람 세 역할로 제한 — service 행은 Cell 흐름 소유)
 - 교훈: 원자적 쓰기는 내용 무결성만 지킨다. 오소유(root:101) 사고는 쓰기 후 소유권 적용·검사가 없으면 그대로 재시작 루프로 이어진다 — 재시작 감시자는 "바뀌었으니 재시작"이 아니라 "검증 통과했으니 재시작"이어야 한다.
 
+## 2026-10-07 · uncommitted · feat(site): Fleet 컨테이너가 Vision 맞춤 제안을 읽어 교정 낡음 감시
+- 변경: `deploy/site/compose.yaml` fleet 서비스에 `--vision-url https://vision:$ROSY_VISION_PORT`(사이트 CA는 fleet 컨테이너의 기존 SSL_CERT_FILE, site leaf의 vision SAN 검증). 주기는 기본 60 s 켬(끄려면 `--calibration-drift-interval-s 0`)
+- 증거: `test/test_site_calibration_drift_deploy.py` 신규 2 passed(compose 핀·CLI 플래그 파싱). 변이 증명: compose의 vision-url 값을 바꾸면 적색, 복원 초록
+- gate 변화: 없음
+- 결정: 해당 없음
+- 교훈: 없음
 ## 2026-10-07 · uncommitted · fix(release): push 게이트 해제 — D-502 수선 쌍 provenance 등록과 line-follow 핀 갱신
 - 변경: 두 push 게이트 실패를 해제했다. (1) `tools/harness/log_repairs.yaml`에 오늘 `eee9d5bdc`(D-502)가 추가한 저널 블록 쌍이 공개 출처 목록에 미등록이라 high-entropy-token 오탐으로 push를 막았다 — `public_provenance.json` records에 해당 줄 sha256(`e0d8cd9c…`)과 두 값을 기존 네 쌍과 같은 reason 양식으로 등록했다. (2) 동료의 API Ref v1.120 반영에 line-follow 문서 핀이 v1.119으로 남아 `test_api_reference_documents_line_follow_endpoints_and_snapshot`이 실패했다 — 핀을 v1.120으로 올렸다(PRT-006 "같은 변경에서 핀 갱신" 절차의 사후 보강).
 - 증거: `test_no_secrets_in_tracked_files`·`test_secret_public_provenance.py` 전체·`test_line_follow_contract_docs.py` 전체 **18 passed**, `known_failures.py` 0 NEW. provenance JSON 재파싱 확인(records 102, 마지막이 새 레코드).

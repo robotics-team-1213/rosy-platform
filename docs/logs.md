@@ -6786,6 +6786,11 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
 
+## 2026-10-07 · uncommitted · docs(api): 추적 교정 낡음 자동 검사 v1.120
+- 변경: API Ref §10.6.1 — `GET /api/fleet/tracking` 출처 행의 `calibration_drift`(판정 모양·한계 0.3 m/3°·건너뛰기·초기화 규칙·콘솔 우선순위) 문서화, 이력 v1.120. `core_api_web/api/app.py` 계약 버전 문자열 동반 갱신, 버전 고정 시험 6곳 v1.120
+- 증거: `test_protocol_version_alignment.py` 3 passed, 버전 고정 관련 5파일 93 passed, known_failures 0 NEW
+- gate 변화: 없음. Robot API·envelope 1.0 변경 없음
+- 결정: 해당 없음
 ## 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
 
 - 변경: SAF-005 배터리 래치(`battery_policy`·`battery_deep`)가 모드를 EMERGENCY로 바꾸지 않아 관리자 해제가 409 `not in EMERGENCY`였다. E-Stop 리스너 하나가 모든 래치를 EMERGENCY로 옮기고, E-Stop은 대기 중인 배터리 도크 복귀를 지운다(OK까지 재무장 없음). `battery/voltage`가 `battery` 센서 표본이 되고 `GET /sensors/battery`는 404 대신 `evidence`(missing/fresh/stale)를, `GET /safety/state` `battery`는 `evidence`·`sample_age_s`·`level`·`percent`를 싣는다. API Ref v1.120, SRS SAF-005 문단.
