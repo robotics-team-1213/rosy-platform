@@ -90,10 +90,17 @@ class LaneComplianceConfig:
     turn_spots: tuple = ()
     #: How close the map pose must be to a turn spot (m): the D-587 pose bound.
     turn_spot_tolerance_m: float = 0.018
+    #: D-511 rev 6: the lap route as arc ids (map v5: the figure eight) for the driving context.
+    lap_arcs: tuple = ()
+    #: Send the driving context (``context``) in the cue. Off until the robots' CORE knows the field.
+    guide_context: bool = False
     #: Send the return cue (``POST /line-follow/lane-cue``) to the robot; off = observe only.
     return_cue: bool = True
 
     def __post_init__(self) -> None:
+        if (not isinstance(self.guide_context, bool)
+                or not all(isinstance(a, str) and a for a in self.lap_arcs)):
+            raise ValueError("fleet.lane_compliance.guide_context must be true/false, lap_arcs arc ids")
         if not isinstance(self.return_cue, bool) or not isinstance(self.wrong_way, bool):
             raise ValueError("fleet.lane_compliance.return_cue / wrong_way must be true or false")
         for spot in self.turn_spots:
@@ -134,6 +141,10 @@ class LaneComplianceConfig:
         unknown = set(raw) - {item.name for item in fields(cls)}
         if unknown:
             raise ValueError(f"fleet.lane_compliance has unknown keys: {sorted(unknown)}")
+        if "lap_arcs" in raw:
+            if not isinstance(raw["lap_arcs"], list):
+                raise ValueError("fleet.lane_compliance.lap_arcs must be a list of arc ids")
+            raw["lap_arcs"] = tuple(raw["lap_arcs"])
         if "turn_spots" in raw:
             spots = raw["turn_spots"] or []
             if not isinstance(spots, list) or not all(isinstance(s, Mapping) and set(s) == {"x", "y"} for s in spots):
@@ -258,6 +269,9 @@ class ReturnSample:
     guide: Optional[dict] = None
     #: D-511 rev 4: the body is on a configured turn spot (a WRONG_WAY may turn here).
     turn_spot: bool = False
+    #: rev 6: the nearest arc and the distance along it (for the lap context).
+    arc_id: Optional[str] = None
+    s_m: Optional[float] = None
 
 
 def map_bounds(graph, pad_m: float) -> Optional[tuple]:
@@ -329,7 +343,7 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
                         None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
                         None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead,
                         guide, any(math.hypot(x - sx, y - sy) <= config.turn_spot_tolerance_m
-                                   for sx, sy in config.turn_spots))
+                                   for sx, sy in config.turn_spots), arc.id, round(s, 4))
 
 
 #: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.

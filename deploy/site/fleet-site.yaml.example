@@ -12,6 +12,9 @@ fleet:
       - {x: -0.524, y: -0.242}
       - {x: -0.214, y: -0.264}
     turn_spot_tolerance_m: 0.018   # D-587 자세 한계
+    lap_arcs: [west:fwd, ring_in_sw:fwd, ring_s:fwd, ring_out_se:fwd, east_out:fwd, east:fwd,
+               ring_in_ne:fwd, ring_n:fwd, ring_out_nw:fwd, west_out:fwd]   # D-511 개정 6: 8자 한 바퀴
+    guide_context: false   # 로봇 CORE가 lane-cue `context`를 알 때 true
   stuck_resolver:          # D-577 개정 2026-10-10: 판단기가 Fleet 등록 자격으로 답할 등록 로봇(로봇별 승인)
     enrolled_robots: [rosy_40, rosy_41]
   traffic:

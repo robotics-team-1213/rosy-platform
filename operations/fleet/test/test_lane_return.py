@@ -171,3 +171,41 @@ def test_site_example_turn_spots_parse():
     example = Path(__file__).resolve().parents[3] / "deploy" / "site" / "fleet-site.yaml.example"
     cfg = LaneComplianceConfig.from_mapping(yaml.safe_load(example.read_text(encoding="utf-8"))["fleet"]["lane_compliance"])
     assert len(cfg.turn_spots) == 4 and cfg.turn_spot_tolerance_m == 0.018 and cfg.wrong_way is False
+
+
+def test_lap_context_names_the_next_feature_and_headings():
+    from types import SimpleNamespace
+    from fleet.localization.lap_context import build_lap, context
+
+    class _Arc(SimpleNamespace):
+        def point_at(self, s):
+            s = min(max(s, 0.0), self.length_m)
+            return self.x0 + s * math.cos(self.h), self.y0 + s * math.sin(self.h), self.h
+
+    arcs = {f"a{i}": _Arc(edge_id=f"e{i}", length_m=1.0, end_place=f"p{i}", h=i * math.pi / 2,
+                          x0=[0, 1, 1, 0][i], y0=[0, 0, 1, 1][i]) for i in range(4)}
+    lap = build_lap(SimpleNamespace(arcs=arcs, out_of={"p0": ("a1", "x")}), ["a0", "a1", "a2", "a3"],
+                    crosswalks=(),
+                    turn_spots=[(1.0, 0.5)])
+    c = context(lap, "a0", 0.5, 0.01, 0.1, 0.3)
+    assert c["next"] == {"kind": "junction", "ds_m": c["next"]["ds_m"], "action": "left", "ref": "p0"}
+    assert abs(c["next"]["ds_m"] - 0.5) < 0.02 and abs(c["heading_deg"]) < 1e-6
+    c = context(lap, "a1", 0.2, 0.0, 0.1, 0.3)
+    assert c["next"]["kind"] == "turn_spot" and abs(c["next"]["ds_m"] - 0.3) < 0.02
+    assert c["heading_ahead_deg"] == 90.0 and context(lap, "zz", 0.1, 0.0, 0.1, 0.3) is None
+
+
+def test_site_example_lap_builds_on_map_v5():
+    import json
+    import yaml
+    from pathlib import Path
+    from fleet.localization.lap_context import build_lap
+    root = Path(__file__).resolve().parents[3]
+    raw = yaml.safe_load((root / "deploy/site/fleet-site.yaml.example").read_text(encoding="utf-8"))
+    cfg = LaneComplianceConfig.from_mapping(raw["fleet"]["lane_compliance"])
+    site = SiteMap.model_validate(json.loads((root / "deploy/site/site-maps/map_v2_fleet-v5.json").read_text(encoding="utf-8")))
+    cws = [(c.id, [tuple(p) for p in c.polygon]) for c in site.crosswalks]
+    lap = build_lap(build_graph(site), cfg.lap_arcs, cws, cfg.turn_spots)
+    kinds = [f[1] for f in lap.features]
+    assert lap is not None and cfg.guide_context is False
+    assert kinds.count("crosswalk") == 2 and kinds.count("ring_entry") == 2 and 7.0 < lap.length_m < 7.8

@@ -41,6 +41,7 @@ from fastapi import HTTPException
 
 from fleet.localization.lane_compliance import (OFF_MAP, ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
                                                 LaneComplianceTracker, ReturnTracker, map_bounds)
+from fleet.localization.lap_context import build_lap, context as lap_context
 from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
@@ -69,6 +70,7 @@ class LaneComplianceMonitor:
         #: robot -> an open CORE stuck (D-407): its answer owns the robot, the cue stands down.
         self._stuck_open = stuck_open or (lambda robot_id: False)
         self._returns: dict[str, ReturnTracker] = {}
+        self._lap: tuple = (None, None)          # (map version, Lap) for the rev 6 context
         self._cue_seq = 0
         self._cue_sent: dict[str, str] = {}      # last state sent per robot
         self._cue_mute: dict[str, float] = {}    # robot -> wall time an unsupported CORE is asked again
@@ -109,6 +111,9 @@ class LaneComplianceMonitor:
         crosswalks = ([(c.id, [tuple(p) for p in c.polygon]) for c in getattr(active[1], "crosswalks", ())]
                       if active is not None else [])
         bounds = map_bounds(graph, cfg.off_map_pad_m)
+        version = active[0] if active is not None else None
+        if cfg.guide_context and self._lap[0] != version:
+            self._lap = (version, build_lap(graph, cfg.lap_arcs, crosswalks, cfg.turn_spots))
         now = self._wall()
         cues = []
         for robot_id in roster:
@@ -158,6 +163,9 @@ class LaneComplianceMonitor:
                 "pose_stamp": getattr(pose, "odom_stamp", None) if placed else None,
                 "guide": raw.guide if current else None,
                 "turn_spot": raw.turn_spot if current else False,
+                "context": (lap_context(self._lap[1], raw.arc_id, raw.s_m, raw.offset_m,
+                                        getattr(pose, "age_s", None), getattr(pose, "anchor_age_s", None))
+                            if current and self.config.guide_context else None),
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
                 "crosswalk": raw.crosswalk,
@@ -196,7 +204,9 @@ class LaneComplianceMonitor:
                 **{k: back[k] for k in ("state", "side", "bearing_deg", "turn_deg", "lane_heading_deg",
                                         "offset_m", "edge_id", "guide")},
                 # rev 4: only when true, so a CORE without the field (strict schema) never sees it.
-                **({"turn_spot": True} if back["turn_spot"] else {})}
+                **({"turn_spot": True} if back["turn_spot"] else {}),
+                # rev 6: only with guide_context on, so a CORE without the field never sees it.
+                **({"context": back["context"]} if back["context"] is not None else {})}
         # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
         try:
             reply = await asyncio.wait_for(send(body), PERIOD_S)
