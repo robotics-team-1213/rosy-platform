@@ -474,3 +474,19 @@ def test_get_line_follow_shows_the_lane_cue(core_client):
         "accepted": True, "reason": None}
     shown = client.get("/api/v1/line-follow", headers={"Authorization": "Bearer rosy-dev-viewer"}).json()
     assert shown["lane_cue"]["state"] == "ON_LINE" and shown["lane_cue"]["side"] == "left"
+
+
+def test_the_lap_context_is_validated_kept_and_shown():
+    from core_common.protocol.lane_cue import LaneCueRequest
+    rig = Rig()
+    ctx = {"route": "lap", "segment_id": "east_out:fwd", "s_m": 3.1, "lap_m": 7.38, "heading_deg": -1.0,
+           "ahead_m": 0.25, "heading_ahead_deg": 0.0, "offset_m": 0.01,
+           "next": {"kind": "crosswalk", "ds_m": 0.3, "action": "stop_look", "ref": "cw_south"},
+           "pose_age_s": 0.1, "anchor_age_s": 0.4}
+    body = LaneCueRequest(cue_id="c1", fleet_epoch="e", seq=1, ttl_s=1.0, pose_stamp=WALL + rig.fed,
+                          state="ON_LANE", context=ctx).model_dump()
+    assert rig.m.set_lane_cue(body, now=rig.t)[0]
+    assert rig.m.status().lane_cue["context"]["next"]["kind"] == "crosswalk"
+    with pytest.raises(ValueError):
+        LaneCueRequest(cue_id="c1", fleet_epoch="e", seq=1, ttl_s=1.0, pose_stamp=1.0, state="ON_LANE",
+                       context={**ctx, "extra": 1})
