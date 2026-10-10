@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import math
 
-from core_common.robot_body import PINKY_PRO
+from core_common.robot_body import nominal_body_for
 
 
 def finite(value):
@@ -30,7 +30,8 @@ class RealignConfig:
             if not isinstance(area, dict) or set(area) != {"map_revision", "polygon"}:
                 raise ValueError("realign area requires map_revision and polygon")
             polygon = area["polygon"]
-            if (not isinstance(area["map_revision"], str) or not area["map_revision"]
+            revision = area["map_revision"]
+            if (not (isinstance(revision, str) and revision or type(revision) is int and revision > 0)
                     or not isinstance(polygon, list) or len(polygon) < 3
                     or not all(isinstance(p, (list, tuple)) and len(p) == 2 and all(map(finite,p)) for p in polygon)):
                 raise ValueError("realign area requires finite convex map coordinates")
@@ -79,8 +80,15 @@ def _observed_at(value):
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         return parsed.timestamp() if parsed.tzinfo is not None else None
-    except (TypeError, AttributeError, ValueError):
+    except (TypeError, AttributeError, ValueError, OverflowError, OSError):
         return None
+
+
+def _base(row):
+    caps = row.get("capabilities") or {}
+    controls = caps.get("controls") or {}
+    return next((i for i in controls.get("items", ()) if isinstance(i, dict)
+                 and i.get("kind") == "base_velocity"), {})
 
 
 def select(row, rows, config, *, now, attempt):
@@ -111,6 +119,10 @@ def select(row, rows, config, *, now, attempt):
             or not 0 <= age or age+now-observed > .3 or obs.get("geometry_known") is not True):
         return None, "clearance_stale"
     kind = "PIVOT" if proof.get("turn_spot") is True else "KTURN"
+    base = _base(row)
+    body = nominal_body_for(base.get("robot_kind"))
+    if body is None or kind not in (base.get("stuck_realign") or ()):
+        return None, "body_or_capability_unproved"
     if kind == "KTURN" and (clearance.get("rear_state") != "clear"
             or not finite(clearance.get("rear_clearance_m")) or clearance["rear_clearance_m"] <= .06):
         return None, "rear_unproved"
@@ -123,7 +135,7 @@ def select(row, rows, config, *, now, attempt):
         req.update(back_m=.04, back_radius_m=.08, fwd_radius_m=.02)
     points, pad = _centres(req, proof)
     travel = 0. if kind == "PIVOT" else .05+abs(req["angle_rad"])*req["fwd_radius_m"]
-    radius = PINKY_PRO.rotation_radius_m + PINKY_PRO.sweep_pad_m + proof["u_m"] + .05*travel + pad
+    radius = body.rotation_radius_m + body.sweep_pad_m + proof["u_m"] + .05*travel + pad
     if not any(revision == proof["map_version"] and _in_area(points, radius, polygon)
                for revision, polygon in config.areas):
         return None, "map_sweep_unproved"
@@ -131,11 +143,13 @@ def select(row, rows, config, *, now, attempt):
         if peer.get("robot_id") == row.get("robot_id"):
             continue
         other = peer.get("realign_evidence") or {}
+        peer_body = nominal_body_for(_base(peer).get("robot_kind"))
         if (not peer.get("online", True) or other.get("status") != "heading_compared" or other.get("map_id") != proof["map_id"]
+                or peer_body is None
                 or other.get("map_version") != proof["map_version"]
                 or not all(finite(other.get(k)) for k in ("x", "y", "u_m")) or other["u_m"] < .018):
             return None, "peer_unknown"
-        reach = radius + PINKY_PRO.rotation_radius_m + other["u_m"] + .30
+        reach = radius + peer_body.rotation_radius_m + other["u_m"] + .30
         if any(math.hypot(p[0]-other["x"],p[1]-other["y"]) <= reach for p in points):
             return None, "peer_near"
     return req, None
