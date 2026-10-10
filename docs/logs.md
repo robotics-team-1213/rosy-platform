@@ -7691,3 +7691,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 요청에 따라 최대 5단계 책임 구조 방향을 D-625로 기록하고, 네 holder 이전표와 M0–M9 계획·참조 수정·Safety 리뷰·복구 절차를 먼저 작성했다. 도구 시험을 구현 전에 준비한다.
 - 증거: 기존 d427 mover/scanner·platform manifest 소비자 검토, API safety.py와 OMX owner/stop의 Safety 태그 확인. 도구 RED/GREEN은 후속 커밋에서 원격 검증한다.
 - gate 변화: 없음. 실제 제품 파일 이동·책임 추출·장치 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-11 · f2f9945c7 · docs: D-625 이전 도구 준비 검증
+
+- 변경: 네 단위의 JSON 이전표와 기본 read-only preview/선택 holder 이동 도구를 준비했다. 참조 수정은 수동이며 API·OMX Safety 단위는 자동 이동을 차단한다. 기존 scanner를 재사용하고 삭제·stash·reset·광역 staging을 넣지 않았다.
+- 증거: 구현 전 e98e0aeed의 원격 RED 12 NEW(도구 미구현), 구현/시험 보강 f2f9945c7의 모델 PC 원격 도구/harness/network 계약 144 성공 표시·exit 0, known_failures 0 NEW/0 known. synthetic 등록 worktree의 실제 이동/역이동과 충돌·dirty·stale·link·ignored·Safety 거절 검증. 실제 네 단위 preview에서 tracked byte hash/index/status 무변경, ADR Log BOM/CRLF와 committed journal append-only 보존 확인.
+- gate 변화: 없음. SOURCE/원격 도구 증거이며 실제 제품 이동·책임 추출·설치·ARM64·DEVICE·FIELD·main 착지·push는 미실행이다.
