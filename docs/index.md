@@ -209,6 +209,7 @@
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 | D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
 | D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 
 ## 계획·결과 문서
 
@@ -301,8 +302,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
 - 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
 - 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
 - 2026-10-10 · b4097d9a90 · feat(core,fleet): D-603 CORE rotate_to와 trip 출발 자동 정렬
-- 2026-10-10 · uncommitted · docs(isaac): D-606 모델 PC Isaac Lab 환경 준비

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.201
+**Version:** v1.202
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -913,6 +913,33 @@ Fleet 응답: `welcome`(성공, 장기 토큰 발급) / `error(PAIRING_INVALID)`
 { "type": "heartbeat",
   "payload": { "state_snapshot": { "...": "/ws/state 스키마 동일" } } }
 ```
+
+### 7.3.1 교차로 신호 질의 (D-620, v1.202)
+
+명시적 `line_follow.junction_signal_enabled:true`인 CAMERA_LINE 시험은 지시 없는
+교차로에서 정지한 에피소드의 UUID hex(32자)를 선택 필드
+`payload.junction_signal_request`로 보낸다. 기본값은 `null`이고 기존 heartbeat는 그대로 유효하다.
+HELLO로 인증된 해당 로봇 신원만 조회한다. Fleet 답은 heartbeat 선택 필드다:
+
+```json
+{"type":"heartbeat","payload":{"junction_signal":{"request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","lamp":"red","may_enter":false,"reason":"approach_signal"}}}
+```
+
+`lamp`는 `green|red|unknown`, `may_enter`는 엄격한 boolean, `reason`은 최대 96자다.
+Fleet는 기존 trip 신호/통행권을 사용하거나, 2초 이내 지도 자세의 진행 방향 차로 안에서
+다음 장소까지 0.6m 이내인 접근로의 기존 신호표를 사용한다. 지도/신호 없음·조회 오류는
+`unknown/false` 응답이다. 답변은 통행권을 만들거나 늘리지 않는다.
+
+CORE는 `green && may_enter:true`인 수신 후 2초 이내 답을 우측 진입 선택에 사용한다.
+응답이 한 번도 없는 정지 에피소드는 3초 뒤 기존 D-495 `right/turn_deg:-90`을 한 번 선택한다.
+적색·미확인·진입 불허·만료 답·잘못된 상관 답·Fleet ERROR·pairing 거부는 대기한다.
+실제 회전 전 적색은 fallback도 취소한다. 이전 ID·OFF·회전 시작 뒤 답은 다음 회전을 만들지 않는다.
+모든 CORE 회전/장애물/횡단보도/통행권/정지 검사는 유지한다. 무응답 fallback은 현장 감독 시험에 한정한다.
+
+상태 API의 `line_follow.junction`에 선택 필드 `signal_request_id`와 `signal_state`를 추가한다.
+상태는 `waiting|red|unknown|green|fallback|entered` 또는 `null`이다.
+CORE journal에는 요청 ID별 질의, 답 변화, 우측 선택을 기록한다.
+`entered`는 회전 단계 시작이며 실물 이동 증거는 별도다.
 
 ## 7.4 이벤트 전달
 

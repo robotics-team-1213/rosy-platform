@@ -57,6 +57,17 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
                                     "signal_request_id": None, "signal_state": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
+
+
+def test_signal_query_overlay_requires_an_explicit_yaml_boolean():
+    from core.line_follow_wiring import _line_follow_config
+    import pytest
+
+    assert not _line_follow_config({}).junction_signal_enabled
+    assert _line_follow_config({'junction_signal_enabled': True}).junction_signal_enabled
+    for value in ('true', 1, None):
+        with pytest.raises(ValueError, match='junction_signal_enabled'):
+            _line_follow_config({'junction_signal_enabled': value})
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
 
 

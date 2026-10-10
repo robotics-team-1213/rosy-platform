@@ -23,3 +23,5 @@ D-572 reserved in another active branch (refs/adr/D-572)
 D-571 ADR reserved on branch feat/rosy-cam-map-plane (971523db2), not yet on main; remove when it lands
 D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
+
+D-619 다른 세션이 refs/adr/D-619를 선점했으며 D-620 후보 브랜치에는 해당 ADR이 아직 착지하지 않음
