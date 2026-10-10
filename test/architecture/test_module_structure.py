@@ -983,7 +983,8 @@ SIZE_VERDICTS = {
     ),
     "core/services/core_features/line_follow/recovery": (
         1_292,
-        "split: re-judged at 1292 on 2026-10-10 (independent re-judge required before landing) when D-407 stuck "
+        "split: re-judged at 1292 on 2026-10-10 (independent re-judge 2026-10-10, critic agent, read-only: AGREE WITH "
+        "CONDITIONS, conditions applied) when D-407 stuck "
         "code moved into recovery/stuck/ (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 "
         "section), its own SIZE_UNITS entry; the 2098 verdict's junction move stands. What stays is D-468 lane "
         "return, D-476 bridge, D-546 pose request and the shared D-507 6 motion_admit.py; every file below 600; "
@@ -995,10 +996,11 @@ SIZE_VERDICTS = {
         1_031,
         "accept: registered at 1031 on 2026-10-10 when D-407 stuck code left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 section; independent re-judge "
-        "required before landing): stuck_recovery.py 540 (state machine), stuck_wiring.py 362 (manager glue), "
+        "2026-10-10, critic agent, read-only: AGREE WITH CONDITIONS, conditions applied): stuck_recovery.py 540 (state machine), stuck_wiring.py 362 (manager glue), "
         "trail.py 66 (ForwardTrail), progress_watch.py 61 (D-607 odom progress watch), __init__.py 2. Mixins of "
         "LineFollowManager under its one lock and generation; no own lock, thread, store or publisher; CORE "
-        "CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
+        "CommandManager stays the final cmd_vel publisher. D-607 realign joins as its own sub-unit "
+        "recovery/stuck/realign/ by its own dated addendum. Re-judge after +150.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
         959,
