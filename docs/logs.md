@@ -7661,3 +7661,9 @@ osy-d395-s1d\`.
 - 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
 - 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
 - gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
+
+- 변경: root AGENTS·제품·계약·실제 폴더를 대조해 ROSY 정체성, 의미 기반 3단계 목표 트리, 세계 상태/행동 예측/학습·평가 경계를 플랫폼 설계/계획에 기록했다. CORE 공통 운용·Drive/Arm Control·Safety·복구·곡률 책임은 별도 상세 설계/계획과 연결했다. 네 문서 모두 Proposed다.
+- 증거: 문서 링크·경로 확인, harness generate와 lint(0 errors, 25 freshness warnings). 원격 문서 계약 시험 결과는 검증 뒤 이어 기록한다.
+- gate 변화: 없음. Proposed 문서뿐이며 코드 이동·Safety 정책 변경·장치 주행·main 착지·push는 하지 않았다.

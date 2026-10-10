@@ -288,6 +288,10 @@
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 - [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
+- [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
+- [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
+- [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -302,8 +306,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
 - 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
 - 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
-- 2026-10-10 · b4097d9a90 · feat(core,fleet): D-603 CORE rotate_to와 trip 출발 자동 정렬

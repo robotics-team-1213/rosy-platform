@@ -231,6 +231,10 @@ adrs:
 - D-453
 - D-455
 plans:
+- docs/plans/2026-10-11-rosy-platform-identity-and-structure-design.md
+- docs/plans/2026-10-11-rosy-platform-identity-and-structure.md
+- docs/plans/2026-10-11-core-responsibility-and-driving-design.md
+- docs/plans/2026-10-11-core-responsibility-and-driving.md
 - docs/plans/2026-10-05-model-pc-pixel-label-pipeline.md
 - docs/plans/2026-10-04-d329-matrix-schema.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
