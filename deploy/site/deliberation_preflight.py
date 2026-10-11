@@ -92,7 +92,7 @@ async def check():
         script = '''import errno,json,os,socket,subprocess,sys,time
 host=json.loads(sys.argv[1])
 checks={name+'_isolated':os.readlink('/proc/self/ns/'+name)!=value for name,value in host.items()}
-checks['environment_empty']=set(os.environ)<= {'HOME','PATH','LC_CTYPE'} and os.environ.get('HOME')=='/tmp/home'
+checks['environment_empty']=set(os.environ)<= {'HOME','PATH','LC_CTYPE','PWD'} and os.environ.get('HOME')=='/tmp/home' and os.environ.get('PATH')=='/usr/bin:/bin' and os.environ.get('PWD','/tmp')=='/tmp'
 checks['host_paths_hidden']=not any(os.path.exists(p) for p in ('/home','/etc','/run','/var'))
 checks['network_loopback_only']=all(name=='lo' for _,name in socket.if_nameindex())
 checks['capabilities_dropped']=next(line.split()[1] for line in open('/proc/self/status') if line.startswith('CapEff:'))=='0000000000000000'
