@@ -27,6 +27,8 @@
 
 ## 한 번 계산한 결과를 같은 관측에 묶는 단계
 
+`line-follow-shadow-v1`은 필요성/관측 freshness 정책이며 해결기 전체 규칙 버전이 아니다. 실제 선택에는 `ResolverConfig`, chain/진행 상태, trip·crosswalk·map pose·활성 map, AI proposal/설정도 영향을 준다. 선택 receipt는 사용한 설정/지도 revision과 추가 입력의 범위·hash를 보존해야 한다. 현재 같은 CORE request라는 이유만으로 이 입력들의 불변을 추정하지 않는다. 이 정보가 없는 기존 resolver note는 비교 기준으로 수용하지 않는다.
+
 1. 기존 poll의 snapshot과 현재 Assessment를 고정한다. subject/case/CORE owner, 전체 request, evidence 시각·ID, revision과 정책을 함께 보존한다.
 2. 기존 `resolver.step()`를 1회 실행한다. 결과 목록과 선택에 사용한 행을 기록하되 규칙을 다시 실행하거나 CORE를 호출하지 않는다.
 3. 실제 생성 지점에서 조치 종류·rule·조건부 인수 이유와 원래 Assessment를 묶는 불변 receipt를 만든다. 다른 로봇·다른 사건·중복 결과·다른 revision은 비교 기준을 만들지 못한다.
