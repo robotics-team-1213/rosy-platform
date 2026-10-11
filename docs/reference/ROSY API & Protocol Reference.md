@@ -3266,3 +3266,18 @@ D-675 source only: private intake 설정에 선택적 ot_token_file을 지정�
 Fleet navigation goal/bay admission preserves its stop token across capability and state awaits. A cancel or E-stop during admission refuses the unsent command with `COMMAND_REJECTED`; a concurrent goal/bay pipeline for the same robot is refused with the same code. Sequential goal replacement remains supported. A goal receipt requires an explicit boolean `accepted`: false is a refusal; missing or malformed acknowledgement is an unknown result and cannot create a goal or lease record. A late receipt after a stop cannot restart lease renewal; Fleet reissues navigation cancellation while preserving ambiguous Task outcomes.
 
 Trip start preserves its stop generation across capability, pose/alignment, and lease admission. A stop during those awaits returns HTTP 409 `TRIP_START_CANCELED`, opens no live trip, and releases a lease already obtained for that start. This does not establish physical standstill. Task policy evidence, enablement and current dispatch generation are checked again at the owner-send boundary; known-unsent refusals remain reasoned HOLD records. Robot API/envelope versions and final CORE/Arm command authority are unchanged.
+
+
+### D-685 승인된 자율 운영과 Fleet 관측 이력
+
+`fleet.stuck_resolver.autonomous_robots`는 site config의 robot ID 목록이다. 최초 site 승인이 자동 운영 범위를 정하며, 목록의 로봇은 복구 가능한 stuck를 사람 대신 자동 대기/관측하고 기존 admission을 통과한 새 후보로 복구한다. 기본 빈 목록은 현장 활성화를 뜻하지 않는다. AI 대상·profile·credential·policy dispatch gate는 각각 기존 조건을 유지한다. UNKNOWN 이동은 같은 사건의 CORE `nav.line_stuck_closed`를 관측할 때까지 재발행하지 않는다. 기한과 예산을 재설정하지 않으며 human claim/class와 AI MANUAL은 범위 밖 예외다.
+
+| Method | Path | Authority | Response |
+|---|---|---|---|
+| GET | `/api/fleet/observations` | 기존 Fleet read_guard | `{observations, next_cursor, has_more, recording}` |
+
+쿼리는 `after_id`(기본 0, 비음수), `limit`(기본 100, 1..200), `robot_id`(선택, 1..96자)다. 행은 `{observation_id, robot_id, received_at, sha256, observation}`이다. `observation`은 기기의 기존 state와 gather_source, online, 목표/queue/capability/link, Fleet 수신 epoch, 원래 `_state_mono`, 추정 observed_at와 state_age_s를 보존한다. clock은 `fleet_receive_epoch`, verification은 `observed_not_labeled`다. state 내부 기기 timestamp·센서 단위와 결측은 그대로 둔다. Fleet 추정 시각은 기기 시계 동기화 증명이 아니고, cached hub 상태를 새 센서 샘플로 간주하지 않는다.
+
+`--tasks-db` 또는 기존 `--events-db`가 있을 때 같은 durable journal에 기록한다. SharedGather의 실제 refresh마다 기록하며 cache 반환은 재기록하지 않는다. 저장 없음은 recording.state `disabled`, 성공은 `recording`, 실패는 `error/observation_storage_failed`로 노출한다. 조회 저장 장애는 503 `OBSERVATION_STORAGE_UNAVAILABLE`다. 기록 실패가 E-stop/기존 상태 읽기를 차단하지 않는다. 새 원장 보존은 최대 30일/100000행, 한 행 64KiB이며 대용량 카메라/scan 원본은 기존 기기 녹화로 보존한다. 오래된 원장 전체를 보존한다고 주장하지 않는다.
+
+오프라인 `learning/curation/pinky/fleet_observations.py <database> <new-output-on-X> [--robot-id ID]`는 SQLite read snapshot을 JSONL/해시 manifest로 내보내고 다시 검증한다. 신규 출력만 만들며 원본과 기존 출력은 변경하지 않는다. schema `rosy.fleet-observations/1`은 학습 준비 원본으로 `train_eligible:false`, `labels:null`, `action_outcome:not_inferred`다. 실제 센서/행동 학습은 기존 device recording → Pinky Episode/원본 검증 → DatasetManifest/registry → 독립 평가/승격 경로에서 수행한다. Fleet 목표와 AI 선택은 CORE 실제 출력/정답 라벨이 아니다. 이벤트·Task·Mission·stuck 원장의 ID와 시간/시계 근거를 함께 대조하고 모호한 연결을 확정하지 않는다.

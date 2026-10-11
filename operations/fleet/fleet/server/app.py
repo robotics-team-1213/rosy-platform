@@ -47,6 +47,7 @@ from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
+from fleet.incidents.automation.runtime import install_incident_runtime
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -134,6 +135,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
                ai_facts_acting: frozenset = frozenset(),
+               autonomous_robots: frozenset = frozenset(),
                ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
@@ -147,7 +149,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
-               notification_config=None, channel_config=None) -> FastAPI:
+               notification_config=None, incident_model_config=None, channel_config=None) -> FastAPI:
+    if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
+        raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
         raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
@@ -629,6 +633,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),
                                       painted=lambda: (site_maps.active() or (None,) * 4)[3])
+        resolver_core.autonomous_robots = frozenset(autonomous_robots)
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
@@ -637,6 +642,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        app.state.stuck_resolver.events_since = console.hub.registry.events_since
         app.state.stuck_resolver.heading_review = app.state.lane_compliance.stuck_heading
         app.state.line_stuck.heading_review = app.state.lane_compliance.stuck_heading
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
@@ -645,6 +651,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.stuck.problems import ProblemWatch
         resolver_core.ai_first = app.state.ai_first               # D-610: AI-first robots, closed loop, P2 kinds
         app.state.stuck_resolver.episodes, app.state.stuck_resolver.problems = app.state.ai_episodes, ProblemWatch()
+    install_incident_runtime(app, incident_model_config)
     from fleet.stuck.ai_routes import install_ai_first_routes, rosy_cam_lease
     install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
                             loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
@@ -716,6 +723,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    trip_runner.autonomous_robots = frozenset(autonomous_robots)
+    trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:
         from fleet.server.junction_signal import signal_for
         hub.junction_signal = partial(signal_for, traffic=trip_runner.traffic, poses=map_pose,

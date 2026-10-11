@@ -7,7 +7,7 @@
 
 ## 확인한 현재 경계
 
-`StuckResolverLoop`는 `incident_worker=None` 주입 지점과 기존 gather의 결과를 전달하는 `feed()`를 갖는다. 그러나 [app.py](../../operations/fleet/fleet/server/app.py)의 실제 resolver 구성은 worker를 전달하지 않는다. 실제 프로파일·제공자·호스트 admission·기준 판단을 조합하는 운영 factory도 없다. 원격 소스 시험은 이 구성과 실제 제공자 수용을 대신하지 않는다.
+`StuckResolverLoop`는 기존 gather의 결과를 전달하는 `feed()`를 갖는다. [app.py](../../operations/fleet/fleet/server/app.py)의 `incident_model_config`와 [runtime.py](../../operations/fleet/fleet/incidents/automation/runtime.py)는 같은 Fleet journal의 원장·사람 인수·읽기 관측·최종 outbox를 구성한다. 설정 없음은 worker 없음이며 명시적 설정도 `enabled=False`가 기본이다. 실제 운영 프로파일·제공자·호스트 admission·기준 판단을 주입하는 배포 구성은 아직 없다. 원격 소스 시험은 실제 제공자 수용을 대신하지 않는다.
 
 [loop.py](../../operations/fleet/fleet/stuck/loop.py)의 `run_once()`는 gather → worker feed → 사람 claim 반영 → heading/closed-loop 확인 → `resolver.step()` 1회 → 기존 전송 순서다. [resolver.py](../../operations/fleet/fleet/stuck/resolver.py)의 `step()`는 chain·plan·escalation 상태를 변경한다. 비교용으로 두 번째 호출하면 동일 입력의 독립 읽기가 아니다.
 
@@ -47,7 +47,9 @@
 
 ## 명시적인 운영 factory와 수용 receipt
 
-후속 factory는 기존 Fleet board와 동일 DB에만 worker를 구성하고, 기본 비활성 상태를 유지한다. 고정 프로파일 쌍과 전체 SHA, 현재 프로파일 조회, scope-bound baseline 조회, 사람 소유 조회, 전체/역할별 지속 예산, 읽기 port, 최종 outbox callback을 명시적으로 받는다. `set_automation(worker.prepare_receipt)`는 기존 판단 저장 transaction을 사용하고 caller의 commit/rollback을 유지한다. resolver loop 종료 시 worker의 제출 결과와 UNKNOWN 보존을 끝까지 처리한다.
+source factory는 기존 Fleet board와 동일 DB에만 worker를 구성한다. `incident_model_config`의 필수 입력은 고정 `profiles`, 일치하는 `providers`, `admission`, `current_profiles`, `budget`이며 선택 입력은 `enabled`, `baseline`, `clock`이다. 모델별 분기는 없다. 사람 소유는 영속 handoff와 현재 resolver claim을 함께 확인하고, 관측 port는 기존 poll만 읽는다. `set_automation(worker.prepare_receipt)`는 기존 판단 저장 transaction을 사용하고 caller의 commit/rollback을 유지한다. 최종 실패는 동일 outbox에 저장하며 resolver loop 종료는 기존 worker `aclose()`로 UNKNOWN 보존을 끝까지 처리한다.
+
+현재 포함 플랜의 상세 billing receipt는 launcher에만 보존되고 generic worker 비용 원장에 아직 연결되지 않는다. 실제 factory 활성화 전 정책 근거·사용량·실제 관측 청구 null을 사건 시도에 연결해야 한다. 정규화 비용 0만으로 실제 과금이 관측됐다고 기록하지 않는다. 이 gap과 실제 provider·보정·scope-bound Fleet 기준이 남아 있으므로 source factory가 있다는 이유로 운영 수용을 승인하지 않는다.
 
 프로파일 수용은 다음 증거를 별도로 고정한다.
 

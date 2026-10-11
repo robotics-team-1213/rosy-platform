@@ -7962,6 +7962,11 @@ osy-d395-s1d\`.
 - 검토: responsibility_review의 독립 책임 분리 검토 및 root diff 검토를 완료했다. cancellation 시 사라진 프로세스의 ProcessLookupError 처리만 sandbox 시험에 보강했으며 production cleanup은 바꾸지 않았다.
 - gate 변화: SOURCE·원격 관련 회귀·설치 패키지·로컬 착지 완료. worker와 최종 사람 인수는 별도 구현 중이며 피드백 export·후보 승격은 실행 계획 단계다. 실제 제공자 호출·독립 품질·CI·push·배포·현장 수용은 미확인이다.
 
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
 ## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
 
 - 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
