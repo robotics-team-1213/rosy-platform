@@ -236,9 +236,8 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
                   return primary.scrollHeight <= primary.clientHeight + 1 && stage.height >= 200;
                 }"""), (width, height, page.evaluate("""() => {
                   const primary = document.querySelector('.console-primary');
-                  return {height: primary.clientHeight, scrollHeight: primary.scrollHeight,
-                    children: [...primary.querySelector('.panel').children].map(node =>
-                      [node.className || node.id, Math.round(node.getBoundingClientRect().height)])};
+                  return {scroll: primary.scrollHeight, client: primary.clientHeight,
+                    stage: document.querySelector('#map-stage').getBoundingClientRect().height};
                 }"""))
             elif width >= 1024:
                 assert page.evaluate("document.querySelector('ui-shell').getBoundingClientRect().height > innerHeight")
