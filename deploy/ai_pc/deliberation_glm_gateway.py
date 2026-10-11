@@ -15,6 +15,7 @@ import urllib.request
 
 from rosy.decision.deliberation import Problem, canonical, identifier, opinion
 from .deliberation_smoke_budget import claim
+from . import deliberation_glm_judgment as versioned
 
 MODEL = 'glm-5.3-flash'
 UPSTREAM = 'https://api.z.ai/api/coding/paas/v4/chat/completions'
@@ -24,6 +25,9 @@ LIMIT = 16384
 
 def trusted_body(raw):
     data = json.loads(raw)
+    if 'schema' in data or 'profile_revision' in data:
+        problem, _, _, body = versioned.request(data)
+        return problem, body
     if (set(data) != {'problem', 'prior', 'instruction'}
             or type(data['prior']) is not list or len(data['prior']) > 1):
         raise ValueError('INVALID_TRUSTED_JOB')
@@ -76,7 +80,7 @@ def upstream(body, token, remaining):
     return json.loads(raw)
 
 
-def checked_response(problem, response):
+def checked_response(problem, response, *, body=None):
     choice, = response['choices']
     message = choice['message']
     usage = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
@@ -93,7 +97,9 @@ def checked_response(problem, response):
         if type(count) is not int or not 0 <= count <= usage['completion_tokens']:
             raise ValueError('INVALID_REASONING_USAGE')
         usage['completion_tokens_details'] = {'reasoning_tokens': count}
-    payload = opinion(problem, json.loads(message['content']))
+    payload = json.loads(message['content'])
+    payload = (versioned.result(problem, body, payload) if body is not None
+               and 'schema' in json.loads(body) else opinion(problem, payload))
     return {'id': 'rosy-glm-one-shot', 'object': 'chat.completion', 'model': MODEL,
             'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': canonical(payload)},
                          'finish_reason': 'stop'}], 'usage': usage}
@@ -143,7 +149,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             claim(server.body)
             server.calls = 1
             response = checked_response(server.problem, upstream(request, server.token,
-                max(0.01, server.deadline - time.monotonic())))
+                max(0.01, server.deadline - time.monotonic())), body=server.body)
             stream = incoming.get('stream') is True
             raw = stream_response(response) if stream else canonical(response).encode()
             server.metrics = {'state': 'PASS_GLM_PROVIDER_ONLY', 'calls': 1, 'usage': response['usage']}
