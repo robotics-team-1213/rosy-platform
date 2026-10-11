@@ -1455,3 +1455,9 @@
 - 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
 - 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
 - gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
