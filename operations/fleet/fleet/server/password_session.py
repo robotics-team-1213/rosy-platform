@@ -529,7 +529,7 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         name = payload.get("display_name")
         if (set(payload) != {"display_name"} or not isinstance(name, str)
                 or not 1 <= len(name.strip()) <= 80
-                or any(unicodedata.category(char) == "Cc" for char in name)):
+                or any(unicodedata.category(char) in {"Cc", "Cs"} for char in name)):
             raise HTTPException(status_code=422, detail={"code": "INVALID_REQUEST", "message": "invalid display name"})
         return own_profile(request, principal, name.strip())
 
