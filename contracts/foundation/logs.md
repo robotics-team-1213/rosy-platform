@@ -620,4 +620,6 @@
 
 ## 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder
 
-Read-only Fleet judgment and observed-closure DTOs moved unchanged into protocol/fleet_judgment.py with canonical schemas.py exports. Responsibility split fixes actual size regression without changing size verdicts/allowances or wire fields. Remote guards/installed regression revalidation pending.
+- 변경: 읽기 판단·관측 종료 DTO를 protocol/fleet_judgment.py로 옮기고 schemas.py의 정식 export를 유지했다. 크기 제한·예외·wire 필드는 변경하지 않았다.
+- 증거: 통합 원격 크기 검사에서 초과를 재현했다. 책임 분리 후 수정 HEAD의 구조/설치 재검증 대기.
+- gate 변화: SOURCE 책임 분리. 실제 설치·배포·현장 수용은 별도다.
