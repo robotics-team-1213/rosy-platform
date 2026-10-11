@@ -82,6 +82,6 @@
 
 - 전체 표면 감사: 등록 11개 경로와 하위 문서 확인 완료. 세 감사 담당이 독립 검토했으며, 등록 밖 독립 HTML 표면은 확인되지 않았다.
 - 확정 수정 목록: Install field 덧칠 / disclosure 행·닫힌 summary / roster 접속 안내 / Site-map·Cell heading semantics / field mismatch 색 역할 / 공용 결과 paint / 캔버스 글자 역할 / Pilot 일반 조작 / native 버튼·서체·간격 생성 소비 / registry 중복 키 및 실제 역할 / 표면 전체 토큰 참조 검사.
-- 공용 규칙·소비자 수정과 최종 회귀: 공용·Fleet·장치/검토 표면 세 소유 작업으로 병렬 실행 중. 기존 UI 실패 40개도 현재 계약과 대조해 닫는다.
+- 공용 규칙·소비자 수정과 최종 회귀: 공용·Fleet·장치/검토 표면의 구현을 통합했다. 공용 규칙 104개, 역할 소유권 52개, Fleet/지도/영상 브라우저 116개, Robot/Pilot 브라우저 179개가 원격 통과했다. Android Cam 413개·Pilot 105개 단위 시험과 debug APK 빌드가 통과했다. 기존 UI 실패 항목은 통합 HEAD에서 독립 재검증하며, 최신 설치본 검증 전에는 완료로 표시하지 않는다.
 - 선행 Fleet 와이어프레임: main 머지·푸시 완료. 폴더 이동에 따른 ROS 경계 회귀는 `8a140aeb2`에서 원격 65개 및 pre-push 4,493개 통과, CI 16개 작업 및 서명된 관제 후보 빌드 통과. 서명된 설치 SHA와 기능 검증 종료 확인. 실제 관제 1366×768·320×568에서 비상정지/알림 48/14/12, 탭 4개 및 가로 넘침 없음 확인. 같은 화면의 AI 조회는 HTTP 200·build_commit 8a140aeb2875다. 증거: X:/DevTemp/control-632-live/installed-8a140aeb2-readback.json 및 installed-8a140aeb2-site.txt. 이번 전체 표면 변경의 설치 증거는 별도로 수집한다.
 - 목표 완료는 문서 작성이나 계획 승인만으로 표시하지 않는다.
