@@ -72,3 +72,62 @@ def test_versioned_launcher_default_admission_refuses_before_gateway(monkeypatch
         with pytest.raises(ValueError):
             asyncio.run(launcher(module.ARGV, raw, 1, 16384, 0))
         assert launcher.used is False
+
+
+@pytest.mark.parametrize('change', ['valid', 'wrong_runtime', 'expired', 'wrong_sdk', 'cancel'])
+def test_actual_versioned_provider_uses_launcher_host_receipt_not_sdk_cost(monkeypatch, change):
+    import asyncio
+    from contextlib import asynccontextmanager
+    from deploy.ai_pc import deliberation_opencode as module
+    from rosy.decision.deliberation.versioned_cli import VersionedCliProvider
+    bridge, raw, receipt, policy, sdk = setup()
+    problem, bound, _ = fixture()
+    caps = replace(bridge.CAPABILITIES, ready=True, isolated=True, cost_verified=True)
+    if change == 'wrong_runtime': caps = replace(caps, model_revision='foreign')
+    if change == 'expired': policy = replace(policy, valid_until=0)
+    if change == 'wrong_sdk': receipt['judgment_sha256'] = 'b' * 64
+    events = []
+    class Sandbox:
+        def __init__(self, *args): pass
+        def command(self, *args):
+            return ('systemd-run', '--', 'bwrap', '--unshare-all', '--', '/provider')
+        def close(self): pass
+    @asynccontextmanager
+    async def gateway(body, remaining, directory):
+        assert body == raw and 0 < remaining <= 1
+        events.append('gateway')
+        try:
+            yield object()
+        finally:
+            events.append('gateway-cleaned')
+    async def bounded(command, body, remaining, limit):
+        events.append('cli')
+        if change == 'cancel': raise asyncio.CancelledError()
+        return 0, sdk
+    async def finish(process): return receipt
+    async def cleanup(unit): events.append('scope-cleaned')
+    for name, value in (('SandboxLauncher', Sandbox), ('gateway_session', gateway),
+                        ('bounded_process', bounded), ('finish_gateway', finish), ('cleanup_scope', cleanup)):
+        monkeypatch.setattr(module, name, value)
+    if change == 'wrong_runtime':
+        with pytest.raises(ValueError): module.GlmOpenCodeLauncher(admission=caps, billing_policy=policy)
+        assert events == []
+        return
+    with module.GlmOpenCodeLauncher(admission=caps, billing_policy=policy) as launcher:
+        provider = VersionedCliProvider(profile=bound.profile, adapter=caps,
+                                       launch=launcher, cli_version='1.18.35')
+        if change == 'valid':
+            result, cost = asyncio.run(provider(problem, bound, (), 1, budget_usd=0))
+            assert result.payload == opinion(problem, bound) and cost == 0
+            assert launcher.billing_receipt['observed_usd_charge'] is None
+            assert launcher.billing_receipt['job_sha256'] == bridge.digest(json.loads(raw))
+        else:
+            error = asyncio.CancelledError if change == 'cancel' else ValueError
+            with pytest.raises(error):
+                asyncio.run(provider(problem, bound, (), 1, budget_usd=0))
+        assert launcher.used is (change != 'expired')
+        if change != 'expired':
+            with pytest.raises(ValueError, match='ONE_SHOT_ALREADY_USED'):
+                asyncio.run(provider(problem, bound, (), 1, budget_usd=0))
+    assert events == ([] if change == 'expired' else
+                      ['gateway', 'cli', 'scope-cleaned', 'gateway-cleaned'])
