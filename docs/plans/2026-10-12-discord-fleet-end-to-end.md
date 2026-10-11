@@ -1,0 +1,28 @@
+# Discord와 Fleet 실제 연동 완료 계획
+
+2026-10-12. Branch: `feat/discord-workflow`.
+
+사용자가 완전한 연동을 목표로 다시 설정하도록 요청했다. 접수와 로그인만으로 완료하지 않는다. D-669 설계, D-671 접수, D-675 Gateway를 기반으로 기존 Fleet 소유자에 연결한다. 모델 CLI와 broker는 별도 세션이 소유하며 이 브랜치에서 구현하지 않는다.
+
+## 완료 기준
+
+1. 지정 채널에서 기명 사용자의 Bot mention 원문을 실제로 수신하고 재시작 후에도 같은 요청을 조회한다.
+2. 요청 원문과 hash, 요청자, 구조화 후보 또는 보류 사유, 기존 작업 ID, 확인자를 연결한다. 모호한 요청은 사람에게 확인하며 모델 HOLD를 우회하지 않는다.
+3. Fleet Console의 기존 승인 규약을 거쳐 기존 Task/Mission/Cell Job 소유자가 처리한다. 일반 Mission의 owner와 Cell Job의 독립 approver 규칙을 보존한다.
+4. 위험 사건은 현재 사건과 revision에 묶인 기존 인수·정지/취소 규약에 연결한다. 자연어 위험 표현으로 해제·rearm·이동 권한을 만들지 않는다.
+5. 처리 결과를 원래 Discord 요청에 회신하고 실제 수신을 확인한다. 접수, 승인, 장치 수락, 동작 결과, 목표 증거, UNKNOWN을 구분한다.
+6. 실제 배포 SHA, 비공개 설정, 기명 로그인, 원장 readback, Discord 메시지 ID와 회신 상태를 증거로 남긴다. 로봇 오프라인과 FIELD 미확인은 별도 gate로 유지한다.
+
+## 실행 순서
+
+- **진행 중 — 기반 착지:** D-671/D-675 최신 main 통합 회귀를 완료한다. 현재 수신·원장·Console 원문 조회와 source image build가 구현됐다. 운영 수신은 아직 적용 전이다.
+- **다음 — 후보와 확인:** 관련 ADR/API/DTO를 먼저 확정한다. 기존 Task 제출과 Mission/Cell Job 승인 호출자를 재사용하고 요청→작업 관계를 기존 tasks DB에 저장한다. 동일 요청·내용으로 재승인이 실행을 중복하지 않는지, 다른 owner·수정된 원문·권한 철회·불명 제출을 검증한다.
+- **다음 — 결과 회신:** 기존 알림의 durable outbox와 전송 결과 의미를 검토해 재사용 가능한 경계를 선택한다. 고정 guild/channel과 원래 message reference만 사용하고 mentions를 차단한다. timeout/5xx와 재시작 후 SENDING은 UNKNOWN이며 맹목 재전송하지 않는다. Bot 자기 회신은 intake에서 제외한다.
+- **다음 — 위험 대응:** 현재 line incident owner의 사건 조회·인수·정지 계약부터 연결한다. 다른 종류의 위험은 해당 소유자가 있을 때만 연결한다. source/fake 시험과 실제 운영 검증을 분리한다.
+- **마지막 — 배포와 실제 경로:** 사용자 승인 범위와 저장소의 push·CI·signed candidate·updater 규칙을 확인한다. 검토 가능한 구현과 local FF를 먼저 끝내고 필요한 명시 승인은 마지막 단계에서 받는다. 비공개 token/config를 Fleet에만 주입한 뒤 실제 대화→Console 확인→원장→회신을 검증한다.
+
+## 검증과 책임
+
+제품 변경은 이 worktree에서만 한다. 로그와 임시 파일은 X의 기존 discord-fleet-pipeline 세션에 둔다. committed HEAD의 pytest는 원격 PC에서만 실행하고 각 로그를 known_failures와 비교한다. 승인·중복·UNKNOWN·권한·원문 XSS·설치/이미지 closure와 변경된 Console의 실제 browser 경로를 확인한다. safety 경계 변경은 독립 검토를 거친다.
+
+모델 provider 수용과 실제 로봇 주행은 Discord 소스 검증으로 승격하지 않는다. 기명 사용자 요청을 Bot 공용 operator나 임의 principal로 대체하지 않는다. CORE와 OMX의 최종 장치 권한 및 기존 Fleet transaction/fence를 유지한다.
