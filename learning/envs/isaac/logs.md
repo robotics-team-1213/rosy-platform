@@ -103,3 +103,10 @@
 - 변경: 기존 전방 목표각을 보존하고 현재 route index의 비중복 접선 방향을 별도 계산한다. 경로 끝은 마지막 비중복 구간을 사용하고 두 각도 모두 현재 yaw 기준으로 wrap한다. source 시각·진행·이탈·pivot 설정과 strict camera target·CORE 최종 권한·정책 고정·물리 정지는 유지한다.
 - 증거: 원격 RED6 NEW/42 pass 뒤 전체 Isaac174 pass/1 skip·NEW0·exit0. 독립 source Safety-Review 수용 후 중복·끝 시험을 +y/90도로 보강한1610f52b2d도 같은 회귀를 통과했다. 기록된 실패 PNG의 고정 기존 모델 CPU replay는 here/ahead를 분리해도 guided pivot/target loss/HOLD를 유지했다. 입력 계약 수정이 목표 상실 해결이라는 증거는 없다.
 - gate 변화: SOURCE/LOCAL 유지. 실제 native 새 입력·카메라 완주·RL 개선·벽 안전 센서 연결·두 대 Fleet·한국 교통·ROS-SIM·실물 수용은 미완료다.
+
+## 2026-10-11 · c229738784 · fix(isaac): 명시적 렌더에서 카메라 receipt 갱신
+
+- 문제: 정지 시간의 렌더 초기화는 SDK 기본 수집 주기의 simulation dt를 채우지 못해 current_frame이 초기값0으로 남았고 기존 Fabric 검증에서 첫 녹화 쓰기가 거부됐다.
+- 변경: recording/front Camera의 frequency를 매 렌더 수집(-1)으로 명시한다. 관측24-step/녹화48-step cadence, legacy path 렌더 cadence, 실제 frame 검증·freshness·CORE·정지·cleanup은 유지한다.
+- 증거: 원시 receipt0 재현과 기본120Hz→-1 단일 변수 진단 뒤 c229738784 원격 Isaac174 pass/1 skip·NEW0·exit0 및 독립 source Safety-Review 수용. wrapper 없는 committed-source native에서 전체7123파일 hash를 고정했다. baseline101은 유효98/101관측·10sim초·0.190177m·시간 제한 뒤 실제 정지, Fabric 검증을 통과한52프레임 MP4를 확인했다.
+- gate 변화: train0은 유효0/22관측·2.191667sim초 뒤 camera loss, updates0·invalid_camera_observation527로 후보를 거부했고 SDK exit1로 종료했다. 녹화 수정의 근거이며 전체 완주·RL 효과·두 대 Fleet·한국 교통·ROS-SIM·실물 수용은 미완료다.
