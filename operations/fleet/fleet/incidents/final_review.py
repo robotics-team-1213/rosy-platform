@@ -40,6 +40,10 @@ def final_current(connection, rid, sid, scope_json, now, *, receipt=None):
 
 
 def original_revision(connection, scope, revision):
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_incident_v2_origins'").fetchone():
+        if connection.execute('SELECT 1 FROM fleet_incident_v2_origins WHERE subject_id=? AND case_id=? AND observation_revision=?',
+                              (scope.subject_id, scope.case_id, revision)).fetchone():
+            return True
     if connection.execute('SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND observation_revision=? LIMIT 1',
                           (scope.subject_id, scope.case_id, revision)).fetchone():
         return True
