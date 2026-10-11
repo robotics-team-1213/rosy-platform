@@ -41,6 +41,14 @@ D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분�
 
 **Related:** D-2, D-18, D-517, D-525, D-541, D-573, D-606, D-638, D-650, D-653.
 
+### Addendum 2026-10-12 — 두 대 Gazebo 도로 증거 연결
+
+A21 runner 설정의 ENFORCED와 Fleet snapshot의 DISABLED가 일치하지 않았다. 실제 CORE 교통 endpoint의 직접 readback 전에는 ENFORCED 실행을 수용하지 않는다. 지면 투영은 기존 simulation guard가 허용하는 GAZEBO source로 연결하며 실제 shared helper의 투영 생성 회귀로 확인한다.
+
+실제 A21에서 두 CORE·Fleet online 2/2·카메라/차선/LiDAR/odom과 CORE별 최종 publisher를 확인했으나 위치는 UNKNOWN이었다. 기존 multi_real launch는 road/observation 발행자를 시작하지 않아 ENFORCED 교통 정책에 도로 증거를 공급하지 못했다. 기존 road_observer_node를 각 namespace의 camera/front에 연결하고 declared URDF nominal 카메라 투영·map_v2_fleet 식별자를 명시한다. 기존 learned line observer는 유지한다. 도로 관측 노드가 기존 front JPEG와 raw preview를 발행하므로 단순 JPEG relay를 중복 실행하지 않는다.
+
+이는 기존 RGB 도로 검출기 연결이며 학습된 주의 표식·보행자/신호 인식의 정확도 검증이나 네 신호 표시 구현을 대신하지 않는다. UNKNOWN 위치·신호·stale 관측·CORE 최종 권한을 완화하지 않는다. 원격 구조 시험, 실제 road evidence 수신과 preview 단일 발행, 실제 교통/주행 수용은 별도 검증한다.
+
 ### Addendum 2026-10-12 — 공유 지도 진입·진출 규칙 정합성
 
 기존 양방향 지도는 링 진입 네 방향을 열었고 Isaac 경로도 NW·SE에서 재진입했다. 승인한 NE·SW 진입/NW·SE 진출 구조에 맞춰 원본 `lane_rules.yaml`에 기존 TurnBan 계약으로 NW의 west→ring_w 및 SE의 east→ring_e 금지를 기록한다. 두 파생 lane_graph는 생성기로 갱신하며 Fleet 지도 가져오기가 이를 보존한다. 신호 접근로 검사는 연결된 진입 중 금지된 전이를 제외한다. 도로의 양방향과 링에서 도로로 나가는 합법적 진출은 유지한다.

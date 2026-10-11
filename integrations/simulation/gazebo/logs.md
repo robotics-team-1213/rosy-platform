@@ -348,3 +348,9 @@
 - 변경: 새 NE/SW 진입 ordered 경로를 기존 segmentation·CORE·frozen RL로 실제 headless 평가했다. 최신 main 통합 소스로 별도 Gazebo build/install과 두 CORE·실제 Fleet 연결 정지 시험을 준비했다.
 - 증거: R23 source 7,337 파일 실행 전후 hash 검증, SDK exit 1, 네 heading baseline/eval 완주 0/8·진행 0m. 영상 8개 ffprobe·SHA·시각 증가, 무효 camera 명령 0·최종 정지·GPU 없음·독립 runner PID 부재 확인. private 원본 56개 hash 대조 보관. A21 ROS 17 패키지 빌드 exit 0; 실행 직전 공식 sim selector는 eligible 없음·exit 1이다.
 - gate 변화: 완주/RL 개선은 HOLD다. trace의 lane_cue null·junction idle과 camera_target_unavailable을 기록했다. native Fleet 회전·공간/오차 승인·재획득과 두 대 실제 주행이 남았다. 정지 sensor/Fleet 연결 script는 준비·syntax 확인뿐이며 A21 SDK/CORE/Fleet 실행을 주장하지 않는다. 기존 안전 정지를 완화하지 않았다.
+
+## 2026-10-12 · uncommitted · 두 카메라 도로 관측 연결과 A21 실제 정지 시험
+
+- 변경: 두 namespace에 기존 road_observer_node를 연결하고 중복 preview relay를 제거했다. CORE와 map/scene 식별자를 맞췄다. simulation 지면 guard가 거절하는 GZ 값을 GAZEBO로 수정하고 실제 shared projection helper의 생성 회귀를 추가했다.
+- 증거: A21 실제 두 CORE·Fleet online 2/2, 카메라·차선·scan·odom 수신과 namespace별 최종 cmd_vel publisher CORE 하나를 확인했다. 모든 명령·최종 odom 속도 0, 종료 후 소유 프로세스·포트 부재 확인. private 원본 39개 SHA 대조 보관. roslogs/latest 절대 symlink는 안전 추출에서 제외했다. 새 도로 연결의 원격 회귀·native 실행은 아직 미확인이다.
+- gate 변화: 실제 정지 연결 증거만 추가했다. 위치 UNKNOWN, 설정 ENFORCED와 snapshot DISABLED 불일치로 교통 모드 수용은 보류다. 주행·도로 검출 정확도·신호 표시·완주·병렬 RL 개선은 미완료다.
