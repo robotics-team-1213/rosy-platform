@@ -14,7 +14,9 @@ D-697의 규칙 기준은 모델 export를 호출 0건으로 바꿔 만들 수 �
 
 AI-first 또는 AI 사실·제안·대기 입력이 있는 pass는 MIXED로 기록하며 RULE_ONLY 기준으로 승인하지 않는다. roster/config hash는 그 입력 범위를 결속할 뿐 map callbacks·resolver lifecycle 전체의 독립 replay나 진본성을 인증하지 않는다. 독립 평가와 승격은 계속 HOLD다.
 
-같은 사건·관측 revision·필요성 policy의 fresh RULE_ONLY 선택 중 HOLD만 reobserve, HANDOFF 또는 최종 인수가 붙은 WAIT만 human으로 비교한다. 물리 ANSWER와 NONE은 임의로 변환하지 않는다. 설치 factory의 기본 baseline 포트는 현재 pass에서 저장한 선택만 읽고, 명시적 기존 baseline 포트는 유지한다. 모델의 실제 행동 권한을 추가하지 않는다.
+같은 사건·관측 revision·필요성 policy의 fresh RULE_ONLY 선택 중 HOLD만 reobserve, HANDOFF만 human으로 비교한다. WAIT를 포함한 모든 물리 ANSWER와 NONE은 임의로 변환하지 않는다. 실제 선택을 저장하는 동안 사람이 인수하면 기존 dispatch·관측 note와 비교 기준이 사람 점유를 보존한다. 설치 factory의 기본 baseline 포트는 현재 pass에서 저장한 선택만 읽고, 명시적 기존 baseline 포트는 유지한다. 모델의 실제 행동 권한을 추가하지 않는다.
+
+이 원장은 기본 resolver의 JSON 검증에도 쓰이므로 기존 ROS-free `rosy-contracts-learning>=0.1.10`을 Fleet 필수 설치 의존성으로 명시한다. 기존 `fleet[learning]` extra 이름은 유지하며 원래의 계약 wheel을 재사용한다. wheel·sdist에서 이 의존성의 설치 위치와 기본 resolver 생성을 확인한다. 별도 학습 런타임·torch·ROS 의존성을 추가하지 않는다.
 
 | 기존 계약 | 관계 |
 |---|---|

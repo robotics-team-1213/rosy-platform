@@ -100,7 +100,7 @@ class StuckResolverLoop:
                 await asyncio.to_thread(self.ai_board.log.append_verdicts, verdicts)
         for action in actions:
             if isinstance(action, Escalate):
-                self._escalated(action)
+                if not self._resolver.is_claimed(action.robot_id, action.stuck_id): self._escalated(action)
             else:
                 await self._answer(action, now, selected=selected.get(action.robot_id))
         if self.problems is not None:              # D-610 4: stalled and pose_lost
@@ -117,7 +117,9 @@ class StuckResolverLoop:
             source = digest(robots)
             config = digest(dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots)))
             selected = {action.robot_id: action for action in actions}
-            mixed = self._resolver.ai_first is not None or any(
+            active_ai = sorted(r['robot_id'] for r in robots if self._resolver.ai_first is not None
+                               and self._resolver.ai_first.on(r['robot_id']))
+            mixed = bool(active_ai) or any(
                 r.get('ai_facts') or r.get('ai_proposal') or r.get('ai_wait') for r in robots)
             records = [pipeline.selection_receipt(self._board.intervention_assessment(r['robot_id']),
                 selected.get(r['robot_id']), source_sha256=source, config_sha256=config, mixed=bool(mixed)) for r in robots]
@@ -132,6 +134,7 @@ class StuckResolverLoop:
         from rosy_situation.snapshot_assessment import POLICY
         if assessment is None or not assessment.applies_to(assessment.request, now=self._board._wall(), policy_revision=POLICY.revision):
             return None
+        if self._resolver.is_claimed(assessment.request.subject_id, assessment.request.case_id): return None
         record = self._rule_selections.get(assessment.request.subject_id)
         if (record is None or record['assessment']['request'] != json.loads(json.dumps(asdict(assessment.request)))
                 or record['assessment']['policy_revision'] != assessment.policy_revision

@@ -70,6 +70,5 @@ def baseline_choice(value):
     if value['strategy'] != 'RULE_ONLY' or value['assessment']['necessity'] != 'INTERVENE': return None
     selection = value['selection']
     if selection['kind'] == 'HOLD': return 'reobserve'
-    if selection['kind'] == 'HANDOFF' or (selection['decision'] == 'WAIT' and selection['reason'] is not None):
-        return 'human'
+    if selection['kind'] == 'HANDOFF': return 'human'
     return None
