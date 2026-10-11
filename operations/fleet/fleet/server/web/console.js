@@ -144,7 +144,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
+    "ui-button:not([data-auth-focus]):not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -272,6 +272,7 @@ async function refreshIncidents() {
       item.className = "incident-row";
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
+      summary.className = "ui-disclosure-row";
       const core = report.evidence.core, fleet = report.evidence.fleet;
       const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
       incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName}`);
@@ -315,6 +316,7 @@ async function refreshIncidents() {
       item.className = "incident-row";
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
+      summary.className = "ui-disclosure-row";
       const name = report.classification === "wait_cycle_confirmed"
         ? ai.value?.fleet_agrees === false ? "AI 단독 대기 순환 판단" : "AI·Fleet 대기 순환 일치"
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",

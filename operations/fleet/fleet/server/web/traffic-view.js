@@ -117,7 +117,7 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
     const { x: cx, y: cy } = toPoint(mx, my);
     const label = stop.text;  // "적 ≥7", or rev 6 occupancy "주황 · 점유 예정 · rosy_01"
     ctx.save();
-    ctx.font = window.RosyPalette.canvasFont(12, "mono");
+    ctx.font = window.RosyPalette.canvasFont("micro", "mono");
     const w = 30 + ctx.measureText(label).width, h = 22;
     ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 11);
     ctx.fillStyle = css("--ground-deep"); ctx.fill();

@@ -151,7 +151,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       battery.dataset.fact = "battery";
       battery.append(nodeWithText("span", "sr-only", "배터리 "),
         nodeWithText("strong", "", power.battery));  // the card reads the same value
-      line.append(nodeWithText("b", "", displayName),
+      line.append(nodeWithText("b", "ui-disclosure-name", displayName),
         nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
       if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
       node.appendChild(line);
@@ -352,11 +352,18 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
     if (link?.next) {
       if (link.focus === "console-token") {
-        const next = document.createElement("button");
+        const next = document.createElement("ui-button");
+        next.setAttribute("kind", "quiet");
+        next.dataset.authFocus = "";
         next.type = "button";
         next.textContent = link.next;
         next.addEventListener("click", scope.guard(() => {
-          document.getElementById("console-token")?.focus();
+          const token = document.getElementById("console-token");
+          const access = document.getElementById("token-access");
+          if (access) access.open = true;
+          const more = document.getElementById("topbar-more");
+          if (more?.getAttribute("aria-expanded") === "false") more.click();
+          token?.focus();
         }));
         node.appendChild(next);
       } else {
