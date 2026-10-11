@@ -611,4 +611,4 @@ def test_concurrent_password_changes_have_exactly_one_winner(tmp_path):
         thread.join(timeout=10)
         assert not thread.is_alive()
     assert len(results) == 2 and results.count(None) == 1
-    assert sessions.principal(next(value for value in results if value is not None)) is not None
+    assert sessions.principal(next(value[0] for value in results if value is not None)) is not None
