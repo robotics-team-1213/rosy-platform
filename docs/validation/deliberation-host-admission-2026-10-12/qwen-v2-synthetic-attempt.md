@@ -19,3 +19,5 @@
 시험을 먼저 추가한 `446c05b511`은 적격 AI PC 10.2GB에서 예상한 4 NEW였다. `6ce30937e7`의 관련 3개 파일 시험은 같은 자원 하한을 충족한 AI PC에서 64 passed, exit 0이다. 로그는 위 세션의 `logs/qwen-diagnostic-red/run-1.txt`와 `logs/qwen-diagnostic-green/run-1.txt`다. 실제 모델 호출 없이 예외 분류·원문 비노출·단일 호출을 검증했다.
 
 운영 admission·calibration·현장 수용은 HOLD다. 다음 연결 시험에는 제공자 요청 경계와 검증 결과의 제한된 receipt를 남겨 원인을 구분해야 하며, 이번 표식을 초기화해서 재호출하지 않는다.
+
+독립 source review의 timer 정리 지적을 반영했다. 성공·실패 반환 모두 타이머를 해제하고 기존 signal handler를 복원한다. 회귀를 먼저 추가한 `311e101b37`에서 예상한 5 NEW를 확인한 뒤 `fa583898b69f016a954c29453fdf4cda96d82181`의 관련 3개 파일이 적격 AI PC 9GB에서 65 passed, exit 0, known-failures 신규 실패 0건과 lint를 통과해 로컬 main에 착지했다. 고정 로그 복사본은 위 세션의 `logs/qwen-timer-integrated-green/run-1.txt`이며 독립 source 재검토의 중요 지적은 해소됐다. 이 수정 뒤 실제 모델을 다시 호출하지 않았다.
