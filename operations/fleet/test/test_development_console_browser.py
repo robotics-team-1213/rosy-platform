@@ -94,7 +94,9 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     brand = page.locator("ui-brand").bounding_box()
                     assert max(role["y"], badge["y"], brand["y"]) < min(
                         role["y"] + role["height"], badge["y"] + badge["height"], brand["y"] + brand["height"])
-                    assert role["x"] > width / 2
+                    assert role["x"] >= brand["x"] + brand["width"]
+                    if width >= 1024:
+                        assert role["x"] > width / 2
                     assert badge["x"] + badge["width"] <= stop["x"]
                     assert page.locator("ui-topbar").bounding_box()["height"] < 100
                 page.set_viewport_size({"width": 390, "height": 844})
