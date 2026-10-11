@@ -127,6 +127,11 @@ assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not N
 assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
 from rosy_discord.intake import project_message, signed_request
 from rosy_discord.gateway import DiscordGateway
+from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
+from core_common.protocol.channel_requests import ChannelIncidentClaimRequest
+from core_common.protocol.schemas import ChannelIncidentClaimRequest as ExportedIncidentRequest
+assert ExportedIncidentRequest is ChannelIncidentClaimRequest
+assert Path(importlib.util.find_spec('fleet.server.channel_incidents').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.gateway').origin).is_relative_to(installed)
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
@@ -281,6 +286,7 @@ from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal
 from rosy.execution.site.workflow import project_progress
 from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
+from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
 from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence
