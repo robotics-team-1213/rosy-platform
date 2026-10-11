@@ -788,6 +788,9 @@ main {
 @media (width >= 64rem) and (height >= 40rem) {
   #fleet-main .map-stage { flex: 1; block-size: auto; min-height: 12.5rem; }
 }
+@media (width >= 64rem) and (height < 50rem) {
+  .map-readouts { block-size: 8rem; }
+}
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
 
