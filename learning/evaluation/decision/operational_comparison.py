@@ -50,10 +50,10 @@ def budget_limits(value):
     if type(cost) not in (int, float) or not 0 <= cost <= 10 or not math.isfinite(cost):
         raise ValueError('INVALID_COMPARISON_BUDGET_COST')
     roles = value['role_limits']
-    if type(roles) is not list or len(roles) > 2: raise ValueError('INVALID_COMPARISON_ROLE_LIMITS')
+    if type(roles) not in (list, tuple) or len(roles) > 2: raise ValueError('INVALID_COMPARISON_ROLE_LIMITS')
     limits = {}
     for row in roles:
-        if (type(row) is not list or len(row) != 2 or type(row[0]) is not str
+        if (type(row) not in (list, tuple) or len(row) != 2 or type(row[0]) is not str
                 or row[0] not in {'primary', 'reviewer'} or row[0] in limits or count(row[1], 8) < 1):
             raise ValueError('INVALID_COMPARISON_ROLE_LIMITS')
         limits[row[0]] = row[1]
