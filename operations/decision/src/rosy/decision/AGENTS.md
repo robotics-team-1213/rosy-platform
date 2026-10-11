@@ -22,6 +22,7 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 | `selector_bridge.py` | Resolves ER 2 image selectors against candidates from the same camera frame |
 | `vision_observation_source.py` | Trusted, bounded reads of the source-scoped Vision preview API |
 | `decision_pipeline.py` | D-523 parsers: identity fact or allowlisted choice. No stuck answer and no network |
+| `deliberation/` | D-640 bounded advisory supervisor and fixed CLI translator; Fleet owns durable records and activation |
 
 ## For AI Agents
 

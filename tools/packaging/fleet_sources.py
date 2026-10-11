@@ -12,6 +12,7 @@ from setuptools.command.build_py import build_py
 roots = runpy.run_path('fleet/_source_layout.py')['SOURCE_ROOTS']
 package_dirs = {
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
+    'rosy.decision.deliberation': roots['decision'] / 'src/rosy/decision/deliberation',
     'fleet.server.web': roots['console'],
     'rosy_situation': roots['assessment'] / 'rosy_situation',
 }
