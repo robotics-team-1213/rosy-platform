@@ -23,6 +23,8 @@ export function createWorkView({scope, call, el}) {
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
     rows = []; selected = null; detailVersion++;
     list.replaceChildren(); detail.replaceChildren();
+    el("channel-requests").replaceChildren();
+    el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
     el("work-evidence").textContent = "작업을 선택하세요.";
   }
@@ -102,9 +104,30 @@ export function createWorkView({scope, call, el}) {
       if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);
       paint();
+      await refreshRequests(life);
     } catch (error) {
       if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.");
     } finally { inFlight = false; }
+  }
+  async function refreshRequests(life) {
+    const requests = el("channel-requests"), state = el("channel-requests-state");
+    try {
+      const result = await call("/api/fleet/channel-requests"); life.check();
+      requests.replaceChildren();
+      for (const row of result.rows) {
+        const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
+        text.textContent = row.content;
+        info.className = "hint";
+        info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
+        item.append(text, info); requests.append(item);
+      }
+      state.textContent = `${result.rows.length}건 · 접수된 원문입니다. 실행 승인은 별도로 확인합니다.`;
+    } catch (error) {
+      if (!life.current()) return;
+      requests.replaceChildren();
+      state.textContent = error.status === 404 ? "대화 요청 접수가 설정되지 않았습니다." :
+        error.status === 401 || error.status === 403 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
+    }
   }
   scope.listen(el("work-filter"), "change", paint);
   scope.listen(el("work-refresh"), "click", refresh);

@@ -31,11 +31,12 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'operations/world',
-                     'operations/execution', 'middleware/skills/api'):
+                     'operations/execution', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation'):
+        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation',
+                            'integrations/messaging/discord'):
             sources.append(copied)
     expected = {p.relative_to(ROOT / 'operations/ui/console').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
@@ -56,6 +57,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/ui/console')
         shutil.rmtree(staging / 'operations/situation')
+        shutil.rmtree(staging / 'integrations/messaging/discord')
         shutil.rmtree(staging / 'tools')
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
@@ -122,6 +124,8 @@ request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
 assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+from rosy_discord.intake import project_message, signed_request
+assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
@@ -183,6 +187,8 @@ print('installed namespace, resources and HTTP guards verified')
 import sys
 sys.path.insert(0, sys.argv[1])
 from fleet.server.mission_service import MissionService
+from rosy_discord.intake import project_message, signed_request
+from fleet.server.channel_requests import ChannelRequests
 from fleet.server.mission_progress import MissionProgressService
 from rosy.execution.site.goal_evidence import GoalPredicate
 from rosy.execution.site.workflow import project_progress

@@ -148,7 +148,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
-               notification_config=None) -> FastAPI:
+               notification_config=None, channel_config=None) -> FastAPI:
     if notification_config is not None and task_service is None:
         raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
@@ -786,6 +786,21 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.work_routes import install_work_routes
     install_work_routes(app, task_service=task_service, mission_service=mission_service,
                         require_viewer=require_viewer, read_guard=read_guard)
+    if channel_config is not None:
+        if task_service is None:
+            raise ValueError("Discord intake requires the existing tasks DB")
+        from fleet.server.channel_requests import ChannelRequests, install_channel_routes
+        key = channel_config.transport_key
+        key_digest = sha256(key.encode()).hexdigest()
+        if (key_digest in principals or key in (console_token, discovery_token, vision_lease_secret,
+                                               robot_credential_key, pairing_sync_token)
+                or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)):
+            raise ValueError("Discord transport credential must be isolated")
+        accounts = {p.principal_id: p.role for p in principals.values()}
+        accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
+        app.state.channel_requests = ChannelRequests(task_service.store.path, channel_config, accounts)
+        install_channel_routes(app, app.state.channel_requests,
+                               require_operator=require_operator, read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
                             service_id=cell_app_service_id, principals=principals,

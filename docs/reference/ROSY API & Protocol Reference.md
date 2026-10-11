@@ -1,8 +1,8 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.209
+**Version:** v1.210
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3204,3 +3204,12 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 `GET /api/fleet/incidents`의 line_stuck report에 `handoff`(없으면null), `judgment_revision`(현재 열린 case가 아니면null)을 추가한다. 조회는 선택 `robot_id`와 `stuck_id`를 함께 받으며 기존 limit 안에서 해당 사건만 반환한다. 하나만 주거나 식별자 형식이 잘못되면422다. token 없는 `/console?inbox=1&robot=<id>&incident=<id>` 링크는 기존 viewer/operator 로그인 이후 이 조회와 인수 UI로 연결되며 GET으로 인수하지 않는다. 공개 인수·조회 producer는 Fleet routes/기존 원장, consumer는 Console이다.
 
 `GET /api/fleet/notifications?limit=100`(viewer+)는 `{records:[{event_id,robot_id,stuck_id,kind,channel,state,created_at,expires_at,next_attempt_at,attempts,last_code,provider_id,delivered_at}]}`다. kind는 OPEN/CLOSED, state는 PENDING/SENDING/SENT/RETRY/UNKNOWN/FAILED/EXPIRED/SUPERSEDED, 시각은 UTC epoch seconds다. limit 1..1000, 미인증401/잘못된 limit422이며 private endpoint·메시지 payload·secret·설치 주소를 반환하지 않는다. line_stuck incident report의 `notifications`는 같은 형식의 해당 사건 최근20건이다. SENT는 provider 수락이며 실제 수신/인수/해소가 아니다. UNKNOWN은 맹목 재시도하지 않는다. durable producer는 Fleet 사건/판단 owner, consumer는 opt-in notification worker와 Console이다.
+## v1.210 Discord 기명 요청 접수 (D-671, source only)
+
+`POST /api/fleet/channel-requests/discord`는 전용 transport 인증만 받는다. `X-ROSY-Timestamp`는 epoch-second 정수 문자열, `X-ROSY-Signature`는 전용 secret으로 timestamp + ASCII `.` + raw UTF-8 body에 계산한 HMAC-SHA256 소문자 hex다. 서버 시각과 차이 60초 초과 또는 잘못된 서명은401다. 일반 bearer/cookie는 transport 인증을 대신하지 않는다. raw body 최대8192 bytes(초과413), unknown field/형식 오류422다.
+
+본문은 `DiscordRequestEnvelope`: guild_id/channel_id/author_id/message_id(17..20자리 숫자 문자열), content(1..2000자), mentions(최대100개 user ID 문자열), author_bot(bool), webhook_id(string|null)다. Fleet private guild/channel/Bot mention/user mapping과 현재 operator 계정이 일치해야 한다. Bot/webhook/DM/권한 철회는403이며 개발 principal과 caller principal은 허용하지 않는다.
+
+응답은 `ChannelRequestReceipt`: request_id(접수 key), principal_id, guild_id/channel_id/message_id/author_id, 원문 content 및 content_hash(SHA256), received_at(UTC ISO8601), status=`REQUESTED`다. 같은 scope와 같은 envelope는 같은 receipt이고 수정된 내용은409다. 설정된 DB 최대1000건에서503이며 자동 삭제하지 않는다. 재접수도 현재 권한을 다시 검사한다. 접수는 Task/Mission/Job/승인/장치 요청/모델 호출을 만들지 않는다.
+
+`GET /api/fleet/channel-requests`는 등록된 기명 operator의 자기 요청 최근50건 `{rows:[ChannelRequestReceipt]}`만 읽는다. 미인증401/다른 역할·공용·development403다. CLI `--discord-intake-config`가 없으면 두 경로는404다. account/mapping 변경은 기존 site-users와 같이 서버 재시작으로 반영한다. Gateway 수신 실행기, Bot token 주입, 실수신 및 후보/승인 연결은 후속 gate다. CORE/OMX writer, 기존 Mission/Cell Job 권한 및 WS protocol_version 1.0은 유지한다.

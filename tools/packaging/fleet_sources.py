@@ -15,6 +15,7 @@ package_dirs = {
     'rosy.decision.deliberation': roots['decision'] / 'src/rosy/decision/deliberation',
     'fleet.server.web': roots['console'],
     'rosy_situation': roots['assessment'] / 'rosy_situation',
+    'rosy_discord': roots['discord'] / 'rosy_discord',
 }
 ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment')
 
