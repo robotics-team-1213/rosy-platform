@@ -187,4 +187,4 @@ def test_policy_is_revalidated_when_queued_work_is_dispatched(tmp_path, change, 
     result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
     assert result["status"] == "HOLD" and result["reason"] == reason
     assert sent == []
-    assert service.store.reservations() == []
+    assert service.store.resource_claims(resource_kind="robot", resource_id="rosy_01") == []

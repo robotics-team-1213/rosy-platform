@@ -128,6 +128,14 @@ class FleetTaskService:
         task = self.scheduler.claim_next(available_robot_ids)
         if task is None:
             return None
+        if task["source"] == "policy":
+            admission = self._policy_admission_reason(task["evidence"]["evidence_id"],
+                                                      robot_id=task["robot_id"])
+            if admission is not None or not self.POLICY_DISPATCH_ENABLED:
+                return self.store.transition(
+                    task["task_id"], "HOLD", actor_id=task["actor_id"], source=task["source"],
+                    reason=admission or "POLICY_NOT_ACCEPTED",
+                )
         attempt = self.scheduler.begin_dispatch(task["task_id"])
 
         try:
