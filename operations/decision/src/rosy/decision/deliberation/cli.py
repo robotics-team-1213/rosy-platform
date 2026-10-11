@@ -1,6 +1,7 @@
 """Fixed CLI translation. Deployment must inject a proven isolated launcher."""
 import json
 import math
+import re
 from dataclasses import asdict
 
 from . import canonical, identifier, opinion
@@ -12,6 +13,8 @@ class CliProvider:
             raise ValueError('ISOLATED_LAUNCHER_REQUIRED')
         if kind not in {'claude', 'opencode'}:
             raise ValueError('unsupported CLI')
+        if type(model) is not str or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/:#-]{0,127}', model) is None:
+            raise ValueError('invalid configured model ID')
         self.kind, self.model, self.profile_id = kind, identifier(model), identifier(profile_id)
         self.launch = launch
 

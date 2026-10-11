@@ -80,9 +80,15 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
     """Independent same-case metrics. No provider call, learned policy write or FIELD approval."""
     if not cases or len(cases) > 10000 or type(training_sessions) is not list:
         raise ValueError('invalid evaluation set')
+    if training_recordings is not None and type(training_recordings) is not list:
+        raise ValueError('invalid frozen training recording manifest')
     digest = hashlib.sha256(json.dumps(cases, sort_keys=True, allow_nan=False).encode()).hexdigest()
     by_id, physical = {}, set()
     for case in cases:
+        for field in ('id', 'session_id', 'recording_id'):
+            value = case[field]
+            if type(value) is not str or not value or value != value.strip() or len(value) > 128:
+                raise ValueError('invalid frozen case identity')
         key = case['id']
         source = (case['session_id'], case['recording_id'])
         if (type(key) is not str or not key or key in by_id or source in physical
@@ -148,10 +154,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("data", type=Path, help="JSONL with id, state, instructions, criteria, expected")
     parser.add_argument("--endpoint", default="http://127.0.0.1:8000/v1/systemone")
-    parser.add_argument("--model", required=True, help="server model ID; record exact revision separately")
+    parser.add_argument("--model", help="server model ID; required for network replay")
+    parser.add_argument("--comparison-runs", type=Path, help="offline same-case rules/single/deliberation rows")
+    parser.add_argument("--reviewed-profile", type=Path, help="pre-reviewed dataset hash, limits and minimum cases")
+    parser.add_argument("--training-manifest", type=Path, help="frozen training sessions and recording IDs")
     parser.add_argument("--timeout", type=float, default=8.0)
     args = parser.parse_args()
     try:
+        if args.comparison_runs:
+            profile = json.loads(args.reviewed_profile.read_text()) if args.reviewed_profile else None
+            manifest = json.loads(args.training_manifest.read_text()) if args.training_manifest else {}
+            result = compare_deliberation(json.loads(args.data.read_text()),
+                json.loads(args.comparison_runs.read_text()), training_sessions=manifest.get('sessions', []),
+                training_recordings=manifest.get('recordings'), reviewed_profile=profile,
+                limits=profile.get('limits') if profile else None)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return {'PASS_OFFLINE_ONLY': 0, 'HOLD': 2, 'FAIL': 1}[result['state']]
+        if not args.model:
+            parser.error('--model is required for network replay')
         result = replay(args.data, args.endpoint, args.model, args.timeout)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return int(any(case["error"] is not None for case in result["cases"]))
