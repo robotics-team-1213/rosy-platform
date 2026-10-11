@@ -113,6 +113,29 @@ def test_rejected_bay_goal_does_not_claim_a_successful_yield():
     assert "rosy_01" not in console.goal_leases
 
 
+@pytest.mark.parametrize("stop", ["cancel", "estop"])
+def test_a_receipt_after_a_stop_cannot_recreate_a_goal_or_renew_its_lease(stop):
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+    console.goal_leases.operator_present()
+
+    async def late_accept(*args, **kwargs):
+        if stop == "cancel":
+            await console.cancel("rosy_01")
+        else:
+            await console.estop_all()
+        return {"accepted": True}
+
+    robot.navigation_goal = late_accept
+    with pytest.raises(RuntimeError):
+        run(console.goal("rosy_01", 1.0, 0.0))
+    assert "rosy_01" not in console._goals
+    assert "rosy_01" not in console.goal_leases
+    assert [call for call in robot.calls if call[0] == "navigation_cancel"]
+    run(console.goal_leases.renew())
+    assert robot.renewals == []
+
+
 def test_operator_goal_is_leased_and_renewed_while_an_operator_is_present():
     robot, console, _clock = _leased()
     (_, _, _, _, correlation_id, ttl), = _sent(robot)
