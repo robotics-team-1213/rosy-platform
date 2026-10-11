@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -113,3 +114,43 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.tool_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
+
+
+def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
+    image = tmp_path / 'image'
+    dockerfile = ROOT / 'deploy/site/Dockerfile.fleet'
+    for line in dockerfile.read_text(encoding='utf-8').splitlines():
+        if not line.startswith('COPY '):
+            continue
+        words = shlex.split(line)
+        destination = image / words[-1].lstrip('/')
+        destination.mkdir(parents=True, exist_ok=True)
+        for name in words[1:-1]:
+            source = ROOT / name
+            if source.is_dir():
+                shutil.copytree(source, destination, dirs_exist_ok=True,
+                                ignore=shutil.ignore_patterns('__pycache__', '*.egg-info'))
+            else:
+                shutil.copy2(source, destination)
+    roots = [image / 'opt/rosy/src' / path for path in
+             ('site/fleet', 'contracts/foundation', 'operations/world')]
+    probe = r'''
+import importlib.util
+import json
+import sys
+sys.path[:0] = json.loads(sys.argv[1])
+from fleet.stuck.board import LineStuckBoard
+from rosy_situation.assessment import Assessment
+assert importlib.util.find_spec('rosy_situation.service') is None
+board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)
+board.observe([{'robot_id': 'pinky', 'online': False}])
+assert isinstance(board.intervention_assessment('pinky'), Assessment)
+assert board.intervention_assessment('pinky').necessity == 'ABSTAIN'
+'''
+    run(['-I', '-c', probe, json.dumps(list(map(str, roots)))], tmp_path)
+    package = image / 'opt/rosy/src/site/situation/rosy_situation'
+    assert {p.name for p in package.glob('*.py')} == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+    allowed = {line for line in (ROOT / 'deploy/site/Dockerfile.fleet.dockerignore').read_text().splitlines()
+               if line.startswith('!operations/situation')}
+    assert allowed == {'!operations/situation/rosy_situation/' + name for name in
+                       ('__init__.py', 'assessment.py', 'snapshot_assessment.py')}
