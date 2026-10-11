@@ -4,10 +4,25 @@ import assert from 'node:assert/strict';
 import {
   oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip,
   tripErrorText, tripRefusalText,
-  tripStartReason,
+  tripStartReason, tripPoseReason,
 } from '../../../ui/console/shared/site-map-model.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
+
+test('trip actions explain the selected robot map pose without treating an operator pin as camera evidence', () => {
+  const guide = pose => ({map_version: 4, robots: [{robot_id: 'a', pose}]});
+  assert.match(tripPoseReason(guide({state: 'UNKNOWN'}), 'a', ACTIVE), /위치.*확인/);
+  assert.match(tripPoseReason(guide(null), 'a', ACTIVE), /위치.*확인/);
+  assert.match(tripPoseReason(guide({state: 'DEGRADED'}), 'a', ACTIVE), /위치.*확인/);
+  const pose = {state: 'LOCALIZED', x: 0, y: 0, yaw: 0, source: 'operator_pin'};
+  assert.equal(tripPoseReason(guide(pose), 'a', ACTIVE), '');
+  assert.equal(tripPoseReason(guide(null), 'a', ACTIVE, {x: 0, y: 0, yaw: 0}), '');
+  assert.match(tripPoseReason(guide({...pose, yaw: null}), 'a', ACTIVE), /위치.*확인/);
+  assert.match(tripPoseReason({...guide(pose), map_version: 3}, 'a', ACTIVE), /지도/);
+  assert.match(tripPoseReason(guide(pose), 'b', ACTIVE), /위치.*확인/);
+  assert.equal(tripPoseReason(null, 'a', ACTIVE), ''); // older Fleet still admits on the server
+  assert.doesNotMatch(tripErrorText('TRIP_POSE_UNTRUSTED', {pose_state: 'LOCALIZED'}), /LOCALIZED가 아닙니다/);
+});
 
 test('one lap uses a finite trip via a different stop and returns to its start', () => {
   const map = {places: [{id: 'W_mid', kind: 'stop'}, {id: 'E_mid', kind: 'stop'}]};
