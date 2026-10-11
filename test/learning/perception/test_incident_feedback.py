@@ -1,6 +1,7 @@
 """Fleet incident reviews are candidates for a recording, never pixel labels."""
 
 import json
+import hashlib
 import sys
 
 import incident_feedback
@@ -65,3 +66,43 @@ def test_cli_accepts_windows_utf8_bom_exports(tmp_path, monkeypatch):
                                     "--out", str(output)])
     incident_feedback.main()
     assert json.loads(output.read_text(encoding="utf-8"))["matches"][0]["review_state"] == "unreviewed"
+
+
+def model_feedback(**changes):
+    case = dict(scope=dict(subject_id='rosy_40', case_id='stuck-a', owner_id='core',
+                           profile_sha256='a' * 64, policy_revision='policy-1'),
+                state='HOLD', outcome='UNRESOLVED', reason='PROVIDER_OUTCOME_UNKNOWN',
+                calls=1, observations=0, spent_micros=0, reserved_micros=100000,
+                **changes)
+    digest = hashlib.sha256(json.dumps(case, sort_keys=True, separators=(',', ':'),
+                                     ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+    return dict(schema='rosy.incident.model_feedback/1', case=case, digest=digest,
+                label_state='UNREVIEWED', field_accepted=False)
+
+
+def test_model_failure_links_to_exact_recording_without_becoming_truth():
+    base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
+    before = json.dumps(base, sort_keys=True)
+    linked = incident_feedback.attach_model_feedback(base, model_feedback())
+    row = linked['matches'][0]
+    assert linked['schema'] == 'rosy.recording.incident_feedback/2'
+    assert (row['review_state'], row['reviewed_root_cause']) == ('unreviewed', None)
+    assert row['model_feedback']['reserved_micros'] == 100000
+    assert row['model_feedback']['label_state'] == 'UNREVIEWED'
+    assert json.dumps(base, sort_keys=True) == before
+
+
+@pytest.mark.parametrize('tamper', ['foreign_subject', 'hash', 'label', 'counter'])
+def test_invalid_or_self_labeled_model_feedback_cannot_enter_recording(tamper):
+    base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
+    data = model_feedback()
+    if tamper == 'foreign_subject':
+        data['case']['scope']['subject_id'] = 'rosy_41'
+    elif tamper == 'hash':
+        data['digest'] = 'b' * 64
+    elif tamper == 'label':
+        data['field_accepted'] = True
+    else:
+        data = model_feedback(calls=True)
+    with pytest.raises(ValueError):
+        incident_feedback.attach_model_feedback(base, data)
