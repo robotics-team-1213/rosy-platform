@@ -32,4 +32,6 @@ Fleet는 `rosy_situation`의 `__init__.py`, `assessment.py`, `snapshot_assessmen
 ContextDraft는 사건당 영구 1회 억제 대신 현재 열린 사건의 기존 3초 TTL 뒤 재관측하며, 다른 사건의 state는 현재 근거로 쓰지 않는다. 고정 0.45/0.35/0.2 초안 점수는 그대로 가설 점수로 유지한다.
 
 ### 수용과 후속
+
+현재 정책 revision도 권고 재사용 조건이다. `Assessment.applies_to`는 소비자가 현재 정책 revision을 반드시 전달하게 하며, 입력 전체가 같아도 정책 revision이 바뀌면 과거 평가 재사용을 거절한다.
 단일 암 셀·로봇·다중 로봇·Mission 없는 관측의 정상/막힘/근거 부족, 대기 만료, 상충, 잘못된 case/revision/owner, NaN/bool/미래 시각, 늦은 결과를 fake clock으로 원격 검증한다. 비개입/기권 소비가 신규 command/proposal/problem alert를 만들지 않음을 단언하고 checkout 밖 wheel/sdist 최소 closure를 확인한다. 이 시험은 물리 원인 정확도나 독립 현장 평가가 아니다. D-642~D-646의 현재/과거 UI·원장·알림·독립 평가와 D-648의 dispatcher/workflow 이전은 후속으로 유지한다.
