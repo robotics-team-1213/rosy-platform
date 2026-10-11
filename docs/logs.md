@@ -7906,3 +7906,9 @@ osy-d395-s1d\`.
 - 변경: 최신 통합 CI의 World wheel 시험에서 D-667 의존성 raw 문자열 비교가 실패했다. 기존 설치 시험과 같은 Requirement/canonicalize_name으로 이름·공백 표기만 정규화하고 최소 >=0.0.1, 설치 버전0.0.1, 무조건부/no-extras, import identity와 Fleet 비의존 검사를 유지했다. 패키지 의존성·관측 동작은 바꾸지 않았다.
 - 증거: 8eab47497의 site-vision-cell job 실패 subprocess line6을 확보했다. 첫 수정291c77151 원격2 PASS/NEW0 후 독립 검토가 marker/extras 엄격성을 지적해 c175120a7에 보강했다. 최종 엄격성은 착지 원격 시험과 후속 CI로 다시 확인하며 실패를 기존 실패 목록에 추가하지 않는다.
 - gate 변화: 배포5f4040f306의 사이트 수용 근거는 유지한다. 후속 main 통합 CI 실패와 시험 수정은 별도이고 실물/장치/AI 권한을 승격하지 않는다. 원본 로그는 지도 조사 X 세션의 logs/ci-8eab-site-vision-job.txt 및 logs/world-metadata-fix/에 보존한다.
+
+## 2026-10-12 · addd5a982 · 플랫폼 계정·연결·작업 UI 관례 재정리
+
+- 변경: 공식 Carbon·GOV.UK·WCAG 참고와 현재 Fleet/Robot/Pilot 소스를 대조해 계정 발견성, 우측 진입점·전용 로그인·업무 복귀, 연결/권한/장치 연결 분리, 전체 표면 적용 표와 검증 기준을 설계 제안에 정리했다. DESIGN.md에 현행 ADR과 구분된 후속 안내를 연결했다.
+- 증거: 문서/소스 조사다. 기존 관제 workflow 원격 8 PASS(addd5a982)는 보존하되 새 로그인 흐름 검증으로 사용하지 않는다. 생성 문서와 harness lint는 이번 문서 변경에 대해 확인한다.
+- gate 변화: 인증 구현·새 ADR·배포·실물 수용 없음. D-658/D-519/D-641 충돌 항목 정합화 뒤 구현한다. 현행 계약을 제안만으로 바꾸지 않는다.
