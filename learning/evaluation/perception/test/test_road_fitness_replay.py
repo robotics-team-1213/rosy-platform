@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 for holder in ("learning/registry/perception", "learning/curation/perception",
                "learning/evaluation/perception", "middleware/perception", "operations/world/src"):
     sys.path.insert(0, str(ROOT / holder))

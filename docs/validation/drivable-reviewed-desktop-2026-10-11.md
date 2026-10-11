@@ -25,7 +25,7 @@ v2 Desktop 패키지에는 dataset 디렉터리가 없다. README와 head/run.js
 | v2 동일 image SHA256의 데이터 내 중복 | 0 |
 
 최초 dataset manifest 파일 SHA256은 `da3e9919474e93b476aec96911e1e892de3247e35ac1516b8b6d4cbeecc3ec95`다.
-v2는 `0ef7359a16fcf8449853cf545b1d9fdca79b768f222a616dc06e29a3ee255a94`이며 model manifest와 head/run.json의 선언에 일치한다.
+v2 dataset manifest 파일 SHA256은 `0ef7359a16fcf8449853cf545b1d9fdca79b768f222a616dc06e29a3ee255a94`이며 model manifest와 head/run.json의 선언에 일치한다.
 이 값은 **manifest 파일** SHA256이다. 기존 store의 전체 디렉터리 content SHA로 간주하지 않는다.
 
 | 데이터 부분 | train | val | test |

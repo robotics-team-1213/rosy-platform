@@ -21,3 +21,5 @@ World wheel은 `core_common` 의존성을 선언하고 설치 시험은 두 whee
 ## Verification
 
 World와 계약 import의 객체 동일성, 독립 wheel 설치, learning import 경계, 서명 묶음의 누락 거절·설치 import, 기존 인지 회귀를 확인한다. 실물·시뮬레이션 성능과 장치 수용은 별도다.
+
+새 동작 시험은 D-184에 따라 구현 소유자의 `test/`에 둔다. 인지 기준선은 perception, 평가·고정 재생은 learning evaluation이 소유한다. 기존 공유 시험 corpus는 유지하며 harness가 새 평가 시험도 선택한다. 외부 동작 시험 예외 목록은 늘리지 않는다.
