@@ -7889,6 +7889,12 @@ osy-d395-s1d\`.
 - 증거: 재생 20개 합성 시험 terminal exit 0, NEW0. 승인 hash/짝 영상 검사를 제거한 2개 실패를 확인하고 복구했다. 공통 계약 이전 후 World 설치·아키텍처·학습 관련 시험 terminal exit 0, NEW0. 독립 소스 검토의 패키지 버전 문제를 수정했다. 최신 버전의 설치/전체 회귀·착지 증거는 후속 기록이다.
 - gate 변화: 없음. 실제 독립 정답·보정·물체 성능·수용 profile·장치 관측 전달과 지연/손실, 실물/시뮬레이션 성능은 HOLD다. 기존 20261010 검수 데이터의 의미와 운영 선택을 유지한다.
 
+## 2026-10-12 · 5f4040f306 · D-655 지도 없는 조사와 통합 관제 사이트 수용
+
+- 변경: 빈 조사 기준·시설·도로·카메라/relative odom 근거·CAS, 선택 로봇 기록과 대형 작업 연결, 지도 busy guard와 충돌/개입 결과 구분을 구현·통합했다. 실행 계획과 날짜 검증 기록을 최종 상태로 정리했다.
+- 증거: 착지 원격16,523 PASS/NEW0, Node312 PASS, pre-push292 PASS. exact SHA FULL CI15 jobs 및 site build 성공, 운영자 서명·사이트 updater 종료0·세 healthy image identity·교정/조사 import 확인. 실제 사이트1440/390 px 세 모드 크기 안정·선택→기록·대형 패널·로컬 시설 작성·기존 지도/profile 보존 PASS. 상세 docs/validation/2026-10-12-mapless-fleet-control.md.
+- gate 변화: 이번 기능의 사이트 설치/UI 증거를 추가했다. 로봇 두 대 오프라인으로 실물 주행·측량·대형 수용 미확인; FIELD 승격·로봇 배포·이동·E-Stop 해제 없음. 일반 외부 IP URL의 연결/TLS 문제는 별도 제한으로 유지한다.
+
 ## 2026-10-12 · uncommitted · Discord 대화 작업 요청·Fleet 대응 파이프라인 점검
 
 - 변경: D-669 Proposed와 설계/구현 계획을 작성했다. 일반 관리는 Console, 위험 대응은 Discord로 협업하되 transport·기명 principal·후보·기존 작업/사건 원장·장치 writer와 목표 근거의 경계를 분리했다. 일반 Mission 동일 owner와 Cell Job 별도 approver 계약을 구분했다.

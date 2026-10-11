@@ -25,6 +25,12 @@
 
 물리 로봇이 오프라인이면 G3/G5의 원격 가짜 transport 검증과 실제 주행 수용을 별도로 기록한다. 오프라인을 통과 상태로 바꾸거나 검증을 위해 E-Stop을 풀거나 움직이지 않는다. 사이트 배포가 곧 실물 측량 정확도 수용은 아니다.
 
+### 2026-10-12 최종 실행 결과
+
+기능 릴리스 `5f4040f306`의 착지 회귀 16,523 PASS/NEW 0, Node 312 PASS, pre-push 292 PASS 및 동일 SHA FULL CI 15 jobs 성공을 확인했다. 기존 운영자 서명·사이트 updater 설치 종료 0, Fleet/Vision/proxy immutable image identity와 healthy, 실제 사이트 desktop/mobile 검증을 완료했다. 기존 활성 지도·본문·profile·draft는 배포 전 baseline과 동일하다.
+
+G1/G2는 원격 저장·검증 및 실제 사이트 로컬 작성, G3는 좌표·근거·연속성/CAS 원격 검증, G4/G5는 선택·기록·대형 패널의 사이트 연결과 명령 충돌·개입 원격 검증, G6는 동일 SHA CI/서명/설치/UI 근거다. 로봇 두 대 오프라인으로 실물 G3/G5·교정 정확도는 미확인이다. [최종 검증 기록](../validation/2026-10-12-mapless-fleet-control.md)에 근거 경로·제한·다음 실물 확인 순서를 고정했다.
+
 ## 착수 시점의 확인된 코드
 
 - D-488: `fleet.site_map`, `server/site_map_store.py`, `server/site_map_routes.py`에 지도 초안·불변 활성 버전·revision 검사가 있다.
@@ -137,7 +143,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 |---|---|---|
 | 목표 등록 | 완료 | 현재 대화의 active goal; 예산 제한 없음 |
 | 격리 작업 위치 | 완료 | `.worktrees/wt-mapless-control-384416`, `feat/mapless-fleet-control`; X: session과 연결 |
-| 현재 기능·공백 조사 | 진행 | camera lane CLI, LOCALIZED-only teach, profile example roads, tools-tab formation 확인 |
+| 현재 기능·공백 조사 | 완료 | camera lane·teach·profile·formation 소유 경로 추적 후 Task 1~5에서 연결·검증 |
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
 | Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
@@ -145,7 +151,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | Task 4 선택 로봇·기록·대형 맥락 | 완료 · source/remote | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 5 source 충돌 처리를 완료했고 Task 6 실제 수용은 남음 |
 | Task 5 개입·작업 충돌 | 완료 · source/remote | 활성화 busy·조회 경합·대형/운행 명령 사유·복구 수락 표시 보강. 최종 d6abc8e863 원격 140 PASS, 개입 253 PASS, Node 301 PASS/NEW 0. 독립 검토 수용; Task 6 미완료 |
 | Task 1–5 구현·검증 | 완료 · source/remote | 각 단계의 새 source·원격 근거를 아래 기록. main 통합·CI·배포·실제 사이트 수용은 Task 6에서 별도 확인 |
-| Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
+| Task 6 통합·배포·사이트 확인 | 완료 · 사이트 범위 | `5f4040f306` 원격 회귀·FULL CI·서명 릴리스·불변 image readback 및 실제 desktop/mobile 검증. [최종 기록](../validation/2026-10-12-mapless-fleet-control.md) |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
 
 이 계획 작성은 구현·배포 완료가 아니다. 기존 배포 `367f6a90f41e`는 이전 지도 안정화와 작업 영역 변경의 증거이며 이번 지도 없는 조사 기능의 배포 증거로 쓰지 않는다.

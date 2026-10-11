@@ -21,7 +21,11 @@ Branch: `feat/perception-fitness-pipeline`. 계약: D-659, D-663, D-665, D-666, 
 | 별도 export CLI의 semantic 손실 재현 | `acdc9fdb4b` | 새 6개 시험 실패. YAML reader가 semantic을 버리는 원인 확인 |
 | export reader 수정 후 writer/기존 전달 경계 | `c57b59c402` | 원격 training contract 시험 terminal exit 0, NEW0. 2개 ML 의존 시험은 제외이며 실제 모델 변환 실행 증거가 아니다 |
 
-전체 회귀와 최신 main 착지 결과는 해당 실행 후 추가 기록한다. 원격 원본 로그와 receipt는 비공개 세션 artifact 위치에 보존한다.
+최신 main `53b45aafb4`를 통합한 `c41dfcb0aa`를 시험 PC에서 검사하고 local main에 fast-forward로 착지했다. 관련 회귀 세 묶음은 각각 9,494/4,206/3,699개 통과, 444/116/211개 제외이며 모두 terminal exit 0과 known-failure 비교 NEW0이다. 합계는 17,399개 통과, 771개 제외다. lint는 error 0, warning 27이다.
+
+첫 통합 검사에서 발견한 신규 실패 세 가지는 시험 소유 경로, 문서 checksum 표기, Fleet initializer 버전 불일치였다. 모듈 시험 경로와 harness 등록, checksum 문맥, 패키지 버전 일치를 수정했고 예외 목록을 늘리지 않았다. 독립 소스 검토도 수정 후 추가 차단 사항이 없음을 확인했다.
+
+selector가 FULL로 승격했지만 이번 실행은 guard와 mapped suite 범위다. 전체 CI tier는 미확인이다. 원격 원본 로그와 SHA256 receipt는 비공개 세션 artifact 위치에 보존한다. 이 착지는 push·장치 배포·실물 또는 시뮬레이션 성능 수용 증거가 아니다.
 
 ## 독립 소스 검토와 수정
 
@@ -30,6 +34,12 @@ Branch: `feat/perception-fitness-pipeline`. 계약: D-659, D-663, D-665, D-666, 
 중요 지적 두 가지를 수정했다. 같은 Foundation 버전으로 새 World 의존성을 충족시키던 문제는 새 버전과 전이 pin으로 해결했다. 별도 ONNX CLI reader의 의미 손실은 공유 reader에서 optional semantic을 보존하도록 수정했다. convert와 lane NCNN export도 같은 reader를 사용한다. 검토는 소스 검토이며 실행·배포·현장 증거가 아니다.
 
 ## 미확인과 다음 단계
+
+### 기존 소비자의 의미 혼용 경계 보완
+
+후속 런타임 조사에서 전달 도구를 거치지 않은 직접 로드와 pointer 변경은 전체 도로면 모델을 기존 lane evidence/paint/drivable 후처리에 사용할 수 있음을 확인했다. `0667921ce4`의 원격 RED 8건은 추론 전 거절 누락, `514b41d743`의 RED 2건은 교체 시 이전 모델 유지 누락을 재현했다. manifest의 기존 의미 helper를 전달·intake와 런타임이 공유하고 후처리 전에 검사하며, ModelSlot은 호환되지 않은 lane 후보를 거절해 이전 모델을 유지한다. 원시 session 로드는 오프라인 도로면 평가에 계속 사용할 수 있다.
+
+`804bcdc80e`에서 거절한 후보의 서명 상태가 이전 모델 상태를 덮는 RED 2건도 재현했다. `SignatureCheck`가 의미 검사 뒤에만 서명 상태를 갱신하도록 수정했다. `0abc58f999`의 원격 runner/signature/object detector/고정 fitness/training contract 회귀는 terminal exit 0이다. 실제 관측 consumer·장치 전달을 구현하거나 배포한 증거는 아니다.
 
 20261010 검수 데이터는 기존 연결 도로 구역 기준선 자료다. 전체 도로면의 독립 정답으로 재해석하지 않는다. 전체 도로면과 현재 구역의 실제/시뮬레이션 독립 정답 pair, 실제 관측 기준점 생산/보정·출처, 검수 독립성·freshness와 upstream 학습 closure가 필요하다.
 
