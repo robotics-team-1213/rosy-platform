@@ -44,3 +44,16 @@ CORE cmd_vel에 대한 새로운 publisher나 로봇 접속 기능은 없다.
 ```powershell
 python -B -m pytest learning/curation/pinky/test -q -p no:cacheprovider --basetemp X:/DevTemp/pinky-episode-tests
 ```
+
+
+## Fleet 관측 이력의 학습 준비 원본
+
+기존 CORE/Task journal의 Fleet 상태 관측을 검증 가능한 unlabeled 원본으로 내보낸다:
+
+```powershell
+python learning/curation/pinky/fleet_observations.py <fleet-journal.sqlite3> <new-output-on-X> --robot-id <robot-id>
+```
+
+`observations.jsonl`과 `manifest.json`을 신규 폴더에만 만들며 read-only SQLite transaction으로 일관된 보존 이력을 읽는다. 행/파일 해시를 내보낸 뒤 다시 검증하고 `verify(output)`은 변경된 센서값/행 수/해시를 거절한다. `train_eligible:false`, `labels:null`이며 이 원본은 common Episode나 정답 dataset이 아니다. 원본 state와 clock/source/age를 유지하므로 분석·재생·학습 특징 준비에 사용할 수 있다. 같은 수신 시각이나 Fleet 목표만으로 실제 action/정답을 추정하지 않는다.
+
+고속 camera/scan/odom/CORE 최종 cmd_vel은 위의 기존 기기 recording과 raw verifier가 근거다. 학습으로 넘길 때 원본·기기/사건/attempt·시간 도메인·지도/모델 revision을 대조하고, 기존 Episode와 DatasetManifest/registry 및 독립 평가·승격 경로를 따른다. 보존 기간 밖 자료는 이 export에 없으며 물리 장치 인증/수용은 따로 확인한다. 중단된 export는 manifest가 없거나 검증에 실패하므로 입력으로 쓰지 않는다.
