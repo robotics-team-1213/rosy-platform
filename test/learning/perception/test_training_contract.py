@@ -71,6 +71,13 @@ def test_export_refuses_unknown_road_meaning(tmp_path, semantic):
         _write(tmp_path, classes=classes)
 
 
+def test_whole_road_output_cannot_use_the_legacy_v13_revision(tmp_path):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": "road_surface/1"}]
+    with pytest.raises(ValueError, match="v13.*semantic"):
+        _write(tmp_path, classes=classes, revision_prefix="v13-drivable")
+
+
 def test_v13_drivable_revision_is_separate_and_requires_class(tmp_path):
     lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
                "torchscript_sha256": "c" * 64}

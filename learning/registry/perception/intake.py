@@ -366,7 +366,7 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
               "lane_marking_iou": {}, "source_groups": []}
-    model_class_docs = ((model.manifest.raw.get("output") or {}).get("classes") or
+    model_class_docs = (((getattr(model.manifest, "raw", None) or {}).get("output") or {}).get("classes") or
                         [{"name": c.name, "role": c.role} for c in model_classes])
     result.update(evaluation_semantics(model_class_docs, manifest.get("classes", []), matched))
     if not matched:
@@ -561,7 +561,7 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
             if report["eval"].get("reserved_eval_overlap"):
                 report["reasons"].append("eval: training dataset overlaps or cannot exclude reserved eval sources")
             report["verdict"] = "fail" if report["reasons"] else "pass"
-        error = road_delivery_error(manifest.raw)
+        error = road_delivery_error(getattr(manifest, "raw", None) or {})
         if error:
             report["reasons"].append(error)
             report["verdict"] = "fail"

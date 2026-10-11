@@ -30,6 +30,16 @@ def test_road_meaning_survives_classes_and_dataset_build(tmp_path):
     assert result["classes"][-1]["semantic"] == "road_surface/1"
 
 
+def test_new_road_surface_template_has_no_selected_region_channel():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    classes = build.load_classes(root / "learning/curation/perception/classes/road_surface_v1.yaml")
+    roads = [c for c in classes if c["role"] == "drivable"]
+    assert len(roads) == 1 and roads[0]["semantic"] == "road_surface/1"
+    assert not any(c.get("semantic") == "current_road_region/1" for c in classes)
+    assert [c["index"] for c in classes] == list(range(len(classes)))
+
+
 def test_original_png_frames_preserve_bytes_and_extension(tmp_path):
     dirs = [_frames_dir(tmp_path, s, [0]) for s in ('s1', 's2')]
     for d in dirs:
