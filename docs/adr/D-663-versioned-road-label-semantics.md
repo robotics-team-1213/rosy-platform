@@ -39,6 +39,8 @@ D-659는 도로면·현재 도로 구역·선택 경로를 구별하지만 실�
 
 기존 모델 전달은 의미가 선언된 `road_surface/1`·`trajectory_band/1`을 lane_seg 조향/paint/shadow 슬롯에 넣지 않는다. 현재 구역 선언도 기존 lineage·서명·intake·슬롯 제한을 모두 통과해야 한다. 구형 모델의 원래 슬롯 호환은 유지한다. 같은 클래스 이름이라는 이유로 도로면 모델을 기존 조향 입력으로 변환하지 않는다.
 
+직접 로드와 pointer 변경에서도 같은 경계를 지킨다. 기존 `LaneSegModel`의 lane evidence·paint·drivable 후처리는 추론 전에 같은 의미 검사를 수행한다. `ModelSlot`은 다른 의미의 lane 모델로 교체를 거절하고 이전 모델을 유지한다. 검사는 manifest 공통 helper를 전달 도구와 런타임이 재사용한다. manifest 검증·원시 session 로드는 오프라인 도로면 평가에 계속 사용할 수 있다.
+
 전체 도로면에 대한 새 관측 전용 consumer와 전달물은 후속 단계다. 현재 intake 결과는 D-356 shadow 전달 적격성이다. 도로면 후보를 오프라인으로 평가할 수 있어도 그 결과로 기존 슬롯 전달이 승인되지는 않는다.
 
 ### Consequences and verification
