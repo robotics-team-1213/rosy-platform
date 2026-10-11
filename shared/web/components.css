@@ -771,6 +771,7 @@ ui-shell[data-grammar-missing] {
    64rem 미만은 두 줄(이름·상태 / 화면 전환)이고 비상 정지는 두 줄을 차지한다.
    30rem 미만은 그 두 줄의 여백과 부제만 줄인다. 새 머리 격자는 만들지 않는다. */
 ui-topbar {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--gap-topbar);
