@@ -73,8 +73,6 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (standalone) {
         if (cookie) onChange(true);
       } else {
-        const token = document.getElementById('token-access');
-        if (token) token.open = false;
         host.hidden = false;
         part('principal').textContent = `${session.principal_id} · ${session.role}`;
         part('logout').textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
