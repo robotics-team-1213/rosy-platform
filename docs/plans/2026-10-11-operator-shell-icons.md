@@ -41,8 +41,8 @@
 - 사건: `operations/fleet/test/test_console_queue_inline_browser.py`, `operations/fleet/test/web/line-stuck.test.mjs`, `test/test_fleet_console_browser.py`. 기본 JSON 숨김, 요약에서 누가 무엇을 했는지, 펼침과 폴링 focus, 원문 보존, 검토 저장·내보내기·거절·완료 구분을 확인한다.
 - 모든 시험은 커밋된 HEAD의 원격 로그와 `test/known_failures.py` 비교 결과를 기록한다. source-only·SKIP·CI·설치본·실물 증거를 섞지 않는다.
 
-## 검증 상태
+## 소스 검증 시점의 상태
 
 ADR와 와이어프레임을 먼저 확정한 후 공용 아이콘·설명, 네 문서 shell, 단계별 사건 근거를 구현했다. 원격 통합 브라우저 45개와 공용 최신 회귀 102개가 통과했고 NEW는 0이다. 독립 검토의 키보드 설명 누락 P2도 공용 코드와 실제 소비 마크업 회귀로 수정했다. 결과와 실패 재검증 경계는 [검증 기록](../validation/operator-shell-2026-10-11/result.md)에 기록했다.
 
-공식 main 착지·푸시·CI·최종 설치는 아직 미완료다. D-639의 통일 규격 검사 결과를 이 작업의 shell 검증으로 대체하지 않는다.
+전체 콘솔 브라우저 117개가 통과했고, 이후 최신 지도 상황 패널 통합은 14개와 영상 3개로 재검증했다. 공식 main 착지는 원격 4,605 PASS와 492 PASS, NEW 0으로 완료했다. 출시 SHA의 CI·서명 설치·실제 화면 수용은 별도 릴리스 receipt에 기록한다. D-639의 통일 규격 검사 결과를 이 작업의 shell 검증으로 대체하지 않는다.

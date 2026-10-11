@@ -49,6 +49,10 @@
 !middleware/core/
 !middleware/control/
 !middleware/control/drive/
+!middleware/control/drive/behaviors/
+!middleware/control/drive/behaviors/**
+!middleware/control/drive/runtime/
+!middleware/control/drive/runtime/**
 !middleware/control/drive/planning/
 !middleware/control/drive/planning/nav2/
 !middleware/control/drive/planning/nav2/**

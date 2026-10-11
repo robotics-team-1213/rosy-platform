@@ -160,7 +160,10 @@ def test_missing_manifest_fails_closed(repo):
 def test_manifest_contains_only_whole_holder_moves():
     manifest = SCRIPT.with_name("platform_structure_moves.json")
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    assert set(data["units"]) == {"core-api", "pinky-device", "omx-device", "drive-nav2"}
+    behaviors = {'drive-behavior-' + name.replace('_', '-') for name in (
+        'line_follow', 'docking', 'navigation', 'localization', 'swarm', 'road_behaviour', 'traffic_policy')}
+    assert set(data["units"]) == {"core-api", "pinky-device", "omx-device", "drive-nav2"} | behaviors
+    assert all(data['units'][name]['manual_safety'] for name in behaviors)
     for unit in data["units"].values():
         assert unit["source"].startswith("middleware/")
         assert unit["target"].startswith("middleware/")

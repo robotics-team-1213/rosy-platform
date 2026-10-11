@@ -30,10 +30,13 @@ def test_source_holder_builds_and_installs_the_original_package(
     sources = [copied]
     if package == "core":
         for dependency in ("contracts/foundation", "middleware/core/events", "middleware/core/services"):
-            target = tmp_path / Path(dependency).name
+            target = tmp_path / 'dependencies' / dependency
             shutil.copytree(ROOT / dependency, target,
                             ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
             sources.append(target)
+        shutil.copytree(ROOT / 'middleware/control/drive/behaviors',
+                        tmp_path / 'dependencies/middleware/control/drive/behaviors',
+                        ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache'))
     for operation in ("wheel", "install"):
         args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), *map(str, sources)]
                 if operation == "wheel" else

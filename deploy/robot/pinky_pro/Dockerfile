@@ -62,6 +62,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/core/events /opt/rosy_ws/src/runtime/events
 COPY middleware/core/services /opt/rosy_ws/src/runtime/services
+COPY middleware/control/drive/behaviors /opt/rosy_ws/src/runtime/services/_source_roots/behaviors
 COPY middleware/core/api /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
@@ -147,6 +148,7 @@ COPY middleware/control/drive/recovery /opt/rosy_ws/src/runtime/control/drive/re
 COPY middleware/control/drive/tracking /opt/rosy_ws/src/runtime/control/drive/tracking
 COPY middleware/control/drive/calibration /opt/rosy_ws/src/runtime/control/drive/calibration
 COPY middleware/control/drive/planning/grid /opt/rosy_ws/src/runtime/control/drive/planning/grid
+COPY middleware/control/drive/runtime /opt/rosy_ws/src/runtime/control/drive/runtime
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \
