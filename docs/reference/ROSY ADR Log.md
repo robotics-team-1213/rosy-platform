@@ -664,3 +664,9 @@
 - Status: Accepted (2026-10-11).
 - Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
 - Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.
+
+## D-651 — 작업 중심 Fleet 지도와 선택 로봇 작업면
+
+- 상태: Accepted (2026-10-11).
+- 결정: 지도 작업면과 선택 로봇의 배정·진행 작업면을 나누고 지도 글자와 기술 정보를 접힌 보조 정보로 이동한다. 전체 취소·개입 큐·안전 근거와 기존 명령 권한을 보존한다.
+- 계약: [ADR](../adr/D-651-task-centered-fleet-workspace.md). 실제 이동과 측량 정확도는 별도 수용이다.
