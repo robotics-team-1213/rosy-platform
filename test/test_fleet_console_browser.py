@@ -1412,6 +1412,13 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         assert edge[2] > 150 and edge[0] < 100, colours  # the plane margin is part of the picture
         assert not (out[2] > 150 and out[0] < 100), colours  # beyond the plane stays ground
         save_temp_screenshot(page, "fleet_map_plane_1920.png")
+        if out := os.environ.get("ROSY_SHOT_DIR"):
+            page.locator("#map-options > summary").click()
+            for width, height in [(1440, 1000), (390, 844)]:
+                page.set_viewport_size({"width": width, "height": height})
+                page.wait_for_timeout(300)
+                page.screenshot(path=str(Path(out) / f"console-map-plane-overlay-{width}.png"), full_page=True)
+            page.locator("#map-options > summary").click()
 
         plane["status"] = 409
         page.wait_for_function(
