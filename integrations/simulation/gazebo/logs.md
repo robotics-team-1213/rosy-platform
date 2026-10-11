@@ -309,4 +309,5 @@
 
 - 요청: 모델 PC Isaac 한 대 camera/RL, 다른 PC Gazebo 두 대 actual CORE/Fleet를 같은 curved 맵으로 검증한다.
 - 변경: gz_multi는 image transport 없이 nominal camera geometry와 headless rendering만 선택한다. map_v2_fleet_multi_real 전용 launch가 runner-owned run_spec·모델 pointer를 받고 두 namespaced local image bridge·기존 line_observer·JPEG relay를 구성한다. camera Fleet은 fleet_sim_camera_site.yaml의 preview admission을 유지한다.
-- 범위: 초기 연결 구성이다. 신호/횡단보도 gate·Fleet 실행·두 대 주행/완주·RL 성공은 아직 미검증이다. 기본 gz_multi와 D-118 parameter bridge에는 생 Image를 추가하지 않았다.
+- 증거: 원격65pass1skip·D601/package16pass·known_failures0NEW. AI PC ROS Jazzy에서 두 namespaced 인식/미리보기 각3노드와 CORE2개 launch graph를 확인했다. ROS pytest 모듈은 skip이며 graph 확인이 native 실행을 대신하지 않는다.
+- gate 변화: 없음. 초기 연결 구성이다. 신호/횡단보도 gate·Fleet 실행·두 대 주행/완주·RL 성공은 아직 미검증이다. 기본 gz_multi와 D-118 parameter bridge에는 생 Image를 추가하지 않았다.
