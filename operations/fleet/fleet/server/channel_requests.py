@@ -27,8 +27,13 @@ class ChannelConfig(BaseModel):
     bot_token_file: str | None = Field(default=None, min_length=1, max_length=4096)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *, optional=False):
         try:
+            if optional:
+                try:
+                    Path(path).stat()
+                except FileNotFoundError:
+                    return None
             return cls.model_validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
         except (OSError, ValueError, yaml.YAMLError):
             raise ValueError("invalid Discord intake configuration") from None
