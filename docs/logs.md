@@ -7808,3 +7808,9 @@ osy-d395-s1d\`.
 - 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
 - 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
 - gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
+
+## 2026-10-11 · uncommitted · 인지 파이프라인 착수와 현재 구역 책임 검토
+
+- 변경: branch `feat/perception-fitness-pipeline`의 실행 계획에 도로 관측·현재 구역 추정·따라갈 구역 선택·운영 admission을 구별했다. 사용자 보완에 따라 새 segmentation 출력/manifest 계약은 책임 배치를 먼저 검토한 뒤 진행한다.
+- 증거: 착수 HEAD `8c10dd8a3`의 lane_mask, drivable_paint, World MapPose, 자문 Decision 및 Drive path_follow를 대조했다. drivable_paint의 우측 분기 선택은 인지 사실 정답과 별도 평가할 기존 주행 정책이다.
+- gate 변화: 없음. 목표/worktree/계획은 착수 근거이며 새 role, 구역 추정 구현, 모델 학습, 인지 승인·주행 활성화는 미완료다.
