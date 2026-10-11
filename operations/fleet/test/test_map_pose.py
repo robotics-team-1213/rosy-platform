@@ -18,6 +18,31 @@ def odom(t, x=0.0, y=0.0, yaw=0.0):
     return OdomSample(x, y, yaw, T0 + t)
 
 
+def test_survey_odom_is_fresh_relative_evidence_without_an_operational_anchor():
+    tracker = MapPoseTracker('r1')
+    assert tracker.survey_odom(T0) is None
+    assert tracker.add_odom(odom(0, x=2, y=3, yaw=0.4), T0)
+    assert tracker.survey_odom(T0) == ((2, 3, 0.4), T0, 0)
+    assert tracker.pose(T0).state == UNKNOWN
+    assert tracker.odom_to_map() is None
+    assert tracker.survey_odom(T0 + 3.01) is None
+    assert tracker.survey_odom(T0 - 0.01) is None
+    assert tracker.add_odom(odom(4, x=0), T0 + 4)
+    assert tracker.survey_odom(T0 + 4) == ((0, 0, 0), T0 + 4, 1)
+    assert tracker.pose(T0 + 4).state == UNKNOWN
+
+
+def test_survey_odom_keeps_epoch_on_repeated_reads_and_changes_on_a_reset():
+    tracker = MapPoseTracker('r1')
+    assert tracker.add_odom(odom(0), T0)
+    assert not tracker.add_odom(odom(0), T0)
+    assert tracker.survey_odom(T0)[2] == 0
+    assert tracker.add_odom(odom(0.1, x=3), T0 + 0.1)
+    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 1)
+    assert not tracker.add_odom(odom(0.05, x=4), T0 + 0.1)
+    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 1)
+
+
 def seen(t, x=ANCHOR[0], y=ANCHOR[1], yaw=ANCHOR[2], robot="r1", quality=None):
     return Sighting(robot, x, y, yaw, T0 + t, quality)
 
