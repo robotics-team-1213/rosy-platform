@@ -628,6 +628,7 @@
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
 | D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 | Accepted (2026-10-11) |
 | D-639 | 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성 | Accepted (2026-10-11; 구현·CI·설치본·현장 수용 별도) |
+| D-641 | 운용 화면의 다섯 영역·의미 아이콘·단계별 근거 공개 | Accepted (2026-10-11; implementation and installed acceptance separate) |
 
 | D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
 | D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Proposed (2026-10-11) |
@@ -666,3 +667,9 @@
 - Status: Accepted (2026-10-11).
 - Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
 - Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.
+
+## D-641 - Operator shell zones, semantic icons and progressive evidence
+
+- Status: Accepted (2026-10-11).
+- Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
+- Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.

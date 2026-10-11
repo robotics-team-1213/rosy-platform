@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-  previewFresh, headingText, fleetAnswerText,
+  previewFresh, headingText, fleetAnswerText, stuckSummary,
 } = await import("../../../ui/console/line-stuck.js");
 
 const STUCK = {
@@ -17,6 +17,25 @@ const STUCK = {
   front_clearance_m: 0.123, rear_clearance_m: 0.31, turn_clearance_m: null, preview_seq: 812,
 };
 const byDecision = (buttons) => Object.fromEntries(buttons.map((b) => [b.decision, b]));
+
+test("operator summary separates proposal, transmission, receipt and completion", () => {
+  assert.match(stuckSummary(STUCK), /멈춰 판단을 요청.*조치를 선택/);
+  assert.match(stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", tier: "ai", accepted: true}}), /AI 분석.*관제가.*로봇이 수락.*실행 완료는 별도/);
+  assert.match(stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: false, code: "EMERGENCY_ACTIVE"}}), /거절.*비상정지/);
+  assert.match(stuckSummary({...STUCK, ai_proposal: {decision: "WAIT", class: "held", verdict: "crosswalk_unknown"}}), /관제가 전달을 보류/);
+  const unknown = stuckSummary({...STUCK, ai_proposal: {decision: "UNKNOWN_WIRE_ENUM", class: "new_phase"}});
+  assert.match(unknown, /미확인/);
+  assert.doesNotMatch(unknown, /UNKNOWN_WIRE_ENUM|new_phase/);
+  const pending = stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: null, tier: "unknown_source", code: "STUCK_DECISION_OUTCOME_UNKNOWN"}});
+  assert.match(pending, /판단 주체 미확인.*전달 여부와 처리 결과가 미확인/);
+  assert.doesNotMatch(pending, /전달했습니다|영상|unknown_source/);
+  const unreachable = stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: false, code: "ROBOT_UNREACHABLE"}});
+  assert.match(unreachable, /전달하지 못했습니다/);
+  assert.doesNotMatch(unreachable, /로봇이 거절/);
+  const proposalUnknown = stuckSummary({...STUCK, ai_proposal: {decision: "RESUME", class: "refused", outcome: "STUCK_DECISION_OUTCOME_UNKNOWN"}});
+  assert.match(proposalUnknown, /전달 여부와 처리 결과가 미확인/);
+  assert.doesNotMatch(proposalUnknown, /로봇이 거절/);
+});
 
 test("only robots with an open stuck are pending", () => {
   const robots = [{ robot_id: "a", line_stuck: STUCK }, { robot_id: "b", line_stuck: null },
