@@ -123,6 +123,30 @@ def test_source_candidate_requires_current_owner_scope_and_exclusive_input(tmp_p
     assert client.app.state.channel_workflow.read(receipt['request_id'], 'operator-1')['state'] == 'REQUESTED'
 
 
+@pytest.mark.parametrize('field,value', [
+    ('source_mission_id', 'stale-held-mission'), ('source_action_id', 'old-action'),
+    ('source_attempt_id', 'old-attempt'), ('source_dispatch_generation', 0),
+    ('source_event_watermark', 0), ('source_observation_id', 'old-observation'),
+    ('source_observed_at', '2000-01-01T00:00:00Z'), ('supersedes_mission_id', 'old-mission'),
+    ('state', 'REJECTED'), ('state', 'UNRESOLVED'), ('state', 'RESOLVING'),
+])
+def test_feedback_lineage_and_nonready_source_never_become_ordinary_discord_mission(tmp_path, field, value):
+    from test_mission_api import _create
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    source = _create(client).json()['proposal']['proposal_id']
+    receipt, path, body = prepare_mission(client)
+    body.pop('candidate')
+    with closing(tasks.store._connect()) as conn, conn:
+        conn.execute(f'UPDATE fleet_proposals SET {field}=? WHERE proposal_id=?', (value, source))
+    response = _post(client, path + '/prepare', 'operator-secret', {**body, 'source_proposal_id': source})
+    assert response.status_code == 409, response.text
+    assert client.app.state.channel_workflow.read(receipt['request_id'], 'operator-1')['state'] == 'REQUESTED'
+    with closing(tasks.store._connect()) as conn:
+        assert conn.execute('SELECT COUNT(*) FROM fleet_proposals').fetchone()[0] == 1
+        assert conn.execute('SELECT COUNT(*) FROM fleet_missions').fetchone()[0] == 0
+    assert tasks.store.resource_claims(resource_kind='workcell', resource_id='omx_01') == []
+
+
 def test_changed_review_during_resolution_leaves_only_unadmitted_proposal(tmp_path, monkeypatch):
     client, tasks, _ = _client(tmp_path, channel_config=config())
     receipt, path, body = prepare_mission(client)
