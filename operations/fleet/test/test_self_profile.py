@@ -11,7 +11,7 @@ from fleet.server.password_session import PasswordSessions
 from fleet.server import password_session as session_module
 
 PROFILE = "/api/fleet/auth/profile"
-NEW_PASSWORD = "another correct horse"
+NEW_PASSWORD = "correct horse battery staple"
 
 
 def test_profile_is_cookie_owned_durable_and_bound_to_principal(tmp_path):
@@ -30,7 +30,8 @@ def test_profile_is_cookie_owned_durable_and_bound_to_principal(tmp_path):
         "current_password": TYPED, "password": NEW_PASSWORD,
     }).status_code == 204
     restarted = _client(_app(tmp_path, logins=source)[0])
-    assert _login(restarted, password=NEW_PASSWORD).status_code == 204
+    response = _login(restarted, password=NEW_PASSWORD)
+    assert response.status_code == 204
     assert restarted.get(PROFILE).json()["display_name"] == name
     replaced = _client(_app(tmp_path, logins=_accounts(principal_id="replacement"))[0])
     assert _login(replaced).status_code == 204
@@ -98,6 +99,7 @@ def test_normal_password_change_rejects_missing_or_foreign_fields(tmp_path, body
 
 
 def test_normal_concurrent_rotation_has_one_winner_and_invalidates_checked_password(tmp_path):
+    original_password = TYPED
     sessions = PasswordSessions(tmp_path / "sessions.db", _accounts())
     cookie = sessions.issue("alice", remember=False)
     checked = sessions.check("racer", "alice", TYPED)
@@ -106,7 +108,7 @@ def test_normal_concurrent_rotation_has_one_winner_and_invalidates_checked_passw
     def rotate():
         barrier.wait()
         try:
-            results.append(sessions.change_password(cookie, NEW_PASSWORD, current_password=TYPED))
+            results.append(sessions.change_password(cookie, NEW_PASSWORD, current_password=original_password))
         except session_module.StalePasswordCheck:
             results.append(None)
     threads = [threading.Thread(target=rotate) for _ in range(2)]
