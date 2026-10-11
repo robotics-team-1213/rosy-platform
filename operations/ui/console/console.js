@@ -7,6 +7,7 @@ import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
+import { createChannelRequestView } from "./channel-request-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
@@ -38,7 +39,13 @@ const layoutMedia = matchMedia("(min-width: 64rem)");
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
-const workView = createWorkView({scope: pageScope, call, el});
+const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
+  robots: () => view.robots,
+  canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
+    && !motionCommandReason(view, robotId, "goal")
+    && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
+  confirm: options => confirmedAction.run(options)});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
 layoutPanels.push(el("work-overview"));
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
