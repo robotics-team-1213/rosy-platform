@@ -183,11 +183,11 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         page.locator('[data-context-tab="tools"]').click()
         assert "0.60 m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
         page.locator('[data-context-tab="status"]').click()
-        # D-540 3: every robot has a card; the nominal ones are one line, the exception is open.
-        assert [card.get_attribute("data-robot-id")
-                for card in page.locator("#roster article:not([data-collapsed])").all()] == ["rosy_03"]
-        assert [card.get_attribute("data-robot-id")
-                for card in page.locator("#roster article[data-collapsed]").all()] == ["rosy_01", "rosy_02"]
+        # D-651: exceptions lead the summary; actions await explicit selection.
+        assert page.locator('#roster article').first.get_attribute('data-robot-id') == 'rosy_03'
+        assert page.locator('#roster article').count() == 3
+        assert page.locator('#robot-workspace article').count() == 0
+        assert page.locator('#robot-workspace-empty').is_visible()
         save_temp_screenshot(page, "fleet_console_exception_first.png")
         _open_cards(page)
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
@@ -197,7 +197,8 @@ def test_the_console_renders_what_swarm_control_says(console_url):
             ".map((el) => [el.querySelector('b')?.textContent,"
             " el.querySelectorAll('ui-tag[status=crit], ui-tag[status=warn]').length]))"
         )
-        assert per_robot == {"rosy_01": 0, "rosy_02": 0, "rosy_03": 2}
+        assert per_robot["rosy_01"] == per_robot["rosy_02"] == 0
+        assert per_robot["rosy_03"] >= 1
 
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_overlay.png")
@@ -217,22 +218,20 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        # D-540 3: the nominal robot is one line (name · trip/nav · battery); Enter opens it, 접기 folds it.
-        card = page.locator('#roster article[data-robot-id="rosy_01"]')
-        line = card.locator(".robot-line")
-        assert card.get_attribute("data-collapsed") == ""
-        assert "rosy_01" in line.inner_text() and line.locator('[data-fact="battery"]').count() == 1
-        assert line.get_attribute("aria-expanded") == "false"
-        line.focus()
-        page.keyboard.press("Enter")
-        page.wait_for_function("() => !document.querySelector('#roster article').hasAttribute('data-collapsed')")
-        assert card.locator(".robot-actions").is_visible()
-        fold = card.locator(".robot-fold")
-        assert fold.get_attribute("aria-expanded") == "true"
-        page.wait_for_timeout(1500)  # a poll keeps the operator's choice
-        assert not page.evaluate("document.querySelector('#roster article').hasAttribute('data-collapsed')")
-        fold.click()
-        page.wait_for_function("() => document.querySelector('#roster article').hasAttribute('data-collapsed')")
+        summary = page.locator('#roster article[data-robot-id="rosy_01"]')
+        assert 'rosy_01' in summary.inner_text()
+        assert summary.locator('[data-fact="battery"]').count() == 1
+        choose = summary.locator('[data-select-robot-id="rosy_01"]')
+        choose.focus()
+        page.keyboard.press('Enter')
+        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        assert card.locator('.robot-actions').is_visible()
+        assert page.locator('#robot-choice').input_value() == 'rosy_01'
+        page.wait_for_timeout(1500)
+        assert card.is_visible()
+        page.locator('#robot-choice').select_option('')
+        assert page.locator('#robot-workspace article').count() == 0
+        assert page.locator('#robot-workspace-empty').is_visible()
         assert not errors
         browser.close()
 
@@ -255,17 +254,17 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        card = page.locator('#roster article[data-robot-id="rosy_01"]')
-        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '63%'")
+        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '63%'")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
 
         robot["power_health_age_s"] = 6.0
-        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '확인 불가'")
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '확인 불가'")
         assert card.locator('[data-charging]').get_attribute("data-charging") == "확인 불가"
 
         robot["power_health_age_s"] = 0.2
         robot["state"]["safety"]["estop"] = True
-        page.wait_for_function("() => document.querySelector('#roster [data-fact=safety]')?.textContent.includes('비상 정지')")
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=safety]')?.textContent.includes('비상 정지')")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
         assert "관리자:" in card.inner_text()
         assert not errors
@@ -289,7 +288,7 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        goals = page.locator("#roster ui-button[data-goal-robot-id]")
+        goals = page.locator("#robot-workspace ui-button[data-goal-robot-id]")
         assert goals.count() == 2
         for goal in goals.all():
             assert goal.get_attribute("disabled") == (None if supported else "")
@@ -307,11 +306,14 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
         browser.close()
 
 
-def _open_cards(page):
-    """D-540 3: a nominal robot card is one line; open each so its facts and actions show."""
+def _open_cards(page, robot_id=None):
+    """Select the robot whose task and evidence are inspected in the workspace."""
     page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
-    while page.locator("#roster .robot-line").count():
-        page.locator("#roster .robot-line").first.click()
+    if robot_id is None:
+        robot_id = page.locator('#robot-choice option[value]:not([value=""])').evaluate_all(
+            "options => options.some(option => option.value === 'rosy_01') ? 'rosy_01' : options[0].value")
+    page.locator('#robot-choice').select_option(robot_id)
+    page.locator('#robot-workspace article').wait_for(state='visible')
     page.evaluate("() => document.activeElement?.blur()")
 
 
@@ -540,22 +542,22 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+        page.wait_for_function("() => document.querySelector('#robot-workspace article')?.textContent.includes('1.00')")
         api["/api/fleet/state"] = (500, {"detail": "gather failed"})
         page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 서버 없음'"
-                               " && document.querySelector('#roster article')?.textContent.includes('상태 확인 불가')")
+                               " && document.querySelector('#robot-workspace article')?.textContent.includes('상태 확인 불가')")
         assert not errors
-        assert "1.00" not in page.inner_text("#roster")
-        assert "상태 확인 불가" in page.inner_text("#roster")
+        assert "1.00" not in page.inner_text("#robot-workspace")
+        assert "상태 확인 불가" in page.inner_text("#robot-workspace")
         assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
-        assert page.locator("#roster article ui-button").first.is_disabled()
+        assert page.locator("#robot-workspace article ui-button").first.is_disabled()
         assert page.locator("#online-pill").evaluate("node => node.scrollWidth <= node.clientWidth")
         for state in ("lost", "recovered"):
             if state == "recovered":
                 api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
                                            "robots": [robot]}
-                page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+                page.wait_for_function("() => document.querySelector('#robot-workspace article')?.textContent.includes('1.00')")
                 assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
@@ -685,7 +687,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         page.locator('#map-canvas').press('Enter')
         dialog.wait_for()
         robot['state']['safety']['estop'] = True
-        page.wait_for_function('() => !document.querySelector("#roster article.selected")')
+        page.wait_for_function('() => !document.querySelector("#robot-workspace article.selected")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
@@ -695,7 +697,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         fallback.wait_for()
         fallback.click()
         robot['state']['line_follow']['mode'] = 'OFF'
-        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
+        page.wait_for_function('() => ![...document.querySelectorAll("#robot-workspace ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
@@ -923,11 +925,12 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         assert "닿지 않음: CONNECT_ERROR" in roster
         assert "오프라인" in roster
         assert "OFFLINE" not in roster
-        offline = page.locator("#roster .robot.offline")
+        _open_cards(page, "rosy_03")
+        offline = page.locator("#robot-workspace .robot.offline")
         assert "rosy_03" in page.locator("#roster article").first.inner_text()
         assert "NAVIGATING" not in offline.inner_text()
         assert "0.45" not in offline.inner_text()
-        assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
+        assert page.locator("#robot-workspace .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
         offline.scroll_into_view_if_needed()
         stop = page.locator("#estop").bounding_box()
         assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
@@ -955,7 +958,8 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        card = page.locator("#roster article").filter(has_text="rosy_01")
+        _open_cards(page)
+        card = page.locator("#robot-workspace article").filter(has_text="rosy_01")
         card.wait_for()
         safety_row = card.locator('[data-fact="safety"]')
         # Stable fact identity survives translated/icon labels; stop remains a
@@ -991,7 +995,7 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         page.locator("ui-button[data-goal-robot-id='rosy_01']").click()
         assert page.locator(".robot.selected").count() == 1
         robot["state"]["safety"] = None
-        page.wait_for_function("() => document.querySelector('#roster article')"
+        page.wait_for_function("() => document.querySelector('#robot-workspace article')"
                                "?.textContent.includes('안전 상태를 확인할 수 없어')")
         assert page.locator(".robot.selected").count() == 0
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
@@ -1299,6 +1303,8 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
         # D-560: this Vision answers the map-plane lease with a raw frame (no D-560), so the D-515
         # browser warp is the fallback and the tag says so.
@@ -1380,6 +1386,8 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         page.route("**/api/fleet/vision/lease", serve_lease)
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 평면 영상 · paint-test')",
             timeout=10000)
@@ -1461,6 +1469,8 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         # The 1 s tracking poll keeps the network busy; networkidle never comes (timed out on main too).
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
@@ -1531,6 +1541,8 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
             timeout=20000)
@@ -1597,6 +1609,8 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('정지 로봇 관측 차이')",
             timeout=20000)
@@ -1754,6 +1768,9 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             "() => document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Enter")
+        page.wait_for_function("() => document.querySelector('#robot-choice')?.value === 'rosy_01'")
+        assert page.locator('.robot.selected').count() == 0
+        page.locator('#robot-workspace ui-button[data-goal-robot-id]').click()
         page.wait_for_function(
             "() => document.querySelectorAll('.robot.selected').length === 1"
             " && document.querySelector('.robot.selected b')?.textContent === 'rosy_01'"
@@ -1784,9 +1801,9 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         page.locator('[data-context-tab="inbox"]').click()
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator('[data-context-tab="status"]').click()
-        _open_cards(page)
-        page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
-        aim = page.locator('#roster article[data-robot-id="rosy_02"] ui-button').first
+        _open_cards(page, "rosy_02")
+        page.wait_for_function("() => !document.querySelector('#robot-workspace article ui-button')?.disabled")
+        aim = page.locator('#robot-workspace article[data-robot-id="rosy_02"] ui-button').first
         aim.click()
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"
@@ -1839,9 +1856,9 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
-        page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
-        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
+        page.wait_for_function("() => document.querySelectorAll('#robot-workspace article').length > 0")
+        page.wait_for_function("() => !document.querySelector('#robot-workspace article ui-button')?.disabled")
+        page.locator("#robot-workspace article").filter(has_text="rosy_01").locator("ui-button").first.click()
         canvas_box = page.locator("#map-canvas").bounding_box()
         assert canvas_box
         page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
@@ -1852,7 +1869,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
         page.locator('[data-context-tab="status"]').click()
-        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button[data-cancel-scope]").click()
+        page.locator("#robot-workspace article").filter(has_text="rosy_01").locator("ui-button[data-cancel-scope]").click()
         page.wait_for_timeout(200)
         assert not errors
         browser.close()
@@ -1998,11 +2015,11 @@ def test_console_fits_the_declared_viewport(console_url):
     assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 2) <= 0.03, fit  # D-629: map 2 : rail 1
     # D-540 3 replaces D-493's 1920 rail fit: the rail is the one scroll, its first panels start on screen.
     assert fit["rosterPanel"]["top"] < fit["vh"], fit
-    for name in ("mapCanvas", "visionPreview", "roster", "rosterPanel", "stop"):
+    for name in ("mapCanvas", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
-    for name in ("signals", "formation"):
+    for name in ("signals", "formation", "visionPreview"):
         assert tools_fit[name]["width"] > 0 and tools_fit[name]["height"] > 0, tools_fit
-    assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
+    assert tools_fit["visionFrame"]["height"] == 0, tools_fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 48 and fit["stop"]["height"] >= 48, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["rosterPreceding"]["top"] >= fit["rosterHeading"]["bottom"], fit
@@ -2432,10 +2449,11 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         browser, page, errors = _open_console(playwright, API)
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
-        assert page.locator("#roster article:not([data-collapsed])").count() == 1
-        assert "rosy_03" in page.locator("#roster article:not([data-collapsed])").inner_text()
+        assert page.locator('#roster article').first.get_attribute('data-robot-id') == 'rosy_03'
+        assert page.locator('#robot-workspace article').count() == 0
+        _open_cards(page, 'rosy_03')
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
-        actions = page.locator("#roster article .robot-actions")
+        actions = page.locator("#robot-workspace article .robot-actions")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
@@ -2766,7 +2784,8 @@ def test_visible_text_meets_the_contrast_floor(console_url):
         )
         # 로스터의 선택 상태를 만든다 — 바닥 붕괴는 선택 카드에서 났다.
         # 선택은 카드가 아니라 '목표 지정' 버튼으로 일어난다(console.js).
-        page.locator("#roster article ui-button", has_text="목표 지정").first.click()
+        _open_cards(page)
+        page.locator("#robot-workspace article ui-button", has_text="목표 지정").first.click()
         # 경합 하에서 기본 5초를 넘기는 것은 대기의 문제지 대비의 문제가 아니다
         # — 계약은 센서스가 지킨다(2026-09-25 재검증 노트의 플레이크와 같은 계열).
         page.wait_for_function(
@@ -2923,7 +2942,7 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
         browser, page, errors = _open_console(playwright, API)
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        first_tag = page.locator("#roster article").first.locator(".robot-head ui-tag").first
+        first_tag = page.locator("#robot-workspace article").first.locator(".robot-head ui-tag").first
         assert first_tag.inner_text() == "내비게이션"
         assert first_tag.get_attribute("title") == "NAVIGATION"
         assert "NAVIGATION" not in page.inner_text("#roster")
@@ -3312,7 +3331,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         banner.wait_for()
         assert banner.inner_text().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
         page.wait_for_function(
-            "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
+            "() => document.querySelectorAll('#roster p.robot-summary-evidence').length === 3")
         listed = page.locator("#address-movable li")
         assert listed.count() == 2
         assert "rosy_09 → 10.16.36.20:8080" in listed.nth(0).inner_text()
@@ -3324,7 +3343,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         assert page.evaluate("""() => [...document.querySelectorAll('#roster article')]
             .every((card) => card.scrollHeight <= card.clientHeight + 1)""")
         assert page.evaluate("""() => {
-            const reason = document.querySelector('#roster article[data-robot-id="rosy_10"] [data-address-reason]');
+            const reason = document.querySelector('#roster article[data-robot-id="rosy_10"] .robot-summary-evidence');
             reason.scrollIntoView({block: 'nearest'});
             const r = reason.getBoundingClientRect();
             const box = document.querySelector('#roster').getBoundingClientRect();
@@ -3451,7 +3470,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.locator("#address-banner").wait_for()
         page.wait_for_function(
-            "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
+            "() => document.querySelectorAll('#roster p.robot-summary-evidence').length === 3")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#enrolled-list li[data-robot-id]').length > 0")
@@ -3832,7 +3851,8 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         # Rearm reopens dispatch (queued tasks move), so it is locked with the same reason.
         page.wait_for_function(f'() => document.querySelector("#dispatch-rearm")?.getAttribute("reason") === "{named}"')
         assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
-        goal = page.locator('#roster ui-button[data-goal-robot-id]').first
+        _open_cards(page)
+        goal = page.locator('#robot-workspace ui-button[data-goal-robot-id]').first
         goal.wait_for()
         page.locator('[data-context-tab="tools"]').click()
         # D-540 6: the block says the cause once; every button it holds says "위 사유".
@@ -3843,7 +3863,7 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         assert page.locator("#formation-stop").get_attribute("disabled") is None
         assert page.locator("#estop").get_attribute("disabled") is None
         page.locator('[data-context-tab="status"]').click()
-        cancel = page.locator("#roster .robot-actions ui-button", has_text="취소").first
+        cancel = page.locator("#robot-workspace .robot-actions ui-button", has_text="취소").first
         assert cancel.get_attribute("reason") != named
         assert not errors
         browser.close()
