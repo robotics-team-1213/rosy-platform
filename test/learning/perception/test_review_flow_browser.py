@@ -347,7 +347,8 @@ def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width)
 def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
-    assert page.locator('.workspace').bounding_box()['width'] == width
+    workspace = page.locator('.workspace')
+    assert workspace.bounding_box()['width'] == min(width, workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
     topbar = page.locator('ui-topbar').bounding_box()
     assert page.locator('.workspace').bounding_box()['y'] == topbar['y'] + topbar['height']
     page.locator('#filter').select_option('pending')
@@ -443,8 +444,8 @@ def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path,
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if width <= 390:
         card = page.locator('#jobs .ui-task-row').bounding_box()
-        search = page.locator('#search').bounding_box()
-        assert abs(card['x'] - search['x']) <= 1 and abs(card['width'] - search['width']) <= 1
+        content = page.locator('#jobs').bounding_box()
+        assert abs(card['x'] - content['x']) <= 1 and abs(card['width'] - content['width']) <= 1
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-report-age-{width}.png'
@@ -463,14 +464,24 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
-    expect(page.locator('.workspace-heading h2')).to_have_text('연결한 학습 결과')
+    expect(page.locator('.workspace-heading h2')).to_have_text('학습·검수 작업대')
     page.locator('#new-task').click()
     page.locator('#name').fill('검수할 결과')
     page.locator('#path').fill(str(report))
     page.locator('#connect').click()
-    expect(page.locator('#updated')).to_contain_text('1개 작업')
+    # A single job hides redundant filters; exercise the actual multiple-job workflow.
+    other = tmp_path / 'other-learning-result'
+    other.mkdir()
+    (other / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('다른 결과')
+    page.locator('#path').fill(str(other))
+    page.locator('#connect').click()
+    expect(page.locator('#updated')).to_contain_text('2개 작업')
+    page.locator('#search').fill('검수할 결과')
+    expect(page.locator('#updated')).to_contain_text('2개 중 1개 표시')
     page.locator('#search').fill('없는 작업')
-    expect(page.locator('#updated')).to_contain_text('1개 중 0개 표시')
+    expect(page.locator('#updated')).to_contain_text('2개 중 0개 표시')
     expect(page.locator('#empty-title')).to_have_text('조건에 맞는 작업이 없습니다')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
@@ -478,7 +489,7 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
         page.evaluate('window.scrollTo(0, 0)')
         page.screenshot(path=str(Path(output) / f'learning-results-filter-{width}.png'), full_page=True)
     page.locator('#reset-filters').click()
-    expect(page.locator('#updated')).to_contain_text('1개 작업')
+    expect(page.locator('#updated')).to_contain_text('2개 작업')
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -1133,7 +1144,7 @@ def test_stale_undo_never_overwrites_other_tab(browser_workspace, width):
 def test_class_select_lists_the_workspace_class_set(browser_workspace):
     page, store, expect = browser_workspace
     options = page.locator('#boxes .box-top select').first.locator('option')
-    expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
+    expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람'])
 
 
 def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):

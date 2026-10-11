@@ -30,7 +30,8 @@ TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
-    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions|"
+    r"ui-disclosure-row|ui-disclosure-name|ui-page-heading|ui-section-heading"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 # D-359 §7.4 — outline도 덧칠이다(포커스처럼 보인다). 눌림은 aria-pressed의 공용 표현이다.
@@ -317,6 +318,51 @@ def test_surfaces_do_not_repaint_shared_controls():
             if painted:
                 offenders.append(f"{path.name} {selector.strip()[:60]} -> {painted}")
     assert not offenders, offenders
+
+
+def test_new_shared_role_classes_reject_surface_repaint(tmp_path, monkeypatch):
+    stylesheet = tmp_path / "surface.css"
+    monkeypatch.setitem(globals(), "_surface_texts", lambda: [stylesheet])
+    for role in ["ui-disclosure-row", "ui-disclosure-name", "ui-page-heading", "ui-section-heading"]:
+        stylesheet.write_text(f".{role} {{ font-size: var(--text-display); }}", encoding="utf-8")
+        with pytest.raises(AssertionError, match=role):
+            test_surfaces_do_not_repaint_shared_controls()
+        stylesheet.write_text(f".{role} {{ margin: var(--space-3); }}", encoding="utf-8")
+        test_surfaces_do_not_repaint_shared_controls()
+
+
+def local_button_height_problems(css):
+    problems = []
+    for selector, body in RULE.findall(css):
+        if not re.search(r"(?<![\w-])(?:ui-button|button|summary)\b|\.ui-disclosure-row\b", selector):
+            continue
+        for prop, value in re.findall(r"(?<![-\w])(min-height|height|max-height|block-size)\s*:\s*([^;}]+)", body):
+            if any(float(size) > 0 for size in re.findall(r"(?<![\w.-])(\d*\.?\d+)(?:px|rem)\b", value)):
+                problems.append(f"{selector.strip()} {prop}: {value.strip()}")
+    return problems
+
+
+def test_surface_buttons_use_shared_height_roles():
+    bad = []
+    for path in _surface_texts():
+        if path.suffix == ".css":
+            css = path.read_text(encoding="utf-8")
+        elif path.suffix == ".html":
+            markup = path.read_text(encoding="utf-8")
+            blocks = re.findall(r"<style\b[^>]*>(.*?)</style>", markup, re.S)
+            blocks.extend(f"button {{ {style} }}" for style in re.findall(
+                r'<(?:ui-button|button|summary)\b[^>]*\bstyle="([^"]*)"', markup))
+            css = "\n".join(blocks)
+        else:
+            continue
+        bad.extend(f"{path.relative_to(ROOT)}: {row}" for row in local_button_height_problems(css))
+    assert bad == [], "\n".join(bad)
+
+
+def test_local_height_guard_keeps_container_geometry_and_stretch():
+    assert local_button_height_problems(".stage { min-height: 7rem; } ui-button { height: 100%; min-height: var(--target-primary); }") == []
+    assert local_button_height_problems(".stage ui-button { min-height: 7rem; }")
+    assert local_button_height_problems("summary { min-height: 44px; }")
 
 
 def test_pitch_colours_live_in_one_block():

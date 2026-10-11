@@ -7710,6 +7710,12 @@ osy-d395-s1d\`.
 - 증거: 원격 CORE/실제 Python 설치 2575 성공·10 skip, feature 1675 성공, structure/harness/Safety 272 성공, OMX 532 성공·3 skip. 각 성공 실행 known_failures 0 NEW/0 known. docs/validation/d626-holder-migration-2026-10-11/result.md 참조.
 - gate 변화: 없음. SOURCE·Python 설치 근거이며 새 Jazzy/ARM64/장치/현장·CI·main 착지·push·배포는 미확인 또는 미실행.
 
+## 2026-10-11 · uncommitted · docs(uiux): define complete operational role and token closure
+- 변경: D-639와 전체 표면 실행 계획으로 공용 토큰·조작·캔버스·native 척도·역할 및 레지스트리 폐쇄성의 목표와 완료 기준을 정한다. 실제 등록 11개 경로의 읽기 감사에서 남은 소비자 차이를 확정했다.
+- 증거: 세 독립 읽기 감사, 기존 DESIGN/D-624/D-629/D-632 계약 및 UI 실패 로그 대조. 구현·최종 원격 회귀·설치본 수용은 이 문서만으로 통과 처리하지 않는다.
+- gate 변화: 없음.
+- 결정: D-639 Accepted (2026-10-11); 목표는 구현·검증 후 완료한다.
+- 교훈: 이미 닫힌 규칙을 재작성하지 않고 실제 소비자 우회와 검사 누락을 함께 닫는다.
 ## 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
 
 - 변경: 렌즈 모델 조사와 부분보드·robust 지도 등록 조사를 병행해 원논문·공식 문서와 현행 소스를 비교했다. 측정 내참수 → 바닥 등록 → 단일 inverse remap, 유효/미관측/오차 검증 영역, crop 계보와 불확실성 검증을 Proposed ADR로 기록했다.

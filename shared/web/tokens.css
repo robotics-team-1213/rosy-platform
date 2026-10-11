@@ -319,6 +319,8 @@
   --text-value: 1.125rem;
   --text-title: 1.25rem;
   --text-display: 2rem;
+  /* Brand artwork fits its name column; operational text keeps the role scale. */
+  --brand-wordmark-size: min(var(--text-title), 14cqi);
 
   /* 대문자 라벨은 자간이 없으면 뭉친다. 한 값으로 고정한다. */
   --track-label: 0.12em;
