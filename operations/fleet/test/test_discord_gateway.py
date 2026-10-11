@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+import fleet  # Load the same source holders as the installed Fleet caller.
 from rosy_discord.gateway import DiscordGateway, GatewayStop
 
 GUILD, CHANNEL, BOT, USER = [str(100000000000000000 + i) for i in range(4)]
