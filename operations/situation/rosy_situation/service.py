@@ -34,10 +34,13 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
+
+from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
@@ -130,6 +133,7 @@ class Situation:
         self._route_map: Optional[dict] = None
         from rosy_situation.incident_context import ContextDraft
         self.context_draft = ContextDraft()
+        self._assessment_samples = {}
         self.vlm = vlm
         self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="rosy-vlm")
         self._profile = None
@@ -176,6 +180,8 @@ class Situation:
         snapshot = {"observed_at": self.wall()}
         for key, path in (("state", "/api/fleet/state"), ("traffic", "/api/fleet/traffic"),
                           ("line_stuck", "/api/fleet/line-stuck")):
+            if key == 'state':
+                snapshot['_state_requested_at'] = self.wall()
             snapshot[key] = self.fleet.call(path)
         try:
             snapshot["trips"] = self.fleet.call("/api/fleet/trips")
@@ -187,7 +193,7 @@ class Situation:
         except (OSError, ValueError) as exc:
             _LOG.warning("trip route read failed: %s", exc)
             snapshot["trips"], snapshot["route_map"] = {}, None
-        if any((str(row.get("robot_id") or ""), str(row.get("stuck_id") or "")) not in self.context_draft.seen
+        if any(self.context_draft.due(row, self.wall())
                for row in (snapshot["line_stuck"].get("pending") or [])):
             context = {"map": None, "cameras": {}}
             try:
@@ -258,6 +264,15 @@ class Situation:
             _LOG.warning("fleet read failed: %s", exc)
             return PERIOD_S
         self._log("input", snapshot)
+        assessments = snapshot_assessments(snapshot)
+        now = self.clock()
+        for rid, result in assessments.items():
+            signature = (result.request.case_id, result.request.owner, result.necessity, result.reason)
+            previous = self._assessment_samples.get(rid)
+            if previous is None or previous[0] != signature or now - previous[1] >= 60.0:
+                self._log('assessments', asdict(result))
+                self._assessment_samples[rid] = (signature, now)
+        self._assessment_samples = {rid: value for rid, value in self._assessment_samples.items() if rid in assessments}
         facts = self.analyzers(snapshot) + self.context_draft(snapshot)
         for fact in facts:
             self._log("facts", fact)

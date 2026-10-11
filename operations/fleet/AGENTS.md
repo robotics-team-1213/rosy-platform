@@ -23,7 +23,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | File | Description |
 |------|-------------|
 | `package.xml` | ament_python; `core_common` is an `exec_depend` for colcon build order only — this package's code has no ROS import (D-18, D-126) |
-| `setup.py` | Console script `fleet=fleet.cli:main` |
+| `setup.py` | Fleet metadata/entrypoint; `tools/packaging/fleet_sources.py` owns build-time composition. D-652 installs three pure `rosy_situation` files only, excluding AI service/analyzers/vision |
 | `fleet/formation/geometry.py` | `Formation`, `SlotOffset`, `slots()` — FOR-001, pure functions |
 | `fleet/formation/assignment.py` | `SlotAssigner` protocol, `GreedyDistanceAssigner` — FOR-002, pure functions |
 | `fleet/swarm/robots.py` | `RobotEndpoint`, `load_robots()` / `write_robots()` for `robots.yaml` (per-robot token, D-30) |

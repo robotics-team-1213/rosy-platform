@@ -6,8 +6,8 @@ Fleet 서버 본체(Phase 4)는 아직 없다. 여기 있는 것은 로봇 계�
 
 __version__ = "0.1.0"
 
-# Source checkouts load the canonical Decision namespace from its holder.
-# Installed Fleet distributions include rosy.decision directly.
+# Source checkouts load the canonical Decision and pure assessment holders.
+# Installed Fleet distributions include these namespaces directly.
 from pathlib import Path as _Path
 
 if (_Path(__file__).resolve().parents[1] / "package.xml").is_file():
