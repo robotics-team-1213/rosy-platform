@@ -833,3 +833,6 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+## 2026-10-11 — UI 역할·공용 토큰 소비 (D-639)
+
+- 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.

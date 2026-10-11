@@ -753,7 +753,7 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
         assert "fixture token list offline" in read_status.inner_text()
         assert "CORE" in token_status.inner_text()
 
-        safety_section = page.locator("main > section.ui-readback:not(:has([data-peer-list]))").nth(1)
+        safety_section = page.locator('main > section.ui-readback:has([name="manual_linear"])')
         safety_form = safety_section.locator("form")
         safety_read_status = safety_section.locator("ui-status").nth(0)
         safety_action_status = safety_section.locator("ui-status").nth(1)
@@ -840,7 +840,7 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
         _unmount_panel(page)
         assert set(page.evaluate("window.__stopped")) == {
-            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning",
+            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning", "/api/v1/navigation/state",
         }
         assert errors == []
         browser.close()
@@ -869,6 +869,8 @@ def test_console_map_actions_require_hardware_runtime():
             ? {map_id:'map-a', width:2, height:2, resolution:1, origin:{x:0,y:0}, data:[0,0,0,0]}
             : {};
           window.__unmount = mount(root, {role:'operator', api, store});
+          callbacks['/api/v1/robot/state']({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},
+            localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
           callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
           const button = root.querySelector('[data-map-click="goal"]');
@@ -1310,7 +1312,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
 
         page.evaluate("window.__setGrid(true); window.__intervals[10000]()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('fixture-map')")
-        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}})")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").click(position={"x":30,"y":30})
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")

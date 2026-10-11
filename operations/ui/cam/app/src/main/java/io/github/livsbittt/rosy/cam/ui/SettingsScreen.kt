@@ -375,7 +375,7 @@ private fun LensSection(
                 RadioButton(selected = lens == choice, onClick = null)
                 Text(
                     stringResource(if (choice == LensChoice.WIDE) R.string.settings_lens_wide else R.string.settings_lens_standard),
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = RosyMetrics.Space2.dp),
                 )
             }
         }

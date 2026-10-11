@@ -179,7 +179,7 @@ fun PairingScreen(
                     val text = stringResource(message, PairingText.failureArg(state))
                     if (PairingText.critical(state)) CritMessage(text)
                     else Text(text, color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth().border(1.dp, RosyColors.StatusWarn, RoundedCornerShape(6.dp))
+                        modifier = Modifier.fillMaxWidth().border(1.dp, RosyColors.StatusWarn, RoundedCornerShape(RosyMetrics.RadiusControl.dp))
                             .padding(horizontal = RosyMetrics.Space3.dp, vertical = RosyMetrics.Space2.dp))
                     PairingText.unsettledCredential(state)?.let { id ->
                         Text(stringResource(R.string.pairing_credential, id), fontFamily = FontFamily.Monospace)

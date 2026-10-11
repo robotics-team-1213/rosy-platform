@@ -58,3 +58,8 @@ Share-dir lookup: `get_package_share_directory('emotion')/emotion`.
 - PIL, rclpy, hardware LCD via `rosy_lcd.py`
 
 <!-- MANUAL: -->
+
+### LCD 표시 역할
+
+- 이름·로그인 코드·현재 정보·감정만 표시하며 운용 입력을 소유하지 않는다. 공용 팔레트 의미와 token parity를 유지한다.
+- 320×240 물리 표시, 글자 맞춤과 정보 카드 기하는 매체 계약이다. 웹 버튼/서체 척도를 그대로 강제하지 않으며 실기 LCD 수용을 호스트 그림 시험과 구분한다.
