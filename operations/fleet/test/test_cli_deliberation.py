@@ -10,6 +10,8 @@ from test_deliberation import problem, reply
 def test_unconfigured_isolation_never_launches():
     with pytest.raises(ValueError, match='ISOLATED_LAUNCHER_REQUIRED'):
         CliProvider(kind='claude', model='pinned-model', profile_id='p', launch=None)
+    with pytest.raises(ValueError):
+        CliProvider(kind='claude', model='--dangerously-skip-permissions', profile_id='p', launch=lambda: None)
 
 
 @pytest.mark.parametrize('kind', ['claude', 'opencode'])
