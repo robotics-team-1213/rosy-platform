@@ -41,6 +41,47 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "68e6f973f958ca4dccc58ed2669524644acfcf83":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "ownership rechecks and explicit acceptance receipts require later stop/continuation fences. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "6dd8a3365b92b428105ec68e140c40518ae44bc5":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "pending goals and stop generations require subsequent admission/continuation and cancel-error fixes. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "0f1962e904595d60b189f49d8d529a4a0a5d7f35":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "serialized admission, final policy checks and trip/follower fencing require traffic-await fences. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "8f602794d4d14314130b86b8ceccf621c2f4cf13":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "stop-token checks after traffic awaits require later unknown bay-receipt compensation. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "25c036ae82aa3075b6085284a958f34c76eb6173":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "abandoned bay cancellation requires final accepted-mover uncertainty and compensation-failure fixes. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "1b556107d1d5239bf77e491ef44113ebc347877a":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "standalone has missing RobotApiError import and incomplete continuation protection. "
+        "Requires f1dfada7f and 38f51c4c2 together; see docs/validation/"
+        "fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "f1dfada7feea49f100de0d6bee707ab2a140ef5b":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "imports the existing transport error type; full continuation protection still requires 38f51c4c2. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "38f51c4c2adbdda938a1236881b05cca2588a5ea":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "post-acceptance owner refusals remain UNKNOWN without retry; compensation failure requires 5f3f033a8. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "cd42d880a72d9453ead9129df3281a07f7559010":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "cancel-all overlap preserves UNKNOWN and async cancellation; requires 5f3f033a8 compensation fix. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "5f3f033a842ea3c18b9a5a0b440bd277f4e23b1d":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "late accepted-goal compensation failure keeps NavigationStopped/UNKNOWN, pending finally cleanup "
+        "and CancelledError; see docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no device acceptance.",
     "d5db5db69a90672d1ff12377d7ef178861a82cad":  # git commit revision
         "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
         "Pinky .10/gain2 profile reviewed together with the required angular saturation curvature fix; "
