@@ -16,6 +16,16 @@ class EvidenceState(str, enum.Enum):
     UNAVAILABLE = "unavailable"
 
 
+class HostStatusEvidence(BaseModel):
+    """CORE judgment of one Host Agent network or release status sample."""
+
+    evidence: EvidenceState = EvidenceState.UNAVAILABLE
+    observed_at: str | None = None
+    age_s: float | None = None
+    stale_after_s: float = 15.0
+    reason: str = ""
+
+
 # Existing authorities: readiness default, D-23 speed sample, safety actuation budget.
 STALE_POSE_S = 2.0
 STALE_VELOCITY_S = 0.5

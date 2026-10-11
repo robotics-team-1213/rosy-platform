@@ -10,10 +10,11 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 
 ## 계획·결과 문서
 
-- 없음
+- [2026-10-11-mapless-fleet-control.md](../../../docs/plans/2026-10-11-mapless-fleet-control.md)
 
 ## 교훈 (docs/solutions)
 
@@ -26,7 +27,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · fb54c9f47f · fix(ci): 사건 인수 버튼 종류·비활성 사유
-- 2026-10-11 · 92592fc2ef · uiux: 운영 요약과 사건 근거·진단 분리 (D-641)
-- 2026-10-11 · e58d7c4f52 · refactor: 사건 근거·검토 패널 소유 분리 (D-362/D-641)
-- 2026-10-11 · 0702cdb15 · uiux: 선택 로봇의 배정·진행 작업면 (D-651)
+- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
+- 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
+- 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
+- 2026-10-11 · ebf05b9811 · D-655 카메라 관측 누적과 근거 보존
+- 2026-10-11 · 7476837977 · D-655 분류별 요소 편집과 기록 프레임 표시

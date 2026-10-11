@@ -27,6 +27,9 @@ gates:
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 adrs:
 - D-637
+- D-655
+plans:
+- docs/plans/2026-10-11-mapless-fleet-control.md
 ---
 
 Existing implementation holder; shared regression suite as registered in harness.yaml.

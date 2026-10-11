@@ -2,6 +2,7 @@
 //
 import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
+import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
@@ -618,7 +619,7 @@ async function commitGoal(col, row) {
   life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" || namedReason() ||
+  if (view.stateUnavailable || auth.role !== "operator" || namedReason() || motionCommandReason(view, view.selected, 'goal') ||
       !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
     disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
     render();
@@ -629,6 +630,7 @@ async function commitGoal(col, row) {
   const mapSnapshot = JSON.stringify([view.map.map_id, view.map.width, view.map.height, view.map.resolution, view.map.origin]);
   await confirmedAction.run({message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`, opener: el("map-canvas"),
     eligible: () => !view.stateUnavailable && view.selected === robotId && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
+      && !motionCommandReason(view, robotId, 'goal')
       && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
     request: async owner => {
   view.selected = null;
@@ -869,6 +871,14 @@ if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   render();
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
+view.openFormationWorkspace = () => {
+  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; pinStart = null;
+  if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
+  render();
+  inbox.select('tools');
+  const heading = el('formation-heading'); heading.tabIndex = -1;
+  heading.focus({preventScroll: false});
+};
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,

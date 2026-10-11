@@ -130,8 +130,11 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
   SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
   SITE_MAP_PROFILE_LIMIT: '지도 프로필은 최대 100개입니다. 기존 프로필을 선택해 수정하세요.',
-  SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
+  SITE_MAP_ROUTE_ACTIVE: '운행·대형·지도 기록이 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
+  SITE_MAP_SURVEY_UNREVIEWED: '조사 좌표 기준과 축척 근거를 먼저 검토하세요',
+  SITE_MAP_ROAD_UNREVIEWED: '관측·추정 도로를 검토하고 근거를 남기세요',
+  SITE_MAP_EXCLUSION_OVERLAP: '금지 구역과 겹치는 주행 차로를 수정하세요',
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
@@ -140,6 +143,11 @@ export const SITE_MAP_ERROR_LABEL = {
   TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
   TEACH_NOT_RECORDING: '기록 중이 아닙니다',
   TEACH_POSE_UNTRUSTED: '로봇 지도 위치가 LOCALIZED가 아닙니다 · Rosy Cam이 로봇을 보는 곳에서 다시 하세요',
+  TEACH_SURVEY_REQUIRED: '조사 기준이 있는 초안을 먼저 만들어 저장하세요',
+  TEACH_SURVEY_CHANGED: '기록의 조사 기준과 현재 초안이 다릅니다 · 기존 기준을 확인하세요',
+  TEACH_MAP_CHANGED: '로봇 위치와 초안의 지도 기준이 다릅니다 · 활성 지도와 기록 기준을 확인하세요',
+  TEACH_ODOM_UNAVAILABLE: '신선한 로봇 주행 좌표를 읽을 수 없습니다 · 로봇 연결과 odom을 확인하세요',
+  TEACH_MODE_INVALID: '기록 좌표 방식과 조사 기준을 확인하세요',
   TEACH_TOO_SHORT: '기록한 길이 0.1 m보다 짧아 버렸습니다',
   TEACH_UNKNOWN: '확정할 기록이 없습니다 · 10분이 지났거나 이미 확정했습니다',
   TEACH_UNKNOWN_PLACE: '없는 장소입니다',
@@ -202,8 +210,12 @@ export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+  for (const facility of map.facilities || []) for (const [x, y] of facility.geometry) add(x, y);
   for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);  // any 90° turn of a box
-  if (!xs.length) { xs.push(0); ys.push(0); }
+  if (!xs.length) {
+    const [x, y] = map.survey?.origin || [0, 0];
+    add(x - 1, y - 1); add(x + 1, y + 1);  // View extent only; no road is inferred.
+  }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6),
     (height - 2 * pad) / Math.max(maxY - minY, 1e-6));
@@ -295,23 +307,6 @@ export function planPolylines(map, plan) {
 
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
 
-export function editPlace(map, id, {name, kind}) {
-  const next = copy(map);
-  const place = next.places.find(item => item.id === id);
-  if (!place) throw new Error(`없는 장소 ${id}`);
-  if (name !== undefined) {
-    if (!String(name).trim() || String(name).length > 64) throw new Error('주소 이름은 1–64자입니다');
-    place.name = String(name).trim();
-  }
-  if (kind !== undefined) {
-    if (!PLACE_KINDS.includes(kind)) throw new Error('알 수 없는 장소 종류');
-    // D-513: the heading comes from a robot set down on the spot (teach "place"), never a guess
-    if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
-    place.kind = kind;
-  }
-  return next;
-}
-
 /** D-513 7: the one screen orientation of this map (clockwise turn of the plain +y-up view). */
 export const VIEW_TURNS = [0, 90, 180, 270];
 export function viewTurnOf(map) { return VIEW_TURNS.includes(map?.view_turn_deg) ? map.view_turn_deg : 0; }
@@ -319,26 +314,6 @@ export function editViewTurn(map, turn) {
   const value = Number(turn);
   if (!VIEW_TURNS.includes(value)) throw new Error('화면 방향은 0·90·180·270° 중 하나입니다');
   return {...copy(map), view_turn_deg: value};
-}
-
-export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_mps: speed}) {
-  const next = copy(map);
-  const edge = next.edges.find(item => item.id === id);
-  if (!edge) throw new Error(`없는 차로 ${id}`);
-  if (direction !== undefined) {
-    if (!['one_way', 'two_way'].includes(direction)) throw new Error('통행 방향은 일방/양방입니다');
-    edge.direction = direction;
-  }
-  if (driveMode !== undefined) {
-    if (!['lane', 'free'].includes(driveMode)) throw new Error('주행 방식은 차선/좌표입니다');
-    edge.drive_mode = driveMode;
-  }
-  if (speed !== undefined) {
-    const value = Number(speed);
-    if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');
-    edge.speed_cap_mps = value;
-  }
-  return next;
 }
 
 /** D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)". */
@@ -463,7 +438,10 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
 /** One line for the teach panel from `GET /api/fleet/teach`. */
 export function teachStatusText(view) {
   const live = view?.recording;
-  if (live) return `기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  if (live) return `${live.mode === 'survey' ? '조사 ' : ''}기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  const reason = {pose_lost: '위치 단절', odom_lost: '주행 좌표 단절', odom_reset: '주행 좌표 초기화',
+    survey_changed: '조사 초안 변경', map_changed: '활성 지도 또는 초안 좌표계 변경'}[newestPending(view)?.reason];
+  if (reason) return `기록 중단 · ${reason} · 유효한 앞부분만 확정 대기 · 로봇 정지는 별도로 확인하세요`;
   if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
   return '기록 없음';
 }

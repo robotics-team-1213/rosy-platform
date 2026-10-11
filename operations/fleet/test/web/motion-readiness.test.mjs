@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityReason, chooseConvoyLeader, chooseLeader, formationReason, leaderPathKind, noRobotServesGrid,
+  capabilityReason, chooseConvoyLeader, chooseLeader, motionCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
 } from '../../../ui/console/motion-readiness.js';
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
@@ -27,6 +27,19 @@ test('formation checks the selected leader and followers independently', () => {
   assert.notEqual(formationReason([leader], 'one', ['one']), '');
   follower.online = false;
   assert.match(formationReason([leader, follower], 'one', ['one', 'two']), /오프라인/);
+});
+
+test('formation keeps leader goals open but refuses member trips and follower goals', () => {
+  const view = {formation: {active: true, leader: 'one', assignment: {two: 0}}};
+  assert.equal(motionCommandReason(view, 'one', 'goal'), '');
+  assert.match(motionCommandReason(view, 'one', 'trip'), /대형.*해제/);
+  assert.match(motionCommandReason(view, 'two', 'goal'), /팔로워.*리더/);
+  assert.match(motionCommandReason(view, 'two', 'trip'), /대형.*해제/);
+  assert.equal(motionCommandReason(view, 'outside', 'trip'), '');
+  assert.equal(motionCommandReason({formation: {...view.formation, active: false}}, 'two', 'goal'), '');
+  assert.match(motionCommandReason({...view, formationUnavailable: true}, 'one', 'goal'), /확인 불가/);
+  assert.match(motionCommandReason({trafficTrips: [{robot_id: 'one'}]}, 'one', 'goal'), /운행.*취소/);
+  assert.equal(motionCommandReason({trafficTrips: [{robot_id: 'one'}]}, 'two', 'goal'), '');
 });
 
 function lead(id, { online = true, can = true, x, y, yaw, frame = 'map', estop = false, line = null, goal = false } = {}) {
