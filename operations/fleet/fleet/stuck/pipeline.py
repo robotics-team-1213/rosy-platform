@@ -22,6 +22,40 @@ def law_hold(row, *, decision=None, stuck_id=None):
     return None
 
 
+def ai_hold(resolver, answer, selected, current, rows):
+    """Revalidate the original AI candidate after admission awaits; WAIT retains its human handoff."""
+    from fleet.stuck import ai_first, lane_lost
+
+    if answer.rule != "ai" or answer.decision == "WAIT":
+        return None
+    proposal = (selected or {}).get("ai_proposal")
+    if not proposal or proposal != current.get("ai_proposal"):
+        return "ai_proposal_changed"
+    rid, first = answer.robot_id, resolver.ai_first
+    vlm = str(proposal.get("source", "")).startswith("vlm:")
+    if vlm and (first is None or not first.on(rid)):
+        return "ai_disabled"
+    stuck = current["state"]["line_follow"]["stuck"]
+    if first is not None and first.on(rid):
+        key = ai_first.problem_key(current, "stuck", stuck.get("cause"), resolver.at_crosswalk(rid))
+        if key in first.human_classes():
+            return f"human_class:{key}"
+        if vlm:
+            invalid = first.evidence_invalid(proposal, rid)
+            if invalid is not None:
+                return invalid
+    chain = resolver._chains.get(rid)
+    if chain is None:
+        return "stuck_changed"
+    if not vlm:
+        return lane_lost.ai_proposal_invalid(proposal, current, stuck, rows, chain,
+                                             resolver.config, resolver._painted())
+    verdict, candidate = ai_first._check(resolver, first, proposal, current, stuck, rows, chain,
+                                         chain.started_at, 0.0, [], counted=True)
+    return None if verdict == "forwarded" and candidate == answer else verdict if verdict != "forwarded" \
+        else "ai_candidate_changed"
+
+
 def candidate(resolver, now, row, stuck, rows, chain):
     """Existing D-577/D-610 selection, after the resolver's law and lifecycle checks."""
     from fleet.stuck.ai_first import ai_answer
