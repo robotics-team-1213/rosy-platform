@@ -212,7 +212,7 @@ def test_readback_recomputes_validity_and_region_even_when_hash_matches(tmp_path
     elif target == 'digest':
         doc['bindings']['inputs_sha256'] = 'unverified'
     elif target == 'model_revision':
-        observed['model_revision'] = 'invalid'
+        observed['model_revision'] = '../other'
     elif target == 'camera_profile':
         observed['camera_profile_revision'] = ''
     else:
