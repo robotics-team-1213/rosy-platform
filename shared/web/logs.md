@@ -707,5 +707,7 @@
 
 ## 2026-10-11 · 4402c5c4b · fix: 기존 아이콘 설명의 키보드 연결
 
+- gate 변화: 기존 title·접근성 이름을 hover/키보드 설명에 연결한다. 권한·조작 규격·CSP 검사 기준은 유지한다.
+
 - 변경: actionIcon이 기존 title을 공용 tooltip에 연결하고, 보이는 문구가 없는 아이콘은 접근성 이름을 설명으로 재사용한다. 명시 tooltip·라벨·선택·높이·권한은 보존한다.
 - 증거: 실제 Fleet 테마·영상 새로고침·접속 마크업의 키보드 회귀를 포함한 원격 102 passed(13.15s), known_failures 0 NEW. OMEN strict probe 22 cores/7.6 GB로 하한 충족. 로그 X:/DevTemp/ui-shell-common-641/run-4.txt. 최종 Fleet 통합·설치 수용은 별도다.
