@@ -142,6 +142,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     "node => node.scrollWidth <= node.clientWidth + 1"), (name, width)
                 inbox = page.locator("#fleet-inbox").bounding_box()
                 assert inbox and inbox["height"] >= 48 and inbox["y"] + inbox["height"] <= height
+                assert h == inbox["height"] == 48 and w >= 48, (name, width, fact)
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
