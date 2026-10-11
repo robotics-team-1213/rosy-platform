@@ -35,6 +35,12 @@ selector가 FULL로 승격했지만 이번 실행은 guard와 mapped suite 범�
 
 ## 미확인과 다음 단계
 
+### 기존 소비자의 의미 혼용 경계 보완
+
+후속 런타임 조사에서 전달 도구를 거치지 않은 직접 로드와 pointer 변경은 전체 도로면 모델을 기존 lane evidence/paint/drivable 후처리에 사용할 수 있음을 확인했다. `0667921ce4`의 원격 RED 8건은 추론 전 거절 누락, `514b41d743`의 RED 2건은 교체 시 이전 모델 유지 누락을 재현했다. manifest의 기존 의미 helper를 전달·intake와 런타임이 공유하고 후처리 전에 검사하며, ModelSlot은 호환되지 않은 lane 후보를 거절해 이전 모델을 유지한다. 원시 session 로드는 오프라인 도로면 평가에 계속 사용할 수 있다.
+
+`804bcdc80e`에서 거절한 후보의 서명 상태가 이전 모델 상태를 덮는 RED 2건도 재현했다. `SignatureCheck`가 의미 검사 뒤에만 서명 상태를 갱신하도록 수정했다. `0abc58f999`의 원격 runner/signature/object detector/고정 fitness/training contract 회귀는 terminal exit 0이다. 실제 관측 consumer·장치 전달을 구현하거나 배포한 증거는 아니다.
+
 20261010 검수 데이터는 기존 연결 도로 구역 기준선 자료다. 전체 도로면의 독립 정답으로 재해석하지 않는다. 전체 도로면과 현재 구역의 실제/시뮬레이션 독립 정답 pair, 실제 관측 기준점 생산/보정·출처, 검수 독립성·freshness와 upstream 학습 closure가 필요하다.
 
 물체 평가, 조건별 최소 표본·coverage와 출처 단위 불확실성, 사전 고정 수용 임계값, 실제 장치의 관측 전용 전달·버전 readback·지연/손실도 미확인이다. 이 작업에서 push·장치 배포·운영 활성화·주행·실물/시뮬레이션 성능 수용을 수행하지 않았다. SOURCE 시험과 local main 착지를 이 단계의 수용으로 확대하지 않는다.
