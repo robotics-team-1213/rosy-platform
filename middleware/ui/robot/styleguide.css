@@ -78,6 +78,10 @@ h2 {
 }
 
 .type-demo { align-items: baseline; }
+.icon-inventory { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+.icon-states { align-items: flex-start; }
+.icon-states > a { display: inline-flex; align-items: center; gap: var(--space-2); }
+.icon-states > a[aria-current="page"] { text-decoration: underline; text-underline-offset: var(--space-1); }
 /* 확인 대화상자 고정 그림 — 제품의 고정 가운데 배치를 풀어 칸 안에 둔다. */
 .dialog-demo dialog.ui-confirm { position: static; z-index: auto; margin: 0; }
 
