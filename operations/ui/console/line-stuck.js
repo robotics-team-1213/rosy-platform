@@ -301,6 +301,31 @@ export function fleetAnswerText(answer) {
   return `${source} → Fleet 전송 ${decision} → ${receipt}${answer.outcome ? ` · 상태 ${OUTCOME_TEXT[answer.outcome] || answer.outcome}` : ""}`;
 }
 
+/** Operator summary: a receipt is never evidence that movement completed. */
+export function stuckSummary(stuck) {
+  const answer = stuck.fleet_answer, proposal = stuck.ai_proposal || stuck.ai?.proposal;
+  const decision = DECISION_LABEL[answer?.decision || proposal?.decision] || "조치 미확인";
+  if (answer) {
+    const source = answer.tier === "ai" ? "영상 분석의 제안을 관제가" : answer.tier === "human" ? "운영자의 판단을 관제가" : "관제가";
+    const refusal = {EMERGENCY_ACTIVE: "비상정지 중입니다.", CALIBRATION_ACTIVE: "보정 세션이 로봇을 제어하고 있습니다.",
+      OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: "운영자 권한이 필요합니다.",
+      STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || "";
+    const receipt = answer.accepted === true ? "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
+      : answer.accepted === false ? `로봇이 거절했습니다. ${refusal} 판단 근거를 확인하세요.` : "로봇의 응답이 미확인입니다. 상태를 다시 확인하세요.";
+    return `${source} ${decision} 지시로 전달했습니다. ${receipt}`;
+  }
+  if (proposal) {
+    const status = {accepted: "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다.",
+      refused: "로봇이 거절했습니다. 판단 근거를 확인하세요.",
+      pending: "관제가 전달하고 로봇의 응답을 기다립니다.",
+      held: `관제가 전달을 보류했습니다. ${AI_HELD_REASON[proposal.verdict] || "보류 이유 미확인"} · 판단 근거를 확인하세요.`}[proposal.class]
+      || "전달 결과가 미확인입니다. 판단 근거를 확인하세요.";
+    return `영상 분석이 ${decision}를 제안했습니다. ${status}`;
+  }
+  return stuck.robot_online === false ? "로봇 연결이 끊겼습니다. 연결을 확인한 뒤 현재 요청을 다시 확인하세요."
+    : "로봇이 멈춰 판단을 요청했습니다. 주변과 판단 근거를 확인한 뒤 조치를 선택하세요.";
+}
+
 /** D-577 8: caption of the stuck's evidence picture; `elapsedS` = seconds since Fleet answered. */
 export function evidenceCaption(preview, elapsedS = 0) {
   if (!preview) return "카메라 그림 없음";
@@ -492,11 +517,11 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     head.className = "stuck-head";
     const cause = document.createElement("ui-tag");
     cause.setAttribute("status", "crit");
-    cause.textContent = CAUSE_LABEL[stuck.cause] || stuck.cause || "원인 미상";
+    cause.textContent = CAUSE_LABEL[stuck.cause] || "원인 미확인";
     cause.title = stuck.cause || "";
     const phase = document.createElement("ui-tag");
     phase.setAttribute("status", stuck.phase === "BACKING" || stuck.phase === "SETTLING" ? "warn" : "neutral");
-    phase.textContent = PHASE_LABEL[stuck.phase] || stuck.phase || "—";
+    phase.textContent = PHASE_LABEL[stuck.phase] || "단계 미확인";
     phase.title = stuck.phase || "";
     head.append(cause, phase);
     if (stuck.robot_online === false) {
@@ -539,30 +564,59 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       node.addEventListener("click", scope.guard(() => choose(robotId, stuck.stuck_id, spec.decision)));
       actions.append(node);
     }
-    li.append(head, facts);
+    const summaryLine = document.createElement("p");
+    summaryLine.className = "stuck-resolver";
+    summaryLine.textContent = stuckSummary(stuck);
+    const detail = document.createElement("details"), detailTitle = document.createElement("summary");
+    detail.dataset.focusKey = "evidence";
+    detailTitle.dataset.focusKey = "evidence-summary";
+    detailTitle.className = "ui-disclosure-row";
+    detailTitle.textContent = "판단 근거";
+    detail.append(detailTitle, facts);
+    const diagnostic = document.createElement("details"), diagnosticTitle = document.createElement("summary");
+    diagnostic.dataset.focusKey = "diagnostics";
+    diagnosticTitle.dataset.focusKey = "diagnostics-summary";
+    diagnosticTitle.className = "ui-disclosure-row";
+    diagnosticTitle.textContent = "개발 진단";
+    diagnostic.append(diagnosticTitle);
+    li.append(head, summaryLine);
     const boundary = stuck.inquiry?.lane_boundary;
     const boundaryLabel = {unknown: "관측 불가", baseline: "기준 설정", confirming: "변화 확인 중", confirmed: "변화 확인됨"}[boundary?.state] || "관측 불가";
     const boundaryText = boundary ? `차선 경계: ${boundaryLabel} · 변화 #${boundary.revision} · 같은 경계에서는 AI 재문의 대기` : "";
+    if (boundary) {
+      const line = document.createElement("p");
+      line.textContent = `차선 경계: ${boundaryLabel} · 같은 경계에서는 새 판단 요청을 기다립니다.`;
+      detail.append(line);
+    }
+    for (const fact of stuck.ai?.facts || stuck.ai_facts || []) {
+      const line = document.createElement("p");
+      line.textContent = `영상 분석 참고 · 신뢰도 ${Number.isFinite(fact.confidence) ? `${Math.round(fact.confidence * 100)}%` : "미확인"} · 조치 명령과 별도입니다.`;
+      detail.append(line);
+    }
+    const identifiers = document.createElement("p");
+    identifiers.textContent = `문의 ${stuck.stuck_id} · 원인 ${stuck.cause || "미확인"} · 단계 ${stuck.phase || "미확인"}`;
+    diagnostic.append(identifiers);
     for (const text of [headingText(stuck.heading_review), boundaryText, fleetAnswerText(stuck.fleet_answer)].filter(Boolean)) {
       const line = document.createElement("p");
       line.className = "stuck-resolver";
       line.textContent = text;
-      li.append(line);
+      diagnostic.append(line);
     }
     const note = resolverText(stuck.resolver);
     if (note) {
       const line = document.createElement("p");
       line.className = "stuck-resolver";
       line.textContent = note;
-      li.append(line);
+      diagnostic.append(line);
     }
     for (const text of aiLines(stuck)) {
       const line = document.createElement("p");
       line.className = "stuck-resolver";
       line.textContent = text;
-      li.append(line);
+      diagnostic.append(line);
     }
-    li.append(actions, evidence(robotId));
+    detail.append(evidence(robotId), diagnostic);
+    li.append(actions, detail);
 
     if (pending) {
       const box = document.createElement("div");
@@ -595,11 +649,23 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
 
     const last = results.get(robotId);
     if (last && last.stuck_id === stuck.stuck_id) {
-      const result = document.createElement("p");
+      const result = document.createElement("div");
       result.className = "stuck-result";
       result.dataset.kind = last.kind;
       result.setAttribute("role", last.kind === "bad" ? "alert" : "status");
-      result.textContent = last.text;
+      // Keep the exact wire response available without putting it in the first reading layer.
+      const rawAt = last.kind === "bad" ? last.text.lastIndexOf(" (") : -1;
+      result.append(document.createTextNode(rawAt >= 0 ? last.text.slice(0, rawAt) : last.text));
+      if (rawAt >= 0) {
+        const raw = document.createElement("details"), title = document.createElement("summary"), body = document.createElement("pre");
+        raw.dataset.focusKey = "result-diagnostics";
+        title.dataset.focusKey = "result-diagnostics-summary";
+        title.className = "ui-disclosure-row";
+        title.textContent = "개발 진단";
+        body.textContent = last.text.slice(rawAt);
+        raw.append(title, body);
+        result.append(raw);
+      }
       li.append(result);
     }
     return li;
@@ -641,7 +707,14 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
-        slot.replaceChildren(item(robot.robot_id, stuck));
+        const replacement = item(robot.robot_id, stuck);
+        if (node?.dataset.stuckId === stuck.stuck_id) {
+          for (const fold of node.querySelectorAll("details[data-focus-key]")) {
+            const next = replacement.querySelector(`details[data-focus-key="${fold.dataset.focusKey}"]`);
+            if (next) next.open = fold.open;
+          }
+        }
+        slot.replaceChildren(replacement);
         signatures.set(robot.robot_id, signature);
       } else {
         // 멈춘 시간만 바뀌었다 — 항목을 다시 만들지 않는다(포커스·확인 단계 유지).
