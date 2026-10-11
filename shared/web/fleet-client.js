@@ -7,8 +7,10 @@ export function createFleetClient(options = {}) {
     let response;
     try { response = await request(path, init); }
     catch (error) {
-      if (error.name !== 'AbortError' && /Failed to fetch|NetworkError|ERR_/.test(error.message || ''))
-        error.message = '관제 연결을 확인하지 못했습니다. 네트워크를 확인한 뒤 현재 상태를 다시 조회하세요.';
+      if (error?.name !== 'AbortError' && /Failed to fetch|NetworkError|ERR_/.test(error?.message || '')) {
+        try { error.message = '관제 연결을 확인하지 못했습니다. 네트워크를 확인한 뒤 현재 상태를 다시 조회하세요.'; }
+        catch { /* Immutable exceptions retain their original identity and message. */ }
+      }
       throw error;
     }
     const {status, ok, body} = response;

@@ -82,7 +82,10 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     page.locator('#element-load').click()
     page.locator('#element-name').fill('Reviewed signal name')
     page.locator('#element-save').click()
-    page.locator('#save-draft').click()
+    with page.expect_response(lambda response: response.request.method == 'PUT'
+                             and response.url.endswith('/api/fleet/site-map/draft')) as saved_response:
+        page.locator('#save-draft').click()
+    assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     assert store.draft_view()['map']['facilities'][0]['name'] == 'Reviewed signal name'
     assert store.draft_view()['map']['facilities'][0]['approaches'][0]['stop_s_m'] == .8
@@ -762,7 +765,8 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     expect(page.locator("#estop")).to_be_enabled()
     assert pending
     pending[0].abort()
-    expect(page.locator("#notice")).to_contain_text("연결이 끊겼습니다")
+    expect(page.locator("#notice")).to_contain_text("관제 연결을 확인하지 못했습니다")
+    expect(page.locator("#notice")).to_contain_text("현재 상태를 다시 조회하세요")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-disconnected-{width}x{height}.png"), full_page=True)

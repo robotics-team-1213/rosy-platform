@@ -52,3 +52,13 @@ PARKED 진단과 개발용 시뮬레이터를 활성 제품 화면으로 바꾸�
 - 마지막 캡처에서 Robot 입구 권한이 세로로 쌓이던 문제를 발견해 기존 공용 wordmark의 container sizing과 권한 nowrap으로 수정했다. 부모 통합 커밋은 `e6bcbb960`이며 후속 회귀가 해당 소스 변경을 검증했다.
 - 같은 세션 `evidence/browser/`에 Pilot 4 화면 크기 × 빈 목록/읽기 실패 8장, Robot 입구·운용·작업 준비·설치 정비 320/390 총 8장을 보관했다. 통합 담당자도 Robot 입구·작업 준비 및 Pilot 실패 화면 320px를 직접 열어 권한 판독·본문 다음 행동·비상 정지 노출을 확인했다.
 - 변경하지 않은 Cam·LCD·경기 보드의 기존 배치는 역할 검토를 통해 유지했다. 경기 보드·LCD의 초기 원격 호스트 미확인 기록은 이번 통합 회귀 342 passed의 범위에서만 해소되었다. 실물 장치와 설치된 게임 호스트 검증은 여전히 별도다.
+
+## 승인 후 통합 검사와 발견 사항
+
+사용자는 위 최초 기록 이후 main 착지·push·새 버전 배포 검증을 명시적으로 승인했다. 진행 목표는 `docs/plans/2026-10-12-field-ui-recovery-brief.md`의 현장 운용·오류 복구이며 추가 승인 대기 상태가 아니다.
+
+- `80a12948c`의 적정 자원 전체 영향 검사에서 첫 묶음은 독립 검토의 공용 예외 보존 결함을 재현한 뒤 중단했다. 종료 2, 15 failed / 7204 passed / 68 skipped이므로 이 묶음 전체를 통과로 계산하지 않는다. 두 번째 묶음은 249 passed로 정상 종료했지만 도구는 착지하지 않았다. 원본은 공용 세션 `logs/land/uiux-header-all-surfaces/run-1-1.txt`, `run-1-2.txt`다.
+- `known_failures.py`는 관측한 15건을 NEW로 분류했다. 위치 순서에 의존하던 로봇 조작 선택, 이전 헤더 접힘 가정, 지도 저장 응답을 기다리지 않던 관측, 공용 연결 오류의 변경된 안내를 실제 목적·계약과 맞춰 고쳤다. 기존 실패 목록에 추가하지 않았다.
+- 공용 오류 어댑터의 null 취소 이유, frozen TypeError, read-only DOMException은 새 Node 세 사례에서 모두 실패했다. 예외 객체·취소·비재전송을 보존하는 수정 뒤 요청 계약 포함 36 passed다. 독립 검토는 동일 수정안을 재검토해 추가 차단 사항이 없음을 확인했다.
+- Android 앱 proxy 시험은 Linux에서 Windows 전용 gradlew.bat·JAVA_HOME·X 경로를 사용해 PermissionError로 실패했다. 파일 blob은 기준·main·후보에서 같지만 깨끗한 main 실행 증거 없이 기존 실패로 승격하지 않는다. Linux의 기존 Java/Gradle wrapper는 확인했고 SDK/고정 의존 캐시 준비와 portable 실행 보완이 필요하다.
+- Pinky 두 대 오프라인 및 ADB 연결 기기 부재를 다시 확인했다. 실물 화면·사용자 작업 수용을 완료로 표시하지 않는다.
