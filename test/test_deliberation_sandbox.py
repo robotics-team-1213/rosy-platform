@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import sys
+import uuid
 
 import pytest
 
@@ -125,3 +126,39 @@ def test_invalid_launch_input_never_spawns():
         with pytest.raises(ValueError):
             await bounded_process((sys.executable,), b'x'*16385, 1, 32)
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('load_state,allowed', [(b'not-found\n', True), (b'loaded\n', False), (b'', False)])
+def test_collected_scope_requires_explicit_absence_readback(monkeypatch, load_state, allowed):
+    from deploy.site import deliberation_sandbox as module
+    calls = []
+    async def fake(argv, *args):
+        calls.append(argv)
+        return (1, b'') if len(calls) == 1 else (0, load_state)
+    monkeypatch.setattr(module, 'bounded_process', fake)
+    async def run():
+        if allowed:
+            await module.cleanup_scope('rosy-deliberation-test.scope')
+        else:
+            with pytest.raises(RuntimeError, match='CLEANUP_UNCONFIRMED'):
+                await module.cleanup_scope('rosy-deliberation-test.scope')
+    asyncio.run(run())
+    assert calls[1][-2:] == ('--value', 'rosy-deliberation-test.scope')
+
+
+def test_cleanup_cannot_target_other_units(monkeypatch):
+    from deploy.site import deliberation_sandbox as module
+    async def forbidden(*args):
+        pytest.fail('invalid unit must never reach systemctl')
+    monkeypatch.setattr(module, 'bounded_process', forbidden)
+    async def run():
+        for unit in ('--all', 'fleet.service', 'rosy-deliberation-test.scope\n', None):
+            with pytest.raises(ValueError):
+                await module.cleanup_scope(unit)
+    asyncio.run(run())
+
+
+def test_actual_user_manager_confirms_absent_generated_scope():
+    from deploy.site.deliberation_sandbox import cleanup_scope
+    unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
+    asyncio.run(cleanup_scope(unit))
