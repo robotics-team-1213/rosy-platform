@@ -80,6 +80,7 @@
 - [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -91,8 +92,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 19e1c7eef · uiux: 바닥 지도와 상세 상태 분리
 - 2026-10-11 · 655093d8a · test(fleet): 지도 종류와 기본 정보 관리 검증
 - 2026-10-11 · uncommitted · feat(fleet): 지도 종류와 기본 정보 관리 (D-635)
 - 2026-10-11 · 26181c12d · test(fleet): 좌표 관측 수명과 화면 배치 검증
 - 2026-10-11 · uncommitted · fix(fleet): 하단 좌표 표 안정성과 선택 카메라 유지 (D-634)
-- 2026-10-11 · 541815508 · feat(fleet): 지도 프로필과 좌표·영상 보기 (D-631)

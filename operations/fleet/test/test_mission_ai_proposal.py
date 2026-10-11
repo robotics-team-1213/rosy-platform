@@ -3,11 +3,11 @@ import json
 
 import httpx
 
-from fleet.ai.er2_standard import (
+from rosy.decision.er2_standard import (
     GeminiER2StandardAdapter,
     ImageObservation,
 )
-from fleet.ai.candidate import ImageTransform
+from rosy.decision.candidate import ImageTransform
 from test_mission_api import _candidate, _client
 
 

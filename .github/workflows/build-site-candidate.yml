@@ -26,6 +26,8 @@ on:
     paths:
       - deploy/site/**
       - operations/fleet/**
+      - operations/decision/**
+      - operations/ui/console/**
       - operations/world/src/**
       - operations/vision/**
       - operations/apps/games/**

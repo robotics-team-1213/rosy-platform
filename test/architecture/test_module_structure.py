@@ -107,6 +107,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "deploy/site/rosy_model_code.py": (
+        639,
+        "accept: independently reviewed 2026-10-11 under D-637: one signed source-release, "
+        "work-lock, switch and rollback transaction. Baseline 580 to 639 adds the five-holder "
+        "closure, exact job aliases and retained health/dirty/busy guards; signature, READY and "
+        "durable state remain unchanged. Keep the existing 600-line threshold, growth allowance "
+        "and HARD_TIER=1000; revisit source-layout resolution before further growth.",
+    ),
     "deploy/site/rosy_site_autoupdate.py": (
         616,
         "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
@@ -182,7 +190,7 @@ SIZE_VERDICTS = {
         "no new size unit or budget change. Next growth separates ai_facts HTTP routes from its journal "
         "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
-    "fleet/fleet/server/web/map-view.js": (
+    "ui/console/map-view.js": (
         831,
         "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
         "(behaviour-preserving): the camera picture path (cameraMapCalibration, the top-down cache, "
@@ -712,7 +720,7 @@ SIZE_VERDICTS = {
         "Follow-up split: move the boot/AP-QR renderers (boot_lines, ap_qr, _draw_qr, render_boot) into "
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
-    "fleet/fleet/server/web/console.js": (
+    "ui/console/console.js": (
         1_175,
         "split: reviewed on 2026-10-11 by parent reviewer after D-632 inbox ownership extraction: "
         "console.js is 1170, below the existing 1175 ceiling; no allowance increase. Notification "
@@ -726,7 +734,7 @@ SIZE_VERDICTS = {
         "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
     ),
-    "fleet/fleet/server/web/shared/styles.css": (
+    "ui/console/shared/styles.css": (
         802,
         "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
@@ -1281,26 +1289,26 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
-    "learning/training/perception/model/deliver.py": (
+    "learning/registry/perception/deliver.py": (
         626,
         "accept: the lane_seg paint slot (2026-10-10) parametrises the existing pointer scripts "
         "(push, rollback, release-hold, status) instead of copying them; the remote shell text, "
         "argument checks and journal stay in one file so the default shadow scripts stay "
-        "byte-identical (golden test in learning/training/perception/test/test_model_deliver.py). "
+        "byte-identical (golden test in test/learning/perception/test_model_deliver.py). "
         "Split the remote_script builders out if it grows again",
     ),
-    "learning/training/perception/dataset/lane_derived_drivable.py": (
+    "learning/curation/perception/lane_derived_drivable.py": (
         678,
         "accept: recorded at 678 on 2026-10-10 (independent re-judge 2026-10-10, critic: accept kept for training tooling; the file holds derive, union and review-sheet jobs - next growth moves sheets/_tile/_corrupt/_check_canar*/import_verdicts/_only_cleared/finalize to dataset/lane_derived_review.py) after "
         "D-554/D-563/D-576 landed together: derive, union and review-sheet jobs (lane-bounded fill, own-road "
         "walls, per-row both-line rule, canaries) covered by "
-        "learning/training/perception/test/test_lane_derived_drivable.py. Re-judge on further growth",
+        "test/learning/perception/test_lane_derived_drivable.py. Re-judge on further growth",
     ),
-    "learning/training/perception/rosy_ml.py": (
+    "tools/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
         "harvest, fetch_http, intake), which own the behaviour; covered by "
-        "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
+        "test/learning/perception/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
         1273,
@@ -1568,6 +1576,8 @@ def _declared(name: str) -> set:
 def _files(name: str, suffixes):
     holders = (ROOT / "middleware/control/drive" / holder for holder in
                ("calibration", "recovery", "safety", "tracking", "planning/grid")) if name == "control" else ()
+    if name == "fleet":
+        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console")
     for directory in (PACKAGES[name]["dir"], *holders):
         for path in directory.rglob("*"):
             if path.is_file() and path.suffix in suffixes and _is_prod(path):
@@ -1773,7 +1783,7 @@ def _over_budget() -> dict:
             if not _is_prod_outside_src(path):
                 continue
             count = _lines(path)
-            if count > FILE_BUDGET:
+            if count > (FILE_BUDGET_WEB if path.suffix in WEB_SUFFIXES else FILE_BUDGET):
                 over[path.relative_to(ROOT).as_posix()] = count
     return over
 

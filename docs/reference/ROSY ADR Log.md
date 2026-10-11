@@ -628,6 +628,8 @@
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
 | D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 | Accepted (2026-10-11) |
 
+| D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
@@ -641,3 +643,10 @@
 - 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
 - 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
 - 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).
+
+
+## D-637 ? Remaining Decision Console learning holders
+
+- Status: Accepted (2026-10-11).
+- Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
+- Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.

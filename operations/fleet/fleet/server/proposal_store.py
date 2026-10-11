@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core_common.protocol.schemas import ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
 
 from .sqlite_policy import configure_connection, enable_wal
 
