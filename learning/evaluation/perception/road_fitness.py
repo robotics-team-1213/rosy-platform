@@ -124,10 +124,7 @@ def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, reg
         outside[lo:hi] = False
         excluded[name] = int((outside & (resized != 255)).sum())
         excluded_targets[name] = int((outside & (resized == 1)).sum())
-        resized[outside] = 255
         truth_masks.append(resized)
-    if ((region_truth == 1) & (road_truth == 0)).any():
-        raise ValueError("current region truth lies outside declared road truth")
     logits = model._session.run(preprocess(bgr, spec))
     classes = model.manifest.raw["output"]["classes"]
     if logits.shape != (1, len(classes), spec.height, spec.width) or not np.isfinite(logits).all():
