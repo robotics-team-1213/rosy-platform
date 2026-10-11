@@ -11,6 +11,7 @@ import sys
 import tarfile
 
 import pytest
+from setuptools.command.develop import develop
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,8 +58,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help
-    uninstall_help = run(['setup.py', 'develop', '--uninstall', '--help'], staging / 'operations/fleet').stdout
-    assert any(line.lstrip().startswith('--editable') for line in uninstall_help.splitlines()), uninstall_help
+    if {'editable', 'uninstall'} <= {option[0] for option in develop.user_options}:
+        uninstall_help = run(['setup.py', 'develop', '--uninstall', '--help'], staging / 'operations/fleet').stdout
+        assert any(line.lstrip().startswith('--editable') for line in uninstall_help.splitlines()), uninstall_help
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
@@ -119,7 +121,9 @@ for distribution in distributions.values():
         dependency = distributions.get(canonicalize_name(requirement.name))
         if dependency is not None:
             assert dependency.version in requirement.specifier, (distribution.metadata['Name'], raw_requirement)
-assert 'core_common==0.0.1' in importlib.metadata.requires('rosy-execution')
+execution_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
+                          for r in map(Requirement, importlib.metadata.requires('rosy-execution'))}
+assert ('core-common', '==0.0.1', (), None, None) in execution_requirements, execution_requirements
 from datetime import datetime, timezone
 projected = project_progress({
     'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
@@ -133,8 +137,10 @@ assert projected['progress']['stop']['physical_state'] == 'UNKNOWN'
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
-assert 'rosy-execution==0.1.1' in importlib.metadata.requires('fleet')
-assert 'rosy-contracts-learning>=0.1.10' in importlib.metadata.requires('fleet')
+fleet_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
+                      for r in map(Requirement, importlib.metadata.requires('fleet'))}
+assert ('rosy-execution', '==0.1.1', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-contracts-learning', '>=0.1.10', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
 from fleet.stuck.loop import StuckResolverLoop
