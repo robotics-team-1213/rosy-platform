@@ -50,8 +50,10 @@ def gateway(consume):
 
 
 def test_ready_identity_and_message_scope_are_checked():
+
     async def scenario():
         received = []
+
         async def consume(envelope):
             received.append(envelope)
         worker = gateway(consume)
@@ -66,7 +68,9 @@ def test_ready_identity_and_message_scope_are_checked():
 
 
 def test_failed_receipt_preserves_resume_sequence():
+
     async def scenario():
+
         async def consume(envelope):
             raise OSError("journal temporarily unavailable")
         worker = gateway(consume)
@@ -78,7 +82,9 @@ def test_failed_receipt_preserves_resume_sequence():
 
 
 def test_identify_and_resume_and_missing_heartbeat_ack():
+
     async def scenario():
+
         async def consume(envelope):
             pass
         worker = gateway(consume)
@@ -105,7 +111,9 @@ def test_session_loss_stops_when_receipt_is_unresolved():
 @pytest.mark.parametrize("failure", ["journal", "reconnect", "invalid-resumable", "before-hello"])
 def test_session_retries_keep_resume_valid(monkeypatch, failure):
     import rosy_discord.gateway as module
+
     async def scenario():
+
         async def consume(envelope):
             raise OSError("journal unavailable")
         worker = gateway(consume)
@@ -115,9 +123,12 @@ def test_session_retries_keep_resume_valid(monkeypatch, failure):
                  "before-hello": {"op": 7, "d": None}}[failure]
         socket = Socket([event] if failure == "before-hello" else
                         [{"op": 10, "d": {"heartbeat_interval": 45000}}, event])
+
         class Connection:
+
             async def __aenter__(self):
                 return socket
+
             async def __aexit__(self, *args):
                 if not socket.closed:
                     await socket.close(code=1000)
@@ -143,10 +154,11 @@ def test_session_retries_keep_resume_valid(monkeypatch, failure):
     ("wss://gateway.discord.gg/?token=value", False),
 ])
 def test_ready_resume_endpoint_is_discord_only(url, allowed):
+
     async def scenario():
         worker = gateway(None)
         event = packet("READY", {"user": {"id": BOT, "bot": True}, "session_id": "s",
-                                  "resume_gateway_url": url}, 1)
+                                 "resume_gateway_url": url}, 1)
         if allowed:
             await worker.dispatch(event)
             assert worker.url == url.rstrip("/")
@@ -162,6 +174,7 @@ def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
     from fleet.server.channel_gateway import install_gateway
     from fleet.server.channel_requests import ChannelConfig, ChannelRequests
     states = []
+
     async def run(self):
         states.append("start")
         try:
@@ -185,13 +198,16 @@ def test_handshake_retry_is_bounded_to_transient_status(monkeypatch, status, ret
     from websockets.http11 import Response
     from websockets.exceptions import InvalidStatus
     import rosy_discord.gateway as module
+
     async def scenario():
         attempts = []
+
         async def session(self):
             attempts.append(True)
             if len(attempts) > 1:
                 raise GatewayStop("finished test")
             raise InvalidStatus(Response(status, "private server body", Headers()))
+
         async def pause(seconds):
             assert seconds == 5
         monkeypatch.setattr(DiscordGateway, "session", session)
