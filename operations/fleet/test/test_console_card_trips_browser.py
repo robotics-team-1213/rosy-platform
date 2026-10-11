@@ -46,7 +46,8 @@ PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m"
 
 
 def _card(page, robot_id):
-    return page.locator(f'#roster article[data-robot-id="{robot_id}"]')
+    page.locator("#robot-choice").select_option(robot_id)
+    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
 
 
 def test_running_trip_shows_and_clears_ai_route_warning_without_deadlock(site):
@@ -74,8 +75,6 @@ def test_running_trip_shows_and_clears_ai_route_warning_without_deadlock(site):
 
 def _open_form(page, robot_id):
     card = _card(page, robot_id)
-    if card.get_attribute("data-collapsed") is not None:
-        card.locator(".robot-line").click()
     card.locator(f'ui-button[data-trip-open="{robot_id}"]').click()
     return card.locator(".card-trip")
 
@@ -85,6 +84,96 @@ def _settle(page, posts, path, count=1):
         page.clock.run_for(100)
         if sum(1 for post in posts if post[0] == path) >= count:
             return
+
+
+@pytest.mark.parametrize("role", ["operator", "viewer"])
+def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_visible(site, role):
+    """Inspection is open to viewers too, sends no POST and never arms the map; offline movement stays off."""
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": role}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        expect(page.locator("#roster .robot-summary")).to_have_count(4)
+        assert page.locator("#roster [data-goal-robot-id], #roster [data-trip-open]").count() == 0
+        offline = page.locator('#roster [data-robot-id="rosy_04"]')
+        expect(offline).to_contain_text("오프라인")
+        expect(offline).to_contain_text("접속 실패")
+        expect(page.locator("#robot-workspace article")).to_have_count(0)
+        page.locator('#roster [data-robot-id="rosy_03"]').focus()
+        page.keyboard.press("Enter")
+        expect(page.locator('#robot-workspace article[data-robot-id="rosy_03"]')).to_have_count(1)
+        assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
+        assert page.locator("#map-canvas").evaluate("node => node.classList.contains('idle')")
+        card = _card(page, "rosy_04")
+        expect(page.locator("#robot-workspace article")).to_have_count(1)
+        assert card.locator("[data-goal-robot-id]").evaluate("node => node.disabled")
+        assert card.locator("[data-trip-open]").evaluate("node => node.disabled")
+        expect(offline).to_contain_text("접속 실패")
+        assert not posts and not errors
+        browser.close()
+
+
+def test_workspace_goal_keeps_confirmation_target_and_selection_change_withdraws_the_arm(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    goal = "/api/fleet/robots/rosy_03/goal"
+    grid = {"map_id": "mock:1", "width": 40, "height": 40, "resolution": 0.05,
+            "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "data": [20] * 1600}
+    api = {**API, "/api/fleet/map": grid}
+    answers = {goal: (200, {"accepted": True, "task": {"task_id": "selected-goal", "status": "ACCEPTED"}})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        card = _card(page, "rosy_03")
+        card.locator("[data-goal-robot-id]").click()
+        assert page.locator("#map-canvas").get_attribute("tabindex") == "0"
+        _card(page, "rosy_01")
+        assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
+        assert page.locator("#map-canvas").evaluate("node => node.classList.contains('idle')")
+        assert not posts
+        card = _card(page, "rosy_03")
+        card.locator("[data-goal-robot-id]").click()
+        page.keyboard.press("Enter")
+        dialog = page.locator("dialog.ui-confirm")
+        expect(dialog).to_contain_text("rosy_03")
+        assert not posts
+        dialog.locator("ui-button[kind=irreversible]").click()
+        _settle(page, posts, goal)
+        assert sum(path == goal for path, _ in posts) == 1
+        expect(page.locator("#log")).to_contain_text("미션 하달")
+        assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_03"
+        assert not errors
+        browser.close()
+
+
+def test_workspace_trip_picker_shows_one_mode_and_keeps_destination_across_polls(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, posts)
+        form = _open_form(page, "rosy_02")
+        kind = form.get_by_role("combobox", name="작업 종류", exact=True)
+        assert kind.input_value() == "route"
+        destination = form.get_by_role("combobox", name="목적지", exact=True)
+        destination.select_option("B")
+        page.clock.run_for(1500)
+        assert destination.input_value() == "B"
+        expect(form.locator(".trip-mode:not([hidden])")).to_have_count(1)
+        kind.select_option("lap")
+        expect(form.get_by_role("combobox", name="한 바퀴 출발·복귀", exact=True)).to_be_visible()
+        expect(destination).not_to_be_visible()
+        kind.select_option("repeat")
+        expect(form.get_by_role("combobox", name="반복 출발 자리", exact=True)).to_be_visible()
+        expect(form.locator(".trip-mode:not([hidden])")).to_have_count(1)
+        kind.select_option("route")
+        assert destination.input_value() == "B"
+        _card(page, "rosy_03")
+        expect(page.locator("#robot-workspace .card-trip")).to_have_count(0)
+        assert not posts and not errors
+        browser.close()
 
 
 def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
@@ -99,7 +188,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         browser, page, errors = _open(playwright, site, API, posts, answers)
         form = _open_form(page, "rosy_02")
         assert "고리 1/3대" in form.inner_text()
-        form.locator("select").first.select_option("B")
+        form.get_by_role("combobox", name="목적지", exact=True).select_option("B")
         go = form.locator('ui-button[data-trip-start="rosy_02"]')
         assert go.get_attribute("reason") == "먼저 경로를 계산하세요"
         form.get_by_role("button", name="경로 보기", exact=True).click()
@@ -114,6 +203,7 @@ def test_a_trip_and_a_repeat_start_from_the_card(site):  # noqa: F811
         assert _card(page, "rosy_02").locator(".card-trip").count() == 0
 
         form = _open_form(page, "rosy_02")
+        form.get_by_role("combobox", name="작업 종류", exact=True).select_option("repeat")
         form.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("B")
         form.locator('ui-button[data-trip-repeat="rosy_02"]').click()
         _settle(page, posts, "/api/fleet/trips/p2/start", 2)
@@ -165,15 +255,14 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, posts, answers)
         lead = _card(page, "rosy_01")
-        assert lead.get_attribute("data-collapsed") == ""
+        assert lead.get_attribute("data-collapsed") is None
         assert "반복 운행 2바퀴째" in lead.inner_text()
         lost = _card(page, "rosy_03")
         assert lost.get_attribute("data-collapsed") is None
         assert "운행 멈춤 · 로봇 화면·Pilot에서 넘겨받음(kim-tablet)" in lost.locator(".trip-line").inner_text()
         assert "운행 멈춤" in page.locator("#warning-list").inner_text()
 
-        lead.locator(".robot-line").click()
-        stop = lead.locator('ui-button[data-cancel-scope="trip"]')
+        stop = _card(page, "rosy_01").locator('ui-button[data-cancel-scope="trip"]')
         assert stop.get_attribute("kind") == "quiet" and stop.inner_text().strip() == "운행 취소"
         stop.click()
         _settle(page, posts, "/api/fleet/trips/t-1/cancel")
@@ -181,7 +270,6 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
         assert not any(path == "/api/fleet/robots/rosy_01/cancel" for path, _ in posts)
 
         lane = _card(page, "rosy_02")
-        lane.locator(".robot-line").click()
         lane.locator('ui-button[data-cancel-scope="goal-lane"]').click()
         _settle(page, posts, "/api/fleet/robots/rosy_02/line-follow")
         assert ("/api/fleet/robots/rosy_02/cancel", None) in posts
@@ -198,7 +286,6 @@ def test_an_unnamed_operator_sees_why_moves_are_off_and_can_still_cancel(site): 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
         card = _card(page, "rosy_02")
-        card.locator(".robot-line").click()
         trip = card.locator('ui-button[data-trip-open="rosy_02"]')
         assert trip.get_attribute("reason") == NAMED and trip.evaluate("node => node.disabled")
         assert not card.locator('ui-button[data-cancel-scope="goal-lane"]').evaluate("node => node.disabled")
@@ -228,6 +315,7 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
             assert page.evaluate("""() => { const rail = document.querySelector('.console-secondary');
               return rail.scrollWidth <= rail.clientWidth + 1; }"""), width
             assert page.evaluate("""() => [...document.querySelectorAll('.card-trip ui-button, .card-trip select')]
+              .filter((node) => node.getBoundingClientRect().height > 0)
               .every((node) => node.scrollWidth <= node.clientWidth + 1 && node.getBoundingClientRect().height < 80)"""), width
             if width >= 1024 and height >= 640:
                 assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
@@ -249,7 +337,7 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
             # One atomic scroll: a 1 s poll may rebuild the card between a locator's resolve and its action.
-            page.evaluate("document.querySelector('#roster article[data-robot-id=\"rosy_02\"] .card-trip')"
+            page.evaluate("document.querySelector('#robot-workspace article[data-robot-id=\"rosy_02\"] .card-trip')"
                           "?.scrollIntoView({block: 'nearest'})")
             _shot(page, f"card-trip-{width}x{height}.png")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
@@ -272,7 +360,6 @@ def test_a_failed_trip_cancel_still_stops_lane_driving(site):  # noqa: F811
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, answers)
         card = _card(page, "rosy_01")
-        card.locator(".robot-line").click()
         card.locator('ui-button[data-cancel-scope="trip"]').click()
         _settle(page, posts, "/api/fleet/robots/rosy_01/line-follow")
         assert ("/api/fleet/trips/t-1/cancel", None) in posts
