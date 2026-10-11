@@ -50,8 +50,16 @@ def episode_phases(train_episodes, *, camera, evaluation_only):
                      for phase in (('baseline', 'eval') if camera else ('eval',))]
 
 
+def camera_sample_due(frame, episode_start_frame):
+    return (frame - episode_start_frame) % 24 == 0
+
+
+def policy_state_sha256(state):
+    return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+
+
 def camera_comparison(baseline, evaluated):
-    fields = ('seed', 'initial_heading_offset_rad', 'initial_target_pose', 'time_limit_s', 'policy_sha256')
+    fields = ('seed', 'initial_heading_offset_rad', 'initial_target_pose', 'time_limit_s', 'policy_state_sha256')
     if (baseline['phase'] != 'baseline' or evaluated['phase'] != 'eval'
             or evaluated['epoch'] != baseline['epoch'] + 1
             or any(baseline[key] != evaluated[key] for key in fields)):
@@ -278,7 +286,8 @@ def main():
             nonlocal frame
             if not app.is_running():
                 raise RuntimeError('SDK stopped before task result')
-            world.step(render=frame % (48 if recorder is not None else 30) == 0)
+            # Camera episodes render explicitly at their local observation/recording cadence.
+            world.step(render=front_camera is None and frame % (48 if recorder is not None else 30) == 0)
             frame += 1
 
         def physical_stop():
@@ -349,6 +358,7 @@ def main():
             start_time = world.current_time
             initial_pose = read_pose()
             wall_start = time.monotonic()
+            episode_start_frame = frame
             previous = None
             frozen = policy.export() if phase == 'eval' or (perception is not None and phase == 'baseline') else None
             if phase == 'eval' and (policy.updates == 0 or not any(
@@ -368,7 +378,10 @@ def main():
             with (output / f'trace-{epoch}-{phase}-{seed}.jsonl').open('w') as trace:
                 while True:
                     pose = read_pose()
-                    if recorder is not None and (recorder.frames == 0 or (frame - 1) % 48 == 0):
+                    recording_step = frame - episode_start_frame if perception is not None else frame - 1
+                    if recorder is not None and (recorder.frames == 0 or recording_step % 48 == 0):
+                        if perception is not None:
+                            world.render()
                         image_frame = camera.get_current_frame()
                         recorder.write(camera.get_rgba(),
                             render_frame=image_frame['rendering_frame'],
@@ -380,7 +393,7 @@ def main():
                     if lane is None:
                         state, speed, angular = task.pursuit(*pose[:3])
                     else:
-                        if camera_frames == 0 or (frame - 1) % 24 == 0:
+                        if camera_sample_due(frame, episode_start_frame):
                             position_front_camera()
                             world.render()
                             image = front_camera.get_current_frame()
@@ -459,7 +472,7 @@ def main():
                            initial_target_pose=[*route[0], heading], time_limit_s=task.time_limit,
                            learned_state_steps=learned_steps, stop=physical_stop())
             if frozen is not None:
-                episode['policy_sha256'] = hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest()
+                episode['policy_state_sha256'] = policy_state_sha256(frozen)
             if lane is not None:
                 episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames)
             if recorder is not None:
