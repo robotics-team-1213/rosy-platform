@@ -91,8 +91,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · uncommitted · uiux: notification inbox and read semantics (D-632)
-- 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
-- 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
-- 2026-10-11 · uncommitted · fix(fleet): fresh recovery context (D-623)
-- 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
+- 2026-10-11 · 655093d8a · test(fleet): 지도 종류와 기본 정보 관리 검증
+- 2026-10-11 · uncommitted · feat(fleet): 지도 종류와 기본 정보 관리 (D-635)
+- 2026-10-11 · 26181c12d · test(fleet): 좌표 관측 수명과 화면 배치 검증
+- 2026-10-11 · uncommitted · fix(fleet): 하단 좌표 표 안정성과 선택 카메라 유지 (D-634)
+- 2026-10-11 · 541815508 · feat(fleet): 지도 프로필과 좌표·영상 보기 (D-631)

@@ -128,6 +128,8 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
+  SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
+  SITE_MAP_PROFILE_LIMIT: '지도 프로필은 최대 100개입니다. 기존 프로필을 선택해 수정하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
@@ -778,4 +780,13 @@ export function mergeCrosswalks(map, imported) {
   const had = new Map((next.crosswalks || []).map(item => [item.id, item]));
   next.crosswalks = imported.map(item => ({...copy(item), approach: had.get(item.id)?.approach || []}));
   return next;
+}
+// A centre-origin pitch template; its boundary marks are places, never driving lanes.
+export function soccerProfileMap(field, mapId) {
+  if (![field.length_m, field.width_m, field.goal_width_m].every(v => Number.isFinite(v) && v > 0)
+      || field.goal_width_m > field.width_m) throw new Error('경기장 치수는 양수이며 골대 폭은 경기장 폭 이하여야 합니다.');
+  const x = field.length_m / 2, y = field.width_m / 2;
+  return {schema: 'rosy.site_map/1', map_id: mapId,
+    places: [[-x, -y], [x, -y], [x, y], [-x, y]].map(([px, py], i) =>
+      ({id: `corner_${i}`, name: `경기장 모서리 ${i + 1}`, kind: 'park', x: px, y: py})), edges: []};
 }

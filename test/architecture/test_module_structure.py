@@ -240,7 +240,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_448,
+        51_800,
+        "split: independently re-judged at 51800 on 2026-10-11 by calibration_review: D-634-D-636 add "
+        "352 lines for stable camera selection, stale-coordinate display, bounded map profile "
+        "validation/store/routes and the existing map editor, plus read-only pixel coverage. "
+        "Intrinsic/floor fitting stays offline in Vision; no Fleet process, transport or command "
+        "path is added. Keep observe/server/UI split obligations, package +150 allowance and "
+        "console 1175 zero-growth ceiling. map-view remains 977 under its 981 ceiling; use the "
+        "existing camera-backdrop seam for further camera code. Previous verdict: "
         "split: independently re-judged at 51448 on 2026-10-11 by parent reviewer: D-629/D-632 add a "
         "read-only notification/message surface using existing Fleet state and log evidence. The new "
         "179-line inbox.js owns unread keys, context tabs and keyboard/focus, known-field stage views, "

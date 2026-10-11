@@ -157,7 +157,12 @@ class DiscoveryTransport(httpx.AsyncBaseTransport):
         if (request.url.scheme != 'https' or request.url.host != expected.hostname
                 or request.url.port != (expected.port or 443)):
             raise ValueError('discovery transport refuses a different origin')
-        address, port = await resolve_robot(self.endpoint, self.finder)
+        try:
+            address, port = await resolve_robot(self.endpoint, self.finder)
+        except TimeoutError as exc:
+            raise httpx.ConnectTimeout(str(exc), request=request) from exc
+        except (ValueError, OSError) as exc:
+            raise httpx.ConnectError(str(exc), request=request) from exc
         # httpcore's sni_hostname extension preserves certificate hostname checks
         # while the TCP destination is the current mDNS IP. No auth reaches HTTP
         # until that TLS handshake succeeds.

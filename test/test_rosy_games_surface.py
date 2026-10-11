@@ -49,6 +49,9 @@ def test_fleet_does_not_own_the_match_and_games_has_no_fleet_start():
         assert "rosy_games" not in text and "import games" not in text, path
     for path in fleet.rglob("*.html"):
         text = path.read_text(encoding="utf-8").lower()
+        # D-635 allows field geometry profiles, never Fleet match controls.
+        if path.name == "site-map.html":
+            text = text.replace('value="soccer"', "").replace('id="profile-soccer"', "")
         assert "soccer" not in text
         assert "games" not in text
     games_web = ROOT / "operations" / "apps" / "games" / "games" / "web" / "index.html"

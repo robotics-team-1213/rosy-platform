@@ -2,7 +2,7 @@
 // 그림 펴기, 크게 보기·썸네일 회전, Vision 프레임 연결. 지도 그리기는 map-view.js 가 가지고
 // draw hook 과 toPx 투영을 넘긴다.
 
-import { mapUpTurn, quarterTurn } from "./site-layer.js";
+import { siteBounds, fitTransform, project } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 import { createPlaneFeed, planeCalibration, planeCalibrationsFor, planeToMap } from "/console/assets/vision-view.js";
@@ -33,23 +33,27 @@ export function planeAffine(plane, width, height, toPx) {
 // 이웃 삼각형 사이 머리카락 틈이 보이지 않게 잘라 내는 경로를 화면에서 0.5 px 넓힌다.
 // 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
 // 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
-let topDownCache = null;
+const topDownCache = new Map();
 function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height, dpr, rot = 0) {
   const image = frame.image;
-  const key = [calibration.calibration_revision, width, height, dpr, rot,
+  const key = [calibration.source_id, calibration.map_id, calibration.calibration_revision,
+    ...calibration.map_to_image, width, height, dpr, rot,
     bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
-  if (!topDownCache || topDownCache.frame !== frame || topDownCache.key !== key) {
+  let cached = topDownCache.get(key);
+  if (!cached || cached.frame !== frame) {
     const off = document.createElement("canvas");
     off.width = Math.round(width * dpr);
     off.height = Math.round(height * dpr);
     const octx = off.getContext("2d");
     octx.scale(dpr, dpr);
     warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
-    topDownCache = { frame, key, canvas: off };
+    cached = { frame, canvas: off };
+    topDownCache.set(key, cached);
+    if (topDownCache.size > 2) topDownCache.delete(topDownCache.keys().next().value);
   }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(topDownCache.canvas, 0, 0);
+  ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();
 }
 function warpOnto(ctx, image, mapToImage, bounds, toPx) {
@@ -78,11 +82,16 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
   let calibrations = [];
   // D-560: Vision's map plane is the picture; the D-515 raw warp is only the fallback.
   let planes = null;
-  const planeFrame = () => planes?.current() ?? null;
-  const setCalibrations = (rows) => { calibrations = rows; };
-  const usesPlane = () => Boolean(planeCalibration(planeFrame(), calibrations, view.siteMap));
-  const calibration = () => planeCalibration(planeFrame(), calibrations, view.siteMap)
-    || cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+  const planeFrame = () => {
+    const frame = planes?.current();
+    return cameraFrame && fresh(cameraFrame) && frame?.source === cameraFrame.source ? frame : null;
+  };
+  const setCalibrations = (rows) => { calibrations = rows; redraw(); };
+  const calibration = () => cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+  const usesPlane = () => {
+    const plane = planeCalibration(planeFrame(), calibrations, view.siteMap);
+    return Boolean(plane && plane.calibration_revision === calibration()?.calibration_revision);
+  };
   function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot) {
     if (!usesPlane()) {
       drawCameraTopDown(ctx, cameraFrame, record, bounds, toPx, width, height, dpr, rot);
@@ -101,39 +110,54 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     ctx.drawImage(image, 0, 0);
     ctx.restore();
   }
-  const redraw = () => { if (!view.map && view.siteMap) draw(); };
+  function drawCorrected() {
+    const canvas = el("camera-corrected"), status = el("camera-corrected-status");
+    if (!canvas || !status) return;
+    const record = calibration(), bounds = siteBounds(view.siteMap);
+    const ready = Boolean(record && bounds);
+    canvas.hidden = !ready;
+    status.textContent = ready ? `교정 후 · ${record.map_id} · ${record.calibration_revision || "승인 교정"}`
+      : "같은 지도의 승인 교정과 신선한 영상이 필요합니다.";
+    if (!ready) { canvas.width = canvas.width; return; }
+    if (!el("camera-comparison")?.open) return;
+    canvas.width = 480; canvas.height = 270;
+    const ctx = canvas.getContext("2d");
+    const transform = fitTransform(bounds, canvas.width, canvas.height, 8);
+    const toPx = (x, y) => { const p = project(transform, x, y); return {x: p.px, y: p.py}; };
+    drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0);
+  }
+  function redraw() {
+    if (!view.map && view.siteMap) draw();
+    drawCorrected();
+    const status = el("map-display-status");
+    if (status) status.textContent = view.displayMode === "camera"
+      ? cameraFrame ? "교정 전 · 카메라 원본" : "원본 영상 대기 · 신선한 프레임 없음"
+      : view.displayMode === "overlay" && !calibration()
+        ? "교정 영상 없음 · 2D 좌표 표시" : view.displayMode === "overlay"
+          ? `공유 map 좌표 · m · 영상 유효 영역 ${usesPlane() && Number.isFinite(planeFrame()?.observedFraction)
+            ? `${Math.round(planeFrame().observedFraction * 100)}%` : "미확인"}` : "공유 map 좌표 · m";
+  }
 
   function setCameraFrame(frame) {
     cameraFrame = frame?.state === "live" ? frame : null;
     redraw();
-  }
-  // D-513 7: 크게 보기·썸네일도 이 카메라 보정의 지도 방향으로 돌린다. 펴 놓은 미리보기도
-  // 모서리 순서를 지켜 펴므로 같은 회전이다. 보정이 없으면 0 — 받은 URL 그대로다.
-  // 실영상과 같은 조건으로 고른다: 지금 지도의 보정이고, 원본 프레임이면 크기도 같아야 한다.
-  function frameTurn(frame) {
-    const maps = (view.siteMap?.maps || []).map((map) => map.map_id);
-    const record = calibrations.find((row) => row.source_id === frame.source && maps.includes(row.map_id)
-      && (frame.rectified || (row.image?.width === frame.image?.naturalWidth
-        && row.image?.height === frame.image?.naturalHeight)));
-    return record ? (mapUpTurn(record) + (view.siteViewTurn || 0)) % 360 : 0;
-  }
-  function turnedUrl(frame) {
-    const image = frame.image;
-    const rot = frameTurn(frame);
-    if (!rot || !image?.naturalWidth) return frame.url;
-    const turn = quarterTurn(rot, image.naturalWidth, image.naturalHeight);
-    const canvas = document.createElement("canvas");
-    canvas.width = turn.width; canvas.height = turn.height;
-    const ctx = canvas.getContext("2d");
-    ctx.transform(...turn.matrix);
-    ctx.drawImage(image, 0, 0);
-    return canvas.toDataURL("image/jpeg", 0.9);
   }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
     // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
+    const mode = el("map-display-mode");
+    view.displayMode = mode.value || "coordinates";
+    const setMode = (value) => {
+      view.displayMode = value;
+      mode.value = value;
+      stage.dataset.view = value === "camera" ? "camera" : "map";
+      toggle.setAttribute("aria-pressed", String(value === "camera"));
+      redraw();
+    };
+    scope.listen(mode, "change", () => setMode(mode.value));
+    scope.listen(el("camera-comparison"), "toggle", drawCorrected);
     planes = createPlaneFeed({ scope, visionView, onChange: redraw });
     const setLive = (url) => {
       birdseye.hidden = !url;
@@ -142,36 +166,28 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
     };
     setLive(null);
-    // 돌린 조감도는 보일 때만 다시 그린다 — 숨은 동안 프레임마다 JPEG 을 만들지 않는다.
     let lastFrame = null;
-    const shown = () => stage.dataset.view === "camera" || ["auth", "unavailable", "loading"].includes(stage.dataset.mapState);
-    const showFrame = () => setLive(lastFrame && (shown() ? turnedUrl(lastFrame) : lastFrame.url));
-    // 지도 상태가 바뀌어 조감도가 드러나면 다음 프레임을 기다리지 않고 돌린 그림으로 바꾼다.
-    scope.subscribe(() => {
-      const observer = new MutationObserver(showFrame);
-      observer.observe(stage, { attributes: true, attributeFilter: ["data-map-state"] });
-      return () => observer.disconnect();
-    });
+    const showFrame = () => setLive(lastFrame?.url);
     scope.listen(toggle, "click", () => {
-      const large = stage.dataset.view !== "camera";
-      stage.dataset.view = large ? "camera" : "map";
-      toggle.setAttribute("aria-pressed", String(large));
+      setMode(view.displayMode === "camera" ? "coordinates" : "camera");
       showFrame();
     });
     let cancelMapCameraExpiry = () => {};
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
       if (frame.state !== "live" || !fresh(frame)) {
-        lastFrame = null; setCameraFrame(null); setLive(null); return;
+        lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false); return;
       }
       lastFrame = frame;
-      // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
-      (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
+      // D-631: the before-correction picture keeps the camera's original orientation.
+      (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", "0");
       setCameraFrame(frame);
       showFrame();
       // Ask Vision only when the site view can draw it (no grid map, a site map, a calibration on it).
       planes.refresh(!view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0);
-      cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
+      cancelMapCameraExpiry = scope.timeout(() => {
+        lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false);
+      }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
   return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };

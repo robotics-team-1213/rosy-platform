@@ -17,6 +17,23 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import remote_pytest as rp  # noqa: E402
 
 
+def test_changed_vision_dependency_rebuilds_remote_environment(monkeypatch):
+    original = rp.git
+    changed = False
+
+    def git(repo, *args):
+        result = original(repo, *args)
+        if changed and args[0] == "rev-parse" and args[1].endswith(":deploy/site/requirements-vision.txt"):
+            return "f" * 40
+        return result
+
+    monkeypatch.setattr(rp, "git", git)
+    before, dirs = rp.deps(ROOT, "HEAD")
+    changed = True
+    after, after_dirs = rp.deps(ROOT, "HEAD")
+    assert before != after and dirs == after_dirs
+
+
 def host(nproc=24, load1=1.0, avail_gb=12.0, total_gb=15.0, pytest=True, sim=False, busy=False,
          lock_cores=0, lock_gb=0, site=False):
     """A fake PROBE result."""
