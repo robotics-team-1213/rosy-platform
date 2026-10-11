@@ -5,7 +5,8 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
-import { CAUSE_LABEL, createLineStuckPanel } from "./line-stuck.js";
+import { createIncidentView } from "./incident-view.js";
+import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -59,10 +60,7 @@ const STATE_MS = 1000;
 // polling at 1 s always left a gap and the markers blinked; poll well inside the lifetime.
 const TRACKING_MS = 400;
 const MAP_MS = 5000;
-const INCIDENT_CAUSES = {
-  line_marking: "차선·바닥 표식", obstacle: "장애물", robot_fault: "로봇·센서 오류",
-  localization: "위치 추정", traffic_wait: "교통 대기", unknown: "미확인",
-};
+
 
 // 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다. poll-gate.js 참고.
 const dispatchGate = createPollGate();
@@ -101,13 +99,7 @@ function markLocked(reason = "auth") {
   auth.locked = true;
   connectionView.open();
   auth.role = null;
-  incidentReports = [];
-  incidentTrafficReports = [];
-  el("incident-list").replaceChildren();
-  el("incident-traffic-list").replaceChildren();
-  el("incident-export").disabled = true;
-  el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
-  el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
+  incidents.reset();
   showSignedOut({fold: false, refused: reason === "auth"});
   applyRoleToControls(null, operatorControls());
   const pill = el("online-pill");
@@ -194,171 +186,7 @@ async function call(path, options = {}) {
   }
 }
 
-let incidentReports = [], incidentTrafficReports = [];
-function incidentSummary(summary, report, title) {
-  const name = document.createElement("span");
-  name.textContent = title;
-  const time = document.createElement("time");
-  const opened = report.opened_at ? new Date(report.opened_at) : null;
-  time.textContent = opened && Number.isFinite(opened.getTime())
-    ? `시작 ${opened.toLocaleString("ko-KR")}` : "시각 미확인";
-  if (opened && Number.isFinite(opened.getTime())) time.dateTime = opened.toISOString();
-  summary.append(name, time);
-}
-function incidentLine(parent, value) {
-  const line = document.createElement("p");
-  line.textContent = value;
-  parent.append(line);
-}
-function incidentReviewForm(report, path) {
-  const form = document.createElement("form");
-  const select = document.createElement("select");
-  select.className = "ui-field";
-  select.setAttribute("aria-label", `${report.robot_ids.map(incidentRobotName).join(", ")} 원인 분류`);
-  for (const [value, label] of Object.entries(INCIDENT_CAUSES)) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    select.append(option);
-  }
-  select.value = report.reviews.at(-1)?.root_cause || "unknown";
-  const note = document.createElement("input");
-  note.className = "ui-field";
-  note.maxLength = 1000;
-  note.placeholder = "판단 근거 또는 수정 내용";
-  note.setAttribute("aria-label", `${report.robot_ids.map(incidentRobotName).join(", ")} 검토 메모`);
-  const save = document.createElement("ui-button");
-  save.setAttribute("kind", "quiet");
-  save.type = "submit";
-  save.textContent = "검토 기록";
-  form.append(select, note, save);
-  form.addEventListener("submit", pageScope.guard(async event => {
-    event.preventDefault();
-    save.disabled = true;
-    save.setAttribute("reason", "검토 기록을 저장하고 있습니다");
-    try {
-      await call(path, {method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({root_cause: select.value, note: note.value})});
-      log(`${report.robot_ids.map(incidentRobotName).join(", ")} 사건 검토를 기록했습니다.`, "good");
-      await refreshIncidents();
-    } catch (error) {
-      log(`사건 검토 기록 실패: ${error.message}`, "bad");
-      save.disabled = false;
-      save.removeAttribute("reason");
-    }
-  }));
-  return form;
-}
-function incidentRobotName(robotId) {
-  const name = view.robotNames[robotId];
-  return name && name !== robotId ? `${name} (${robotId})` : robotId;
-}
-
-async function refreshIncidents() {
-  if (auth.locked) return;
-  const status = el("incident-status");
-  try {
-    const payload = await call("/api/fleet/incidents?limit=10");
-    incidentReports = payload.reports || [];
-    incidentTrafficReports = payload.traffic_reports || [];
-    status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
-    el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
-    if (el("incident-export").disabled) el("incident-export").setAttribute("reason", "내보낼 사건이 없습니다");
-    else el("incident-export").removeAttribute("reason");
-    const list = el("incident-list");
-    list.replaceChildren();
-    for (const report of incidentReports) {
-      const item = document.createElement("li");
-      item.className = "incident-row";
-      const detail = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.className = "ui-disclosure-row";
-      const core = report.evidence.core, fleet = report.evidence.fleet;
-      const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
-      incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName}`);
-      detail.append(summary);
-      incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "종료 기록 없음"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
-      incidentLine(detail, `CORE: 단계 ${core.phase_at_open || "미확인"}, 정지 ${core.held_s_max ?? "미확인"}초, 재시도 ${core.attempts_max ?? "미확인"}`);
-      incidentLine(detail, `Fleet: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"}, 관측 나이 ${fleet.pose_age_s ?? "미확인"}초, 해결 ${fleet.resolved_by || "미확인"}`);
-      const cam = report.evidence.rosy_cam;
-      incidentLine(detail, cam ? `Rosy Cam: ${cam.source_id}, seq ${cam.seq}, 촬영 ${new Date(cam.captured_at * 1000).toLocaleString()}`
-        : "Rosy Cam: 사건 시작 ±5초 관측 없음");
-      incidentLine(detail, report.closed_at
-        ? "Pinky 앞 카메라: 사건 종료 후 이미지는 보존되지 않음"
-        : "Pinky 앞 카메라: 현재 열린 사건의 영상은 위 개입 목록에서 확인 · 종료 후 이미지는 보존되지 않음");
-      const ai = report.evidence.ai_facts || [];
-      const draft = ai.find(f => f.kind === "incident_context");
-      if (draft) {
-        const names = {line_marking: "차선 표시 또는 인식", obstacle: "전방 장애물", unknown: "원인 미확정"};
-        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 신뢰도 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
-        for (const item of draft.value.support || []) incidentLine(detail, `${item.source} ${item.field}: ${JSON.stringify(item.value)}`);
-        incidentLine(detail, `추가 확인: ${(draft.value.missing || []).join(", ")}`);
-      }
-      incidentLine(detail, ai.length ? `AI 참고: ${ai.map(f => `${f.kind} (${f.stage}, ${Math.round(f.confidence * 100)}%)`).join(" · ")}`
-        : "AI 참고: 사건 시작 ±5초 사실 없음");
-      incidentLine(detail, report.actions.length ? `조치: ${report.actions.map(a => `${a.decision} ${a.accepted === 1 ? "수락됨" : a.accepted === 0 ? "거절됨" : "결과 미확인"}`).join(" · ")}`
-        : "조치: 기록 없음");
-      const latest = report.reviews.at(-1);
-      incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause]} · ${latest.note || "메모 없음"} (${latest.principal_id})`
-        : "사람 검토: 아직 없음");
-      if (auth.role === "operator") {
-        detail.append(incidentReviewForm(report,
-          `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
-      }
-      item.append(detail);
-      list.append(item);
-    }
-    const trafficList = el("incident-traffic-list");
-    trafficList.replaceChildren();
-    for (const report of incidentTrafficReports) {
-      const ai = report.evidence.ai_fact;
-      const item = document.createElement("li");
-      item.className = "incident-row";
-      const detail = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.className = "ui-disclosure-row";
-      const name = report.classification === "wait_cycle_confirmed"
-        ? ai.value?.fleet_agrees === false ? "AI 단독 대기 순환 판단" : "AI·Fleet 대기 순환 일치"
-        : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
-           livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
-          || report.classification;
-      incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`);
-      detail.append(summary);
-      incidentLine(detail, `AI ${ai.source} · ${ai.stage} · 신뢰도 ${Math.round(ai.confidence * 100)}%`);
-      incidentLine(detail, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
-      incidentLine(detail, "CORE·Rosy Cam: 이 AI 사실과 연결된 영속 표본 없음");
-      const latest = report.reviews.at(-1);
-      incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause]} · ${latest.note || "메모 없음"} (${latest.principal_id})`
-        : "사람 검토: 아직 없음");
-      if (auth.role === "operator") detail.append(incidentReviewForm(report,
-        `/api/fleet/incidents/facts/${ai.fact_row}/review`));
-      item.append(detail);
-      trafficList.append(item);
-    }
-    if (!incidentTrafficReports.length) {
-      const empty = document.createElement("li");
-      empty.textContent = "저장된 AI 상황 사실이 없습니다.";
-      trafficList.append(empty);
-    }
-  } catch (error) {
-    if (error.name === "AbortError") return;
-    status.textContent = `사건 기록을 불러오지 못했습니다: ${error.message}`;
-  }
-}
-pageScope.listen(el("incident-refresh"), "click", refreshIncidents);
-pageScope.listen(el("incident-export"), "click", async () => {
-  try {
-    const payload = await call("/api/fleet/incidents?limit=100");
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"}));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "rosy-incidents.json";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (error) {
-    if (error.name !== "AbortError") log(`사건 JSON 내보내기 실패: ${error.message}`, "bad");
-  }
-});
+const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth});
 
 async function refreshDispatchControl(life = pageScope.capture()) {
   life.check();
@@ -627,7 +455,7 @@ async function refreshDiscovery() {
     if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
       view.robotNames = names;
       render();
-      await refreshIncidents();
+      await incidents.refresh();
     }
     const pending = snapshot.scanner_online
       ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
@@ -726,7 +554,7 @@ async function refreshAuthorization() {
     // Independent panels refresh side by side; one slow source does not delay the rest.
     // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
-      refreshIncidents(),
+      incidents.refresh(),
       mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
@@ -1077,13 +905,7 @@ function useToken(token) {
   // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
   auth.role = null;
   applyRoleToControls(null, operatorControls());
-  incidentReports = [];
-  incidentTrafficReports = [];
-  el("incident-list").replaceChildren();
-  el("incident-traffic-list").replaceChildren();
-  el("incident-export").disabled = true;
-  el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
-  el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
+  incidents.reset();
   if (auth.token) {
     sessionStorage.setItem("rosy-console-token", auth.token);
   } else {
