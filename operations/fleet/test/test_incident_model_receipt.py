@@ -121,14 +121,14 @@ def test_malformed_numeric_or_nested_receipt_preserves_known_cost(tmp_path, faul
 @pytest.mark.parametrize('failure', ['none', 'builder', 'store'])
 def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failure(tmp_path, monkeypatch, failure):
     import asyncio
-    from test_incident_case_worker import setup, settled
+    from test_incident_case_worker import make_incident_worker, settled
     builder_rejected = failure != 'none'
     if builder_rejected:
         def reject(*args, **kwargs): raise ValueError('TRACE_SCOPE_CHANGED')
         monkeypatch.setattr('fleet.incidents.automation.ledger.store.checked_receipt'
                            if failure == 'store' else 'fleet.incidents.automation.worker.model_receipt', reject)
     async def run():
-        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05)
+        _, seen, _, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, provider_cost=.05)
         worker.feed(poll()); await settled(worker)
         scope = worker._scope(seen[0][0])
         with store._transaction() as conn:
