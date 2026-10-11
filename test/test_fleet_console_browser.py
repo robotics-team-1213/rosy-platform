@@ -1515,7 +1515,8 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
     with sync_playwright() as sync_playwright_p:
         browser, page, errors = _open_console(
             sync_playwright_p, api,
-            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')" +
+            ";(() => {window.__mapTexts=[];const fill=CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText=function(text,...args){ if(this.canvas.id==='map-canvas'){window.__mapTexts.push(String(text));window.__mapTexts=window.__mapTexts.slice(-100);} return fill.call(this,text,...args);};})()")
 
         def serve_frame(route):
             route.fulfill(status=200, content_type="image/svg+xml",
@@ -1528,17 +1529,18 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
-            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
+            "() => window.__mapTexts?.filter(text => text.includes('카메라 교정 어긋남')).at(-1)?.includes('카메라 교정 어긋남(자동 검사)')",
             timeout=20000)
         tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
-        assert "카메라 교정 어긋남(자동 검사) — 맞춤 재수락 필요" in tag
-        assert "Rosy Cam 실영상" not in tag
-        # 실영상(빨강)을 얹지 않았다 — 미터 눈금 바탕이다.
+        assert "카메라 교정 어긋남 — 맵 고정 다시 필요" in tag and "paint-test" in tag
+        caption = page.evaluate("window.__mapTexts.filter(text => text.includes('카메라 교정 어긋남')).at(-1)")
+        assert "자동 검사" in caption and "ceiling_north" in caption
+        # D-560 retains the accepted camera calibration; the outer canvas margin stays dark.
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
                              "return p[0] < 100 && p[1] < 100; }")
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
-                             ".includes('자동 검사에서 어긋난')")
+                             ".includes('그림은 수락된 보정 그대로')")
         assert not errors
         browser.close()
 
@@ -1578,7 +1580,8 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
     with sync_playwright() as sync_playwright_p:
         browser, page, errors = _open_console(
             sync_playwright_p, api,
-            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')" +
+            ";(() => {window.__mapTexts=[];const fill=CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText=function(text,...args){ if(this.canvas.id==='map-canvas'){window.__mapTexts.push(String(text));window.__mapTexts=window.__mapTexts.slice(-100);} return fill.call(this,text,...args);};})()")
 
         def serve_frame(route):
             route.fulfill(status=200, content_type="image/svg+xml",
@@ -1591,11 +1594,14 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
-            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남 — 맞춤 재수락 필요')",
+            "() => window.__mapTexts?.filter(text => text.includes('카메라 교정 어긋남')).at(-1)?.includes('정지 로봇 관측 차이')",
             timeout=20000)
         tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
         aria = page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')")
-        assert "자동 검사" not in tag and "자동 검사" not in aria  # 로봇 표본 판정이 이겼다
+        caption = page.evaluate("window.__mapTexts.filter(text => text.includes('카메라 교정 어긋남')).at(-1)")
+        assert "정지 로봇 관측 차이" in caption and "rosy_01" in caption
+        assert "자동 검사" not in caption  # The rendered robot verdict outranks the server check.
+        assert "paint-test" in tag and "그림은 수락된 보정 그대로" in aria
         assert not errors
         browser.close()
 
@@ -2458,6 +2464,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
+          inbox: document.querySelector('#fleet-inbox').getBoundingClientRect().toJSON(),
           stopScopeHidden: (() => {
             const small = document.querySelector('#estop small');
             return !!small && getComputedStyle(small).display === 'none';
@@ -2478,10 +2485,10 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 4, layout
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-359 §6.4 — compact 머리는 두 줄이다(이름·설정 / 연결·시계, 정지는 두 줄에 걸친다).
-        # 연결 표지와 시계는 여전히 한 줄을 나눠 쓴다 — 격자 이름 대신 상자로 비교한다.
-        status, clock = layout["status"], layout["clock"]
-        assert min(status["bottom"], clock["bottom"]) - max(status["top"], clock["top"]) > 1, layout
+        # Compact: brand/connection fold above, connection status/inbox below; clock is hidden.
+        status, inbox = layout["status"], layout["inbox"]
+        assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
+        assert layout["clock"]["height"] == 0, layout
         assert layout["stopScopeHidden"], layout
         # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
         assert layout["stopVerb"] == "비상 정지", layout

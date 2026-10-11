@@ -58,7 +58,7 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
             expect(tab).to_be_enabled()
         expect(page.locator('#peer-picker')).to_be_visible()
         choose(page, '호스트 서비스')
-        expect(page.locator('#host-services')).to_be_visible()
+        expect(page.get_by_role('tab', name='호스트 서비스', exact=True)).to_have_attribute('aria-selected', 'true')
         choose(page, '로봇 등록')
         expect(page.locator('#robot-enrollment')).to_be_visible()
         page.locator('#enroll-address').fill('192.0.2.55:8080')
