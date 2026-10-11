@@ -7846,3 +7846,21 @@ osy-d395-s1d\`.
 - 변경: 도로면/구역의 실제 TP·FP·FN과 다른 구역 포함/자기 구역 누락을 도메인·조건별로 집계한다. 추론 보류와 정답 전체 255를 구별하고 전체/점수화 분모와 경계 제외/미산출 사유를 보존한다. 단위는 화소이며 결과는 진단/HOLD다.
 - 증거: 새 집계 함수 부재의 원격 RED 후 468ae9e5ab 합성 지표·구역·기존 기준선 44개 시험 terminal exit 0. known_failures와 전체 회귀는 별도 receipt로 기록한다.
 - gate 변화: 없음. 고정 dataset/모델 재생, 독립 실물/시뮬레이션 성능·장치 관측 수용은 아직 미완료다.
+
+## 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
+
+- 변경: 모델 원장 중재·순수 작업 규칙을 실제 소유 경로로 분리하고 현재 판단/결과 기록, 이름 있는 사람 인수, 3채널 기본 OFF outbox와 Pinky 독립 offline checker를 구현했다. API Reference v1.207 및 설치 소비 경로를 갱신했다.
+- 증거: 단위별 원격 terminal/NEW0와 독립 검토·수정은 docs/validation/responsibility-boundaries-2026-10-11/implementation.md에 기록했다. 최종 main 통합/착지는 별도 기록한다.
+- gate 변화: 소스·원격 fake/설치 계약. 팀이 새 Discord 서버/채널과 실제 정답·한계를 준비한다. 단계 3~5 운영 수용 및 단계 6은 HOLD; CI/push·배포·실제 provider/발송·실물 motion 없음.
+
+## 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
+
+- 변경: D-661 팀 통지·사람 인수를 incidents 하위 패키지로 분리하고 최신 main의 순수 진척·지연 schema import를 통합했다. 단계별 계획·팀 인수·독립 평가·착지 증거를 기록했다.
+- 증거: 최종 AI PC 원격493 passed/0 skipped/NEW0, 독립 검토 및 tools/land.py lint/시험 통과, 로컬 main FF `7afb0e2c4f`. 상세 docs/validation/responsibility-boundaries-2026-10-11/landing.md. 이전 전체 회귀16676 성공과 당시 크기1 NEW는 최종 영향군 결과와 구별했다.
+- gate 변화: 로컬 통합 완료, push·CI·배포·실제 채널/현장 수용 없음. 팀의 Discord 준비·Pinky 검수 이후 운영 수용; 단계6 HOLD 유지.
+
+## 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
+
+- 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
+- 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
+- gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.

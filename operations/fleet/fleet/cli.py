@@ -158,6 +158,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "recompile Cell Job proposals with palletizing at this stack tolerance; needs --mission-api"))
     console.add_argument("--goal-evidence-config", default=None, type=Path,
                          help="optional scoped goal-evidence producer registry YAML")
+    console.add_argument('--notifications-config', default=None, type=Path,
+                         help='explicit team notification YAML (requires --tasks-db; endpoints stay in env)')
     console.add_argument("--pairing-ca", default=None, type=Path,
                          help="site CA PEM (never a leaf) handed to paired cameras; enables the "
                               "D-341 pairing routes, needs --tls-cert and --tasks-db")
@@ -643,6 +645,10 @@ def run_console(args: argparse.Namespace) -> None:
         from fleet.server.central_registry import CentralRegistry
 
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
+    notification_config = None
+    if getattr(args, 'notifications_config', None) is not None:
+        from fleet.incidents.notifications import NotificationConfig
+        notification_config = NotificationConfig.load(args.notifications_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
@@ -673,7 +679,7 @@ def run_console(args: argparse.Namespace) -> None:
                      traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
                      trip_lease=_trip_lease(args),
                      identity_config=identity_config,
-                     lane_compliance_config=_lane_compliance_config(args))
+                     lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

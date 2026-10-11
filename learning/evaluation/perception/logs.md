@@ -17,3 +17,11 @@
 - 증거: 새 집계 함수 부재의 원격 RED 후 합성 지표·구역·기존 기준선 44개 시험 terminal exit 0. 새 모델/실물 성능 시험은 아니다.
 - gate 변화: 없음. dataset-backed 재생과 독립 출처·장치 수용은 후속이다.
 
+
+## 2026-10-11 · 0b14fa02b0 · D-662 offline Pinky judgment checker
+
+- 변경: main에서 추가된 D-662 checker 기록을 D-665 인지 평가 기록과 함께 보존한다.
+- 증거: 아래 원래 기록과 연결된 implementation.md를 유지한다. 이번 병합의 재시험은 별도 receipt다.
+- gate 변화: 없음. 원래 독립 profile과 팀 FIELD 수용 HOLD를 유지한다.
+
+2026-10-11: D-662 offline Pinky judgment checker at 0b14fa02b0; independent review corrected required-ABSTAIN errors and duplicated physical windows. Remote acceptance-review-green 11 passed, NEW0 (8 checker + 3 installed delivery). Initial profile and team FIELD acceptance remain HOLD. See docs/validation/responsibility-boundaries-2026-10-11/implementation.md.
