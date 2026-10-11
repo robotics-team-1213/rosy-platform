@@ -48,6 +48,7 @@ from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
+from fleet.incidents.automation.runtime import install_incident_runtime
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -149,7 +150,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
-               notification_config=None) -> FastAPI:
+               notification_config=None, incident_model_config=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
@@ -651,6 +652,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.stuck.problems import ProblemWatch
         resolver_core.ai_first = app.state.ai_first               # D-610: AI-first robots, closed loop, P2 kinds
         app.state.stuck_resolver.episodes, app.state.stuck_resolver.problems = app.state.ai_episodes, ProblemWatch()
+    install_incident_runtime(app, incident_model_config)
     from fleet.stuck.ai_routes import install_ai_first_routes, rosy_cam_lease
     install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
                             loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
