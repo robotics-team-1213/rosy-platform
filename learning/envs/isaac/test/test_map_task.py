@@ -6,6 +6,10 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
+repo = Path(__file__).resolve().parents[4]
+for path in ('contracts/motion/src', 'contracts/skill/src', 'contracts/foundation',
+             'middleware/core/services', 'middleware/core/gateway'):
+    sys.path.insert(0, str(repo / path))
 from map_task import MapTask, QPolicy, SimulationOwner, load_track
 from rosy.contracts.motion import BaseTwist, MotionHeader, MotionIntent, MotionKind, PriorityClass
 
@@ -76,7 +80,7 @@ def intent(epoch=1, **overrides):
                   envelope_ref='isaac-map-v1', state_sequence=epoch,
                   limits={'linear_mps': .06, 'angular_radps': .8})
     fields.update(overrides)
-    return MotionIntent(MotionHeader(**fields), MotionKind.BASE_TWIST, BaseTwist(.03, .2))
+    return MotionIntent(MotionKind.BASE_TWIST, MotionHeader(**fields), BaseTwist(.03, .2))
 
 
 def test_policy_admission_uses_core_and_stop_clears_old_episode():
