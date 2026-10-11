@@ -646,6 +646,7 @@
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
+| D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -684,3 +685,8 @@
 - Status: Accepted (2026-10-11).
 - Decision: One canonical platform mark, shared token-driven wordmark application, distinct role icons, accessible names, and separately evidenced rollout.
 - Contract: [ADR](../adr/D-654-rosy-platform-route-mark.md), [plan](../plans/2026-10-11-rosy-brand.md).
+
+## D-658 Fleet 공용 헤더 영역
+
+- 상태: Accepted (2026-10-11).
+- Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
