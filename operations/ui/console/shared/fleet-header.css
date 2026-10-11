@@ -63,7 +63,13 @@ ui-topbar {
 .fleet-link-status ui-tag { box-sizing: border-box; flex: none; white-space: nowrap; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
-.fleet-header-safety { grid-area: safety; }
+.fleet-header-actions [hidden] { display: none; }
+.fleet-account-trigger { display: inline-flex; align-items: center; justify-content: center; min-height: var(--target-secondary); padding-inline: var(--space-2); color: var(--text-primary); white-space: nowrap; cursor: pointer; }
+#fleet-account { position: relative; }
+.fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.fleet-account-panel .password-login-who { flex-wrap: wrap; }
+.fleet-account-panel [data-login="principal"] { display: none; }
+.fleet-header-safety { grid-area: safety; justify-self: end; }
 #topbar-more { display: inline-flex; }
 .topbar-extra {
   display: none;
@@ -91,6 +97,7 @@ ui-topbar {
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   .fleet-link-status { justify-content: flex-start; align-content: center; min-height: calc(var(--space-5) * 2 + var(--space-1)); }
+  .fleet-header-actions { gap: 0; }
   .fleet-link-status ui-tag { min-height: var(--space-5); }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }

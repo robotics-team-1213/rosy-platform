@@ -26,9 +26,9 @@ body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(-
 @media (width < 30rem) {
   .entry-main { padding: var(--space-4); }
   .entry-topbar { gap: var(--space-2); }
-  .entry-topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand role stop" "logout logout stop" "notice notice notice"; }
-  .entry-topbar ui-brand { grid-area: brand; }
-  .entry-topbar #entry-role { grid-area: role; min-width: 0; white-space: normal; overflow-wrap: anywhere; justify-self: start; }
+  .entry-topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "brand role stop" "logout logout stop" "notice notice notice"; }
+  .entry-topbar ui-brand { grid-area: brand; min-width: 0; container-type: inline-size; }
+  .entry-topbar #entry-role { grid-area: role; white-space: nowrap; justify-self: start; }
   .entry-topbar #entry-stop { grid-area: stop; align-self: stretch; }
   .entry-topbar #entry-logout { grid-area: logout; justify-self: start; }
   .entry-topbar #entry-stop-notice { grid-area: notice; }

@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
 - 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
-- 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
-- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
-- 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
-- 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
+- 2026-10-12 · e775bdd6a · Fleet 계정 진입점과 로그인 복귀 구현
+- 2026-10-12 · 80a12948c · test(ui): 실제 조작 목적과 처리 완료를 관측
+- 2026-10-12 · 7a0725de4 · fix(ui): 현장 복구 목표와 공용 실패 안내
