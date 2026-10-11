@@ -29,7 +29,3 @@ D-622 reserved in another active branch; not in this structure candidate, remove
 
 D-621 reserved by another active session; ADR not yet landed in this branch
 D-622 reserved by another active session; ADR not yet landed in this branch
-D-629 reserved by another active session (refs/adr/D-629); remove when its ADR lands
-D-632 reserved by another active session (refs/adr/D-632); remove when its ADR lands
-D-629 reserved by another active session (refs/adr/D-629); not in this candidate; remove when its ADR lands
-D-631 reserved by another active session; ADR not yet landed in this branch
