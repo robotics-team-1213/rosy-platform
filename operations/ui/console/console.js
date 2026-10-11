@@ -2,9 +2,11 @@
 //
 import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
+import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
+import { createWorkView } from "./work-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
@@ -36,12 +38,16 @@ const layoutMedia = matchMedia("(min-width: 64rem)");
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
+const workView = createWorkView({scope: pageScope, call, el});
+layoutPanels.push(el("work-overview"));
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  layoutPanels.forEach((node, index) => {
-    const parent = layoutMedia.matches ? (index === MAP_PANEL ? primary : secondary) : main;
+  const ordered = workView.active ? [el("work-overview"), document.querySelector('.console-context'),
+    ...layoutPanels.filter(node => node.id !== "work-overview" && !node.matches('.console-context'))] : layoutPanels;
+  ordered.forEach((node) => {
+    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
@@ -97,6 +103,7 @@ function markLocked(reason = "auth") {
   cancelAllNotice();
   const firstLock = !auth.locked;
   auth.locked = true;
+  workView.reset();
   connectionView.open();
   auth.role = null;
   incidents.reset();
@@ -136,7 +143,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice)");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
 }
 
 const view = {
@@ -559,6 +566,7 @@ async function refreshAuthorization() {
     // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
       incidents.refresh(),
+      workView.refresh(),
       mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
@@ -611,7 +619,7 @@ async function commitGoal(col, row) {
   life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" || namedReason() ||
+  if (view.stateUnavailable || auth.role !== "operator" || namedReason() || motionCommandReason(view, view.selected, 'goal') ||
       !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
     disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
     render();
@@ -622,6 +630,7 @@ async function commitGoal(col, row) {
   const mapSnapshot = JSON.stringify([view.map.map_id, view.map.width, view.map.height, view.map.resolution, view.map.origin]);
   await confirmedAction.run({message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`, opener: el("map-canvas"),
     eligible: () => !view.stateUnavailable && view.selected === robotId && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
+      && !motionCommandReason(view, robotId, 'goal')
       && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
     request: async owner => {
   view.selected = null;
@@ -862,6 +871,14 @@ if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   render();
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
+view.openFormationWorkspace = () => {
+  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; pinStart = null;
+  if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
+  render();
+  inbox.select('tools');
+  const heading = el('formation-heading'); heading.tabIndex = -1;
+  heading.focus({preventScroll: false});
+};
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
@@ -909,6 +926,7 @@ function saveToken() {
 }
 
 function useToken(token) {
+  workView.reset();
   stopNotice();
   cancelAllNotice();
   pageScope.invalidate();
@@ -985,6 +1003,7 @@ mapView.refresh();
 trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
 pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);

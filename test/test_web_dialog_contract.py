@@ -58,8 +58,10 @@ PINNED_CONFIRMS = {
     "operations/ui/console/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/ui/console/host-services.js": 1,  # named operator host control, shared confirmation
     "operations/ui/console/roster.js": 1,
-    # Activation, camera-draft and profile-draft replacement (D-497, D-635); trip cancel left with the 운행 panel (D-540 4).
-    "operations/ui/console/site-map.js": 3,
+    # Activation and profile replacement; D-655 camera replacement moved to its controller.
+    "operations/ui/console/site-map.js": 2,
+    "operations/ui/console/site-map-camera.js": 1,
+    "operations/ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "operations/ui/console/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(

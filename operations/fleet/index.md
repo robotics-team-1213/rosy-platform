@@ -81,6 +81,7 @@
 - [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 - [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 
 ## 교훈 (docs/solutions)
@@ -93,8 +94,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 89c9b79bbd · fix(test): 추적 응답 fixture 설치 뒤 화면 초기화
-- 2026-10-11 · 7afb0e2c4f · 사건 조정 분리 최종 검증과 착지
-- 2026-10-11 · 757226957d · 팀 사건 조정 책임 하위 패키지
-- 2026-10-11 · 0b14fa02b0 · 책임 추출·현재 판단·사람 인수·팀 알림
-- 2026-10-11 · fb2e5e07d3 · D-657 모델 도구 Fleet 어댑터와 순수 실행 규칙
+- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
+- 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
+- 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토
+- 2026-10-11 · 7476837977 · D-655 조사 독립 검토 회귀 수정
+- 2026-10-11 · 1a14e9705a · D-655 지도 없는 상대 주행 조사 API
