@@ -142,3 +142,21 @@ def test_invalid_camera_time_abstains_before_model(now_ns, reason):
     report, calls = model_frame(now_ns=now_ns)
     assert calls == [] and report['input_errors'] == [reason]
     assert report['classes']['person']['false_negative'] == 1
+
+
+@pytest.mark.parametrize('key', ['model_revision', 'camera_profile_revision',
+                               'preprocessing', 'detector_thresholds'])
+def test_summary_refuses_mixed_model_bindings(key):
+    from copy import deepcopy
+    first, _ = model_frame()
+    second = deepcopy(first)
+    second[key] = 'different'
+    with pytest.raises(ValueError, match='binding'):
+        summarize_frames([first, second])
+
+
+def test_summary_refuses_unrecognised_domain_instead_of_dropping_frame():
+    report = score([], [])
+    report['domain'] = 'unknown'
+    with pytest.raises(ValueError, match='domain'):
+        summarize_frames([report])
