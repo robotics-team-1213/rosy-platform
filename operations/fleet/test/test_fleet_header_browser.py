@@ -200,6 +200,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
+                    assert abs(inbox["x"] + inbox["width"] - (x + w)) <= 1
                     more = page.locator("#topbar-more")
                     expect(more).to_be_visible()
                     more.click()
