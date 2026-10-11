@@ -126,6 +126,7 @@ class OllamaTransport:
 
 
 def main():
+    previous_handler = signal.getsignal(signal.SIGALRM)
     try:
         remaining = float(sys.argv[1])
         if not math.isfinite(remaining) or not 0 < remaining <= 30:
@@ -142,6 +143,9 @@ def main():
                 'VALIDATION' if isinstance(error, (ValueError, KeyError, TypeError)) else 'INTERNAL')
         print(canonical({'state': 'HOLD', 'reason': 'LOCAL_PROVIDER_FAILED', 'failure_kind': kind}), flush=True)
         return 1
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 if __name__ == '__main__':
