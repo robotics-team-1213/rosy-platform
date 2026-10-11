@@ -1017,6 +1017,19 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     assert all(e['evidence']['status'] == 'reviewed' for e in reviewed['map']['edges'])
     assert all('frame sha256 def' in e['evidence']['note'] for e in reviewed['map']['edges'])
     assert all('Measured calibration' in e['evidence']['note'] for e in reviewed['map']['edges'])
+    edge_id = reviewed['map']['edges'][0]['id']
+    page.locator(f'#site-map-svg [data-edge="{edge_id}"]').dispatch_event('click')
+    page.locator('#edge-speed').fill('0.02')
+    page.locator('#apply-edit').click()
+    with page.expect_response(lambda response: response.url.endswith('/api/fleet/site-map/draft')
+                              and response.request.method == 'PUT'):
+        page.locator('#save-draft').click()
+    edited = store.draft_view()
+    assert edited['map']['edges'][0]['evidence']['status'] == 'observed'
+    assert 'frame sha256 def' in edited['map']['edges'][0]['evidence']['note']
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=edited['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
     assert store.active_view() == active
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]

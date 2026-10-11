@@ -384,6 +384,8 @@ test('camera observations accumulate in the same survey without invented joins o
   assert.equal(accumulated.edges[1].evidence.status, 'observed');
   assert.equal(accumulated.survey.reviewed, false);
   assert.deepEqual(mergeCameraMap(accumulated, repeated), accumulated);
+  assert.throws(() => mergeCameraMap(accumulated, {...repeated, edges: repeated.edges.map(e => ({...e,
+    evidence: {...e.evidence, note: 'x'.repeat(1000)}}))}), /1000/);
   const corrected = editSurveyElement(reviewed, {id: reviewed.edges[1].id, kind: 'road', name: 'Observed road',
     from: reviewed.edges[1].from, to: reviewed.edges[1].to, geometry: [[3, 0], [3.5, .1], [4, 0]], width_m: .2, direction: 'one_way'});
   assert.ok(corrected.edges[1].evidence.note.includes('Frame abc'));
