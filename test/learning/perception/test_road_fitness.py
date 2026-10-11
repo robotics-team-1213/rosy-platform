@@ -15,7 +15,7 @@ for directory in ("middleware/perception", "contracts/foundation", "operations/w
 from control.sensing.perception.learned.road_region import observed_road_region  # noqa: E402
 from rosy.world.api import ObservationSnapshot, SnapshotValidity  # noqa: E402
 from rosy.world.state.projections.road_region import road_region_input_errors  # noqa: E402
-from road_fitness import _metrics, evaluate_frame, summarize_frames  # noqa: E402
+from road_fitness import _metrics, evaluate_frame, evaluate_model_frame, summarize_frames  # noqa: E402
 
 CLASSES = [{"index": 0, "name": "floor", "role": "background"},
            {"index": 1, "name": "lane", "role": "lane_marking"},
@@ -272,3 +272,79 @@ def test_conditions_require_an_explicit_sequence_of_names(conditions):
     with pytest.raises(ValueError, match="conditions"):
         evaluate_frame(labels, CLASSES, image, anchor, (), truth, truth,
                        domain="real", conditions=conditions, now_ns=1050, max_age_ns=100)
+
+
+def _onnx_model(tmp_path, crop=True):
+    import hashlib
+    import json
+    import cv2
+    import onnx
+    from onnx import helper, numpy_helper, TensorProto
+    from control.sensing.perception.learned.runner import LaneSegModel
+    height = 4 if crop else 6
+    labels = cv2.resize(_labels(), (6, 6), interpolation=cv2.INTER_NEAREST)[-height:]
+    logits = np.eye(len(CLASSES), dtype=np.float32)[labels].transpose(2, 0, 1)[None]
+    graph = helper.make_graph([helper.make_node("Constant", [], ["logits"],
+                               value=numpy_helper.from_array(logits))], "fixture",
+                              [helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 3, height, 6])],
+                              [helper.make_tensor_value_info("logits", TensorProto.FLOAT, list(logits.shape))])
+    doc = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=9)
+    model_path = tmp_path / "model.onnx"
+    model_path.write_bytes(doc.SerializeToString())
+    spec = {"shape": [1, 3, height, 6], "layout": "nchw", "color": "rgb", "scale": 1 / 255,
+            "mean": [0, 0, 0], "std": [1, 1, 1]}
+    if crop:
+        spec["crop"] = {"from_frame": [6, 6], "rows": [2, 6]}
+    raw = {"schema": "rosy.perception.model/1", "model_revision": "lane-seg-20261011-abcdef12",
+           "task": "lane_seg", "input": spec,
+           "files": [{"name": "model.onnx", "precision": "fp32",
+                      "sha256": hashlib.sha256(model_path.read_bytes()).hexdigest()}],
+           "output": {"layout": "nchw_logits", "classes": CLASSES},
+           "dataset": {"repo": "fixture", "revision": "a" * 64}, "camera_profile_revision": "cal-v1"}
+    (tmp_path / "model_manifest.json").write_text(json.dumps(raw), encoding="utf-8")
+    return LaneSegModel.open(tmp_path)
+
+
+@pytest.mark.parametrize("crop", [True, False])
+def test_onnx_replay_resizes_truth_and_anchor_with_the_model_roi(tmp_path, crop):
+    model = _onnx_model(tmp_path, crop)
+    image, anchor = _snapshots()
+    truth = (_labels() == 2).astype(np.uint8)
+    region_truth = np.zeros_like(truth)
+    region_truth[:, :5] = 1
+    report = evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor,
+                                  ((10, 2),), truth, region_truth, domain="real", conditions=(),
+                                  now_ns=1050, max_age_ns=100)
+    assert report["road_surface"]["iou"] == report["current_region"]["iou"] == 1
+    assert report["road_surface"]["scored_pixels"] == (24 if crop else 36)
+    assert report["preprocessing"]["excluded_truth_pixels"]["road_surface"] == (12 if crop else 0)
+    assert report["preprocessing"]["seed_pixels"] == [[5, 1]]
+    assert report["model_revision"] == model.model_revision
+    assert report["fitness_verdict"] == "HOLD"
+
+
+def test_replay_unknown_roi_anchor_abstains_and_does_not_score_top_as_background(tmp_path):
+    model = _onnx_model(tmp_path)
+    image, anchor = _snapshots()
+    truth = (_labels() == 2).astype(np.uint8)
+    report = evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor,
+                                  ((0, 2),), truth, truth, domain="real", conditions=(),
+                                  now_ns=1050, max_age_ns=100)
+    assert report["current_region"]["scored_pixels"] == 0
+    assert report["region_reason"] == "anchor_not_on_observed_road"
+    assert report["road_surface"]["unknown_truth_pixels"] == 12
+
+
+def test_replay_checks_truth_before_resizing_and_rejects_nonfinite_logits(tmp_path):
+    model = _onnx_model(tmp_path)
+    image, anchor = _snapshots()
+    truth = (_labels() == 2).astype(np.uint8)
+    invalid = truth.copy()
+    invalid[1, 1] = 7
+    with pytest.raises(ValueError, match="truth"):
+        evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor, (), invalid, truth,
+                             domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+    model._session.run = lambda x: np.full((1, len(CLASSES), 4, 6), np.nan, np.float32)
+    with pytest.raises(ValueError, match="logits"):
+        evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor, (), truth, truth,
+                             domain="real", conditions=(), now_ns=1050, max_age_ns=100)
