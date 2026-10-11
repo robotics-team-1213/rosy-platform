@@ -21,7 +21,7 @@ SLACK = 'https://hooks.slack.com/services/T1/B1/private_token'
 TELEGRAM = 'https://api.telegram.org/bot123:private_token/sendMessage'
 
 
-def setup(tmp_path, kinds=('discord',)):
+def _setup(tmp_path, kinds=('discord',)):
     now = [100.0]
     log = LineStuckAnswerLog(tmp_path / 'fleet.sqlite3')
     urls = {'discord': DISCORD, 'slack': SLACK, 'telegram': TELEGRAM}
@@ -47,7 +47,7 @@ def run(log, board, config, now, handler):
 
 
 def test_normal_zero_send_deduplication_and_no_secrets_in_rows(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0, None)
     assert log.notifications.rows() == []
     observe(board, 100.0)
@@ -73,7 +73,7 @@ def test_normal_zero_send_deduplication_and_no_secrets_in_rows(tmp_path):
 
 
 def test_outbox_failure_rolls_back_the_judgment_write(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0, None)
     board.observe([row(stuck_id='case-1')])
     receipt = board.judgment_view('pinky')
@@ -87,7 +87,7 @@ def test_outbox_failure_rolls_back_the_judgment_write(tmp_path):
 
 @pytest.mark.parametrize('change', ['closed', 'replaced', 'claimed', 'expired', 'destination'])
 def test_rechecks_current_case_before_sending(tmp_path, change):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     if change == 'closed':
         observe(board, 100.0, None)
@@ -109,7 +109,7 @@ def test_rechecks_current_case_before_sending(tmp_path, change):
 
 
 def test_partial_delivery_429_and_timeout_are_distinct(tmp_path):
-    now, log, board, config = setup(tmp_path, ('discord', 'slack', 'telegram'))
+    now, log, board, config = _setup(tmp_path, ('discord', 'slack', 'telegram'))
     observe(board, 100.0)
     def send(request):
         if request.url.host == 'discord.com':
@@ -129,7 +129,7 @@ def test_partial_delivery_429_and_timeout_are_distinct(tmp_path):
 
 
 def test_restart_leaves_inflight_delivery_unknown_without_retry(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     assert log.notifications.claim_due(100.0, config)['state'] == 'SENDING'
     reopened = LineStuckAnswerLog(log.path)
@@ -147,7 +147,7 @@ def test_destination_is_fixed_and_secret_errors_are_redacted(url):
 
 @pytest.mark.parametrize('kind', ['discord', 'slack', 'telegram'])
 def test_provider_receipt_and_http_logs_do_not_expose_endpoint(tmp_path, kind, caplog):
-    now, log, board, config = setup(tmp_path, (kind,))
+    now, log, board, config = _setup(tmp_path, (kind,))
     observe(board, 100.0)
     caplog.set_level(logging.INFO, logger='httpx')
     def send(request):
@@ -161,7 +161,7 @@ def test_provider_receipt_and_http_logs_do_not_expose_endpoint(tmp_path, kind, c
 
 
 def test_rate_spacing_and_third_attempt_exhaustion(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     sent = []
     def connect_fail(request):
@@ -176,7 +176,7 @@ def test_rate_spacing_and_third_attempt_exhaustion(tmp_path):
 
 
 def test_5xx_is_unknown_and_not_retried(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     run(log, board, config, 100.0, lambda request: httpx.Response(503))
     now[0] = 160.0
@@ -187,7 +187,7 @@ def test_5xx_is_unknown_and_not_retried(tmp_path):
 
 @pytest.mark.parametrize('change', ['closed', 'claimed'])
 def test_dequeued_request_is_rechecked_before_http(tmp_path, monkeypatch, change):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     entered, release = threading.Event(), threading.Event()
     original = log.notifications.claim_due
@@ -216,7 +216,7 @@ def test_dequeued_request_is_rechecked_before_http(tmp_path, monkeypatch, change
 
 
 def test_cancellation_after_http_entry_stays_unknown(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     async def cancel():
         entered = asyncio.Event()
@@ -251,7 +251,7 @@ def test_config_requires_private_endpoint_and_durable_journal(tmp_path, monkeypa
 
 
 def test_expiry_is_rechecked_after_dequeue(tmp_path, monkeypatch):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     original = log.notifications.claim_due
     def advance(*args):
@@ -269,7 +269,7 @@ def test_expiry_is_rechecked_after_dequeue(tmp_path, monkeypatch):
 
 
 def test_closure_outbox_failure_rolls_back_episode_close(tmp_path):
-    now, log, board, config = setup(tmp_path)
+    now, log, board, config = _setup(tmp_path)
     observe(board, 100.0)
     with closing(log._connect()) as connection, connection:
         connection.execute("CREATE TRIGGER reject_closed BEFORE INSERT ON fleet_notification_outbox WHEN NEW.kind='CLOSED' BEGIN SELECT RAISE(ABORT, 'disk unavailable'); END")
