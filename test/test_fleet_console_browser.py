@@ -192,13 +192,12 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         _open_cards(page)
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
         # warn)에만 몰리고 정상 로봇은 무색이다("one coloured row").
-        per_robot = page.evaluate(
-            "() => Object.fromEntries([...document.querySelectorAll('#roster article')]"
-            ".map((el) => [el.querySelector('b')?.textContent,"
-            " el.querySelectorAll('ui-tag[status=crit]:not([data-localization]), ui-tag[status=warn]:not([data-localization])').length]))"
-        )
-        assert per_robot["rosy_01"] == per_robot["rosy_02"] == 0
-        assert per_robot["rosy_03"] >= 1
+        per_robot = {}
+        for robot_id in ('rosy_01', 'rosy_02', 'rosy_03'):
+            _open_cards(page, robot_id)
+            per_robot[robot_id] = page.locator(
+                '#robot-workspace ui-tag[status=crit], #robot-workspace ui-tag[status=warn]').count()
+        assert per_robot == {"rosy_01": 0, "rosy_02": 0, "rosy_03": 2}
 
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_overlay.png")
@@ -1987,7 +1986,7 @@ FLEET_FIT_PROBE = """() => {
     stop: inside('#estop'),
     roster: inside('#roster'),
     rosterHeading: inside('#roster-heading'),
-    rosterPreceding: inside('#site-path'),
+    rosterPreceding: inside('.robot-list-details > h3'),
     vh: window.innerHeight,
   };
 }"""
