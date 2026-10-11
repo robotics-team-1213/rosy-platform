@@ -16,7 +16,7 @@ def _model(tmp_path, semantic="road_surface/1"):
     folder = _model_dir(tmp_path)
     path = folder / "model_manifest.json"
     doc = json.loads(path.read_text())
-    doc["input"].update(shape=[1, 3, 2, 4], crop=[4, 4, 2, 4])
+    doc["input"].update(shape=[1, 3, 2, 4], crop={"from_frame": [4, 4], "rows": [2, 4]})
     doc["output"]["classes"][1].update(name="drivable", role="drivable", semantic=semantic)
     path.write_text(json.dumps(doc), encoding="utf-8")
     return LaneSegModel.open(folder, session_factory=lambda *_: FakeSession(lane_col=5))
