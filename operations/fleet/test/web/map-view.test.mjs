@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createMapView } from '../../fleet/server/web/map-view.js';
+
+test('an active camera map keeps its coordinate view when a robot starts serving a grid', async () => {
+  const ctx = new Proxy({}, { get: (_, key) => key === 'measureText' ? () => ({ width: 10 }) : () => {} });
+  const elements = new Map();
+  const el = (id) => {
+    if (!elements.has(id)) elements.set(id, {
+      dataset: {}, classList: { add() {}, remove() {} }, querySelectorAll: () => [],
+      setAttribute() {}, removeAttribute() {}, getContext: () => ctx,
+      clientWidth: 800, clientHeight: 600,
+    });
+    return elements.get(id);
+  };
+  const previous = globalThis.window;
+  globalThis.window = { devicePixelRatio: 1, RosyPalette: {
+    cssColor: () => '#000', canvasFont: () => '12px sans-serif',
+  } };
+  try {
+    const view = { robots: [], sightings: [], layers: {}, map: null };
+    const calls = [];
+    const scope = { capture: () => ({ check() {}, current: () => true }), onDispose() {}, listen() {} };
+    const map = createMapView({ scope, el, view, auth: { locked: false },
+      onMapChanged() {}, onMapUnavailable() {}, call: async (path) => {
+        calls.push(path);
+        if (path === '/api/fleet/site-map') return { maps: [
+          { map_id: 'track', polygon_m: [[0, 0], [2, 0], [2, 1], [0, 1]] },
+        ] };
+        if (path === '/api/fleet/site-map/active') return { version: 5, map: { map_id: 'track' } };
+        if (path === '/api/fleet/calibrations') return { calibrations: [] };
+        if (path === '/api/fleet/map') return { width: 1, height: 1, data: [0] };
+        throw new Error(path);
+      } });
+    await map.refresh();
+    view.robots = [{ robot_id: 'r1', online: true, capabilities: { navigation: true }, state: {
+      localization: { state: 'LOCALIZED', pose_frame: 'map' },
+    } }];
+    await map.refresh();
+    assert.equal(el('map-stage').dataset.mapState, 'site');
+    assert.equal(view.map, null);
+    assert.ok(!calls.includes('/api/fleet/map'));
+  } finally { globalThis.window = previous; }
+});
