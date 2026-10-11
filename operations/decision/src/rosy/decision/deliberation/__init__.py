@@ -36,15 +36,26 @@ class Problem:
     evidence_ids: tuple[str, ...]
     choices: tuple[str, ...]
     necessity: str
+    goal: str = 'inspect'
+    facts_json: str = '{"state":"unknown"}'
 
     def __post_init__(self):
         for value in (self.subject_id, self.case_id, self.generation):
             identifier(value)
+        identifier(self.goal)
         if self.domain not in {'door', 'arm_target'} or self.necessity not in {
                 'INTERVENE', 'DO_NOT_INTERVENE', 'ABSTAIN'}:
             raise ValueError('invalid domain or necessity')
         if type(self.observed_at) not in (int, float) or not math.isfinite(self.observed_at):
             raise ValueError('invalid observation time')
+        facts = json.loads(self.facts_json)
+        valid = ({'state': {'unknown', 'open', 'closed'}, 'door_state': {'unknown', 'open', 'closed'}}
+                 if self.domain == 'door' else {'state': {'unknown', 'present', 'missing'},
+                                              'target_state': {'unknown', 'present', 'missing'}})
+        if (type(facts) is not dict or not facts or any(key not in valid or type(value) is not str
+                or value not in valid[key] for key, value in facts.items())):
+            raise ValueError('invalid approved observation facts')
+        object.__setattr__(self, 'facts_json', canonical(facts))
         for name, allowed in (('evidence_ids', None), ('choices', CHOICES)):
             values = getattr(self, name)
             if (type(values) not in (tuple, list) or not 1 <= len(values) <= 16
@@ -96,12 +107,19 @@ class Supervisor:
         def finish(reason, state='HOLD', choice=None):
             return {**result, 'reason': reason, 'state': state, 'choice': choice}
         def fresh():
-            return current() and 0 <= self.clock() - problem.observed_at <= 3
+            try:
+                return current() is True and 0 <= self.clock() - problem.observed_at <= 3
+            except Exception:
+                return False
         if not fresh():
             return finish('STALE_OR_CHANGED')
         if problem.necessity == 'DO_NOT_INTERVENE':
             return finish('NORMAL', 'NOT_NEEDED')
-        if len(providers) != 2 or len({identifier(p.profile_id) for p in providers}) != 2:
+        try:
+            configured = len(providers) == 2 and len({identifier(p.profile_id) for p in providers}) == 2
+        except (ValueError, TypeError, AttributeError):
+            configured = False
+        if not configured:
             return finish('PROFILES_REQUIRED')
         if key in self._active or len(self._active) >= self.max_active:
             return finish('BUSY')
@@ -115,7 +133,8 @@ class Supervisor:
                     remaining = self.timeout_s - (time.monotonic() - start)
                     result['calls'] += 1
                     prior = () if index < 2 else tuple(json.loads(canonical(result['opinions'])))
-                    payload, cost = await providers[index % 2](problem, prior, remaining)
+                    payload, cost = await providers[index % 2](problem, prior, remaining,
+                        budget_usd=self.max_cost_usd - result['cost_usd'])
                     if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
                         return finish('COST_UNKNOWN')
                     result['cost_usd'] += cost

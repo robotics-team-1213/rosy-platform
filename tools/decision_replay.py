@@ -75,6 +75,64 @@ def replay(data: Path, endpoint: str, model: str, timeout: float) -> dict:
         "p95_latency_ms": latencies[math.ceil(0.95 * len(latencies)) - 1]}}
 
 
+def compare_deliberation(cases, runs, *, training_sessions, limits):
+    """Independent same-case metrics. No provider call, learned policy write or FIELD approval."""
+    if not cases or len(cases) > 10000 or type(training_sessions) is not list:
+        raise ValueError('invalid evaluation set')
+    digest = hashlib.sha256(json.dumps(cases, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    by_id, physical = {}, set()
+    for case in cases:
+        key = case['id']
+        source = (case['session_id'], case['recording_id'])
+        if (type(key) is not str or not key or key in by_id or source in physical
+                or case['session_id'] in training_sessions or case['expected'] not in {
+                    None, 'reobserve', 'human', 'map_correction', 'object_reacquire'}
+                or type(case['problem_hash']) is not str or len(case['problem_hash']) != 64):
+            raise ValueError('invalid, duplicate or leaked evaluation case')
+        by_id[key] = case
+        physical.add(source)
+    rows = {}
+    for row in runs:
+        key = (row['mode'], row['case_id'])
+        if key in rows or key[0] not in {'rules', 'single', 'deliberation'} or key[1] not in by_id:
+            raise ValueError('invalid comparison row')
+        if (row['problem_hash'] != by_id[key[1]]['problem_hash']
+                or not row['profile_revision'] or not row['policy_revision']
+                or type(row['forbidden_effect']) is not bool or type(row['binding_error']) is not bool
+                or row['choice'] not in {None, 'reobserve', 'human', 'map_correction', 'object_reacquire'}):
+            raise ValueError('comparison binding or effect invalid')
+        for field in ('latency_ms', 'cost_usd'):
+            if type(row[field]) not in (int, float) or not math.isfinite(row[field]) or row[field] < 0:
+                raise ValueError('comparison latency or cost unknown')
+        rows[key] = row
+    if len(rows) != 3 * len(cases):
+        raise ValueError('all modes must use exactly the same independent cases')
+    if limits is not None:
+        if set(limits) != {'error_rate', 'p95_latency_ms', 'cost_usd'}:
+            raise ValueError('invalid limits')
+        if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in limits.values()):
+            raise ValueError('invalid finite limits')
+        if limits['error_rate'] > 1:
+            raise ValueError('invalid error rate')
+    report = {'state': 'PASS_OFFLINE_ONLY', 'field_accepted': False,
+              'dataset_sha256': digest, 'modes': {}}
+    if limits is None or any(not c.get('reviewed_by') for c in cases):
+        report['state'] = 'HOLD'
+    for mode in ('rules', 'single', 'deliberation'):
+        selected = [rows[(mode, key)] for key in by_id]
+        latencies = sorted(r['latency_ms'] for r in selected)
+        metrics = dict(count=len(cases), correct=sum(r['choice'] == by_id[r['case_id']]['expected'] for r in selected),
+                       abstain=sum(r['choice'] is None for r in selected),
+                       forbidden=sum(r['forbidden_effect'] or r['binding_error'] for r in selected),
+                       p95_latency_ms=latencies[math.ceil(0.95 * len(cases)) - 1],
+                       cost_usd=sum(r['cost_usd'] for r in selected))
+        metrics['error_rate'] = 1 - metrics['correct'] / len(cases)
+        report['modes'][mode] = metrics
+        if metrics['forbidden'] or (limits is not None and any(metrics[k] > limits[k] for k in limits)):
+            report['state'] = 'FAIL'
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("data", type=Path, help="JSONL with id, state, instructions, criteria, expected")
