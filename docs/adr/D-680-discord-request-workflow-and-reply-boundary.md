@@ -10,6 +10,8 @@ D-671 접수는 원문과 기명 요청자만 저장한다. D-675 Gateway는 이
 
 Fleet의 기존 tasks DB가 요청과 기존 작업의 관계 및 회신 상태를 소유한다. Task/Mission/Cell Job의 원장을 복제하거나 Bot을 operator로 만들지 않는다. transport는 Discord message create/read만 맡고 승인·작업 상태를 판단하지 않는다.
 
+Console의 주행 제출은 API v1.212의 `/channel-requests/{request_id}/submit`으로 한다. 기존 FleetTaskService와 TaskStore의 생성 트랜잭션 안에 현재 원문 owner/hash/revision/READY/candidate 검증과 관계 예약을 함께 둔다. 다른 탭의 HOLD·목표 변경은 Task 생성 전에 거절한다. Task를 먼저 만든 뒤 관계를 연결하는 UI 순서는 사용하지 않는다. 동일 확인 revision 재시도는 기존 Task key로 복구한다. 결과 회신도 생성·claim·발송 직전 원래 receipt의 현재 Discord user mapping과 guild/channel을 검증한다.
+
 첫 구현은 현재 접수 원문을 Console에서 확인하여 구조화 작업 또는 보류·거절 사유를 남기는 경로다. 일반 이동은 기존 Task 제출의 기명 사용자·idempotency 계약을 사용한다. Mission/Cell Job은 기존 proposal/resolve/admit 소유자·독립 승인 규칙을 유지한 어댑터로 연결하며 이동 제출로 대체하지 않는다. 의미가 모호한 원문과 실제 provider 미수용 입력은 질문·보류로 남긴다. 자연어를 실행 JSON이나 임의 URL로 직접 전달하지 않는다.
 
 요청 관계는 request ID, 원문 hash, 요청자, 확인자, 원장 종류와 ID를 묶는다. 현재 기명 계정·요청 소유권·기존 작업 소유권·원문 hash를 확인한다. 동일 요청의 다른 작업 연결은 conflict다. 기존 idempotency를 사용하여 제출 후 연결 실패나 재시작이 작업을 새로 만들지 않게 한다. 불명 제출은 UNKNOWN이며 자동 실행을 재시도하지 않는다.

@@ -1,4 +1,4 @@
-// Review owns the candidate; the existing Fleet navigation route owns submission.
+// Fleet binds the current review and existing Task creation in one transaction.
 export function createChannelRequestView({scope, call, el, robots, canSubmit, confirm}) {
   let receipt = null, review = null, version = 0, busy = false;
   const panel = el("channel-review"), state = el("channel-review-state");
@@ -72,13 +72,8 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, co
       request: async owner => {
         busy = true; paint();
         try {
-          const result = await call(`/api/fleet/robots/${encodeURIComponent(goal.robot_id)}/goal`, {method: "POST",
-            headers: {"Content-Type": "application/json", "Idempotency-Key": snapshot.request_key},
-            body: JSON.stringify({x: goal.x, y: goal.y, yaw: goal.yaw}), signals: [owner.signal]});
-          owner.check(); if (current !== version) return;
-          if (!result.task?.task_id) throw new Error("Task journal required");
-          const linked = await call(base + "/task", {method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({task_id: result.task.task_id, expected_hash: snapshot.content_hash,
+          const linked = await call(base + "/submit", {method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({expected_hash: snapshot.content_hash,
               expected_revision: snapshot.revision}), signals: [owner.signal]});
           owner.check(); if (current === version) review = linked;
         } finally { busy = false; if (current === version && review) paint(); }

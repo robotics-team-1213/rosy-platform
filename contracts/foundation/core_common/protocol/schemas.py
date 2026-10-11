@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
-    ChannelReviewRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
+    ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
 )
 
 import enum
