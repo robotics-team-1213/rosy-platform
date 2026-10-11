@@ -75,7 +75,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         for group in ("safety", "recovery", "tracking", "calibration"):
             for path in (MIDDLEWARE / "control/drive" / group).glob("*.py"):
                 assert names.count("control/control/" + path.name) == 1
-                assert sum(name.startswith("control/") and name.endswith("/" + path.name)
+                assert sum(name.startswith("control/control/") and name.endswith("/" + path.name)
                            for name in names) == 1
         stl = "map/map_v2_fleet/260919 MAP FILE.STL"
         archived_stl = [name for name in names if name.endswith("/share/control/" + stl)]

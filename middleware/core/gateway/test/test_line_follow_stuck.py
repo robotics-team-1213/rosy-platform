@@ -166,7 +166,7 @@ def test_console_resume_lets_the_robot_approach_down_to_stop_distance():
     _run(m, 5.5, 5.8, front=0.24)                 # between stop 0.20 and resume 0.28: held
     assert m.tick(5.81).linear == 0.0
     stuck_id = m.status().stuck.stuck_id
-    assert m.stuck_decision(stuck_id, "RESUME", by="operator") == "resume"
+    assert m.stuck_decision(stuck_id, "RESUME", by="operator", now=5.81) == "resume"
     assert _run(m, 5.9, 6.2, front=0.24).linear > 0.0
     assert _run(m, 6.2, 6.5, front=0.19).linear == 0.0          # re-blocks inside stop distance
     assert m.status().reason == "obstacle_ahead"
@@ -177,7 +177,7 @@ def test_console_resume_refused_inside_stop_distance_and_late_answer_rejected():
     _blocked_until_stuck(m)
     stuck_id = m.status().stuck.stuck_id
     with pytest.raises(AnswerRefused) as refused:
-        m.stuck_decision(stuck_id, "RESUME", by="operator")
+        m.stuck_decision(stuck_id, "RESUME", by="operator", now=5.5)
     assert refused.value.code == "STUCK_DECISION_REFUSED"
     with pytest.raises(AnswerRefused) as stale:
         m.stuck_decision("stuck-old", "WAIT", by="operator")
@@ -190,7 +190,7 @@ def test_lane_lost_opens_a_stuck_and_resume_unlatches():
     _run(m, 0.5, 4.0, front=1.0, lane=False)
     assert m.status().state == "LOST"
     assert events.named("nav.line_stuck_opened")[-1]["cause"] == "lane_lost"
-    m.stuck_decision(m.status().stuck.stuck_id, "RESUME", by="operator")
+    m.stuck_decision(m.status().stuck.stuck_id, "RESUME", by="operator", now=4.0)
     assert _run(m, 4.0, 4.3, front=1.0).linear > 0.0
 
 

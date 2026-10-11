@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("source,package,modules,entrypoints,config", [
-    ("middleware/core/gateway", "core", ["core", "core.drive"],
+    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power"],
      {"core": "core.main:main"}, None),
     ("middleware/core/api", "core_api_web", ["core_api_web"], {}, None),
     ("middleware/devices/pinky/bringup", "bringup", ["bringup"],
