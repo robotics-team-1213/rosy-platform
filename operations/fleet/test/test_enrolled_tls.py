@@ -130,7 +130,7 @@ def test_dhcp_rest_bearer_follows_only_verified_receiver(tmp_path, monkeypatch):
 
         monkeypatch.setattr('fleet.swarm.discovery_transport.socket.getaddrinfo', missing)
         rows.clear()
-        with pytest.raises(ValueError, match='not_discovered'):
+        with pytest.raises(httpx.ConnectError, match='not_discovered'):
             await client.state()
         assert not calls
         await client.aclose()

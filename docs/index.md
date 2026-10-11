@@ -311,8 +311,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
+- 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
+- 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
 - 2026-10-11 · uncommitted · docs(uiux): define complete operational role and token closure
 - 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
-- 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
-- 2026-10-11 · f2f9945c7 · docs: D-625 이전 도구 준비 검증
-- 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
