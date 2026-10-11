@@ -931,6 +931,9 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     page.locator('#token-save').click()
     expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
     page.locator('#profile-new').click()
+    page.locator('#profile-id').fill('other-frame')
+    page.locator('#profile-save').click()
+    expect(page.locator('#map-profile')).to_have_value('other-frame')
     expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
     assert store.active_view() == active and store.draft_view()['map'] is None
     assert not [call for call in robot.calls if call[0] not in
