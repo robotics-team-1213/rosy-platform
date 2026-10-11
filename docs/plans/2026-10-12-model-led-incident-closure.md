@@ -74,6 +74,10 @@ Phase 6의 단일 사건 읽기 전용 export와 기존 녹화 feedback 연결�
 
 ## 완료 기준
 
+최신 checkpoint: 기존 사건 원장과 resolver loop에 선택적 모델 worker를 구성하는 factory, 최종 검토 outbox 연결, GLM v2 의존성/import closure는 `3e2f3b9fdab4bfabbdf28eb665a0cd184591446f`로 로컬 main에 착지했다. D-685 자율 복구 변경을 함께 보존한 13개 관련 파일 원격 통합 시험은 적격 Model PC 7.3GB에서 288 passed, exit 0, known-failures 신규 실패 0건이며 lint도 통과했다. 로그는 `X:/DevTemp/land/feat-conditional-model-review/run-1-1.txt`다. 기본 비활성·같은 DB·사람 점유 차단·UNKNOWN/재발행 거부 경계를 유지한다. 위의 과거 checkpoint에서 미구현으로 적었던 factory는 이제 source 구현되었으며, 실제 서비스 설정과 수용 프로파일 연결은 여전히 남아 있다.
+
+AI PC의 임시 비특권 환경에서 해시 고정 wheel의 오프라인 설치, pip 의존성 검사, v2 import/codec probe가 exit 0과 `PASS_V2_IMPORT_CODEC_ONLY`로 끝났다. 모델 호출은 0회이며 root 설치·서비스 계정 격리·실제 제공자·과금·독립 품질·현장 수용을 증명하지 않는다. 설치 묶음과 실제 확인 범위는 [import closure 기록](../validation/deliberation-host-admission-2026-10-12/versioned-import-closure.md)에 둔다. 다음 작업은 상세 비용 증거를 공통 사건 원장에 연결하고, 실제 Fleet 비교 기준과 수용된 제공자·보정 프로파일을 구성하는 것이다. Discord 설정은 담당 세션이 유지한다. 목표는 아직 진행 중이며 푸시·운영 활성화는 수행하지 않았다.
+
 2026-10-12 checkpoint: Phase 2·3과 Phase 4의 예산 원장·기존 관측 읽기 포트는 `daccbd38be`로 로컬 main에 착지했다. 원격 24개 관련 파일의 364개 source 시험과 known-failure 비교에서 신규 실패 0건을 확인했다. 판단 계약·provider 연결·독립 평가를 실제 하위패키지로 분리했으며 기존 부모의 크기 기준과 +150 한도를 유지했다. 푸시·배포·실제 GLM·현장 수용은 포함하지 않는다. worker·최종 사람 인수 연결은 별도 작업 중이다. Phase 6의 구체적 실행 순서는 [실패 피드백·개선 계획](2026-10-12-model-improvement-feedback.md)에 기록한다.
 
 각 단계의 소스·원격·호스트·실제 제공자·독립 품질·배포·현장 증거를 구분한다. 모델 간 합의나 JSON 성공만으로 현장 완료를 선언하지 않는다. 관측 부족·위험 누락·다른 사건에 조치·정상 불필요 명령 0건 수용 기준은 유지한다. 모델 교체 시 같은 계약/근거/안전/종결 검증이 그대로 통과해야 한다.
