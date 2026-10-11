@@ -101,8 +101,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
-    console.add_argument("--discord-intake-config", default=None, type=Path,
+    discord = console.add_mutually_exclusive_group()
+    discord.add_argument("--discord-intake-config", default=None, type=Path,
                          help="D-671 private named Discord intake configuration; absent disables intake")
+    discord.add_argument("--discord-intake-config-optional", default=None, type=Path,
+                         help="D-675 private intake configuration; missing file disables intake")
     console.add_argument("--stuck-resolver", action="store_true",
                          help="D-577 2: accepted for compatibility; the resolver is on by default")
     console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
@@ -652,6 +655,9 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'discord_intake_config', None) is not None:
         from fleet.server.channel_requests import ChannelConfig
         channel_config = ChannelConfig.load(args.discord_intake_config)
+    elif getattr(args, 'discord_intake_config_optional', None) is not None:
+        from fleet.server.channel_requests import ChannelConfig
+        channel_config = ChannelConfig.load(args.discord_intake_config_optional, optional=True)
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
