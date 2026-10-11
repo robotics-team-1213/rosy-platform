@@ -8,6 +8,7 @@ session is refused and unlocks with the shared token.
 
 import copy
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -142,6 +143,20 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 expect(footer.locator("#clock")).not_to_have_text("--:--:--")
                 expect(page.get_by_role("banner")).to_have_count(1)
                 assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                for link in page.locator(".doc-tabs a").all():
+                    box = link.bounding_box()
+                    assert box["width"] == box["height"] == 48, (name, width, box)
+                    assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
+                more = page.get_by_role("button", name="접속과 화면 표시")
+                assert more.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                inbox_text = page.locator("#fleet-inbox").text_content().strip()
+                assert not inbox_text or inbox_text.isdecimal(), inbox_text
+                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                for tab in page.locator(".context-tabs [role=tab]").all():
+                    assert tab.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    assert tab.bounding_box()["height"] == 48
+                    expect(tab).to_have_attribute("data-ui-tooltip", tab.text_content().strip())
                 if width >= 1024:
                     assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
                 else:
@@ -166,8 +181,6 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 if width <= 390:
                     more = page.get_by_role("button", name="접속과 화면 표시")
                     expect(more).to_be_visible()
-                    if width == 390:
-                        expect(more).to_contain_text("접속")
                     more.click()
                     expect(page.locator("#theme-choice-label")).to_be_visible()
                     assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)
