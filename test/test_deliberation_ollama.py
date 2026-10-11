@@ -67,6 +67,7 @@ def test_fixed_local_readback_and_only_bounded_request(monkeypatch, change):
     else:
         assert [item[0] for item in seen] == ['/api/ps', '/api/chat', '/api/ps']
         request = seen[1][1]
+        assert len(canonical(request).encode()) <= 16384
         assert request['model'] == ollama.MODEL and request['stream'] is False
         assert request['options']['num_predict'] == 1024 and 'tools' not in request and 'think' not in request
 
@@ -77,3 +78,38 @@ def test_wrong_schema_refuses_before_http(monkeypatch):
     monkeypatch.setattr(ollama, 'exchange', lambda *args: pytest.fail('no HTTP admission'))
     with pytest.raises(ValueError):
         ollama.execute(canonical(raw).encode(), 1)
+
+
+def test_exchange_uses_fixed_loopback_no_auth_and_bounded_reader(monkeypatch):
+    seen = []
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, limit):
+            assert limit == 16385
+            return b'{}'
+    class Opener:
+        def open(self, request, timeout):
+            seen.append(request)
+            assert timeout == 1
+            return Response()
+    monkeypatch.setattr(ollama.urllib.request, 'build_opener', lambda *args: Opener())
+    ollama.exchange('/api/ps', None, 1)
+    assert seen[0].full_url == 'http://127.0.0.1:11434/api/ps'
+    assert seen[0].get_header('Authorization') is None
+    with pytest.raises(ValueError):
+        ollama.exchange('https://other.invalid', None, 1)
+    with pytest.raises(ValueError):
+        ollama.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.invalid')
+
+
+def test_transport_uses_bounded_subprocess_not_thread(monkeypatch):
+    import asyncio
+    seen = []
+    async def bounded(argv, raw, remaining, limit):
+        seen.append((argv, raw, remaining, limit))
+        return 0, b'{}'
+    monkeypatch.setattr(ollama, 'bounded_process', bounded)
+    assert asyncio.run(ollama.OllamaTransport()(b'{}', 1, 123)) == (0, b'{}')
+    argv, raw, remaining, limit = seen[0]
+    assert argv[1] == '-c' and argv[-1] == '1' and raw == b'{}' and limit == 123
