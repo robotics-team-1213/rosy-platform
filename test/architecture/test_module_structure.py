@@ -270,7 +270,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_396,
+        53_606,
+        "split: independently re-judged by safety_structure_review at 53606 on 2026-10-12: "
+        "D-675 adds Discord Gateway transport and optional existing-Fleet lifespan reception, without "
+        "Task/Mission/Job/claim, provider or device authority. Includes every Discord source file; "
+        "keep +150, app.py 906, every file ceiling and full-progress/observe/server/UI obligations. "
+        "Previous verdict: "
         "split: independently re-judged on 2026-10-12 by safety_structure_review at 53396, including the "
         "35-line Discord transport holder installed by Fleet. D-671 adds dedicated authenticated reception, "
         "existing-DB journal and owner-only Console reading, with no work creation or device/model authority. "
