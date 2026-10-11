@@ -7217,7 +7217,8 @@ osy-d395-s1d\`.
 
 ## 2026-10-08 · uncommitted · feat(decision-ask): AI PC 질의는 사실과 후보만 반환한다
 
-- 변경: D-523. leet.ai.decision_pipeline이 정체 사실과 허용 후보를 검사한다. 막힘 답, meet 주문, 네트워크, 공개 REST, Laya 기동은 없다. D-492와 D-503은 Proposed로 남는다.
+- 변경: D-523. 
+leet.ai.decision_pipeline이 정체 사실과 허용 후보를 검사한다. 막힘 답, meet 주문, 네트워크, 공개 REST, Laya 기동은 없다. D-492와 D-503은 Proposed로 남는다.
 - 증거: pytest operations/fleet/test/test_decision_pipeline.py 34 passed. known_failures.py 0 new. 출력 X:\DevTemp\decision-ask\run.txt.
 - gate 변화: 없음. 현장 그림자, V0/V1, 장치 동작은 미검증.
 - 결정: D-523 Accepted (2026-10-08, 사용자 계획 승인; 내부 파서)
@@ -7679,3 +7680,50 @@ osy-d395-s1d\`.
 - 변경: D-635/API reference에 차선 코스·축구장·일반 지도 종류, 설명과 경기장 치수 저장 계약을 기록했다. 기존 Games 재사용과 자동 실행·Vision 축구 인식의 별도 연결 범위를 명시했다.
 - 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 원격 계약 175·Node 285·Chromium 4·DB 재개방 포함 프로필 11 passed, known_failures NEW 0, lint 오류 0.
 - gate 변화: SOURCE/원격 계약/브라우저. main 착지·push·배포·실측 경기장 교정·게임 수용은 별도다.
+## 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
+
+- 변경: root AGENTS·제품·계약·실제 폴더를 대조해 ROSY 정체성, 의미 기반 3단계 목표 트리, 세계 상태/행동 예측/학습·평가 경계를 플랫폼 설계/계획에 기록했다. CORE 공통 운용·Drive/Arm Control·Safety·복구·곡률 책임은 별도 상세 설계/계획과 연결했다. 네 문서 모두 Proposed다.
+- 증거: 문서 링크·경로 확인, harness generate와 lint(0 errors, 25 freshness warnings). 원격 문서 계약 시험 결과는 검증 뒤 이어 기록한다.
+- gate 변화: 없음. Proposed 문서뿐이며 코드 이동·Safety 정책 변경·장치 주행·main 착지·push는 하지 않았다.
+
+## 2026-10-11 · be92428a1 · docs: 플랫폼·CORE 구조 계획의 원격 문서 계약 검증
+
+- 변경: 위 설계/계획 커밋의 원격 검증 결과를 기록했다. 제품 코드·계약·설정 변경은 없다.
+- 증거: 커밋 be92428a1을 모델 PC에 보내 `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 실행, 121 성공 표시·exit 0. known_failures는 0 NEW/0 known. 네 문서 교차 링크·시험 경로 확인 및 append-only 기준 log의 커밋 blob 보존을 확인했다.
+- gate 변화: 없음. 원격 실행의 기존 상태/검증 branch 경고는 독립 실물 수용이 아니다. 설계 문서의 목표 폴더·Prediction·world model 학습/추론은 구현·설치하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 도메인 개요 3단계·내부 책임 최대 5단계 구조안
+
+- 변경: 후속 사용자 요청에 따라 플랫폼 목표 트리를 최대 5단계로 개정했다. CORE runtime/관문, Drive·Arm 계획/제어/복구/Safety, local 실행 수명, world 상태 projection, 행동 예측 inference, world model 학습/평가를 구분하고 폴더 승격·파일 유지·보류 기준을 계획에 반영했다.
+- 증거: 현재 gateway·line-follow·OMX 모듈 안내와 기존 분리 기준 대조, tracked source 최대 5 depth inventory. 네 문서 교차 링크와 목표 트리 depth≤5 확인, harness lint 0 errors/25 기존 freshness warnings. 원격 문서 계약 결과는 후보 커밋 검증 뒤 기록한다.
+- gate 변화: 없음. Proposed 문서 개정이며 소스/실제 폴더 이동·새 패키지 생성·장치 활성화·main 착지·push는 하지 않는다.
+
+## 2026-10-11 · 179738b17 · docs: 최대 5단계 구조안 문서 계약 검증
+
+- 변경: 목표 트리·계획 개정의 검증 결과를 기록했다. 코드와 실제 디렉터리는 변경하지 않았다.
+- 증거: 해당 후보 커밋의 모델 PC 원격 network/harness 문서 계약 121 성공 표시·exit 0, known_failures 0 NEW/0 known. 문서 링크·목표 책임 depth≤5와 기존 append-only journal의 Git blob 보존을 확인했다.
+- gate 변화: 없음. 패키징·장치·물리 수용은 확인하지 않았고 기존 gate를 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
+
+- 변경: 사용자 요청에 따라 최대 5단계 책임 구조 방향을 D-625로 기록하고, 네 holder 이전표와 M0–M9 계획·참조 수정·Safety 리뷰·복구 절차를 먼저 작성했다. 도구 시험을 구현 전에 준비한다.
+- 증거: 기존 d427 mover/scanner·platform manifest 소비자 검토, API safety.py와 OMX owner/stop의 Safety 태그 확인. 도구 RED/GREEN은 후속 커밋에서 원격 검증한다.
+- gate 변화: 없음. 실제 제품 파일 이동·책임 추출·장치 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-11 · f2f9945c7 · docs: D-625 이전 도구 준비 검증
+
+- 변경: 네 단위의 JSON 이전표와 기본 read-only preview/선택 holder 이동 도구를 준비했다. 참조 수정은 수동이며 API·OMX Safety 단위는 자동 이동을 차단한다. 기존 scanner를 재사용하고 삭제·stash·reset·광역 staging을 넣지 않았다.
+- 증거: 구현 전 e98e0aeed의 원격 RED 12 NEW(도구 미구현), 구현/시험 보강 f2f9945c7의 모델 PC 원격 도구/harness/network 계약 144 성공 표시·exit 0, known_failures 0 NEW/0 known. synthetic 등록 worktree의 실제 이동/역이동과 충돌·dirty·stale·link·ignored·Safety 거절 검증. 실제 네 단위 preview에서 tracked byte hash/index/status 무변경, ADR Log BOM/CRLF와 committed journal append-only 보존 확인.
+- gate 변화: 없음. SOURCE/원격 도구 증거이며 실제 제품 이동·책임 추출·설치·ARM64·DEVICE·FIELD·main 착지·push는 미실행이다.
+
+## 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
+
+- 변경: 후속 실행 요청에 따라 D-625 M3–M6의 package 보존 이전을 D-626으로 기록했다. 최신 main을 작업 브랜치에 병합하고 Safety/설치 보존 조건을 독립 리뷰로 확인했다.
+- 증거: 이전 전 3927f9a33의 모델 PC 원격 architecture/도구 계약 104 성공 표시·exit 0, known_failures 0 NEW/0 known. API Safety 1개·OMX Safety 5개와 Pinky deadman·Nav2 후보 출력·Docker 목적지 보존 조건을 리뷰했다. 변경 후 최종 리뷰와 시험은 각 이전 후보에서 기록한다.
+- gate 변화: 없음. 이전 실행 범위의 계약이며 실제 패키지 설치·장치·현장 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
+
+- 변경: 네 실제 holder 이전 및 참조·manifest·CI·설치 경로 정렬 후, CORE 도킹/군집 조립과 line-follow 배선을 drive 하위로 분리했다. 현재 책임 구조·후속 알고리즘 경계·독립 Safety 승인과 검증 결과를 문서화했다.
+- 증거: 원격 CORE/실제 Python 설치 2575 성공·10 skip, feature 1675 성공, structure/harness/Safety 272 성공, OMX 532 성공·3 skip. 각 성공 실행 known_failures 0 NEW/0 known. docs/validation/d626-holder-migration-2026-10-11/result.md 참조.
+- gate 변화: 없음. SOURCE·Python 설치 근거이며 새 Jazzy/ARM64/장치/현장·CI·main 착지·push·배포는 미확인 또는 미실행.

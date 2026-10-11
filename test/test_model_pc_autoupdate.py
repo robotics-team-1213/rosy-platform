@@ -92,6 +92,29 @@ def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
         m.unpack(folder / "code.tar", tmp_path / "release")
 
 
+def test_split_perception_archive_requires_its_declared_drive_closure(tmp_path, keys):
+    m = module()
+    helper = {"middleware/perception/control/_source_layout.py": b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="source-holder dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    helper.update({name: b"source\n" for name in m.SPLIT_REQUIRED})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=helper)
+    m.unpack(folder / "code.tar", tmp_path / "complete")
+    for name in m.SPLIT_REQUIRED:
+        assert (tmp_path / "complete" / name).read_bytes() == b"source\n"
+
+
+@pytest.mark.parametrize("path", ["middleware/control/drive/planning/nav2/node.py",
+                                  "middleware/control/drive/unknown/code.py",
+                                  "middleware/control/arm/safety/code.py"])
+def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
+    m = module()
+    folder = candidate(m, tmp_path, keys, extra_files={path: b"pass\n"})
+    with pytest.raises(ValueError, match="approved model-code dependencies"):
+        m.unpack(folder / "code.tar", tmp_path / "release")
+
+
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
     m = module()
     source = tmp_path / "release"
@@ -213,7 +236,7 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
-                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False),
+                                      ("middleware/devices/pinky/profile/config/camera_nominal.yaml.extra", False),
                                       ("operations/vision/rosy_vision/cli.py", False),
                                       ("operations/vision/rosy_vision/lane_map.py.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
@@ -271,7 +294,7 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     (code / "model").mkdir(parents=True)
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
-    profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+    profile = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
     dependencies = ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
                     "shared/web/shared-assets.json", profile]
     if camera_map:

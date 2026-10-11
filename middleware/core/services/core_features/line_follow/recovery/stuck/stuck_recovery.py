@@ -228,6 +228,8 @@ class StuckRecovery:
     def _answer_refusal(self, decision: str, now: float, yield_m: Optional[float] = None,
                         yield_turn_rad: Optional[float] = None) -> Optional[str]:
         last = self._last_or(now)
+        if decision in ("RESUME", "BACK_AND_RETRY", "YIELD") and self._answer_clock_invalid(now):
+            return "invalid_clock"
         if self._cause == CROSSWALK and decision not in CROSSWALK_DECISIONS:
             return "crosswalk_gate"           # D-573 4: no moving answer while a person may be there
         if self._operator_required and decision == "BACK_AND_RETRY":  # YIELD stays: operator-owned
@@ -254,7 +256,19 @@ class StuckRecovery:
         return None
 
     def _last_or(self, now: float) -> StuckInput:
-        return self._last if self._last is not None else StuckInput(now=now)
+        if self._last is None:
+            return StuckInput(now=now)
+        elapsed = now - self._last.now
+        def age(value):
+            if value is None:
+                return None
+            return value + elapsed if math.isfinite(value) and value >= 0 and math.isfinite(elapsed) and elapsed >= 0 else math.inf
+        return replace(self._last, now=now, scan_age_s=age(self._last.scan_age_s),
+                       trail_age_s=age(self._last.trail_age_s))
+
+    def _answer_clock_invalid(self, now: float) -> bool:
+        return not math.isfinite(now) or (self._last is not None and (
+            not math.isfinite(self._last.now) or now < self._last.now))
 
     # ---- local recovery ---------------------------------------------------------
     def _yield_refusal(self, inp: StuckInput, yield_m: Optional[float],

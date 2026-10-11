@@ -103,6 +103,12 @@ def _is_test_file(path: str) -> bool:
 def _package_of(path: str, root: dict) -> str:
     """Dotted package of ``path``, used to resolve relative imports."""
     relative = PurePosixPath(path).relative_to(root["path"])
+    mounts = root.get("source_packages", {})
+    holders = [holder for holder in mounts if not holder or str(relative) == holder or str(relative).startswith(holder + "/")]
+    if holders:
+        holder = max(holders, key=len)
+        parent = relative.relative_to(holder).parent if holder else relative.parent
+        return ".".join([mounts[holder], *parent.parts])
     if root["d427_target"] in PACKAGE_DIR_ROOTS:
         (prefix,) = root["import_prefix"]
         return ".".join([prefix, *relative.parent.parts])
@@ -261,14 +267,16 @@ def _parent(root: dict, roots: list[dict]) -> dict | None:
 def _state(root: dict, roots: list[dict]) -> str:
     """D-427 migration state of a root.
 
-    moved: ``path == d427_target``. partly moved: carries ``deferred`` (the
+    moved: ``path == layout_target`` (defaults to the original ``d427_target``).
+    The D-427 target remains the ownership ID after later layout moves.
+    partly moved: carries ``deferred`` (the
     follow-up that splits it out) and sits inside its moved parent package.
     pending: anything else, including a deferred root whose parent has not moved.
     """
-    if root["path"] == root["d427_target"]:
+    if root["path"] == root.get("layout_target", root["d427_target"]):
         return "moved"
     parent = _parent(root, roots)
-    if root.get("deferred") and parent is not None and parent["path"] == parent["d427_target"]:
+    if root.get("deferred") and parent is not None and parent["path"] == parent.get("layout_target", parent["d427_target"]):
         return "partly_moved"
     return "pending"
 
@@ -474,6 +482,19 @@ def test_moved_roots_leave_nothing_behind():
     assert sum(map(in_scope, tracked)) > 1000, "old-path scan scope shrank; check in_scope"
     problems = _legacy_report(_manifest()["roots"], tracked, _read_text, LEGACY_SCAN_ALLOWLIST)
     assert problems == [], problems
+
+
+def test_later_layout_move_preserves_ownership_and_still_rejects_pending_legacy():
+    root = {"path": "middleware/current_api", "d427_target": "middleware/identity_api",
+            "layout_target": "middleware/current_api", "part": "middleware", "legacy": "old/api"}
+    assert _state(root, [root]) == "moved"
+    assert _legacy_report([root], [], lambda _: "", set()) == []
+    pending = {**root, "path": "middleware/core/not_yet_moved"}
+    assert _state(pending, [pending]) == "pending"
+    assert _legacy_report([pending], [], lambda _: "", set()) == [
+        "middleware/core/not_yet_moved: legacy only on moved or partly moved roots, not pending",
+    ]
+    assert root["d427_target"] == "middleware/identity_api"
 
 
 def test_legacy_scan_catches_every_form_and_respects_exemptions():

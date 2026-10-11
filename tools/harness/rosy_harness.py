@@ -706,6 +706,10 @@ def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dic
     if owner is None:
         return None
     if owner["path"] == module_path:
+        if owner.get("layout_target") and owner.get("d427_target"):
+            committed = _git(repo, "show", f"{ref}:{owner['d427_target']}/logs.md")
+            if committed is not None:
+                return committed
         return _git(repo, "show", f"{ref}:{owner['legacy']}/logs.md")
     renamed = _git(repo, "log", "-1", "--follow", "-M", "--diff-filter=R", "--format=", "--name-status",
                    "HEAD", "--", rel) or ""

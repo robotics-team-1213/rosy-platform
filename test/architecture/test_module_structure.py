@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception"}
+           "foundation", "ros_idl", "perception", "devices", "control"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -99,9 +99,9 @@ SIZE_UNITS = ("core/services/core_features/line_follow",
               "fleet/fleet/traffic",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
-              "perception/control/sensing/perception",
-              "perception/control/sensing/perception/learned",
-              "perception/control/sensing/perception/drivable")
+              "perception/vision/perception",
+              "perception/vision/perception/learned",
+              "perception/vision/perception/drivable")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -114,15 +114,6 @@ SIZE_VERDICTS = {
         "site_update_io.py; candidate verification lives in verify_candidate.py. The updater "
         "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
         "Re-judge on further growth",
-    ),
-    "core/gateway/core/services.py": (
-        603,
-        "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
-        "D-541 adds only the trip_lease import, field, build_trip_lease call and kwarg; lease logic and "
-        "wiring live in core/trip_lease.py (fleet_loss_wiring pattern). services.py stays CORE composition. "
-        "On next growth, split: move the pure config parsers (_battery/_power/_traffic_policy_config, "
-        "_simulation_docking, _seeded_dock_database) to core/*_wiring.py, re-exporting _battery_config for "
-        "tests. Budget and allowance unchanged",
     ),
     "fleet/fleet/server/trip_runner.py": (
         751,
@@ -874,7 +865,7 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "perception/control/safety/node.py": (
+    "control/drive/safety/adapter/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -940,7 +931,7 @@ SIZE_VERDICTS = {
         "LOCALIZED check feeding the lane route); verdict unchanged. "
         "The zero-growth allowance remains unchanged.",
     ),
-    "perception/control/sensing/perception/lane.py": (
+    "perception/vision/perception/lane.py": (
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
@@ -954,7 +945,7 @@ SIZE_VERDICTS = {
         "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
         "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
-    "perception/control/sensing/perception/lane_bev.py": (
+    "perception/vision/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
@@ -1083,7 +1074,7 @@ SIZE_VERDICTS = {
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
-    "perception/control/sensing/perception/drivable": (
+    "perception/vision/perception/drivable": (
         810,
         "accept: keep steering from the learned drivable way (drivable_steer.py moved from learned/, "
         "drivable_keep.py, drivable_preview.py) is its own size unit inside the P1a perception unit, by the "
@@ -1101,7 +1092,7 @@ SIZE_VERDICTS = {
         "_lane_cue_spot_running, reads _cue_latch and _cue_spot_turning, interprets the plan tuple "
         "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
-    "perception/control/sensing/perception/learned": (
+    "perception/vision/perception/learned": (
         2272,
         "accept: independently re-judged at 2272 on 2026-10-10 by snapshot_review: drivable paint and floor gating remain in the model runner/manifest owner, including the gated fallback; steering remains the separate drivable unit and CORE retains commands. Re-judge after +150. Previous verdict: "
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
@@ -1112,7 +1103,7 @@ SIZE_VERDICTS = {
         "Re-judged at 1982 on 2026-10-10: drivable_steer.py (548) left for the drivable unit "
         "(drivable addendum), learned had reached 2520. Re-judge on growth past +150.",
     ),
-    "perception/control/sensing/perception": (
+    "perception/vision/perception": (
         9_934,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
@@ -1135,8 +1126,8 @@ SIZE_VERDICTS = {
         "addendum); measured after merging local main.",
     ),
     "control": (
-        34_619,
-        f"split: re-judged at 34619 on 2026-10-10 for D-597 (learned_paint_target parameter and drivable paint wiring in line_observer_node.py, overlay key in ir_overlay.py, --paint-target in line_observer_overrides.py; the decision logic is in the perception unit). P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        34_855,
+        f"split: independently re-judged at 34855 on 2026-10-11 by safety_structure_review for D-630: 233 unique production files across the perception distribution and its five declared Drive source holders; Nav2 and registered vision units excluded. The +236 reflects packaging/source facades and source audit overhead. Physical holder separation keeps the existing control distribution, so the split obligation and +150 trigger remain (docs/plans/2026-10-11-platform-structure-migration.md). Previously re-judged at 34619 on 2026-10-10 for D-597 (learned_paint_target parameter and drivable paint wiring in line_observer_node.py, overlay key in ir_overlay.py, --paint-target in line_observer_overrides.py; the decision logic is in the perception unit). P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
@@ -1388,7 +1379,7 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
-    "apps/device/omx/adapter/omx_adapter/action_store.py": (
+    "devices/omx/adapter/omx_adapter/action_store.py": (
         1_191,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
@@ -1401,14 +1392,14 @@ SIZE_VERDICTS = {
         "completion is journaled per kind (PICK_PLACE names kept, CELL_TRANSFER its own) with "
         "net -3 lines. The hard-tier zero-growth rule prevents silent expansion",
     ),
-    "apps/device/omx/adapter/omx_adapter/command_owner.py": (
+    "devices/omx/adapter/omx_adapter/command_owner.py": (
         621,
         "accept: one owner (2026-10-02, C3b review) for the single-writer arm command policy: "
         "config, joint-state intake, submit admission (limits, start window), poll timeouts on "
         "the owner and wall clocks, cancel and recovery share one lock and one HOLD latch; "
         "splitting admission from the watchdog would split that lock. ROS-free and host-testable",
     ),
-    "apps/device/omx/adapter/omx_adapter/pose_plan.py": (
+    "devices/omx/adapter/omx_adapter/pose_plan.py": (
         714,
         "accept: one owner (2026-10-02, C3b) for the simulation cell profile and the analytic "
         "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
@@ -1510,7 +1501,7 @@ ROLE_DIR = {
     "core": ("core", "gateway"),
     "core_events": ("core", "events"),
     "core_features": ("core", "services"),
-    "core_api_web": ("core", "api_web"),
+    "core_api_web": ("core", "api"),  # D-626 holder; package identity stays core_api_web
     "core_common": ("foundation",),
     "interfaces": ("ros_idl",),
     "control": ("perception",),  # middleware/perception (D-427 wave 4e)
@@ -1518,16 +1509,16 @@ ROLE_DIR = {
     "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
     "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
-    "pinky_pro": ("apps", "device", "pinky", "profile"),
-    "bringup": ("apps", "device", "pinky", "bringup"),
-    "description": ("apps", "device", "pinky", "description"),
+    "pinky_pro": ("devices", "pinky", "profile"),
+    "bringup": ("devices", "pinky", "bringup"),
+    "description": ("devices", "pinky", "description"),
     "sensor_adc": ("drivers", "pinky_adc"),
     "lamp_control": ("drivers", "pinky_lamp"),
     "led": ("drivers", "pinky_led"),
-    "omx": ("apps", "device", "omx", "profile"),
-    "omx_adapter": ("apps", "device", "omx", "adapter"),
+    "omx": ("devices", "omx", "profile"),
+    "omx_adapter": ("devices", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
-    "navigation": ("core", "navigation"),
+    "navigation": ("control", "drive", "planning", "nav2"),
     "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
     "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
@@ -1556,9 +1547,12 @@ def _declared(name: str) -> set:
 
 
 def _files(name: str, suffixes):
-    for path in PACKAGES[name]["dir"].rglob("*"):
-        if path.is_file() and path.suffix in suffixes and _is_prod(path):
-            yield path
+    holders = (ROOT / "middleware/control/drive" / holder for holder in
+               ("calibration", "recovery", "safety", "tracking", "planning/grid")) if name == "control" else ()
+    for directory in (PACKAGES[name]["dir"], *holders):
+        for path in directory.rglob("*"):
+            if path.is_file() and path.suffix in suffixes and _is_prod(path):
+                yield path
 
 
 def _used(name: str) -> dict:
@@ -1584,7 +1578,7 @@ def _used(name: str) -> dict:
         for pattern in WORKSPACE_REF_PATTERNS:
             for match in pattern.finditer(text):
                 used.setdefault(match.group(1), f"{_rel(path).as_posix()} references {match.group(1)}")
-        if "launch" in path.relative_to(PACKAGES[name]["dir"]).parts or ".launch." in path.name:
+        if "launch" in _rel(path).parts or ".launch." in path.name:
             for pattern in LAUNCH_EXEC_PATTERNS:
                 for match in pattern.finditer(text):
                     used.setdefault(match.group(1), f"{_rel(path).as_posix()} runs {match.group(1)}")
@@ -1837,9 +1831,13 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
 @pytest.mark.parametrize(
     "rel, name, ok",
     [
-        (("apps", "device", "pinky", "bringup"), "bringup", True),
-        (("apps", "device", "pinky", "profile"), "pinky_pro", True),
-        (("apps", "device", "omx", "adapter"), "omx_adapter", True),
+        (("devices", "pinky", "bringup"), "bringup", True),
+        (("devices", "pinky", "profile"), "pinky_pro", True),
+        (("apps", "device", "pinky", "bringup"), "bringup", False),
+        (("devices", "omx", "adapter"), "omx_adapter", True),
+        (("control", "drive", "planning", "nav2"), "navigation", True),
+        (("core", "navigation"), "navigation", False),
+        (("apps", "device", "omx", "adapter"), "omx_adapter", False),
         (("drivers", "imu_bno055"), "imu_bno055", True),
         (("devices", "pinky_pro", "bringup"), "bringup", False),
         (("devices", "bringup"), "bringup", False),

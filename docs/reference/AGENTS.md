@@ -48,7 +48,7 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 ### Internal
 
 - `contracts/foundation/core_common/protocol/schemas.py`
-- `middleware/core/api_web/core_api_web/api/`
+- `middleware/core/api/core_api_web/api/`
 - `deploy/robot/pinky_pro/release/host_agent.py`
 
 ### External

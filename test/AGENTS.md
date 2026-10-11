@@ -92,7 +92,7 @@ t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1
 
 ### Internal
 
-- `middleware/apps/device/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
+- `middleware/devices/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
 - `deploy/robot/pinky_pro/release/*`, `deploy/robot/pinky_pro/*`, `deploy/robot/pinky_pro/image/*`
 
 ### External

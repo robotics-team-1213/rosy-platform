@@ -12,7 +12,7 @@ from omx_adapter.ros_goal_contract import RosGoalEvent, canonical_ros_goal_id
 
 
 def handle(sink):
-    file = ROOT/'middleware/apps/device/omx/adapter/omx_adapter/ros_runtime.py'
+    file = ROOT/'middleware/devices/omx/adapter/omx_adapter/ros_runtime.py'
     tree = ast.parse(file.read_text(encoding='utf-8'))
     cls = next(node for node in tree.body if isinstance(node,ast.ClassDef)
                and node.name == 'RosTrajectoryActionHandle')

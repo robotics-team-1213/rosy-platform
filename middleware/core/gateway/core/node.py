@@ -74,7 +74,7 @@ class RosyCoreNode(Node):
 
         from core.bridge.control_sensor_adapter import ControlSensorConfig, build_control_adapter
         from core.lidar_mount import resolve_lidar_forward_deg
-        from core.line_follow_wiring import bind_lane_return_motion, check_bridge_floor_basis
+        from core.drive.line_follow import bind_lane_return_motion, check_bridge_floor_basis
         from core.safety_params import resolve_safety_params, simulation_sensors
         from core.safety_policy_status import safety_policy_block
         from core_common.config import local_overlay

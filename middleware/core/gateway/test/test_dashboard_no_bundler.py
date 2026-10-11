@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-API = (Path(__file__).resolve().parents[4] / "middleware" / "core") / "api_web"
+API = (Path(__file__).resolve().parents[4] / "middleware" / "core") / "api"
 WEB = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 
 

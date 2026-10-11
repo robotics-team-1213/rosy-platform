@@ -224,6 +224,7 @@ def _covered(path: str, patterns: list[str]) -> bool:
 def test_push_paths_cover_every_image_source_and_candidate_doc():
     patterns = _triggers()["push"]["paths"]
     sources = _image_source_paths(ROOT / "deploy" / "site")
+    assert "operations/world/src" in sources
 
     assert all("*" not in p or (p.endswith("/**") and "*" not in p[:-3]) for p in patterns)
     for path in [*sources, *DOC_FILES, ".github/workflows/build-site-candidate.yml"]:

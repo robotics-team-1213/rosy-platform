@@ -18,7 +18,7 @@ from rosy_vision.track.marker_sightings import robot_sightings
 from rosy_vision.track.model import DetectorResult
 from rosy_vision.track.worker import TrackWorker
 
-GEOMETRY = Path(__file__).resolve().parents[3] / "middleware/apps/device/pinky/profile/config/geometry.yaml"
+GEOMETRY = Path(__file__).resolve().parents[3] / "middleware/devices/pinky/profile/config/geometry.yaml"
 LENS = {"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}
 #: The approved record of the site camera on 2026-10-10 (camera ~1.94 m above the floor).
 RECORD = {

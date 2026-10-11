@@ -35,7 +35,7 @@ Static HTML, CSS, and JS. No React app in the current dashboard.
 
 ### Internal
 
-- `middleware/core/api_web/` serves `robot/`.
+- `middleware/core/api/` serves `robot/`.
 - `shared/web/` for shared operator copy and components.
 
 ### External
