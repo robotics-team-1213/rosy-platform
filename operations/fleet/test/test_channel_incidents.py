@@ -14,7 +14,7 @@ from test_channel_workflow import GUILD, CHANNEL, USER, BOT, MESSAGE
 from test_line_stuck_api import _console, _named_app, _state, _auth, OPERATOR, VIEWER
 
 
-def setup(tmp_path):
+def make_channel_incident(tmp_path):
     robot = FakeRobot('rosy_01', state=_state())
     config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
                            transport_key='transport-key-' * 3, users={USER: 'op-7'})
@@ -36,7 +36,7 @@ def post(client, path, body, token=OPERATOR):
 
 
 def test_current_claim_relation_retry_and_closed_reply_have_no_device_authority(tmp_path):
-    client, store, robot, receipt, path, body = setup(tmp_path)
+    client, store, robot, receipt, path, body = make_channel_incident(tmp_path)
     result = post(client, path, body)
     assert result.status_code == 200, result.text
     view = result.json()
@@ -63,7 +63,7 @@ def test_current_claim_relation_retry_and_closed_reply_have_no_device_authority(
 
 @pytest.mark.parametrize('change', ['hash', 'revision', 'judgment', 'closed', 'stale', 'owner', 'mapping'])
 def test_current_case_and_named_request_guards_leave_no_relation_or_claim(tmp_path, change):
-    client, store, _, receipt, path, body = setup(tmp_path)
+    client, store, _, receipt, path, body = make_channel_incident(tmp_path)
     if change in {'hash', 'judgment'}:
         body['expected_hash' if change == 'hash' else 'judgment_revision'] = '0' * 64
     if change == 'revision':
@@ -91,7 +91,7 @@ def test_current_case_and_named_request_guards_leave_no_relation_or_claim(tmp_pa
 
 
 def test_changed_review_at_claim_and_reply_failure_rollback_both_owners(tmp_path, monkeypatch):
-    client, store, _, receipt, path, body = setup(tmp_path)
+    client, store, _, receipt, path, body = make_channel_incident(tmp_path)
     app = client.app
     handoff = app.state.line_stuck._log.handoff
     original = handoff.claim
