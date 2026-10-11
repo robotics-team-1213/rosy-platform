@@ -63,6 +63,33 @@ def test_export_preserves_road_meaning(tmp_path, semantic):
     assert load_manifest(out).raw["output"]["classes"][-1]["semantic"] == semantic
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "current_road_region/1", "trajectory_band/1"])
+def test_export_cli_yaml_preserves_road_meaning_through_writer(tmp_path, semantic):
+    import yaml
+    import export_onnx
+    classes = [{"name": name, "role": role} for name, role in CLASSES]
+    classes[2]["semantic"] = semantic
+    path = tmp_path / "classes.yaml"
+    path.write_text(yaml.safe_dump({"classes": classes}))
+    out, doc = _write(tmp_path, classes=export_onnx.load_classes(path))
+    assert load_manifest(out).raw["output"]["classes"][2]["semantic"] == semantic
+    from intake_eval_gate import road_delivery_error
+    assert bool(road_delivery_error(doc)) is (semantic != "current_road_region/1")
+
+
+@pytest.mark.parametrize("semantic", [None, "road_suface/1", 1])
+def test_export_cli_yaml_keeps_invalid_semantics_visible_to_validation(tmp_path, semantic):
+    import yaml
+    import export_onnx
+    classes = [{"name": name, "role": role} for name, role in CLASSES]
+    classes[2]["semantic"] = semantic
+    path = tmp_path / "classes.yaml"
+    path.write_text(yaml.safe_dump({"classes": classes}))
+    with pytest.raises(ValueError, match="semantic"):
+        _write(tmp_path, classes=export_onnx.load_classes(path))
+    assert not (tmp_path / "out/model_manifest.json").exists()
+
+
 @pytest.mark.parametrize("semantic", [None, "", "road_suface/1", 1])
 def test_export_refuses_unknown_road_meaning(tmp_path, semantic):
     classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
