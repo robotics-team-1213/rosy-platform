@@ -114,6 +114,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         p, bound, body = fixture(prior=True)
         body = body.decode()
         answer['choices'][0]['message']['content'] = json.dumps(opinion(p, bound))
+        answer.update(id='response-1', request_id='request-1')
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
@@ -131,6 +132,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
         server.problem, server.body, server.token = p, body, 'fake-unit-token'
+        server.credential_sha256 = 'f' * 64
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
