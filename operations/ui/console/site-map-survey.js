@@ -39,7 +39,7 @@ export function createSurveyPanel(host) {
   function clear() {
     points = []; picking = false; editing = false;
     loadedApproaches = []; approachEdited = false;
-    $('element-id').disabled = false;
+    gate('element-id', '');
     $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
     geometry();
   }
@@ -54,7 +54,7 @@ export function createSurveyPanel(host) {
     if ((map?.map_id || null) !== lastMapId) {
       lastMapId = map?.map_id || null;
       points = []; picking = false; editing = false; loadedApproaches = []; approachEdited = false;
-      $('element-id').disabled = false; $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+      gate('element-id', ''); $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
       $('element-points').textContent = '찍은 좌표 없음'; $('element-pick').setAttribute('aria-pressed', 'false');
     }
     const draftReason = reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '') || (!map?.survey ? '조사 기준이 있는 초안을 만드세요' : '');
@@ -118,7 +118,7 @@ export function createSurveyPanel(host) {
     const row = rows().find(r => `${r.category}:${r.id}` === $('element-existing').value);
     if (!row) return;
     editing = true; editingKind = row.kind; picking = false; points = row.geometry.map(p => [...p]);
-    $('element-id').value = row.id; $('element-id').disabled = true;
+    $('element-id').value = row.id; gate('element-id', '불러온 요소의 ID는 유지됩니다');
     $('element-name').value = row.name; $('element-kind').value = row.kind;
     $('element-from').value = row.from || ''; $('element-to').value = row.to || '';
     $('element-width').value = row.width_m || .2; $('element-direction').value = row.direction || 'one_way';
@@ -129,7 +129,7 @@ export function createSurveyPanel(host) {
     for (const option of $('element-lanes').options) option.selected = approaches.some(a => a.edge_id === option.value);
     $('element-forward').value = approaches[0]?.forward === false ? 'reverse' : 'forward';
     $('element-stop').value = approaches[0]?.stop_s_m ?? '';
-    geometry(); message('기존 요소를 불러왔습니다. 수정 후 다시 검토하세요.');
+    geometry(); message('기존 요소를 불러왔습니다. ID는 유지됩니다. 수정 후 다시 검토하세요.');
   }));
   $('element-delete').addEventListener('click', async () => {
     if (host.reason() || host.source() !== 'draft') return;
