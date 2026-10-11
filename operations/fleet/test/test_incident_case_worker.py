@@ -370,6 +370,21 @@ def test_cancel_at_terminal_commit_preserves_known_receipt_and_closes_active_cas
     asyncio.run(run())
 
 
+def test_verified_model_receipt_keeps_bounded_judgment_digest_and_scope(tmp_path):
+    import json
+    async def run():
+        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path)
+        worker.feed(poll()); await settled(worker)
+        with store._transaction() as conn:
+            row = conn.execute('SELECT summary_json FROM fleet_incident_v2_attempts WHERE kind=?', ('model',)).fetchone()
+            receipt = json.loads(row[0])
+        assert receipt['verdict'] == 'reobserve' and receipt['choice'] == 'reobserve'
+        assert len(receipt['receipt_sha256']) == 64 and receipt['observation_revision'] == seen[0][0].generation
+        assert len(row[0].encode()) <= 1024 and 'alternatives' not in receipt
+        await worker.aclose()
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize('fault', ['replaced', 'left_roster', 'restart', 'stale_normal'])
 def test_non_clearance_closures_never_become_observed_resolution(tmp_path, fault):
     async def run():
