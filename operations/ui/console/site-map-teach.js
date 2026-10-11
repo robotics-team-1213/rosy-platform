@@ -168,7 +168,8 @@ export function createTeachPanel(host) {
     lines() {
       return [view?.recording, newestPending(view)]
         .filter(record => record && (record.mode !== 'survey' || surveyTeachMatches(record, host.map())))
-        .map(record => record.points || record.polyline).filter(points => points && points.length > 1);
+        .map(record => Array.isArray(record.points) ? record.points : record.polyline)
+        .filter(points => points && points.length > 1);
     },
   };
 }
