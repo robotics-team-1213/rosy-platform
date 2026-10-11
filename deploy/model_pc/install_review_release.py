@@ -21,6 +21,16 @@ from pathlib import Path
 SERVICE = "rosy-review-v13.service"
 APP = Path("learning/training/perception/dataset/review_app.py")
 WEB = Path("learning/training/perception/dataset/review_app_web")
+SPLIT_REQUIRED = ("middleware/perception/package.xml",
+                  "middleware/perception/sensors/sensing/__init__.py",
+                  "middleware/perception/vision/perception/__init__.py",
+                  "middleware/control/drive/safety/command_gate.py",
+                  "middleware/control/drive/recovery/recover.py",
+                  "middleware/control/drive/tracking/path_follow.py",
+                  "middleware/control/drive/calibration/modes.py",
+                  "middleware/control/drive/planning/grid/__init__.py",
+                  "middleware/control/drive/safety/adapter/__init__.py",
+                  "middleware/control/drive/tracking/wander/__init__.py")
 
 
 def check_source(source: Path, root: Path, state: Path) -> None:
@@ -30,6 +40,10 @@ def check_source(source: Path, root: Path, state: Path) -> None:
     for required in (APP, WEB / "index.html", WEB / "pixels.html", Path("shared/web/shared-assets.json")):
         if not (source / required).is_file():
             raise ValueError(f"release source is missing {required}")
+    if (source / "middleware/perception/control/_source_layout.py").is_file():
+        for required in SPLIT_REQUIRED:
+            if not (source / required).is_file():
+                raise ValueError(f"release source is missing {required}")
     for directory, dirs, files in os.walk(source):
         for name in dirs + files:
             entry = Path(directory) / name
