@@ -104,8 +104,16 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         browser, page, errors = _open(playwright, site, api, posts, answers)
         item = page.locator("#incident-list li")
         expect(item).to_have_count(1)
+        records = page.locator(".incident-panel")
+        expect(records).not_to_be_visible()
+        page.get_by_role("tab", name="기록·근거").click()
+        expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 1건")
+        expect(records).to_be_visible()
         expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
         expect(item.locator("summary")).to_contain_text("앞 물체로 멈춤")
+        expect(item.locator("time")).to_have_attribute("datetime", "2026-10-10T05:00:00.000Z")
+        assert item.evaluate("node => getComputedStyle(node).borderLeftWidth") == "0px"
+        assert records.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
         item.locator("summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
         expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
@@ -114,7 +122,7 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         expect(item).to_contain_text("이미지는 보존되지 않음")
         item.locator("select").select_option("obstacle")
         item.locator("input").fill("현장 상자 확인")
-        item.locator("button[type=submit]").click()
+        item.locator("ui-button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
         expect(page.locator("#incident-traffic-list li")).to_have_count(2)
@@ -122,7 +130,7 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         fact.locator("summary").click()
         expect(fact).to_contain_text("AI 단독 대기 순환 판단")
         fact.locator("select").select_option("traffic_wait")
-        fact.locator("button[type=submit]").click()
+        fact.locator("ui-button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/facts/17/review"
         with page.expect_download() as download_info:
             page.locator("#incident-export").click()
@@ -137,6 +145,105 @@ SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
   const y = getComputedStyle(node).overflowY;
   return (y === 'auto' || y === 'scroll') && node.scrollHeight > node.clientHeight + 1;
 }).map((node) => node.id || node.className)"""
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, [])
+        page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+        for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1100)
+            status = page.get_by_role("tab", name="로봇 상태")
+            status.click()
+            map_before = page.locator("#map-stage").bounding_box()
+            expect(page.locator("#context-status")).to_be_visible()
+            expect(page.locator("#context-evidence")).not_to_be_visible()
+            page.evaluate("scrollTo(0, 0)")
+            _shot(page, f"context-status-{theme}-{width}x{height}.png")
+            status.focus()
+            status.press("ArrowRight")
+            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
+            expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
+            expect(page.locator("#context-evidence")).to_be_visible()
+            expect(page.locator("#context-status")).not_to_be_visible()
+            page.evaluate("scrollTo(0, 0)")
+            _shot(page, f"context-evidence-{theme}-{width}x{height}.png")
+            page.get_by_role("tab", name="기록·근거").press("End")
+            expect(page.locator("#context-tools")).to_be_visible()
+            assert page.locator("#context-tools .signals").evaluate("node => getComputedStyle(node).gridColumnStart") == "1"
+            page.get_by_role("tab", name="운영 도구").press("Home")
+            expect(status).to_be_focused()
+            expect(page.locator("#context-status")).to_be_visible()
+            map_after = page.locator("#map-stage").bounding_box()
+            assert map_after["width"] == pytest.approx(map_before["width"], abs=1)
+            assert map_after["height"] == pytest.approx(map_before["height"], abs=1)
+            assert page.locator(".queues-panel").evaluate("node => !node.closest('[role=tabpanel]')")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= height
+            if width >= 1024:
+                left = page.locator(".console-primary").bounding_box()
+                right = page.locator(".console-secondary").bounding_box()
+                assert left["width"] / right["width"] == pytest.approx(2, abs=0.05)
+                assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
+                assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
+        assert not errors
+        browser.close()
+
+
+def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    stuck = {**STUCK, "inquiry": {"version": "situation-inquiry-v1", "problem_id": STUCK["stuck_id"],
+        "observations": {"cause": "obstacle_ahead"}},
+        "ai_proposal": {"decision": "WAIT", "class": "accepted", "verdict": "forwarded", "outcome": "hold"},
+        "fleet_answer": {"decision": "WAIT", "tier": "ai", "accepted": True, "outcome": "hold"}}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [
+        _robot("rosy_01", line_stuck=stuck), OFFLINE]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        button = page.locator("#fleet-inbox")
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(page.locator("#context-inbox")).to_be_visible()
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        messages = page.locator("#inbox-messages")
+        expect(messages).to_contain_text("CORE 문의")
+        expect(messages).to_contain_text("AI 제안 대기")
+        expect(messages).to_contain_text("CORE 수락 · 복구 완료는 별도 확인")
+        messages.locator("summary").click()
+        expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
+        page.get_by_role("tab", name="로봇 상태").click()
+        page.clock.run_for(6000)
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
+        page.clock.run_for(3000)
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        assert messages.locator("details").get_attribute("open") is not None
+        assert page.locator("#critical-list").inner_text()
+        snapshot = api.pop("/api/fleet/state")
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("상태 갱신 실패")
+        expect(messages.locator("pre")).to_have_count(0)
+        api["/api/fleet/state"] = snapshot
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        stuck["fleet_answer"] = None
+        stuck["ai_proposal"] = {"decision": "RESUME", "class": "held", "verdict": "crosswalk_unknown"}
+        page.clock.run_for(4000)
+        expect(messages.locator("dd").nth(3)).to_have_text("CORE 전달·응답 기록 없음 · 실행 완료 미확인")
+        assert not posts and not errors
+        _shot(page, "context-inbox-message-stages.png")
+        browser.close()
 
 
 @pytest.fixture

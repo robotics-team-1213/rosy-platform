@@ -232,7 +232,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_061,
+        51_448,
+        "split: independently re-judged at 51448 on 2026-10-11 by parent reviewer: D-629/D-632 add a "
+        "read-only notification/message surface using existing Fleet state and log evidence. The new "
+        "179-line inbox.js owns unread keys, context tabs and keyboard/focus, known-field stage views, "
+        "bounded logs and clear/deep-link display; console.js falls from 1332 to 1170 and retains "
+        "polling, auth and command callers. No new transport, process or motion owner. Keep the existing "
+        "observe/server/UI split obligations, package +150 allowance and console 1175 zero-growth ceiling. "
+        "Independent review caught and corrected the incident cause import and three tab-selection "
+        "callers before acceptance. Previous verdict: "
         "split: independently re-judged at 51061 on 2026-10-10 by led_review: lane convoy uses fresh same-map Fleet guide poses and its own repeat-trip admission, while formation capability gates remain unchanged;  the formation console chooses the leader in the existing formation and motion-readiness owners, furthest along a shared map heading, otherwise the smaller robot number, then arms the existing map goal or opens the existing lane trip. card-trip.js uses the same choice for an open repeat trip. No new command path. console.js stays under the 1175 ceiling. Existing observe/server/UI split obligations and +150 remain. Previous verdict: "
         "split: independently re-judged at 50834 on 2026-10-10 by snapshot_review, excluding registered traffic, localization and stuck units; trip admission, AI wiring, drift diagnostics and UI retain their existing owners. Existing observe/server/UI split obligations and +150 remain. Previous verdict: re-judged at 49802 on 2026-10-10 when fleet/fleet/localization (1707) left for its own SIZE_UNITS "
         "entry (docs/plans/2026-10-10-fleet-localization-size-unit.md; independent review requested): 51324 + "
@@ -699,6 +707,10 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/server/web/console.js": (
         1_175,
+        "split: reviewed on 2026-10-11 by parent reviewer after D-632 inbox ownership extraction: "
+        "console.js is 1170, below the existing 1175 ceiling; no allowance increase. Notification "
+        "view/log/tab lifecycle now belongs to inbox.js. Existing incident/auth/pin extraction "
+        "obligations before further shell growth remain. Previous verdict: "
         "split: re-judged at 1175 on 2026-10-10: D-608 adds incident display, human review and JSON export within the existing Fleet session and role boundary. Extract the incident panel before further console growth. Previously "
         "split: re-judged at 993 on 2026-10-10 over 832 (+161; independent re-judge, critic): D-593 pin tool +45, "
         "site path/link +48, host/marker +18, stop/cancel feedback +33, D-596 b +12, D-519 login +8; owners unchanged. "
