@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 from control.sensing.perception.learned.road_region import observed_road_region, road_masks
+from control.sensing.perception.learned.lane_mask import preprocess
 from rosy.world.state.projections.road_region import road_region_input_errors
 
 
@@ -96,6 +97,49 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
             "image_snapshot_id": image.snapshot_id, "anchor_snapshot_id": anchor.snapshot_id,
             "road_surface": surface_metrics, "current_region": region_metrics,
             "region_reason": reason, "input_errors": list(errors), "fitness_verdict": "HOLD"}
+
+
+def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, region_truth, *,
+                         domain: str, conditions, now_ns: int, max_age_ns: int) -> dict:
+    """Replay an opened model; truth and anchors use the original camera image grid."""
+    if (not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3
+            or not bgr.size or bgr.dtype != np.uint8):
+        raise ValueError("expected a non-empty uint8 HxWx3 BGR frame")
+    if model.manifest.task != "lane_seg":
+        raise ValueError("road replay needs a lane_seg model")
+    if not isinstance(seed_pixels, (list, tuple)) or any(
+            not isinstance(p, (list, tuple)) or len(p) != 2 or any(
+                isinstance(v, (bool, np.bool_)) or not isinstance(v, (int, np.integer)) for v in p)
+            for p in seed_pixels):
+        raise ValueError("anchors must be integer (row, col) pixels")
+    spec = model.manifest.input
+    height = spec.crop[0] if spec.crop is not None else spec.height
+    lo, hi = spec.crop[2:] if spec.crop is not None else (0, height)
+    truth_masks, excluded = [], {}
+    for name, truth in (("road_surface", road_truth), ("current_region", region_truth)):
+        _metrics(None, truth, bgr.shape[:2])
+        resized = cv2.resize(truth.astype(np.uint8), (spec.width, height), interpolation=cv2.INTER_NEAREST)
+        outside = np.ones(resized.shape, dtype=bool)
+        outside[lo:hi] = False
+        excluded[name] = int((outside & (resized != 255)).sum())
+        resized[outside] = 255
+        truth_masks.append(resized)
+    logits = model._session.run(preprocess(bgr, spec))
+    classes = model.manifest.raw["output"]["classes"]
+    if logits.shape != (1, len(classes), spec.height, spec.width) or not np.isfinite(logits).all():
+        raise ValueError("model logits have invalid shape or non-finite values")
+    indices = np.array([c["index"] for c in classes], dtype=np.int64)
+    labels = np.full((height, spec.width), 255, dtype=np.int64)
+    labels[lo:hi] = indices[logits[0].argmax(axis=0)]
+    seeds = [[int(np.floor((r + .5) * height / bgr.shape[0])),
+              int(np.floor((c + .5) * spec.width / bgr.shape[1]))] for r, c in seed_pixels]
+    report = evaluate_frame(labels, classes, image, anchor, seeds, *truth_masks, domain=domain,
+                            conditions=conditions, now_ns=now_ns, max_age_ns=max_age_ns)
+    report.update(model_revision=model.model_revision,
+                  preprocessing={"source_shape": list(bgr.shape[:2]), "evaluation_shape": [height, spec.width],
+                                 "predicted_rows": [lo, hi], "seed_pixels": seeds,
+                                 "excluded_truth_pixels": excluded})
+    return report
 
 
 def _summarize(rows) -> dict:
