@@ -186,6 +186,7 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.deliberation.evaluation.calibration_metrics',
                'rosy.decision.deliberation.evaluation.calibration_selection',
                'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
+               'fleet.incidents.automation.observation',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
