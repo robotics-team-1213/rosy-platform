@@ -94,13 +94,15 @@ def test_completion_atomically_keeps_verified_cost_with_valid_trace_or_trace_rej
         if rows: assert rows[0][0] == receipt.payload_json
 
 
-@pytest.mark.parametrize('builder_rejected', [False, True])
-def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failure(tmp_path, monkeypatch, builder_rejected):
+@pytest.mark.parametrize('failure', ['none', 'builder', 'store'])
+def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failure(tmp_path, monkeypatch, failure):
     import asyncio
     from test_incident_case_worker import setup, settled
+    builder_rejected = failure != 'none'
     if builder_rejected:
         def reject(*args, **kwargs): raise ValueError('TRACE_SCOPE_CHANGED')
-        monkeypatch.setattr('fleet.incidents.automation.worker.model_receipt', reject)
+        monkeypatch.setattr('fleet.incidents.automation.ledger.store.checked_receipt'
+                           if failure == 'store' else 'fleet.incidents.automation.worker.model_receipt', reject)
     async def run():
         _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05)
         worker.feed(poll()); await settled(worker)
