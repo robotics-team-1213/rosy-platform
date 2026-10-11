@@ -18,7 +18,7 @@
 - **Source 검증 완료 — 접수·후보·확인:** 기명 immutable 접수와 기존 Task/Mission/Cell owner adapter 및 Console를 구현했다. same-DB 관계·독립 승인·기존 evidence/fence를 유지하며 Mission feedback source 복사 우회를 거절한다. 운영 수신과 최신 통합 착지는 후속이다.
 - **Source 검증 완료 — 결과 회신:** 고정 guild/channel과 원래 message reference, mentions 차단, current mapping, durable opt-in worker와 기존 작업 결과 observer를 구현했다. timeout/5xx와 재시작 SENDING은 UNKNOWN이며 맹목 재전송하지 않는다. 실제 채널 왕복은 후속이다.
 - **Source 검증 완료 — 위험 대응:** 현재 line incident의 기명 인수와 원문 관계·회신을 기존 owner의 같은 transaction으로 연결했다. Console는 현재 사건·judgment를 별도 확인하며 기존 조치 화면으로 연결한다. 정지·취소/재개는 기존 소유자의 확인과 장치 admission을 유지한다. 서버90/Chromium10/설치3 증거는 운영 수용과 구분한다.
-- **진행 중 — 최종 구조·착지:** Fleet의 모든 owner adapter를 독립 제한 재판정했으며 파일 상한·+150·이전 추출 의무를 유지한다. 최초 core_common 부모10031 판정 누락 NEW1을 정리하고 전체 영향 검사와 최신 main local FF를 마친다. 실패를 기존 실패로 등록하지 않는다.
+- **Source 완료 — 최종 구조·착지:** Fleet의 모든 owner adapter를 독립 제한 재판정했으며 파일 상한·+150·이전 추출 의무를 유지한다. 최초 core_common 부모10031 판정 누락과 이후 신규 실패를 수정했으며 기존 실패로 등록하지 않았다. 최신 계정·Cam 계약을 함께 보존한 API v1.216 통합본 `d5cfa0b630`을 local main에 FF했다. 최종 관련 원격457건/NEW0, Node318건/lint0errors이며 배포·실제 왕복은 다음 gate다.
 - **다음 — 배포와 실제 경로:** 사용자 승인 범위와 저장소의 push·CI·signed candidate·updater 규칙을 적용한다. 검토 가능한 구현과 local FF를 먼저 끝내고 필요한 명시 승인은 마지막 단계에서 받는다. 비공개 token/config를 Fleet에만 주입한 뒤 실제 대화→Console 확인→원장→회신과 재시작 durable readback을 검증한다.
 
 ## 검증과 책임
