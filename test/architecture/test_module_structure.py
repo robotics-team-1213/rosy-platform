@@ -274,8 +274,8 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_352,
-        "split: independently re-judged on 2026-10-12 by pipeline_review at 53352 for D-678. "
+        53_355,
+        "split: independently re-judged on 2026-10-12 by pipeline_review at 53355 for D-678. "
         "Final admission, stop fencing and receipt/readback stay with existing Console, GoalLeases, "
         "TaskService, TripAdmission, Mission store/dispatcher and FormationSession owners; no engine "
         "or SIZE_UNITS added. Keep package +150 and existing observe/server/UI split obligations. "
@@ -984,8 +984,8 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1322,
-        "accept: independently re-judged on 2026-10-12 by pipeline_review at 1322 for D-678: "
+        1325,
+        "accept: independently re-judged on 2026-10-12 by pipeline_review at 1325 for D-678: "
         "goal/bay admission, queue and post-send traffic share the existing mutable Console state. "
         "Stop token authority stays in GoalLeases; Task policy and Trip/formation owners remain separate. "
         "Splitting only these guards would scatter the same state authority. Keep zero growth and "
