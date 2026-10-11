@@ -263,6 +263,13 @@ class MapPoseTracker:
     def latest_odom_stamp(self) -> Optional[float]:
         return self._odom[-1].stamp if self._odom else None
 
+    def survey_odom(self, now: float) -> Optional[tuple[Pose, float, int]]:
+        """D-655: fresh relative (pose, stamp, epoch) evidence, independent of any map anchor."""
+        latest = self._odom[-1] if self._odom else None
+        if latest is None or not 0.0 <= now - latest.stamp <= self.config.max_odom_age_s:
+            return None
+        return latest.pose, latest.stamp, self._epoch
+
     def moved_since(self, since: float, min_m: float, min_rad: float) -> bool:
         """D-511 2: an odom sample after `since` is more than `min_m` / `min_rad` (a jitter
         deadband) from the last one before it (an odom reset starts over)."""
