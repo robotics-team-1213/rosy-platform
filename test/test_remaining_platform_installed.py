@@ -41,7 +41,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 70  # D-655 survey assets and D-664 work view join the installed assets.
+    assert len(expected) == 75  # D-683 login and D-689 profile documents/scripts are installed.
+    assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
+    assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js', 'work-view.js'} <= expected.keys()
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
@@ -139,6 +141,20 @@ assert cli._decode_result is cli_owner._decode_result
 assert calibration.CalibrationArtifact is calibration_owner.CalibrationArtifact
 assert calibration.evaluate_calibration is calibration_owner.evaluate_calibration
 assert calibration.wilson_lower is calibration_owner.wilson_lower
+from fleet.incidents.automation import contract, store
+from fleet.incidents.automation.ledger import contract as ledger_contract, store as ledger_store
+from fleet.incidents.automation import closure, worker
+for name in ('dataclass', 'Decimal', 'ROUND_CEILING', 'ROUND_FLOOR', 'math', 're',
+             'CHOICES', 'canonical', 'identifier', 'sha256', 'micros',
+             'CaseScope', 'CaseBudget', 'summary_json'):
+    assert getattr(contract, name) is getattr(ledger_contract, name), name
+for name in ('closing', 'contextmanager', 'asdict', 'json', 'math', 'Path', 'sqlite3',
+             'time', 'canonical', 'identifier', 'CaseBudget', 'CaseScope', 'micros',
+             'sha256', 'summary_json', 'configure_connection', 'IncidentCaseStore'):
+    assert getattr(store, name) is getattr(ledger_store, name), name
+assert closure.CaseScope is ledger_contract.CaseScope
+assert worker.CaseScope is ledger_contract.CaseScope
+assert worker.CaseBudget is ledger_contract.CaseBudget
 from fleet.server import proposal_store
 from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall
@@ -183,10 +199,13 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.deliberation.providers.versioned_request',
                'rosy.decision.deliberation.providers.local',
                'rosy.decision.deliberation.evaluation.calibration',
+               'rosy.decision.deliberation.evaluation.comparison',
                'rosy.decision.deliberation.evaluation.calibration_metrics',
                'rosy.decision.deliberation.evaluation.calibration_selection',
                'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
                'fleet.incidents.automation.observation',
+               'fleet.incidents.automation.closure', 'fleet.incidents.automation.worker',
+               'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',

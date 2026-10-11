@@ -4,13 +4,23 @@
 
 Fleet이 상황을 보고 규칙과 AI 후보를 판단해 실행하며 결과를 확인하는 공통 탐색 입구다. 이 문서의 `FL-*`는 실행 제약(law), `FR-*`는 상황별 대응(rule)의 탐색 식별자이며 새 API 필드가 아니다. 세부 계약은 [FLEET SRS](../spec/ROSY%20FLEET%20SRS.md), [CORE SRS](../spec/ROSY%20CORE%20SRS.md), [API reference](ROSY%20API%20%26%20Protocol%20Reference.md), 각 ADR과 아래 구현을 따른다. 코드의 값과 활성 현장 설정이 다르면 실제 설정을 확인하며 문서만으로 활성화를 주장하지 않는다.
 
+## 자율 운영 목표와 적용 범위
+
+목표는 **사람이 목표와 승인 범위를 정하면 Fleet이 일상 관측·판단·실행·복구·결과 확인을 계속 수행하는 것**이다. 아래 D-674/D-678 표의 사람 인계 기본은 과거/비대상 경로이며, [D-685](../adr/D-685-fleet-autonomous-recovery.md)의 `fleet.stuck_resolver.autonomous_robots` 대상에서는 다음 흐름을 적용한다.
+
+**관측 → law → rule/허용 AI 후보 → 최종 admission → 기존 owner → receipt/readback → 완료 또는 자동 대기·재관측·재계획·복구.**
+
+접수된 WAIT/R5는 조건이 회복돼 실행 가능한 후보가 생길 때만 재판단한다. 같은 조건의 polling은 명령을 반복하지 않는다. UNKNOWN은 원장과 정확한 CORE 사건 종료 대조 전까지 읽기 전용이며 재시작/사건/모드 변화만으로 해제하지 않는다. 소진된 예산/기한은 초기화하지 않는다. 결정적 교착/blocked 경로의 새 계획은 최초 승인 범위 안에서 capability·pose·지도·정지 generation 검사를 거쳐 자동 적용한다. 대기 중 계획 검사도 기존 route 시도 이력을 유지한다.
+
+사람은 실제 점유, 물리 수리, E-stop 등 명시적 안전 해제와 승인 범위 밖 human class/MANUAL/credential 예외에 개입한다. 자동 대기 UI/원장은 `auto_hold:<reason>`로 표시하며 물리 성공·사람 소유권·새 WAIT 명령 접수를 만들어내지 않는다. 자동 대상 목록과 resolver credential, AI 근거·모델 opt-in은 별도 조건이며 소스 머지가 현장 활성화가 아니다.
+
 ## 1. 파이프라인과 책임
 
 ```mermaid
 flowchart TD
     O[상황·사건·관측 수집] --> L{law: 권한과 제약}
     L -->|허용| R[rule 또는 허용된 AI 후보]
-    L -->|거절| H[대기·사람 인계·거절 기록]
+    L -->|거절| H[자동 대기·거절 기록·재관측]
     R --> A{실행 직전 admission 재검사}
     A -->|상황·권한 유지| D[기존 CORE 또는 Arm owner 계약 호출]
     A -->|변경·거절| H
@@ -21,6 +31,8 @@ flowchart TD
     V -->|미해결| B{재시도 예산·기한}
     B -->|남음| O
     B -->|소진| H
+    H -->|조건 회복·예산 잔여| O
+    H -->|물리 수리·안전 해제·범위 밖 예외| U[예외 사람 개입]
 ```
 
 law는 후보의 우선순위보다 먼저 적용하며 실행 직전에도 적용한다. AI-first는 후보 선택 순서를 바꾸는 기능이다. E-stop, 실행 소유자, 사람 점유, 사건 바인딩, CORE의 최종 거절 권한을 바꾸지 않는다. 반면 D-577의 위치·횡단보도 등의 일부 후보 검사는 D-610 AI-first 설정에 따라 유지 여부가 달라진다. 모든 검사를 무조건 law라고 부르지 않는다.
@@ -148,3 +160,12 @@ navigation은 capability/state 대기 뒤 queue를 만들기 전부터 route/obs
 - [AI-first](../../operations/fleet/fleet/stuck/ai_first.py), [D-577 후보 검사](../../operations/fleet/fleet/stuck/lane_lost.py), [Decision](../../operations/decision/src/rosy/decision/)
 - [교통](../../operations/fleet/fleet/traffic/handover.py), [trip guard](../../operations/fleet/fleet/server/trip_guard.py), [자원 admission](../../operations/fleet/fleet/server/dispatch_admission.py)
 - [Task](../../operations/fleet/fleet/server/task_service.py), [Mission](../../operations/fleet/fleet/server/mission_dispatcher.py), [Situation](../../operations/situation/rosy_situation/assessment.py)
+
+
+## 9. 관측·운영 기록과 AI 학습 원본
+
+Fleet SharedGather는 캐시를 새 관측으로 복제하지 않고 refresh된 기기 state/센서값, robot ID·online·출처·수신/원본 시간·신선도·목표/대기열을 기존 durable journal의 `fleet_observations`에 보존한다. 원본 기기 시각은 state에 남고 Fleet 관측 시각은 receive-clock의 추정값이다. 원장 지연·offline·결측을 신선한 센서나 정상 결과로 승격하지 않는다. `/api/fleet/observations`는 기존 read_guard와 robot/cursor pagination으로 조회하고 저장 장애를 표시한다. 기록은 30일 이내이면서 전체 로봇 합계 최근 100000행만 남기며 행당 64KiB 제한이다. 빈도가 높으면 30일 전에 행 한도에 도달한다. payload 최악 크기는 약 6.55GB이며 SQLite/WAL 공간은 별도다. 정확한 고속 센서·카메라·LiDAR와 최종 cmd_vel은 기존 기기 녹화가 원본이며 Fleet 상태 기록으로 대신 만들지 않는다.
+
+`learning/curation/pinky/fleet_observations.py`는 보존된 원장을 일관된 read snapshot으로 JSONL/manifest로 내보내고 행/파일 해시를 재검증한다. 출력은 덮어쓰지 않으며 X:에 저장한다. 원본은 `observed_not_labeled`, 학습 준비 export는 `train_eligible:false/labels:null`이다. 기기 recording → 기존 [Pinky Episode](../../learning/curation/pinky/README.md)와 raw 검증 → dataset registry가 실제 센서/행동 dataset 경로다. 원장·이벤트·Task/Mission/attempt·지도/model revision과 시간 근거를 대조해 학습 입력을 준비하되 모호한 연결과 AI 판단을 정답으로 쓰지 않는다. 학습·독립 평가·모델 승격·활성화는 각각 별도 gate다.
+
+자율 대상 설정은 durable Task journal과 백그라운드 stuck resolver가 모두 구성된 경우에만 시작한다. 이동 후보는 owner 호출 전에 기존 원장에 `FLEET_STUCK_DISPATCH_PENDING`을 FULL synchronous로 저장하고, 저장/재대조 실패면 전송하지 않는다. 쓰기 await 뒤 law/AI/사람 점유를 다시 확인한다. 이미 전송을 시작한 pending은 확정 receipt 또는 정확한 CORE 사건 종료를 durable 대조한 뒤에만 해제한다. 강제 프로세스 종료로 receipt 기록이 없어도 재시작에서 pending을 동결하며, 기록 손실을 근거로 재발행하지 않는다. 새 코드들은 Fleet 내부 원장 표식이며 CORE receipt를 위조하지 않는다. 저장 매체 자체의 파손은 별도 현장 장애다.

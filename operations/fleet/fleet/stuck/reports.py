@@ -135,6 +135,17 @@ class LineStuckAnswerLog:
                 (limit,)).fetchall()
         return [dict(row) for row in found]
 
+    def uncertain_motion(self) -> set[tuple[str, str]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute("""SELECT DISTINCT a.robot_id, a.stuck_id
+                FROM fleet_line_stuck_answers a WHERE a.principal_id='fleet-resolver'
+                AND a.code IN ('STUCK_DECISION_OUTCOME_UNKNOWN', 'FLEET_STUCK_DISPATCH_PENDING')
+                AND a.decision != 'WAIT'
+                AND NOT EXISTS (SELECT 1 FROM fleet_line_stuck_answers r
+                    WHERE r.robot_id=a.robot_id AND r.stuck_id=a.stuck_id
+                    AND r.code='STUCK_DECISION_RECONCILED' AND r.answer_id>a.answer_id)""").fetchall()
+        return {(row["robot_id"], row["stuck_id"]) for row in rows}
+
     def open_episode(self, row: dict) -> None:
         """Open (or, after a Fleet restart, reopen) one episode. The first ``opened_at`` stays."""
         columns = ", ".join(row)

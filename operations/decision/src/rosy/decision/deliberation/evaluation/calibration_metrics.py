@@ -14,8 +14,12 @@ def digest(value):
 
 
 def finite(value, *, maximum=None):
-    if (type(value) not in (int, float) or not math.isfinite(value) or value < 0
-            or maximum is not None and value > maximum):
+    try:
+        valid = (type(value) in (int, float) and value >= 0
+                 and (maximum is None or value <= maximum) and math.isfinite(value))
+    except OverflowError:
+        valid = False
+    if not valid:
         raise ValueError('invalid finite calibration metric')
     return value
 

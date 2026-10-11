@@ -155,3 +155,20 @@ def test_actual_gateway_child_cancel_reaps_process(tmp_path, monkeypatch):
     assert len(seen) == 1 and seen[0].returncode == -signal.SIGKILL
     with pytest.raises(ProcessLookupError):
         os.kill(seen[0].pid, 0)
+
+
+def test_v2_gateway_preserves_host_venv_and_foundation_closure(tmp_path, monkeypatch):
+    import sys
+    from deploy.ai_pc import deliberation_opencode_process as module
+    from test_deliberation_glm_judgment import fixture
+    real_spawn = asyncio.create_subprocess_exec
+    _, _, body = fixture()
+    script = "import json,os,sys;job=json.loads(sys.stdin.readline());assert job['credential_sha256']=='f'*64;assert any(p.endswith('/contracts/foundation') for p in os.environ['PYTHONPATH'].split(os.pathsep));print('READY',flush=True);print(json.dumps({'state':'PASS_GLM_PROVIDER_ONLY','calls':1}),flush=True)"
+    async def spawn(*argv, **kwargs):
+        assert argv == (sys.executable, '-m', 'deploy.ai_pc.deliberation_glm_gateway')
+        return await real_spawn(sys.executable, '-c', script, **kwargs)
+    monkeypatch.setattr(module.asyncio, 'create_subprocess_exec', spawn)
+    async def run():
+        async with module.gateway_session(body, 1, tmp_path, credential_sha256='f' * 64) as process:
+            return await module.finish_gateway(process)
+    assert asyncio.run(run())['calls'] == 1
