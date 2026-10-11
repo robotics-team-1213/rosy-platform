@@ -125,7 +125,7 @@ class OllamaTransport:
             str(source), str(remaining)), body, remaining, output_limit)
 
 
-if __name__ == '__main__':
+def main():
     try:
         remaining = float(sys.argv[1])
         if not math.isfinite(remaining) or not 0 < remaining <= 30:
@@ -134,6 +134,15 @@ if __name__ == '__main__':
         signal.setitimer(signal.ITIMER_REAL, remaining)
         result = execute(sys.stdin.buffer.read(LIMIT + 1), remaining)
         print(canonical(result), flush=True)
-    except Exception:
-        print('{"state":"HOLD","reason":"LOCAL_PROVIDER_FAILED"}', flush=True)
-        sys.exit(1)
+        return 0
+    except Exception as error:
+        # Diagnose boundaries without retaining provider content or exception text.
+        kind = ('TIMEOUT' if isinstance(error, TimeoutError) else
+                'TRANSPORT' if isinstance(error, OSError) else
+                'VALIDATION' if isinstance(error, (ValueError, KeyError, TypeError)) else 'INTERNAL')
+        print(canonical({'state': 'HOLD', 'reason': 'LOCAL_PROVIDER_FAILED', 'failure_kind': kind}), flush=True)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
