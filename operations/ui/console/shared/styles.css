@@ -857,4 +857,3 @@ main {
 .robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
 .robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
 .robot-list-details { margin-top: var(--space-3); }
-.context-tabs ui-button { font-size: var(--text-label); }
