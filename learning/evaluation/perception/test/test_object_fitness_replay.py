@@ -142,7 +142,7 @@ def test_artifact_change_during_inference_never_returns_report(tmp_path, monkeyp
 def test_cli_works_without_robot_config_and_refuses_output_overwrite(tmp_path, monkeypatch):
     import rosy_ml
     data = bundle(tmp_path, monkeypatch)
-    monkeypatch.setattr(rosy_ml, 'read_config', lambda *a, **k: pytest.fail('robot config read'))
+    monkeypatch.setattr(rosy_ml, 'load_config', lambda *a, **k: pytest.fail('robot config read'))
     output = tmp_path / 'report.json'
     args = ['object-fitness', str(data[0]), '--store', str(data[1].root), '--eval', str(data[2]),
             '--inputs', str(data[3]), '--max-age-ns', '100', '--out', str(output)]
