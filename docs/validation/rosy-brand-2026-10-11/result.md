@@ -1,5 +1,7 @@
 # D-654 ROSY 브랜드 소스 검증
 
+D-658 헤더 영역 변경의 `326e0582b7` 원격 회귀 15개가 통과했고 NEW 0이다. 네 문서의 동일 헤더, 접근성 그룹, 320–1920px 여섯 폭, 접속 거부·자동 펼침, 알림과 안전 그룹 소속, 상태 배지의 동일 박스 계산을 확인했다. 실패했던 320px 헤더 높이는 상태 배지의 기존 토큰 크기와 border-box를 공용 규칙에 적용해 해결했다. 테스트 기준이나 실패 목록을 완화하지 않았다. 로그: `X:/DevTemp/projects/rosy-platform/2026-10-11--192437--rosy-brand--d27650/logs/header-regions-qualified/run-1.txt`.
+
 `f62299e82b`의 원격 검사 78개가 통과했고 `known_failures.py`는 NEW 0이다. 작은 심볼 16/24/48px, 파생 타일의 정본 기하·토큰 일치, allowlist·설치 목록, 두 테마의 실제 공용 브랜드, 네 Fleet 문서와 여섯 폭, Cell의 320px 비상 정지 접근을 포함한다. 데스크톱과 모바일 스크린샷을 직접 확인했다. 로그: `X:/DevTemp/projects/rosy-platform/2026-10-11--192437--rosy-brand--d27650/logs/browser/run-1.txt`.
 
 브랜드 심볼은 기존 `ui-brand`를 통해 Fleet·Robot·Pilot 웹 표면과 공용 template에 연결된다. 역할별 앱 favicon·런처와 이름은 유지한다. 생성 견본의 가상 화면과 역할 색 점은 실제 표시나 상태 계약으로 사용하지 않는다.
