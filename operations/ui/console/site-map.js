@@ -354,6 +354,11 @@ async function guarded(work) {
 }
 
 $('token-save').addEventListener('click', async () => {
+  const localEdit = state.dirty || state.band !== null || state.selected ? {working: state.working,
+    draft: state.draft, selected: state.selected, band: state.band, dirty: state.dirty} : null;
+  const editFields = [...document.querySelectorAll(
+    '[aria-labelledby="edit-heading"] input:not([type="file"]), [aria-labelledby="edit-heading"] select, '
+    + '[aria-labelledby="edit-heading"] textarea')].map(field => ({field, value: field.value, checked: field.checked}));
   state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   planeEpoch += 1; plane = null; calibrations = [];
   $('plane-pick').checked = false;
@@ -364,11 +369,6 @@ $('token-save').addEventListener('click', async () => {
   state.role = null;
   profiles = [];
   $('map-profile').replaceChildren();
-  for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).value = '';
-  $('profile-kind').value = 'lane_course';
-  $('profile-description').value = '';
-  $('profile-soccer').hidden = true;
-  $('profile-file').value = '';
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;
@@ -390,10 +390,17 @@ $('token-save').addEventListener('click', async () => {
     loginForm.refresh(false);
     syncButtons();
     await load();
-    notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
+    if (localEdit) {
+      // Keep the original revision: a changed server draft must fail CAS, never overwrite unseen edits.
+      Object.assign(state, localEdit);
+      render(); syncButtons();
+    }
+    notice(localEdit ? '재접속 확인 · 편집 중인 초안을 보존했습니다. 저장 전 최신 서버 초안과 비교하세요.'
+      : state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
       : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 없이 시작에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
+    if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
     if (error.status === 401 || error.status === 403) {
       state.role = null;
@@ -404,6 +411,7 @@ $('token-save').addEventListener('click', async () => {
     syncButtons();
     notice(siteMapErrorText(error));
   } finally {
+    for (const {field, value, checked} of editFields) { field.value = value; field.checked = checked; }
     clearInterval(ticker);
     gate('token-save', '');
   }

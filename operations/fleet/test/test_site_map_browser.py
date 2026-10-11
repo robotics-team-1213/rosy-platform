@@ -1171,3 +1171,26 @@ def test_camera_connections_require_review_before_extending_the_saved_map(page_s
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def test_reconnect_preserves_unapplied_and_applied_map_edits(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#site-map-svg [data-place="NW"]')).to_be_visible()
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    page.locator('#place-name').fill('Unsaved local name')
+    page.locator('#token-save').click()
+    expect(page.locator('#notice')).to_contain_text('보존')
+    expect(page.locator('#place-name')).to_have_value('Unsaved local name')
+    page.locator('#apply-edit').click()
+    page.locator('#token-save').click()
+    expect(page.locator('#notice')).to_contain_text('보존')
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator('#place-name')).to_have_value('Unsaved local name')
+    assert store.draft_view()['map'] is None or all(
+        place['name'] != 'Unsaved local name' for place in store.draft_view()['map']['places'])
+    assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'estop'}]

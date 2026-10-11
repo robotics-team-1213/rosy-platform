@@ -47,6 +47,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 context = browser.new_context()
                 page = context.new_page()
                 page.goto(origin + "/console")
+                page.locator('#fleet-login').click()
                 form = page.locator("#password-login [data-login=form]")
                 expect(form).to_be_visible(timeout=15000)
                 expect(page.locator("#token-access")).not_to_have_attribute("open", "")
@@ -54,10 +55,13 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 page.locator("#password-login [data-login=password]").fill("wrong")
                 page.locator("#password-login [data-login=submit]").click()
                 expect(page.locator("#password-login [data-login=error]")).to_contain_text("맞지 않습니다")
+                expect(page.locator('[data-login=password]')).to_have_value('')
                 page.locator("#password-login [data-login=password]").fill("pw-1234")
                 page.locator("#password-login [data-login=password]").press("Enter")
                 expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
-                expect(page.locator("#topbar-extra [data-login=principal]")).to_have_text("alice")
+                page.locator('#fleet-account > summary').click()
+                expect(page.locator('#fleet-account-identity')).to_contain_text('alice')
+                page.locator('#fleet-account > summary').click()
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')") is None
 
                 page.reload()
@@ -74,24 +78,25 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                         toggle = tab.locator("#topbar-more")
                         if toggle.is_visible() and toggle.get_attribute("aria-expanded") == "true":
                             toggle.click()
-                        principal = tab.locator("#topbar-extra [data-login=principal]")
+                        principal = tab.locator("#fleet-account-identity")
                         expect(principal).to_be_hidden()
                         assert tab.locator('[data-header-region="status"] ui-button').count() == 0
                         height = tab.locator("ui-topbar").bounding_box()["height"]
-                        toggle.click()
+                        tab.locator('#fleet-account > summary').click()
                         expect(principal).to_be_visible()
-                        expect(tab.locator("#topbar-extra [data-login=logout]")).to_be_visible()
+                        expect(tab.locator("#fleet-account [data-login=logout]")).to_be_visible()
                         assert tab.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                        toggle.click()
+                        tab.locator('#fleet-account > summary').click()
                         assert tab.locator("ui-topbar").bounding_box()["height"] == height
                     tab.close()
 
-                page.locator("#topbar-more").click()
-                logout = page.locator("#topbar-extra [data-login=logout]")
+                page.locator('#fleet-account > summary').click()
+                logout = page.locator("#fleet-account [data-login=logout]")
                 expect(logout).to_be_visible()
                 logout.click()
                 expect(page.locator("#user-role")).to_have_text("인증 필요", timeout=15000)
-                expect(form).to_be_visible()
+                expect(page.locator('#fleet-login')).to_be_visible()
+                expect(page.locator('#fleet-account')).to_be_hidden()
             finally:
                 browser.close()
     finally:

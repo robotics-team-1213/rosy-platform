@@ -23,7 +23,7 @@ test('success and empty bodies retain the Console contract', async () => {
 test('401 retains the login message and exposes status for the document lock', async () => {
   const {client, calls} = clientFor(401, {detail: 'unauthorized'});
   await assert.rejects(client('/api/fleet/state'), error =>
-    error.status === 401 && error.message === '관제 토큰이 필요합니다 — 상단에 입력하고 접속을 누르세요');
+    error.status === 401 && error.message === '관제 인증이 필요합니다 — 로그인하거나 고급 접속을 확인하세요');
   assert.equal(calls.length, 1);
 });
 
