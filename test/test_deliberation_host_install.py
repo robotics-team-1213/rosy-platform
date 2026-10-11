@@ -34,3 +34,14 @@ def test_install_refuses_untrusted_parent_before_writing(tmp_path):
     with pytest.raises(ValueError, match='UNTRUSTED_INSTALL_PARENT'):
         install_file(destination, b'fixture', 0o755)
     assert not destination.exists()
+
+
+def test_installer_does_not_adopt_existing_operator_account(monkeypatch):
+    import grp
+    import pwd
+    from types import SimpleNamespace
+    from deploy.site.deliberation_install import dedicated_account
+    monkeypatch.setattr(pwd, 'getpwnam', lambda name: SimpleNamespace(pw_uid=1000, pw_gid=1000))
+    monkeypatch.setattr(grp, 'getgrnam', lambda name: SimpleNamespace(gr_gid=1000, gr_mem=[]))
+    with pytest.raises(ValueError, match='DEDICATED_ACCOUNT_CONFLICT'):
+        dedicated_account()

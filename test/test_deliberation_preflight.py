@@ -21,3 +21,18 @@ def test_resource_readback_checks_kernel_limits(tmp_path, quota, expected):
     properties = {'MemoryMax': '1073741824', 'TasksMax': '32',
         'CPUQuotaPerSecUSec': '1s', 'RuntimeMaxUSec': '35s'}
     assert module.resource_checks(properties, tmp_path)['cgroup_limits'] is expected
+
+
+def test_descendant_probe_never_passes_without_live_child(monkeypatch):
+    class Launcher:
+        def command(self, *args):
+            return ('fixture',)
+    async def process(argv, *args):
+        if argv == ('fixture',):
+            await asyncio.sleep(60)
+        return 0, b''
+    async def cleanup(*args):
+        return None
+    monkeypatch.setattr(module, 'bounded_process', process)
+    monkeypatch.setattr(module, 'cleanup_scope', cleanup)
+    assert asyncio.run(module.descendant_probe(Launcher(), True)) is False
