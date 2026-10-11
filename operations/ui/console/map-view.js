@@ -112,10 +112,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   // Declutter: a chip not `important` (and without tone) never shifts; it shows only where still free.
+  function chipFontSize(ctx) {
+    const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
+    return window.RosyPalette.canvasTextSize("micro") * Math.max(1, ctx.canvas.width / displayedWidth);
+  }
+
   function drawChip(ctx, grid, cx, cy, text, tone, important = true) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
-    const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
-    const fontSize = window.RosyPalette.canvasTextSize("micro") * Math.max(1, ctx.canvas.width / displayedWidth);
+    const fontSize = chipFontSize(ctx);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.font = font("micro", fontSize / window.RosyPalette.canvasTextSize("micro"));
@@ -683,6 +687,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const cy = grid.height - cell.row;
       const pxPerCell = Math.max(canvas.clientWidth / grid.width, canvas.clientHeight / grid.height) || 1;
       const size = Math.min(3, 18 / pxPerCell);
+      // Chips use screen-sized type; keep their half-height clear of the marker at every grid scale.
+      const labelOffset = Math.max(size * 2.2, size + (chipFontSize(ctx) * 0.9 + CHIP_GAP) / ctx.getTransform().d);
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-pose.yaw); // 캔버스 y 가 아래로 자라므로 회전도 뒤집는다
@@ -704,11 +710,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
       ctx.restore();
       if (activeCall(robot.robot_id)) {
-        drawChip(ctx, grid, cx, cy - size * 2.2, `호출 ${robot.robot_id}`, "warn");
+        drawChip(ctx, grid, cx, cy - labelOffset, `호출 ${robot.robot_id}`, "warn");
       }
       const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
       markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
-      labels.push([cx, cy + size * 2.2, robot.robot_id]);
+      labels.push([cx, cy + labelOffset, robot.robot_id]);
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
