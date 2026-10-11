@@ -37,5 +37,5 @@
 
 - ADR, 80개 파일 이동, 설치·소스 archive 매핑, 독립 Safety 검토와 책임 안내 문서를 반영했다. [검증 기록](../validation/d649-drive-boundaries-2026-10-11/result.md)은 초기 실패와 수정 후 재검증을 구분한다.
 - 최신 main 통합은 세 차례 재검증 후 source `5da31e05cb8965ad40a7c44b4094470d4f138461`로 완료하고 발행했다. 최종 영향 시험은 8,342건과 Perception 3,028건 통과, 모두 zero NEW다. pre-push 추가 208건도 통과했다.
-- 정확한 source CI와 온라인 Site·AI·모델 PC 배포는 별도 진행 중이다. 소스 폴더·설치 시험 통과를 장치 또는 배포 수용으로 표시하지 않는다.
+- 최종 source `2891e10061233b1067fd315cdcbad78bdb1b5d46`의 전체 CI·Site 빌드·Android 검사를 통과한 후 온라인 Site·AI·모델 PC 배포를 완료했다. 실제 설치·서비스 경로·API·지도와 Review 데이터 보존은 [배포 수용 기록](../validation/d649-drive-boundaries-2026-10-11/deployment.md)에 있다. 오프라인 로봇의 장치·실주행 수용은 포함하지 않는다.
 - 이전 `53c557136957` 후보는 map-label 브라우저 CI 실패로 서명·적용하지 않았다. 로봇은 사용자 결정으로 오프라인을 유지한다.
