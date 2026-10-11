@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
+import sys
 
 import pytest
 from fleet.server.observation_store import ObservationStore
@@ -87,3 +89,17 @@ def test_window_checks_payload_identity_and_credentials(exporter, tmp_path):
                    (json.dumps(body, ensure_ascii=False, separators=(',', ':')),))
     with pytest.raises(ValueError, match='validation'):
         check(exporter, store.path)
+
+
+def test_window_cli_preserves_export_cli_and_never_overwrites(exporter, tmp_path):
+    store = populate(tmp_path / 'fleet.db')
+    output = tmp_path / 'window.json'
+    command = [sys.executable, '-I', '-S', exporter.__file__, str(store.path), str(output),
+               '--window', '--robot-id', 'rosy_01', '--start', '10.5', '--end', '11.5', '--max-gap-s', '1']
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=10)
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(output.read_bytes()) == json.loads(completed.stdout)
+    assert json.loads(completed.stdout)['capture_complete'] is True
+    original = output.read_bytes()
+    assert subprocess.run(command, capture_output=True, timeout=10).returncode != 0
+    assert output.read_bytes() == original
