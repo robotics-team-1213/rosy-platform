@@ -20,6 +20,36 @@ def store(tmp_path, now=101):
     return IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: now)
 
 
+def test_role_caps_survive_restart_but_allow_primary_and_reviewer_once(tmp_path):
+    s = store(tmp_path)
+    s.begin_case(scope(), budget(max_calls=2, role_limits=(('primary', 1), ('reviewer', 1))))
+    s.reserve(scope(), attempt_id='primary-1', input_hash='b' * 64, observation_revision='r1',
+              kind='model', max_cost_usd=.1, worker_id='w1', role='primary')
+    finish(s, 'primary-1')
+    s = store(tmp_path)
+    with pytest.raises(ValueError, match='CASE_ROLE_BUDGET_EXHAUSTED'):
+        s.reserve(scope(), attempt_id='primary-2', input_hash='c' * 64, observation_revision='r2',
+                  kind='model', max_cost_usd=.1, worker_id='w2', role='primary')
+    s.reserve(scope(), attempt_id='reviewer-1', input_hash='b' * 64, observation_revision='r1',
+              kind='model', max_cost_usd=.1, worker_id='w1', role='reviewer')
+    assert s.case(scope())['calls'] == 2
+
+
+def test_atomic_role_reservation_prevents_concurrent_primary_overspend(tmp_path):
+    s = store(tmp_path)
+    s.begin_case(scope(), budget(role_limits=(('primary', 1), ('reviewer', 1))))
+    def attempt(worker):
+        try:
+            s.reserve(scope(), attempt_id=worker, input_hash='b' * 64, observation_revision='r1',
+                      kind='model', max_cost_usd=.1, worker_id=worker, role='primary')
+            return 'reserved'
+        except ValueError as error: return str(error)
+    with ThreadPoolExecutor(2) as pool:
+        results = list(pool.map(attempt, ('w1', 'w2')))
+    assert sorted(results) == ['CASE_ROLE_BUDGET_EXHAUSTED', 'reserved']
+    assert s.case(scope())['calls'] == 1
+
+
 def reserve(s, attempt='a1', kind='model', cost=.1, worker='w1', revision='r1'):
     return s.reserve(scope(), attempt_id=attempt, input_hash='b' * 64, observation_revision=revision,
                      kind=kind, max_cost_usd=cost, worker_id=worker)

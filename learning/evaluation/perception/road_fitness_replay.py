@@ -27,6 +27,7 @@ from control.sensing.perception.learned.manifest import verify_files
 from control.sensing.perception.learned.runner import LaneSegModel
 from core_common.observation import ObservationSnapshot, SnapshotValidity
 from road_fitness import evaluate_model_frame, summarize_frames
+from source_uncertainty import summarize_sources
 
 SCHEMA = "rosy.perception.region-inputs/1"
 
@@ -196,7 +197,8 @@ def run(model_folder, *, store_root, road_eval, region_eval, inputs, max_age_ns)
                                       road_truth, region_truth, domain=supplied.get("domain"),
                                       conditions=supplied.get("conditions"), now_ns=supplied.get("now_ns"),
                                       max_age_ns=max_age_ns)
-        reports.append({"identity": identity, **report})
+        reports.append({"identity": identity, "session": frame["session"],
+                        "capture_group": frame["capture_group"], **report})
     for path in [road[0], region[0], inputs, *training]:
         store.read_fixed_manifest(path)
     verify_files(model.manifest)
@@ -210,7 +212,8 @@ def run(model_folder, *, store_root, road_eval, region_eval, inputs, max_age_ns)
                          "road_authority_sha256": road[1]["authority_sha256"],
                          "region_authority_sha256": region[1]["authority_sha256"],
                          "declared_training_disjoint": True, "max_age_ns": max_age_ns},
-            "frames": reports, "summary": summarize_frames(reports)}
+            "frames": reports, "summary": summarize_frames(reports),
+            "source_uncertainty": summarize_sources(reports)}
 
 
 def execute(args) -> int:

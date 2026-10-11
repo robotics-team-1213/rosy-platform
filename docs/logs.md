@@ -7955,3 +7955,9 @@ osy-d395-s1d\`.
 - 증거: tools/land.py가 최신 main을 통합한 daccbd38be의 원격 24개 관련 파일 364 passed, exit 0, known-failures NEW 0을 확인하고 로컬 main에 착지했다. AI PC 9.0GB, Model PC 7.9GB 자원 하한을 충족했다. 설치 wheel/sdist, 크기 경계, 사건 예산/관측, v2 JSON/보정/CLI/로컬과 기존 GLM 격리 경로를 포함한다.
 - 검토: responsibility_review의 독립 책임 분리 검토 및 root diff 검토를 완료했다. cancellation 시 사라진 프로세스의 ProcessLookupError 처리만 sandbox 시험에 보강했으며 production cleanup은 바꾸지 않았다.
 - gate 변화: SOURCE·원격 관련 회귀·설치 패키지·로컬 착지 완료. worker와 최종 사람 인수는 별도 구현 중이며 피드백 export·후보 승격은 실행 계획 단계다. 실제 제공자 호출·독립 품질·CI·push·배포·현장 수용은 미확인이다.
+
+## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
+
+- 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
+- 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
+- gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.

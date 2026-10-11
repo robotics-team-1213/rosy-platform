@@ -62,9 +62,13 @@ Reuse: `learning/curation/perception/incident_feedback.py`, 기존 독립 replay
 
 ## 실행 상태 (2026-10-12)
 
-Phase 0·1의 ADR·조건부 검토 source는 로컬 main에 착지했다. Phase 2의 GLM 영속 1회 표식과 Phase 3의 v2 프로파일·판정·공통 CLI 요청·독립 보정은 작업 브랜치에 통합했으며 통합 시험·착지는 확인 후 기록한다. 보정은 모델 프로파일 전체 SHA-256에 고정하며 모델·역할·어댑터·한도 변경 시 다시 수용해야 한다. 원격 component 증거와 미확인 범위는 `../validation/deliberation-host-admission-2026-10-12/versioned-judgment.md`에 둔다.
+Phase 0·1의 ADR·조건부 검토 source는 로컬 main에 착지했다. Phase 2의 GLM 영속 1회 표식과 Phase 3의 v2 프로파일·판정·공통 CLI 요청·독립 보정은 `daccbd38be`로 로컬 main에 착지했다. 보정은 모델 프로파일 전체 SHA-256에 고정하며 모델·역할·어댑터·한도 변경 시 다시 수용해야 한다. 원격 component 증거와 미확인 범위는 `../validation/deliberation-host-admission-2026-10-12/versioned-judgment.md`에 둔다.
 
 실제 GLM 첫 호출은 관리자 설치 명령을 준비했으며 실행 receipt를 아직 확인하지 못했다. Phase 4~6의 운영 루프·최종 인수·개선 승격과 현장 수용은 완료하지 않았다.
+
+Phase 4의 선택적 읽기 전용 worker와 Phase 5의 최종 실패 outbox 연결은 작업 브랜치 `c41fbba181`에서 관련 9개 파일 원격 시험 151개와 신규 실패 0건을 확인했다. 이어 실제 원장 구현을 `automation/ledger`로 분리하고 기존 import 경로·클래스 identity를 유지했다. 실제 wheel/sdist 설치·책임 크기·기존 resolver loop를 포함한 15개 파일 원격 시험 375개, known-failures 신규 실패 0건, lint를 통과하여 `819a6e3140`으로 로컬 main에 착지했다. 호출·관측·비용 한도와 사건/정책 고정, 취소·재시작·사람 점유·다른 사건·새 관측 검사를 포함한다. 실제 서비스 factory와 수용 프로파일 연결, 실제 Fleet 규칙의 동등한 비교 기준 생산, 물리 처리 admission과 현장 종결 증거는 아직 없다. worker 기본값은 비활성이다. 다음 연결 순서는 [실제 런타임 수용 계획](2026-10-12-incident-runtime-admission.md)에 기록했다.
+
+Phase 6의 단일 사건 읽기 전용 export와 기존 녹화 feedback 연결은 `9078a72586`으로 로컬 main에 착지했다. 관련 6개 파일 원격 시험 185개와 known-failure 비교에서 신규 실패 0건을 확인했다. 현재 모델 자료는 `UNREVIEWED`이며 팀의 정답·현장 수용·훈련 데이터로 자동 승격하지 않는다. 판정 JSON의 확률과 원래 입력을 비용 기록과 함께 고정하는 작업, 독립 후보 비교, 승격·복귀는 후속 작업이다.
 
 ## 완료 기준
 
