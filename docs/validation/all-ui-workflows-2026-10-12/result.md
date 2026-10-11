@@ -1,5 +1,21 @@
 # 전체 활성 UI/UX 정보 배치·작업 흐름 검증
 
+## 첫 로그인·기본 내 프로필 — D-686/D-689
+
+사용자는 팀원 네 명에게만 사람 계정을 발급하고 초기 비밀번호를 로그인 ID와 일치시키되 첫 로그인에서 반드시 변경하도록 요청했다. 기본 프로필은 표시 이름 수정·현재 비밀번호 확인 변경·ID/이메일/권한 조회로 확정했다. 기존 기계·운용·AI 자격은 보존하며 실제 명단·자격을 이 문서에 기록하지 않는다. 서버는 초기 쿠키의 운용 API 접근을 거절하고 기존 SQLite에서 자격·프로필·세션 회전을 관리한다. 네 문서 우상단의 내 프로필은 Map/Cell 새 탭으로 입력을 보존한다.
+
+| 증거 | 결과와 범위 |
+|---|---|
+| `3704d9615` G1 영향 gate | 첫 묶음 6,511 passed / 1,049 skipped / 2 NEW, 둘째 521 passed / 48 skipped / 3 NEW. 버튼 disabled 사유, Fleet 크기 재판정, 문서 credential 오검출, 새 자산 3개 추가에 따른 wheel/sdist closure 기대를 수정 중이다. 착지되지 않았다. `logs/land-g1/uiux-header-all-surfaces/` |
+| `afe5873f1` 강제 변경 UI RED | 2 NEW/known 0. 미구현 서버 전제의 강제 변경 시나리오와 D-686 prose 오검출을 확인했다. 같은 묶음의 지도 충돌 3개 크기·사유·wheel/sdist 검사는 통과했다. `logs/first-login-ui-red/run-1.txt` |
+| `a7cf1b28a` 통합 첫 변경 | 2 NEW/known 0. 브라우저의 암시적 단일-page context와 long-ID 시험 fixture가 scanner에 걸린 것을 수정했다. 전체 묶음은 통과로 표시하지 않는다. `logs/first-login-integrated/run-1.txt` |
+| `7ae3c7a67` 프로필 UI RED | 서버를 합치기 전 6 NEW/known 0, 네 진입 경로/비밀번호/실패 복구 시나리오의 미구현 endpoint를 확인했다. `logs/self-profile-ui-red/run-1.txt` |
+| `73b23b956` 프로필·전체 인증/문서 호출자 | 적정 AI PC 22 cores/9 GB에서 173 passed, 종료 0, NEW 0. `logs/profile-green/run-1.txt` |
+| `70e970acb` 잘못된 Unicode 입력 수정 | 같은 자격 원격 PC에서 프로필 20 passed, 종료 0, NEW 0. 단일 surrogate 거절과 기존 이름 보존, 정상 한국어/emoji 수용. `logs/profile-surrogate/run-1.txt` |
+| 독립 검토 | D-686 원본 설정 변경 세션 무효화, D-689 Unicode 경계, 키보드 초점, 만료 시 비밀 삭제와 타 탭 계정 변경을 발견하고 수정했다. 수정된 서버 명세/품질과 UI에 추가 blocker 없음. 실제 시험과 배포 증거를 대신하지 않는다. |
+
+`83c2a49fd` 통합 브라우저/인증/자산/비밀 검사는 진행 중이다. 최신 main 영향 gate·해당 SHA CI·서명·설치·실제 팀원 발급은 아직 확인하지 않았다. 당사자 대신 최종 비밀번호를 정하지 않았고 실제 첫 변경·실물 수용을 완료로 추정하지 않는다.
+
 ## 계정 규칙 후속 정리 — D-683
 
 [공식 참고와 배치 근거](../../plans/2026-10-12-platform-ux-conventions-design.md)를 조사하고 [D-683](../../adr/D-683-fleet-account-entry-and-login-return.md)으로 Fleet 계정 진입 규칙을 채택했다. 네 문서의 우측 로그인/계정, `/console/login`, 허용된 업무 주소 복귀, 서버 세션 확인, 쿠키 로그아웃 결과 검증을 기존 인증 API로 구현했다. 지도·Cell 로그인은 새 탭으로 열고 원래 업무 입력을 보존한다. CORE 권한과 명령을 추가하지 않는다.
