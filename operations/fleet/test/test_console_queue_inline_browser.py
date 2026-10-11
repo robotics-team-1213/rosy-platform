@@ -447,7 +447,7 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
 
 
 def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
-    """D-623: a fresh decoded frame stays below the answers; historical/expired frames disappear."""
+    """D-623/D-641: fresh evidence opens below the answers; historical/expired frames disappear."""
     from playwright.sync_api import sync_playwright
 
     preview = {"robot_id": "rosy_01", "stuck_id": "stuck-abc", "sequence": 812, "source": "front",
@@ -468,6 +468,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
           const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
         }""")
         assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        slot.locator('[data-focus-key="evidence-summary"]').click()
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:
             box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
