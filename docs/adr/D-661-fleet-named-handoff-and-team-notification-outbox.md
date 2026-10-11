@@ -16,6 +16,10 @@ D-660은 현재 필요성의 참고 기록이다. 기존 `line-stuck/claim`은 A
 
 ### Verification and next gates
 
+소스 소유자는 `fleet/incidents/handoff.py`와 `fleet/incidents/notifications.py`다.
+팀 통지·담당 인수를 별도 하위 패키지로 묶고 판단·resolver·장치 admission은 기존 소유자에 남긴다.
+[분리 계획](../plans/2026-10-11-fleet-team-incidents-subpackage.md)에 직접 import·설치·크기 검증을 기록한다.
+
 원격 fake에서 인수 경쟁/중복/만료/다른 사건/재시작/원장 실패, 대기 중 자동 답 억제, 정상 zero-send, outbox 원자성/재시작/종료/부분 실패/429/전송 불명/secret 비노출을 확인한다. 지정 팀 채널의 발송→실제 수신→이름 있는 Console 로그인→인수 readback→현장 결과→종료 통지는 별도 수용이다. Discord 서버와 채널·비공개 webhook은 아직 없으며 팀 관리자의 계정에서 준비해야 한다. D-644~D-646 전체 및 모델 런 관문은 이 ADR로 통과하지 않는다.
 
 공식 전송 계약 확인: [Discord](https://docs.discord.com/developers/resources/webhook#execute-webhook), [Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/), [Telegram](https://core.telegram.org/bots/api#sendmessage), 2026-10-11.

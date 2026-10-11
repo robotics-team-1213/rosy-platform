@@ -10,7 +10,7 @@ from contextlib import closing
 import httpx
 import pytest
 
-from fleet.notifications import Channel, NotificationConfig, NotificationWorker
+from fleet.incidents.notifications import Channel, NotificationConfig, NotificationWorker
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
 from test_judgment_receipts import row

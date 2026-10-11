@@ -19,7 +19,7 @@ from urllib.parse import urlencode, urlsplit
 import httpx
 import yaml
 
-from fleet.incident_handoff import judgment_revision
+from fleet.incidents.handoff import judgment_revision
 
 
 class _RedactProviderURL(logging.Filter):

@@ -100,7 +100,7 @@ python test/known_failures.py <session>/logs/<unit>-green/run-1.txt
 
 ## Task 4: 외부 알림과 인증된 사람 인수
 
-**Detailed plan:** [중앙 판단 단계](2026-10-11-fleet-central-judgment-stages.md)의 D-645 절. **Create proposed:** `operations/fleet/fleet/notifications.py`, `operations/fleet/test/test_notifications.py` (기존 adapter가 있으면 재사용).
+**Detailed plan:** [중앙 판단 단계](2026-10-11-fleet-central-judgment-stages.md)의 D-645 절. **Create proposed:** `operations/fleet/fleet/incidents/notifications.py`, `operations/fleet/test/test_notifications.py` (기존 adapter가 있으면 재사용).
 
 **Read/Modify:** 실제 사건 owner의 transaction·store/service, 기존 Console 인증·inbox·설정 및 채널별 비공개 설정 template.
 

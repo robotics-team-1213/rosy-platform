@@ -26,7 +26,7 @@ from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
-from fleet.incident_handoff import judgment_revision
+from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
