@@ -265,6 +265,28 @@ def test_all_controls_share_geometry_including_emergency_stop(page, theme):
     assert sizes["reason"]["scroll"] <= sizes["reason"]["width"]
 
 
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_native_disclosure_uses_shared_geometry_and_keeps_keyboard_semantics(page, theme):
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    got = page.evaluate("""theme => {
+      document.documentElement.dataset.theme = theme;
+      const details = document.createElement('details');
+      details.innerHTML = '<summary id="disclosure" class="ui-disclosure-row"><span class="ui-disclosure-name">rosy_01</span></summary><p>Current evidence</p>';
+      document.body.append(details);
+      const row=details.querySelector('summary'), css=getComputedStyle(row);
+      return {height:row.getBoundingClientRect().height, size:css.fontSize,
+        inset:css.paddingLeft, name:getComputedStyle(row.firstElementChild).fontSize,
+        display:css.display};
+    }""", theme)
+    assert got == {"height": 48, "size": "14px", "inset": "12px", "name": "16px", "display": "list-item"}
+    page.locator("#disclosure").focus()
+    page.keyboard.press("Enter")
+    assert page.locator("#disclosure").evaluate("el => el.parentElement.open")
+    page.keyboard.press("Enter")
+    assert not page.locator("#disclosure").evaluate("el => el.parentElement.open")
+
+
 def test_hangul_labels_drop_the_latin_tracking(page):
     """US-008: the tracking tokens are for Latin uppercase labels. Hangul in a tracked label read
     as "점유  지도"; an element whose own text has Hangul renders with 0 tracking, a Latin tag keeps

@@ -40,7 +40,7 @@ CANVAS_FILES = [
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")
-# canvasFont(size, family) 또는 그것을 감싼 지역 이름만 허용한다.
+# canvasFont(role, family, rasterScale) or a local role wrapper.
 FONT_SOURCES = re.compile(r"^(window\.RosyPalette\.canvasFont\(|font\(|labelFont$)")
 
 
@@ -69,11 +69,18 @@ def test_canvas_fonts_use_the_token_family_at_12px_or_more(path):
         assert "canvasFont" in local[1] or local[1].startswith("font("), local
 
 
-def test_canvas_font_reads_body_or_mono_and_floors_at_12px():
+def test_canvas_font_reads_shared_text_roles_and_family():
     source = (COMMON / "ui.js").read_text(encoding="utf-8")
     body = source.split("export function canvasFont", 1)[1].split("\n}\n", 1)[0]
     assert "getPropertyValue(`--${family}`)" in body
-    assert "Math.max(12," in body
+    assert "canvasTextSize(role)" in body
+    assert "Math.round(size * scale)" in body
+
+
+def test_numeric_canvas_text_roles_are_rejected_by_the_contract():
+    for path in CANVAS_FILES:
+        source = path.read_text(encoding="utf-8")
+        assert not re.search(r"(?:canvasFont|\bfont)\(\s*(?:\d|Math\.)", source), path
 
 
 def test_games_pitch_colours_live_in_its_stylesheet():

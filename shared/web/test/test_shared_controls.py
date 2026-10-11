@@ -319,6 +319,32 @@ def test_surfaces_do_not_repaint_shared_controls():
     assert not offenders, offenders
 
 
+def local_button_height_problems(css):
+    problems = []
+    for selector, body in RULE.findall(css):
+        if not re.search(r"(?<![\w-])(?:ui-button|button|summary)\b|\.ui-disclosure-row\b", selector):
+            continue
+        for prop, value in re.findall(r"(?<![-\w])(min-height|height|max-height|block-size)\s*:\s*([^;}]+)", body):
+            if re.search(r"(?<![\w.-])[1-9][\d.]*(?:px|rem)\b", value):
+                problems.append(f"{selector.strip()} {prop}: {value.strip()}")
+    return problems
+
+
+def test_surface_buttons_use_shared_height_roles():
+    bad = []
+    for path in _surface_texts():
+        if path.suffix == ".css":
+            bad.extend(f"{path.relative_to(ROOT)}: {row}"
+                       for row in local_button_height_problems(path.read_text(encoding="utf-8")))
+    assert bad == [], "\n".join(bad)
+
+
+def test_local_height_guard_keeps_container_geometry_and_stretch():
+    assert local_button_height_problems(".stage { min-height: 7rem; } ui-button { height: 100%; min-height: var(--target-primary); }") == []
+    assert local_button_height_problems(".stage ui-button { min-height: 7rem; }")
+    assert local_button_height_problems("summary { min-height: 44px; }")
+
+
 def test_pitch_colours_live_in_one_block():
     css = PITCH.read_text(encoding="utf-8")
     root = re.search(r":root\s*\{([^}]*)\}", css)
