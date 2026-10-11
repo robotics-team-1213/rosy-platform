@@ -1,7 +1,5 @@
 """Synthetic checker tests do not supply human labels or field acceptance."""
 
-import copy
-
 import pytest
 import judgment_acceptance as checker
 
@@ -28,7 +26,8 @@ def fixture():
                'label_sha256': checker.digest(labels), 'training_sha256': checker.digest(training),
                'policy_revision': 'fake-policy', 'minimum_counts': {category: 1 for category, _ in categories},
                'minimum_resolution_cases': 0, 'limits': {'miss_rate': 0, 'unnecessary_rate': 0, 'abstain_rate': 1,
-                 'p95_judgment_ms': 20, 'p95_notification_ms': 30, 'resolution_rate_min': 0}}
+                 'p95_judgment_ms': 20, 'p95_notification_ms': 30, 'resolution_rate_min': 0,
+                 'abstain_required_error_rate': 0}}
     return profile, labels, observations, training
 
 
@@ -87,3 +86,13 @@ def test_normal_command_other_case_and_stale_action_fail_zero_gates():
     assert result['metrics']['normal_commands'] == 1
     assert result['metrics']['stale_or_other_case_actions'] == 1
     assert result['metrics']['forbidden_authority'] == 1
+
+
+@pytest.mark.parametrize('necessity', ['INTERVENE', 'DO_NOT_INTERVENE'])
+def test_required_abstain_cannot_pass_as_a_definite_judgment(necessity):
+    profile, labels, observations, training = fixture()
+    observations[3]['necessity'] = necessity
+    observations[4]['necessity'] = necessity
+    result = checker.evaluate(profile, labels, observations, training)
+    assert result['status'] == 'FAIL'
+    assert result['metrics']['abstain_required_error_rate'] == {'numerator': 2, 'denominator': 2, 'value': 1}
