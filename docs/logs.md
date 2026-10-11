@@ -7838,3 +7838,9 @@ osy-d395-s1d\`.
 - 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
 - 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
 - gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
+
+## 2026-10-12 · 5f4040f306 · D-655 지도 없는 조사와 통합 관제 사이트 수용
+
+- 변경: 빈 조사 기준·시설·도로·카메라/relative odom 근거·CAS, 선택 로봇 기록과 대형 작업 연결, 지도 busy guard와 충돌/개입 결과 구분을 구현·통합했다. 실행 계획과 날짜 검증 기록을 최종 상태로 정리했다.
+- 증거: 착지 원격16,523 PASS/NEW0, Node312 PASS, pre-push292 PASS. exact SHA FULL CI15 jobs 및 site build 성공, 운영자 서명·사이트 updater 종료0·세 healthy image identity·교정/조사 import 확인. 실제 사이트1440/390 px 세 모드 크기 안정·선택→기록·대형 패널·로컬 시설 작성·기존 지도/profile 보존 PASS. 상세 docs/validation/2026-10-12-mapless-fleet-control.md.
+- gate 변화: 이번 기능의 사이트 설치/UI 증거를 추가했다. 로봇 두 대 오프라인으로 실물 주행·측량·대형 수용 미확인; FIELD 승격·로봇 배포·이동·E-Stop 해제 없음. 일반 외부 IP URL의 연결/TLS 문제는 별도 제한으로 유지한다.
