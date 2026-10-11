@@ -5,6 +5,9 @@
 ### Context
 화면의 과거 사건에는 CORE 원인, 시작 단계, 주변 카메라 메타데이터, AI 초안, Fleet 답과 사람 검토가 함께 표시된다. 최신 관측과 당시 자료, 진단과 원인 확정의 의미를 먼저 고정해야 중앙 판단의 정확도를 평가할 수 있다.
 
+### 책임·배포 선행 관문
+[D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md)을 먼저 따른다. 이 ADR의 Fleet은 현재 소비자·서비스 문맥이다. 공통 상황평가 holder와 초기 배포는 아직 미결정이며 권고와 작업/자원 승인·원장 소유를 구별한다. 기존 Fleet transaction과 CORE/OMX 권한은 유지한다.
+
 ### Decision
 1. 기존 incident/episode와 robot/site/Mission/attempt 식별을 재사용한다. 각 근거에 원본 producer, 관측/수신 시각, 사건 binding, 지도·보정·정책 revision, 신선도와 누락/상충을 구분한다. 시간상 근접한 카메라 관측만으로 사건 원인을 확정하지 않는다.
 2. 현재 열린 개입과 닫힌 사건 보고를 분리한다. `phase_at_open`은 당시 단계, `held_s_max`는 과거 집계이며 지금의 로봇 상태로 읽지 않는다. 닫힌 사건 자료로 새 답을 보내지 않는다. 현재 상태를 못 읽으면 미확인으로 둔다.

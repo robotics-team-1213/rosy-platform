@@ -4,7 +4,7 @@
 
 **Goal:** Fleet이 개입·비개입·판단 보류를 근거로 구별하고, 중앙 중재와 외부 담당자 처리를 실제 결과로 닫는 규약을 D-640보다 먼저 완성한다.
 
-**Architecture:** 현재 `fleet.stuck`의 관측·규칙·사건·결과와 Console을 재사용한다. 판단 기록과 장치 명령, 알림 수락과 사람 처리, 작업 접수와 목표 해소를 구분한다. 실제 실행 권한은 기존 Fleet admission 및 CORE/OMX에 유지한다.
+**Architecture:** [D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md)에서 World 상태·공통 상황평가·deliberative 후보·작업/자원 중재를 구별하고 논리 holder와 초기 배포 위치를 먼저 결정한다. 현재 `fleet.stuck`과 Console은 기존 소비자·adapter로 재사용하며 공통 판단 전체의 Fleet 소유를 뜻하지 않는다. 기존 Mission/claim transaction과 Fleet admission 및 CORE/OMX 권한은 보존한다.
 
 **Tech Stack:** 기존 Python/httpx/SQLite, ROS-free 계약, Console 정적 JS 및 원격 브라우저. 외부 알림은 설정된 Discord/Slack/Telegram adapter와 인증 Console 처리 링크로 시작한다.
 
@@ -14,6 +14,7 @@
 
 | 순서 | ADR | 산출물 | 다음 단계 조건 |
 |---|---|---|---|
+| 0 | [D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md) | 단일 셀/로봇/다중 로봇 책임·의존 표와 holder/port·초기 배포 결정 | 사실/권고/승인 분리, 기존 transaction·권한 보존, 배포 대안과 선택 근거 검토 |
 | 1 | [D-642 근거 규약](../adr/D-642-fleet-judgment-evidence.md) | 당시/현재와 증상/가설/검증을 구분하는 근거 계약 | 시각·출처·binding·누락/상충 회귀와 API/DB 호환 통과 |
 | 2 | [D-643 개입 필요성](../adr/D-643-fleet-intervention-necessity.md) | 개입·비개입·판단 보류 규칙과 정상 구간 분모 | 정상/위험/불명 검수 시나리오 및 zero-command 통과 |
 | 3 | [D-644 중앙 처리](../adr/D-644-fleet-central-judgment-transaction.md) | 단일 owner·중복/세대 fence·조치/결과 원장 | 경쟁·장애·재시작·응답 불명·실제 해소 구분 통과 |
@@ -36,7 +37,7 @@
 
 아래 행은 코드 enum 추가가 아니라 검수할 의미다. 실제 필드/호환 계약은 구현과 API Reference에서 함께 확정한다.
 
-| 상황 | Fleet 판단 | 장치 영향 | 기록·알림과 재판단 |
+| 상황 | 필요성 평가와 현재 owner 처리 | 장치 영향 | 기록·알림과 재판단 |
 |---|---|---|---|
 | 신선한 정상 진척 | 비개입 | 추가 명령 없음 | bounded 정상 샘플/판정; 새 위험·진척 실패 때 재판단 |
 | 정상 신호/자원 대기 | 비개입 + 감시 | 기존 owner 정책 유지 | 허가/owner/기한 확인; 기한 초과는 개입 후보 |
@@ -50,6 +51,10 @@
 비개입의 성공은 요청을 안 보냈다는 사실과 유효한 관측 결과로 확인한다. `WAIT` 명령 전송은 비개입이 아니며, 자동 안전 대기 유지와 새 대기 명령을 구별한다. 읽음·ACK·기권도 서로 다른 기록이다.
 
 ## 단계별 파일과 검증 작업
+
+### 0. 공통 판단 책임과 배포 위치
+
+Read: D-429, Proposed D-435, D-630, `operations/world/AGENTS.md`, Situation/Decision/Fleet 설치와 Mission/claim의 실제 소비자. [D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md)의 사례·입출력·의존·transaction 표를 만든다. 단일 암 셀/로봇/다중 로봇과 Mission 없는 관측의 owner를 비교하고, 공통 평가 holder/port와 초기 배포를 결정한다. 현재 코드 수정·새 서비스 생성은 수행하지 않는다. B(논리 분리 후 기존 배포 유지)는 잠정 추천이며 독립 서비스 필요는 실제 자원·장애 격리·지연 요구로 검토한다. 아래 공통 로직의 생성 경로는 이 관문 뒤 확정한다.
 
 ### 1. 사건 근거와 표시 의미
 
@@ -65,7 +70,7 @@ Existing tests: `operations/fleet/test/test_line_stuck_evidence.py`, `test_line_
 ### 2. 개입·비개입·보류
 
 Modify: `operations/fleet/fleet/stuck/resolver.py`, `problems.py`, `lane_lost.py`, `ai_first.py`와 실제 호출자.
-Create only if a pure shared decision record is needed: `operations/fleet/fleet/stuck/judgment.py`.
+공통 필요성 평가/판단 기록의 생성 경로는 D-647의 holder 결정 후 명시한다. Fleet 파일은 기존 호출자와 중재 adapter 범위이며 `fleet/stuck/judgment.py`를 공통 판단의 영구 위치로 선점하지 않는다.
 Tests: 기존 `test_stuck_resolver.py`, `test_stuck_no_motion_fleet.py`; new `operations/fleet/test/test_intervention_necessity.py`.
 
 판단 표를 사람 검수 fixture로 만든 뒤 fake clock으로 필요성/사유/유효 범위·재판단 전이를 먼저 시험한다. 비개입/보류가 기존 transport의 mutating call을 만들지 않는지 확인한다. 관측 읽기는 허용된다. 정상 sample과 문제 transition의 bounded 기록, 전이 중복, debounce·기한·owner 상실·새 위험을 시험한다. 모델 abstain을 정상으로 분류하지 않는다. 정상 샘플링/보관 한계와 평가 허용값은 구현 전에 고정한다.

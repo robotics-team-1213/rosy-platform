@@ -7739,3 +7739,10 @@ osy-d395-s1d\`.
 - 변경: docs/fleet-judgment-stages에 근거 규약, 개입/비개입/보류, 중앙 중재/결과, Discord·Slack·Telegram 알림/사람 처리, Console·독립 수용의 5개 Proposed ADR과 파일별 계획을 기록했다. D-640 모델 토론 계획의 선행 관문으로 연결했다.
 - 증거: 현재 ContextDraft 고정 점수·seen, 사건 시작 단계, 수락 tier 기반 resolved_by, stuck 결과 및 D-632 inbox를 소스로 확인했다. 외부 callback 공식 규약은 조사 근거이며 실채널 발송/처리는 실행하지 않았다. 문서 계약/lint는 이 변경의 원격 결과로 별도 보고한다.
 - gate 변화: 없음. 중앙 판단 코드·화면·알림 구현·모델 호출·배포·장치/실채널 수용은 미실행.
+
+## 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)
+
+- 변경: docs/fleet-judgment-stages에서 공통 상황평가와 World·deliberative·작업 중재·Fleet coordination을 구별하고 배포 3안을 비교했다. D-642~D-646과 D-640 계획을 0단계 이후 구현 위치 확정으로 연결했다.
+- 범위: 문서만. 같은 프로세스에서 논리 경계를 먼저 정하는 B안은 잠정 추천이며 실제 서비스 분리·실행 권한 변경·외부 발송은 없다.
+- 증거: 기존 World/Decision/Fleet 소스와 D-429·D-630 및 Proposed D-435를 확인했다. 4개 역할의 read-only 문서 검토에 actionable finding은 없고 holder/배포와 장애 격리는 미결정 관문으로 유지했다. 독립 외부 모델 검토는 jq 미설치로 시작 전 생략했다. 문서 계약 원격 검증은 커밋 뒤 별도 기록한다.
+- gate 변화: 기존 Accepted 계약과 실행 gate는 유지한다. 0단계 검토 완료 전 공통 로직 위치 확정은 HOLD이며 main 착지·push·배포는 하지 않았다.
