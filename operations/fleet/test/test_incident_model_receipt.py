@@ -104,7 +104,7 @@ def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failu
     async def run():
         _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05)
         worker.feed(poll()); await settled(worker)
-        scope = store.active_scopes()[0]
+        scope = worker._scope(seen[0][0])
         with store._transaction() as conn:
             attempt = dict(conn.execute('SELECT * FROM fleet_incident_v2_attempts').fetchone())
             rows = conn.execute('SELECT receipt_json FROM fleet_incident_v2_model_receipts').fetchall()
@@ -115,5 +115,9 @@ def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failu
                 assert raw['judgment']['input_hash'] == seen[0][0].digest
             else: assert attempt['state'] == 'REJECTED'
         assert store.case(scope)['spent_micros'] == 50000
+        if builder_rejected:
+            assert store.case(scope)['state'] == 'HOLD' and store.case(scope)['reason'] == 'MODEL_TRACE_REJECTED'
+            worker.feed(poll(2)); await settled(worker)
+            assert len(seen) == 1 and store.case(scope)['observations'] == 0
         await worker.aclose()
     asyncio.run(run())
