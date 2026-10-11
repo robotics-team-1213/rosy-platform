@@ -7958,6 +7958,6 @@ osy-d395-s1d\`.
 
 ## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
 
-- branch: `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
+- 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
 - 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
 - gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.
