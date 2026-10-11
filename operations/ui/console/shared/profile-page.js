@@ -52,7 +52,7 @@ function failure(error) {
     $('profile-content').hidden = true;
     $('profile-login').hidden = false;
     $('profile-login').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경' : '로그인';
-    status('로그인과 첫 비밀번호 변경을 완료한 뒤 내 프로필을 사용할 수 있습니다.', 'warning');
+    status('로그인과 첫 비밀번호 변경을 완료한 뒤 내 계정을 사용할 수 있습니다.', 'warning');
     $('profile-login').focus();
   } else if (error.code === 'CURRENT_PASSWORD_INCORRECT') {
     status('현재 비밀번호가 맞지 않습니다. 다시 확인하세요.', 'warning');
@@ -62,7 +62,7 @@ function failure(error) {
     for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;
     $('profile-login').hidden = false;
-    status('내 프로필은 사람 계정 로그인으로 사용할 수 있습니다.', 'warning');
+    status('내 계정은 사람 계정 로그인으로 사용할 수 있습니다.', 'warning');
   } else status('처리 결과를 확인할 수 없습니다. 연결을 확인한 뒤 계정 상태 다시 확인을 누르세요.', 'error');
 }
 async function reload() {
