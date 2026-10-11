@@ -16,6 +16,7 @@ from control.sensing.perception.learned.drivable_paint import boundary_paint, la
 from control.sensing.perception.learned.paint_motion import OdomHistory
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from core_events.events.bus import EventBus
+from core.bridge.observation import front_clearance
 from core_features.line_follow import LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation
 from core_features.line_follow.clearance import return_scan_view
 from map_task import QPolicy, SIM_DEVICE_IDS
@@ -77,13 +78,20 @@ class CameraLineManager(LineFollowManager):
 
 class LearnedCameraLane:
     def __init__(self, model, ground, *, camera_x, clock=time.monotonic, config=None,
-                 device_id='isaac-pinky'):
+                 device_id='isaac-pinky', body=None):
         if ground is None or not math.isfinite(camera_x):
             raise ValueError('configured native ground and camera position required')
         self.ground, self.camera_x, self.clock = ground, camera_x, clock
-        self.manager = CameraLineManager(config=config or LineFollowConfig(
+        config = config or LineFollowConfig(
             cruise_speed=.04, max_linear=.06, steering_gain=.4, max_angular=.8,
-            lost_auto_resume=False), clock=clock, device_id=device_id)
+            lost_auto_resume=False)
+        self.native_body = body
+        if body is not None:
+            config = replace(config, obstacle_mode='path', body_front_x_m=body.front_x_m,
+                body_rear_x_m=body.rear_x_m, body_half_width_m=body.half_width_m,
+                body_rotation_radius_m=body.rotation_radius_m, body_lidar_x_m=body.lidar_x_m,
+                lidar_forward_deg=body.lidar_forward_deg)
+        self.manager = CameraLineManager(config=config, clock=clock, device_id=device_id)
         self.manager.set_mode(LineFollowMode.CAMERA_LINE)
         self.worker = LearnedPaintWorker(SimpleNamespace(poll=lambda: model), clock=clock,
                                          start=False, target='drivable')
@@ -95,6 +103,8 @@ class LearnedCameraLane:
         self.last = {'model_used': False, 'reason': 'no_camera_frame'}
 
     def observe_scan(self, sample, *, body):
+        if self.native_body is not None and body != self.native_body:
+            raise ValueError('native scan and CORE body geometry differ')
         received_at = self.clock()
         evidence = return_scan_view(sample, body=body,
             source_now_ns=sample.get('source_now_ns'), clearance_horizon_m=.35)
@@ -106,11 +116,18 @@ class LearnedCameraLane:
             self.invalidate('native_scan_unavailable')
             return False
         view, age, stamp_ns = evidence
+        front_clearance(SimpleNamespace(loc_mission=None, line_follow=self.manager),
+                        sample, received_at=received_at)
+        if not self.manager.wants_return_scan:
+            self.manager.observe_return_scan(view, source_age_s=age, source_stamp_ns=stamp_ns,
+                                             received_at=received_at)
+        if self.native_body is not None and view.unknown:
+            self.wall = None
+            self.invalidate('native_scan_unknown')
+            return False
         ahead, sides = scan_summary(sample['ranges'], sample['angle_min'], sample['angle_increment'],
                                     sample['range_min'], sample['range_max'], body=body)
         self.wall, self.scan_stamp_ns = (ahead, stamp_ns / 1e9, sides), stamp_ns
-        self.manager.observe_return_scan(view, source_age_s=age, source_stamp_ns=stamp_ns,
-                                         received_at=received_at)
         return True
 
     def invalidate(self, reason):
