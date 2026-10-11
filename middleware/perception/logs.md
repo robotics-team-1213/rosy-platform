@@ -1461,3 +1461,9 @@
 - 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
 - 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
 - gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · 260919 진행 방향 횡단 줄무늬 관측
+
+- 변경: road.py가 GroundPlane이 있을 때 기존 D-491 crosswalk_extent와 BirdsEye로 세로 횡단 줄무늬를 찾는다. 기존 가로 표식은 우선하고 정지선·신호 판정 및 CORE gate는 유지한다.
+- 증거: A24 RGB crosswalk=false를 기록했다. 첫 카메라 프레임은 기동 pose가 없어 명목 투영의 거리 fixture를 철회하고, 정확한 25mm/120mm bars·40mm pitch를 명목 카메라에 투영한 원격 RED 1 NEW·32 PASS로 누락을 재현했다. 초기 RED는 자원 floor fallback, 교정된 RED는 AI PC 기준 충족 실행이다. 단일 정지선·차선·두 줄·옆 차로·빈 프레임 오인식 방지와 투영 없는 거리 미추정 회귀를 추가했다. 수정 후 원격 시험·native·독립 검토는 진행 중이다.
+- gate 변화: 없음. 모델·안전 권한은 변경하지 않았다. 실제 안정 카메라·좌표·오차·신호·완주·병렬 RL 수용은 남았다.

@@ -43,6 +43,8 @@ D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분�
 
 ### Addendum 2026-10-12 — 두 대 Gazebo 도로 증거 연결
 
+도로 검출기의 가로 띠 검출은 260919의 진행 방향과 나란한 횡단 줄무늬를 놓친다. 기존 D-491의 crosswalk_extent·BirdsEye를 GroundPlane이 있는 경우 재사용한다. 가로 표식 검출은 우선하며 기존 정지선·신호 판정과 CORE 정책을 변경하지 않는다. 줄무늬 치수·간격·관측된 바닥 grid가 있어야 metric 관측을 만든다. 학습된 차선 검출을 대체하는 새 모델이 아니며 실제 카메라 판정·좌표·오차 수용은 별도 확인한다. A24 첫 카메라 이미지에는 기동 시점의 pose 기록이 없어 명목 높이로 거리 정확도를 단정하지 않는다. 다음 native 시험은 안정된 frame과 odom·Gazebo pose를 함께 보관한다.
+
 A21 runner 설정의 ENFORCED와 Fleet snapshot의 DISABLED가 일치하지 않았다. 실제 CORE 교통 endpoint의 직접 readback 전에는 ENFORCED 실행을 수용하지 않는다. 지면 투영은 기존 simulation guard가 허용하는 GAZEBO source로 연결하며 실제 shared helper의 투영 생성 회귀로 확인한다.
 
 실제 A21에서 두 CORE·Fleet online 2/2·카메라/차선/LiDAR/odom과 CORE별 최종 publisher를 확인했으나 위치는 UNKNOWN이었다. 기존 multi_real launch는 road/observation 발행자를 시작하지 않아 ENFORCED 교통 정책에 도로 증거를 공급하지 못했다. 기존 road_observer_node를 각 namespace의 camera/front에 연결하고 declared URDF nominal 카메라 투영·map_v2_fleet 식별자를 명시한다. 기존 learned line observer는 유지한다. 도로 관측 노드가 기존 front JPEG와 raw preview를 발행하므로 단순 JPEG relay를 중복 실행하지 않는다.
