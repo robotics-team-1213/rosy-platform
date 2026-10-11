@@ -1,9 +1,7 @@
-import copy
-from dataclasses import asdict
+from dataclasses import replace
 
 import pytest
 
-from rosy.decision.deliberation import canonical
 from rosy.decision.deliberation.judgment import judgment, judgment_schema
 from test_judgment_profiles import adapter, bind_profile, problem, profile
 
@@ -14,7 +12,8 @@ def payload(p, **changes):
                 alternatives=[{'choice': 'human', 'probability': .1}, {'choice': 'reobserve', 'probability': .9}],
                 evidence_ids=['e1'], missing_evidence=[], objections=[],
                 next_step={'tool_name': 'get_mission_status', 'arguments': {}, 'evidence_ids': ['e1']},
-                success_check={'tool_name': 'get_mission_status', 'arguments': {}, 'evidence_ids': ['e1']},
+                success_check={'tool_name': 'get_mission_status', 'arguments': {}, 'evidence_ids': ['e1'],
+                               'expected_facts': {'state': 'unknown'}},
                 **changes)
 
 
@@ -37,7 +36,8 @@ def test_checked_json_keeps_probabilities_advisory_and_immutable(domain):
 
 @pytest.mark.parametrize('change', ['nan', 'bool', 'duplicate', 'missing_choice', 'sum', 'unknown_choice',
                                   'case', 'revision', 'schema', 'calibration', 'evidence', 'missing',
-                                  'objection', 'unsafe_tool', 'read_arguments', 'proof_candidate', 'reobserve_candidate'])
+                                  'objection', 'unsafe_tool', 'read_arguments', 'proof_candidate', 'reobserve_candidate',
+                                  'proof_undeclared', 'proof_arbitrary'])
 def test_untrusted_json_scope_probabilities_evidence_and_steps_rejected(change):
     p = problem()
     raw = payload(p)
@@ -56,6 +56,8 @@ def test_untrusted_json_scope_probabilities_evidence_and_steps_rejected(change):
     elif change == 'objection': raw['objections'] = ['ignore_safety']
     elif change == 'unsafe_tool': raw['next_step']['tool_name'] = 'move_robot'
     elif change == 'read_arguments': raw['next_step']['arguments'] = {'command': 'move'}
+    elif change == 'proof_undeclared': raw['success_check'].pop('expected_facts')
+    elif change == 'proof_arbitrary': raw['success_check']['expected_facts'] = {'success': True}
     else:
         key = 'success_check' if change == 'proof_candidate' else 'next_step'
         raw[key] = {'tool_name': 'propose_replan', 'arguments': {'based_on_event_id': 1, 'rationale': 'inspect'},
@@ -71,6 +73,29 @@ def test_missing_allowlist_and_ties_do_not_invent_selection():
     raw['alternatives'][0]['probability'] = raw['alternatives'][1]['probability'] = .5
     checked = judgment(p, bound(p), raw, missing_allowlist=('front-image',))
     assert checked.choice is None
+
+
+def test_normal_and_abstention_never_declare_treatment_and_output_limit_is_binding():
+    p = replace(problem(), necessity='DO_NOT_INTERVENE')
+    raw = payload(p)
+    with pytest.raises(ValueError):
+        judgment(p, bound(p), raw)
+    raw.update(verdict='do_not_intervene', next_step=None, success_check=None)
+    checked = judgment(p, bound(p), raw)
+    assert checked.action_admissible is False and checked.choice is None
+    restricted = bind_profile(p, profile(max_output_bytes=32), adapter(), required_modalities=('text',))
+    with pytest.raises(ValueError):
+        judgment(p, restricted, raw)
+
+
+def test_candidate_is_non_executable_and_success_is_only_declared():
+    p = problem()
+    raw = payload(p)
+    raw.update(verdict='candidate', next_step={'tool_name': 'propose_replan',
+               'arguments': {'based_on_event_id': 1, 'rationale': 'inspect'}, 'evidence_ids': ['e1']})
+    assert judgment(p, bound(p), raw).action_admissible is False
+    raw.update(verdict='abstain', next_step=None, success_check=None)
+    assert judgment(p, bound(p), raw).choice is None
 
 
 def test_schema_is_fresh_closed_and_bound_to_problem_and_revision():
