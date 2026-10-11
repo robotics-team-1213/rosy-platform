@@ -87,3 +87,4 @@
 - 변경: 모델 관측의 source age와 처리 시간을 합쳐 freshness를 확인한다. 무효 관측과 이전 관측 없는 transition은 제외하고 연결을 끊는다. tick 도중 만료하면 권한 메타데이터를 유지한 zero 후보만 제출한다. loss 판정 뒤 학습하며 실패 결과에도 실제 updates와 제외 이유를 보존한다. 기존 경로 기반 update→choose 순서는 유지한다.
 - 증거: 원격 RED 6 NEW/19 pass 및 만료 회귀 RED 1 NEW/25 pass 뒤 전체 Isaac 152 pass/1 skip, known_failures NEW 0. 독립 소스 Safety-Review 수용. native 재시험과 카메라 완주·두 대 Fleet·ROS-SIM·실물 수용은 아직 별도다.
 - 목표: 같은 기존 인식 모델·CORE 주행의 고정 gain 기준선과 비교해 곡선의 오차·흔들림을 줄이는 효과를 검증한다. 신호·횡단보도·Fleet 통행권은 학습 보상으로 우회하지 않는다.
+- gate 변화: SOURCE/LOCAL 유지. 카메라 전체 완주·두 대 Fleet·ROS-SIM·DEVICE·FIELD는 HOLD이며 이번 소스 회귀로 승격하지 않는다.
