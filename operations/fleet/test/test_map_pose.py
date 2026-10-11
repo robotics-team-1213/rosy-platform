@@ -264,7 +264,10 @@ def test_config_defaults_are_the_adr_values():
 
 
 def test_map_pose_is_stdlib_only_and_never_reads_tracking():
-    path = Path(__file__).resolve().parents[1] / "fleet" / "localization" / "map_pose.py"
+    from rosy.world.state.projections import map_pose
+
+    path = Path(map_pose.__file__)
+    assert path == Path(__file__).resolve().parents[3] / "operations/world/src/rosy/world/state/projections/map_pose.py"
     names = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):

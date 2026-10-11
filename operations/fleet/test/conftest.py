@@ -18,6 +18,7 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 # junction manoeuvre states).
 for path in (
     SRC.parent / "operations" / "fleet",
+    SRC.parent / "operations" / "world" / "src",
     SRC.parent / "contracts" / "foundation",
     SRC.parent / "middleware" / "core" / "services",
     # Cell app tests import this production dependency before test_cell_compiler.
