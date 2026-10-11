@@ -719,3 +719,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
+
+## D-682 — 예약된 물체 정답과 고정 detector의 인지 적합성 재생
+
+- 상태: Accepted (2026-10-12).
+- 결정: 학습 export와 구별한 예약 MCAP 물체 정답 출판, 고정 detector·관측·학습 참조 결속과 HOLD 재생을 정의한다.
+- 계약: [ADR](../adr/D-682-fixed-object-truth-and-fitness-replay.md). 실제 독립 성능·장치 수용은 별도다.
