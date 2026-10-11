@@ -41,6 +41,20 @@ def _snapshots():
     return image, anchor
 
 
+def test_missing_anchor_image_reference_only_abstains_region():
+    labels = _labels()
+    image, anchor = _snapshots()
+    road = (labels == 2).astype(np.uint8)
+    region = road.copy()
+    region[:, 7:] = 0
+    report = evaluate_frame(labels, CLASSES, image, replace(anchor, evidence_refs=("other",)),
+                            [[10, 2]], road, region, domain="real", conditions=[],
+                            now_ns=1050, max_age_ns=100)
+    assert "image_reference_missing" in report["input_errors"]
+    assert report["road_surface"]["prediction_available"]
+    assert not report["current_region"]["prediction_available"]
+
+
 def test_fork_keeps_both_branches_without_selecting_a_drive_way():
     mask, reason = observed_road_region(_labels(True), CLASSES, ((10, 5),))
     assert reason == "ok" and mask[2, 2] and mask[2, 9]
