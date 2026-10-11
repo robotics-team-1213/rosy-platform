@@ -741,3 +741,9 @@
 - 변경: 기존 역할별 헤더와 본문 흐름을 검토하고 Cell 미구성 복구, Pilot 상태 근거와 연결 순서, Robot 재시도/권한 판독, Learning 작은 헤더, Android 함께 조종 안내를 통합했다.
 - 증거: 적정 자원 원격 통합 342 passed, 계약·문서 64 passed, 작은 헤더/Cell 캡처 9 passed, Robot/Pilot 단계별 176/27/3/8/3 passed, 각 known_failures NEW 0. Android 106 tests와 APK 빌드 통과. 변경 후 캡처와 기존 설치본 Fleet 8 화면 조합의 직접 검토를 docs/validation/all-ui-workflows-2026-10-12/result.md에 구분해 기록했다.
 - gate 변화: SOURCE·원격 회귀·변경 후 렌더링 근거다. 기존 설치본 확인은 새 변경의 배포 증거가 아니다. 새 main 착지·push·CI·서명 설치 및 실물 장치/현장 수용은 별도다.
+
+## 2026-10-12 · 7a0725de4 · fix(ui): 현장 복구 목표와 공용 실패 안내
+
+- 변경: 사용자가 현장 운용·오류 복구를 우선 선택해 대상→현재 근거→막힌 이유→가능 조작→실제 결과 재확인으로 목표를 정했다. impeccable context/audit/clarify와 frontend-ui-engineering으로 기존 역할·캡처·공용 계약을 평가했고, 서버/연결 실패에 현재 상태 재조회 안내를 공용 Fleet 요청 어댑터에서 제공한다.
+- 증거: Node 새 회귀 변경 전 3 FAIL, 변경 후 요청 계약 포함 33 PASS. detector 12건은 동적 이미지·계약된 탐색·누락된 경로 해석의 영향을 확인했다. docs/plans/2026-10-12-field-ui-recovery-brief.md에 평가 범위와 미확인 성능/실물 경계를 적었다. 관련 브라우저 회귀와 main 통합 재검사는 이어 실행한다.
+- gate 변화: SOURCE/Node 근거다. 사용자 main 착지·push·배포 확인 지시를 받았으며 적정 자원 시험·CI·서명 설치·실제 화면 증거를 따로 확인한다.
