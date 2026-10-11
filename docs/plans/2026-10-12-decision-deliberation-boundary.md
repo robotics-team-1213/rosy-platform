@@ -28,7 +28,7 @@ Decision 하위 단위는 231줄 그대로다. D-664의 읽기 projection·Task/
 기존 camera/auth/trip·observe/server/UI 조건도 합친 판정에 보존한다.
 
 이후 main `5f4040f306`의 D-655 지도 없는 survey/recording/UI를 통합한 부모는
-53098줄, 하위 단위는 231줄이다. 기존 survey World 신선도/녹화 연속성,
+53093줄, 하위 단위는 231줄이다. 기존 survey World 신선도/녹화 연속성,
 Fleet teach recording/CAS, UI draft·camera import 소유와 크기 조건을 모두 보존한다.
 
 Fleet 배포는 `tools/packaging/fleet_sources.py`의 명시 하위 패키지 mapping을 사용한다.
