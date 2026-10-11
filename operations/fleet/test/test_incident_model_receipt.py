@@ -94,6 +94,22 @@ def test_completion_atomically_keeps_verified_cost_with_valid_trace_or_trace_rej
         if rows: assert rows[0][0] == receipt.payload_json
 
 
+def test_deeply_nested_forged_receipt_rejects_trace_without_losing_known_cost(tmp_path):
+    scope, p, _, _, _, _ = fixture()
+    store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
+    store.begin_case(scope, CaseBudget(100, 130, 1, 0, .1))
+    store.reserve(scope, attempt_id='model-1', input_hash=p.digest, observation_revision=p.generation,
+                  kind='model', max_cost_usd=.1, worker_id='worker', role='primary')
+    store.mark_submitting(scope, 'model-1', worker_id='worker')
+    forged = ModelReceipt('[' * 5000 + '0' + ']' * 5000)
+    result = store.complete(scope, 'model-1', worker_id='worker', state='COMPLETED',
+                            actual_cost_usd=.05, summary={'reason': 'MODEL_CHECKED'}, model_receipt=forged)
+    assert result['state'] == 'REJECTED'
+    assert store.case(scope)['spent_micros'] == 50000 and store.case(scope)['reserved_micros'] == 0
+    with store._transaction() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_model_receipts').fetchone()[0] == 0
+
+
 @pytest.mark.parametrize('failure', ['none', 'builder', 'store'])
 def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failure(tmp_path, monkeypatch, failure):
     import asyncio
