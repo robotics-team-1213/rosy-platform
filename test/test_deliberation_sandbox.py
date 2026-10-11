@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import sys
+import uuid
 
 import pytest
 
@@ -155,3 +156,9 @@ def test_cleanup_cannot_target_other_units(monkeypatch):
             with pytest.raises(ValueError):
                 await module.cleanup_scope(unit)
     asyncio.run(run())
+
+
+def test_actual_user_manager_confirms_absent_generated_scope():
+    from deploy.site.deliberation_sandbox import cleanup_scope
+    unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
+    asyncio.run(cleanup_scope(unit))
