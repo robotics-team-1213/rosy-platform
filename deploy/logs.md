@@ -2687,3 +2687,9 @@
 - 변경: OpenCode 1.18.35는 --pure로 고정 번역, 기존2.0.22는 유지, 다른 버전 거절. 호스트 주입에서 버전을 전달하며 생성 실패 때도 snapshot을 닫는다.
 - 증거: 병렬 작업 원격 48 passed, NEW 0, 독립 검토 blocker 없음. `docs/plans/2026-10-12-opencode-cli-admission.md`.
 - gate 변화: SOURCE 확인. 실제 sandbox CLI version/help와 최소 제공자 연결·token cap 검수는 후속 단계다. --pure를 도구/설정 격리 수용으로 해석하지 않는다.
+
+## 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
+
+- 변경: 동일 사건의 Fleet 기준과 Qwen 의견 불일치를 제한된 GLM 검토로 연결하고 기존 정책과 cached 결과 교차 사용을 거부한다. 설치·실행 경계를 분리하고 모델 교체·확률 보정·자동 처리·최종 사람 인수·개선의 통합 목표를 기록했다.
+- 증거: 원격 통합 146 passed, exit 0, NEW 0; 마지막 통합 실행은 자원 하한 fallback 경고가 있어 성능 증거로 쓰지 않는다. docs/validation/deliberation-host-admission-2026-10-12/conditional-review.md.
+- gate 변화: SOURCE/원격 논리만 확인했다. 실제 Fleet 기준 선택 생산자·격리 SDK/모델 호출·독립 보정·자동 처리·배포·현장 수용은 미확인이다. Discord는 담당 세션 작업이다.
