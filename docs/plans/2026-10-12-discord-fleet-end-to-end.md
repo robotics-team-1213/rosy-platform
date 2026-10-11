@@ -23,6 +23,13 @@
 
 ## 검증과 책임
 
+### 다음 어댑터의 기존 계약 확인
+
+- 일반 Mission: 기존 proposal/resolve/admit 경로의 원래 기명 proposer, observation/evidence provenance, resource/revision 검증을 유지한다. Discord 원문으로 관측 근거를 만들어내거나 다른 사용자의 Mission ID를 연결하지 않는다.
+- Cell Job: 기존 cell-app/proposals는 요청한 operator를 감사하되 설정된 service principal이 proposal을 소유한다. 승인자는 그 service author와 달라야 한다. 요청자와 service author를 같은 사용자로 바꾸지 않고 원래 request key와 기존 승인 결과의 provenance를 확인한다.
+- 위험 사건: 기존 line-stuck/claim의 현재 open case, judgment revision, freshness와 기명 인수 계약을 재사용한다. revision 없는 resolver pause를 durable 사건 인수 성공으로 표시하지 않는다. 정지/취소는 해당 기존 소유자의 별도 확인 경로를 사용한다.
+- 결과 읽기는 해당 기존 원장에 남기고 Discord는 검증된 관계와 고정 상태 회신만 소유한다. 새로운 Mission/Cell/incident 추가는 현재 Task source 승인과 크기 재판정에 포함되지 않으므로 별도 독립 검토를 받는다.
+
 제품 변경은 이 worktree에서만 한다. 로그와 임시 파일은 X의 기존 discord-fleet-pipeline 세션에 둔다. committed HEAD의 pytest는 원격 PC에서만 실행하고 각 로그를 known_failures와 비교한다. 승인·중복·UNKNOWN·권한·원문 XSS·설치/이미지 closure와 변경된 Console의 실제 browser 경로를 확인한다. safety 경계 변경은 독립 검토를 거친다.
 
 모델 provider 수용과 실제 로봇 주행은 Discord 소스 검증으로 승격하지 않는다. 기명 사용자 요청을 Bot 공용 operator나 임의 principal로 대체하지 않는다. CORE와 OMX의 최종 장치 권한 및 기존 Fleet transaction/fence를 유지한다.

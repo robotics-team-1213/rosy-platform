@@ -2,6 +2,12 @@
 
 Independent read-only review approved product source `a4a3ad4a0` (HEAD `30e9fe85a` only adds evidence). No important source/Safety blocker remains. Reviewer directly measured Fleet parent 54,214 = Fleet 35,511 + Decision 1,658 + Console 16,800 + Discord 245. The limited re-verdict preserves +150, every file ceiling/hard tier and full-progress/observe/server/UI extraction obligations; future Mission/Cell/incident additions require separate review. app.py 906, TaskStore 1035/1060 and Console 1031/1175 satisfy their existing ceilings. Remote 187 and Chromium 6 passes are supplied execution evidence, not tests run by the reviewer. Latest HEAD, signed CI deployment and actual Discord round-trip acceptance remain separate gates.
 
+## Fleet lifespan integration and current Console result
+
+`305ac3e19`: remote AI PC 83 PASS / NEW 0, including Gateway, replies, durable outbox and architecture size guards. Log: existing X session `logs/workflow-lifespan-roundtrip/run-1.txt`. The opt-in lifespan test uses actual Gateway dispatch, Fleet reception journal, worker and DiscordReplies with MockTransport; duplicate intake sends once, verified response persists SENT, shutdown cancels workers and leaks no task. Default-OFF and startup-failure tests remain. This proves source wiring, not real Discord delivery.
+
+`586c99927` Chromium RED: two viewport cases retained QUEUED after the existing work refresh even when the ledger response became COMPLETED. Classified 2 NEW; no known-failure allowlist change. `bd6bd4730` fixes this through the current request view: only LINKED reviews reload, current selection/lifetime are checked, pending operator drafts are preserved. Remote AI PC Chromium 6 PASS / NEW 0 at 320/1366 widths; no device or external message was sent. Logs: `logs/workflow-live-result-red/run-1.txt` and `logs/workflow-live-result-green/run-1.txt`. New UI source is undergoing independent review; signed deployment and real user-request/result readback remain unfinished.
+
 Branch: `feat/discord-workflow`. Tested source: `f26b367324`. 후속 `8b5d5058e0`은 AST가 같은 공백 정리다.
 
 원격 AI PC의 관련 시험 67건 PASS, exit 0, known_failures NEW 0. 로그는 X의 기존 discord-fleet-pipeline 세션 `logs/workflow-routes-green/run-1.txt`다. 해당 실행은 자원 floor를 통과했다. 첫 workflow 시험은 필수 evidence 인수를 빠뜨린 fixture 오류 5건을 발견했고 None을 명시해 수정했다. 기존 실패 목록은 변경하지 않았다.
