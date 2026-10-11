@@ -97,7 +97,7 @@ AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선�
 
 앞서 찾은 20261008 두 촬영분의 준비 PNG 24장을 원본 MP4에서 지정된 `video_frame`까지 순차 디코딩해 대조했다. 이미지·영상 SHA256과 24/24 프레임 픽셀 일치를 확인했다. AI PC의 확대 탐색에서 발견한 manifest 25개의 `items`/`frames`/`samples` 행에는 이 후보의 이미지 hash 또는 원본 영상 hash가 없었다. 이는 검사한 manifest의 한정된 결과이며 전체 과거 학습·모델 비교 이력의 부재나 독립 최종 평가를 증명하지 않는다.
 
-로컬 main SHA `ddcfbbcce0def51a62fe92075f1c749234dc554e`의 기존 검수 코드를 이용해 별도 후보 작업 공간을 만들었다. `road_surface_v1.yaml` SHA256 `7ecdb083899449d4c3717f25e5b347ae9506f68ec6bd0f9528d2fb4e5c0fd4a9`를 동결했고 24개 초기 마스크는 모두 255, 픽셀 검수 pending 24 / 승인 0이다. 이전 모델의 라벨·객체 초안은 가져오지 않았다. `workspace_kind=training`은 검수 앱의 입력 준비 모드이며 학습 수용을 뜻하지 않는다. 이 영상 후보 작업 공간은 MCAP 전용 고정 평가 등록 경로를 대체하지 않는다. 최신 main의 해당 검수·registry·perception·Foundation·공용 웹 소스와도 차이가 없음을 준비 후 확인했다.
+로컬 main SHA `ddcfbbcce0def51a62fe92075f1c749234dc554e`의 기존 검수 코드를 이용해 별도 후보 작업 공간을 만들었다. `road_surface_v1.yaml` SHA256 `7ecdb083899449d4c3717f25e5b347ae9506f68ec6bd0f9528d2fb4e5c0fd4a9`를 동결했고 24개 초기 마스크는 모두 255, 픽셀 검수 pending 24 / 승인 0이다. 이전 모델의 라벨·객체 초안은 가져오지 않았다. `workspace_kind=training`은 검수 앱의 입력 준비 모드이며 학습 수용을 뜻하지 않는다. 이 영상 후보 작업 공간은 MCAP 전용 고정 평가 등록 경로를 대체하지 않는다. 현재 영상 후보의 training-mode 승인 경로는 255가 남으면 거부하므로, 가림·미관측 255를 유지한 정답의 승인·출력은 아직 지원하지 않는다. 준비 묶음의 실행 안내는 편집·검수 대기 작업만을 열며 이 제약을 우회하거나 255를 배경으로 채워 승인하지 않는다. 최신 main의 해당 검수·registry·perception·Foundation·공용 웹 소스와도 차이가 없음을 준비 후 확인했다.
 
 작업 공간 재개와 loopback 임시 서버에서 `/pixels`, `/api/workspace`, 24개 `/api/mask-images/<index>`의 HTTP 200 및 빈 마스크를 확인했다. 서버는 확인 후 종료했다. 브라우저 렌더·사람 검수·검수자 신원·독립 평가·물리 캘리브레이션 수용은 확인하지 않았다. contact sheet는 실제 실내 도로 촬영 화면이며 정답 mask가 아니다.
 
