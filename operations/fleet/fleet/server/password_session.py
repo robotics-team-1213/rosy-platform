@@ -99,9 +99,13 @@ class PasswordSessions:
                 created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_passwords (
                 login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)""")
-            for row in db.execute("SELECT * FROM fleet_console_passwords"):
+            for row in db.execute("SELECT * FROM fleet_console_passwords").fetchall():
                 if self._sources.get(row["login"]) == row["source_sha256"]:
                     self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
+                else:
+                    # Source rotation invalidates sessions even if YAML now contains the effective hash.
+                    db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
+                    db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
         self._required = {login: verify_password(login, account["password_scrypt"])
                           for login, account in self._logins.items()}
 

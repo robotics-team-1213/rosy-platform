@@ -574,6 +574,19 @@ def test_changed_yaml_source_does_not_inherit_password_override(tmp_path, change
     assert restarted.principal(client.cookies[COOKIE]) is None
 
 
+def test_yaml_rotation_to_effective_hash_still_invalidates_old_cookie(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    sessions = app.state.password_sessions
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": NEW_PASSWORD}).status_code == 204
+    source = _accounts(password_scrypt=sessions._logins["alice"]["password_scrypt"])
+    restarted = PasswordSessions(sessions.path, source)
+    assert restarted.principal(client.cookies[COOKIE]) is None
+    checked = restarted.check("rotated", "alice", NEW_PASSWORD)
+    assert checked is not None and not checked.password_change_required
+    fresh = restarted.issue("alice", remember=False, verified=checked)
+    assert PasswordSessions(sessions.path, source).principal(fresh) is not None
+
+
 def test_password_change_storage_failure_preserves_initial_restriction(tmp_path, monkeypatch):
     app, client = _bootstrap(tmp_path)
     sessions = app.state.password_sessions
