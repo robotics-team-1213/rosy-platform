@@ -254,7 +254,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_083,
+        52_840,
+        "split: independently re-judged on 2026-10-11 by survey_feature_review at 52840 under D-655 "
+        "(docs/plans/2026-10-11-mapless-fleet-control.md): protocol owns survey validation, World owns "
+        "freshness/recording continuity, Fleet teach owns recording/CAS and the existing UI owner "
+        "owns its focused survey controller and pure draft edits. The model seam is 770 lines. "
+        "Review corrected coordinate frame writes/previews, rejected odom continuity and category "
+        "ID preservation; no new transport, process, command authority or size unit. Keep +150, "
+        "observe/server/UI split obligations and existing file ceilings; camera extraction stays "
+        "in Vision. Previous verdict: "
         "split: independently re-judged on 2026-10-11 by design_consistency_review and measured at "
         "52083 after the incident panel seam: D-641 uses existing shared shell/icon/tooltip owners, "
         "and incident-view.js owns report display, review and export while console.js retains session, "
