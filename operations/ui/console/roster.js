@@ -323,6 +323,16 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
+    const context = nodeWithText('div', 'robot-actions');
+    const recording = nodeWithText('a', '', '지도 기록');
+    recording.href = `/console/site-map?robot=${encodeURIComponent(robot.robot_id)}#teach-heading`;
+    recording.dataset.mapRecording = '';
+    const group = nodeWithText('ui-button', '', '대형·대열 관리');
+    group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
+    group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
+    context.append(recording, group); node.appendChild(context);
+    if (role) node.appendChild(nodeWithText('p', 'hint',
+      `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
     if (tripLine) {
       const line = nodeWithText("p", "trip-line", tripLine);

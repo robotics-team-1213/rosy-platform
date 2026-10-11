@@ -151,6 +151,10 @@ def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_
             expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
             assert posts == before and errors == []
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#robot-workspace [data-map-recording]').click()
+            expect(page.locator('#teach-robot')).to_have_value('rosy_03')
+            expect(page.locator('#teach-target')).to_contain_text('rosy_03')
+            assert posts == before and errors == []
         finally:
             browser.close()
 

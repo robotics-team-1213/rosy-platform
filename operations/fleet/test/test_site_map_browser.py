@@ -428,8 +428,8 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'bob · operator')
+    expect(page.locator('#teach-target')).to_contain_text('not-in-roster')
     expect(page.locator('#teach-robot')).to_have_value('')
-    expect(page.locator('#notice')).to_contain_text('not-in-roster')
     expect(page.locator('#teach-start')).to_be_disabled()
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]

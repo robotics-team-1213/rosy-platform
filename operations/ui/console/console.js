@@ -862,6 +862,12 @@ if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   render();
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
+view.openFormationWorkspace = () => {
+  confirmedAction.cancel(); disarmGoal('대형 관리로 목표 지정 취소');
+  inbox.select('tools');
+  const heading = el('formation-heading'); heading.tabIndex = -1;
+  heading.focus({preventScroll: false});
+};
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
