@@ -3236,3 +3236,9 @@
 - 변경: 일반 teach/place/marker 저장을 활성 지도와 초안의 동일 좌표계로 제한하고 기록의 활성 버전 변경을 차단한다. 거절된 odom은 조사 연속성만 끊고 운행 앵커는 유지한다. 같은 조사 지도에서 정상 teach 편집도 review를 무효화하며 새/변경 간선 observed 근거를 보존한다. 공개 기록 프레임 snapshot으로 다른 지도 위 표시를 제한한다.
 - 증거: 독립 검토의 세 문제 remote RED 5 FAIL 뒤 API·마커·공통 계약 122 PASS/NEW 0, 추가 정상 조사 편집·활성 버전 변경·World 서비스 55 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/survey-frame-final/run-1.txt. AI PC 자원 기준 통과.
 - gate 변화: source/remote 회귀. 통합·CI·배포·실제 주행 정확도는 아직 확인하지 않았다.
+
+## 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토
+
+- 변경: survey가 없는 camera map에서도 marker로 이동한 장소의 연결 간선을 operator/observed로 바꿔 재검토를 요구한다. 기존 프레임/교정 note는 보존하고 활성 지도를 유지한다.
+- 증거: 새 단일 시험 remote RED 뒤 ebf05b9811 원격 카메라·marker·UI·구조 12 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-review-final-retry/run-1.txt. AI PC 자원 기준 통과. marker 편집 뒤 활성화는 ROAD_UNREVIEWED로 거절한다.
+- gate 변화: source/remote; endpoint 연결 검토·통합·CI·배포·실제 로봇/측정은 미완료다.
