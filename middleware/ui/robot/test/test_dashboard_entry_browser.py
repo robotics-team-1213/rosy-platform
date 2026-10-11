@@ -137,13 +137,14 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     page, state = entry
     _open(page, token='')
     expect(page.locator('#auth-drawer')).to_be_visible()
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-label').fill('fixture tablet')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
-    assert state['calls'][0] == ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})
+    assert [call for call in state['calls'] if call[1] == '/api/v1/auth/pair'] == [
+        ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})]
     # A response beyond seven days may never become a remembered browser token.
     assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == 'fixture-paired'
@@ -197,7 +198,7 @@ def test_entry_remembers_only_expiring_paired_login_and_revokes_on_logout(entry)
     page.locator('#code-input').fill('ABCD')
     page.locator('#code-submit').click()
     expect(page.locator('#code-message')).to_contain_text('8자')
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()

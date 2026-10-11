@@ -692,3 +692,9 @@
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
 - Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
 - Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 · uncommitted · uiux: D-639 공용 역할 출처
+
+- Change: Canvas typography reads named text roles and raster scale; native Android builds export metrics and dark colours from canonical tokens. Shared native disclosure and heading classes own typography and interaction geometry. Registry duplicate keys and local button height literals are rejected.
+- Evidence: Committed-source remote contract, browser and Gradle exporter checks pending. Fleet/Robot/Review callers are owned by the parallel surface branches and must be integrated before the complete consumer suite.
+- Gate: SOURCE; domain geometry, icon assets, PARKED activation and robot safety authority are unchanged.

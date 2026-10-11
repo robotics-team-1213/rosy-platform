@@ -60,9 +60,10 @@ def test_clicking_the_role_surface_brand_opens_the_dashboard_home():
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page()
             # 정적 서버에는 /common/*가 없다 — 공용 ui.js를 실제 파일로 대신 준다.
-            page.route("**/common/ui.js", lambda route: route.fulfill(
+            # ui.js imports shared confirmation/geometry helpers; serve its real module graph.
+            page.route("**/common/*.js", lambda route: route.fulfill(
                 status=200, content_type="text/javascript",
-                body=(WEB_COMMON / "ui.js").read_text(encoding="utf-8")))
+                body=(WEB_COMMON / route.request.url.rsplit("/", 1)[-1]).read_text(encoding="utf-8")))
             page.route("**/dashboard", lambda route: route.fulfill(
                 status=200, content_type="text/html",
                 body='<!doctype html><html lang="ko"><body data-home="1"></body></html>'))

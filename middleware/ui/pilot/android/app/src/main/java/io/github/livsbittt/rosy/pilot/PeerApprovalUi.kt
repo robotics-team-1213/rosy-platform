@@ -51,9 +51,9 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                         // Set before show(): an IME that is already attached keeps the old options (2026-10-09 walk).
                         isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                     }
-                    val note = TextView(activity)
+                    val note = PilotViews(activity).label("", RosyMetrics.TextLabel, true)
                     val form = LinearLayout(activity).apply {
-                        orientation = LinearLayout.VERTICAL; setPadding(48, 0, 48, 0); addView(code); addView(note)
+                        orientation = LinearLayout.VERTICAL; setPadding(PilotViews(activity).dp(RosyMetrics.Space5.toInt()), 0, PilotViews(activity).dp(RosyMetrics.Space5.toInt()), 0); addView(code); addView(note)
                     }
                     dialog = AlertDialog.Builder(activity).setTitle("승인 대기 · ${pending.code}")
                         .setMessage(message).setView(form)

@@ -95,7 +95,7 @@
               </div>
               <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
               <ul id="enrolled-list" class="enrolled-list"></ul>
-              <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
+              <details class="enroll-help"><summary class="ui-disclosure-row">등록 도움말</summary><ul id="enroll-help"></ul></details>
               <dialog id="enroll-dialog" aria-labelledby="enroll-target">
                 <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
                 <div id="enroll-move-check" class="enroll-move-check" hidden>
@@ -222,7 +222,7 @@
           <figcaption class="hint" id="field-rectified-caption"></figcaption>
         </figure>
         <details class="field-options" id="field-options">
-          <summary>경기장 크기·레이어</summary>
+          <summary class="ui-disclosure-row">경기장 크기·레이어</summary>
           <fieldset class="field-size">
             <legend>경기장 크기(표시 축척, 이 브라우저만)</legend>
             <label for="field-width">가로 m <input class="ui-field" id="field-width" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
@@ -266,7 +266,7 @@
           <p class="hint tracking-state" id="tracking-relearn-state" role="status"></p>
         </section>
         <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
-          <summary>왜곡 및 사각 보정</summary>
+          <summary class="ui-disclosure-row">왜곡 및 사각 보정</summary>
           <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
           <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
           <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
