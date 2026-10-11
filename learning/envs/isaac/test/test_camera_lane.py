@@ -19,6 +19,38 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
+    import camera_lane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = camera_lane.LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    seen = []
+    original = camera_lane.keep_step
+    def capture(*args):
+        seen.append(args[8])
+        return original(*args)
+    monkeypatch.setattr(camera_lane, 'keep_step', capture)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is True
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=1., source_now=1., pose=(0., 0., 0.))
+        assert seen == [(None, 1., {'left': None, 'right': None})]
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is False
+        assert lane.state() is None
+        stale = {**sample, 'source_stamp_ns': 2_000_000_000, 'source_now_ns': 3_000_000_000}
+        assert lane.observe_scan(stale, body=NOMINAL_BODY) is False
+    finally:
+        lane.close()
+
+
 @pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
 def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     import math
