@@ -360,3 +360,9 @@
 - 변경: 새 Gazebo 도로 관측 연결의 source 검토와 원격 계약 시험 결과를 기록했다.
 - 증거: 독립 Safety-Review SOURCE APPROVE. AI PC의 committed HEAD 시험은 관련 네 파일 60 PASS·exit 0, known_failures 0 new·0 known이다. 실제 projection helper에 launch params를 전달한 회귀가 포함됐다. harness lint 0 errors·28 warnings.
 - gate 변화: 원격 회귀만 통과했다. 실제 road/observation 수신·교통 endpoint 모드·preview 단일 발행과 주행 완주는 별도 미확인이다.
+
+## 2026-10-12 · d9fbc11ce · A24 두 CORE 도로 관측과 교통 설정 readback
+
+- 변경: 새 도로 관측 연결·기동 snapshot 수정을 포함한 소스를 격리 AI PC에서 빌드·실행했다. 최신 main 6c39ed8ae를 별도 통합해 f2c8b2e1f에서 관련 회귀를 다시 수행했다. 일지 충돌은 양쪽 기록을 보존하고 인덱스를 재생성했다.
+- 증거: A24 source 7,337 파일 hash 확인, 17 ROS 패키지 build exit 0, native 정지 runner exit 0. online 2/2·로봇별 road/line/image 271건·preview publisher 하나·최종 CORE publisher 하나·명령/최종 odom 속도 0. 실제 교통 API와 snapshot ENFORCED 일치. 기존 named operator pin API로 실제 Gazebo 위치 등록 후 LOCALIZED 두 대를 확인했다. 독립 PID 부재·세 포트 ECONNREFUSED·private 원본 47개 SHA 대조. 통합 f2c8b2e1f의 원격 관련 278 PASS·exit 0·known_failures NEW 0.
+- gate 변화: 도로 topic·정지 연결·활성 설정 증거만 추가했다. CORE 내부 valid 수신은 다음 sensors endpoint 확인이 필요하다. 첫 로봇 learned crosswalk 검출과 RGB road crosswalk=false의 차이, 둘째 containment uncertainty=null이 남았다. operator pin은 지속 카메라 위치 증거가 아니며 완주·교통 인식·grant·병렬 RL·실물 수용은 미완료다. A24 native는 main 통합 전 소스다.
