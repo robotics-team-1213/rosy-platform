@@ -189,17 +189,27 @@ def fit_lenses(training, validation, size, *, source_id, capture_signature, mode
     return report
 
 
-def _camera(image, candidate, source_id, capture_signature):
-    _identity(source_id, capture_signature)
-    if (candidate.get("source_id") != source_id or candidate.get("capture_signature") != capture_signature
-            or list(image.shape[1::-1]) != candidate.get("image_size")):
-        raise ValueError("camera identity or image geometry mismatch")
+def _lens(candidate):
+    _identity(candidate.get("source_id"), candidate.get("capture_signature"))
+    size = candidate.get("image_size")
+    if not isinstance(size, (list, tuple)) or len(size) != 2 or any(type(v) is not int or not 32 <= v <= 8192 for v in size):
+        raise ValueError("invalid lens image geometry")
     k, d = np.asarray(candidate["K"], np.float64), np.asarray(candidate["D"], np.float64)
     expected = 4 if candidate.get("model") == "fisheye" else 5 if candidate.get("model") == "pinhole" else 0
     if (not expected or k.shape != (3, 3) or d.shape != (expected,) or not np.isfinite(k).all()
             or not np.isfinite(d).all() or k[0, 0] <= 0 or k[1, 1] <= 0
-            or not np.allclose(k[2], [0, 0, 1]) or not candidate.get("revision")):
+            or k[0, 1] != 0 or k[1, 0] != 0 or not np.allclose(k[2], [0, 0, 1])
+            or not isinstance(candidate.get("revision"), str) or not candidate["revision"]):
         raise ValueError("invalid lens candidate")
+    return k, d
+
+
+def _camera(image, candidate, source_id, capture_signature):
+    k, d = _lens(candidate)
+    _identity(source_id, capture_signature)
+    if (candidate.get("source_id") != source_id or candidate.get("capture_signature") != capture_signature
+            or list(image.shape[1::-1]) != candidate.get("image_size")):
+        raise ValueError("camera identity or image geometry mismatch")
     return k, d
 
 
@@ -224,22 +234,34 @@ def corrected_image(image, candidate, *, source_id, capture_signature):
 
 
 def fit_floor(candidate, pixels, metres, check_pixels, check_metres, *, map_id, pixel_space):
+    _lens(candidate)
     if pixel_space != "undistorted":
         raise ValueError("floor anchors must be measured in undistorted pixels")
     if not isinstance(map_id, str) or not map_id.strip() or len(map_id) > 200:
         raise ValueError("measured map identity required")
     p, m = _points(pixels, 2, 4), _points(metres, 2, 4)
     cp, cm = _points(check_pixels, 2, 3), _points(check_metres, 2, 3)
-    if len(p) != len(m) or len(cp) != len(cm) or any(np.any(np.all(p == point, axis=1)) for point in cp):
+    all_pixels = np.concatenate((p, cp))
+    if np.any(all_pixels < 0) or np.any(all_pixels >= np.asarray(candidate["image_size"])):
+        raise ValueError("floor points outside corrected image")
+    if (len(p) != len(m) or len(cp) != len(cm)
+            or any(np.any(np.all(p == point, axis=1)) for point in cp)
+            or any(np.any(np.all(m == point, axis=1)) for point in cm)):
         raise ValueError("independent floor check correspondences required")
     h, inliers = cv2.findHomography(p, m, cv2.USAC_MAGSAC, .02)
     if h is None or not np.isfinite(h).all() or abs(np.linalg.det(h)) < 1e-12 or int(inliers.sum()) < 4:
         raise ValueError("floor registration failed")
+    accepted = p[inliers.reshape(-1).astype(bool)]
+    reference = accepted.mean(axis=0)
+    weights = (h @ np.column_stack((np.concatenate((accepted, cp)), np.ones(len(accepted)+len(cp)))).T)[2]
+    reference_w = (h @ np.array([*reference, 1.]))[2]
+    if np.any(weights * reference_w <= 1e-12):
+        raise ValueError("floor correspondences cross projective horizon")
     projected = cv2.perspectiveTransform(cp.reshape(-1, 1, 2), h).reshape(-1, 2)
     errors = np.linalg.norm(projected - cm, axis=1)
     record = {"status": "candidate", "applied": False, "map_id": map_id, "pixel_space": pixel_space,
               "lens_revision": candidate["revision"], "source_id": candidate["source_id"],
-              "undistorted_to_map": h.tolist(), "reference_pixel": p.mean(axis=0).tolist(),
+              "undistorted_to_map": h.tolist(), "reference_pixel": reference.tolist(),
               "inliers": int(inliers.sum()), "validation": {"p95_m": float(np.percentile(errors, 95)),
               "max_m": float(max(errors))}}
     record["revision"] = _revision(record)
