@@ -687,7 +687,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         page.locator('#map-canvas').press('Enter')
         dialog.wait_for()
         robot['state']['safety']['estop'] = True
-        page.wait_for_function('() => !document.querySelector("#roster article.selected")')
+        page.wait_for_function('() => !document.querySelector("#robot-workspace article.selected")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
@@ -697,7 +697,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         fallback.wait_for()
         fallback.click()
         robot['state']['line_follow']['mode'] = 'OFF'
-        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
+        page.wait_for_function('() => ![...document.querySelectorAll("#robot-workspace ui-button")].some(node=>node.textContent==="IR 차선 추종으로 전환…")')
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
@@ -2784,6 +2784,7 @@ def test_visible_text_meets_the_contrast_floor(console_url):
         )
         # 로스터의 선택 상태를 만든다 — 바닥 붕괴는 선택 카드에서 났다.
         # 선택은 카드가 아니라 '목표 지정' 버튼으로 일어난다(console.js).
+        _open_cards(page)
         page.locator("#robot-workspace article ui-button", has_text="목표 지정").first.click()
         # 경합 하에서 기본 5초를 넘기는 것은 대기의 문제지 대비의 문제가 아니다
         # — 계약은 센서스가 지킨다(2026-09-25 재검증 노트의 플레이크와 같은 계열).
