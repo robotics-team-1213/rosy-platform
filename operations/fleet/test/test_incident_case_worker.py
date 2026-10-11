@@ -16,11 +16,13 @@ from test_model_judgment import payload
 
 
 def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4,
-          provider_hook=None, handoff_hook=None):
+          provider_hook=None, handoff_hook=None, provider_cost=0.0):
     now, seen, handoffs = [101.0], [], []
     log = LineStuckAnswerLog(tmp_path / 'fleet.db')
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
-    profiles = (profile(max_calls=8), profile(profile_id='model-reviewer', role='reviewer', max_calls=8))
+    cap = .1 if provider_cost else 0
+    profiles = (profile(max_calls=8, max_cost_usd=cap),
+                profile(profile_id='model-reviewer', role='reviewer', max_calls=8, max_cost_usd=cap))
     current = [profiles]
     human = [False]
     async def provider(p, bound, prior, remaining, **kwargs):
@@ -35,14 +37,14 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observ
         if change == 'invalid' and len(seen) == 1: raw['case_id'] = 'foreign'
         if change == 'unknown': raise RuntimeError('private provider error')
         if change == 'human': human[0] = True
-        return raw, 0.0
+        return raw, provider_cost
     providers = []
     for selected in profiles:
         async def call(*args, **kwargs): return await provider(*args, **kwargs)
         call.profile, call.adapter = selected, adapter()
         providers.append(call)
     store = IncidentCaseStore(log.path, clock=lambda: now[0])
-    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, budget_observations, 0,
+    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, budget_observations, .3 if provider_cost else 0,
                                        tuple((p.role, p.max_calls) for p in profiles))
     async def handoff(scope, summary):
         handoffs.append((scope, summary))
@@ -381,6 +383,48 @@ def test_verified_model_receipt_keeps_bounded_judgment_digest_and_scope(tmp_path
         assert receipt['verdict'] == 'reobserve' and receipt['choice'] == 'reobserve'
         assert len(receipt['receipt_sha256']) == 64 and receipt['observation_revision'] == seen[0][0].generation
         assert len(row[0].encode()) <= 1024 and 'alternatives' not in receipt
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_second_cancellation_does_not_interrupt_durable_shutdown_cleanup(tmp_path):
+    async def run():
+        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        entered, released = threading.Event(), threading.Event()
+        original = store.reserve
+        def delayed(*args, **kwargs):
+            entered.set()
+            if not released.wait(3): raise AssertionError('test release missing')
+            return original(*args, **kwargs)
+        store.reserve = delayed
+        worker.feed(poll())
+        while not entered.is_set(): await asyncio.sleep(.002)
+        closer = asyncio.create_task(worker.aclose())
+        await asyncio.sleep(.01); closer.cancel()
+        await asyncio.sleep(.01); closer.cancel()
+        released.set()
+        result = await asyncio.gather(closer, return_exceptions=True)
+        assert isinstance(result[0], asyncio.CancelledError)
+        assert seen == [] and len(handoffs) == 1
+        assert store.case(handoffs[0][0])['state'] == 'HOLD'
+    asyncio.run(run())
+
+
+def test_stale_model_response_retains_verified_billing_and_does_not_become_current(tmp_path):
+    async def run():
+        entered, released = asyncio.Event(), asyncio.Event()
+        async def delayed(_):
+            if not entered.is_set(): entered.set(); await released.wait()
+        now, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_hook=delayed, provider_cost=.05)
+        worker.feed(poll()); await entered.wait()
+        now[0] += 1; worker.feed(poll(2)); released.set(); await settled(worker)
+        assert len(seen) == 2
+        scope = store.active_scopes()[0]
+        assert store.case(scope)['spent_micros'] == 100000
+        with store._transaction() as conn:
+            rows = conn.execute('SELECT state,actual_micros,observation_revision FROM fleet_incident_v2_attempts ORDER BY rowid').fetchall()
+            assert tuple(rows[0]) == ('REJECTED', 50000, seen[0][0].generation)
+            assert tuple(rows[1]) == ('COMPLETED', 50000, seen[1][0].generation)
         await worker.aclose()
     asyncio.run(run())
 
