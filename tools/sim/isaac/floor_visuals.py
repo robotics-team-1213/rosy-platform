@@ -74,6 +74,7 @@ def add_floor_visuals(stage, visuals):
             texture.CreateOutput('rgb', Sdf.ValueTypeNames.Float3)
             texture.CreateInput('file', Sdf.ValueTypeNames.Asset).Set(str(visual['texture']))
             texture.CreateInput('sourceColorSpace', Sdf.ValueTypeNames.Token).Set('sRGB')
+            texture.CreateInput('scale', Sdf.ValueTypeNames.Float4).Set(Gf.Vec4f(*visual['colour'], 1.))
             texture.CreateInput('st', Sdf.ValueTypeNames.Float2).ConnectToSource(reader.ConnectableAPI(), 'result')
             shader.GetInput('diffuseColor').ConnectToSource(texture.ConnectableAPI(), 'rgb')
         material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), 'surface')
