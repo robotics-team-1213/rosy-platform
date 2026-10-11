@@ -9,6 +9,7 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     if (!elements.has(id)) elements.set(id, {
       dataset: {}, classList: { add() {}, remove() {} }, querySelectorAll: () => [],
       setAttribute() {}, removeAttribute() {}, getContext: () => ctx,
+      getBoundingClientRect: () => ({ width: 800, height: 600 }),
       clientWidth: 800, clientHeight: 600,
     });
     return elements.get(id);
@@ -29,7 +30,7 @@ test('an active camera map keeps its coordinate view when a robot starts serving
         ] };
         if (path === '/api/fleet/site-map/active') return { version: 5, map: { map_id: 'track' } };
         if (path === '/api/fleet/calibrations') return { calibrations: [] };
-        if (path === '/api/fleet/map') return { width: 1, height: 1, data: [0] };
+        if (path === '/api/fleet/map') throw new Error('robot grid must not replace the active site map');
         throw new Error(path);
       } });
     await map.refresh();
