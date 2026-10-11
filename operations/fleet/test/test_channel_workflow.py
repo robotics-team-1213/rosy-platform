@@ -141,6 +141,29 @@ def test_submit_creates_and_links_once_with_original_confirmation_revision(tmp_p
     assert tasks.get_task(first["work_id"])["actor_id"] == "op"
 
 
+def test_task_history_insert_failure_rolls_back_task_relation_and_reply(tmp_path):
+    import asyncio
+    import sqlite3
+    from contextlib import closing
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    from fleet.server.task_service import FleetTaskService
+    workflow, journal, tasks, _, receipt = fixture(tmp_path)
+    service = FleetTaskService(tasks, robot_ids={"pinky"})
+    outbox = ChannelReplyOutbox(journal)
+    journal.reply_outbox = outbox
+    ready = review(workflow, receipt)
+    with closing(tasks._connect()) as conn, conn:
+        conn.execute("CREATE TRIGGER reject_task_history BEFORE INSERT ON fleet_task_history "
+                     "BEGIN SELECT RAISE(ABORT, 'synthetic history failure'); END")
+    with pytest.raises(sqlite3.IntegrityError):
+        asyncio.run(workflow.submit(receipt["request_id"], "op", task_service=service,
+                                    expected_hash=receipt["content_hash"], expected_revision=ready["revision"]))
+    assert workflow.read(receipt["request_id"], "op")["state"] == "READY"
+    assert [row["kind"] for row in outbox.rows("op")] == ["REVIEW:1"]
+    with closing(tasks._connect()) as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_tasks").fetchone()[0] == 0
+
+
 def test_review_is_durable_owner_scoped_revision_checked_and_not_execution(tmp_path):
     workflow, journal, tasks, _, receipt = fixture(tmp_path)
     assert workflow.read(receipt["request_id"], "op")["revision"] == 0
