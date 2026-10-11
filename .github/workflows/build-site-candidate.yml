@@ -29,6 +29,7 @@ on:
       - operations/decision/**
       - operations/ui/console/**
       - operations/world/src/**
+      - operations/execution/src/**
       - operations/vision/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
