@@ -301,3 +301,9 @@
 - 변경: 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
 - 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 413 passed, 0 failed. X:/DevTemp/ui-role-devices/cam-gradle-2.txt 및 X-only 재실행 cam-gradle-3.txt. 실제 폰 수용은 별도다.
 - gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
+
+- 변경: 인증된 미리보기 읽기가 있으면 센서를 열고 JPEG를 보낸다. 마지막 읽기 뒤 30초가 지나면 demand.wanted가 false가 되고, 소켓과 wake lock은 둔 채 센서와 송출을 멈춘다. 앱 화면이 열려 있으면 맞추기용 미리보기만 하고 보내지 않는다. demand를 모르는 이전 앱과 demand를 보내지 않는 이전 Vision은 지금처럼 계속 보낸다.
+- 증거: Windows Gradle testDebugUnitTest 418 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-unit.txt). 원격 AI PC에서 d780942b9 Vision·버전 핀 294 passed, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt).
+- gate 변화: SOURCE/JVM. 대기 전류와 요청 뒤 첫 프레임 시간은 측정하지 않았다. APK를 설치하지 않았다. DEVICE/FIELD는 PARKED.
