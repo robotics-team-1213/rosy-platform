@@ -9,7 +9,7 @@
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [fleet_decision](operations/decision/progress.md) | fleet_decision | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [fleet_decision](operations/decision/progress.md) | fleet_decision | 8036d90c09 (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [console_source](operations/ui/console/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |

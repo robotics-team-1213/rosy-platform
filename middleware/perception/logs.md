@@ -1442,6 +1442,14 @@
 - gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
 - 결정: D-649
 
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
+
 ## 2026-10-11 · 9fc0a88c9 · source test import precedence
 
 - 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.

@@ -82,7 +82,7 @@ import delivery_journal  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
-from intake_eval_gate import v13_lineage_error  # noqa: E402
+from intake_eval_gate import v13_lineage_error, road_delivery_error  # noqa: E402
 from control.sensing.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)
 
@@ -459,6 +459,9 @@ def _push(args, ssh, scp, runner) -> int:
         return 2
     if manifest.model_revision != rev:
         print(f"refused: manifest revision {manifest.model_revision} != {rev}", file=sys.stderr)
+        return 2
+    if road_delivery_error(manifest.raw):
+        print(f"refused: {road_delivery_error(manifest.raw)}", file=sys.stderr)
         return 2
     if rev.startswith("v13-drivable-") and v13_lineage_error(manifest.raw):
         print(f"refused: {v13_lineage_error(manifest.raw)}", file=sys.stderr)

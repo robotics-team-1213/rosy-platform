@@ -17,7 +17,8 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 | `__init__.py` | Package docstring: model contract, pre/post-processing, runner; weights never live in `src/` |
 | `manifest.py` | `rosy.perception.model/1` manifest: schema, roles, sha256 and shape checks, optional `input.crop` (D-597), fail-closed `ManifestError` |
 | `lane_mask.py` | `preprocess` (frame to NCHW) and `lane_evidence` (logits to visible/error/confidence), near-field band, `wall` never a target |
-| `runner.py` | `LaneSegModel` (lazy `onnxruntime`, warm-up check) and `ModelSlot` (pointer-file hot swap; failed swap keeps previous model) |
+| `road_region.py` | D-665 road_surface/1 masks and camera-local region from explicit projected anchors; no centre fallback, branch policy or hole filling; offline paired evaluation only |
+| `runner.py` | `LaneSegModel` (lazy `onnxruntime`, warm-up check); D-663 legacy postprocessing refuses road_surface/trajectory semantics before inference. `ModelSlot` refuses those lane candidates and keeps the previous model; offline raw sessions remain readable |
 | `shadow.py` | `perception/learned/shadow` payload pairing learned and rule error; no command fields |
 | `status.py` | `perception/learned/status` payload: counters, latency, "no shadow model loaded" |
 | `paint_worker.py` | `LearnedPaintWorker`: one thread infers on the latest frame; keeper takes the newest mask within `stale_s` or falls back (D-408) |

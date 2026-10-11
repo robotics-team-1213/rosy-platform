@@ -92,7 +92,17 @@ assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rc
 assert 'core_common' not in sys.modules
 assert mission_step_state('ACTION_SUCCEEDED') == 'AWAITING_GOAL_EVIDENCE'
 import importlib.metadata
-assert 'core_common==0.0.0' in importlib.metadata.requires('rosy-execution')
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+distributions = {canonicalize_name(d.metadata['Name']): d
+                 for d in importlib.metadata.distributions(path=[sys.argv[1]])}
+for distribution in distributions.values():
+    for raw_requirement in distribution.requires or []:
+        requirement = Requirement(raw_requirement)
+        dependency = distributions.get(canonicalize_name(requirement.name))
+        if dependency is not None:
+            assert dependency.version in requirement.specifier, (distribution.metadata['Name'], raw_requirement)
+assert 'core_common==0.0.1' in importlib.metadata.requires('rosy-execution')
 from datetime import datetime, timezone
 projected = project_progress({
     'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
@@ -106,7 +116,7 @@ assert projected['progress']['stop']['physical_state'] == 'UNKNOWN'
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
-assert 'rosy-execution==0.1.0' in importlib.metadata.requires('fleet')
+assert 'rosy-execution==0.1.1' in importlib.metadata.requires('fleet')
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
                           (EvidenceRef('robot', 'core', 'state-1', 99.0),))
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
@@ -149,7 +159,9 @@ print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
-               'fleet.server.model_feedback_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
+               'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
+               'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
                'rosy.execution.site.workflow']
     for order in (modules, list(reversed(modules))):

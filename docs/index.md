@@ -225,6 +225,8 @@
 | D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
 | D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
 | D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -307,6 +309,7 @@
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
 - [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
+- [2026-10-11-perception-fitness-pipeline.md](plans/2026-10-11-perception-fitness-pipeline.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -325,7 +328,7 @@
 ## 최근 기록
 
 - 2026-10-12 · 5f4040f306 · D-655 지도 없는 조사와 통합 관제 사이트 수용
+- 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+- 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
 - 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
 - 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
-- 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
-- 2026-10-11 · 1cbe8fa67 · D-664 공통 작업 읽기 첫 구현

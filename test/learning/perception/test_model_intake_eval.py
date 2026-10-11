@@ -96,6 +96,57 @@ def test_evaluate_frame_cap(tmp_path):
     assert ev["frames"] == 2
 
 
+def _semantic_eval(tmp_path, model_semantic, eval_semantic):
+    folder = _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "lane_marking"),
+                                        ("extra", "drivable")))
+    doc = json.loads((folder / "manifest.json").read_text())
+    if eval_semantic is not None:
+        doc["classes"][-1]["semantic"] = eval_semantic
+    (folder / "manifest.json").write_text(json.dumps(doc))
+    model = _model(_pred())
+    model.manifest.raw["output"] = {"classes": [vars(c).copy() for c in MODEL_CLASSES]}
+    if model_semantic is not None:
+        model.manifest.raw["output"]["classes"][-1]["semantic"] = model_semantic
+    ev = intake.evaluate(model, folder, 400)
+    ev["disjoint"] = True
+    return ev
+
+
+@pytest.mark.parametrize("model_semantic,eval_semantic", [
+    ("current_road_region/1", "road_surface/1"), (None, "road_surface/1"),
+    ("road_surface/1", None)])
+def test_same_name_and_role_do_not_make_different_road_truth_comparable(tmp_path, model_semantic, eval_semantic):
+    ev = _semantic_eval(tmp_path, model_semantic, eval_semantic)
+    assert ev["semantic_mismatches"]["extra"] == {"model": model_semantic, "eval": eval_semantic}
+    assert any("semantic" in reason for reason in intake.judge_eval(ev, {}))
+
+
+def test_strict_road_evaluation_refuses_unknown_legacy_meaning(tmp_path):
+    ev = _semantic_eval(tmp_path, None, None)
+    assert ev["unverified_semantics"] == ["extra"]
+    assert intake.judge_eval(ev, {}) == []
+    assert intake.judge_eval(ev, {"require_label_semantics": True})
+
+
+def test_same_declared_road_meaning_is_comparable(tmp_path):
+    ev = _semantic_eval(tmp_path, "current_road_region/1", "current_road_region/1")
+    assert ev["semantic_mismatches"] == {} and ev["unverified_semantics"] == []
+    ev["training_content_verified"] = True
+    assert intake.judge_eval(ev, {"require_label_semantics": True}) == []
+
+
+def test_champion_requires_same_declared_road_meaning(tmp_path):
+    other = {"extra": {"model": "road_surface/1", "eval": "road_surface/1"}}
+    current = {"extra": {"model": "current_road_region/1", "eval": "current_road_region/1"}}
+    folder = tmp_path / "other"
+    folder.mkdir()
+    (folder / intake.REPORT_NAME).write_text(json.dumps({"verdict": "pass", "model_revision": "other",
+        "eval": {"set": {"content_sha": SHA}, "miou": 0.99, "iou": {"extra": 0.99},
+                 "label_semantics": other}}))
+    assert intake.find_champion(tmp_path, SHA, None, label_semantics=current) is None
+    assert intake.find_champion(tmp_path, SHA, None, label_semantics=other)["model_revision"] == "other"
+
+
 def test_evaluate_reports_label_support_by_frame_sources(tmp_path):
     folder = _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "lane_marking"),
                                          ("extra", "drivable")), n=2)
@@ -317,6 +368,77 @@ def test_background_only_match_is_a_model_fail(tmp_path, monkeypatch):
 
 
 DS_SHA = "e" * 64
+
+
+def _seal(folder):
+    import store
+    dest = folder.with_name(store.content_sha(folder))
+    folder.rename(dest)
+    return dest
+
+
+def test_strict_evaluation_checks_actual_content(tmp_path):
+    folder = _seal(_eval_set(tmp_path))
+    assert intake.evaluate(_model(_pred()), folder, 400, verify_content=True)["frames"] == 3
+    (folder / "manifest.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
+
+
+@pytest.mark.parametrize("training_semantic", [None, "current_road_region/1", "road_surface/1"])
+def test_strict_intake_binds_model_to_training_labels(tmp_path, monkeypatch, training_semantic):
+    ev = _semantic_eval(tmp_path, "road_surface/1", "road_surface/1")
+    folder = Path(ev["set"]["path"])
+    model = _model(_pred())
+    model.manifest.raw["output"] = {"classes": [vars(c).copy() for c in MODEL_CLASSES]}
+    model.manifest.raw["output"]["classes"][-1]["semantic"] = "road_surface/1"
+    folder = _seal(folder)
+    _store_dataset(tmp_path, ["training-session"])
+    training = tmp_path / "store/datasets/lanes" / DS_SHA
+    doc = json.loads((training / "manifest.json").read_text(encoding="utf-8"))
+    doc["classes"] = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))["classes"]
+    for c in doc["classes"]:
+        if c["role"] == "drivable":
+            c.pop("semantic", None)
+            if training_semantic is not None:
+                c["semantic"] = training_semantic
+    (training / "manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+    training = _seal(training)
+    model.manifest.dataset_revision = training.name
+    rc, report = _run(tmp_path, monkeypatch, model, {
+        "eval_set": str(folder.relative_to(tmp_path)), "require_eval": True,
+        "require_label_semantics": True, "min_lane_marking_iou": 0.5,
+    }, store=tmp_path / "store")
+    assert report["transient"] is False
+    ev = report["eval"]
+    assert ev["training_content_verified"] is True
+    if training_semantic == "road_surface/1":
+        assert rc == 0, report["reasons"]
+        assert not ev["training_semantic_mismatches"] and not ev["training_unverified_semantics"]
+    else:
+        assert rc == 1
+        assert any("training label semantic" in reason for reason in report["reasons"])
+
+
+def test_strict_training_resolution_rejects_modified_store_content(tmp_path):
+    _store_dataset(tmp_path, ["training-session"])
+    training = _seal(tmp_path / "store/datasets/lanes" / DS_SHA)
+    (training / "manifest.json").write_text('{"frames": []}', encoding="utf-8")
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.training_sessions(tmp_path / "store", training.name, verify_content=True)
+
+
+def test_strict_eval_detects_truth_changed_during_inference(tmp_path, monkeypatch):
+    folder = _seal(_eval_set(tmp_path))
+    original = intake.model_logits
+
+    def mutate_truth(model, bgr):
+        (folder / "masks/s/s__000000.png").write_bytes(b"changed")
+        return original(model, bgr)
+
+    monkeypatch.setattr(intake, "model_logits", mutate_truth)
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
 
 
 def _store_dataset(tmp_path, sessions):
