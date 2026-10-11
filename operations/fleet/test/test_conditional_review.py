@@ -178,3 +178,28 @@ def test_invalid_profiles_and_stale_request_never_call_models():
         [first, second], current=lambda: True))
     assert result['reason'] == 'STALE_OR_CHANGED' and result['calls'] == 0
     assert not first.calls and not second.calls
+
+
+def test_fleet_primary_disagreement_passes_bound_opinion_for_comparison():
+    request = problem(necessity='INTERVENE', fleet_choice='human')
+    result, providers = run(request=request)
+    assert result['state'] == 'HOLD' and result['review_trigger'] == 'fleet_qwen_disagreement'
+    assert result['calls'] == 2 and result['choice'] is None
+    prior = providers[1].calls[0][0]
+    assert len(prior) == 1 and prior[0]['profile_id'] == 'qwen'
+    assert prior[0]['choice'] == 'reobserve' and prior[0]['input_hash'] == request.digest
+
+
+def test_matching_fleet_choice_and_normal_case_do_not_call_reviewer():
+    result, providers = run(request=problem(necessity='INTERVENE', fleet_choice='reobserve'))
+    assert result['calls'] == 1 and not providers[1].calls
+    result, providers = run(request=problem(necessity='DO_NOT_INTERVENE', fleet_choice='human'))
+    assert result['calls'] == 0 and all(not p.calls for p in providers)
+
+
+def test_fleet_baseline_is_allowlisted_and_changes_problem_hash():
+    first, second = problem(fleet_choice='human'), problem(fleet_choice='reobserve')
+    assert first.digest != second.digest and first.digest != problem().digest
+    for choice in ('RESUME', 'map_correction', '', True, ['human']):
+        with pytest.raises(ValueError):
+            problem(fleet_choice=choice)
