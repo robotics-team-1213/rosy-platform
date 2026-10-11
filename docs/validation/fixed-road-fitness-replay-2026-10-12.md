@@ -43,4 +43,12 @@ selector가 FULL로 승격했지만 이번 실행은 guard와 mapped suite 범�
 
 20261010 검수 데이터는 기존 연결 도로 구역 기준선 자료다. 전체 도로면의 독립 정답으로 재해석하지 않는다. 전체 도로면과 현재 구역의 실제/시뮬레이션 독립 정답 pair, 실제 관측 기준점 생산/보정·출처, 검수 독립성·freshness와 upstream 학습 closure가 필요하다.
 
+### 정답 없는 관측 산출 경계
+
+D-670은 정답·목적지·통행 정책 없이 기존 모델 세션과 D-665/D-667 로직을 실행하는 내부 관측 함수를 정의한다. 도로면/현재 구역 mask, 두 snapshot ID, 로드한 모델·camera profile·전처리·crop/기준점 변환과 추론 구간 latency를 반환한다. image 무효·오래됨·미래는 추론 전 보류하며 anchor만 무효면 도로면은 유지하고 구역을 보류한다. 반환 판단은 항상 HOLD이고 transport·장치 consumer는 아직 연결하지 않았다.
+
+`609df1bf06`의 원격 RED 14건으로 새 경계의 미구현을 확인했다. 첫 두 실행은 fixture의 crop 형식과 필수 lane class 오류로 실패했으므로 경계 RED 근거로 사용하지 않는다. `fae7bdf1d8`의 RED 1건은 anchor의 image-reference 누락이 유효한 도로면까지 보류하던 기존 평가 문제를 재현했다. `b5565a104b`의 원격 관련 GREEN은 terminal exit 0, NEW0이며 별도 ONNX Runtime 실행에서도 기존 crop/전체 영상 시험 2개를 포함한 68개 시험이 통과했다. 이는 합성 모델 실행이며 실물 인지 수용이 아니다.
+
+설치 closure 검토 지적은 control 0.1.1과 Foundation 최소 0.0.1 의존 선언으로 수정했다. `db1eb3058b`의 설치 metadata RED 뒤 `dc3148cdde`의 sdist→wheel·Foundation wheel 설치·격리 import 및 관련 회귀가 terminal exit 0이다. Foundation source 경로를 import에 넣지 않고 설치본만으로 새 관측 함수와 공통 타입을 읽었다. 실제 ARM64 이미지 또는 장치 설치는 미확인이다.
+
 물체 평가, 조건별 최소 표본·coverage와 출처 단위 불확실성, 사전 고정 수용 임계값, 실제 장치의 관측 전용 전달·버전 readback·지연/손실도 미확인이다. 이 작업에서 push·장치 배포·운영 활성화·주행·실물/시뮬레이션 성능 수용을 수행하지 않았다. SOURCE 시험과 local main 착지를 이 단계의 수용으로 확대하지 않는다.
