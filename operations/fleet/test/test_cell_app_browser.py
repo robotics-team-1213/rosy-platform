@@ -272,6 +272,12 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("Cell 서비스 구성을 확인")
     expect(page.locator("#saved-status")).to_contain_text("Cell 서비스 구성을 확인")
+    for control in ("recipe-save", "cell-save", "compile", "recipe-load", "cell-load", "read-job"):
+        expect(page.locator(f"#{control}")).to_be_disabled()
+        expect(page.locator(f"#{control}")).to_have_attribute("reason", "Cell 서비스 구성 확인 필요")
+    expect(page.locator("#token-save")).to_be_enabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    expect(page.locator("#recipe-id")).to_be_enabled()
     assert "CELL_APP_UNCONFIGURED" not in page.locator("main").inner_text()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
