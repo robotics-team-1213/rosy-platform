@@ -18,7 +18,7 @@ SIM_DEVICE_IDS = ('isaac-pinky', 'isaac-pinky-a', 'isaac-pinky-b')
 def load_track():
     sys.path.insert(0, str(MAP / 'scripts'))
     from stl_scene import load_scene
-    from build_world import training_scene
+    from build_world import training_scene, caution_meshes
     scene = load_scene(MAP / '260919 MAP FILE.STL')
     if scene.source_sha256 != SOURCE_SHA256:
         raise ValueError('measured map source hash differs')
@@ -29,7 +29,7 @@ def load_track():
         if points and math.dist(points[-1], part[0]) > .001:
             raise ValueError('lane route disconnected')
         points.extend(part if not points else part[1:])
-    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS,
+    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS, caution_meshes=caution_meshes(),
                 source_sha256=scene.source_sha256)
 
 

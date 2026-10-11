@@ -53,3 +53,52 @@ v2 추가분은 이전 모델이 틀린 장면을 우선 포함하며 자동 초
 기존 모델·검수분·추가 어려운 장면은 버전과 원본 hash를 유지해 기준선으로 활용한다. 새 도로면 검수는 D-663 road_surface classes로 별도 작성하고, 현재 구역 정답은 로직 평가용으로 분리한다. 원본 영상 단위 예약/split, 독립 검수 authority, 실제 기준점 투영, 실물/시뮬레이션별 coverage와 사전 고정 profile은 후속 결속 대상이다.
 
 원시 확인 로그는 X: 세션 `2026-10-11--213319--perception-fitness-pipeline--024175/evidence/desktop-20261010-*`에 있다. 주소·계정·원본 이미지·모델 파일은 공개 저장소에 넣지 않는다. 이번 확인은 새 학습·모델 재추론·시뮬레이션·장치 지연·배포·주행 활성화·현장 수용 증거가 아니다.
+
+## 저장 검수 마스크의 직접 대조 (2026-10-12)
+
+동일 dataset manifest SHA256을 다시 확인하고 추가 검수분 1,341장의 `review/saved` 마스크와 최종 dataset 마스크를 직접 읽었다. rows 110..239의 화소 불일치는 0, dataset rows 0..109에서 255가 아닌 화소도 0이다. 최종 mask 파일 hash 1,341개 모두 manifest와 일치했고 저장 검수 누락·크기 오류는 없었다. split은 train 1,092 / val 168 / test 81이다. 따라서 앞 기록에서 미확인이었던 saved mask→최종 mask 보존은 이 추가분에 한해 확인됐다. 기존 1,428장의 저장 검수 대조나 검수 독립성을 확대한 결론은 아니다.
+
+readback 로그는 위 비공개 세션의 `evidence/desktop-20261010-saved-mask-readback-20261012.json`이며 SHA256은 `316647b1aa78512d47fe0b132f2b3dfeb55503fbe719b4fb65a5b38f1043422b`이다. 이 로그는 UTF-16로 저장된 원격 JSON 출력의 byte hash다. 기존 mask·classes·manifest를 수정하지 않았다. 현재 구역 기준선이라는 의미와 새 도로면 적합성 HOLD를 유지한다.
+
+## upstream 원본 영상별 split 대조 (2026-10-12)
+
+AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선언된 source_video_sha256을 읽고, 위 검수 데이터의 image SHA256에 정확히 연결했다. upstream manifest SHA256은 `846ab9310f43b2f75edd9d38cd2c6f5dd62a4e0771a72931ee5a20143741c04b`이다. 2,769장 중 2,519장이 단일 원본 영상 hash에 연결됐고, 250장은 연결되지 않았다. 둘 이상의 원본 영상 hash가 겹치는 모호한 image 연결은 0이었다.
+
+| 선언된 원본 영상 그룹 | train | val | test |
+|---|---:|---:|---:|
+| 첫 그룹 | 674 | 234 | 166 |
+| 둘째 그룹 | 220 | 0 | 45 |
+| 셋째 그룹 | 503 | 31 | 0 |
+| 넷째 그룹 | 112 | 47 | 0 |
+| 다섯째 그룹 | 268 | 14 | 0 |
+
+위 다섯 그룹은 같은 upstream 원본 영상 hash가 두 개 이상의 split에 존재한다. 나머지 두 연결 그룹은 train에만 194장과 11장이 있다. 따라서 앞 확인의 동일 이미지 split 중복 0은 원본 영상 단위 분리를 증명하지 않는다. 이 세트는 기준선/개발 자료로 보존하며 독립 최종 시험으로 승격하지 않는다. 새 최종 시험은 학습에서 제외하도록 사전 예약한 출처와 독립 검수 정답이 필요하다.
+
+이 대조는 upstream 선언에 대한 연결이며 원본 영상 파일을 다시 hash한 물리 출처 검증은 아니다. 연결되지 않은 250장의 출처도 임의로 부여하지 않았다. 원본 group hash별 전체 표와 readback은 위 비공개 세션의 `evidence/desktop-20261010-upstream-source-splits-20261012.json`에 보존한다. 원본 데이터·split·학습 모델은 수정하지 않았다.
+
+## 이전 촬영분·검수 산출물의 확대 탐색 (2026-10-12)
+
+사용자가 이전 자료도 확인해 달라고 요청해 로컬 추적 제외 `data`와 시험 PC 세 대의 기존 보관 위치를 읽었다. 로컬 `data/teleop/learning`에는 영상 22개, `data/perception/raw`에는 bag 디렉터리 12개가 있다. bag 디렉터리에는 원본/compact 사본이 포함돼 독립 촬영 세션 수로 해석하지 않는다. 로컬 영상 22개의 파일 hash와 전체 매체 경로 목록을 비공개 세션의 `evidence/existing-footage-local-20261012.json`에 보존했다. 기존 ignore 규칙으로 숨겨진 자료를 탐색에서 누락하지 않도록 `rg --files --no-ignore`를 사용했다.
+
+원격 탐색은 각 home 및 `/srv/rosy`, `/mnt`, `/media`의 깊이 6 이내에서 ROSY/Pinky/teleop 관련 영상·MCAP·DB3와 manifest를 찾았다. 모델 PC는 매체 596개/manifest 214개, AI PC는 109개/25개, 현장 PC는 22개/25개다. 이는 반복 checkout 사본·분할 bag·파생 영상·일부 upstream 예제까지 포함한 탐색 결과이며 새 원본이나 독립 정답 수가 아니다. 권한 거절은 모델 PC 2곳, AI PC 1곳에 있었고 깊이 밖·다른 PC·미연결 볼륨은 미확인이다. 전체 목록은 `evidence/existing-footage-{local,model,ai,site}-20261012.json`에 있다.
+
+다음 두 원본 파일을 직접 hash해 앞 upstream 선언과 결속했다. 이는 7개 연결 그룹 중 2개 원본에 대한 추가 증거이며, 나머지 그룹과 연결되지 않은 250장 전체의 출처를 검증한 결과가 아니다.
+
+| 원본 | 확인한 SHA256 | 연결된 검수 데이터 |
+|---|---|---|
+| 로컬 20261005T134540Z 카메라 영상 | SHA256 `a5dd55eb10d2514e405ecf9547b2e181c9da1cc713ee124943a7657ae2d499b9` | train 194장 |
+| 모델 PC 20261006T091340Z 카메라 영상 | SHA256 `c41d9dc375035516096a32cff2b78471fe9b6747192691b2d24e3ed72c9dfbda` | train 11장 |
+
+모델 PC의 20261008 촬영분에는 원본 hash와 capture group을 가진 준비 영상/프레임 8장 및 16장이 있다. 확인한 입력 JSONL에는 사람 정답·검수 완료·독립 authority 결속이 없다. 이름에 eval이 있어도 독립 수용 세트라고 판단하지 않는다. 기존 객체 검수 반환 하나는 `person_feet` 클래스, exported 0 / queued 20, reviewer authentication unverified라 D-602의 `person` 독립 정답으로 전환하지 않는다. 기존 고정 eval 세트 세 개도 LiDAR/trajectory 자동 라벨이며 독립 사람 정답이 아니다. Isaac의 OMX/OMY RGB·semantic·box 자료는 도로 지도 출처의 대체물이 아니다.
+
+자료가 없다는 결론은 철회하고 원본·기준선·미검수 후보를 구분한다. 실제 새 도로면/현재 구역 정답 검수와 source 단위 학습 제외·독립성 확인이 남아 있다. 이 탐색은 데이터를 복사·재라벨·승인하거나 모델을 배포하지 않았다.
+
+## 빈 도로면 검수 작업 준비 및 영상 프레임 대응 (2026-10-12)
+
+앞서 찾은 20261008 두 촬영분의 준비 PNG 24장을 원본 MP4에서 지정된 `video_frame`까지 순차 디코딩해 대조했다. 이미지·영상 SHA256과 24/24 프레임 픽셀 일치를 확인했다. AI PC의 확대 탐색에서 발견한 manifest 25개의 `items`/`frames`/`samples` 행에는 이 후보의 이미지 hash 또는 원본 영상 hash가 없었다. 이는 검사한 manifest의 한정된 결과이며 전체 과거 학습·모델 비교 이력의 부재나 독립 최종 평가를 증명하지 않는다.
+
+로컬 main SHA `ddcfbbcce0def51a62fe92075f1c749234dc554e`의 기존 검수 코드를 이용해 별도 후보 작업 공간을 만들었다. `road_surface_v1.yaml` SHA256 `7ecdb083899449d4c3717f25e5b347ae9506f68ec6bd0f9528d2fb4e5c0fd4a9`를 동결했고 24개 초기 마스크는 모두 255, 픽셀 검수 pending 24 / 승인 0이다. 이전 모델의 라벨·객체 초안은 가져오지 않았다. `workspace_kind=training`은 검수 앱의 입력 준비 모드이며 학습 수용을 뜻하지 않는다. 이 영상 후보 작업 공간은 MCAP 전용 고정 평가 등록 경로를 대체하지 않는다. 현재 영상 후보의 training-mode 승인 경로는 255가 남으면 거부하므로, 가림·미관측 255를 유지한 정답의 승인·출력은 아직 지원하지 않는다. 준비 묶음의 실행 안내는 편집·검수 대기 작업만을 열며 이 제약을 우회하거나 255를 배경으로 채워 승인하지 않는다. 최신 main의 해당 검수·registry·perception·Foundation·공용 웹 소스와도 차이가 없음을 준비 후 확인했다.
+
+작업 공간 재개와 loopback 임시 서버에서 `/pixels`, `/api/workspace`, 24개 `/api/mask-images/<index>`의 HTTP 200 및 빈 마스크를 확인했다. 서버는 확인 후 종료했다. 브라우저 렌더·사람 검수·검수자 신원·독립 평가·물리 캘리브레이션 수용은 확인하지 않았다. contact sheet는 실제 실내 도로 촬영 화면이며 정답 mask가 아니다.
+
+검수 코드·동결 원본·SQLite·클래스·실행 안내를 포함한 `evidence/road-surface-review-24.zip`의 SHA256은 `2f003b3d606c52895b5d8f760d711855c135cf6318db6e10bbb440b339285d54`이다. 증거는 같은 X 드라이브 세션의 `evidence/blank-road-review-preparation-20261012.json`, `candidate-known-manifest-overlap-20261012.json`, `blank-road-review-http-readback-20261012.json`에 보존했다. 모델 PC 작업 공간은 `/home/rosy/rosy-ml/scratch/road-surface-review-20261012-024175/review-state`다. 기존 운영 앱·자료·원본 영상·모델을 수정하지 않았고 HOLD를 유지한다.
