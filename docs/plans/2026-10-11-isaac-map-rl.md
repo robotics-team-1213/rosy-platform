@@ -10,14 +10,14 @@
 
 ### Task 1: Pure task and admission checks
 
-- Create `learning/envs/isaac/map_task.py` and `learning/envs/isaac/test/test_map_task.py`.
+- Create `tools/sim/isaac/map_task.py` and `learning/envs/isaac/test/test_map_task.py`. Cross-package CORE/Drive diagnostic composition belongs to tools/sim, per D-427.
 - Test ordered progress (no shortcut), finite observations, physical terminal-zero dwell, failure vs timeout, Q-learning updates with no evaluation mutation, and POLICY envelope/epoch/expiry refusal.
 - Commit tests first, run `python tools/remote/remote_pytest.py --log-dir <X-session>/logs/red -- learning/envs/isaac/test/test_map_task.py`; record expected collection failure, never whitelist it.
 - Implement only tested behavior; repeat remote tests and `python test/known_failures.py <log>`; expect exit 0 and NEW=0.
 
 ### Task 2: SDK map and physics runner
 
-- Create `learning/envs/isaac/run_map_rl.py`. Reuse `stl_scene.load_scene`, `build_world.training_scene`, `importer_compat`, `drive_runtime`, `graph_contract`, and CORE final port; do not modify generated map files or CORE production source.
+- Create `tools/sim/isaac/run_map_rl.py`. Reuse `stl_scene.load_scene`, `build_world.training_scene`, `importer_compat`, `drive_runtime`, `graph_contract`, and CORE final port; do not modify generated map files or CORE production source.
 - Build the same visual paint and four collision walls in USD. Measure rigid-body pose/velocity and run one physics environment. Stop before resetting; fail closed on invalid data.
 - Run native SDK only on the reserved model PC with fresh source archive and hash manifest, bounded memory/time, CPU learning, and separate baseline/train/eval phases. Export JSONL physical trajectory and frozen Q table outside source.
 

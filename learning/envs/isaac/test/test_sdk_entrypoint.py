@@ -79,7 +79,9 @@ def test_cli_control_status_is_not_replaced_with_success(failure, expected):
 
 @pytest.mark.parametrize("runner", ["run_rosy", "import_omx", "run_map_rl"])
 def test_public_runner_uses_status_preserving_entrypoint(runner):
-    source = (Path(__file__).parents[1] / f"{runner}.py").read_text(encoding="utf-8")
+    root = (Path(__file__).resolve().parents[4] / 'tools/sim/isaac'
+            if runner == 'run_map_rl' else Path(__file__).parents[1])
+    source = (root / f"{runner}.py").read_text(encoding="utf-8")
     assert "run_cli(main)" in source
 
 @pytest.mark.parametrize('initial_status', [0, 2])

@@ -13,6 +13,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/envs/isaac'))
 from prepare_urdf import REPOSITORY, validate_output_path
 from model_checks import check_urdf
 from importer_compat import import_model, reference_model
@@ -49,7 +50,7 @@ def main():
     passive = passive_caster_joints(ET.parse(args.urdf).getroot())
     output = validate_output_path(args.output_dir / 'result.json').parent
     output.mkdir(parents=True, exist_ok=False)
-    for path in ('contracts/motion/src', 'contracts/skill/src', 'contracts/foundation',
+    for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
                  'middleware/core/gateway', 'middleware/core/services', 'middleware/perception'):
         sys.path.insert(0, str(REPOSITORY / path))
     track = load_track()
