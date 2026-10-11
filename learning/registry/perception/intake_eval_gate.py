@@ -73,6 +73,10 @@ def compare_to_champion(ev: dict, champion: dict | None):
 
 
 def judge_eval(ev: dict, gate: dict) -> list[str]:
+    if ev.get("semantic_mismatches"):
+        return [f"eval: label semantic differs between model and evaluation: {ev['semantic_mismatches']}"]
+    if gate.get("require_label_semantics") and ev.get("unverified_semantics"):
+        return [f"eval: unverified drivable label semantics: {ev['unverified_semantics']}"]
     if gate.get("require_eval"):
         if ev.get("disjoint") is not True:
             return ["eval: deployment requires a verified training dataset disjoint from evaluation"]
@@ -107,6 +111,10 @@ def judge_eval(ev: dict, gate: dict) -> list[str]:
 
 
 def _eval_gate_error(gate: dict) -> str | None:
+    if not isinstance(gate.get("require_label_semantics", False), bool):
+        return "require_label_semantics must be a boolean"
+    if gate.get("require_label_semantics") and not gate.get("require_eval"):
+        return "require_label_semantics needs require_eval"
     required = gate.get("require_eval", False)
     if not isinstance(required, bool):
         return "require_eval must be a boolean"
@@ -119,4 +127,28 @@ def _eval_gate_error(gate: dict) -> str | None:
         floor = gate.get("min_eval_miou")
         if floor is not None and (not _number(floor) or not 0 < floor <= 1):
             return "min_eval_miou must be in (0, 1]"
+    return None
+
+
+def evaluation_semantics(model_classes: list, eval_classes: list, matched: list) -> dict:
+    model = {c["name"]: c for c in model_classes}
+    truth = {c["name"]: c for c in eval_classes}
+    roads = {c["name"] for c in model_classes + eval_classes if c.get("role") == "drivable"}
+    declared, mismatches, unverified = {}, {}, []
+    for name in sorted(roads):
+        pair = {"model": model.get(name, {}).get("semantic"), "eval": truth.get(name, {}).get("semantic")}
+        if any(v is not None for v in pair.values()):
+            declared[name] = pair
+            if pair["model"] != pair["eval"]:
+                mismatches[name] = pair
+        if name not in matched or any(v is None for v in pair.values()):
+            unverified.append(name)
+    return {"label_semantics": declared, "semantic_mismatches": mismatches, "unverified_semantics": unverified}
+
+
+def road_delivery_error(doc: dict) -> str | None:
+    if doc.get("task") == "lane_seg" and any(
+            c.get("role") == "drivable" and c.get("semantic") not in (None, "current_road_region/1")
+            for c in doc.get("output", {}).get("classes", [])):
+        return "drivable semantic is incompatible with existing lane_seg delivery (current_road_region/1 required)"
     return None

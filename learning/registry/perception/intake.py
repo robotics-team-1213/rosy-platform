@@ -44,13 +44,13 @@ for _p in (_SENSING, _FOUNDATION):
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    ManifestError, load_manifest, verify_files)
+    ManifestError, load_manifest, verify_files, validate_label_semantic)
 from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: E402
 from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
-                              v13_lineage_error, v13_quality_error)
+                              v13_lineage_error, v13_quality_error, evaluation_semantics, road_delivery_error)
 import drivable_versions  # noqa: E402  D-558 ledger
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
@@ -61,7 +61,7 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
 CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
-EVAL_KEYS = ("require_eval", "eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
+EVAL_KEYS = ("require_eval", "require_label_semantics", "eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
              "min_lane_marking_iou")  # lane_seg only
 DEFAULT_IGNORE_INDEX = 255
 
@@ -343,6 +343,11 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     models). An eval set without frames is a setup error (EvalSetError)."""
     eval_dir = Path(eval_dir)
     manifest = _read_eval_set(eval_dir)
+    try:
+        for c in manifest.get("classes", []):
+            validate_label_semantic(c)
+    except ManifestError as exc:
+        raise EvalSetError(f"eval set {eval_dir}: {exc}") from exc
     model_classes = model.manifest.classes
     set_classes = {c["name"]: int(c["index"]) for c in manifest.get("classes", [])}
     set_roles = {c["name"]: c.get("role") for c in manifest.get("classes", [])}
@@ -361,6 +366,9 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
               "lane_marking_iou": {}, "source_groups": []}
+    model_class_docs = ((model.manifest.raw.get("output") or {}).get("classes") or
+                        [{"name": c.name, "role": c.role} for c in model_classes])
+    result.update(evaluation_semantics(model_class_docs, manifest.get("classes", []), matched))
     if not matched:
         return result
     ignore = manifest.get("ignore_index", DEFAULT_IGNORE_INDEX)
@@ -419,7 +427,7 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     return result
 
 
-def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict | None:
+def find_champion(out, content_sha: str, exclude_revision: str | None, *, label_semantics=None) -> dict | None:
     """The best earlier pass on the same eval set: {"model_revision", "miou", "iou"} or None.
     Reports that are not well-formed (not a dict, non-numeric mIoU) are skipped."""
     best = None
@@ -438,6 +446,8 @@ def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict |
                 or not _number(ev.get("miou"))):
             continue
         iou = ev.get("iou") if isinstance(ev.get("iou"), dict) else {}
+        if label_semantics is not None and ev.get("label_semantics", {}) != label_semantics:
+            continue
         if best is None or ev["miou"] > best["miou"]:
             best = {"model_revision": rep.get("model_revision"), "miou": float(ev["miou"]),
                     "iou": {k: float(v) for k, v in iou.items() if _number(v)}}
@@ -537,7 +547,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                                          or trained[2] & set(reservations.values())
                                          or trained[1] - trained[3]):
                         ev["reserved_eval_overlap"] = True
-                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
+                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision,
+                                      label_semantics=ev["label_semantics"])
                 ev["champion_comparison"] = compare_to_champion(ev, champ)
                 ev["champion"] = None if champ is None else {
                     "model_revision": champ["model_revision"], "miou": champ["miou"]}
@@ -550,6 +561,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
             if report["eval"].get("reserved_eval_overlap"):
                 report["reasons"].append("eval: training dataset overlaps or cannot exclude reserved eval sources")
             report["verdict"] = "fail" if report["reasons"] else "pass"
+        error = road_delivery_error(manifest.raw)
+        if error:
+            report["reasons"].append(error)
+            report["verdict"] = "fail"
         if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
             report["transient"] = True
             report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")
