@@ -57,7 +57,7 @@ main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
   .fleet-workspace > #fleet-main { flex: 1; min-height: 0; }
 }
 @media (width < 64rem) {
-  .fleet-body { grid-template-columns: minmax(0, 1fr); }
+  .fleet-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .fleet-body > .doc-tabs { flex-direction: row; overflow-x: auto; padding: 0 var(--space-3); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .fleet-body > .doc-tabs a { border-inline-start: 0; border-bottom: 2px solid transparent; }
   .fleet-body > .doc-tabs a[aria-current="page"] { border-bottom-color: var(--ink); }
