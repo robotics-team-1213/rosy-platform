@@ -7783,3 +7783,10 @@ osy-d395-s1d\`.
 - 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
+
+- 변경: branch `docs/responsibility-contract`에서 D-656의 논리 책임 계약과 후속 통합 계획을 기록했다. 기존 D-648/D-652·중앙 판단·모델 토론 계획의 세부를 재사용하고 실제 파일/consumer/설치/시험과 완료 관문을 단계별로 연결했다.
+- 결정: 공통 평가·모델 후보·순수 작업 규칙·현장 원장 어댑터·CORE/OMX writer·독립 평가의 책임을 구별한다. 모델 런과 작업 실행, 비개입/보류/자연 해소와 조치 성공을 구별하며 종료 writer와 Mission/claim transaction을 유지한다.
+- 증거: 현재 HEAD 063676cbcb, 기존 dispatcher/진행/목표 근거·model-turn/설치 시험 및 ADR를 읽었다. 문서 generate/lint와 커밋 HEAD 원격 계약 검증은 후속 receipt로 기록한다.
+- gate 변화: 없음. Accepted는 책임/진행 원칙이며 새 runtime 구현·모델 호출·외부 발송·운영 활성화·서비스 분산·배포/현장 수용을 뜻하지 않는다.

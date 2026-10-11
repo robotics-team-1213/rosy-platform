@@ -80,3 +80,11 @@
 - 증거: 착지 검사에서 발견한 architecture/legacy-path/release guard NEW 4건은 실패로 기록했다. 수정 HEAD 764b591ed6의 원격 Isaac/architecture/release/harness exit 0, NEW 0. 독립 소스 Safety-Review는 저장소 경로·SDK helper 연결·최종 권한·물리 정지·정책 고정·source lineage를 승인했다.
 - gate: SOURCE/LOCAL GO 유지. R8/R9 runtime 증거는 이전 SHA에 귀속하고 ROS-SIM/두 대 Fleet/실물 HOLD를 유지한다.
 - 교훈: CORE를 재사용하는 진단은 여러 package를 조합하는 tools/sim의 기존 소유를 따른다. 이동 전 성공 실행으로 import/소유 검사를 대신하거나 새 위반을 허용 목록에 넣지 않는다.
+
+## 2026-10-11 · fb355522f5 · fix(isaac): 유효 카메라 관측만 Q-learning에 반영
+
+- 문제: 기존 카메라 runner가 관측 없는 기본 bin도 학습하고, camera loss 판정 전 갱신하며 실패 결과에서 실제 업데이트 수를 누락했다.
+- 변경: 모델 관측의 source age와 처리 시간을 합쳐 freshness를 확인한다. 무효 관측과 이전 관측 없는 transition은 제외하고 연결을 끊는다. tick 도중 만료하면 권한 메타데이터를 유지한 zero 후보만 제출한다. loss 판정 뒤 학습하며 실패 결과에도 실제 updates와 제외 이유를 보존한다. 기존 경로 기반 update→choose 순서는 유지한다.
+- 증거: 원격 RED 6 NEW/19 pass 및 만료 회귀 RED 1 NEW/25 pass 뒤 전체 Isaac 152 pass/1 skip, known_failures NEW 0. 독립 소스 Safety-Review 수용. native 재시험과 카메라 완주·두 대 Fleet·ROS-SIM·실물 수용은 아직 별도다.
+- 목표: 같은 기존 인식 모델·CORE 주행의 고정 gain 기준선과 비교해 곡선의 오차·흔들림을 줄이는 효과를 검증한다. 신호·횡단보도·Fleet 통행권은 학습 보상으로 우회하지 않는다.
+- gate 변화: SOURCE/LOCAL 유지. 카메라 전체 완주·두 대 Fleet·ROS-SIM·DEVICE·FIELD는 HOLD이며 이번 소스 회귀로 승격하지 않는다.
