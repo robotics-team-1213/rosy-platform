@@ -92,6 +92,40 @@ def test_model_failure_links_to_exact_recording_without_becoming_truth():
     assert json.dumps(base, sort_keys=True) == before
 
 
+def handoff_feedback():
+    data = model_feedback()
+    case = data['case']
+    case['budget'] = {'started_at': 100}
+    case['handoff'] = dict(schema='rosy.incident.handoff_evidence/1',
+        scope_sha256=hashlib.sha256(json.dumps(case['scope'], sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+        tables=dict(claims='PRESENT', outbox='ABSENT', queues='PRESENT'),
+        queue={'queued_at': 101}, notifications=[], claim=dict(claimed_at=102, judgment_revision='b' * 64,
+            record_sha256='c' * 64, binding='CASE_ONLY'),
+        assertions=dict(verified_human_identity=False, independent_quality=False))
+    data['schema'] = 'rosy.incident.model_feedback/2'
+    data['digest'] = hashlib.sha256(json.dumps(case, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    return data
+
+
+def test_opt_in_handoff_evidence_survives_recording_binding_without_quality_claims():
+    base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
+    exported = handoff_feedback()
+    result = incident_feedback.attach_model_feedback(base, exported)
+    assert result['matches'][0]['model_feedback']['handoff'] == exported['case']['handoff']
+    assert result['matches'][0]['model_feedback']['label_state'] == 'UNREVIEWED'
+
+
+@pytest.mark.parametrize('fault', ['identity', 'scope', 'private_extra'])
+def test_handoff_proof_tamper_is_rejected_even_with_recomputed_export_digest(fault):
+    base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
+    data = handoff_feedback(); proof = data['case']['handoff']
+    if fault == 'identity': proof['assertions']['verified_human_identity'] = True
+    if fault == 'scope': proof['scope_sha256'] = 'e' * 64
+    if fault == 'private_extra': proof['claim']['principal_id'] = 'PRIVATE_OPERATOR'
+    data['digest'] = hashlib.sha256(json.dumps(data['case'], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    with pytest.raises(ValueError): incident_feedback.attach_model_feedback(base, data)
+
+
 @pytest.mark.parametrize('tamper', ['foreign_subject', 'hash', 'label', 'counter'])
 def test_invalid_or_self_labeled_model_feedback_cannot_enter_recording(tamper):
     base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
