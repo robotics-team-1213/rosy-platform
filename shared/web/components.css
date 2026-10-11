@@ -6,7 +6,7 @@
  * 단다. <ui-field> 감싸개도 같은 얼굴을 그리지만, 화면의 폼 제출·<label> 연결·
  * JS가 이미 네이티브 요소를 직접 쥐고 있어 감싸개로 바꾸면 마크업과 핸들러가 크게
  * 흔들린다. 체크·라디오는 상자를 그리지 않고, 감싸는 <label class="ui-check">가
- * 44px 누름 면이 된다.
+ * 48px 누름 면이 된다.
  */
 
 .sr-only {
@@ -82,6 +82,7 @@ ui-button {
   justify-content: center;
   box-sizing: border-box;
   gap: var(--gap-button-content);
+  min-width: var(--target-secondary);
   min-height: var(--target-secondary);
   margin: 0;
   padding: 0 var(--inset-button);
@@ -89,7 +90,7 @@ ui-button {
   border-radius: var(--radius-button);
   color: var(--text-primary);
   background: transparent;
-  font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   text-align: center;
   cursor: pointer;
   user-select: none;
@@ -100,7 +101,7 @@ ui-button[kind="primary"] {
   border-color: transparent;
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
-  font-weight: var(--weight-strong);
+  font-weight: var(--weight-label);
 }
 
 ui-button[kind="quiet"],
@@ -118,7 +119,7 @@ a.docs-link {
   cursor: pointer;
 }
 
-a.docs-link { min-height: var(--target-secondary); }
+a.docs-link { box-sizing: border-box; min-width: var(--target-secondary); min-height: var(--target-secondary); }
 
 a.docs-link:hover {
   color: var(--text-primary);
@@ -130,7 +131,7 @@ ui-button[kind="irreversible"] {
   border-color: transparent;
   color: var(--button-irreversible-ink);
   background: var(--button-irreversible-bg);
-  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
 }
 
 ui-button[kind="segment"] {
@@ -278,8 +279,8 @@ textarea.ui-field:focus-visible {
 
 ui-button[kind="irreversible"] span {
   display: block;
-  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--mono);
-  letter-spacing: var(--track-wide);
+  font: inherit;
+  letter-spacing: var(--track-state);
 }
 
 ui-button[kind="irreversible"] small {

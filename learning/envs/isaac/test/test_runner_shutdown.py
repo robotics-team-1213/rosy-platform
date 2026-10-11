@@ -10,7 +10,8 @@ import pytest
 
 
 @pytest.mark.parametrize("runner", ["run_rosy", "import_omx"])
-def test_sdk_error_survives_runner_cleanup(runner, tmp_path, monkeypatch):
+@pytest.mark.parametrize("headless", [True, False])
+def test_sdk_error_survives_runner_cleanup(runner, headless, tmp_path, monkeypatch):
     directory = Path(__file__).parents[1]
     monkeypatch.syspath_prepend(str(directory))
     spec = importlib.util.spec_from_file_location(runner, directory / f"{runner}.py")
@@ -22,7 +23,7 @@ def test_sdk_error_survives_runner_cleanup(runner, tmp_path, monkeypatch):
     monkeypatch.setenv("ROS_DOMAIN_ID", "139")
     monkeypatch.setattr(module, "parse_args", lambda: SimpleNamespace(
         namespace="rosy_99", model="omx_f", urdf=urdf, output_dir=tmp_path / "output",
-        headless=True, frames=1, wheel_damping=None))
+        headless=headless, frames=1, wheel_damping=None))
     monkeypatch.setattr(module, "check_urdf", lambda *a, **k: None)
     if runner == "import_omx":
         monkeypatch.setattr(module, "check_vendor_manifest", lambda: None)
@@ -53,3 +54,8 @@ def test_sdk_error_survives_runner_cleanup(runner, tmp_path, monkeypatch):
         module.main()
     assert captured["closed"] is True
     assert captured["fast_shutdown"] is False
+    if runner == "run_rosy" and headless:
+        assert (captured["width"], captured["height"], captured["anti_aliasing"]) == (640, 480, 0)
+        assert captured["extra_args"] == ['--/app/extensions/excluded=["isaacsim.gui.menu"]']
+    else:
+        assert not {"width", "height", "anti_aliasing"}.intersection(captured)

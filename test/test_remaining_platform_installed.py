@@ -35,7 +35,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 64  # AGENTS.md and source-only package.json were not installed.
+    assert len(expected) == 65  # AGENTS.md and source-only package.json were not installed.
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')

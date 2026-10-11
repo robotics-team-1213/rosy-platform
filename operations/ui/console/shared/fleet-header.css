@@ -13,7 +13,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 /* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
    이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
-/* D-457 — 아이콘 세그먼트는 정사각 누름 면(44px)을 지킨다. */
+/* 아이콘 세그먼트도 공통 버튼의 정사각 누름 면(48px)을 지킨다. */
 .theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
 #theme-choice-label { white-space: nowrap; }
 
@@ -51,6 +51,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
    선다. 줄이 모자라면 항목이 다음 줄로 내려가고 글자가 접히지 않는다. */
 #topbar-more { display: none; }
 .topbar-extra { display: contents; }
+.fleet-link-status { display: contents; }
 @media (width >= 90rem) {
   ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
   /* 긴 주체 이름이 머리 줄을 넘치게 하지 않도록 역할 표지는 12rem에서 자른다(전문은 title). */
@@ -73,7 +74,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;
     /* D-501 — 다른 문서로 가는 길은 머리 아래 탭 줄(doc-tabs.css)이다. */
-    grid-template-areas: "brand pill clock more estop";
+    grid-template-areas: "brand pill inbox more estop";
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
@@ -82,7 +83,8 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #clock { grid-area: clock; justify-self: end; }
+  #clock { display: none; }
+  #fleet-inbox { grid-area: inbox; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
   .topbar-extra {
@@ -111,14 +113,18 @@ ui-topbar input[type="checkbox"] { width: auto; }
 @media (width < 30rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand more estop" "pill clock estop";
+    grid-template-areas: "brand more estop" "pill inbox estop";
     gap: var(--space-1);
-    padding: var(--space-2);
+    padding: var(--space-1) var(--space-2);
   }
   ui-topbar ui-brand { container-type: inline-size; }
+  .fleet-link-status { display: contents; }
+  #development-badge { grid-area: brand; align-self: end; justify-self: start; }
+  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-6); }
+  ui-topbar ui-brand b { line-height: var(--leading-flat); }
   #clock { font-size: var(--text-micro); }
   /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */
-  #estop { align-self: center; padding-inline: var(--space-2); gap: var(--space-1); }
+  #estop { align-self: center; gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
   .topbar-extra { grid-row: 3; }
 }

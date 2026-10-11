@@ -31,7 +31,8 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
             body="<!doctype html><html><head></head><body></body></html>",
         ),
     )
-    for url, path in {"/common/ui.js": ROOT / "shared" / "web" / "ui.js", **modules}.items():
+    for url, path in {"/common/ui.js": ROOT / "shared" / "web" / "ui.js",
+                      "/common/core_ui_logic.js": ROOT / "shared" / "web" / "core_ui_logic.js", **modules}.items():
         page.route(
             f"http://rosy.test{url}",
             lambda route, _request, path=path: route.fulfill(
@@ -92,7 +93,7 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
           };
         }""")
         assert page.evaluate("window.__sharedContract") == {
-            "sizes": ["44px", "48px", "58px"],
+            "sizes": ["48px", "48px", "48px"],
             "activeSegment": "rgb(53, 56, 60)",
             "defaultRole": "status",
             "live": "polite",
