@@ -48,6 +48,16 @@ def camera_episode_usable(phase, visible_frames):
     return usable
 
 
+def camera_admission_error(phase, visible_frames, learned_steps):
+    try:
+        camera_episode_usable(phase, visible_frames)
+    except RuntimeError as exc:
+        return str(exc)
+    if phase == 'eval' and learned_steps == 0:
+        return 'evaluation visited no learned state'
+    return None
+
+
 def episode_phases(train_episodes, *, camera, evaluation_only):
     evaluations = ([(707, 0.), (808, math.pi / 2), (909, math.pi), (1001, -math.pi / 2)]
                    if evaluation_only else [(202, 0.), (303, 0.)] + ([(404, 0.)] if camera else []))
@@ -533,22 +543,30 @@ def main():
                 baseline = result
             if frozen is not None and policy.export() != frozen:
                 raise RuntimeError('evaluation mutated policy')
-            if phase == 'eval' and learned_steps == 0:
+            if phase == 'eval' and learned_steps == 0 and lane is None:
                 raise RuntimeError('evaluation visited no learned state')
             if lane is not None:
-                # Failed training starts stay in the report; other seeds still train after a measured stop.
-                camera_episode_usable(phase, camera_visible_frames)
-            if phase == 'eval' and perception is not None:
+                # Keep failed headings rejected, but measure the remaining headings after a verified stop.
+                error = camera_admission_error(phase, camera_visible_frames, learned_steps)
+                if error is not None:
+                    episode['admission_error'] = error
+            if (phase == 'eval' and perception is not None and not episode.get('admission_error')
+                    and not summary['episodes'][-2].get('admission_error')):
                 summary['camera_comparisons'].append(camera_comparison(summary['episodes'][-2], episode))
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates
         summary['policy_sha256'] = hashlib.sha256((output / 'policy.json').read_bytes()).hexdigest()
-        summary['full_map_complete'] = all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval')
+        summary['camera_admission_errors'] = [dict(phase=e['phase'], seed=e['seed'], error=e['admission_error'])
+                                              for e in summary['episodes'] if e.get('admission_error')]
+        summary['full_map_complete'] = (not summary['camera_admission_errors'] and
+            all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval'))
         summary['baseline_complete'] = baseline['complete'] if baseline is not None else None
         summary['final_stop'] = physical_stop()
         (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
         print('RESULT ' + json.dumps(summary), flush=True)
+        if summary['camera_admission_errors']:
+            raise RuntimeError('camera episode admission failed; candidate not accepted')
         if not summary['full_map_complete']:
             raise RuntimeError('held-out full-map completion failed; candidate not accepted')
     except Exception as exc:

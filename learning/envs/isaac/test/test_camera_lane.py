@@ -454,6 +454,18 @@ def test_camera_failure_snapshots_preserve_distinct_reasons_without_unbounded_ou
     assert not camera_snapshot_due(3, current, {(str(i), None) for i in range(8)})
 
 
+@pytest.mark.parametrize('phase,visible,learned,expected', [
+    ('train', 0, 0, None), ('baseline', 1, 0, None), ('eval', 1, 1, None),
+    ('baseline', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 1, 0, 'evaluation visited no learned state'),
+])
+def test_failed_camera_heading_remains_rejected_when_later_headings_are_measured(phase, visible, learned, expected):
+    from run_map_rl import camera_admission_error
+    error = camera_admission_error(phase, visible, learned)
+    assert error is None if expected is None else expected in error
+
+
 def test_inference_wall_time_cannot_refresh_an_old_camera_frame():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
