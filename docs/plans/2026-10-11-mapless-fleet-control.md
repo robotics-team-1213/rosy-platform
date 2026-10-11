@@ -237,4 +237,11 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - `ed901a0249`에서 main `4bcfc55d88`을 작업 브랜치에 합쳤다. 새 사건 계약과 조사 계약의 export를 모두 보존하고, API 문서 번호 충돌은 v1.208로 정리했다. Fleet 재측정 52790 및 별도 incident 360은 기존 +150·파일 상한·분리 의무를 유지한다. 아직 공유 main에 착지하지 않았다.
 - 첫 넓은 원격 회귀는 세 호출에서 9232/3542/3638 PASS와 각각 4/3/7 NEW였다. 자원 부족 fallback 실행이므로 수용 증거로 승격하지 않았다. NEW는 v1.208 헤더 정합성, 신규 자산 설치 목록, 분리된 확인 창 소유 목록, 비활성 이유, 문서 import 소유 목록, 거절 odom의 조사 연속성 기대값을 수정했다. 기존 실패 목록에 추가하지 않았다.
 - `e9fd1c42fe`에서 자원 기준 통과 AI PC 원격 계약·Chromium·설치 회귀 275 PASS/NEW 0 (`logs/merged-contracts-final/run-1.txt`), Node 302 PASS (`logs/merged-node-final.txt`). 이전 잘못된 시험 경로 실행은 exit 4/시험 없음이며 수용 증거가 아니다. 독립 검토는 수정 소스를 수용했다.
-- 전체 회귀 재실행·착지·CI·서명 사이트 배포·실제 desktop/mobile 화면 확인은 남아 있다. 현장 설치는 `5cfd0b7cd36a506baee567043121a29f3fad1877`이며 이번 브랜치 설치가 아니다. 기본 브라우저 연결 없음과 Windows Application Control 차단을 우회하지 않고 기존 원격 Chromium 경로를 사용한다. 공개 HTTPS 접속의 시간 초과도 아직 해결·확인 대상이다.
+- 전체 회귀 재실행·착지·CI·서명 사이트 배포·실제 desktop/mobile 화면 확인은 남아 있다. 현장 설치는 `5cfd0b7cd36a`이며 이번 브랜치 설치가 아니다. 기본 브라우저 연결 없음과 Windows Application Control 차단을 우회하지 않고 기존 원격 Chromium 경로를 사용한다. 공개 HTTPS 접속의 시간 초과도 아직 해결·확인 대상이다.
+
+### 2026-10-12 · D-664 통합과 현장 비교 기준
+
+- `0508f92b0`에서 작업 현황 읽기를 포함한 main을 합쳤다. D-664의 v1.208 이력을 보존하고 D-655와 현재 API 헤더를 v1.209로 구분했다. 두 계약의 export 및 70개 설치 자산을 유지한다. 독립 검토 Fleet 53012, 별도 incidents 360으로 재판정했으며 +150·파일 상한·두 기능의 기존 분리 의무는 유지한다. 이어 `868934dea`에서 main `e7558c7d4d`을 합쳤고, 실제 존재하는 D-655의 되살아난 gap 행만 제거했다.
+- `35a8bbd0a` 회귀는 AI PC 22 cores/9 GB, 모델 PC 23.9 cores/8.6 GB 기준 통과로 시작했다. 핵심 계약·Vision·공통 UI·구조 9320 PASS/582 SKIP, Fleet 3651 PASS/211 SKIP. 설치/Perception/root 3551 PASS/113 SKIP의 1 NEW는 이 계획의 이전 현장 릴리스 SHA 전체 표기가 high-entropy 검사에 걸린 것이다. 문서 표기를 짧은 commit ID로 바꾸고 정확한 값은 기존 X: readback에 보존한다. 비밀 검사 규칙·allowlist는 바꾸지 않는다. 해당 실패로 착지는 거절됐으며 수정 후 검증은 진행 중이다.
+- 배포 전 실제 사이트를 기존 원격 Chromium으로 desktop 1440 px/mobile 390 px에서 확인했다. Console/site-map HTTP 200, JS 오류 0, 가로 넘침 없음. 활성 지도는 map_v2_fleet v5, draft 없음, 저장 profile map_v2_fleet-v5를 읽어 `logs/site-baseline-map-state.json`에 보존했다. 로봇 2대 오프라인이며 실제 이동·대형 개입 수용을 주장하지 않는다.
+- 현장 인증서는 호스트 이름 SAN만 포함하고 Tailscale IP SAN은 없다. 외부 8443은 시간 초과이고 현장 loopback은 CA/SAN 검증을 통과한다. 화면 확인은 SSH 터널과 검증한 인증서 공개키에 한정한 Chromium 신뢰로 수행했다. 일반 사용자 IP 접속 해결·이번 소스 배포 증거로 승격하지 않는다. 로컬 GitHub 연결은 SSH SOCKS 경유로 복구했으며 인증서 검사를 유지한다. 기존 main e7558c7d4d의 CI 성공은 이번 브랜치의 CI 증거가 아니다.
