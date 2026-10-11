@@ -11,10 +11,13 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, on }
   const status = el("map-traffic-status");
   if (status) {
     const labels = drawing ? [
+      ...drawing.bands.filter((band, index, bands) => bands.findIndex(item => item.unit === band.unit) === index)
+        .map(band => `${band.unit} · ${band.robot || "로봇 미확인"} · ${{OCCUPIED: "점유 중", GRANTED: "통행 허가", UNKNOWN: "위치 불명"}[band.state] || "상태 미확인"}`),
+      ...drawing.ticks.map(tick => `통행권 끝 · ${tick.robot}`),
       ...drawing.zones.map(zone => `${zone.unit} · ${zone.label}`),
       ...drawing.signals.map(stop => `가상 · ${stop.signal} · ${stop.approach} · ${stop.text}`),
     ] : [];
-    status.replaceChildren(...(labels.length ? labels : [on ? "교통 상태 대기" : "교통 표시 꺼짐"]).map(text => {
+    status.replaceChildren(...(labels.length ? labels : [on ? drawing ? "점유·신호 없음" : "교통 상태 대기" : "교통 표시 꺼짐"]).map(text => {
       const row = document.createElement("li");
       row.textContent = text;
       return row;

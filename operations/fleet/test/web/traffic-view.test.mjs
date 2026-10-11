@@ -27,6 +27,14 @@ test('signal and occupancy descriptions stay outside the floor plane', () => {
     drawSignalLamps(ctx, project, options);
     assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent.includes('sig_ring') && row.textContent.includes('east:fwd')));
     assert.ok(arcs.length > 0 && arcs.every(arc => arc[2] <= 12));
+    options.view.activeSiteMap.map.edges = [{id: 'east', polyline: [[0, 0], [1, 0]]}];
+    options.view.traffic = {map_version: 5, block_length_m: {east: 1},
+      units: [{id: 'east#0', state: 'OCCUPIED', holders: ['rosy_40']}],
+      robots: [{robot_id: 'rosy_40', authority_end_m: .8}]};
+    options.view.trafficTrips = [{robot_id: 'rosy_40', plan: {segments: [{edge_id: 'east', forward: true, s_from: 0, s_to: 1}]}}];
+    drawTraffic(ctx, project, 100, options);
+    assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent.includes('rosy_40') && row.textContent.includes('점유 중')));
+    assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent === '통행권 끝 · rosy_40'));
     drawTraffic(ctx, project, 100, {...options, on: false});
     assert.equal(elements['map-traffic-status'].rows[0].textContent, '교통 표시 꺼짐');
   } finally {globalThis.document = previous; globalThis.window = previousWindow;}
