@@ -242,3 +242,64 @@ def test_normal_teach_cannot_write_operational_coordinates_into_survey_draft(act
             confirm(service, result, draft['revision'])
     assert error.value.code == 'TEACH_MAP_CHANGED'
     assert store.draft_view() == draft
+
+
+@pytest.mark.parametrize('action', ['confirm', 'place', 'marker_add', 'marker_move'])
+def test_operational_teach_preserves_active_survey_and_invalidates_draft_review(action):
+    from copy import deepcopy
+    from test_teach import MAP, Poses, _drive
+    body = deepcopy(MAP)
+    body['survey'] = {**setup()[4]['map']['survey'], 'reviewed': True, 'review_note': 'Measured'}
+    body['edges'][0]['evidence'] = {'source': 'operator', 'status': 'reviewed',
+        'reference_revision': 'reference-1', 'note': 'Measured'}
+    store = SiteMapStore()
+    store.import_if_empty(SiteMap.model_validate(body), source='test')
+    active = store.active_view()
+    poses = Poses()
+    service = TeachService(poses=poses, site_maps=store, roster=lambda: ['r1'],
+        place_markers=lambda _: {'map_id': 'site', 'source_id': 'floor', 'x': 0.1, 'y': 0, 'yaw': 0})
+    if action == 'confirm':
+        async def run():
+            await service.start('r1', 'bob')
+            await _drive(service, poses, [(0.2, 0)])
+            return await service.stop('bob')
+        result = asyncio.run(run())
+        saved = confirm(service, result, None)['draft']['map']
+        assert saved['edges'][-1]['evidence']['source'] == 'odometry'
+        assert saved['edges'][-1]['evidence']['status'] == 'observed'
+        assert service.view()['pending'] == []
+    elif action == 'place':
+        saved = asyncio.run(service.place('r1', name='Spot', kind='park', expected_revision=None,
+            principal_id='bob'))['draft']['map']
+    else:
+        saved = service.place_from_marker(34, name='Spot', kind='park',
+            place_id='A' if action == 'marker_move' else None, expected_revision=None,
+            principal_id='bob')['draft']['map']
+        if action == 'marker_move':
+            assert saved['edges'][0]['evidence']['status'] == 'observed'
+            assert saved['edges'][0]['polyline'][0] == [0.1, 0]
+    assert saved['survey']['reviewed'] is False
+    assert saved['survey']['review_note'] == ''
+    assert store.active_view() == active
+
+
+@pytest.mark.parametrize('phase', ['sample', 'confirm'])
+def test_new_active_version_cannot_extend_or_confirm_old_recording(phase):
+    from test_teach import _service, _drive, MAP
+    service, poses, store, _clock = _service()
+    async def run():
+        await service.start('rosy_60', 'bob')
+        await _drive(service, poses, [(0.2, 0)])
+        result = await service.stop('bob') if phase == 'confirm' else None
+        draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
+        store.activate(expected_revision=draft['revision'], principal_id='bob', route_active=False)
+        if phase == 'sample':
+            await _drive(service, poses, [(0.4, 0)])
+            assert service.view()['recording'] is None
+            assert service.view()['pending'][0]['reason'] == 'map_changed'
+        else:
+            with pytest.raises(TeachError) as error:
+                confirm(service, result, draft['revision'])
+            assert error.value.code == 'TEACH_MAP_CHANGED'
+            assert service.view()['pending']
+    asyncio.run(run())
