@@ -419,6 +419,22 @@ def page_site(tmp_path, request):
         listener.close()
 
 
+def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    page.goto(page.url + '?robot=not-in-roster#teach-heading')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'bob · operator')
+    expect(page.locator('#teach-robot')).to_have_value('')
+    expect(page.locator('#notice')).to_contain_text('not-in-roster')
+    expect(page.locator('#teach-start')).to_be_disabled()
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+
+
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     from playwright.sync_api import expect
