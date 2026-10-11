@@ -11,8 +11,9 @@ function getRecent() {
   try { list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
   catch { return []; }
   if (!Array.isArray(list)) return [];
+  const hadToken = list.some(entry => entry && typeof entry === "object" && "token" in entry);
   list = list.filter(entry => entry && typeof entry.host === "string" && typeof entry.label === "string");
-  if (list.some((entry) => "token" in entry)) {
+  if (hadToken) {
     // 이전 판이 남긴 평문 토큰을 걷어낸다.
     list = list.map(({host, label}) => ({host, label}));
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* 저장 불가 */ }
