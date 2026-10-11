@@ -29,15 +29,39 @@ class ChannelReplyOutbox:
         return hashlib.sha256(json.dumps(value).encode()).hexdigest()
 
     def received(self, conn, receipt):
+        self.enqueue(conn, receipt, 'RECEIVED',
+                     f"ROSY 요청 접수 · {receipt['request_id']}\nFleet Console에서 확인합니다. 실행 승인 전입니다.")
+
+    def enqueue(self, conn, receipt, kind, content):
         request_id = receipt['request_id']
-        nonce = hashlib.sha256(f'{request_id}:RECEIVED'.encode()).hexdigest()[:24]
+        nonce = hashlib.sha256(f'{request_id}:{kind}'.encode()).hexdigest()[:24]
         now = self.clock()
         # Same connection makes receipt and its reply intent one durable commit.
         conn.execute('''INSERT OR IGNORE INTO fleet_channel_reply_outbox
             (request_id, kind, nonce, principal_id, message_id, route_hash, content,
-             next_attempt_at, expires_at) VALUES (?, 'RECEIVED', ?, ?, ?, ?, ?, ?, ?)''',
-                     (request_id, nonce, receipt['principal_id'], receipt['message_id'], self.route_hash(),
-                      f'ROSY 요청 접수 · {request_id}\nFleet Console에서 확인합니다. 실행 승인 전입니다.', now, now + 600))
+             next_attempt_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (request_id, kind, nonce, receipt['principal_id'], receipt['message_id'], self.route_hash(),
+                      content, now, now + 600))
+
+    def observe_results(self):
+        with closing(self.journal._connect()) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {'fleet_channel_workflow', 'fleet_tasks'} <= tables:
+                return
+            rows = conn.execute('''SELECT r.receipt, t.status, w.work_id
+                FROM fleet_channel_workflow w JOIN fleet_channel_requests r
+                  ON json_extract(r.receipt, '$.request_id')=w.request_id
+                JOIN fleet_tasks t ON t.task_id=w.work_id
+                WHERE w.state='LINKED' AND t.status IN ('COMPLETED','FAILED','HOLD','CANCELED','EXPIRED','UNKNOWN')
+                  AND NOT EXISTS (SELECT 1 FROM fleet_channel_reply_outbox o
+                    WHERE o.request_id=w.request_id AND o.kind='TASK:' || t.status)
+                ORDER BY t.updated_at LIMIT 50''').fetchall()
+            for receipt, status, task_id in rows:
+                receipt = json.loads(receipt)
+                self.enqueue(conn, receipt, 'TASK:' + status,
+                             f"ROSY 작업 원장 · {receipt['request_id']}\nTask {task_id} · {status}"
+                             + ('\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else ''))
 
     def claim(self, *, now):
         with closing(self.journal._connect()) as conn, conn:
@@ -95,6 +119,7 @@ class ChannelReplyWorker:
         self.outbox, self.sender, self.clock = outbox, sender, clock
 
     async def run_once(self):
+        await asyncio.to_thread(self.outbox.observe_results)
         row = await asyncio.to_thread(self.outbox.claim, now=self.clock())
         if row is None:
             return
