@@ -53,7 +53,7 @@
 
 ## Task 3: 역할별 화면 정리
 
-**Files:** `operations/fleet/fleet/server/web/`, `middleware/ui/robot/`, `middleware/ui/pilot/`, `learning/training/perception/dataset/review_app_web/`, `operations/apps/games/games/web/`, 레지스트리에 있는 고정·native 표면.
+**Files:** `operations/ui/console/`, `middleware/ui/robot/`, `middleware/ui/pilot/`, `learning/curation/perception/review_app_web/`, `operations/apps/games/games/web/`, 레지스트리에 있는 고정·native 표면.
 
 1. 위 역할 표의 첫 정보·현재 상태·주 동작·복귀 경로를 기존 화면에 적용한다. 같은 의미의 상태·메시지·근거 표현은 같은 공용 부품을 쓴다.
 2. 남은 하드코딩을 토큰으로 바꾸고 화면 CSS는 배치만 소유하게 한다. canvas는 기존 토큰 읽기를 사용하며 native 복제의 생성·검증 경로를 명확히 한다.
