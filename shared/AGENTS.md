@@ -32,7 +32,7 @@ One web package. Its `AGENTS.md` has the file-level rules.
 
 ### Internal
 
-- Served by `middleware/core/api_web` and `operations/fleet`.
+- Served by `middleware/core/api` and `operations/fleet`.
 
 ### External
 

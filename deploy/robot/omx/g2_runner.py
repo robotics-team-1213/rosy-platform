@@ -124,8 +124,8 @@ def preflight(run, *, sdk):
         "rosy.processes.palletizing.compiler": "operations/processes/palletizing/src",
         "rosy.execution.site.item_pose": "operations/execution/src",
         "rosy.integrations.robots.omx.transfer_provider": "integrations/robots/omx/src",
-        "omx_adapter.pose_plan": "middleware/apps/device/omx/adapter",
-        "rosy_agent.omx_cell_owner": "middleware/apps/device/omx/agent/src",
+        "omx_adapter.pose_plan": "middleware/devices/omx/adapter",
+        "rosy_agent.omx_cell_owner": "middleware/devices/omx/agent/src",
     })
     for name, document in (("original-recipe", original), ("recipe", recipe), ("cell", cell)):
         write_json(run / (name+".json"), document)

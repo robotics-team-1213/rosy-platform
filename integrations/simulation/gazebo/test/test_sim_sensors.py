@@ -9,7 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[2]
-DESCRIPTION = REPO / "middleware" / "apps" / "device" / "pinky" / "description" / "urdf"
+DESCRIPTION = REPO / "middleware" / "devices" / "pinky" / "description" / "urdf"
 
 
 def _ir():

@@ -8,10 +8,10 @@ contracts/foundation/core_common/protocol/schemas.py
 middleware/ui/face/emotion/info_screen.py
 middleware/ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
-middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_api.py
-middleware/core/api_web/core_api_web/api/app.py
-middleware/core/navigation/launch/hardware.launch.py
-middleware/core/navigation/params/nav2_params.yaml
+middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
+middleware/core/api/core_api_web/api/app.py
+middleware/control/drive/planning/nav2/launch/hardware.launch.py
+middleware/control/drive/planning/nav2/params/nav2_params.yaml
 middleware/perception/config/line_follow.yaml
 middleware/perception/config/robot.yaml
 middleware/perception/control/calibration_relocation.py
@@ -84,7 +84,7 @@ contracts/foundation/core_common/protocol/controls.py
 # (a) PINKY_PRO_GEOMETRY URDF nominal + DECEL_MPS2 comment (D-424); safety-tagged, no edit without safety review; geometry should be loaded from the product profile/geometry.yaml (D-397).
 contracts/foundation/core_common/robot_body.py
 # (a) imports pinky_controls (D-411) for the capabilities announce; drops out when the controls profile moves to the product profile (see controls.py).
-middleware/core/api_web/core_api_web/api/v1/system.py
+middleware/core/api/core_api_web/api/v1/system.py
 # (a) comment-only: Pinky LiDAR example numbers in a docstring (D-424); safety-tagged, left unedited pending safety review.
 middleware/perception/control/control/lidar_guard.py
 # (a) comment-only: Pinky LiDAR floor note (D-424); safety-tagged, left unedited pending safety review.

@@ -74,15 +74,15 @@ modules:
     functional_kind: host-contract
     functional: [integrations/simulation/gazebo/test/test_gz_package_contract.py, integrations/simulation/gazebo/test/test_world_to_map.py, integrations/simulation/gazebo/test/test_world_profiles.py]
   - name: navigation
-    path: middleware/core/navigation
+    path: middleware/control/drive/planning/nav2
     tests: [test/test_nav2_hardware_slice.py, test/test_footprint_profiles.py, test/test_nav2_profile_limits.py, test/test_nav2_bandwidth_contracts.py, test/test_flask_launch_removed.py]
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
   - name: bringup
-    path: middleware/apps/device/pinky/bringup
-    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, middleware/apps/device/pinky/bringup/test/test_command_deadman.py, middleware/apps/device/pinky/bringup/test/test_pinky_pro_adapter.py]
+    path: middleware/devices/pinky/bringup
+    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, middleware/devices/pinky/bringup/test/test_command_deadman.py, middleware/devices/pinky/bringup/test/test_pinky_pro_adapter.py]
     functional_kind: pytest
-    functional: [middleware/apps/device/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
+    functional: [middleware/devices/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
     path: middleware/ui/face
     tests: [middleware/ui/face/test/test_info_screen.py, middleware/ui/face/test/test_info_screen_boot.py, middleware/ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
@@ -124,10 +124,10 @@ modules:
     functional_kind: pytest
     functional: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py]
   - name: core_api_web
-    path: middleware/core/api_web
-    tests: [middleware/core/api_web/test]
+    path: middleware/core/api
+    tests: [middleware/core/api/test]
     functional_kind: pytest
-    functional: [middleware/core/api_web/test]
+    functional: [middleware/core/api/test]
   - name: web_common
     path: shared/web
     tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]
@@ -144,10 +144,10 @@ modules:
     functional_kind: host-contract
     functional: [middleware/ui/pilot/test/test_stick.py]
   - name: omx_adapter
-    path: middleware/apps/device/omx/adapter
-    tests: [middleware/apps/device/omx/adapter/test]
+    path: middleware/devices/omx/adapter
+    tests: [middleware/devices/omx/adapter/test]
     functional_kind: pytest
-    functional: [middleware/apps/device/omx/adapter/test]
+    functional: [middleware/devices/omx/adapter/test]
   - name: interfaces
     path: contracts/ros_idl
     tests: [contracts/ros_idl/test/test_srv_surface.py]
@@ -155,20 +155,20 @@ modules:
     functional: [contracts/ros_idl/test/test_srv_surface.py]
     artifacts: [contracts/ros_idl/srv/SetLed.srv, contracts/ros_idl/srv/SetLamp.srv, contracts/ros_idl/srv/SetBrightness.srv, contracts/ros_idl/srv/Emotion.srv]
   - name: pinky_pro
-    path: middleware/apps/device/pinky/profile
-    tests: [middleware/apps/device/pinky/profile/test]
+    path: middleware/devices/pinky/profile
+    tests: [middleware/devices/pinky/profile/test]
     functional_kind: host-contract
-    functional: [middleware/apps/device/pinky/profile/test/test_robot_package.py]
+    functional: [middleware/devices/pinky/profile/test/test_robot_package.py]
   - name: omx
-    path: middleware/apps/device/omx/profile
-    tests: [middleware/apps/device/omx/profile/test]
+    path: middleware/devices/omx/profile
+    tests: [middleware/devices/omx/profile/test]
     functional_kind: host-contract
-    functional: [middleware/apps/device/omx/profile/test/test_omx_package.py]
+    functional: [middleware/devices/omx/profile/test/test_omx_package.py]
   - name: description
-    path: middleware/apps/device/pinky/description
-    tests: [middleware/apps/device/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
+    path: middleware/devices/pinky/description
+    tests: [middleware/devices/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
     functional_kind: host-contract
-    functional: [middleware/apps/device/pinky/description/test/test_urdf_surface.py]
+    functional: [middleware/devices/pinky/description/test/test_urdf_surface.py]
   - name: dock
     path: operations/site_devices/dock
     tests: [test/test_dock_contract.py, middleware/core/services/test/test_docking.py]

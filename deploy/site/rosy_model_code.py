@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
-CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
 #: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;

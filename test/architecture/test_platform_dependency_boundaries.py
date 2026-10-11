@@ -18,7 +18,7 @@ CURRENT_COMPONENTS = {
         "rosy.processes.palletizing",
     ),
     "fleet_site": ("operations/fleet/fleet", "fleet"),
-    "omx_device_adapter": ("middleware/apps/device/omx/adapter/omx_adapter", "omx_adapter"),
+    "omx_device_adapter": ("middleware/devices/omx/adapter/omx_adapter", "omx_adapter"),
     "world_api": ("operations/world/src/rosy/world/api", "rosy.world.api"),
     "skill_contracts": ("contracts/skill/src/rosy/contracts/skill", "rosy.contracts.skill"),
     "skill_api": ("middleware/skills/api/src/rosy/skills/api", "rosy.skills.api"),
@@ -28,7 +28,7 @@ CURRENT_COMPONENTS = {
         "rosy.integrations.robots.omx",
     ),
     "gateway_app": ("operations/apps/fleet/src/rosy_gateway", "rosy_gateway"),
-    "agent_app": ("middleware/apps/device/omx/agent/src/rosy_agent", "rosy_agent"),
+    "agent_app": ("middleware/devices/omx/agent/src/rosy_agent", "rosy_agent"),
 }
 
 
