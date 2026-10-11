@@ -510,7 +510,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
                 self._append_history(connection, row["task_id"], "EXPIRED", "scheduler",
                                      "site-scheduler", now, "TASK_EXPIRED")
             stale_claims = connection.execute(
@@ -526,7 +526,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
             selected = None
             control = connection.execute(
                 "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
@@ -756,7 +756,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
             connection.commit()
         return recovered
 
