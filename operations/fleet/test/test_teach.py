@@ -221,6 +221,7 @@ def _app(tmp_path):
 @pytest.mark.parametrize('action', ['start', 'place'])
 def test_localized_writes_refuse_activation_during_localization_read(tmp_path, monkeypatch, action):
     client, _tasks, store, poses = _app(tmp_path)
+    poses.at(1.0, 0.5)
     entered, release = threading.Event(), asyncio.Event()
 
     async def delayed_refresh(*args, **kwargs):
