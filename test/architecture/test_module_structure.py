@@ -274,7 +274,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_606,
+        54_214,
+        "split: independently re-judged by safety_structure_review at 54214 on 2026-10-12 "
+        "for a4a3ad4a0: D-680 atomic existing-Task admission, scoped durable replies and Console review. "
+        "Fleet35511 + Decision1658 + Console16800 + Discord245; app906, TaskStore1035/1060, "
+        "Console1031/1175. Preserve +150, all file ceilings/hard tiers and full-progress/observe/server/UI "
+        "extraction obligations. Mission/Cell/incident additions require a separate review. "
+        "See docs/plans/2026-10-12-discord-fleet-end-to-end.md. Previous verdict: "
         "split: independently re-judged by safety_structure_review at 53606 on 2026-10-12: "
         "D-675 adds Discord Gateway transport and optional existing-Fleet lifespan reception, without "
         "Task/Mission/Job/claim, provider or device authority. Includes every Discord source file; "
