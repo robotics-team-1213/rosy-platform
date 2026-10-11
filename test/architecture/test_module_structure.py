@@ -321,6 +321,19 @@ SIZE_VERDICTS = {
         "temporary SSH credential view joined the same robot UI owner; the planned role-resource "
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
+    "core_common": (
+        10_031,
+        "split: independently re-judged by safety_structure_review at 10031 on 2026-10-12. "
+        "Compared with main4dc522986 at9888, only Discord canonical DTO136 and schema re-export7 "
+        "lines were added. Protocol5298 + domain1203 + other3504 + foundation root26. "
+        "The strict contract family already lives in protocol/channel_requests.py; no DB, transport, "
+        "provider, ROS, process or actuation authority and no upstream imports. Keep package10000/+150, "
+        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. No new SIZE_UNITS "
+        "or scan exclusion. Before the next protocol family expansion, review an actual protocol "
+        "subpackage split with installed consumers/direction, one canonical schema facade and same-change "
+        "parent/unit measurements. Preserve prior protocol/schema extraction obligations. "
+        "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
+    ),
     "fleet": (
         54_852,
         "split: independently re-judged by safety_structure_review at 54852 on 2026-10-12 "
