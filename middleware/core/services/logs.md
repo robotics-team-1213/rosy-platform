@@ -948,3 +948,9 @@
 - 변경: 알고리즘과 최종 권한은 기존 feature에 두고 CORE 조립을 gateway/core/drive로 분리했다. stuck provider 안내 경로만 정렬했다.
 - 증거: 원격 전체 core_features 1675 성공, known_failures 0 NEW/0 known. CORE 조립은 별도 독립 Safety source 검토를 통과했다.
 - gate 변화: 없음. 새 producer·복구·곡률 정책과 장치 활성화는 추가하지 않았다.
+
+## 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)
+- 변경: Base 행동 구현 일곱 package를 Drive behaviors로 이전. 설치 core_features identity와 CORE Command/Safety 권한 유지; source/sdist/wheel, Docker, dev overlay, Safety 태그, architecture 크기·의존·영향 시험 연결 갱신.
+- 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 80 Git blob 동일, 독립 Safety 승인. 초기 원격 CORE 4498 passed와 경로 guard 실패 3건; 수정 후 설치/guard 117 passed, 0 NEW.
+- gate 변화: 배포·ARM64·DEVICE·FIELD gate 변경 없음. 최신 main 통합 시험 별도.
+- 결정: D-649

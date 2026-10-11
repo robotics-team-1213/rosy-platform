@@ -34,6 +34,7 @@ PACKAGES = (
     SRC.parent / "middleware" / "core" / "events" / "core_events",
     SRC.parent / "middleware" / "core" / "services" / "core_features",
     SRC.parent / "middleware" / "core" / "api" / "core_api_web",
+    ROOT / 'middleware/control/drive/behaviors',
 )
 
 
@@ -43,6 +44,9 @@ def _sources() -> list[Path]:
 
 def _origin(path: Path) -> str:
     """`services/core_features/docking/manager.py` 처럼 도메인 기준 경로."""
+    behavior_root = ROOT / 'middleware/control/drive/behaviors'
+    if path.is_relative_to(behavior_root):
+        return 'services/core_features/' + path.relative_to(behavior_root).as_posix()
     for package in PACKAGES:
         if path.is_relative_to(package):
             return path.relative_to(package.parent.parent).as_posix()
@@ -329,7 +333,7 @@ PINNED_RELAYS = {
 
 
 #: 이벤트 이름과 모양이 같은 파일 이름들 (`app.js`, `docks.json`, `audit.jsonl`).
-_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "md", "sh", "py", "webmanifest"}
+_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "xml", "md", "sh", "py", "webmanifest"}
 
 #: 첫 인자가 "점 찍힌 이름"인데 이벤트가 아닌 호출들. capability 경로(CAP-001)와
 #: Host Agent RPC 메서드가 그렇다 — 목록이 아니라 **자리** 로 걸러진다.

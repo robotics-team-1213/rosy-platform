@@ -54,7 +54,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
     source = tmp_path / "source/middleware/perception"
     shutil.copytree(PACKAGE, source, ignore=shutil.ignore_patterns(
         "__pycache__", "*.egg-info", "build", "dist"))
-    for relative in ("safety", "recovery", "tracking", "calibration", "planning/grid"):
+    for relative in ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
         shutil.copytree(MIDDLEWARE / "control/drive" / relative,
                         source.parent / "control/drive" / relative)
     dist = tmp_path / "dist"
@@ -72,6 +72,9 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         names = wheel.namelist()
         for module in SOURCE_MODULES.values():
             assert names.count(module.replace(".", "/") + ".py") == 1
+        for name in ('control_node', 'goal_node', 'wander_node', 'safety_node'):
+            assert names.count('control/' + name + '.py') == 1
+            assert not (PACKAGE / 'control' / (name + '.py')).exists()
         for group in ("safety", "recovery", "tracking", "calibration"):
             for path in (MIDDLEWARE / "control/drive" / group).glob("*.py"):
                 assert names.count("control/control/" + path.name) == 1

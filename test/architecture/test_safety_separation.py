@@ -36,7 +36,7 @@ SAFETY = "safety"
 
 def test_charging_confirmation_is_safety_tagged():
     """D-443 Q8: charging evidence controls D-27 discharge-stop suppression."""
-    path = "middleware/core/services/core_features/docking/charging.py"
+    path = "middleware/control/drive/behaviors/docking/charging.py"
     assert path in _manifest()["safety_modules"]
     assert _concern_of(path) == SAFETY
 
