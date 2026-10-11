@@ -164,6 +164,6 @@ navigation은 capability/state 대기 뒤 queue를 만들기 전부터 route/obs
 
 ## 9. 관측·운영 기록과 AI 학습 원본
 
-Fleet SharedGather는 캐시를 새 관측으로 복제하지 않고 refresh된 기기 state/센서값, robot ID·online·출처·수신/원본 시간·신선도·목표/대기열을 기존 durable journal의 `fleet_observations`에 보존한다. 원본 기기 시각은 state에 남고 Fleet 관측 시각은 receive-clock의 추정값이다. 원장 지연·offline·결측을 신선한 센서나 정상 결과로 승격하지 않는다. `/api/fleet/observations`는 기존 read_guard와 robot/cursor pagination으로 조회하고 저장 장애를 표시한다. 기록 보존은 rolling 30일/100000행/64KiB다. 정확한 고속 센서·카메라·LiDAR와 최종 cmd_vel은 기존 기기 녹화가 원본이며 Fleet 상태 기록으로 대신 만들지 않는다.
+Fleet SharedGather는 캐시를 새 관측으로 복제하지 않고 refresh된 기기 state/센서값, robot ID·online·출처·수신/원본 시간·신선도·목표/대기열을 기존 durable journal의 `fleet_observations`에 보존한다. 원본 기기 시각은 state에 남고 Fleet 관측 시각은 receive-clock의 추정값이다. 원장 지연·offline·결측을 신선한 센서나 정상 결과로 승격하지 않는다. `/api/fleet/observations`는 기존 read_guard와 robot/cursor pagination으로 조회하고 저장 장애를 표시한다. 기록은 30일 이내이면서 전체 로봇 합계 최근 100000행만 남기며 행당 64KiB 제한이다. 빈도가 높으면 30일 전에 행 한도에 도달한다. payload 최악 크기는 약 6.55GB이며 SQLite/WAL 공간은 별도다. 정확한 고속 센서·카메라·LiDAR와 최종 cmd_vel은 기존 기기 녹화가 원본이며 Fleet 상태 기록으로 대신 만들지 않는다.
 
 `learning/curation/pinky/fleet_observations.py`는 보존된 원장을 일관된 read snapshot으로 JSONL/manifest로 내보내고 행/파일 해시를 재검증한다. 출력은 덮어쓰지 않으며 X:에 저장한다. 원본은 `observed_not_labeled`, 학습 준비 export는 `train_eligible:false/labels:null`이다. 기기 recording → 기존 [Pinky Episode](../../learning/curation/pinky/README.md)와 raw 검증 → dataset registry가 실제 센서/행동 dataset 경로다. 원장·이벤트·Task/Mission/attempt·지도/model revision과 시간 근거를 대조해 학습 입력을 준비하되 모호한 연결과 AI 판단을 정답으로 쓰지 않는다. 학습·독립 평가·모델 승격·활성화는 각각 별도 gate다.
