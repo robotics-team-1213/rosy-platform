@@ -720,7 +720,8 @@ function tooltipTarget(node) {
   return node instanceof Element ? node.closest("[data-ui-tooltip]") : null;
 }
 function tooltipOwnerVisible(owner) {
-  return owner?.isConnected && owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
+  return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") &&
+    owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
 }
 function placeTooltip() {
   if (!tooltip || tooltip.hidden) return;
@@ -779,7 +780,7 @@ document.addEventListener("keydown", event => {
 window.addEventListener("resize", placeTooltip);
 document.addEventListener("scroll", placeTooltip, true);
 new MutationObserver(placeTooltip).observe(document.documentElement, {
-  subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "class", "aria-hidden"],
+  subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden"],
 });
 
 for (const button of document.querySelectorAll("[data-action-icon]")) {
