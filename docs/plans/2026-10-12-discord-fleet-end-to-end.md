@@ -36,6 +36,8 @@
 
 ## 진행 기록
 
+- D-687/API1.213의 Mission·Cell prepare/admit backend와 기존 원장 결과 observer를 구현했다. source `aa10b5080` 관련101 PASS/NEW0, Model PC floor 충족. 실제 기존 owner/독립 승인, prepare 중 다른 탭 HOLD, 권한 철회와 상태별 회신 intent를 포함한다. 초기 새 view/self-lock 실패를 고쳤고 기존 실패 목록은 바꾸지 않았다. [증거](../validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md). Console 준비·승인 UI, 위험 사건 연결과 운영 왕복은 여전히 후속이다.
+
 - D-680 source design과 원래 메시지 회신 transport를 작성했다. 접수 회신 intent와 원문 receipt의 atomic commit, bounded retry/UNKNOWN/fence, 전송 전 권한·목적지 재검사와 기본 OFF worker를 구현했다.
 - Source `4bb95bc516` 원격 67 PASS/NEW 0. 변경 파일 style 0 errors. [증거](../validation/discord-fleet-pipeline-2026-10-12/reply-source.md).
 - 다음 작업: 실제 opt-in lifespan 전송 경로 시험, Console 확인과 기존 작업 관계·처리 결과 회신, 위험 사건 어댑터. 운영 배포와 실제 대화 왕복 수용은 미완료다.

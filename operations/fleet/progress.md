@@ -52,6 +52,7 @@ gates:
   FIELD:
     state: PARKED
 adrs:
+- D-687
 - D-679
 - D-681
 - D-652
