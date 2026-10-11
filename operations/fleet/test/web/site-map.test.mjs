@@ -1,4 +1,4 @@
-﻿import {test} from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
@@ -332,3 +332,17 @@ test('survey edits preserve legal IDs shared across categories', async () => {
   assert.equal(map.survey.reviewed, true);
 });
 
+
+
+test('normal teach previews follow their captured frame and cannot overlay another profile', async () => {
+  const {teachFrameMatches} = await import('../../../ui/console/shared/site-map-edit.js');
+  const record = {mode: 'map', map_id: 'site'};
+  assert.equal(teachFrameMatches(record, MAP), true);
+  assert.equal(teachFrameMatches(record, {...MAP, map_id: 'other'}), false);
+  assert.equal(teachFrameMatches(record, {...MAP, survey: {revision: 'new'}}), false);
+  assert.equal(teachFrameMatches({}, MAP), false);
+  const reference = {revision: 's1', origin: [1, 2]};
+  const observed = {...record, survey_reference: reference};
+  assert.equal(teachFrameMatches(observed, {...MAP, survey: {...reference, reviewed: true}}), true);
+  assert.equal(teachFrameMatches(observed, {...MAP, survey: {...reference, origin: [3, 4]}}), false);
+});
