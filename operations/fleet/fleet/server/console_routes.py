@@ -324,15 +324,18 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
-        if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
-            owner = await asyncio.to_thread(board._log.handoff.get, robot_id, body.stuck_id)
-            if owner is not None and owner['principal_id'] != principal.principal_id:
-                raise HTTPException(409, detail={'code': 'INCIDENT_ALREADY_CLAIMED',
-                                                'message': 'another named operator owns this incident'})
         on_trip = console.trip_busy(robot_id)
         if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
             raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
         try:
+            if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
+                # Claim and motion admission have one order; stops never wait on this lock.
+                async with gather._lock:
+                    owner = await asyncio.to_thread(board._log.handoff.get, robot_id, body.stuck_id)
+                    if owner is not None and owner['principal_id'] != principal.principal_id:
+                        raise HTTPException(409, detail={'code': 'INCIDENT_ALREADY_CLAIMED',
+                                                        'message': 'another named operator owns this incident'})
+                    return await _forward_stuck_decision(robot_id, body, request, principal, client)
             return await _forward_stuck_decision(robot_id, body, request, principal, client)
         finally:
             runner = getattr(app.state, "trip_runner", None)
