@@ -9,6 +9,7 @@
     <string name="state_stopped">정지됨</string>
     <string name="state_connecting">연결 중…</string>
     <string name="state_streaming">송출 중</string>
+    <string name="state_standby">대기 — 영상을 요청하면 다시 보냅니다</string>
     <string name="state_disconnected">연결 끊김 — 다시 연결 중</string>
     <string name="state_preview_only">카메라 미리보기 중</string>
 

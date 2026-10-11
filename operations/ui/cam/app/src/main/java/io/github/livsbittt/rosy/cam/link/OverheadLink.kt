@@ -71,6 +71,8 @@ data class LinkStatus(
     val sentQuality: Int? = null,
     /** Last adapter `status` of the current connection; null until one arrives or after a drop. */
     val site: ServerMessage.Status? = null,
+    /** D-691. Null until this connection sends `demand`, and again after the link drops. */
+    val wanted: Boolean? = null,
 )
 
 /** Sensor facts reported in `hello`. Updated by the camera once it knows the real resolution. */
@@ -333,7 +335,7 @@ class OverheadLink(
             }
         }
         Log.w(TAG, "link lost: $error fatal=$fatal")
-        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null) }
+        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null, wanted = null) }
     }
 
     private fun refreshCounters() {
@@ -386,6 +388,12 @@ class OverheadLink(
                     onCamera?.invoke(msg)
                 }
                 is ServerMessage.BadCamera -> Log.w(TAG, "ignored bad camera message (${msg.reason}): $text")
+                is ServerMessage.Demand -> {
+                    backoff.reset()
+                    Log.i(TAG, "demand wanted=${msg.wanted}")
+                    _status.update { it.copy(wanted = msg.wanted) }
+                }
+                is ServerMessage.BadDemand -> Log.w(TAG, "ignored bad demand message (${msg.reason}): $text")
                 is ServerMessage.Unknown -> Log.d(TAG, "ignored message type ${msg.type}")
             }
         }
