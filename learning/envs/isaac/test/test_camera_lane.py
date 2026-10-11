@@ -359,7 +359,7 @@ def test_path_policy_keeps_its_existing_training_and_four_heading_protocol():
 
 def comparison_episodes():
     shared = dict(seed=202, initial_heading_offset_rad=0., initial_target_pose=[0., 0., .1],
-                  initial_pose=[0., 0., .1, 0., 0.], time_limit_s=400., policy_sha256='a' * 64)
+                  initial_pose=[0., 0., .1, 0., 0.], time_limit_s=400., policy_state_sha256='a' * 64)
     return (dict(shared, phase='baseline', epoch=8, complete=False, sim_s=200.),
             dict(shared, phase='eval', epoch=9, complete=True, sim_s=190.))
 
@@ -374,7 +374,7 @@ def test_camera_comparison_preserves_a_failed_baseline_and_successful_fixed_poli
 
 
 @pytest.mark.parametrize('change', [
-    {'seed': 303}, {'phase': 'train'}, {'time_limit_s': 200.}, {'policy_sha256': 'b' * 64},
+    {'seed': 303}, {'phase': 'train'}, {'time_limit_s': 200.}, {'policy_state_sha256': 'b' * 64},
     {'initial_target_pose': [0., 0., .2]}, {'initial_heading_offset_rad': 1.},
     {'initial_pose': [.016, 0., .1, 0., 0.]}, {'initial_pose': [0., 0., .126, 0., 0.]},
     {'initial_pose': [float('nan'), 0., .1, 0., 0.]}, {'epoch': 10},
@@ -385,3 +385,27 @@ def test_camera_comparison_rejects_different_conditions_or_physical_start(change
     evaluated.update(change)
     with pytest.raises(ValueError, match='paired camera'):
         camera_comparison(baseline, evaluated)
+
+
+def test_camera_sample_offsets_match_despite_previous_episode_and_stop_frames():
+    from run_map_rl import camera_sample_due
+    for start in (0, 1, 23, 24, 3124, 5569):
+        offsets = [offset for offset in range(100) if camera_sample_due(start + offset, start)]
+        assert offsets == [0, 24, 48, 72, 96]
+
+
+def test_saved_policy_json_format_changes_file_hash_but_not_comparison_state_hash():
+    import hashlib
+    import json
+    from camera_lane import CameraQPolicy
+    from run_map_rl import policy_state_sha256, camera_comparison
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.update((3, 1), 1, 1., (3, 1), terminated=True)
+    raws = [json.dumps(policy.export(), sort_keys=True).encode(),
+            (json.dumps(policy.export(), indent=2) + '\n').encode()]
+    assert hashlib.sha256(raws[0]).digest() != hashlib.sha256(raws[1]).digest()
+    restored = [CameraQPolicy.restore(json.loads(raw), perception=perception_id()) for raw in raws]
+    baseline, evaluated = comparison_episodes()
+    baseline['policy_state_sha256'] = policy_state_sha256(restored[0].export())
+    evaluated['policy_state_sha256'] = policy_state_sha256(restored[1].export())
+    assert camera_comparison(baseline, evaluated)['eval_complete'] is True
