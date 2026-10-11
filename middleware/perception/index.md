@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 92b5cff5e · fix(control): preserve the ROS-free paint map boundary after holder moves
 - 2026-10-11 · fbf513a4d · refactor(perception): 센서·vision과 Drive의 의미 holder 분리 (D-630)
 - 2026-10-10 · bb6347eba · feat(sim): map_v2_fleet 곡률 학습 파생 맵
 - 2026-10-10 · 8dd17ab69 · uiux(preview): 카메라 미리보기가 조향에 쓴 drivable 길을 그린다
 - 2026-10-10 · 928b3dc23 · test(control): 떼어 낸 카메라 콜백이 D-611 래치를 갖는다
-- 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
