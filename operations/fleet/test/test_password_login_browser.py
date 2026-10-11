@@ -57,23 +57,46 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 page.locator("#password-login [data-login=password]").fill("pw-1234")
                 page.locator("#password-login [data-login=password]").press("Enter")
                 expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
-                expect(page.locator("#password-login [data-login=principal]")).to_have_text("alice")
+                expect(page.locator(".fleet-link-status [data-login=principal]")).to_have_text("alice")
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')") is None
 
                 page.reload()
                 expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                 # D-540 2: every document reads the same login in the same header (#user-role, Korean role).
-                for path in ("/console/install", "/console/site-map", "/console/cell"):
+                for path in ("/console", "/console/install", "/console/site-map", "/console/cell"):
                     tab = context.new_page()
                     tab.goto(origin + path)
                     expect(tab.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                     expect(tab.locator("#user-role")).to_contain_text("운영자")
                     expect(tab.locator("#estop")).to_be_enabled()
+                    for width in (480, 640, 768, 1366, 1440, 1920):
+                        tab.set_viewport_size({"width": width, "height": 900})
+                        toggle = tab.locator("#topbar-more")
+                        if toggle.is_visible() and toggle.get_attribute("aria-expanded") == "true":
+                            toggle.click()
+                        principal = tab.locator(".fleet-link-status [data-login=principal]")
+                        expect(principal).to_be_visible()
+                        expect(tab.locator(".fleet-link-status [data-login=logout]")).to_be_visible()
+                        account = principal.bounding_box()
+                        brand = tab.locator("ui-brand").bounding_box()
+                        if width >= 768:
+                            assert account["x"] >= brand["x"] + brand["width"]
+                            assert max(account["y"], brand["y"]) < min(
+                                account["y"] + account["height"], brand["y"] + brand["height"])
+                        if width >= 1024:
+                            assert account["x"] > width / 2
+                        assert tab.evaluate("""() => {
+                            const bar = document.querySelector('ui-topbar'), who = bar.querySelector('[data-login=who]');
+                            const height = bar.getBoundingClientRect().height;
+                            who.hidden = true;
+                            const withoutAccount = bar.getBoundingClientRect().height;
+                            who.hidden = false;
+                            return height === withoutAccount;
+                        }""")
                     tab.close()
 
-                logout = page.locator("#password-login [data-login=logout]")
-                if not logout.is_visible():  # compact widths fold principal and 로그아웃 behind 설정
-                    page.locator("#topbar-more").click()
+                logout = page.locator(".fleet-link-status [data-login=logout]")
+                expect(logout).to_be_visible()
                 logout.click()
                 expect(page.locator("#user-role")).to_have_text("인증 필요", timeout=15000)
                 expect(form).to_be_visible()
