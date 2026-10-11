@@ -137,7 +137,7 @@ export function createSurveyPanel(host) {
   });
   $('element-save').addEventListener('click', () => act(() => {
     if (host.source() !== 'draft') return;
-    if (editing && $('element-kind').value !== editingKind) throw new Error('Keep the existing element kind');
+    if (editing && $('element-kind').value !== editingKind) throw new Error('기존 요소의 종류를 유지하세요');
     const stop = $('element-stop').value;
     const item = {id: $('element-id').value, name: $('element-name').value, kind: $('element-kind').value, geometry: points,
       from: $('element-from').value, to: $('element-to').value, width_m: number('element-width'), direction: $('element-direction').value,

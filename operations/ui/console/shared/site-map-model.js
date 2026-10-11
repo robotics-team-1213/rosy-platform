@@ -145,6 +145,7 @@ export const SITE_MAP_ERROR_LABEL = {
   TEACH_POSE_UNTRUSTED: '로봇 지도 위치가 LOCALIZED가 아닙니다 · Rosy Cam이 로봇을 보는 곳에서 다시 하세요',
   TEACH_SURVEY_REQUIRED: '조사 기준이 있는 초안을 먼저 만들어 저장하세요',
   TEACH_SURVEY_CHANGED: '기록의 조사 기준과 현재 초안이 다릅니다 · 기존 기준을 확인하세요',
+  TEACH_MAP_CHANGED: '로봇 위치와 초안의 지도 기준이 다릅니다 · 활성 지도와 기록 기준을 확인하세요',
   TEACH_ODOM_UNAVAILABLE: '신선한 로봇 주행 좌표를 읽을 수 없습니다 · 로봇 연결과 odom을 확인하세요',
   TEACH_MODE_INVALID: '기록 좌표 방식과 조사 기준을 확인하세요',
   TEACH_TOO_SHORT: '기록한 길이 0.1 m보다 짧아 버렸습니다',
@@ -439,7 +440,7 @@ export function teachStatusText(view) {
   const live = view?.recording;
   if (live) return `${live.mode === 'survey' ? '조사 ' : ''}기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
   const reason = {pose_lost: '위치 단절', odom_lost: '주행 좌표 단절', odom_reset: '주행 좌표 초기화',
-    survey_changed: '조사 초안 변경'}[newestPending(view)?.reason];
+    survey_changed: '조사 초안 변경', map_changed: '활성 지도 또는 초안 좌표계 변경'}[newestPending(view)?.reason];
   if (reason) return `기록 중단 · ${reason} · 유효한 앞부분만 확정 대기 · 로봇 정지는 별도로 확인하세요`;
   if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
   return '기록 없음';
