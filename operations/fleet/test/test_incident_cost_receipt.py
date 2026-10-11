@@ -9,7 +9,7 @@ from rosy.decision.deliberation.providers.versioned_request import prepare_reque
 from fleet.incidents.automation.ledger.receipt import model_receipt, checked_receipt
 from test_incident_model_receipt import fixture
 from test_cost_evidence import host_receipt
-from test_incident_case_worker import setup, settled
+from test_incident_case_worker import make_incident_worker, settled
 
 
 def evidence(p, bound, checked):
@@ -37,7 +37,7 @@ def test_actual_worker_cost_evidence_or_failure_reaches_atomic_store_and_readonl
     spec = importlib.util.spec_from_file_location('cost_feedback', Path(__file__).resolve().parents[3] / 'tools/incident_model_feedback.py')
     exporter = importlib.util.module_from_spec(spec); spec.loader.exec_module(exporter)
     async def run():
-        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05 if failed else 0)
+        _, seen, _, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, provider_cost=.05 if failed else 0)
         provider = worker.providers[0]
         async def wrapped(p, bound, prior, remaining, **kwargs):
             raw, cost = await provider(p, bound, prior, remaining, **kwargs)

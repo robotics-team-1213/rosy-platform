@@ -28,7 +28,7 @@ class Transport:
                    + canonical({'type': 'step_finish', 'part': {'cost': self.cost}})).encode()
 
 
-def setup(kind='claude', **changes):
+def make_cli_provider(kind='claude', **changes):
     p = problem()
     selected = profile(provider_kind=kind, model_id='provider/model', adapter='isolated-cli',
                        max_cost_usd=.1, max_output_bytes=8192, **changes)
@@ -41,7 +41,7 @@ def setup(kind='claude', **changes):
 
 @pytest.mark.parametrize('kind', ['claude', 'opencode'])
 def test_version_two_invokes_fixed_transport_and_validates_bound_json(kind):
-    p, bound, transport, provider = setup(kind)
+    p, bound, transport, provider = make_cli_provider(kind)
     result, cost = asyncio.run(provider(p, bound, (), 2, budget_usd=.05))
     assert result.payload == payload(p) and result.action_admissible is False and cost == .01
     argv, body, remaining, limit, budget = transport.calls[0]
@@ -57,7 +57,7 @@ def test_version_two_invokes_fixed_transport_and_validates_bound_json(kind):
 
 @pytest.mark.parametrize('change', ['legacy', 'unknown_cost', 'wrong_capabilities', 'profile', 'timeout', 'budget'])
 def test_not_admitted_transport_or_binding_never_called(change):
-    p, bound, transport, provider = setup()
+    p, bound, transport, provider = make_cli_provider()
     remaining, budget = 2, .05
     if change == 'legacy': transport.schema_versions = (1,)
     elif change == 'unknown_cost': transport.cost_verified = False
@@ -71,7 +71,7 @@ def test_not_admitted_transport_or_binding_never_called(change):
 
 
 def test_valid_prior_is_case_bound_and_malformed_output_cost_not_fallback():
-    p, bound, transport, provider = setup()
+    p, bound, transport, provider = make_cli_provider()
     prior_profile = replace(bound.profile, profile_id='previous-model', profile_revision='prior1')
     prior_bound = replace(bound, profile=prior_profile)
     raw = payload(p)
@@ -89,7 +89,7 @@ def test_valid_prior_is_case_bound_and_malformed_output_cost_not_fallback():
 
 
 def test_other_case_prior_refuses_without_transport_call():
-    p, bound, transport, provider = setup()
+    p, bound, transport, provider = make_cli_provider()
     other = replace(p, case_id='other')
     other_bound = replace(bound, input_hash=other.digest)
     checked = judgment(other, other_bound, payload(other))
@@ -99,7 +99,7 @@ def test_other_case_prior_refuses_without_transport_call():
 
 
 def test_versioned_deadline_cancels_a_hanging_transport_without_replay():
-    p, bound, transport, provider = setup()
+    p, bound, transport, provider = make_cli_provider()
     ended = []
 
     class Hanging(Transport):
