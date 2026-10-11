@@ -80,6 +80,11 @@ class ChannelWorkflow:
                 state=excluded.state, candidate=excluded.candidate, reason=excluded.reason''',
                          (request_id, value['revision'] + 1, state,
                           json.dumps(candidate) if candidate else None, reason.strip()))
+            if self.journal.reply_outbox is not None:
+                self.journal.reply_outbox.enqueue(
+                    conn, receipt, f"REVIEW:{value['revision'] + 1}",
+                    f"ROSY 요청 검토 · {request_id}\n{state} · 실행 요청 전입니다."
+                    " 자세한 검토 사유는 Fleet Console에서 확인하세요.")
             return self._view(conn, receipt)
 
     def link_task(self, request_id, principal, *, task_id, expected_hash, expected_revision):
@@ -104,6 +109,10 @@ class ChannelWorkflow:
                 raise HTTPException(409, detail='CHANNEL_TASK_PROVENANCE_MISMATCH')
             conn.execute("UPDATE fleet_channel_workflow SET revision=revision+1, state='LINKED', work_id=? "
                          "WHERE request_id=?", (task_id, request_id))
+            if self.journal.reply_outbox is not None:
+                self.journal.reply_outbox.enqueue(
+                    conn, receipt, 'LINKED', f"ROSY 작업 원장 연결 · {request_id}\nTask {task_id}"
+                    " · 장치 실행 완료를 의미하지 않습니다.")
             return self._view(conn, receipt)
 
 
