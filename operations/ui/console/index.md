@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 - 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
 - 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
 - 2026-10-11 · ebf05b9811 · D-655 카메라 관측 누적과 근거 보존
-- 2026-10-11 · 7476837977 · D-655 분류별 요소 편집과 기록 프레임 표시
