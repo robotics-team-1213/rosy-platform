@@ -79,6 +79,10 @@ async def check():
         if os.getuid() != account.pw_uid:
             result['reason'] = 'DEDICATED_ACCOUNT_REQUIRED'
             return result
+        for path in (BWRAP, BWRAP.parent):
+            st = path.stat()
+            if st.st_gid != account.pw_gid or st.st_mode & 0o777 != 0o750:
+                raise ValueError('BWRAP_ACCOUNT_BOUNDARY_MISMATCH')
         for path in (BWRAP, PROFILE_PATH, *BWRAP.parents):
             st = path.lstat()
             if path.resolve() != path or st.st_uid != 0 or st.st_mode & 0o022:
@@ -120,6 +124,7 @@ time.sleep(1)
         if not group or not cgroup.is_relative_to('/sys/fs/cgroup') or cgroup.name != unit:
             raise ValueError('CGROUP_READBACK_MISSING')
         checks = resource_checks(properties, cgroup)
+        checks['restricted_account'] = True
         code, raw = await task
         if code != 0:
             raise ValueError('ISOLATION_PROBE_FAILED')
