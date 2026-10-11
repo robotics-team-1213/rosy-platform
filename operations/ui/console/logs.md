@@ -3,7 +3,7 @@
 ## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
 
 - 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
-- 증거: `d3dac3633` Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 이전 원격 묶음 `b9145fa9b` 169 PASS / 8 NEW에서 재접속 Apply 복원 결함 및 변경된 계약의 fixture를 수정했다. 수정 후 브라우저와 Android proxy는 진행 중이다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
+- 증거: Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 원격 `440385e24` 95 PASS / 1 NEW의 CSP 대기 helper를 수정하고 `0d01b320c` 재접속/편집 보존/충돌 최종 5 PASS, NEW 0을 확인했다. `06ce50c4a` Android proxy 실제 번들 브라우저 1 PASS와 JVM/assemble을 확인했다. 실패한 전체 묶음은 통과로 합산하지 않는다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
 - 경계: main 착지·push·CI·서명·설치·실물 수용 미확인. 시험 서버 캡처를 배포된 화면의 증거로 부르지 않는다.
 
 ## 2026-10-11 · 0702cdb15 · uiux: 선택 로봇의 배정·진행 작업면 (D-651)
