@@ -28,7 +28,8 @@
 전송 불명·부분 실패·secret 비노출 시험은 기존 의미를 유지한다.
 
 독립 검토자 `responsibility_review`는 2026-10-11 경계와 독립 단위 등록을 확인했다.
-분리 직후 측정 목표는 부모 51933줄, incidents 360줄이다. 실제 측정과 원격 terminal
+분리 직후 독립 실측은 부모 51933줄, incidents 360줄이다. 최종 영향군493 passed/NEW0와
+`7afb0e2c4f` 로컬 FF를 확인했다. 실제 측정과 원격 terminal
 증거는 [착지 기록](../validation/responsibility-boundaries-2026-10-11/landing.md)에 남긴다.
 다음 통지/사람 인수 성장도 이 경계에서 재검토하며 판단이나 실행 권한을 가져오지 않는다.
 실제 채널/현장 수용과 제한 모델 토론은 기존 HOLD를 유지한다.

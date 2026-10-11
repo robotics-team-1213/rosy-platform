@@ -26,7 +26,21 @@ D-661 두 책임을 `fleet/incidents`로 그대로 묶고 전체 직접 호출�
 동일 physical-line 필터 실측은 Fleet 51933, incidents 360이다.
 별도 하위 단위와 부모 재측정을 함께 기록했고 예산·허용 증가량은 유지했다.
 
-최종 원격 terminal과 로컬 FF 착지는 아직 대기 중이며 완료 후 아래에 기록한다.
+## 최종 원격 검증과 로컬 FF
+
+최종 검증 HEAD `7afb0e2c4f`는 main `1e163e70f3`의 전체 project_progress와
+호출 시점 wire-schema import 개선을 통합했다. 설치 probe의 import 격리·실제 투영,
+native no-clobber와 incidents 설치 검사를 함께 보존했다. 독립 검토자도 통합을 확인했다.
+
+2026-10-11 AI PC 원격 terminal exit 0, 493 passed/0 skipped, 비교기 NEW0/known0.
+범위는 구조·전체 harness·release boundary·wheel/sdist/source/native 설치·책임 추출,
+판단 receipt·이름 있는 인수·알림·차선 정지 API/근거·resolver/loop·무조치·Mission progress다.
+`land-incidents-2/refactor-responsibility-execution/run-1-1.txt`에 증거가 있다.
+모델 PC가 자원 하한에 미달해 기존 runner가 AI PC를 선택했다. 노트북 pytest는 실행하지 않았다.
+
+`tools/land.py` terminal exit 0, lint ok, 1 round에서 로컬 main으로 37 commits FF,
+착지 SHA `7afb0e2c4f`. push하지 않았다. 이 기록의 후속 커밋은 결과 문서화이며,
+소스 검증 대상과 실제 운영/CI 수용을 변경하지 않는다.
 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-11--201913--responsibility-execution--256063/logs/`다.
 실패를 known failures에 추가하지 않았고 모든 성공 판정에는 비교기 NEW0를 요구한다.
 
