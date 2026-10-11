@@ -27,13 +27,31 @@ def final_current(connection, rid, sid, scope_json, now, *, receipt=None):
         return False
     request = receipt['request']
     scope = json.loads(scope_json)
-    return (request.get('subject_id') == rid and request.get('case_id') == sid
+    bound = (request.get('subject_id') == rid and request.get('case_id') == sid
             and request.get('owner') == scope['owner_id'] == 'core'
             and receipt['policy_revision'] == scope['policy_revision']
-            and receipt['necessity'] != 'DO_NOT_INTERVENE'
-            and bool(request['evidence']) and all(type(item['observed_at']) in (int, float)
+            and receipt['necessity'] != 'DO_NOT_INTERVENE')
+    if not bound:
+        return False
+    fresh = bool(request['evidence']) and all(type(item['observed_at']) in (int, float)
                 and math.isfinite(item['observed_at']) and 0 <= now - item['observed_at'] < 3
-                for item in request['evidence']))
+                for item in request['evidence'])
+    return True if fresh else None
+
+
+def original_revision(connection, scope, revision):
+    if connection.execute('SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND observation_revision=? LIMIT 1',
+                          (scope.subject_id, scope.case_id, revision)).fetchone():
+        return True
+    rows = connection.execute('SELECT assessment FROM fleet_judgment_records WHERE robot_id=? ORDER BY judgment_id DESC LIMIT 8',
+                              (scope.subject_id,)).fetchall()
+    for row in rows:
+        receipt = json.loads(row['assessment'])
+        request = receipt['request']
+        if (request.get('case_id') == scope.case_id and request.get('revision') == revision
+                and request.get('owner') == scope.owner_id and receipt['policy_revision'] == scope.policy_revision):
+            return True
+    return False
 
 
 def final_facts(connection, scope, summary, now):
@@ -53,10 +71,9 @@ def final_facts(connection, scope, summary, now):
     for key in ('calls', 'observations', 'spent_micros', 'reserved_micros'):
         if type(summary[key]) is not int or summary[key] < 0 or summary[key] != case[key]:
             raise ValueError('FINAL_REVIEW_COUNTER_MISMATCH')
-    current = connection.execute('SELECT assessment FROM fleet_judgment_current WHERE robot_id=?', (scope.subject_id,)).fetchone()
     if (summary['reason'] != case['reason'] or re.fullmatch('[A-Z0-9_]{1,64}', summary['reason']) is None
             or summary['profile_sha256'] != scope.profile_sha256
-            or summary['observation_revision'] != json.loads(current['assessment'])['request']['revision']):
+            or not original_revision(connection, scope, summary['observation_revision'])):
         raise ValueError('FINAL_REVIEW_SUMMARY_MISMATCH')
     facts = {**summary, 'scope_json': scope_json, 'observed_at': now, 'shadow': True,
              'necessity': 'FINAL_FAILURE', 'cost_status': 'UNKNOWN' if connection.execute(

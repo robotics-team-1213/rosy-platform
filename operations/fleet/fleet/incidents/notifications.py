@@ -201,8 +201,11 @@ class NotificationOutbox:
                     if not invalid and not 0 <= now - receipt['evaluated_at'] <= 3:
                         continue
                 elif row['kind'] == 'FINAL_REVIEW':
-                    invalid |= not final_current(connection, row['robot_id'], row['stuck_id'],
-                                                 json.loads(row['payload'])['scope_json'], now)
+                    current = final_current(connection, row['robot_id'], row['stuck_id'],
+                                            json.loads(row['payload'])['scope_json'], now)
+                    if not invalid and current is None:
+                        continue
+                    invalid |= current is False
                 if invalid:
                     connection.execute("UPDATE fleet_notification_outbox SET state='SUPERSEDED', last_code='INCIDENT_OR_ROUTE_CHANGED' WHERE event_id=?", (row['event_id'],))
                     continue
@@ -214,6 +217,11 @@ class NotificationOutbox:
                                    (now, attempt_id, row['event_id']))
                 return {**dict(row), 'state': 'SENDING', 'attempts': row['attempts'] + 1, 'attempt_id': attempt_id}
         return None
+
+    def defer(self, row, *, now):
+        with closing(self._log._connect()) as connection, connection:
+            connection.execute("UPDATE fleet_notification_outbox SET state='PENDING', attempts=attempts-1, next_attempt_at=?, last_attempt_at=NULL, last_code='AWAITING_FRESH_OBSERVATION' WHERE event_id=? AND state='SENDING' AND attempt_id=?",
+                               (now + 1, row['event_id'], row['attempt_id']))
 
     def finish(self, row, state, code, *, now, provider_id=None, retry_after=60):
         if state == 'RETRY' and (row['attempts'] >= 3 or now + retry_after >= row['expires_at']):
@@ -268,6 +276,9 @@ class NotificationWorker:
                     ledger_current = (final_current(connection, row['robot_id'], row['stuck_id'], facts['scope_json'],
                                                     self.clock(), receipt=receipt) if row['kind'] == 'FINAL_REVIEW'
                                       else parent is None or parent['state'] not in ('ACTIVE', 'HOLD'))
+                if ledger_current is None and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending:
+                    await asyncio.to_thread(self.outbox.defer, row, now=self.clock())
+                    continue
                 if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
                         or not ledger_current or row['kind'] == 'OPEN' and judgment_revision(receipt) != row['judgment_revision']
                         or (row['robot_id'], row['stuck_id']) in self.board._handoff_pending):
