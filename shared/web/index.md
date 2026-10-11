@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · uiux: D-639 공용 역할 출처
 - 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
 - 2026-10-07 · 93c606cbb · D-487 관제 표면 표시 이름 Rosy Fleet
 - 2026-10-06 · uncommitted · uiux(web-common): readout 임시 빈 상태 규칙 제거
-- 2026-10-06 · uncommitted · uiux(web-common): readout 빈 상태 전폭
