@@ -20,6 +20,7 @@ import httpx
 import yaml
 
 from fleet.incidents.handoff import judgment_revision
+from fleet.incidents.final_review import final_current, final_facts, managed_case
 
 
 class _RedactProviderURL(logging.Filter):
@@ -102,6 +103,7 @@ class NotificationOutbox:
     def __init__(self, log):
         self._log = log
         self.config: NotificationConfig | None = None
+        self._prepare_receipt = None
         with closing(log._connect()) as connection, connection:
             connection.execute('''CREATE TABLE IF NOT EXISTS fleet_notification_outbox (
                 event_id INTEGER PRIMARY KEY, robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
@@ -113,14 +115,33 @@ class NotificationOutbox:
                 UNIQUE(robot_id, stuck_id, judgment_revision, kind, channel, route_hash))''')
             connection.execute('CREATE INDEX IF NOT EXISTS fleet_notification_due ON fleet_notification_outbox(state, next_attempt_at)')
 
+    def set_automation(self, prepare_receipt):
+        if not callable(prepare_receipt):
+            raise ValueError('EXPLICIT_AUTOMATION_PREPARER_REQUIRED')
+        self._prepare_receipt = prepare_receipt
+
+    def enqueue_final(self, scope, summary, *, now):
+        with closing(self._log._connect()) as connection, connection:
+            facts = final_facts(connection, scope, summary, now)
+            if self.config is None:
+                return False
+            revision = hashlib.sha256(facts['scope_json'].encode()).hexdigest()
+            self._insert(connection, scope.subject_id, scope.case_id, revision, 'FINAL_REVIEW', now, facts)
+            return True
+
     def enqueue(self, connection, receipt):
         now = receipt['evaluated_at']
         connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
-        if self.config is None or receipt['necessity'] == 'DO_NOT_INTERVENE':
-            return
         request = receipt['request']
         rid, sid = request.get('subject_id'), request.get('case_id')
         if not all(isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,64}', value) for value in (rid, sid)):
+            return
+        prepared = self._prepare_receipt(connection, receipt) if self._prepare_receipt else False
+        parent = managed_case(connection, rid, sid)
+        if prepared is True or parent is not None and parent['state'] in ('ACTIVE', 'HOLD'):
+            connection.execute("UPDATE fleet_notification_outbox SET state='SUPERSEDED', last_code='AUTOMATION_MANAGED' WHERE robot_id=? AND stuck_id=? AND kind='OPEN' AND state IN ('PENDING','RETRY')", (rid, sid))
+            return
+        if self.config is None or receipt['necessity'] == 'DO_NOT_INTERVENE':
             return
         now = receipt['evaluated_at']
         self._insert(connection, rid, sid, judgment_revision(receipt), 'OPEN', now,
@@ -168,6 +189,8 @@ class NotificationOutbox:
             for row in rows:
                 invalid = routes.get(row['channel']) != row['route_hash']
                 if row['kind'] == 'OPEN':
+                    parent = managed_case(connection, row['robot_id'], row['stuck_id'])
+                    invalid |= parent is not None and parent['state'] in ('ACTIVE', 'HOLD')
                     episode = connection.execute('SELECT closed_at FROM fleet_line_stuck_episodes WHERE robot_id=? AND stuck_id=?', (row['robot_id'], row['stuck_id'])).fetchone()
                     current = connection.execute('SELECT assessment FROM fleet_judgment_current WHERE robot_id=?', (row['robot_id'],)).fetchone()
                     receipt = json.loads(current['assessment']) if current else None
@@ -177,6 +200,12 @@ class NotificationOutbox:
                                 or judgment_revision(receipt) != row['judgment_revision'] or owner is not None)
                     if not invalid and not 0 <= now - receipt['evaluated_at'] <= 3:
                         continue
+                elif row['kind'] == 'FINAL_REVIEW':
+                    current = final_current(connection, row['robot_id'], row['stuck_id'],
+                                            json.loads(row['payload'])['scope_json'], now)
+                    if not invalid and current is None:
+                        continue
+                    invalid |= current is False
                 if invalid:
                     connection.execute("UPDATE fleet_notification_outbox SET state='SUPERSEDED', last_code='INCIDENT_OR_ROUTE_CHANGED' WHERE event_id=?", (row['event_id'],))
                     continue
@@ -188,6 +217,11 @@ class NotificationOutbox:
                                    (now, attempt_id, row['event_id']))
                 return {**dict(row), 'state': 'SENDING', 'attempts': row['attempts'] + 1, 'attempt_id': attempt_id}
         return None
+
+    def defer(self, row, *, now):
+        with closing(self._log._connect()) as connection, connection:
+            connection.execute("UPDATE fleet_notification_outbox SET state='PENDING', attempts=attempts-1, next_attempt_at=?, last_attempt_at=NULL, last_code='AWAITING_FRESH_OBSERVATION' WHERE event_id=? AND state='SENDING' AND attempt_id=?",
+                               (now + 1, row['event_id'], row['attempt_id']))
 
     def finish(self, row, state, code, *, now, provider_id=None, retry_after=60):
         if state == 'RETRY' and (row['attempts'] >= 3 or now + retry_after >= row['expires_at']):
@@ -218,6 +252,11 @@ class NotificationWorker:
                     f"{facts.get('necessity', '관측 종료')} · {facts['reason']}\n"
                     f"담당: {facts['owner'] or '미인수'} · 관측: {facts['observed_at']} · 통지 기한: {facts['expires_at']}\n"
                     f"검토 알림 · 조치 허가/실제 해소는 별도 확인\n{facts['console_link']}")
+            if row['kind'] == 'FINAL_REVIEW':
+                text += (f"\n자동 처리: 호출 {facts['calls']} · 관측 {facts['observations']}"
+                         f" · 비용 상태 {facts['cost_status']} · 기록/예약 microUSD "
+                         f"{facts['spent_micros']}/{facts['reserved_micros']}"
+                         f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}")
             payload = {'content': text, 'allowed_mentions': {'parse': []}, 'flags': 4}
             params = {'wait': 'true'} if channel.kind == 'discord' else None
             if channel.kind == 'slack':
@@ -230,10 +269,19 @@ class NotificationWorker:
                 await asyncio.to_thread(self.outbox.finish, row, 'EXPIRED', 'DELIVERY_EXPIRED_BEFORE_HTTP', now=self.clock())
                 continue
             # Event-loop state is checked after dequeue; no await separates this check and HTTP entry.
-            if row['kind'] == 'OPEN':
+            if row['kind'] in ('OPEN', 'FINAL_REVIEW'):
                 receipt = self.board.judgment_view(row['robot_id'])
+                with closing(self.outbox._log._connect()) as connection:
+                    parent = managed_case(connection, row['robot_id'], row['stuck_id'])
+                    ledger_current = (final_current(connection, row['robot_id'], row['stuck_id'], facts['scope_json'],
+                                                    self.clock(), receipt=receipt) if row['kind'] == 'FINAL_REVIEW'
+                                      else parent is None or parent['state'] not in ('ACTIVE', 'HOLD'))
+                if (ledger_current is None and self.board.is_open(row['robot_id'], row['stuck_id'])
+                        and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending):
+                    await asyncio.to_thread(self.outbox.defer, row, now=self.clock())
+                    continue
                 if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
-                        or judgment_revision(receipt) != row['judgment_revision']
+                        or not ledger_current or row['kind'] == 'OPEN' and judgment_revision(receipt) != row['judgment_revision']
                         or (row['robot_id'], row['stuck_id']) in self.board._handoff_pending):
                     await asyncio.to_thread(self.outbox.finish, row, 'SUPERSEDED', 'INCIDENT_CHANGED_BEFORE_HTTP', now=self.clock())
                     continue
