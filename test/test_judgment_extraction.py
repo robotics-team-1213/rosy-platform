@@ -29,12 +29,13 @@ import importlib.abc
 import sys
 class RefuseIO(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'fleet', 'sqlite3', 'httpx', 'rclpy', 'core'}:
+        if fullname.split('.')[0] in {'fleet', 'sqlite3', 'httpx', 'rclpy', 'core', 'core_common'}:
             raise AssertionError('pure execution imported ' + fullname)
 sys.meta_path.insert(0, RefuseIO())
 sys.path.insert(0, sys.argv[1])
 from rosy.execution.site.goal_evidence import GoalPredicate, GoalEvidenceError
-from rosy.execution.site.workflow import mission_step_state
+from rosy.execution.site.workflow import mission_step_state, project_progress
+assert callable(project_progress)
 assert mission_step_state('ACTION_SUCCEEDED') == 'AWAITING_GOAL_EVIDENCE'
 assert GoalPredicate.from_mapping(dict(predicate_id='p', condition='object_in_destination',
     object_id='o', destination_id='d', evidence_source='camera_observation')).object_id == 'o'
