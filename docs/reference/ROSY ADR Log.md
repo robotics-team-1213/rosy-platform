@@ -666,6 +666,7 @@
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
+| D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
