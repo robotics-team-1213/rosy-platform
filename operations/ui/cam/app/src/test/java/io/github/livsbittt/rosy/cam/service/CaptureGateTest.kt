@@ -26,4 +26,16 @@ class CaptureGateTest {
         assertEquals(CaptureGate(cameraOn = true, sendFrames = false), CaptureGate.decide(true, null, true, false))
         assertEquals(CaptureGate(cameraOn = true, sendFrames = true), CaptureGate.decide(true, null, false, true))
     }
+
+    @Test
+    fun heatStopsTheSensorEvenWhenARosyIsWatching() {
+        assertEquals(
+            CaptureGate(cameraOn = false, sendFrames = false),
+            CaptureGate.decide(true, true, true, true, thermalPause = true),
+        )
+        assertEquals(
+            CaptureGate(cameraOn = false, sendFrames = false),
+            CaptureGate.decide(false, null, true, false, thermalPause = true),
+        )
+    }
 }

@@ -28,6 +28,7 @@ import io.github.livsbittt.rosy.cam.camera.LensPick
 import io.github.livsbittt.rosy.cam.camera.LensProbe
 import io.github.livsbittt.rosy.cam.camera.LensSelector
 import io.github.livsbittt.rosy.cam.camera.TuningStatus
+import io.github.livsbittt.rosy.cam.health.CaptureCoolingPolicy
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.DeviceHealthMonitor
 import io.github.livsbittt.rosy.cam.health.HealthText
@@ -90,6 +91,8 @@ data class StreamState(
     val tuning: TuningStatus = TuningStatus(),
     /** JPEG is leaving the phone. False while waiting for a Rosy to ask (D-691). */
     val transmitting: Boolean = false,
+    /** Severe heat stopped the sensor. A Rosy request does not override this (D-691). */
+    val thermalPause: Boolean = false,
     val photoSaving: Boolean = false,
     val photoName: String? = null,
     val photoFailed: Boolean = false,
@@ -261,11 +264,13 @@ class StreamService : LifecycleService() {
                     )
                 }
             }
+            val cooling = CaptureCoolingPolicy()
             val opening = CaptureGate.decide(
                 paired = plan.sendFrames,
                 wanted = null,
                 previewVisible = previewSurface.value != null,
                 legacyStream = false,
+                thermalPause = cooling.paused(monitor.health.value),
             )
             newCamera.setCapture(opening.cameraOn, opening.sendFrames)
             _state.update {
@@ -273,6 +278,7 @@ class StreamService : LifecycleService() {
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
                     previewOnly = !plan.sendFrames,
                     transmitting = opening.sendFrames,
+                    thermalPause = cooling.paused(monitor.health.value),
                     lens = pick,
                     wideAvailable = LensSelector.hasWide(backCameras),
                 )
@@ -309,6 +315,18 @@ class StreamService : LifecycleService() {
             }
 
             launch { previewSurface.collect { newCamera.setPreviewSurface(it) } }
+            if (newLink == null) {
+                launch {
+                    combine(previewSurface.map { it != null }, monitor.health) { preview, health ->
+                        val pause = cooling.paused(health)
+                        CaptureGate.decide(false, null, preview, false, pause) to pause
+                    }.distinctUntilChanged().collect { (gate, pause) ->
+                        newCamera.setCapture(gate.cameraOn, gate.sendFrames)
+                        _state.update { it.copy(transmitting = false, thermalPause = pause) }
+                        refreshNotification()
+                    }
+                }
+            }
             newLink?.let { activeLink ->
                 val legacyStream = MutableStateFlow(false)
                 var legacyJob: Job? = null
@@ -332,15 +350,18 @@ class StreamService : LifecycleService() {
                         activeLink.status.map { it.state },
                         previewSurface.map { it != null },
                         legacyStream,
-                    ) { wanted, linkState, preview, legacy ->
-                        if (linkState != LinkState.STREAMING && wanted == null) {
-                            CaptureGate(cameraOn = preview, sendFrames = false)
+                        monitor.health,
+                    ) { wanted, linkState, preview, legacy, health ->
+                        val pause = cooling.paused(health)
+                        val gate = if (linkState != LinkState.STREAMING && wanted == null) {
+                            CaptureGate.decide(true, null, preview, false, pause)
                         } else {
-                            CaptureGate.decide(paired = true, wanted, preview, legacy)
+                            CaptureGate.decide(true, wanted, preview, legacy, pause)
                         }
-                    }.distinctUntilChanged().collect { gate ->
+                        gate to pause
+                    }.distinctUntilChanged().collect { (gate, pause) ->
                         newCamera.setCapture(gate.cameraOn, gate.sendFrames)
-                        _state.update { it.copy(transmitting = gate.sendFrames) }
+                        _state.update { it.copy(transmitting = gate.sendFrames, thermalPause = pause) }
                         refreshNotification()
                     }
                 }
@@ -386,7 +407,7 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, transmitting = false, health = null, lens = null, lensSwitchFailed = false,
+            current.copy(running = false, previewOnly = false, transmitting = false, thermalPause = false, health = null, lens = null, lensSwitchFailed = false,
                 photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(), tuning = TuningStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
@@ -432,6 +453,7 @@ class StreamService : LifecycleService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val text = when {
+            _state.value.thermalPause -> R.string.state_thermal_pause
             previewOnly -> R.string.state_preview_only
             linkState == LinkState.STREAMING && !_state.value.transmitting -> R.string.state_standby
             linkState == LinkState.STREAMING -> R.string.state_streaming
