@@ -551,6 +551,24 @@ def test_type_sizes_come_from_the_scale():
     assert not offenders, f"--text-* 밖의 글자 크기: {offenders}"
 
 
+def test_wordmark_fit_is_owned_only_by_the_shared_brand():
+    owner = TOKENS.parent / "components.css"
+    for path, css in registered_style_sources():
+        css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+        for selector, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+            if "var(--brand-wordmark-size)" in body:
+                assert path.resolve() == owner.resolve() and selector.strip() == "ui-brand b", \
+                    f"wordmark fit belongs to ui-brand, not {path}: {selector.strip()}"
+
+
+def test_wordmark_geometry_cannot_replace_operational_type(tmp_path, monkeypatch):
+    stylesheet = tmp_path / "surface.css"
+    stylesheet.write_text(".status { font-size: var(--brand-wordmark-size); }", encoding="utf-8")
+    monkeypatch.setitem(globals(), "registered_style_sources", lambda: [(stylesheet, stylesheet.read_text())])
+    with pytest.raises(AssertionError, match="wordmark fit"):
+        test_wordmark_fit_is_owned_only_by_the_shared_brand()
+
+
 def test_a_danger_fill_carries_ink_not_dark_text():
     """D-82는 위험을 어두운 빨강으로 바꿨다. 옛 옅은 빨강에 맞춰진 어두운
     잉크를 그대로 두면 대비가 2.86:1로 떨어진다 — 실제로 그랬고, 값만 보는
