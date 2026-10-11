@@ -1,0 +1,55 @@
+# 모델 주도 관제의 실패 피드백·개선 실행 계획
+
+## 목표와 현재 경계
+
+D-681의 Phase 6을 수행한다. 자동 처리의 성공·실패·결과 불명을 원래 사건에 연결하고, 모델·관측·지도·현장 연결·장치 오류를 구분하여 개선 후보를 독립 평가한다. 사람은 최종 미해결 사건과 평가 정답을 검토한다. 운영 중 학습 결과를 곧바로 활성화하지 않는다.
+
+이 문서는 실행 계획이다. 현재 worker·최종 알림 연결은 구현과 원격 검증 중이며, 이 계획의 피드백 export·후보 비교·승격은 아직 구현하거나 활성화하지 않았다. 실제 데이터 없이 합성 사례를 현장 정답으로 기록하지 않는다.
+
+## 기존 경로와 책임
+
+| 단계 | 소유자와 재사용 경로 | 입력·완료 증거 |
+|---|---|---|
+| 사건 결과 확정 | Fleet `incidents/automation` 원장과 CORE 사건 기록 | 동일 subject/case/profile/policy, 시도·예약 비용, 원래 사건 종료와 새 CORE 관측 |
+| 실패 근거 export | Fleet 기존 사건 export 경로 | 종료 또는 HOLD 원장, 결과 불명 포함, bounded 요약과 근거 hash |
+| 정답·데이터 준비 | `learning/curation/perception/incident_feedback.py` | 정확한 사건·recording 식별자, 원인 검토, 미검수·충돌은 정답으로 사용하지 않음 |
+| 독립 비교 | Model PC, `tools/decision_calibration.py` 및 Decision evaluation | 고정된 독립 평가 세트·모델 전체 profile SHA·calibration revision |
+| 후보 기록·승격·복귀 | 기존 `learning/registry` 소유자 | 후보·현재 revision, 평가 산출물 hash, 승인·복귀 receipt; 운영 권한은 별도 admission |
+
+현재 policy registry의 ACT/Pinky 평가 형식을 범용 판정 모델 형식으로 가장하지 않는다. 판정 모델 후보를 기록할 실제 계약과 기존 registry 확장 지점을 먼저 확인한다. 새 운영 writer나 별도 학습 서비스를 만들지 않는다.
+
+## Task 1: 결과·시도 근거를 고정하여 export
+
+worker의 확정된 API와 원장을 기준으로 종료/HOLD 사건, 전체 시도 수, 관측 수, 역할별 model revision, 알려진 비용과 남은 예약 비용을 export한다. 모델 원문·키·토큰·사람의 자유 입력은 내보내지 않는다. UNKNOWN은 실패 분석 대상이며 성공률 분모에서 빼지 않는다.
+
+같은 SQLite snapshot에서 사건과 시도를 읽어 서로 다른 시점의 결과가 섞이지 않게 한다. 출력은 새 파일에만 생성하고 manifest/hash를 함께 고정한다. export 자체는 새로운 모델 호출·robot 관측·알림을 만들지 않는다.
+
+RED: 다른 사건 결합, 진행 중 사건의 성공 표시, UNKNOWN 비용 0 추정, profile 교체로 과거 원장 덮어쓰기, 중복 export의 결과 변경, 입력 파일 덮어쓰기. GREEN: 동일 사건의 시도·종결·hash 재검증과 미확인 결과 보존.
+
+## Task 2: 원인·정답을 구분하여 데이터 준비
+
+기존 `incident_feedback.bind`의 사건 ID/recording 결합과 미검수·검수 후보·충돌 상태를 유지한다. 범용 판정 오류의 분류는 `judgment`, `observation`, `map`, `field_connection`, `device`, `unknown`으로 소유자에게 연결하되, 모델이 제안한 분류를 정답으로 승격하지 않는다. 실제 분류 계약은 기존 incident schema와 검수 기록을 읽은 후 확정한다.
+
+train·calibration-fit·독립 evaluation은 session/recording 식별자와 원본 hash 모두 분리한다. 훈련 데이터에 섞인 사례는 독립 평가에서 제외하고 새로운 held-out 사례를 확보한다. 정상 미개입·근거 부족·위험·다른 사건·재시작·모델 교체 사례를 평가 세트에 포함한다.
+
+RED: 미검수/의견 충돌을 정답으로 변환, 사건 ID 추정, recording/hash 중복, 모델 답을 자기 정답으로 사용, 개인 정보 노출. 기존 feedback 시험을 함께 실행한다.
+
+## Task 3: 동일 독립 사건 세트에서 후보 비교
+
+현재 Fleet 규칙, 현재 기본 모델, 기본+검토 모델, 개선 후보를 같은 고정된 evaluation manifest로 비교한다. 정확한 모델·프롬프트·adapter·schema·지원 입력·한도·calibration을 전체 profile SHA로 고정한다. 실제 비용과 지연은 실제 호출 receipt로만 채우고 합성 시험 수치를 운영 성능으로 쓰지 않는다.
+
+비교 항목은 실제 종결률·결과 불명률·재발률·정상 불필요 개입·위험 누락·다른 사건 결합·사람 인수율·지연·비용이다. 사람 인수율 감소만으로 개선을 승인하지 않는다. 금지 오류는 0건이어야 하며, 검수된 정확도·보정·지연 한계가 없으면 HOLD다. `.95` 보정 신뢰도와 `.20` 대안 확률 차이는 기존 초기 기준을 유지하고 현장 성능으로 해석하지 않는다.
+
+RED: 서로 다른 evaluation 세트 비교, 현재 후보만 분모에서 UNKNOWN 제외, 금지 오류를 평균 점수로 상쇄, 보정 artifact/profile 불일치, 비용 불명 상태에서 비용 개선 승인. GREEN: 같은 manifest의 비교와 회귀 시 거절.
+
+## Task 4: 제한된 후보 승격과 복귀
+
+독립 평가와 기존 실행 admission을 통과한 후보만 새 profile revision으로 다음 사건부터 적용한다. 진행 중 사건은 원래 profile·예산·원장·정책을 유지한다. 승격 전 현재 revision과 artifact hash를 복귀 대상으로 기록하고 후보의 수용 근거를 재검증한다.
+
+위험 회귀·예산 초과·결과 불명 증가 시 새 사건에 대한 후보 admission을 중단하고 이전 승인 profile로 복귀한다. 진행 중 UNKNOWN 시도를 다시 제출하거나 안전 정지를 해제하지 않는다. registry의 메타데이터 변경, 운영 설정 readback, 실제 새 사건의 활성 profile 확인을 각각 별도 receipt로 남긴다.
+
+RED: 평가 통과만으로 운영 활성화, 진행 중 사건 profile 교체, 과거 예산 초기화, 결과 불명 재제출, 복귀 revision 불명. 실제 현장 수용이 없으면 FIELD는 HOLD다.
+
+## 검증과 완료
+
+각 Task는 필요한 계약을 읽고 작은 RED/GREEN 시험을 먼저 만든다. 커밋 HEAD를 시험 PC에 전달하여 원격 pytest를 실행하고 `test/known_failures.py`로 비교한다. 원격 source 시험, 실제 제공자, 독립 품질, 설치·활성화 readback, 현장 수용을 각각 기록한다. Discord 서버·웹훅 설정은 담당 세션의 범위로 유지한다.
