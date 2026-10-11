@@ -20,6 +20,10 @@ class ChannelWorkflow:
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_channel_workflow (
                 request_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, state TEXT NOT NULL,
                 candidate TEXT, reason TEXT, work_id TEXT)''')
+            columns = {row[1] for row in conn.execute('PRAGMA table_info(fleet_channel_workflow)')}
+            for name, definition in [('work_kind', "TEXT NOT NULL DEFAULT 'task'"), ('preparation_digest', 'TEXT')]:
+                if name not in columns:
+                    conn.execute(f'ALTER TABLE fleet_channel_workflow ADD COLUMN {name} {definition}')
 
     def _receipt(self, conn, request_id, principal):
         self.journal.operator(principal)
@@ -38,13 +42,15 @@ class ChannelWorkflow:
         value = {'request_id': receipt['request_id'], 'content_hash': receipt['content_hash'],
                  'revision': 0, 'state': 'REQUESTED', 'candidate': None, 'reason': None, 'work_id': None}
         if row is not None:
-            value.update(dict(row))
+            value.update({key: row[key] for key in value})
             value['candidate'] = json.loads(row['candidate']) if row['candidate'] else None
-        value.update(work_kind='task' if value['work_id'] else None, work_status=None,
+        value.update(work_kind=row['work_kind'] if value['work_id'] else None, work_status=None,
                      request_key='discord-' + receipt['request_id'])
         if value['work_id']:
-            task = conn.execute('SELECT status FROM fleet_tasks WHERE task_id=?', (value['work_id'],)).fetchone()
-            value['work_status'] = task[0] if task else 'UNKNOWN'
+            table, key = {'task': ('fleet_tasks', 'task_id'), 'mission': ('fleet_missions', 'mission_id'),
+                          'cell_job': ('fleet_cell_jobs', 'mission_id')}[value['work_kind']]
+            work = conn.execute(f'SELECT status FROM {table} WHERE {key}=?', (value['work_id'],)).fetchone()
+            value['work_status'] = work[0] if work else 'UNKNOWN'
         return value
 
     def read(self, request_id, principal):
@@ -103,7 +109,8 @@ class ChannelWorkflow:
                                     ('operator', principal, value['request_key'])).fetchone()
             if value['state'] == 'LINKED' or existing:
                 raise HTTPException(409, detail='CHANNEL_WORK_ALREADY_SUBMITTED')
-            conn.execute('''INSERT INTO fleet_channel_workflow VALUES (?, ?, ?, ?, ?, NULL)
+            conn.execute('''INSERT INTO fleet_channel_workflow
+                (request_id, revision, state, candidate, reason, work_id) VALUES (?, ?, ?, ?, ?, NULL)
                 ON CONFLICT(request_id) DO UPDATE SET revision=excluded.revision,
                 state=excluded.state, candidate=excluded.candidate, reason=excluded.reason''',
                          (request_id, value['revision'] + 1, state,
