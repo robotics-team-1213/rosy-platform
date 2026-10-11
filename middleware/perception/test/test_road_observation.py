@@ -12,14 +12,22 @@ from control.sensing.perception.learned.runner import LaneSegModel
 from test_learned_runner import FakeSession, _model_dir
 
 
+class RoadSession(FakeSession):
+    def run(self, x):
+        out = super().run(x)
+        out[0, 2] = 10
+        return out
+
+
 def _model(tmp_path, semantic="road_surface/1"):
     folder = _model_dir(tmp_path)
     path = folder / "model_manifest.json"
     doc = json.loads(path.read_text())
     doc["input"].update(shape=[1, 3, 2, 4], crop={"from_frame": [4, 4], "rows": [2, 4]})
-    doc["output"]["classes"][1].update(name="drivable", role="drivable", semantic=semantic)
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": semantic})
     path.write_text(json.dumps(doc), encoding="utf-8")
-    return LaneSegModel.open(folder, session_factory=lambda *_: FakeSession(lane_col=5))
+    return LaneSegModel.open(folder, session_factory=lambda *_: RoadSession(n_classes=3, lane_col=5))
 
 
 def _snapshots():
@@ -42,7 +50,7 @@ def test_raw_road_inference_keeps_crop_unknown(tmp_path):
     model = _model(tmp_path)
     labels, latency = model.infer_road_surface(np.zeros((8, 8, 3), np.uint8))
     assert labels.shape == (4, 4) and labels.dtype == np.uint8
-    assert (labels[:2] == 255).all() and (labels[2:] == 1).all()
+    assert (labels[:2] == 255).all() and (labels[2:] == 2).all()
     assert latency >= 0
     with pytest.raises(ManifestError, match="drivable semantic"):
         model.infer(np.zeros((8, 8, 3), np.uint8))
@@ -59,7 +67,7 @@ def test_raw_road_inference_refuses_other_meanings_before_session(tmp_path, sema
 @pytest.mark.parametrize("fault", ["shape", "nan"])
 def test_raw_road_inference_refuses_invalid_logits(tmp_path, fault):
     model = _model(tmp_path)
-    output = np.full((1, 2, 2, 4), np.nan if fault == "nan" else 0, np.float32)
+    output = np.full((1, 3, 2, 4), np.nan if fault == "nan" else 0, np.float32)
     model._session.run = lambda _: output[:, :, :1] if fault == "shape" else output
     with pytest.raises(ValueError, match="logits"):
         model.infer_road_surface(np.zeros((8, 8, 3), np.uint8))
