@@ -54,3 +54,12 @@ main `1eab62769c`의 D-694/D-695도 통합했다. 독립 재실측은 parent54,9
 수정 source `9875888d5c`는 실제 Chromium10건을 포함한234 passed/NEW0, installed wheel/sdist/source assembly의 Console76개와 DTO import identity, 계정·비밀번호·사건 원장 및 API1.215/구조 guard를 통과했다. 원격 도구가 pytest 자원 하한 fallback을 사용했으므로 이는 기능 증거이며 하한 충족·성능·CI·현장 증거는 아니다. 로그는 `logs/workflow-account-lifecycle-green/run-1.txt`다. 기존 Node 확인 owner5 PASS와 독립 source/Safety 승인도 유지한다. 최종 auto land·실제 signed candidate 및 Discord 왕복은 아직 남아 있다.
 
 현장에 비공개 파일을 사용자 소유의 mode0700 임시 디렉터리에 준비하고 파일mode0600 및 내용 일치를 readback했다. 운영 `/etc/rosy/fleet-discord` 설치·Gateway 활성화는 하지 않았다. 열린 Playwright에서 #fleet-ai의 기존 연결 테스트 메시지와 사용자 로그인, Fleet Console 기명 접속을 확인했으나 새 Fleet 접수·원장 회신 증거로 집계하지 않는다.
+
+
+## Final source landing; runtime remains pending
+
+Source `d5cfa0b630` landed by local FF. API v1.216 preserves D-691 Cam demand alongside the account/profile and Discord contracts; prior revision rows remain. Final related remote tests: 457 passed / NEW0, Node: 318 passed, lint: 0 errors. Logs: `logs/landing-cam-contracts-retry/feat-discord-workflow/{run-1-1,node-1}.txt` in the existing X session. Earlier `0ae17572bd` related run: 376 passed / NEW0 and Node318 passed; main moved before FF.
+
+The larger source `1a07fe6ecb` run ended with 18,505 passed / 1,102 skipped / 1 NEW (missing API v1.215 changelog row). The doc-only correction and subsequent API v1.216 integration passed the final version/header/changelog guards above. This is not a full GitHub CI, production image, provider, robot, or field acceptance result.
+
+Shared-main unrelated deletions and untracked files were preserved. No push, production configuration install, Gateway activation, new Discord message, or robot command was performed. The administrator-only private configuration is staged, not installed. Remaining gates: explicit repository push authorization, exact-SHA CI and signed candidate, administrator configuration apply, fresh human request and original-message reply, and restart durable readback.
