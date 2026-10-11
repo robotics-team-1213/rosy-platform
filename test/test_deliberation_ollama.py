@@ -110,6 +110,8 @@ def test_transport_uses_bounded_subprocess_not_thread(monkeypatch):
         seen.append((argv, raw, remaining, limit))
         return 0, b'{}'
     monkeypatch.setattr(ollama, 'bounded_process', bounded)
+    monkeypatch.setattr(ollama.sys, 'executable', '/opt/unit-venv/bin/python')
     assert asyncio.run(ollama.OllamaTransport()(b'{}', 1, 123)) == (0, b'{}')
     argv, raw, remaining, limit = seen[0]
-    assert argv[1] == '-c' and argv[-1] == '1' and raw == b'{}' and limit == 123
+    assert argv[0] == '/opt/unit-venv/bin/python' and argv[1] == '-c'
+    assert argv[-1] == '1' and raw == b'{}' and limit == 123
