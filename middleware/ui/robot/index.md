@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
 - 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
 - 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 - 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
-- 2026-10-10 · uncommitted · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
