@@ -105,7 +105,7 @@ function paintInboxMessages() {
     }
     const facts = stuck.ai_facts || [];
     const values = [inquiry ? `${CAUSE_LABEL[inquiry.observations?.cause] || "원인 미확인"} · 문의 수신` : "기록 없음",
-      proposal ? `AI 제안 ${DECISION_LABEL[proposal.decision] || proposal.decision}` : facts.length ? facts.map(fact => `${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`).join(" · ") : "기록 없음",
+      proposal ? `AI 제안 ${DECISION_LABEL[proposal.decision] || proposal.decision} · ${proposal.reason || "판단 근거 기록 없음"}` : facts.length ? facts.map(fact => `${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`).join(" · ") : "기록 없음",
       answer ? `전송 ${DECISION_LABEL[answer.decision] || answer.decision}` : proposal ? proposal.verdict === "forwarded" ? "CORE로 전달" : aiProposalText(proposal) : "기록 없음",
       fleetAnswerText(answer) || (proposal ? `${aiProposalText(proposal)} · 실행 완료는 별도 확인` : "처리 응답 기록 없음 · 실행 완료 미확인")];
     item.querySelectorAll("dd").forEach((node, index) => { node.textContent = values[index]; });
@@ -114,7 +114,7 @@ function paintInboxMessages() {
       core_inquiry: inquiry ? {version: inquiry.version, problem_id: inquiry.problem_id, task: inquiry.task,
         cause: inquiry.observations?.cause, lane_visible: inquiry.observations?.lane_visible,
         front_clear: inquiry.observations?.front_clear, boundary_revision: inquiry.lane_boundary?.revision} : null,
-      ai_proposal: proposal ? {decision: proposal.decision, class: proposal.class, verdict: proposal.verdict, outcome: proposal.outcome} : null,
+      ai_proposal: proposal ? {decision: proposal.decision, reason: proposal.reason, class: proposal.class, verdict: proposal.verdict, outcome: proposal.outcome} : null,
       ai_facts: facts.map(fact => ({kind: fact.kind, source: fact.source, stage: fact.stage, confidence: fact.confidence})),
       fleet_answer: answer ? {decision: answer.decision, tier: answer.tier, accepted: answer.accepted, code: answer.code, outcome: answer.outcome} : null,
     }, null, 2);
