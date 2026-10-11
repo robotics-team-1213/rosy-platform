@@ -844,3 +844,9 @@
 - 변경: 연결 로비의 함께 조종 설명을 기존 버튼 활성 조건과 같은 연결 가능 수·발열 상태로 갱신한다. 두 대 미만은 Wi-Fi·전원 확인/다시 찾기, 발열은 냉각 후 다시 선택, 준비된 목록은 두 대 선택/연결을 안내한다. 좁은 로비 제목에도 Pilot 역할을 남긴다.
 - 증거: `X:/DevTemp/native-ux-a1f3c9/gradle.txt`의 `:app:testDebugUnitTest :app:assembleDebug` 종료 BUILD SUCCESSFUL; 16 suites, 106 passed, 0 failed, 0 errors. `docs/validation/uiux-native-games-2026-10-12.md`에 Cam·LCD·게임 보드의 기존 역할 검토와 이번 회차 미확인 경계를 기록했다.
 - gate 변화: SOURCE/native compile/JVM 근거만. 실물 태블릿·앱 설치본·두 대 주행·정지 readback은 미확인이다.
+
+## 2026-10-12 · uiux/robot-pilot-workflow · 연결 정보와 재시도 동선
+
+- 변경: 좁은 접속 헤더에서 제품 이름과 비상 정지를 첫 줄에 두고 상태와 운용 지도는 다음 줄에 둔다. 현재 로봇 연결과 로그인 입력을 최근 접속보다 먼저 둔다. 다른 주소의 기록과 잘못된 저장 자료는 연결 선택에서 제외한다. 자기 로봇의 상태 미확인, 안전 정지, 회전·자동 이동을 대기로 바꾸지 않는다. 서비스 워커 셸 캐시를 갱신한다.
+- 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
+- 수용: SOURCE 변경만 있으며 브라우저 캡처·실제 설치 화면·DEVICE·FIELD는 확인하지 못했다. 착지·push·배포하지 않았다.
