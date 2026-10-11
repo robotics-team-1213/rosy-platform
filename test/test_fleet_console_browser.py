@@ -1526,7 +1526,7 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
                                    "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
             timeout=20000)
@@ -1589,7 +1589,7 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
                                    "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남 — 맞춤 재수락 필요')",
             timeout=20000)
@@ -1953,6 +1953,7 @@ FLEET_FIT_PROBE = """() => {
     stop: inside('#estop'),
     roster: inside('#roster'),
     rosterHeading: inside('#roster-heading'),
+    rosterPreceding: inside('#site-path'),
     vh: window.innerHeight,
   };
 }"""
@@ -1994,7 +1995,8 @@ def test_console_fits_the_declared_viewport(console_url):
     assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 48 and fit["stop"]["height"] >= 48, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
-    assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
+    assert fit["rosterPreceding"]["top"] >= fit["rosterHeading"]["bottom"], fit
+    assert fit["roster"]["top"] - fit["rosterPreceding"]["bottom"] <= 24, fit
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
 
@@ -2056,9 +2058,9 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
-        # D-493: the topbar holds the only link to each other document.
+        # D-493: document navigation owns one link to each other document; recovery CTAs may repeat a destination.
         for href in ("/console/install", "/console/site-map", "/console/cell"):
-            assert page.locator(f'a[href="{href}"]').count() == 1, href
+            assert page.get_by_role("navigation", name="Rosy Fleet 문서", exact=True).locator(f'a[href="{href}"]').count() == 1, href
         assert page.locator('.install-link, .device-link').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("tab", name="로봇 등록", exact=True).click()
@@ -2427,8 +2429,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
-        # D-540 (d): 목표 지정 · 운행… · 운행 취소 · LED로 찾기 wrap whole, never wider than the row.
-        assert len(action_widths) == 4 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        # D-540 (d): goal, trip, cancel, LED and map pin wrap whole, never wider than the row.
+        assert len(action_widths) == 5 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         assert all(w <= actions_width + 1 for w in action_widths), action_widths
         _open_cards(page)
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
@@ -2518,7 +2520,7 @@ def test_formation_buttons_keep_their_reasons_readable(console_url, width):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
-    """접속·역할·테마는 '설정' 뒤에 접히고, 펼치면 보인다. 머리는 창 높이의 20% 이하다.
+    """접속·역할·테마는 '접속' 뒤에 접히고, 펼치면 보인다. 머리는 창 높이의 20% 이하다.
 
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
     from playwright.sync_api import sync_playwright
@@ -2538,9 +2540,9 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             status: shown('#online-pill'), clock: shown('#clock')};
         }"""
         folded = page.evaluate(probe)
-        page.get_by_role("button", name="설정", exact=True).click()
+        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
         opened = page.evaluate(probe)
-        page.get_by_role("button", name="설정", exact=True).click()
+        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         scrolled = page.evaluate(probe)
         save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
@@ -2553,7 +2555,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
     assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and not folded["role"], folded
-    assert folded["status"] and folded["clock"], folded
+    assert folded["status"] and not folded["clock"], folded
     assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
     assert opened["overflow"] <= 0, opened
     assert scrolled["expanded"] == "false", scrolled
@@ -2561,7 +2563,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
 
 
 def test_wide_header_keeps_every_item_on_one_line(console_url):
-    """1920px은 모든 항목을 편 한 줄, 1366·1280px(90rem 미만)은 '설정'으로 접힌 한 줄이다.
+    """1920px은 모든 항목을 편 한 줄, 1366·1280px(90rem 미만)은 '접속'으로 접힌 한 줄이다.
     어느 쪽이든 머리는 한 줄이고 비상 정지는 오른쪽 위이며 테마 이름표는 두 줄로 접히지 않는다."""
     from playwright.sync_api import sync_playwright
 
@@ -2573,10 +2575,10 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
             page.goto(console_url, wait_until="networkidle")
             if page.locator('#topbar-more').is_visible():
                 page.locator('#topbar-more').click()
-                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
+                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
                 page.locator('#topbar-more').click()
             else:
-                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
+                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
             results[width] = page.evaluate("""() => {
               const label = document.querySelector('#theme-choice-label');
               const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
@@ -2589,7 +2591,7 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         browser.close()
 
     assert errors == []
-    assert results[1920]["labelLines"] == 0 and not results[1920]["moreShown"], results
+    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
     for width in (1366, 1280):
         assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
     for width, result in results.items():
