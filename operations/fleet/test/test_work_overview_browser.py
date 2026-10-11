@@ -50,6 +50,9 @@ def test_channel_review_keeps_candidate_separate_from_execution(site, size):
             page.locator("#channel-review-y").fill("2.5")
             page.locator("#channel-review-ready").click()
             expect(page.locator("#channel-review-state")).to_contain_text("READY")
+            page.locator("#channel-review-reason").fill("unsaved operator note")
+            page.locator("#work-refresh").click()
+            expect(page.locator("#channel-review-reason")).to_have_value("unsaved operator note")
             assert review["candidate"] == {"robot_id": "rosy_03", "x": 1.25, "y": 2.5, "yaw": 0}
             assert all(item[0] == path for item in posts)
             submit = page.locator("#channel-review-submit")
@@ -70,6 +73,9 @@ def test_channel_review_keeps_candidate_separate_from_execution(site, size):
             expect(page.locator("#channel-review-state")).to_contain_text("LINKED")
             assert [item[0] for item in posts] == [path, path, "submit"]
             expect(submit).not_to_be_visible()
+            review.update(work_status="COMPLETED")
+            page.locator("#work-refresh").click()
+            expect(page.locator("#channel-review-state")).to_contain_text("COMPLETED")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             _shot(page, f"channel-review-{size[0]}.png", full_page=True)
             page.route("**/api/fleet/channel-requests", lambda route: route.fulfill(status=403, json={"detail": "revoked"}))
