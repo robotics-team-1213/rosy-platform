@@ -22,6 +22,13 @@ def run(args, cwd):
     return result
 
 
+def test_offline_installers_use_the_current_learning_contract_wheel():
+    import tomllib
+    version = tomllib.loads((ROOT / 'contracts/learning/pyproject.toml').read_text())['project']['version']
+    for path in ('.github/workflows/ci.yml', 'middleware/execution/local/pyproject.toml'):
+        assert f'rosy-contracts-learning=={version}' in (ROOT / path).read_text()
+
+
 @pytest.mark.parametrize('delivery', ['wheel', 'sdist'])
 def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path, delivery):
     staging = tmp_path / 'source'
