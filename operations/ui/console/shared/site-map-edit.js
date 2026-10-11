@@ -91,6 +91,7 @@ export function editSurveyElement(map, item) {
   const next = appendSurveyElement(base, item);
   if (group === map.edges) {
     const edge = next.edges.find(row => row.id === item.id);
+    edge.evidence.note = old.evidence?.note || '';
     edge.drive_mode = old.drive_mode;
     edge.speed_cap_mps = old.speed_cap_mps;
     if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
@@ -103,7 +104,7 @@ export function editSurveyElement(map, item) {
       if (edge.from === item.id) edge.polyline[0] = [x, y];
       if (edge.to === item.id) edge.polyline[edge.polyline.length - 1] = [x, y];
       if (edge.from === item.id || edge.to === item.id) edge.evidence = {source: 'operator',
-        status: 'observed', reference_revision: next.survey.revision, note: ''};
+        status: 'observed', reference_revision: next.survey.revision, note: edge.evidence?.note || ''};
     }
   }
   return next;
@@ -205,7 +206,19 @@ export function mergeCameraMap(base, observation) {
     throw new Error('관측 근거가 있는 카메라 차로 초안이 필요합니다');
   const next = copy(base), ids = new Map();
   const signature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps]);
-  const fresh = observation.edges.filter(e => !next.edges.some(old => signature(old) === signature(e)));
+  let addedEvidence = false;
+  const fresh = observation.edges.filter(e => {
+    const old = next.edges.find(row => signature(row) === signature(e));
+    if (!old) return true;
+    const note = e.evidence.note || '';
+    if (note && !old.evidence?.note?.includes(note)) {
+      const combined = [old.evidence?.note, note].filter(Boolean).join('\n');
+      if (combined.length > 1000) throw new Error('관측 근거가 1000자를 넘습니다 · 초안을 분리하거나 근거를 검토하세요');
+      old.evidence = {...(old.evidence || e.evidence), status: 'observed', note: combined};
+      addedEvidence = true;
+    }
+    return false;
+  });
   const free = rows => { let n = 1; while (rows.some(r => r.id === `camera_${n}`)) n++; return `camera_${n}`; };
   for (const id of new Set(fresh.flatMap(e => [e.from, e.to]))) {
     const place = observation.places.find(p => p.id === id);
@@ -216,7 +229,7 @@ export function mergeCameraMap(base, observation) {
     ids.set(id, mapped); next.places.push({...copy(place), id: mapped});
   }
   for (const edge of fresh) next.edges.push({...copy(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
-  if (fresh.length) next.survey = {...next.survey, reviewed: false, review_note: ''};
+  if (fresh.length || addedEvidence) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }
 

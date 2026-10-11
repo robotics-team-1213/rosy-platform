@@ -388,9 +388,10 @@ class TeachService:
                     edge["polyline"] = [list(p) for p in edge["polyline"]]
                     for index in (i for i, hit in ends.items() if hit):
                         edge["polyline"][index] = [place["x"], place["y"]]
-                    if body.get("survey"):
+                    if body.get("survey") or edge.get("evidence"):
                         edge["evidence"] = {"source": "operator", "status": "observed",
-                            "reference_revision": body["survey"]["revision"], "note": ""}
+                            "reference_revision": (body["survey"]["revision"] if body.get("survey")
+                                else edge["evidence"]["reference_revision"]), "note": edge.get("evidence", {}).get("note", "")}
         draft = self._save(body, expected_revision, principal_id)
         self._store.record_event("teach_place", principal_id, {
             "marker_id": marker_id, "source_id": row["source_id"], "place_id": place_id,
