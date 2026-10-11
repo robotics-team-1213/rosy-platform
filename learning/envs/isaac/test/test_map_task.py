@@ -29,8 +29,8 @@ def test_exact_map_lineage_and_connected_complete_route():
 
 
 def test_isaac_uses_the_gazebo_warning_mesh_definition():
-    from build_world import caution_meshes
     track = load_track()
+    from build_world import caution_meshes
     assert track['caution_meshes'] == caution_meshes()
     assert len(track['caution_meshes']) == 8
 
