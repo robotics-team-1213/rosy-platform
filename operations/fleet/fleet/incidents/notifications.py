@@ -244,6 +244,11 @@ class NotificationWorker:
                     f"{facts.get('necessity', '관측 종료')} · {facts['reason']}\n"
                     f"담당: {facts['owner'] or '미인수'} · 관측: {facts['observed_at']} · 통지 기한: {facts['expires_at']}\n"
                     f"검토 알림 · 조치 허가/실제 해소는 별도 확인\n{facts['console_link']}")
+            if row['kind'] == 'FINAL_REVIEW':
+                text += (f"\n자동 처리: 호출 {facts['calls']} · 관측 {facts['observations']}"
+                         f" · 비용 상태 {facts['cost_status']} · 기록/예약 microUSD "
+                         f"{facts['spent_micros']}/{facts['reserved_micros']}"
+                         f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}")
             payload = {'content': text, 'allowed_mentions': {'parse': []}, 'flags': 4}
             params = {'wait': 'true'} if channel.kind == 'discord' else None
             if channel.kind == 'slack':

@@ -1,6 +1,6 @@
 import json
 from contextlib import closing
-from dataclasses import asdict, replace
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -87,3 +87,59 @@ def test_final_pending_rechecks_case_owner_freshness_and_parent(tmp_path, change
     sent = []
     run(log, board, channels, now[0], lambda request: sent.append(json.loads(request.content)) or httpx.Response(200, json={'id': '7'}))
     assert bool([body for body in sent if 'FINAL_REVIEW' in body['content']]) == (change == 'fresh_revision')
+
+
+def test_unknown_cost_preserves_reservation_and_reports_unknown(tmp_path):
+    now, log, board, channels = _setup(tmp_path)
+    store = IncidentCaseStore(log.path, clock=lambda: now[0])
+    scope = CaseScope('pinky', 'case-1', 'core', 'a' * 64, 'line-follow-shadow-v1')
+    store.begin_case(scope, CaseBudget(100, 130, 2, 2, 1))
+    observe(board, 100)
+    revision = board.judgment_view('pinky')['request']['revision']
+    store.reserve(scope, attempt_id='call-1', input_hash='b' * 64, observation_revision=revision,
+                  kind='model', max_cost_usd=.25, worker_id='worker-1')
+    store.mark_submitting(scope, 'call-1', worker_id='worker-1')
+    store.complete(scope, 'call-1', worker_id='worker-1', state='UNKNOWN', actual_cost_usd=None,
+                   summary={'reason': 'PROVIDER_OUTCOME_UNKNOWN'})
+    summary = dict(reason='PROVIDER_OUTCOME_UNKNOWN', calls=1, observations=0, spent_micros=0,
+                   reserved_micros=250000, profile_sha256=scope.profile_sha256, observation_revision=revision)
+    log.notifications.enqueue_final(scope, summary, now=100)
+    sent = []
+    run(log, board, channels, 100, lambda request: sent.append(json.loads(request.content)) or httpx.Response(200, json={'id': '7'}))
+    assert len(sent) == 1 and 'UNKNOWN' in sent[0]['content'] and '250000' in sent[0]['content']
+    assert store.case(scope)['reserved_micros'] == 250000
+
+
+@pytest.mark.parametrize('change', ['parent', 'human'])
+def test_final_checks_again_after_dequeue_before_http(tmp_path, change):
+    _, log, board, channels, store, scope, summary = managed(tmp_path)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    log.notifications.enqueue_final(scope, summary, now=100)
+    original = log.notifications.claim_due
+    def claim(now, config):
+        result = original(now, config)
+        if result:
+            if change == 'parent':
+                with closing(log._connect()) as connection, connection:
+                    connection.execute("UPDATE fleet_incident_v2_cases SET state='NOT_NEEDED'")
+            else:
+                log.handoff.claim('pinky', 'case-1', board.judgment_view('pinky'), 'alice', now=100)
+        return result
+    log.notifications.claim_due = claim
+    run(log, board, channels, 100, lambda _: pytest.fail('stale final review reached HTTP'))
+    assert next(row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW')['state'] == 'SUPERSEDED'
+
+
+def test_prepare_still_runs_without_channel_and_failure_rolls_back(tmp_path):
+    _, log, board, _ = _setup(tmp_path)
+    log.notifications.config = None
+    def prepare(connection, receipt):
+        connection.execute('CREATE TABLE attempted_prepare(value TEXT)')
+        raise ValueError('PREPARATION_FAILED')
+    log.notifications.set_automation(prepare)
+    board.observe([__import__('test_judgment_receipts').row(stuck_id='case-1')])
+    with pytest.raises(ValueError, match='PREPARATION_FAILED'):
+        log.record_judgment(board.judgment_view('pinky'))
+    with closing(log._connect()) as connection:
+        assert connection.execute('SELECT COUNT(*) FROM fleet_judgment_current').fetchone()[0] == 0
+        assert not connection.execute("SELECT 1 FROM sqlite_master WHERE name='attempted_prepare'").fetchone()
