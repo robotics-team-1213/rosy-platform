@@ -17,7 +17,7 @@ from control.sensing.perception.learned.paint_motion import OdomHistory
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from core_events.events.bus import EventBus
 from core_features.line_follow import LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation
-from map_task import QPolicy
+from map_task import QPolicy, SIM_DEVICE_IDS
 
 
 def camera_model_identity(model, *, revision, sha256):
@@ -59,8 +59,10 @@ class CameraQPolicy(QPolicy):
 
 
 class CameraLineManager(LineFollowManager):
-    def __init__(self, *, config, clock):
-        super().__init__(EventBus('isaac-pinky'), config=config, clock=clock)
+    def __init__(self, *, config, clock, device_id='isaac-pinky'):
+        if type(device_id) is not str or device_id not in SIM_DEVICE_IDS:
+            raise ValueError('fixed simulation device identity required')
+        super().__init__(EventBus(device_id), config=config, clock=clock)
         self._baseline_gain = config.steering_gain
 
     def tick_gain(self, now, *, gain):
@@ -73,13 +75,14 @@ class CameraLineManager(LineFollowManager):
 
 
 class LearnedCameraLane:
-    def __init__(self, model, ground, *, camera_x, clock=time.monotonic, config=None):
+    def __init__(self, model, ground, *, camera_x, clock=time.monotonic, config=None,
+                 device_id='isaac-pinky'):
         if ground is None or not math.isfinite(camera_x):
             raise ValueError('configured native ground and camera position required')
         self.ground, self.camera_x, self.clock = ground, camera_x, clock
         self.manager = CameraLineManager(config=config or LineFollowConfig(
             cruise_speed=.04, max_linear=.06, steering_gain=.4, max_angular=.8,
-            lost_auto_resume=False), clock=clock)
+            lost_auto_resume=False), clock=clock, device_id=device_id)
         self.manager.set_mode(LineFollowMode.CAMERA_LINE)
         self.worker = LearnedPaintWorker(SimpleNamespace(poll=lambda: model), clock=clock,
                                          start=False, target='drivable')
