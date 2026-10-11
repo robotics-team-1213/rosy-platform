@@ -2,6 +2,7 @@
 import {PLACE_KINDS} from './site-map-model.js';
 
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
+function category(kind) { return PLACE_KINDS.includes(kind) ? 'places' : kind === 'road' ? 'edges' : 'facilities'; }
 
 export function createSurveyDraft(mapId, reference) {
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(mapId) || !/^[A-Za-z0-9_.-]{1,64}$/.test(reference.revision || ''))
@@ -31,7 +32,7 @@ export function appendSurveyElement(map, item) {
     throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
   const next = copy(map);
   next.survey = {...next.survey, reviewed: false, review_note: ''};
-  if ([...next.places, ...next.edges, ...(next.facilities || [])].some(row => row.id === id))
+  if ((next[category(kind)] || []).some(row => row.id === id))
     throw new Error('이미 쓰는 요소 ID입니다');
   if (PLACE_KINDS.includes(kind)) {
     if (geometry.length !== 1 || (kind === 'start' && !Number.isFinite(item.yaw)))
@@ -73,14 +74,15 @@ export function reviewSurveyDraft(map, note) {
 }
 
 export function editSurveyElement(map, item) {
-  const group = [map.places, map.edges, map.facilities || []].find(rows => rows.some(row => row.id === item.id));
+  const key = category(item.kind), group = map[key];
   if (!group) throw new Error('수정할 요소가 없습니다');
   const old = group.find(row => row.id === item.id);
+  if (!old) throw new Error('Unknown element category or ID');
   if ((group === map.places && !PLACE_KINDS.includes(item.kind))
       || (group === map.edges && item.kind !== 'road')
       || (group === map.facilities && item.kind !== old.kind)) throw new Error('기존 요소의 분류를 유지하세요');
   const base = copy(map);
-  for (const key of ['places', 'edges', 'facilities']) if (base[key]) base[key] = base[key].filter(row => row.id !== item.id);
+  base[key] = base[key].filter(row => row.id !== item.id);
   const next = appendSurveyElement(base, item);
   if (group === map.edges) {
     const edge = next.edges.find(row => row.id === item.id);
@@ -102,13 +104,21 @@ export function editSurveyElement(map, item) {
   return next;
 }
 
-export function removeSurveyElement(map, id) {
-  if (map.edges.some(edge => edge.from === id || edge.to === id)
-      || (map.facilities || []).some(f => f.approaches?.some(a => a.edge_id === id))
-      || (map.turn_bans || []).some(b => b.at === id || b.from_edge === id || b.to_edge === id))
+export function removeSurveyElement(map, id, key) {
+  if (!key) {
+    const matches = ['places', 'edges', 'facilities'].filter(k => map[k]?.some(row => row.id === id));
+    if (matches.length !== 1) throw new Error('Choose an unambiguous element category');
+    [key] = matches;
+  }
+  if (!['places', 'edges', 'facilities'].includes(key) || !map[key]?.some(row => row.id === id))
+    throw new Error('Unknown element category or ID');
+  if ((key === 'places' && (map.edges.some(edge => edge.from === id || edge.to === id)
+      || (map.turn_bans || []).some(b => b.at === id)))
+      || (key === 'edges' && ((map.facilities || []).some(f => f.approaches?.some(a => a.edge_id === id))
+      || (map.turn_bans || []).some(b => b.from_edge === id || b.to_edge === id))))
     throw new Error('연결된 차로·시설·통행 규칙을 먼저 수정하거나 삭제하세요');
   const next = copy(map);
-  for (const key of ['places', 'edges', 'facilities']) if (next[key]) next[key] = next[key].filter(row => row.id !== id);
+  next[key] = next[key].filter(row => row.id !== id);
   if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }
