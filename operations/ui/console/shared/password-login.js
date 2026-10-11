@@ -44,8 +44,17 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     part('error').hidden = !message;
   };
 
-  async function refresh() {
+  async function refresh(locked = true) {
     try {
+      if (!standalone && locked) {
+        try {
+          const connection = await cookieRequest('/api/fleet/auth/connection');
+          if (connection.mode === 'paired' && !connection.password_login) {
+            const token = document.getElementById('token-access');
+            if (token) token.open = true;
+          }
+        } catch { /* Older sites retain the explicitly available advanced connection controls. */ }
+      }
       if (standalone) {
         const connection = await cookieRequest('/api/fleet/auth/connection');
         const offered = connection.mode !== 'development' && connection.password_login === true;
