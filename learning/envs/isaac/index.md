@@ -11,10 +11,13 @@
 |---|---|
 | D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
 | D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 |
+| D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 |
 
 ## 계획·결과 문서
 
 - [2026-10-04-isaac-navigation-integration-review.md](../../../docs/plans/2026-10-04-isaac-navigation-integration-review.md)
+- [2026-10-11-isaac-direction-video.md](../../../docs/plans/2026-10-11-isaac-direction-video.md)
+- [2026-10-11-isaac-map-rl.md](../../../docs/plans/2026-10-11-isaac-map-rl.md)
 
 ## 교훈 (docs/solutions)
 
@@ -26,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
+- 2026-10-11 · b6a8d0d2e8 · feat(isaac): 고정 정책 네 시작 방향 실제 화면 녹화
+- 2026-10-11 · dc25401e61 · feat(isaac): 실제 맵 한 대 CPU RL 진단
 - 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
 - 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
-- 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
-- 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
-- 2026-10-04 · uncommitted · docs(isaac): 모델 PC의 주행·관제·적재 연계 검토
