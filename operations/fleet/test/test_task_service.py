@@ -72,7 +72,7 @@ def test_bay_refusal_after_mover_send_keeps_task_unknown(tmp_path, monkeypatch, 
     assert len([call for call in robot.calls if call[0] == "navigation_goal"]) == 1
 
 
-@pytest.mark.parametrize("stage", ["route_cancel", "trust_cancel", "observe"])
+@pytest.mark.parametrize("stage", ["route_cancel", "trust_cancel", "observe", "lease_cancel"])
 def test_post_acceptance_owner_errors_keep_task_unknown(tmp_path, stage):
     from fakes import FakeRobot
     from fleet.server.console import FleetConsole
@@ -94,6 +94,18 @@ def test_post_acceptance_owner_errors_keep_task_unknown(tmp_path, stage):
         console._claims["rosy_02"] = list(robot._path)
     elif stage == "trust_cancel":
         console._untrusted_blocks = lambda *_args: True
+    elif stage == "lease_cancel":
+        original = robot.navigation_goal
+
+        async def stopped_goal(*args, **kwargs):
+            reply = await original(*args, **kwargs)
+            try:
+                await console.cancel("rosy_01")
+            except RobotApiError:
+                pass
+            return reply
+
+        robot.navigation_goal = stopped_goal
     else:
         async def failed_observe():
             raise HubError("UNKNOWN_ROBOT", "roster changed after send")
