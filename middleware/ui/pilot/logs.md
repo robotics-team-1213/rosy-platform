@@ -839,7 +839,7 @@
 - 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 105 passed, 0 failed. X:/DevTemp/ui-role-devices/pilot-gradle-1.txt. 웹 browser와 실제 태블릿 수용은 별도다.
 - gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
 
-## 2026-10-12 · uiux/robot-pilot-workflow · 연결 정보와 재시도 동선
+## 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
 
 - 변경: 좁은 접속 헤더에서 제품 이름과 비상 정지를 첫 줄에 두고 상태와 운용 지도는 다음 줄에 둔다. 현재 로봇 연결과 로그인 입력을 최근 접속보다 먼저 둔다. 다른 주소의 기록과 잘못된 저장 자료는 연결 선택에서 제외한다. 자기 로봇의 상태 미확인, 안전 정지, 회전·자동 이동을 대기로 바꾸지 않는다. 서비스 워커 셸 캐시를 갱신한다.
 - 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
