@@ -1,11 +1,14 @@
 """D-689 self profile and ordinary password rotation, using the existing auth fixtures."""
 
 import pytest
+import sqlite3
+import threading
 
 from test_password_session import (
     CHANGE, COOKIE, ORIGIN, TOKEN, TYPED, _accounts, _app, _bootstrap, _client, _login,
 )
 from fleet.server.password_session import PasswordSessions
+from fleet.server import password_session as session_module
 
 PROFILE = "/api/fleet/auth/profile"
 NEW_PASSWORD = "another correct horse"
@@ -82,3 +85,66 @@ def test_normal_password_change_rejects_missing_or_foreign_fields(tmp_path, body
     client = _client(_app(tmp_path)[0])
     _login(client)
     assert client.post(CHANGE, headers=ORIGIN, json=body).status_code == 422
+
+
+def test_normal_concurrent_rotation_has_one_winner_and_invalidates_checked_password(tmp_path):
+    sessions = PasswordSessions(tmp_path / "sessions.db", _accounts())
+    cookie = sessions.issue("alice", remember=False)
+    checked = sessions.check("racer", "alice", TYPED)
+    barrier, results = threading.Barrier(2), []
+
+    def rotate():
+        barrier.wait()
+        try:
+            results.append(sessions.change_password(cookie, NEW_PASSWORD, current_password=TYPED))
+        except session_module.StalePasswordCheck:
+            results.append(None)
+    threads = [threading.Thread(target=rotate) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+        assert not thread.is_alive()
+    assert len(results) == 2 and results.count(None) == 1
+    with pytest.raises(session_module.StalePasswordCheck):
+        sessions.issue("alice", remember=False, verified=checked)
+
+
+def test_profile_and_normal_rotation_commit_failure_preserve_old_state(tmp_path, monkeypatch):
+    app, _ = _app(tmp_path)
+    client = _client(app)
+    _login(client)
+    sessions = app.state.password_sessions
+    original = sessions._connect
+
+    class CommitFailure(sqlite3.Connection):
+        def __exit__(self, *_args):
+            self.rollback()
+            raise sqlite3.OperationalError("commit unavailable")
+
+    def broken(**kwargs):
+        db = sqlite3.connect(sessions.path, factory=CommitFailure)
+        db.row_factory = sqlite3.Row
+        return db
+
+    monkeypatch.setattr(sessions, "_connect", broken)
+    assert client.patch(PROFILE, headers=ORIGIN, json={"display_name": "New name"}).status_code == 503
+    assert client.post(CHANGE, headers=ORIGIN, json={
+        "current_password": TYPED, "password": NEW_PASSWORD,
+    }).status_code == 503
+    monkeypatch.setattr(sessions, "_connect", original)
+    assert client.get(PROFILE).json()["display_name"] == "alice"
+    assert sessions.check("retry", "alice", TYPED) is not None
+
+
+def test_profile_changes_do_not_touch_another_account(tmp_path):
+    source = {**_accounts(), "second": {**_accounts()["alice"], "principal_id": "other"}}
+    app, _ = _app(tmp_path, logins=source)
+    client, second = _client(app), _client(app)
+    _login(client)
+    _login(second, login="second")
+    assert client.patch(PROFILE, headers=ORIGIN, json={"display_name": "First"}).status_code == 200
+    assert client.post(CHANGE, headers=ORIGIN, json={
+        "current_password": TYPED, "password": NEW_PASSWORD,
+    }).status_code == 204
+    assert second.get(PROFILE).json()["display_name"] == "second"
