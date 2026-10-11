@@ -616,6 +616,11 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     for option in ("store", "road-eval", "region-eval", "inputs", "out"):
         p.add_argument("--" + option, required=True)
     p.add_argument("--max-age-ns", required=True, type=int)
+    p = sub.add_parser('object-fitness', help='D-682: offline fixed object diagnostics, always HOLD')
+    p.add_argument('model')
+    for option in ('store', 'eval', 'inputs', 'out'):
+        p.add_argument('--' + option, required=True)
+    p.add_argument('--max-age-ns', required=True, type=int)
     p = sub.add_parser('observe', help='D-673: truth-free road observation artifact, always HOLD')
     p.add_argument('model')
     for option in ('inputs', 'out'):
@@ -634,6 +639,12 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
             sys.path.insert(0, path)
         import road_fitness_replay
         return road_fitness_replay.execute(args)
+    if args.cmd == 'object-fitness':
+        path = str(ROOT / 'learning/evaluation/perception')
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        import object_fitness_replay
+        return object_fitness_replay.execute(args)
     if args.cmd == 'observe':
         path = str(ROOT / 'learning/evaluation/perception')
         if path not in sys.path:
