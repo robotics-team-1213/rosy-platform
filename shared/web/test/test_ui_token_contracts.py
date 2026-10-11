@@ -37,7 +37,8 @@ def surface_scripts() -> list[Path]:
 def test_all_registered_web_token_references_are_declared():
     sources = {page: text for row in _web_rows()
                for page, text in registry.colour_sources(registry.REPO, row)}
-    declared = {name for text in sources.values() for name in DECLARATION.findall(text)}
+    declared = {name for text in sources.values()
+                for name in re.findall(r"(?<![\w-])(--[a-z0-9-]+)\s*:", text)}
     missing = [f"{page.relative_to(registry.REPO)}: {name}"
                for page, text in sources.items() for name in sorted(set(REFERENCE.findall(text)) - declared)]
     assert missing == [], "\n".join(missing)
