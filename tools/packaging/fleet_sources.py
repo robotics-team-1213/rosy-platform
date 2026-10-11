@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import sys
 
 from setuptools.command.sdist import sdist
 from setuptools.command.build_py import build_py
@@ -26,7 +27,8 @@ ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment')
 
 class HolderDevelop(develop):
     # Colcon editable cleanup would unlink external source holders; use its full-install fallback.
-    user_options = [option for option in develop.user_options if option[0] != 'editable']
+    user_options = [option for option in develop.user_options
+                    if option[0] != 'editable' or '--uninstall' in sys.argv]
 
 
 class PureAssessment(build_py):

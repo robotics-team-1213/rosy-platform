@@ -50,6 +50,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help
+    uninstall_help = run(['setup.py', 'develop', '--uninstall', '--help'], staging / 'operations/fleet').stdout
+    assert any(line.lstrip().startswith('--editable') for line in uninstall_help.splitlines()), uninstall_help
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
