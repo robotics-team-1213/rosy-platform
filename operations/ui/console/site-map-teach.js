@@ -41,9 +41,9 @@ export function createTeachPanel(host) {
     const key = `${$('teach-robot').value}:${$('teach-frame').value}:${draft?.revision}`;
     if (key !== basisKey) { basisKey = key; $('teach-origin-confirm').checked = false; }
     $('teach-origin-check').hidden = !survey;
-    $('teach-frame').disabled = Boolean(recording);
-    $('teach-robot').disabled = Boolean(recording);
-    $('teach-target').textContent = recording ? `기록 중인 로봇 ${recording.robot_id}`
+    gate('teach-frame', recording ? '기록 중 · 중단 뒤 좌표 기준을 바꾸세요' : '');
+    gate('teach-robot', recording ? '기록 중 · 중단 뒤 대상을 바꾸세요' : '');
+    $('teach-target').textContent = recording ? `기록 중인 로봇 ${recording.robot_id} · 중단 뒤 대상과 좌표 기준을 바꿀 수 있습니다`
       : target ? `기록 대상 ${target.robot_id} · ${target.online === false ? '연결 끊김 · ' : ''}시작 전 실제 로봇을 확인하세요`
         : requestedRobot && !roster.some(row => row.robot_id === requestedRobot) ? `요청한 로봇 ${requestedRobot}이 등록 목록에 없습니다 · 기록할 로봇을 직접 선택하세요`
           : '기록할 로봇을 선택하세요';

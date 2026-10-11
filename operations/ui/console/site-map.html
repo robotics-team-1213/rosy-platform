@@ -247,9 +247,9 @@
     <ui-section aria-labelledby="teach-heading">
       <ui-head><h2 class="ui-section-heading" id="teach-heading">지도 가르치기</h2></ui-head>
       <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>
-      <label>로봇<select class="ui-field" id="teach-robot"></select></label>
+      <label>로봇<select class="ui-field" id="teach-robot" aria-describedby="teach-target"></select></label>
       <ui-text id="teach-target" role="status">기록할 로봇을 선택하세요</ui-text>
-        <label>기록 좌표<select class="ui-field" id="teach-frame"><option value="map">확인된 지도 위치</option><option value="survey">지도 없이 상대 주행 조사</option></select></label>
+        <label>기록 좌표<select class="ui-field" id="teach-frame" aria-describedby="teach-target"><option value="map">확인된 지도 위치</option><option value="survey">지도 없이 상대 주행 조사</option></select></label>
         <ui-text id="teach-reference" role="status">조사 기준 없음</ui-text>
         <label class="ui-check" id="teach-origin-check" hidden><input class="ui-field" id="teach-origin-confirm" type="checkbox">로봇을 위 조사 시작점·방향에 놓았습니다</label>
       <div class="actions">
