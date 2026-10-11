@@ -27,3 +27,9 @@ Mission/Cell Job 관계 어댑터, 위험 사건 경로, 실제 opt-in lifespan 
 - Owner scope RED3 → source `99790900f8` 관련45 PASS/NEW0, AI PC floor 통과. 원래 receipt의 user/owner/guild/channel을 새 회신 생성·claim·발송 직전에 다시 검사한다. mapping 교체/삭제·channel 교체 후 재시작해도 폐기된 요청에는 새 결과 회신을 만들지 않는다.
 - Atomic admission RED3 → source `4919e4627b` 관련49 PASS/NEW0. 기존 TaskStore 생성 트랜잭션에 현재 owner/hash/revision/READY/candidate 검사와 LINKED 예약을 함께 둔다. 다른 탭에서 HOLD 또는 다른 goal로 바꾸면 Task 생성이0이며, 같은 확인 revision 재시도는 같은 기존 Task다. 이 실행의 원격 자원 fallback을 성능 수용으로 사용하지 않는다.
 - API v1.212 및 Console source `49490991a8`은 `/channel-requests/{id}/submit`에 expected_hash/revision만 보낸다. server의 기존 FleetTaskService가 기존 actor/key/queue/fence를 유지한다. 새로운 writer나 dispatch 활성화가 없다. 원격 영향군과 실제 Chromium의 새 SHA 최종 회귀는 진행 중이며 재검토도 요청했다.
+
+Source `a59638b7bb` 최종 관련187 PASS/NEW0, Model PC floor 통과. `49490991a8` atomic Console Chromium6 PASS/NEW0(자원 fallback이므로 성능 증거 아님). 로그는 각각 `logs/workflow-reviewed-final/run-1.txt`, `logs/workflow-browser-atomic/run-1.txt`다. 중간 HTTP 회귀1 NEW는 공개 Task read에 없는 내부 request_key를 읽은 fixture 오류로, 같은 DB의 실제 key를 조회하도록 고쳤다.
+
+후속 독립 검토는 첫50개 폐기된 결과가 뒤의 유효한 결과를 막는 문제를 발견했다. RED4 후 폐기 결과 intent를 durable SUPERSEDED(빈 content, 발송 불가)로 기록해 다음 scan이 진행하도록 수정했다. invalid50+valid51번째 결과에서 worker2회로 유효한 회신1건과 invalid50의 SUPERSEDED를 확인했다. Task History INSERT trigger ABORT 시험은 Task INSERT, LINKED와 LINKED reply 예약을 모두 롤백하고 원래 READY/review reply만 유지함을 증명했다.
+
+TaskStore hard-tier 초과는 기존 유한 JSON·64KiB·credential field 검증을 실제 payload 책임 `task_payloads.py`로 분리해 해결했다. 기존 `_safe_json` alias와 검증 동작을 유지하고 TaskStore는1035줄로 기존1060 상한 아래다. 후속 `a4a3ad4a0`은 호출자 공백 및 시험의 동일 count 조회를 별도 assertion으로 정리했다. 변경 파일 flake8 0 errors, harness lint 0 errors(기존 last_verified 경고28개). 전체 parent의 제한 크기 재판정과 source/Safety 최종 재검토는 아직 진행 중이다.
