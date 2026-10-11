@@ -12,6 +12,10 @@ export function createSurveyPanel(host) {
     ...(host.map()?.edges || []).map(e => ({...e, name: e.id, kind: 'road', geometry: e.polyline})),
     ...(host.map()?.facilities || [])];
   const message = text => { $('survey-status').textContent = text; };
+  const number = id => {
+    if (!$(id).value.trim()) throw new Error('좌표·방향·폭의 숫자를 입력하세요');
+    return Number($(id).value);
+  };
   function act(action) {
     if (host.reason()) return;
     try { action(); sync(); } catch (error) { message(error.message); }
@@ -89,9 +93,9 @@ export function createSurveyPanel(host) {
       action: '빈 조사 초안 만들기', opener: $('survey-new')})) return;
     act(() => {
       const id = `survey_${crypto.randomUUID()}`;
-      host.changed(createSurveyDraft(id, {revision: id, origin: [Number($('survey-x').value), Number($('survey-y').value)],
-        heading_rad: Number($('survey-yaw').value) * Math.PI / 180, scale_source: $('survey-scale').value,
-        measured_distance_m: $('survey-scale').value === 'measured' ? Number($('survey-distance').value) : null,
+      host.changed(createSurveyDraft(id, {revision: id, origin: [number('survey-x'), number('survey-y')],
+        heading_rad: number('survey-yaw') * Math.PI / 180, scale_source: $('survey-scale').value,
+        measured_distance_m: $('survey-scale').value === 'measured' ? number('survey-distance') : null,
         description: $('survey-description').value.trim()}));
       clear(); message('빈 조사 초안을 만들었습니다. 요소를 추가한 뒤 초안을 저장하세요. 활성 지도는 유지됩니다.');
     });
@@ -101,7 +105,7 @@ export function createSurveyPanel(host) {
     if (picking) host.begin();
     geometry(); message(picking ? '지도에서 위치를 찍으세요. 좌표 입력으로도 점을 추가할 수 있습니다.' : '점 찍기를 마쳤습니다.');
   }));
-  $('element-point').addEventListener('click', () => act(() => addPoint(Number($('element-x').value), Number($('element-y').value))));
+  $('element-point').addEventListener('click', () => act(() => addPoint(number('element-x'), number('element-y'))));
   $('element-clear').addEventListener('click', () => act(clear));
   $('element-endpoints').addEventListener('click', () => act(() => {
     const map = host.map(), a = map.places.find(p => p.id === $('element-from').value), b = map.places.find(p => p.id === $('element-to').value);
@@ -135,8 +139,9 @@ export function createSurveyPanel(host) {
     if (host.source() !== 'draft') return;
     const stop = $('element-stop').value;
     const item = {id: $('element-id').value, name: $('element-name').value, kind: $('element-kind').value, geometry: points,
-      from: $('element-from').value, to: $('element-to').value, width_m: Number($('element-width').value), direction: $('element-direction').value,
-      yaw: Number($('element-yaw').value) * Math.PI / 180, signal_id: $('element-signal-id').value, signal_kind: $('element-signal-kind').value,
+      from: $('element-from').value, to: $('element-to').value, width_m: number('element-width'), direction: $('element-direction').value,
+      yaw: $('element-kind').value === 'start' ? number('element-yaw') * Math.PI / 180 : undefined,
+      signal_id: $('element-signal-id').value, signal_kind: $('element-signal-kind').value,
       approaches: [...$('element-lanes').selectedOptions].flatMap(o => {
         const existing = editing && !approachEdited ? loadedApproaches.filter(a => a.edge_id === o.value) : [];
         return existing.length ? existing : [{edge_id: o.value, forward: $('element-forward').value === 'forward', ...(stop === '' ? {} : {stop_s_m: Number(stop)})}];

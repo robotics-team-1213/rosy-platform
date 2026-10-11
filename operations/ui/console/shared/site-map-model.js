@@ -387,12 +387,14 @@ export function editSurveyElement(map, item) {
     edge.speed_cap_mps = old.speed_cap_mps;
     if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
   }
+  if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
+    next.places.find(row => row.id === item.id).yaw = old.yaw;
   if (group === map.places) {
     const [x, y] = item.geometry[0];
     for (const edge of next.edges) {
       if (edge.from === item.id) edge.polyline[0] = [x, y];
       if (edge.to === item.id) edge.polyline[edge.polyline.length - 1] = [x, y];
-      if (edge.from === item.id || edge.to === item.id) edge.evidence = {...(edge.evidence || {source: 'operator'}),
+      if (edge.from === item.id || edge.to === item.id) edge.evidence = {source: 'operator',
         status: 'observed', reference_revision: next.survey.revision, note: ''};
     }
   }
