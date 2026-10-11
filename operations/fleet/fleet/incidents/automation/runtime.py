@@ -17,6 +17,7 @@ def install_incident_runtime(app, config):
     if loop.incident_worker is not None:
         raise ValueError('EXISTING_INCIDENT_JOURNAL_AND_EMPTY_WORKER_REQUIRED')
     clock = config.get('clock', time.time)
+    config = {**config, 'baseline': config.get('baseline', loop.rule_baseline)}
     def human_owned(robot_id, case_id):
         return log.handoff.get(robot_id, case_id) is not None or loop._resolver.is_claimed(robot_id, case_id)
     async def final_handoff(scope, summary):
