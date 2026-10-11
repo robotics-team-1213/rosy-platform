@@ -296,6 +296,9 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
             if not supported:
                 assert goal.get_attribute("reason") == "수동 주행만 지원"
         page.locator('[data-context-tab="tools"]').click()
+        page.locator(".formation-form-wrap > summary").click()
+        page.locator("#formation-leader").select_option("robot-a")
+        page.locator('#formation-members input[value="robot-b"]').check()
         arm = page.locator("#formation-start")
         assert arm.get_attribute("disabled") == (None if supported else "")
         if not supported:
