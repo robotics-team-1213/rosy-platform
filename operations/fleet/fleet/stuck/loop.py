@@ -140,6 +140,9 @@ class StuckResolverLoop:
                 or record['assessment']['policy_revision'] != assessment.policy_revision
                 or not record['assessment']['evaluated_at'] <= self._board._wall() < record['assessment']['valid_until']):
             return None
+        current_config = dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots))
+        config_sha = hashlib.sha256(json.dumps(current_config, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+        if record['config_sha256'] != config_sha: return None
         choice = baseline_choice(record)
         return FleetBaseline.from_assessment(assessment, choice) if choice is not None else None
 
