@@ -3193,3 +3193,9 @@
 - 변경: D-635 기본 정보 관리와 Games 재사용 경계의 검증을 기록했다.
 - 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 관련 원격 pytest 175 passed·Node 285 passed·Chromium 데스크톱/모바일 4 passed·DB 재개방 포함 프로필 시험 11 passed, known_failures NEW 0. browser fixture MIME 누락은 수정 후 재검증했다.
 - gate 변화: SOURCE/원격 계약/Chromium. 자동 Games 연결·Vision 축구 인식·착지·push·배포·실물 경기 수용은 별도다.
+
+## 2026-10-11 · 19e1c7eef · uiux: 바닥 지도와 상세 상태 분리
+
+- 변경: 가상 신호는 작은 점선 램프로 표시하고, 점유·대기·입구별 상태는 지도 아래 고정 높이 영역으로 옮겼습니다. 지도 프레임 크기를 관측 행 수와 영상 유무에서 분리했습니다. 좌표 만료 시 값만 지우고 대기 행을 유지합니다.
+- 증거: Node 287 passed. Chromium 데스크톱/모바일 관측→익명→만료 및 지연 응답의 프레임 크기 검증은 이어 진행합니다. 설계: docs/plans/2026-10-11-stable-map-readouts-design.md.
+- gate 변화: 화면 구현. 서명 배포·현장 화면·실물 위치 정확도는 각각 별도입니다.

@@ -12,7 +12,7 @@ SOURCE_PATHS = (
     "operations/processes/palletizing/src", "middleware/skills/api/src",
     "middleware/skills/manipulation/src", "middleware/devices/omx/adapter",
     "middleware/devices/omx/agent/src", "integrations/robots/omx/src",
-    "operations/fleet", "operations/world/src",
+    "operations/fleet", "operations/decision/src", "operations/world/src",
 )
 
 

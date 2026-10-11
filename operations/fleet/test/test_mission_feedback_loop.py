@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from core_common.protocol.schemas import MissionFeedbackContext, MissionFeedbackTurnScope
-from fleet.ai.er2_standard import ER2FeedbackEgressPolicy, ER2RequestError
+from rosy.decision.er2_standard import ER2FeedbackEgressPolicy, ER2RequestError
 from fleet.server.mission_model_turn_worker import MissionModelTurnWorker
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore

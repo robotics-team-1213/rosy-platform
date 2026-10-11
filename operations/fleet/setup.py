@@ -1,15 +1,49 @@
+import os
+from pathlib import Path
+import runpy
+import shutil
+
 from setuptools import find_packages, setup
+from setuptools.command.sdist import sdist
+
+
+layout = runpy.run_path('fleet/_source_layout.py')
+roots = layout['SOURCE_ROOTS']
+package_dirs = {
+    'rosy.decision': roots['decision'] / 'src/rosy/decision',
+    'fleet.server.web': roots['console'],
+}
+
+
+class HolderSource(sdist):
+    def make_release_tree(self, base_dir, files):
+        root = Path.cwd().resolve()
+        super().make_release_tree(base_dir, [name for name in files
+            if (root / name).resolve().is_relative_to(root)])
+        for name, folder in roots.items():
+            shutil.copytree(folder, Path(base_dir) / '_source_roots' / name,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        manifest = Path(base_dir) / 'fleet.egg-info/SOURCES.txt'
+        text = manifest.read_text(encoding='utf-8')
+        for name, folder in roots.items():
+            text = text.replace(os.path.relpath(folder).replace(os.sep, '/') + '/',
+                                '_source_roots/' + name + '/')
+        manifest.unlink()  # Release trees may hard-link the source manifest.
+        manifest.write_text(text, encoding='utf-8')
 
 package_name = 'fleet'
 
 setup(
     name=package_name,
     version='0.1.0',
-    packages=find_packages(exclude=['test']),
-    package_data={package_name: [
-        'server/web/*.html', 'server/web/*.css', 'server/web/*.js',
-        'server/web/shared/*.css', 'server/web/shared/*.js',
-        'server/web/cell/*.html', 'server/web/cell/*.css', 'server/web/cell/*.js',
+    packages=(find_packages(exclude=['test']) + list(package_dirs)
+              + ['fleet.server.web.' + name for name in find_packages(where=str(roots['console']))]),
+    package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
+    cmdclass={'sdist': HolderSource},
+    package_data={'fleet.server.web': [
+        '*.html', '*.css', '*.js',
+        'shared/*.css', 'shared/*.js',
+        'cell/*.html', 'cell/*.css', 'cell/*.js',
     ]},
     include_package_data=True,
     data_files=[

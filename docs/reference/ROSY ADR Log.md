@@ -628,6 +628,8 @@
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
 | D-639 | 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성 | Accepted (2026-10-11; 구현·CI·설치본·현장 수용 별도) |
 
+| D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
@@ -647,3 +649,9 @@
 - 상태: Accepted (2026-10-11).
 - 결정: 등록 표면의 역할·토큰 참조·공용 조작·캔버스 글자·native 척도를 하나의 출처와 검사로 닫는다. 화면별 시각 덧칠과 중복 YAML 키를 거절한다. 입력 기하·도메인 자료·고정 매체는 구분한다.
 - 계약과 범위: [ADR 본문](../adr/D-639-operational-ui-role-token-closure.md), [실행 계획](../plans/2026-10-11-platform-ui-role-tokens.md). 기존 CORE/Fleet 권한과 API는 유지하며 모든 표면 구현·설치본·현장 수용은 별도 검증이다.
+
+## D-637 ? Remaining Decision Console learning holders
+
+- Status: Accepted (2026-10-11).
+- Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
+- Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.

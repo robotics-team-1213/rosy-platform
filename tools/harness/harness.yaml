@@ -41,6 +41,41 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [operations/fleet/test]
+  - name: fleet_decision
+    path: operations/decision
+    tests: [operations/fleet/test]
+    functional_kind: pytest
+    functional: [test/test_remaining_platform_installed.py]
+  - name: console_source
+    path: operations/ui/console
+    tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
+    functional_kind: pytest
+    functional: [test/test_remaining_platform_installed.py]
+  - name: perception_curation
+    path: learning/curation/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_dataset_publish.py]
+  - name: perception_registry
+    path: learning/registry/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_store.py]
+  - name: perception_training
+    path: learning/training/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_training_job.py]
+  - name: perception_evaluation
+    path: learning/evaluation/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_road_replay.py]
+  - name: perception_cli
+    path: tools/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_rosy_ml.py]
   - name: games
     path: operations/apps/games
     tests: [operations/apps/games/test, test/test_rosy_games_surface.py]
