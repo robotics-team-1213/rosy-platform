@@ -33,6 +33,7 @@ import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pair
 import {driverFor} from "../drivers/registry.js";
 import {createVisionPreview} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
+import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -103,12 +104,16 @@ async function refreshLobby(host) {
     // 않으므로 여기(같은 origin)에서 mode·velocity 증거를 읽어 라벨만 단다.
     const self = await api("/api/v1/robot/state").catch(() => null);
     const state = self?.ok ? self.body : null;
+    const evidence = new HeadlessState(state);
     const measured = typeof state?.mode === "string"
       && Number.isFinite(state?.velocity?.linear) && Number.isFinite(state?.velocity?.angular);
+    const velocityEvidence = !state ? "disconnected" : measured ? evidence.evidenceOf("velocity") : "unavailable";
     const moving = measured && (Math.abs(state.velocity.linear) > 0.002 || Math.abs(state.velocity.angular) > 0.002);
-    const word = state?.mode === "SAFE_STOP" || state?.safety?.estop === true ? "안전 정지"
-      : !measured ? "상태 확인 불가" : moving ? (state.mode === "MANUAL" ? "운전 중" : "이동 중") : "정지 상태";
-    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": ""});
+    const word = state?.mode === "SAFE_STOP" || state?.safety?.estop === true
+      ? evidence.isFresh("safety") ? "안전 정지" : "안전 정지 보고 · 안전 상태 확인 불가"
+      : velocityEvidence !== "fresh" ? `속도 ${EVIDENCE_LABEL[velocityEvidence]}`
+        : moving ? (state.mode === "MANUAL" ? "운전 중" : "이동 중") : "정지 상태";
+    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": "", "data-evidence": velocityEvidence});
     host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
