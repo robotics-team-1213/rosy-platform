@@ -42,7 +42,7 @@ class DiscordGateway:
 
     async def heartbeat(self, socket):
         if self.awaiting_ack:
-            await socket.close()
+            await socket.close(code=4000)
             return False
         self.awaiting_ack = True
         await socket.send(json.dumps({"op": 1, "d": self.sequence}))
@@ -97,11 +97,17 @@ class DiscordGateway:
                         await socket.send(json.dumps({"op": 1, "d": self.sequence}))
                         self.awaiting_ack = True
                     elif opcode == 7:
+                        await socket.close(code=4000)
                         return
                     elif opcode == 9:
                         if packet.get("d") is not True:
                             self.forget_session()
+                        await socket.close(code=4000)
                         return
+            except (OSError, TimeoutError):
+                # Normal closure invalidates Discord sessions; preserve replay on journal failure.
+                await socket.close(code=4000)
+                raise
             finally:
                 pulse.cancel()
                 with suppress(asyncio.CancelledError, ConnectionClosed):
