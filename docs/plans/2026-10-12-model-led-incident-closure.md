@@ -16,7 +16,7 @@
 
 ### 현재 시작점과 다음 순서
 
-D-698 source checkpoint: 단독 primary worker와 receipt/export /3, 녹화·실패 분석·독립 소비자의 역할 결속은 `1b434c6aed7af3888adeab3e61590999efdd87fb`로 로컬 main에 착지했다. 적격 Model PC 9GB의 관련 13개 파일 원격 통합 시험 236개, known-failures 신규 실패 0건과 lint를 통과했다. 독립 검토의 역할 결속 지적을 공통 JSON 계약으로 수정하고 재현 RED와 최종 GREEN을 확인했다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/primary-land-1b434c6aed/run-1.txt`이며 SHA256은 `1fa746fd7f105c3d6471bb1078a77c62466e32ba6e7184f12f88f34bdcc7a352`다.
+D-698 source checkpoint: 단독 primary worker와 receipt/export /3, 녹화·실패 분석·독립 소비자의 역할 결속은 commit `1b434c6aed7af3888adeab3e61590999efdd87fb`로 로컬 main에 착지했다. 적격 Model PC 9GB의 관련 13개 파일 원격 통합 시험 236개, known-failures 신규 실패 0건과 lint를 통과했다. 독립 검토의 역할 결속 지적을 공통 JSON 계약으로 수정하고 재현 RED와 최종 GREEN을 확인했다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/primary-land-1b434c6aed/run-1.txt`이며 SHA256은 `1fa746fd7f105c3d6471bb1078a77c62466e32ba6e7184f12f88f34bdcc7a352`다.
 
 단독 구성은 실제 한 역할 프로파일과 선언된 budget, primary 시도만 결속한다. 정상 상태는 무호출이며 재평가가 필요하면 미구성 모델을 호출하지 않고 최종 인수한다. 기존 두 역할 /1·/2와 비용·인수 근거를 유지하며 JSON CLI와 기존 호출자까지 연결했다. 규칙 생산, 정상 명령·재발의 완전한 기록 범위, 독립 정답·한계와 승격·복귀는 여전히 미완료다. 실제 Qwen·GLM 호출, 독립 품질, 배포·현장 수용과 push는 이 checkpoint에 포함하지 않는다. 전체 운영 비교와 FIELD는 HOLD다.
 
