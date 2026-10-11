@@ -369,6 +369,59 @@ def test_background_only_match_is_a_model_fail(tmp_path, monkeypatch):
 DS_SHA = "e" * 64
 
 
+def _seal(folder):
+    import store
+    dest = folder.with_name(store.content_sha(folder))
+    folder.rename(dest)
+    return dest
+
+
+def test_strict_evaluation_checks_actual_content(tmp_path):
+    folder = _seal(_eval_set(tmp_path))
+    assert intake.evaluate(_model(_pred()), folder, 400, verify_content=True)["frames"] == 3
+    (folder / "manifest.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
+
+
+@pytest.mark.parametrize("training_semantic", [None, "current_road_region/1", "road_surface/1"])
+def test_strict_intake_binds_model_to_training_labels(tmp_path, monkeypatch, training_semantic):
+    folder, model = _semantic_eval(tmp_path, "road_surface/1", "road_surface/1")
+    folder = _seal(folder)
+    _store_dataset(tmp_path, ["training-session"])
+    training = tmp_path / "store/datasets/lanes" / DS_SHA
+    doc = json.loads((training / "manifest.json").read_text(encoding="utf-8"))
+    doc["classes"] = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))["classes"]
+    for c in doc["classes"]:
+        if c["role"] == "drivable":
+            c.pop("semantic", None)
+            if training_semantic is not None:
+                c["semantic"] = training_semantic
+    (training / "manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+    training = _seal(training)
+    model.manifest.dataset_revision = training.name
+    rc, report = _run(tmp_path, monkeypatch, model, {
+        "eval_set": str(folder.relative_to(tmp_path)), "require_eval": True,
+        "require_label_semantics": True, "min_lane_marking_iou": 0.5,
+    }, store=tmp_path / "store")
+    assert report["transient"] is False
+    ev = report["eval"]
+    assert ev["training_content_verified"] is True
+    if training_semantic == "road_surface/1":
+        assert not ev["training_semantic_mismatches"] and not ev["training_unverified_semantics"]
+    else:
+        assert rc == 1
+        assert any("training label semantic" in reason for reason in report["reasons"])
+
+
+def test_strict_training_resolution_rejects_modified_store_content(tmp_path):
+    _store_dataset(tmp_path, ["training-session"])
+    training = _seal(tmp_path / "store/datasets/lanes" / DS_SHA)
+    (training / "manifest.json").write_text('{"frames": []}', encoding="utf-8")
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.training_sessions(tmp_path / "store", training.name, verify_content=True)
+
+
 def _store_dataset(tmp_path, sessions):
     d = tmp_path / "store" / "datasets" / "lanes" / DS_SHA
     d.mkdir(parents=True)
