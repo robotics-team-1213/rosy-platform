@@ -636,6 +636,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;
+    if (!grid && !view.siteMap) drawTraffic(null, null, 0, {view: {}, el, on: true});
     placedChips = []; pendingChips = []; markerBoxes = []; optionalChips = [];
     window.__mapChips = placedChips;
     window.__mapMarkers = markerBoxes;

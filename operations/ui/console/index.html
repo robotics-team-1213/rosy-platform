@@ -80,7 +80,7 @@
           <option value="overlay">교정 영상 + 좌표</option>
           <option value="camera">원본 영상만</option>
         </select>
-        <a href="/console/site-map#profile-heading">지도 지도 설정</a>
+        <a href="/console/site-map#profile-heading">지도 설정</a>
         <span class="hint" id="map-display-status" role="status">공유 map 좌표 · m</span>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->
@@ -120,6 +120,8 @@
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
+      <div class="map-readouts">
+      <ul id="map-traffic-status" class="map-traffic-status" aria-label="지도 교통 상태"><li>교통 상태 대기</li></ul>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
         <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
@@ -127,6 +129,7 @@
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
         </table>
+      </div>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
       <details class="note">
