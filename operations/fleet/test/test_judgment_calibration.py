@@ -127,15 +127,19 @@ def test_danger_and_abstain_errors_count_in_denominator_and_fail():
     assert artifact.report['metrics']['count'] == 60 and artifact.report['metrics']['correct'] == 59
 
 
-def selection(artifact, *, score=.99, approved=True, domain='line_follow', objections=None, changed=False):
+def selection(artifact, *, score=.99, approved=True, domain='line_follow', objections=None, changed=False,
+              model_changes=None):
     from dataclasses import replace
     from test_judgment_profiles import problem, profile as runtime_profile, adapter, bind_profile
     from test_model_judgment import payload
     from rosy.decision.deliberation.judgment import judgment
     p = problem(domain)
-    selected = runtime_profile(profile_revision=IDENTITY['profile_revision'],
-                               model_revision=IDENTITY['model_revision'], calibration_revision='calibration-1')
-    b = bind_profile(p, selected, adapter(model_revision=IDENTITY['model_revision']), required_modalities=('text',))
+    values = dict(profile_revision=IDENTITY['profile_revision'],
+                  model_revision=IDENTITY['model_revision'], calibration_revision='calibration-1')
+    selected = runtime_profile(**{**values, **(model_changes or {})})
+    descriptor = adapter(**{field: getattr(selected, field) for field in
+                           ('provider_kind', 'model_id', 'model_revision', 'adapter')})
+    b = bind_profile(p, selected, descriptor, required_modalities=('text',))
     raw = payload(p)
     raw.update(profile_revision=selected.profile_revision,
                alternatives=[dict(choice='reobserve', probability=score), dict(choice='human', probability=1-score)],
@@ -196,3 +200,12 @@ def test_evaluation_bin_missing_from_fit_is_uncertified_not_fake_zero_error():
     assert report['state'] == 'HOLD'
     assert report['metrics']['calibrated_coverage'] == 0
     assert report['metrics']['calibrated_top_brier'] is None
+
+
+@pytest.mark.parametrize('change', [dict(profile_id='different-profile'), dict(model_id='different-model'),
+    dict(provider_kind='http'), dict(adapter='http-json'), dict(role='reviewer'),
+    dict(max_calls=1), dict(timeout_s=10), dict(max_cost_usd=.1)])
+def test_artifact_cannot_be_reused_by_changed_model_profile_with_same_revision(change):
+    fit, evaluation = rows('fit'), rows('evaluation')
+    artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
+    assert selection(artifact, model_changes=change)['eligible'] is False
