@@ -2,6 +2,9 @@
 !operations/fleet/**
 !operations/decision/**
 !operations/ui/console/**
+!operations/situation/rosy_situation/__init__.py
+!operations/situation/rosy_situation/assessment.py
+!operations/situation/rosy_situation/snapshot_assessment.py
 !operations/world/src/**
 !contracts/foundation/core_common/**
 !contracts/learning/src/**

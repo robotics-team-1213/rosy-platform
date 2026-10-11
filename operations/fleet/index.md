@@ -56,6 +56,7 @@
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 
 ## 계획·결과 문서
 
@@ -92,8 +93,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
+- 2026-10-11 · a64806ad3 · D-652 공통 개입 필요성 shadow 소비
 - 2026-10-11 · 19e1c7eef · uiux: 바닥 지도와 상세 상태 분리
 - 2026-10-11 · 655093d8a · test(fleet): 지도 종류와 기본 정보 관리 검증
 - 2026-10-11 · uncommitted · feat(fleet): 지도 종류와 기본 정보 관리 (D-635)
-- 2026-10-11 · 26181c12d · test(fleet): 좌표 관측 수명과 화면 배치 검증
-- 2026-10-11 · uncommitted · fix(fleet): 하단 좌표 표 안정성과 선택 카메라 유지 (D-634)
