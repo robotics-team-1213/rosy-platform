@@ -1,5 +1,11 @@
 # fleet logs
 
+## 2026-10-12 · aa10b5080 · D-687 Discord Mission·Cell owner adapter
+
+- 변경: 원문 기명 owner/hash/revision과 고정 key로 기존 proposal/resolve/Cell document prepare를 사용하고 실행 전 관계를 연결한다. 별도 admit은 기존 Mission owner의 evidence/generation/fence/claims/독립 approver 규약을 유지한다. 결과는 기존 원장에서 읽어 ACTION_SUCCEEDED와 GOAL_CONFIRMED를 구분한다.
+- 증거: 원격 Model PC101 PASS/NEW0. 초기 self-lock과 view projection 신규 실패를 수정했고 기존 실패 목록은 변경하지 않았다. docs/validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md 참조.
+- gate 변화: backend/source fixture만 확인했다. Console UI·위험 adapter·최종 독립 검토·최신 main 착지·CI·서명 배포·실제 Discord 왕복·FIELD는 미완료다. 운영 메시지·provider·장치 명령 없음.
+
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.

@@ -59,6 +59,7 @@
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 | D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 
 ## 계획·결과 문서
 

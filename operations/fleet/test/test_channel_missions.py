@@ -49,6 +49,11 @@ def test_prepare_and_independent_existing_admit(tmp_path, kind):
         "expected_generation": 0}).status_code == 403
     control = tasks.store.dispatch_control()
     generation = tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")["generation"]
+    stale = _post(client, path + "/admit", "operator-secret", {
+        "expected_hash": receipt["content_hash"], "expected_revision": 1,
+        "expected_generation": generation - 1})
+    assert stale.status_code == 409
+    assert tasks.store.resource_claims(resource_kind='workcell', resource_id='omx_01') == []
     admitted = _post(client, path + "/admit", "operator-secret", {
         "expected_hash": receipt["content_hash"], "expected_revision": 1,
         "expected_generation": generation})
@@ -115,6 +120,43 @@ def test_revoked_mapping_blocks_existing_admission(tmp_path):
         'expected_hash': receipt['content_hash'], 'expected_revision': 1, 'expected_generation': 0})
     assert response.status_code == 403
     assert tasks.store.resource_claims(resource_kind='workcell', resource_id='omx_01') == []
+
+
+def test_proposal_expiring_before_relation_is_rejected_without_nested_writer(tmp_path, monkeypatch):
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    receipt, path, body = prepare_mission(client)
+    owners = client.app.state.channel_missions
+    resolve = owners.resolve
+
+    def expire(*args, **kwargs):
+        result = resolve(*args, **kwargs)
+        with closing(tasks.store._connect()) as conn, conn:
+            conn.execute("UPDATE fleet_proposals SET expires_at='2000-01-01T00:00:00+00:00'")
+        return result
+    monkeypatch.setattr(owners, 'resolve', expire)
+    response = _post(client, path + '/prepare', 'operator-secret', body)
+    assert response.status_code == 409
+    assert owners.workflow.read(receipt['request_id'], 'operator-1')['state'] == 'REQUESTED'
+    with closing(tasks.store._connect()) as conn:
+        assert conn.execute("SELECT status FROM fleet_missions").fetchone()[0] == 'PROPOSED'
+
+
+def test_link_reply_failure_rolls_back_relation_without_admission(tmp_path):
+    import sqlite3
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    journal = client.app.state.channel_requests
+    journal.reply_outbox = ChannelReplyOutbox(journal)
+    receipt, path, body = prepare_mission(client)
+    with closing(tasks.store._connect()) as conn, conn:
+        conn.execute("""CREATE TRIGGER deny_link_reply BEFORE INSERT ON fleet_channel_reply_outbox
+            WHEN NEW.kind='LINKED' BEGIN SELECT RAISE(ABORT, 'reply unavailable'); END""")
+    with pytest.raises(sqlite3.IntegrityError):
+        _post(client, path + '/prepare', 'operator-secret', body)
+    assert client.app.state.channel_workflow.read(receipt['request_id'], 'operator-1')['state'] == 'REQUESTED'
+    with closing(tasks.store._connect()) as conn:
+        assert conn.execute("SELECT status FROM fleet_missions").fetchone()[0] == 'PROPOSED'
+        assert conn.execute("SELECT COUNT(*) FROM fleet_channel_reply_outbox WHERE kind='LINKED'").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize('kind', ['mission', 'cell_job'])
