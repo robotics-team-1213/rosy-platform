@@ -3143,3 +3143,9 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
+## 2026-10-11 · fix/fleet-map-pose-stability · 현장 지도 좌표 유지와 위치 조회 연결 실패
+
+- 변경: 활성 현장 지도와 카메라 지도 ID가 일치하면 로봇 SLAM 격자로 화면을 바꾸지 않는다. 로봇 발견 실패·시간 초과를 HTTP transport 연결 오류로 처리해 지도 위치 조회가 500 대신 UNKNOWN을 반환한다.
+- 검증: AI PC 원격 관련 pytest 205 passed(exit 0), 안에 콘솔 Node 280개 포함. 운영자 핀의 odom→map 변환·신선도·재시작, 카메라 역변환·회전, TLS·자격 증명 미전송 시험 포함.
+- 증거: docs/validation/fleet-map-stability-2026-10-11/README.md. 현재 로봇 offline과 전날 사건 원인은 구분한다. SOURCE/원격 계약 검증이며 착지·push·배포·실물 위치 추종 확인은 아직 없다.
