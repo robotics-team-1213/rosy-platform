@@ -45,6 +45,7 @@ def _identities(rows):
 
 
 def _truth_dataset(folder, semantic):
+    store.refuse_publication_links(Path(folder))
     folder = Path(folder).resolve()
     doc = intake._verified_manifest(folder)
     if doc.get("schema") != "rosy.perception.dataset/1" or doc.get("purpose") != "eval" or doc.get("ignore_index") != 255:
@@ -127,8 +128,9 @@ def _semantics(model_classes, classes):
 def run(model_folder, *, store_root, road_eval, region_eval, inputs, max_age_ns):
     if type(max_age_ns) is not int or max_age_ns <= 0:
         raise ValueError("max_age_ns must be a positive integer")
+    for path in (model_folder, inputs):
+        store.refuse_publication_links(Path(path))
     model_folder, inputs = Path(model_folder).resolve(), Path(inputs).resolve()
-    store.refuse_publication_links(model_folder)
     manifest_path = model_folder / "model_manifest.json"
     model_raw = manifest_path.read_bytes()
     road = _truth_dataset(road_eval, "road_surface/1")
@@ -157,7 +159,12 @@ def run(model_folder, *, store_root, road_eval, region_eval, inputs, max_age_ns)
         name, digest = store.parse_dataset_ref(ref)
         path = registry.dataset_path(name, digest)
         doc = intake._verified_manifest(path)
-        _semantics(model_doc["output"]["classes"], doc["classes"])
+        if path in training:
+            raise ValueError("duplicate fixed training dataset")
+        if not doc["frames"]:
+            raise ValueError("non-empty training frame list required")
+        if digest == model_doc["dataset"]["revision"]:
+            _semantics(model_doc["output"]["classes"], doc["classes"])
         for frame in doc["frames"]:
             if not all(isinstance(frame.get(k), str) and frame[k] for k in ("session", "capture_group")):
                 raise ValueError("training source group is unverified")
