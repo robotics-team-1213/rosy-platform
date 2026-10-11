@@ -759,3 +759,9 @@
 - 상태: Accepted (source design only, 2026-10-12).
 - 결정: 기존 proposal/resolve/admit과 service author·독립 승인 규칙을 보존한다. 원문 owner/hash/revision을 확인하고 실행 전 관계부터 연결한다.
 - 계약: [ADR](../adr/D-687-discord-mission-cell-owner-adapters.md). source/size 검토·CI·서명 배포·실제 왕복과 FIELD는 별도 gate다.
+
+## D-693 — Discord 요청과 현재 사건의 기명 인수 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 current case/revision/freshness와 기명 claim 소유자를 유지하고 같은 트랜잭션으로 원문 관계·회신을 예약한다.
+- 계약: [ADR](../adr/D-693-discord-current-incident-handoff.md). 정지·취소/CORE 권한, source·크기·배포·실제 왕복은 별도 gate다.

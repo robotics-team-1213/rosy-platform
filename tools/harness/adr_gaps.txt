@@ -41,3 +41,8 @@ D-683 reserved by another active session; ADR not yet integrated into this branc
 D-684 reserved by another active session; ADR not yet integrated into this branch
 D-685 reserved by another active session; ADR not yet integrated into this branch
 D-686 reserved by another active session; ADR not yet integrated into this branch
+D-688 reserved by another active session; ADR not yet integrated into this branch
+D-689 reserved by another active session; ADR not yet integrated into this branch
+D-690 reserved by another active session; ADR not yet integrated into this branch
+D-691 reserved by another active session; ADR not yet integrated into this branch
+D-692 reserved by another active session; ADR not yet integrated into this branch
