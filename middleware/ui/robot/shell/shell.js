@@ -107,7 +107,7 @@ function refreshPanelState(panels) {
 
 async function assemble() {
   const manifest = await api(`/api/v1/ui/surfaces/${surface}`, { signal: AbortSignal.timeout(REFRESH_MS * 2) });
-  document.getElementById("shell-role").textContent = `권한 · ${enumLabel(ROLE_LABEL, manifest.role)}`;
+  document.getElementById("shell-role").textContent = enumLabel(ROLE_LABEL, manifest.role);
   document.getElementById("shell-role").title = manifest.role;
   if (manifest.revision === revision) {
     refreshPanelState(manifest.panels);
