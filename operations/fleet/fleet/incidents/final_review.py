@@ -5,6 +5,7 @@ import math
 import re
 
 from rosy.decision.deliberation import canonical, identifier
+from rosy_situation.snapshot_assessment import POLICY
 from .automation.contract import CaseScope
 
 
@@ -27,9 +28,10 @@ def final_current(connection, rid, sid, scope_json, now, *, receipt=None):
         return False
     request = receipt['request']
     scope = json.loads(scope_json)
+    expected_policy = POLICY.revision if case['reason'] == 'POLICY_CHANGED' else scope['policy_revision']
     bound = (request.get('subject_id') == rid and request.get('case_id') == sid
             and request.get('owner') == scope['owner_id'] == 'core'
-            and receipt['policy_revision'] == scope['policy_revision']
+            and receipt['policy_revision'] == expected_policy
             and receipt['necessity'] != 'DO_NOT_INTERVENE')
     if not bound:
         return False
@@ -79,7 +81,10 @@ def final_facts(connection, scope, summary, now):
             or summary['profile_sha256'] != scope.profile_sha256
             or not original_revision(connection, scope, summary['observation_revision'])):
         raise ValueError('FINAL_REVIEW_SUMMARY_MISMATCH')
+    current = connection.execute('SELECT assessment FROM fleet_judgment_current WHERE robot_id=?', (scope.subject_id,)).fetchone()
     facts = {**summary, 'scope_json': scope_json, 'observed_at': now, 'shadow': True,
+             'original_policy_revision': scope.policy_revision,
+             'current_policy_revision': json.loads(current['assessment'])['policy_revision'],
              'necessity': 'FINAL_FAILURE', 'cost_status': 'UNKNOWN' if connection.execute(
                  "SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND state='UNKNOWN' LIMIT 1",
                  (scope.subject_id, scope.case_id)).fetchone() else 'RECORDED'}
