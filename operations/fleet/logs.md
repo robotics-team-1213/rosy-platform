@@ -3154,3 +3154,42 @@
 - Change: One shared Fleet notification entry opens the console inbox; existing intervention summaries and operator event messages share a read-only channel. Read state does not resolve intervention or send a robot command.
 - Evidence: Remote browser verification pending for four entry documents, unread deduplication, keyboard navigation and mobile stop visibility.
 - Gate: SOURCE; server deployment and physical acceptance remain separate.
+
+
+## 2026-10-11 · 6d686c65a1 · fix(fleet): 현장 지도 좌표 유지와 위치 조회 연결 실패
+
+- 변경: 활성 현장 지도와 카메라 지도 ID가 일치하면 로봇 SLAM 격자로 화면을 바꾸지 않는다. 로봇 발견 실패·시간 초과를 HTTP transport 연결 오류로 처리해 지도 위치 조회가 500 대신 UNKNOWN을 반환한다.
+- 검증: AI PC 원격 관련 pytest 205 passed(exit 0), 안에 콘솔 Node 280개 포함. 운영자 핀의 odom→map 변환·신선도·재시작, 카메라 역변환·회전, TLS·자격 증명 미전송 시험 포함.
+- 증거: docs/validation/fleet-map-stability-2026-10-11/README.md. 현재 로봇 offline과 전날 사건 원인은 구분한다.
+- gate 변화: SOURCE/원격 관련 계약 검증. 착지·push·배포·실물 위치 추종 확인은 아직 없다.
+
+## 2026-10-11 · 541815508 · feat(fleet): 지도 프로필과 좌표·영상 보기 (D-631)
+
+- 변경: 기본 2D 좌표·선, 승인 교정 영상 오버레이, 교정 전 원본 영상 및 교정 후 비교. SQLite 프로필 라이브러리·JSON 파일/규칙 입력·선택 미리보기·초안 불러오기. 프로필은 활성 지도와 별도로 저장하고 revision·권한·입력 크기·개수 제한을 검사한다.
+- 검증: 원격 계약 회귀 86 passed, 관련 Chromium 전체 68 passed. 마지막 영상 조건 변경 후 API/전체 Node 계약 26 passed 및 새 Chromium 시나리오 4 passed. known_failures NEW 0, harness lint 오류 0.
+- 증거: docs/validation/fleet-map-stability-2026-10-11/README.md에 커밋별 검증과 로그 위치를 기록했다. 표시 전환·프로필 저장은 로봇 이동 명령을 발생시키지 않는다.
+- gate 변화: SOURCE/원격 계약/Chromium 검증. main 착지·push·현장 배포·실물 위치 추종 수용은 별도다.
+
+## 2026-10-11 · uncommitted · fix(fleet): 하단 좌표 표 안정성과 선택 카메라 유지 (D-634)
+
+- 변경: 만료·관측 없음에서 좌표 표는 유지하고 숫자는 대시로 교체한다. 지도 위 만료 관측은 제거한다. source 소실·재연결·목록 순서 변경 때 다른 카메라로 자동 전환하지 않는다. Cam/Vision/Fleet/Console의 기존 책임과 노출 제어 writer 우선순위를 D-634에 기록했다.
+- 검증: 기존 표 숨김·source 자동 전환을 Node 시험으로 재현한 뒤 전체 Node 284 passed. 관련 원격 pytest는 별도 검증한다.
+- gate 변화: SOURCE/Node 검증만. 현장 발생 기록 대조·Cam 장치 검증·착지·push·배포는 별도다.
+
+## 2026-10-11 · 26181c12d · test(fleet): 좌표 관측 수명과 화면 배치 검증
+
+- 변경: D-634의 역할 분담과 좌표 표 안정성 검증을 기록했다. 사용자 정정에 따라 증상은 하단 좌표 표 소실로 분류하며, 별도 source 자동 전환 수정과 구분한다.
+- 검증: b1b8214c5 원격 pytest 151 passed, 26181c12d Chromium 1 passed. 두 실행 known_failures NEW 0. Node 284 passed, harness lint 오류 0·기존 경고 25. 로그는 X:/DevTemp의 이 세션 logs/camera-ownership 및 camera-ownership-browser.
+- gate 변화: SOURCE/원격 계약/Chromium 검증. 현장 APK·Vision 런타임·실장치 발생 기록 대조 및 배포는 검증하지 않았다.
+
+## 2026-10-11 · uncommitted · feat(fleet): 지도 종류와 기본 정보 관리 (D-635)
+
+- 변경: 차선 코스·축구장·일반 지도 종류, 설명과 축구장 치수 저장·선택·파일 입력. 중심 원점의 축구장 경계 템플릿과 기준선 표시. SQLite 추가 열로 기존 지도/기본 정보를 보존하며, 이전 클라이언트가 기본 정보를 생략하면 현재 정보를 유지한다. Games 기존 Field·SoccerGame 재사용 방향과 별도 연결 검증을 ADR로 기록했다.
+- 검증: 기존 API/DB에서 기본 정보 미지원 실패를 원격 시험으로 재현했고, 축구장 템플릿 시험은 Node에서 실패 후 통과했다. 최종 원격 계약·Chromium 검증은 별도 기록한다.
+- gate 변화: 구현 단계. 자동 Games 시작·Vision 축구 인식·배포·실물 수용은 이번 구현 범위에 포함되지 않는다.
+
+## 2026-10-11 · 655093d8a · test(fleet): 지도 종류와 기본 정보 관리 검증
+
+- 변경: D-635 기본 정보 관리와 Games 재사용 경계의 검증을 기록했다.
+- 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 관련 원격 pytest 175 passed·Node 285 passed·Chromium 데스크톱/모바일 4 passed·DB 재개방 포함 프로필 시험 11 passed, known_failures NEW 0. browser fixture MIME 누락은 수정 후 재검증했다.
+- gate 변화: SOURCE/원격 계약/Chromium. 자동 Games 연결·Vision 축구 인식·착지·push·배포·실물 경기 수용은 별도다.

@@ -48,7 +48,7 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, rectify_jpeg
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -483,6 +483,7 @@ class IngestServer:
             "X-Frame-Rectified": rectified,
             "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
             "X-Frame-Calibration": plane.revision,
+            "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
             **_lens_header(self.source_lens(source)),
         })
 

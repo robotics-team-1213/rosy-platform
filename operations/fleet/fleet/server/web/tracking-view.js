@@ -17,6 +17,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
   let cancelExpiry = () => {};
   let driftHistory = [];        // 폴링별 trackingDriftSample 결과 — 교정 낡음 판정 재료
   let previousPoses = new Map(); // 직전 폴링의 MATCHED 자세(정지 로봇 가림)
+  let coordinatePanel = false;
 
   // 응답이 없으면 빈 층이다 — 지난 고리·선·상태를 남기지 않는다. 그림이 바뀌었을 때만 지도를 다시 그린다.
   function show(body, elapsedMs = 0) {
@@ -37,7 +38,10 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     }
     legend.hidden = !(next.robots.length || next.unknown.length);
     if (positions && positionBody) {
+      if (body?.sources?.length || next.robots.length || next.unknown.length) coordinatePanel = true;
       const rows = positionRows(next);
+      // Keep the layout steady when the observation lease expires; never keep old coordinates.
+      if (!rows.length) rows.push({ name: "관측 대기", x: "—", y: "—", basis: "현재 유효한 좌표 없음" });
       positionBody.replaceChildren(...rows.map(row => {
         const tr = document.createElement("tr");
         for (const value of [row.name, row.x, row.y, row.basis]) {
@@ -47,7 +51,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
         }
         return tr;
       }));
-      positions.hidden = !rows.length;
+      positions.hidden = !coordinatePanel;
     }
     if (changed) onChanged();
     if (next.robots.length || next.unknown.length) {
@@ -64,6 +68,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     life.check();
     if (inFlight || unavailable) return;
     if (auth.locked) {
+      coordinatePanel = false;
       show(null);
       line.hidden = true;
       return;
@@ -80,7 +85,8 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     } finally {
       inFlight = false;
     }
-    show(body, performance.now() - started);
+    if (unavailable || auth.locked) coordinatePanel = false;
+    show(auth.locked ? null : body, performance.now() - started);
     if (unavailable || auth.locked) {
       line.hidden = true;
     } else {
@@ -93,6 +99,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
   }
 
   function reset() {
+    coordinatePanel = false;
     unavailable = false;
     driftHistory = [];
     previousPoses = new Map();
