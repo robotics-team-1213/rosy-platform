@@ -46,7 +46,7 @@ class GlmOpenCodeLauncher:
     cost_verified = False
     schema_versions = (1, 2)
 
-    def __init__(self, *, admission=None, billing_policy=None):
+    def __init__(self, *, admission=None, billing_policy=None, profile=None):
         if billing_policy is not None:
             from .deliberation_glm_receipt import TrustedIncludedPlanPolicy
             if type(billing_policy) is not TrustedIncludedPlanPolicy:
@@ -54,6 +54,14 @@ class GlmOpenCodeLauncher:
         if admission is not None:
             from .deliberation_glm_receipt import admission as validate
             validate(admission)
+        if profile is not None or admission is not None or billing_policy is not None:
+            from . import deliberation_glm_receipt as bridge
+            from rosy.decision.deliberation.profiles import ModelProfile
+            if type(profile) is not ModelProfile or profile != bridge.codec.model_profile(profile.profile_revision):
+                raise ValueError('EXACT_GLM_PROFILE_REQUIRED')
+            if billing_policy is not None:
+                billing_policy.validate(bridge.digest(asdict(profile)))
+        self.profile = profile
         self._admission, self.billing_policy = admission, billing_policy
         self.cost_verified = (admission is not None and admission.ready and admission.isolated
                               and admission.cost_verified and billing_policy is not None)
@@ -88,6 +96,8 @@ class GlmOpenCodeLauncher:
             if not self.cost_verified:
                 raise ValueError('GLM_RUNTIME_OR_BILLING_NOT_ADMITTED')
             _, bound, _, _ = bridge.codec.request(json.loads(body))
+            if bound.profile != self.profile:
+                raise ValueError('CASE_OR_PROFILE_CHANGED')
             if type(self.billing_policy) is not bridge.TrustedIncludedPlanPolicy:
                 raise ValueError('BILLING_POLICY_UNKNOWN')
             self.billing_policy.validate(bridge.digest(asdict(bound.profile)))
@@ -105,7 +115,8 @@ class GlmOpenCodeLauncher:
                 source = Path(__file__).parent
                 directory.joinpath('relay.py').write_bytes(source.joinpath('deliberation_relay.py').read_bytes())
                 directory.joinpath('runner.py').write_bytes(source.joinpath('deliberation_opencode_runner.py').read_bytes())
-                async with gateway_session(body, remaining - (asyncio.get_running_loop().time() - started), directory) as gateway:
+                options = {'credential_sha256': self.billing_policy.credential_sha256} if versioned else {}
+                async with gateway_session(body, remaining - (asyncio.get_running_loop().time() - started), directory, **options) as gateway:
                     try:
                         command = await asyncio.to_thread(isolated_command, self.sandbox, argv, unit, directory)
                         result = await bounded_process(command, body,

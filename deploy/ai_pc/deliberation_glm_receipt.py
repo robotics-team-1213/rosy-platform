@@ -1,6 +1,7 @@
 """Trusted host receipts distinguish included-plan policy from observed charges."""
 from dataclasses import asdict, dataclass, replace
 import hashlib
+import hmac
 import json
 import math
 import re
@@ -36,6 +37,14 @@ def reference(value):
     return value
 
 
+def credential(token, expected):
+    actual = hashlib.sha256(token.encode()).hexdigest()
+    if (type(expected) is not str or re.fullmatch('[0-9a-f]{64}', expected) is None
+            or not hmac.compare_digest(actual, expected)):
+        raise ValueError('BILLING_CREDENTIAL_CHANGED')
+    return actual
+
+
 def usage(value):
     fields = {'prompt_tokens', 'completion_tokens', 'total_tokens'}
     if (type(value) is not dict or not fields <= set(value)
@@ -52,7 +61,7 @@ def usage(value):
     return value
 
 
-def receipt(body, response):
+def receipt(body, response, *, credential_sha256):
     problem, bound, _, _ = codec.request(json.loads(body))
     payload = codec.result(problem, body, json.loads(response['choices'][0]['message']['content']))
     if response.get('model') != MODEL:
@@ -64,7 +73,7 @@ def receipt(body, response):
     return dict(schema_version=2, job_sha256=digest(json.loads(body)),
         profile_sha256=digest(asdict(bound.profile)), judgment_sha256=digest(payload),
         provider_response_id=reference(response['id']), provider_request_id=reference(response['request_id']),
-        usage=usage(counts), cost_status='UNKNOWN')
+        credential_sha256=credential_sha256, usage=usage(counts), cost_status='UNKNOWN')
 
 
 @dataclass(frozen=True)
@@ -76,12 +85,13 @@ class TrustedIncludedPlanPolicy:
     key_ref: str
     profile_sha256: str
     valid_until: float
+    credential_sha256: str
 
     def validate(self, profile_sha256):
         for value in (self.policy_revision, self.account_ref, self.key_ref):
             reference(value)
         if (any(type(value) is not str or re.fullmatch('[0-9a-f]{64}', value) is None
-                for value in (self.evidence_sha256, self.profile_sha256))
+                for value in (self.evidence_sha256, self.profile_sha256, self.credential_sha256))
                 or self.profile_sha256 != profile_sha256
                 or type(self.valid_until) not in (int, float) or not math.isfinite(self.valid_until)
                 or self.valid_until <= time.time()):
@@ -105,12 +115,13 @@ def normalize(body, raw, host, policy, limit, budget):
         raise ValueError('CLI_RESULT_UNKNOWN')
     payload = codec.result(problem, body, json.loads(texts[0]))
     fields = {'schema_version', 'job_sha256', 'profile_sha256', 'judgment_sha256',
-              'provider_response_id', 'provider_request_id', 'usage', 'cost_status'}
+              'provider_response_id', 'provider_request_id', 'credential_sha256', 'usage', 'cost_status'}
     if (type(host) is not dict or set(host) != fields | {'state', 'calls'}
             or host['state'] != 'PASS_GLM_PROVIDER_ONLY' or type(host['calls']) is not int or host['calls'] != 1
             or type(host['schema_version']) is not int or host['schema_version'] != 2
             or host['job_sha256'] != digest(json.loads(body)) or host['profile_sha256'] != profile_sha
-            or host['judgment_sha256'] != digest(payload) or host['cost_status'] != 'UNKNOWN'):
+            or host['judgment_sha256'] != digest(payload) or host['cost_status'] != 'UNKNOWN'
+            or host['credential_sha256'] != policy.credential_sha256):
         raise ValueError('GATEWAY_BINDING_UNKNOWN')
     usage(host['usage'])
     reference(host['provider_response_id'])
