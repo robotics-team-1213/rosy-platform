@@ -102,7 +102,8 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
     tooltip.wait_for(state="visible")
     assert "현재 내용 다시 조회" in tooltip.inner_text()
     assert set(refresh.get_attribute("aria-describedby").split()) == {"other-evidence", "rosy-shared-tooltip"}
-    tooltip.hover()
+    box = tooltip.bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     assert tooltip.is_visible()
     page.keyboard.press("Escape")
     assert not tooltip.is_visible()
@@ -114,6 +115,31 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
       try { actionIcon(button, 'refresh'); return false; } catch (error) { return error instanceof TypeError; }
     }""")
     assert rejected
+
+
+def test_focused_description_does_not_block_another_control(page):
+    page.goto(f"{HOST}/styleguide")
+    page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
+    page.locator("#icon-focus-demo").focus()
+    tooltip = page.get_by_role("tooltip")
+    tooltip.wait_for(state="visible")
+    box = tooltip.bounding_box()
+    description = tooltip.text_content()
+    page.evaluate("""box => {
+      const button = document.createElement('button');
+      button.id = 'under-description'; button.textContent = 'Read next item';
+      button.dataset.uiTooltip = 'A different underlying description';
+      Object.assign(button.style, {position: 'fixed', left: `${box.x}px`, top: `${box.y}px`,
+        width: `${box.width}px`, height: `${box.height}px`});
+      button.addEventListener('click', () => button.dataset.clicked = 'yes');
+      document.body.append(button);
+    }""", box)
+    control = page.locator("#under-description")
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    assert tooltip.is_visible()
+    assert tooltip.text_content() == description
+    control.click()
+    assert control.get_attribute("data-clicked") == "yes"
 
 
 @pytest.mark.parametrize("mutation", ["node.hidden = true", "node.remove()"])
