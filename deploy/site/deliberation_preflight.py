@@ -12,6 +12,47 @@ from deploy.site.deliberation_install import BWRAP, PROFILE, PROFILE_PATH
 from deploy.site.deliberation_sandbox import SandboxLauncher, bounded_process, cleanup_scope, protect_cleanup
 
 
+async def descendant_probe(launcher, cancel):
+    unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
+    script = "import subprocess,time; subprocess.Popen(['/provider','-c','import os,time;os.setsid();time.sleep(60)','rosy-deliberation-preflight-child'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);time.sleep(60)"
+    task = asyncio.create_task(bounded_process(launcher.command(('claude', '-c', script), unit), b'', 2, 4096))
+    cgroup, child, expected_exit = None, None, False
+    try:
+        for _ in range(30):
+            await asyncio.sleep(.05)
+            _, raw = await bounded_process(('/usr/bin/systemctl', '--user', 'show',
+                '--property=ControlGroup', '--value', unit), b'', 1, 2048)
+            group = raw.decode().strip()
+            candidate = (Path('/sys/fs/cgroup') / group.lstrip('/')).resolve()
+            if group and candidate.is_relative_to('/sys/fs/cgroup') and candidate.name == unit:
+                cgroup = candidate
+                with suppress(FileNotFoundError, ProcessLookupError):
+                    for pid in map(int, (cgroup / 'cgroup.procs').read_text().split()):
+                        command = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+                        if (b'rosy-deliberation-preflight-child' in command and os.getsid(pid) == pid
+                                and Path(f'/proc/{pid}/stat').read_text().split(') ', 1)[1][0] != 'Z'):
+                            child = pid
+                            break
+            if child is not None or task.done():
+                break
+        if cancel:
+            task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, TimeoutError):
+            expected_exit = True
+    finally:
+        if not task.done():
+            task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await task
+        await protect_cleanup(cleanup_scope(unit))
+    if child is None or cgroup is None or not expected_exit:
+        return False
+    dead = not Path(f'/proc/{child}').exists() or Path(f'/proc/{child}/stat').read_text().split(') ', 1)[1][0] == 'Z'
+    return dead and (not cgroup.exists() or (cgroup / 'pids.current').read_text().strip() == '0')
+
+
 def resource_checks(properties, cgroup):
     quota = (cgroup / 'cpu.max').read_text().split()
     return {'cgroup_limits': (
@@ -24,11 +65,16 @@ def resource_checks(properties, cgroup):
 
 async def check():
     result = dict(state='HOLD', reason='ADMIN_INSTALL_REQUIRED', checks={})
-    if not BWRAP.is_file() or not PROFILE_PATH.is_file():
-        return result
     launcher, task = None, None
     unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
     try:
+        if not BWRAP.is_file() or not PROFILE_PATH.is_file():
+            return result
+        import pwd
+        account = pwd.getpwnam('rosy-deliberation')
+        if os.getuid() != account.pw_uid:
+            result['reason'] = 'DEDICATED_ACCOUNT_REQUIRED'
+            return result
         for path in (BWRAP, PROFILE_PATH, *BWRAP.parents):
             st = path.lstat()
             if path.resolve() != path or st.st_uid != 0 or st.st_mode & 0o022:
@@ -48,7 +94,6 @@ try:
     checks['runtime_readonly']=False
 except OSError as exc:
     checks['runtime_readonly']=exc.errno==errno.EROFS
-subprocess.Popen(['/provider','-c','import os,time;os.setsid();time.sleep(60)'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 print(json.dumps(checks),flush=True)
 time.sleep(1)
 '''
@@ -81,11 +126,12 @@ time.sleep(1)
             raise ValueError('PROBE_READBACK_INVALID')
         checks.update(observation)
         await protect_cleanup(cleanup_scope(unit))
-        checks['descendants_reaped'] = not cgroup.exists() or (cgroup / 'pids.current').read_text().strip() == '0'
+        checks['cancelled_descendant_reaped'] = await descendant_probe(launcher, True)
+        checks['timed_out_descendant_reaped'] = await descendant_probe(launcher, False)
         result['checks'] = checks
         result['reason'] = 'OFFLINE_HOST_ONLY' if all(checks.values()) else 'BOUNDARY_CHECK_FAILED'
         result['state'] = 'PASS_HOST_OFFLINE_ONLY' if all(checks.values()) else 'HOLD'
-    except (OSError, ValueError, RuntimeError, TimeoutError) as exc:
+    except (OSError, ValueError, RuntimeError, TimeoutError, KeyError) as exc:
         result['reason'] = str(exc)[:256]
     finally:
         if task is not None:
