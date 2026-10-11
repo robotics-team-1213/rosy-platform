@@ -191,7 +191,7 @@ def test_camera_source_age_and_replay_invalidate_existing_observation():
     lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
     lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1.31, pose=(0., 0., 0.))
     assert lane.last['reason'] == 'camera_source_stale'
-    assert lane.state() == (3, 0)
+    assert lane.state() is None
 
 
 def test_low_light_image_never_calls_model():

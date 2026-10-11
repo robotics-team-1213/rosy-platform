@@ -174,9 +174,10 @@ class LearnedCameraLane:
                      'confidence': 0. if self.observation is None else self.observation.confidence}
 
     def state(self):
-        if (self.observation is None or self.received_at is None or not self.last.get('model_used')
-                or not 0 <= self.last['source_age_s'] + self.clock() - self.received_at
-                <= self.manager.config.stale_after_s):
+        if self.observation is None or self.received_at is None or not self.last.get('model_used'):
+            return None
+        elapsed = self.clock() - self.received_at
+        if not 0 <= elapsed <= self.manager.config.stale_after_s - self.last['source_age_s']:
             return None
         error, confidence = self.observation.error, self.observation.confidence
         return (bisect.bisect_right((-.6, -.2, -.05, .05, .2, .6), error),
