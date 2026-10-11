@@ -95,6 +95,13 @@ def test_actual_primary_export_reaches_recording_failure_and_independent_compari
         report = compare(cohort, [exported])
         assert report['promotion_state'] == 'HOLD' and 'rule_baseline' in report['missing']
         assert 'primary_baseline' not in report['missing']
+        forged_role = copy.deepcopy(exported)
+        forged_role['case']['budget']['role_limits'] = []
+        forged_role['case']['attempts'][0].update(role='reviewer', model_receipt=None)
+        forged_role['digest'] = hashlib.sha256(json.dumps(forged_role['case'], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        forged_cohort = copy.deepcopy(cohort)
+        forged_cohort['candidates'][0]['exports'][0]['digest'] = forged_role['digest']
+        with pytest.raises(ValueError): compare(forged_cohort, [forged_role])
         profile_path = tmp_path / 'profiles.json'; profile_path.write_text(json.dumps([asdict(profiles[0])]))
         export_path = tmp_path / 'export.json'
         command = [sys.executable, str(root / 'tools/incident_model_feedback.py'), str(store.path),
@@ -136,3 +143,28 @@ def test_single_role_cost_evidence_uses_v3_and_rejects_legacy_downgrade():
     assert raw['cost_evidence']['observed_usd_charge'] is None
     with pytest.raises(ValueError):
         checked_receipt(scope, attempt, ModelReceipt(canonical(dict(raw, schema='rosy.incident.model_receipt/2'))))
+
+
+@pytest.mark.parametrize('fault', ['budget', 'reviewer', 'none'])
+def test_generic_store_cannot_export_unbound_single_primary_roles(tmp_path, fault):
+    import sqlite3
+    from fleet.incidents.automation.store import IncidentCaseStore, CaseScope
+    from rosy.decision.deliberation import canonical
+    from test_judgment_profiles import profile
+    selected = profile()
+    manifest = [asdict(selected)]
+    scope = CaseScope('pinky', 'case', 'core', hashlib.sha256(canonical(manifest).encode()).hexdigest(), 'policy-1')
+    store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
+    budget = CaseBudget(100, 130, 2, 0, 0)
+    store.begin_case(scope, budget)
+    role = 'primary' if fault == 'budget' else 'reviewer' if fault == 'reviewer' else None
+    store.reserve(scope, attempt_id='model', input_hash='a' * 64, observation_revision='r1',
+                  kind='model', role=role, max_cost_usd=0, worker_id='worker')
+    store.mark_submitting(scope, 'model', worker_id='worker')
+    store.complete(scope, 'model', worker_id='worker', state='REJECTED', actual_cost_usd=0,
+                   summary={'reason': 'MODEL_RESULT_REJECTED'})
+    if fault != 'budget':
+        altered = asdict(budget); altered['role_limits'] = [['primary', selected.max_calls]]
+        with sqlite3.connect(store.path) as connection:
+            connection.execute('UPDATE fleet_incident_v2_cases SET budget_json=?', (canonical(altered),))
+    with pytest.raises(ValueError): exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
