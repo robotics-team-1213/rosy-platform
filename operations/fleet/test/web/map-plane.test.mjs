@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createPlaneFeed, mapToPlane, parsePlaneHeader, planeCalibration, planeFitsImage, planeToMap,
+  createPlaneFeed, mapToPlane, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
 } from "../../../ui/console/shared/vision-view.js";
 import { planeAffine } from "../../../ui/console/camera-backdrop.js";
 import { fitTransform, project, quarterTurn } from "../../../ui/console/site-layer.js";
@@ -10,6 +10,13 @@ import { planeView } from "../../../ui/console/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
+
+test("observed fraction keeps unknown separate from zero observed pixels", () => {
+  assert.equal(parseObservedFraction("0"), 0);
+  assert.equal(parseObservedFraction("0.5"), .5);
+  assert.equal(parseObservedFraction("1"), 1);
+  for (const value of [null, undefined, "", " ", "nan", "-0.1", "1.1"]) assert.equal(parseObservedFraction(value), null);
+});
 
 test("X-Frame-Plane parses five finite numbers with min < max and px_per_m > 0, nothing else", () => {
   assert.deepEqual(parsePlaneHeader("-0.15,-0.15,6.55,3.75,400"), PLANE);

@@ -270,6 +270,9 @@ main {
 /* D-493 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
    운영자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
 .map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--surface-recessed); border-radius: var(--radius-button); }
+.camera-corrected { display: block; width: 100%; background: var(--surface-recessed); }
+.camera-corrected[hidden] { display: none; }
+.map-stage[data-view="camera"] > #map-canvas { display: none; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]):has(> .map-birdseye:not([hidden])) > #map-canvas { display: none; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]):has(> .map-birdseye:not([hidden])) > .map-empty {

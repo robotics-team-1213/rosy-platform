@@ -72,7 +72,14 @@ export async function fetchMapPlane(call, source, held, signal) {
   if (response.headers.get("X-Frame-Rectified") !== "map" || !plane) return { state: "plane-unavailable", lease };
   const age = response.headers.get("X-Frame-Age-Ms");
   return { state: "live", plane, calibrationRevision: response.headers.get("X-Frame-Calibration"),
+    observedFraction: parseObservedFraction(response.headers.get("X-Frame-Observed-Fraction")),
     ageMs: age === null ? NaN : Number(age), blob: await response.blob(), lease };
+}
+
+export function parseObservedFraction(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const fraction = Number(value);
+  return Number.isFinite(fraction) && fraction >= 0 && fraction <= 1 ? fraction : null;
 }
 
 // 프레임 응답 → 배지. 배지는 화면에 보이는 영상의 실제 상태만 말한다(2026-09-30 태블릿 점검:
@@ -199,7 +206,7 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane,
-        calibrationRevision: got.calibrationRevision, ageMs };
+        calibrationRevision: got.calibrationRevision, observedFraction: got.observedFraction, ageMs };
       cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
     } catch (error) {
       if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
@@ -257,6 +264,9 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   // 선택한 source 가 마지막 프레임에서 알린 렌즈 종류(wide/standard). 옛 앱이면 null.
   let currentLens = null;
   let currentLensInfo = null;
+  let selectedSource = "";
+  let sourceAvailable = false;
+  let availableSources = [];
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
   let cancelFrameExpiry = () => {};
@@ -422,21 +432,34 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       const result = await call("/api/fleet/vision/sources");
       life.check();
       onSources({ finished: true, status: 200, names: result.sources });
-      const selected = select.value;
-      select.replaceChildren(...result.sources.map((source) => {
+      const previous = selectedSource;
+      availableSources = result.sources;
+      selectedSource ||= result.sources[0] || "";
+      sourceAvailable = result.sources.includes(selectedSource);
+      const names = sourceAvailable || !selectedSource ? result.sources : [selectedSource, ...result.sources];
+      select.replaceChildren(...names.map((source) => {
         const option = document.createElement("option");
         option.value = source;
-        option.textContent = source;
+        option.textContent = source === selectedSource && !sourceAvailable ? `${source} · 연결 끊김` : source;
         return option;
       }));
-      if (result.sources.includes(selected)) select.value = selected;
-      else if (result.sources.length) select.value = result.sources[0];
+      select.value = selectedSource;
       select.disabled = result.sources.length === 0;
-      loadProfile(select.value);
+      if (previous !== selectedSource) {
+        currentLens = null;
+        currentLensInfo = null;
+        planeLease = null;
+        proposalCorners = null;
+        loadProfile(selectedSource);
+        lease = null;
+      }
       lastSourcesAt = Date.now();
-      lease = null;
-      if (!result.sources.length) {
-        loadProfile("");
+      if (selectedSource && !sourceAvailable) {
+        lease = null;
+        planeLease = null;
+        proposalCorners = null;
+        showState("선택한 카메라 연결 끊김", "warn", `${selectedSource}의 재연결을 기다립니다. 다른 카메라는 직접 선택하세요.`);
+      } else if (!result.sources.length) {
         showState("카메라 없음", "warn", "Vision에 등록된 카메라가 없습니다.");
       }
     } catch (error) {
@@ -460,7 +483,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     life.check();
     if (!current()) return;
     const source = select.value;
-    if (!source) return;
+    if (!source || !sourceAvailable) return;
     const work = {kind: "frame"}; busy = work;
     const requestedAt = Date.now();
     try {
@@ -553,6 +576,10 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   }
 
   function reset() {
+    pausePreview();
+    selectedSource = "";
+    sourceAvailable = false;
+    availableSources = [];
     planeLease = null;
     currentLens = null;
     currentLensInfo = null;
@@ -567,6 +594,9 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   }
 
   scope.listen(select, "change", () => {
+    pausePreview();
+    selectedSource = select.value;
+    sourceAvailable = availableSources.includes(selectedSource);
     lease = null;
     planeLease = null;
     proposalCorners = null;
@@ -666,7 +696,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     const life = scope.capture();
     life.check();
     const source = select.value;
-    if (!source) throw new Error("카메라를 먼저 선택하세요.");
+    if (!source || !sourceAvailable) throw new Error("연결된 카메라를 먼저 선택하세요.");
     if (!lease || Date.now() >= leaseExpiresAt) {
       const issued = await call("/api/fleet/vision/lease", {
         method: "POST",
@@ -735,10 +765,12 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     // D-560: the map plane for the selected source on its own lease (the preview lease keeps its mode).
     async fetchPlane() {
       const source = select.value;
-      if (!source) return { state: "no-source" };
+      if (!source || !sourceAvailable) return { state: "no-source" };
       const life = scope.capture();
-      const got = await fetchMapPlane(call, source, planeLease, life.signal);
+      const preview = previewLifetime;
+      const got = await fetchMapPlane(call, source, planeLease, AbortSignal.any([life.signal, preview.signal]));
       life.check();
+      if (preview !== previewLifetime || source !== select.value || !sourceAvailable) return { state: "stale", source };
       planeLease = got.lease;
       return { ...got, source };
     },
