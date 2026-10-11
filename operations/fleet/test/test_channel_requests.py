@@ -175,3 +175,20 @@ def test_bot_token_file_is_optional_private_and_isolated(tmp_path, kind):
             existing_tokens=(), secret_owners=())
     assert token not in str(error.value) and KEY not in str(error.value)
     assert not hasattr(client.app.state, "channel_requests")
+
+
+def test_optional_intake_file_only_disables_when_absent(tmp_path):
+    path = tmp_path / "intake.json"
+    assert ChannelConfig.load(path, optional=True) is None
+    path.write_text('{"transport_key":"private-invalid-config"}')
+    with pytest.raises(ValueError, match="invalid Discord intake configuration"):
+        ChannelConfig.load(path, optional=True)
+
+
+def test_discord_config_flags_are_mutually_exclusive():
+    from fleet.cli import parse_args
+    args = parse_args(["console", "--robots", "robots.yaml", "--discord-intake-config-optional", "intake.json"])
+    assert str(args.discord_intake_config_optional) == "intake.json"
+    with pytest.raises(SystemExit):
+        parse_args(["console", "--robots", "robots.yaml", "--discord-intake-config", "a.json",
+                    "--discord-intake-config-optional", "b.json"])
