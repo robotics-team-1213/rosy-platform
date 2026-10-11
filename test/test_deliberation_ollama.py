@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -111,7 +111,30 @@ def test_transport_uses_bounded_subprocess_not_thread(monkeypatch):
         return 0, b'{}'
     monkeypatch.setattr(ollama, 'bounded_process', bounded)
     monkeypatch.setattr(ollama.sys, 'executable', '/opt/unit-venv/bin/python')
-    assert asyncio.run(ollama.OllamaTransport()(b'{}', 1, 123)) == (0, b'{}')
+    admitted = replace(ollama.CAPABILITIES, ready=True, isolated=True, cost_verified=True)
+    transport = ollama.OllamaTransport(admission=admitted)
+    assert asyncio.run(transport(b'{}', 1, 123)) == (0, b'{}')
     argv, raw, remaining, limit = seen[0]
     assert argv[0] == '/opt/unit-venv/bin/python' and argv[1] == '-c'
     assert argv[-1] == '1' and raw == b'{}' and limit == 123
+
+
+def test_default_transport_is_not_runtime_admitted_before_launch(monkeypatch):
+    import asyncio
+    async def forbidden(*args):
+        pytest.fail('source must not certify runtime admission')
+    monkeypatch.setattr(ollama, 'bounded_process', forbidden)
+    transport = ollama.OllamaTransport()
+    assert not transport.adapter_capabilities.ready and not transport.adapter_capabilities.isolated
+    assert transport.cost_verified is False
+    with pytest.raises(ValueError, match='RUNTIME_NOT_ADMITTED'):
+        asyncio.run(transport(b'{}', 1, 100))
+
+
+@pytest.mark.parametrize('change', [dict(model_id='other'), dict(model_revision='changed'),
+                                  dict(adapter='other'), dict(modalities=('image',)),
+                                  dict(schema_version=1), dict(provider_kind='http')])
+def test_explicit_admission_must_match_fixed_backend(change):
+    descriptor = replace(ollama.CAPABILITIES, ready=True, isolated=True, cost_verified=True, **change)
+    with pytest.raises(ValueError, match='BACKEND_MISMATCH'):
+        ollama.OllamaTransport(admission=descriptor)
