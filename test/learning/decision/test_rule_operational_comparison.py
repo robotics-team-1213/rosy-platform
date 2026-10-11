@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -62,6 +63,15 @@ def test_unbound_or_incomplete_rule_evidence_is_rejected(tmp_path, fault):
     elif fault == 'row_id': result['records'][0]['selection_id'] = True
     elif fault == 'time': result['records'][0]['received_at'] = 200
     else: result['records'] = []
+    if fault != 'digest':
+        for record in result['records']:
+            raw = json.dumps(record['receipt'], sort_keys=True, ensure_ascii=False,
+                             separators=(',', ':'), allow_nan=False).encode()
+            record['sha256'] = hashlib.sha256(raw).hexdigest()
+        raw = json.dumps(dict(scope=result['scope'], records=result['records']),
+                         sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+        result['digest'] = hashlib.sha256(raw).hexdigest()
+        cohort['rules'][0]['exports'][0]['digest'] = result['digest']
     with pytest.raises(ValueError): compare(cohort, [*exports[:-1], result])
 
 
