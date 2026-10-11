@@ -34,12 +34,13 @@ def install_gateway(app, journal, token):
     @asynccontextmanager
     async def lifespan(application):
         async with previous(application) as state, AsyncExitStack() as stack:
-            tasks = [asyncio.create_task(worker.run())]
-            if config.replies_enabled:
-                http = await stack.enter_async_context(httpx.AsyncClient())
-                sender = DiscordReplies(channel_id=config.channel_id, bot_id=config.bot_id, token=token, http=http)
-                tasks.append(asyncio.create_task(ChannelReplyWorker(journal.reply_outbox, sender).run()))
+            tasks = []
             try:
+                tasks.append(asyncio.create_task(worker.run()))
+                if config.replies_enabled:
+                    http = await stack.enter_async_context(httpx.AsyncClient())
+                    sender = DiscordReplies(channel_id=config.channel_id, bot_id=config.bot_id, token=token, http=http)
+                    tasks.append(asyncio.create_task(ChannelReplyWorker(journal.reply_outbox, sender).run()))
                 yield state
             finally:
                 for task in tasks:
