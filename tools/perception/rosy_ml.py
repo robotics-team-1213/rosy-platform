@@ -611,6 +611,11 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--only", help="one recording id")
     p.add_argument("--ca-file", help="device CA; required when the advertisement says tls=required")
     sub.add_parser("intake").add_argument("source")
+    p = sub.add_parser("fitness", help="D-666: offline paired road diagnostics, always HOLD")
+    p.add_argument("model")
+    for option in ("store", "road-eval", "region-eval", "inputs", "out"):
+        p.add_argument("--" + option, required=True)
+    p.add_argument("--max-age-ns", required=True, type=int)
     p = sub.add_parser("store-status")
     p.add_argument("--init", action="store_true", help="create the layout folders")
     p.add_argument("--watch-config", help="read the site watcher's config (and its failures)")
@@ -618,6 +623,12 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
 
     if args.cmd == "init":
         return _init(args, runner)
+    if args.cmd == "fitness":
+        path = str(ROOT / "learning/evaluation/perception")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        import road_fitness_replay
+        return road_fitness_replay.execute(args)
     try:
         if getattr(args, "watch_config", None):
             import watch

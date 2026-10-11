@@ -44,7 +44,8 @@ def load_classes(path) -> list[dict]:
             raise ValueError(f"{path}: classes[{pos}] needs name and role")
         if "index" in item and item["index"] != pos:
             raise ValueError(f"{path}: classes[{pos}].index is {item['index']}, expected {pos}")
-        out.append({"name": item["name"], "role": item["role"]})
+        out.append({"name": item["name"], "role": item["role"],
+                    **({"semantic": item["semantic"]} if "semantic" in item else {})})
     return out
 
 

@@ -631,7 +631,7 @@
 | D-641 | 운용 화면의 다섯 영역·의미 아이콘·단계별 근거 공개 | Accepted (2026-10-11; implementation and installed acceptance separate) |
 
 | D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
-| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Proposed (2026-10-11) |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Accepted (2026-10-12) |
 | D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 | Proposed (2026-10-11) |
 | D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 | Proposed (2026-10-11) |
 | D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 | Proposed (2026-10-11) |
@@ -654,6 +654,10 @@
 | D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
 | D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 | Accepted (2026-10-11) |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 | Accepted (2026-10-11) |
+| D-666 | 고정 도로면/현재 구역 정답과 관측 입력의 독립 재생 실행 계약 | Accepted (2026-10-11) |
+| D-667 | 오프라인 인지 평가의 공통 관측 계약 | Accepted (2026-10-12) |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -698,3 +702,9 @@
 
 - 상태: Accepted (2026-10-11).
 - Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
+
+## D-667 — 오프라인 인지 평가의 공통 관측 계약
+
+- 상태: Accepted (2026-10-12).
+- 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
+- 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.

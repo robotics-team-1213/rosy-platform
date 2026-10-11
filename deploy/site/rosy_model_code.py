@@ -90,6 +90,8 @@ SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/control/drive/runtime/control_node.py",
                   "middleware/control/drive/safety/adapter/__init__.py",
                   "middleware/control/drive/tracking/wander/__init__.py")
+FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
+FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
                  "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
@@ -317,6 +319,9 @@ def unpack(archive, dest):
     if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
+    if (dest / FITNESS_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
+            raise ValueError("missing road-fitness observation dependency")
 
 
 def replace_link(root, target):

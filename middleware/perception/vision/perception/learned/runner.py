@@ -21,7 +21,7 @@ import numpy as np
 
 from .drivable_paint import drivable_target
 from .lane_mask import LaneMaskEvidence, lane_evidence, lane_marking_mask, preprocess, uncrop_logits
-from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, verify_files
+from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
 
 
 # learned-perception-requirements.txt is installed with pip --target here by the
@@ -115,6 +115,9 @@ class LaneSegModel:
 
     def _logits(self, bgr: np.ndarray) -> np.ndarray:
         """Logits on the full (resized) frame grid; a cropped-input model's are uncropped."""
+        error = road_delivery_error(self.manifest.raw)
+        if error:
+            raise ManifestError(error)
         spec = self.manifest.input
         return uncrop_logits(self._session.run(preprocess(bgr, spec)), spec, self.manifest.classes)
 
@@ -212,7 +215,12 @@ class ModelSlot:
             return self.current  # same target still backing off
         self._key = key
         try:
-            self.current = self._opener(Path(target))
+            candidate = self._opener(Path(target))
+            if isinstance(candidate, LaneSegModel):
+                error = road_delivery_error(candidate.manifest.raw)
+                if error:
+                    raise ManifestError(error)
+            self.current = candidate
             self.last_error = None
             self._failed = None
         except Exception as exc:  # keep the previous model on any failure

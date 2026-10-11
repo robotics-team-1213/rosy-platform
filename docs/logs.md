@@ -7809,6 +7809,44 @@ osy-d395-s1d\`.
 - 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
 - gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
 
+## 2026-10-11 · uncommitted · 인지 파이프라인 착수와 현재 구역 책임 검토
+
+- 변경: branch `feat/perception-fitness-pipeline`의 실행 계획에 도로 관측·현재 구역 추정·따라갈 구역 선택·운영 admission을 구별했다. 사용자 보완에 따라 새 segmentation 출력/manifest 계약은 책임 배치를 먼저 검토한 뒤 진행한다.
+- 증거: 착수 HEAD `8c10dd8a3`의 lane_mask, drivable_paint, World MapPose, 자문 Decision 및 Drive path_follow를 대조했다. drivable_paint의 우측 분기 선택은 인지 사실 정답과 별도 평가할 기존 주행 정책이다.
+- gate 변화: 없음. 목표/worktree/계획은 착수 근거이며 새 role, 구역 추정 구현, 모델 학습, 인지 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · c952f2a0a · 도로 구역 기준선과 추종 선택의 독립 시험
+
+- 변경: D-659 인지 평가에서 기존 연결 구역 후보와 D-597 추종 대상을 구별하는 시험을 추가했다. 연결 분기 보존, 분리 도로 제외, 가림/crop 제외와 추종용 hole filling의 차이를 검증했다. 중앙 시드 부재의 최대 영역 선택은 실제 구역 귀속 증거가 아닌 한계 사례로 추가했다.
+- 증거: 첫 시험의 부분집합 가정은 NEW 1로 실패했고 gap closing/hole filling 원인을 확인했다. 관측 화소와 채운 추종 화소를 구별한 `c952f2a0a` 원격 terminal exit 0, NEW 0. 추가 한계 사례와 최신 main 통합은 후속 검증으로 기록한다.
+- gate 변화: 없음. 합성 source 시험이며 독립 실물 정답·시뮬레이션 영상·구역 추정 승인·주행 활성화의 증거가 아니다.
+
+## 2026-10-11 · 6353771b7 · D-663 도로면 drivable과 후속 구역 로직의 의미 계보
+
+- 변경: 사용자의 도로 자체는 drivable, 현재/따라갈 구역은 로직 판단 지침을 실행 계획과 새 road_surface_v1 검수 classes에 반영했다. 선택 semantic은 classes→dataset→export→eval에 보존되고 의미 불일치·구형 strict 평가·champion 혼용과 기존 조향 슬롯의 도로면/궤적 모델 전달을 거절한다. v13의 원래 구역 의미는 별도 유지한다.
+- 증거: 최초 의미 보존/비교/전달 시험은 NEW 16으로 RED를 확인했다. 추가 template RED 후 `6353771b7` 관련 원격 builder/export/notebook/intake/delivery/manifest 회귀 terminal exit 0, NEW 0. notebook은 generator에서 재생성했다. 독립 데이터 계보의 strict 검증과 별도 도메인/구역 평가, 관측 전용 전달은 후속이다.
+- gate 변화: 없음. 새 클래스별 도로면 학습 정답 검수, 학습된 모델의 적합성·장치 관측·주행 활성화·배포는 미완료다.
+
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
+
+## 2026-10-11 · 7c0f8c93a3 · 20261010 drivable 검수 원본과 의미 확인
+
+- 변경: Desktop 패키지 두 버전과 AI PC의 후속 검수 원본을 실행 계획에 연결하고 고정 확인 기록을 추가했다. 기존 로봇 연결 구역 의미를 새 전체 도로면 정답으로 바꾸지 않는다.
+- 증거: 패키지 checksum 47/63개와 데이터 image/mask hash 2,856/5,538개 일치, 실패 0. 후속 2,769 frame 모두 human_edit/done 기록, 동일 image hash의 split 중복 0. 원본 영상 단위 분리와 독립 검수 authority는 별도 결속이 필요하다.
+- gate 변화: 없음. 새 모델 추론·학습·장치 전달·주행·현장 수용은 확인하지 않았다.
+
+## 2026-10-11 · 468ae9e5ab · 도메인별 인지 coverage와 경계 오차 집계
+
+- 변경: 도로면/구역의 실제 TP·FP·FN과 다른 구역 포함/자기 구역 누락을 도메인·조건별로 집계한다. 추론 보류와 정답 전체 255를 구별하고 전체/점수화 분모와 경계 제외/미산출 사유를 보존한다. 단위는 화소이며 결과는 진단/HOLD다.
+- 증거: 새 집계 함수 부재의 원격 RED 후 468ae9e5ab 합성 지표·구역·기존 기준선 44개 시험 terminal exit 0. known_failures와 전체 회귀는 별도 receipt로 기록한다.
+- gate 변화: 없음. 고정 dataset/모델 재생, 독립 실물/시뮬레이션 성능·장치 관측 수용은 아직 미완료다.
+
 
 ## 2026-10-11 · db1b69bc0 · D-664 혼합 장치 작업 개념과 책임 검토
 
@@ -7838,6 +7876,18 @@ osy-d395-s1d\`.
 - 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
 - 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
 - gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
+
+## 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
+
+- 변경: 기존 모델 로더/preprocess의 추론을 도로면/구역 평가에 연결하고, 원본 정답과 기준점 좌표를 같은 resize/crop grid로 옮긴다. crop 제외와 실제 미관측 정답을 구별하고 전체 grid coverage도 보고한다.
+- 증거: a8212d3806 원격 합성 모델/좌표·구역·기준선 55개 시험 terminal exit 0. 실제 ONNX Runtime crop/전체 영상 2개 포함; crop 제외와 원본 정답 모순 검사를 각각 제거한 실패를 확인한 뒤 복구했다. 전체 회귀/known_failures는 별도 receipt다.
+- gate 변화: 없음. 고정 dataset/모델 파일·독립 검수 결속, 실제 보정·성능·장치 전달·현장 수용은 아직 미완료다.
+
+## 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+
+- 변경: 두 사람 승인 정답과 별도 관측 입력·모델·학습 출처를 고정 버전으로 결속하고, 로봇 설정 없이 HOLD 보고서를 생성한다. 공통 관측 계약과 World 기존 import는 같은 객체를 사용한다. 새 계약 파일을 구분하는 패키지 버전·의존 pin·서명 코드 묶음의 필수 파일을 정리했다.
+- 증거: 재생 20개 합성 시험 terminal exit 0, NEW0. 승인 hash/짝 영상 검사를 제거한 2개 실패를 확인하고 복구했다. 공통 계약 이전 후 World 설치·아키텍처·학습 관련 시험 terminal exit 0, NEW0. 독립 소스 검토의 패키지 버전 문제를 수정했다. 최신 버전의 설치/전체 회귀·착지 증거는 후속 기록이다.
+- gate 변화: 없음. 실제 독립 정답·보정·물체 성능·수용 profile·장치 관측 전달과 지연/손실, 실물/시뮬레이션 성능은 HOLD다. 기존 20261010 검수 데이터의 의미와 운영 선택을 유지한다.
 
 ## 2026-10-12 · 5f4040f306 · D-655 지도 없는 조사와 통합 관제 사이트 수용
 

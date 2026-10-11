@@ -24,7 +24,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .manifest import MANIFEST_NAME, ManifestError
+from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, road_delivery_error
 
 SIGNATURE_NAME = MANIFEST_NAME + ".sig"
 TRUSTED_KEYS = "/etc/rosy/trusted-release-keys"
@@ -107,6 +107,11 @@ class SignatureCheck:
                 raise
             signed, reason = False, str(exc)
         model = self._open(folder)
+        manifest = getattr(model, "manifest", None)
+        if isinstance(manifest, ModelManifest):
+            error = road_delivery_error(manifest.raw)
+            if error:
+                raise ManifestError(error)
         self.signed, self.reason = signed, reason
         return model
 

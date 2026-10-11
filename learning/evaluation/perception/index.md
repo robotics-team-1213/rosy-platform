@@ -11,6 +11,9 @@
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
 | D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-666 | 고정 도로면/현재 구역 정답과 관측 입력의 독립 재생 실행 계약 |
+| D-667 | 오프라인 인지 평가의 공통 관측 계약 |
 
 ## 계획·결과 문서
 
@@ -23,7 +26,12 @@
 ## 시험
 
 - `test/learning/perception`
+- `learning/evaluation/perception/test`
 
 ## 최근 기록
 
-- 없음
+- 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+- 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
+- 2026-10-11 · 0b14fa02b0 · D-662 offline Pinky judgment checker
+- 2026-10-11 · 468ae9e5ab · 도메인별 인지 coverage와 경계 오차 집계
+- 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
