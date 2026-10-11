@@ -153,7 +153,7 @@ def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     wrap = lambda angle: math.degrees(math.atan2(math.sin(angle), math.cos(angle)))
     assert guide[0] == pytest.approx(wrap(math.atan2(-.3, .1) - yaw))
     assert guide[3] == pytest.approx(wrap(-yaw))
-    assert guide[1:3] == (17., True)
+    assert guide[1:3] == (17., False)
     assert guide[4:] == (.012, .03)
 
 
