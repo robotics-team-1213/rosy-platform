@@ -735,3 +735,9 @@
 - 변경: 공용 의미 아이콘의 실제 Fleet 호출 마크업이 명시한 아이콘 전용 속성을 보존하는지 검사한다. 접근성 이름·키보드 설명·48px 누름면·테마 선택 검사는 유지한다.
 - 증거: main 629cb923d 원격 공용 회귀에서 기존 속성 없음 단언 실패를 재현했다. 수정 65a7982a7 전체 공용 회귀는 종료 exit 0이며 known_failures NEW 0이나 자원 부족 fallback이므로 적정 자원 수용으로 승격하지 않는다. 적정 자원의 통합 회귀에서 해당 의미 아이콘을 다시 확인한다.
 - gate 변화: 정확한 최종 SHA의 브라우저·CI·배포·native 실기기 수용은 별도다.
+
+## 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
+
+- 변경: 기존 역할별 헤더와 본문 흐름을 검토하고 Cell 미구성 복구, Pilot 상태 근거와 연결 순서, Robot 재시도/권한 판독, Learning 작은 헤더, Android 함께 조종 안내를 통합했다.
+- 증거: 적정 자원 원격 통합 342 passed, 계약·문서 64 passed, 작은 헤더/Cell 캡처 9 passed, Robot/Pilot 단계별 176/27/3/8/3 passed, 각 known_failures NEW 0. Android 106 tests와 APK 빌드 통과. 변경 후 캡처와 기존 설치본 Fleet 8 화면 조합의 직접 검토를 docs/validation/all-ui-workflows-2026-10-12/result.md에 구분해 기록했다.
+- gate 변화: SOURCE·원격 회귀·변경 후 렌더링 근거다. 기존 설치본 확인은 새 변경의 배포 증거가 아니다. 새 main 착지·push·CI·서명 설치 및 실물 장치/현장 수용은 별도다.

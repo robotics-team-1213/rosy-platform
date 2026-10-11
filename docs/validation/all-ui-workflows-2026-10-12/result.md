@@ -43,3 +43,12 @@ PARKED 진단과 개발용 시뮬레이터를 활성 제품 화면으로 바꾸�
 현재 사이트의 Fleet 컨테이너 source revision은 `5f4040f306bf076648993376ed85834824e8d744`였다. 해당 설치본 `/console`, `/console/install`, `/console/site-map`, `/console/cell`을 1366px·320px에서 직접 열었다. **8 조합**에서 네 헤더 영역, 가로 넘침, 48px 정지·이동 조작, 글자/여백, 브랜드 자산 응답을 확인했다. `evidence/live/result.json` 및 8 PNG가 관찰 기록이다. TLS 인증서 신뢰 확인을 생략하는 브라우저 옵션을 사용했다. 이 기록은 새 변경의 배포 증거가 아니다.
 
 이번 브랜치의 main 착지·push·CI·서명 릴리스·새 설치는 수행하지 않았다. 저장소 「같이 하는 깃」 6항의 명시 지시가 필요하다. 로봇 접속 실패와 ADB 기기 부재 때문에 실물 Robot·Pilot·Cam·LCD 및 실제 작업 수용은 미확인이다. 비상 정지 해제·주행·페어링·Cell 작업 제안 같은 운영 변경으로 화면 검사를 대신하지 않았다.
+
+## 최종 후속 검증
+
+- `a2357a8504`: responsive tiers, UI token contracts, document placement, folder layout 원격 **64 passed**, 종료 0, NEW 0. 공용 세션 `logs/contracts/run-1.txt`.
+- Robot/Pilot 원격 세션: `X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/`. 위 176/27 결과의 정확한 위치는 `logs/browser/run-1.txt`, `logs/captures/run-1.txt`다.
+- `ab2f331a4`: Robot 전체 캡처 **3 passed**. `432e39895`: Pilot 겹침·Robot 권한 잘림 회귀 **8 passed**. `855e5b46a`: Robot 입구의 권한 한 줄 회귀 **3 passed**. 모두 종료 0, NEW 0이며 각각 같은 세션의 `logs/robot-captures`, `logs/visual-final`, `logs/entry-final`에 있다.
+- 마지막 캡처에서 Robot 입구 권한이 세로로 쌓이던 문제를 발견해 기존 공용 wordmark의 container sizing과 권한 nowrap으로 수정했다. 부모 통합 커밋은 `e6bcbb960`이며 후속 회귀가 해당 소스 변경을 검증했다.
+- 같은 세션 `evidence/browser/`에 Pilot 4 화면 크기 × 빈 목록/읽기 실패 8장, Robot 입구·운용·작업 준비·설치 정비 320/390 총 8장을 보관했다. 통합 담당자도 Robot 입구·작업 준비 및 Pilot 실패 화면 320px를 직접 열어 권한 판독·본문 다음 행동·비상 정지 노출을 확인했다.
+- 변경하지 않은 Cam·LCD·경기 보드의 기존 배치는 역할 검토를 통해 유지했다. 경기 보드·LCD의 초기 원격 호스트 미확인 기록은 이번 통합 회귀 342 passed의 범위에서만 해소되었다. 실물 장치와 설치된 게임 호스트 검증은 여전히 별도다.
