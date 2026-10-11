@@ -40,8 +40,7 @@ function tag(text, cls) {
   return node;
 }
 
-/** D-540 3: a card stays open whatever the operator chose while the robot is offline (no link or no
- * state), its E-stop is latched, its safety state is not nominal, or a calibration lease holds it. */
+/** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
 export function mustExpand(robot) {
   const estop = robot.state?.safety?.estop;
   return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
@@ -155,9 +154,22 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
     battery.dataset.fact = "battery";
     facts.append(battery);
+    const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
+    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
+    const position = tag(loc?.text || "위치 미확인", loc?.cls || "warn");
+    position.dataset.localization = "";
+    if (loc) position.title = [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ");
+    facts.append(position);
+    const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
+    const role = formation?.leader === robot.robot_id ? "대형 리더"
+      : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
+    if (role) facts.append(tag(role, "nav"));
     node.append(facts);
+    const lane = state.line_follow;
+    const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
+      ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state).text;
     node.append(nodeWithText("p", "trip-line", view.stateUnavailable ? "운행 확인 불가"
-      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : navTag(state).text)));
+      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode)));
     const evidence = [];
     if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
     else {
@@ -166,7 +178,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         ? `로봇이 거절: ${robot.error.code}` : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`);
       if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
       const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
-      if (address) evidence.push(address.text);
+      if (address) {
+        const why = nodeWithText("p", "robot-summary-evidence", address.text);
+        why.dataset.addressReason = view.addresses[robot.robot_id].status;
+        node.append(why);
+      }
       evidence.push(...attentionItems(robot).map(item => item.text.replace(/^\w+:\s*/, "")));
     }
     if (evidence.length) node.append(nodeWithText("p", "robot-summary-evidence", [...new Set(evidence)].join(" · ")));

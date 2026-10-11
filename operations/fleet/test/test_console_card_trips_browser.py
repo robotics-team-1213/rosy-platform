@@ -104,6 +104,10 @@ def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_vis
         page.locator('#roster [data-robot-id="rosy_03"]').focus()
         page.keyboard.press("Enter")
         expect(page.locator('#robot-workspace article[data-robot-id="rosy_03"]')).to_have_count(1)
+        if role == "operator":
+            for width, height in [(1440, 1000), (390, 844)]:
+                page.set_viewport_size({"width": width, "height": height})
+                _shot(page, f"workspace-selected-{width}x{height}.png")
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
         assert page.locator("#map-canvas").evaluate("node => node.classList.contains('idle')")
         card = _card(page, "rosy_04")
@@ -111,6 +115,17 @@ def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_vis
         assert card.locator("[data-goal-robot-id]").evaluate("node => node.disabled")
         assert card.locator("[data-trip-open]").evaluate("node => node.disabled")
         expect(offline).to_contain_text("접속 실패")
+        if role == "operator":
+            rows = [_robot(row["robot_id"], online=False, error={"reachable": False, "code": "ConnectError"})
+                    for row in API["/api/fleet/state"]["robots"]]
+            api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 0, "total": 4}, "ts": 0.0, "robots": rows}
+            page.clock.run_for(1500)
+            expect(page.locator("#roster .robot-summary")).to_have_count(4)
+            for row in rows:
+                expect(page.locator(f'#roster [data-robot-id="{row["robot_id"]}"]')).to_contain_text("접속 실패")
+            for width, height in [(1440, 1000), (390, 844)]:
+                page.set_viewport_size({"width": width, "height": height})
+                _shot(page, f"workspace-offline-{width}x{height}.png")
         assert not posts and not errors
         browser.close()
 
@@ -155,6 +170,9 @@ def test_workspace_trip_picker_shows_one_mode_and_keeps_destination_across_polls
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, posts)
         form = _open_form(page, "rosy_02")
+        for width, height in [(1440, 1000), (390, 844)]:
+            page.set_viewport_size({"width": width, "height": height})
+            _shot(page, f"workspace-form-{width}x{height}.png")
         kind = form.get_by_role("combobox", name="작업 종류", exact=True)
         assert kind.input_value() == "route"
         destination = form.get_by_role("combobox", name="목적지", exact=True)
