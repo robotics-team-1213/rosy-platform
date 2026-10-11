@@ -28,6 +28,8 @@ RED: 다른 사건 결합, 진행 중 사건의 성공 표시, UNKNOWN 비용 0 
 
 ## Task 2: 원인·정답을 구분하여 데이터 준비
 
+D-695의 선택적 `--failure-analysis <analysis.json>`은 기존 `--model-feedback`과 함께 같은 사건·export digest에 묶인 최대 8개 분류 제안을 연결한다. `rosy.incident.failure_analysis/1`은 schema/subject_id/case_id/model_feedback_digest/reviews를 갖고 각 review는 category/source/author_id/at(timezone 포함 시각)를 갖는다. category별 책임은 judgment→Decision, observation→Perception, map→SiteMap, field_connection→Fleet, device→CORE/device, unknown→unassigned다. 모델 제안은 unreviewed, 사람도 최종 수용 전 review_candidate이며 사람 의견 충돌은 disputed다. 기존 recording 원인과 정답 상태를 바꾸지 않는다. schema /1·/2는 기존 동작을 유지하고 분석을 붙일 때만 /3을 출력한다. 자동 분류 모델 연결과 실제 팀 검수·훈련 데이터 수용은 별도 작업이다.
+
 기존 `incident_feedback.bind`의 사건 ID/recording 결합과 미검수·검수 후보·충돌 상태를 유지한다. 범용 판정 오류의 분류는 `judgment`, `observation`, `map`, `field_connection`, `device`, `unknown`으로 소유자에게 연결하되, 모델이 제안한 분류를 정답으로 승격하지 않는다. 실제 분류 계약은 기존 incident schema와 검수 기록을 읽은 후 확정한다.
 
 train·calibration-fit·독립 evaluation은 session/recording 식별자와 원본 hash 모두 분리한다. 훈련 데이터에 섞인 사례는 독립 평가에서 제외하고 새로운 held-out 사례를 확보한다. 정상 미개입·근거 부족·위험·다른 사건·재시작·모델 교체 사례를 평가 세트에 포함한다.

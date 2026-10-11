@@ -49,7 +49,7 @@
 
 source factory는 기존 Fleet board와 동일 DB에만 worker를 구성한다. `incident_model_config`의 필수 입력은 고정 `profiles`, 일치하는 `providers`, `admission`, `current_profiles`, `budget`이며 선택 입력은 `enabled`, `baseline`, `clock`이다. 모델별 분기는 없다. 사람 소유는 영속 handoff와 현재 resolver claim을 함께 확인하고, 관측 port는 기존 poll만 읽는다. `set_automation(worker.prepare_receipt)`는 기존 판단 저장 transaction을 사용하고 caller의 commit/rollback을 유지한다. 최종 실패는 동일 outbox에 저장하며 resolver loop 종료는 기존 worker `aclose()`로 UNKNOWN 보존을 끝까지 처리한다.
 
-현재 포함 플랜의 상세 billing receipt는 launcher에만 보존되고 generic worker 비용 원장에 아직 연결되지 않는다. 실제 factory 활성화 전 정책 근거·사용량·실제 관측 청구 null을 사건 시도에 연결해야 한다. 정규화 비용 0만으로 실제 과금이 관측됐다고 기록하지 않는다. 이 gap과 실제 provider·보정·scope-bound Fleet 기준이 남아 있으므로 source factory가 있다는 이유로 운영 수용을 승인하지 않는다.
+포함 플랜의 상세 billing receipt는 D-694의 호출별 불변 CostEvidence를 통해 generic worker의 같은 completion transaction과 model receipt /2, 읽기 전용 export에 연결됐다. 입력·job·단일 프로파일·판정 hash와 한계 비용을 재검증하며 기존 tuple2·receipt /1을 유지한다. 확인된 비용은 근거 오류로 거절해도 보존하고 후속 선택을 막는다. 실제 관측 청구 null을 0 청구로 바꾸지 않는다. 이 source는 `bc7ba9106f`로 로컬 main에 착지했으며 관련 9개 파일 원격 162 passed, known-failures 신규 실패 0건, lint 0 errors다. 실제 정책·제공자·보정·scope-bound Fleet 기준 수용은 여전히 남아 있으므로 source factory만으로 운영을 승인하지 않는다.
 
 프로파일 수용은 다음 증거를 별도로 고정한다.
 
