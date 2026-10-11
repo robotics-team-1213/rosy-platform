@@ -49,7 +49,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (!standalone && locked) {
         try {
           const connection = await cookieRequest('/api/fleet/auth/connection');
-          if (connection.mode === 'paired' && !connection.password_login) {
+          if (connection.mode === 'paired' && !connection.password_login && !link?.hidden) {
             const token = document.getElementById('token-access');
             if (token) token.open = true;
           }
@@ -73,6 +73,8 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (standalone) {
         if (cookie) onChange(true);
       } else {
+        const token = document.getElementById('token-access');
+        if (token) token.open = false;
         host.hidden = false;
         part('principal').textContent = `${session.principal_id} · ${session.role}`;
         part('logout').textContent = cookie ? '로그아웃' : '이 탭 접속 해제';

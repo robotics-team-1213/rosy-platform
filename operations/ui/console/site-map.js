@@ -393,7 +393,7 @@ $('token-save').addEventListener('click', async () => {
     if (localEdit) {
       // Keep the original revision: a changed server draft must fail CAS, never overwrite unseen edits.
       Object.assign(state, localEdit);
-      render(); syncButtons();
+      render(); select(state.selected); syncButtons();
     }
     notice(localEdit ? '재접속 확인 · 편집 중인 초안을 보존했습니다. 저장 전 최신 서버 초안과 비교하세요.'
       : state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
@@ -408,6 +408,7 @@ $('token-save').addEventListener('click', async () => {
     }
     if (error.status === 401) loginForm.refresh(true);
     render();
+    if (localEdit) select(state.selected);
     syncButtons();
     notice(siteMapErrorText(error));
   } finally {
