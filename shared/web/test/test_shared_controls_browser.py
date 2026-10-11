@@ -223,13 +223,46 @@ def test_every_product_field_clears_the_secondary_target(page, path):
     page.goto(f"{HOST}{path}")
     page.wait_for_function("() => customElements.get('ui-button')")
     probe = page.evaluate(FIELD_PROBE)
-    assert probe["floor"] == 44
+    assert probe["floor"] == 48
     assert probe["count"] > 0
     assert not probe["bad"], probe["bad"]
 
 
 def _spacing_px(value):
     return 0.0 if value == "normal" else float(value.removesuffix("px"))
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_all_controls_share_geometry_including_emergency_stop(page, theme):
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    sizes = page.evaluate("""theme => {
+      document.documentElement.dataset.theme = theme;
+      const result = {};
+      for (const kind of ['primary', 'quiet', 'segment', 'toggle', 'irreversible']) {
+        const button = document.createElement('ui-button');
+        button.setAttribute('kind', kind);
+        const label = document.createElement('span');label.textContent = 'Action';button.append(label);
+        document.body.append(button);
+        const box = button.getBoundingClientRect(), css = getComputedStyle(button);
+        result[kind] = {height:box.height, width:box.width, text:getComputedStyle(label).fontSize, inset:css.paddingLeft};
+      }
+      const field = document.createElement('input');field.className='ui-field';
+      document.body.append(field);result.field={height:field.getBoundingClientRect().height};
+      const long = document.createElement('ui-button');long.setAttribute('kind','quiet');
+      long.disabled=true;long.reason='A long explanation remains visible when a control is unavailable';
+      long.textContent='Unavailable';long.style.maxWidth='180px';document.body.append(long);
+      result.reason = {height:long.getBoundingClientRect().height, scroll:long.scrollWidth, width:long.clientWidth};
+      return result;
+    }""", theme)
+    normal = [sizes[kind] for kind in ("primary", "quiet", "segment", "toggle", "irreversible")]
+    assert {button["height"] for button in normal} == {48}
+    assert {button["text"] for button in normal} == {"14px"}
+    assert {button["inset"] for button in normal} == {"12px"}
+    assert all(button["width"] >= 48 for button in normal)
+    assert sizes["field"]["height"] == 48
+    assert sizes["reason"]["height"] >= 48
+    assert sizes["reason"]["scroll"] <= sizes["reason"]["width"]
 
 
 def test_hangul_labels_drop_the_latin_tracking(page):

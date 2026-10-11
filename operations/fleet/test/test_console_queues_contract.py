@@ -55,7 +55,7 @@ def test_the_queues_panel_heads_the_rail():
     2026-10-02 회차의 교훈(큐가 지도 아래 963px)은 그대로다: 큐는 지도 밑으로 가지 않는다."""
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
-    assert "main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);" in styles
+    assert "main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);" in styles
     assert ".console-primary { grid-column: 1; }" in styles
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
     assert "const MAP_PANEL = 1;" in shell
