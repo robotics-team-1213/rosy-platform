@@ -133,7 +133,7 @@ law는 후보의 우선순위보다 먼저 적용하며 실행 직전에도 적�
 | signals | 인증/허용 verb/phase/점유·관측 → SignalConsole/traffic signal owner | 의도·장치 상태·관측 대조, 유실/오류 표시; 물리 안전 인터록 증거와 별개 | `test_server_signals.py`, `test_traffic_signals.py` |
 | cancel/E-stop/line OFF | 기존 stop fence/fanout → 각 owner | 부분 실패/불명 응답 보존, HTTP 응답만으로 물리 정지 확정 금지 | `test_cancel_all.py`, `test_dispatch_stop_latch.py`, `test_goal_lease.py` |
 
-navigation은 capability/state 대기 뒤 queue를 만들기 전부터 route/observe/map/bay 계산과 내부 cancel 뒤까지 같은 stop token을 검사한다. 내부 traffic cancel 한 번만 예상한 다음 generation으로 인정한다. 외부 정지로 바뀐 token은 대기열·claim·lease를 되살릴 수 없다. 전송 전 거절과 전송 후 불명을 구분하며, 불명은 성공 또는 안전한 재전송으로 승격하지 않는다.
+navigation은 capability/state 대기 뒤 queue를 만들기 전부터 route/observe/map/bay 계산과 내부 cancel 뒤까지 같은 stop token을 검사한다. 내부 traffic cancel 한 번만 예상한 다음 generation으로 인정한다. 외부 정지로 바뀐 token은 대기열·claim·lease를 되살릴 수 없다. 전송 전 거절과 전송 후 불명을 구분한다. 접수 후 교통 처리의 Hub/owner 거절도 원래 목표의 확정 실패 근거가 아니므로 Task는 UNKNOWN과 점유를 유지하고 재발행하지 않는다. 불명은 성공 또는 안전한 재전송으로 승격하지 않는다.
 
 기존 Cell Job·signal·advisory 경로는 계약과 회귀를 재사용한다. dispatch action 종류, 배포 profile, policy gate와 AI 대상의 opt-in은 기존 설정을 따른다. 구현·원격 회귀·리뷰·로컬 머지는 현장 활성화 증거가 아니다. 현장 완료에는 설치 revision/overlay readback, 실제 operator 요청과 owner 원장 대조, 두 로봇의 정지·양보·재시작, 센서/지도 신뢰와 물리 도착·HOLD 수용 증거가 필요하다.
 
