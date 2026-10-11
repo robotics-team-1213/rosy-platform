@@ -48,6 +48,8 @@ class MapTask:
         self.previous = None
         self.stopped_since = None
         self.result = None
+        from control.control.path_follow import PathFollower
+        self.follower = PathFollower()
 
     def observe(self, x, y, yaw, linear, angular, elapsed):
         if self.result is not None:
@@ -96,15 +98,15 @@ class MapTask:
         return state
 
     def pursuit(self, x, y, yaw):
-        target = min(len(self.points) - 1, bisect.bisect_left(self.distance, self.distance[self.index] + .07))
-        dx, dy = self.points[target][0] - x, self.points[target][1] - y
+        from control.control.pursuit import pursuit_index
+        upper = min(len(self.points), bisect.bisect_right(self.distance, self.distance[self.index] + .35))
+        route = self.points[max(0, self.index - 1):upper]
+        target = pursuit_index(route, x, y, .06)
+        dx, dy = route[target][0] - x, route[target][1] - y
         error = math.atan2(math.sin(math.atan2(dy, dx) - yaw), math.cos(math.atan2(dy, dx) - yaw))
-        speed = .04 if abs(error) < .6 else .02
-        if abs(error) > 1.1:
-            speed = 0.
-        angular = max(-.65, min(.65, 2 * speed * math.sin(error) / max(.03, math.hypot(dx, dy))))
-        if speed == 0.:
-            angular = max(-.6, min(.6, 2 * error))
+        speed, angular, _ = self.follower.update(route, (x, y, yaw), route_age=0., tf_age=0.,
+                                                speed=.04, turn=.6, lookahead=.06,
+                                                tolerance=.005, max_deviation=.05)
         state = (bisect.bisect_right((-.6, -.2, -.05, .05, .2, .6), error),
                  bisect.bisect_right((.01, .025), math.dist((x, y), self.points[self.index])))
         return state, speed, angular
