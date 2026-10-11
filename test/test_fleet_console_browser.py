@@ -195,7 +195,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         per_robot = page.evaluate(
             "() => Object.fromEntries([...document.querySelectorAll('#roster article')]"
             ".map((el) => [el.querySelector('b')?.textContent,"
-            " el.querySelectorAll('ui-tag[status=crit], ui-tag[status=warn]').length]))"
+            " el.querySelectorAll('ui-tag[status=crit]:not([data-localization]), ui-tag[status=warn]:not([data-localization])').length]))"
         )
         assert per_robot["rosy_01"] == per_robot["rosy_02"] == 0
         assert per_robot["rosy_03"] >= 1

@@ -260,7 +260,7 @@ def test_map_context_keeps_place_names_off_the_floor(site):
                 page.clock.run_for(1500)
                 plane = page.locator("#map-stage").bounding_box()
                 context = page.locator("#map-readouts").bounding_box()
-                assert context["y"] >= plane["y"] + plane["height"] - 1
+                assert context["y"] >= plane["y"] + plane["height"] - 1, (width, height, plane, context)
                 content_width = page.locator('[aria-labelledby="map-heading"]').evaluate("""node => {
                     const style = getComputedStyle(node);
                     return node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
