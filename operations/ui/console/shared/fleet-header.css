@@ -115,7 +115,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 @media (width < 30rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand more estop" "pill inbox estop";
+    grid-template-areas: "brand more estop" "pill pill inbox";
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);
   }
