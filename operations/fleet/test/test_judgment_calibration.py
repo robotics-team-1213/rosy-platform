@@ -54,7 +54,7 @@ def test_one_sided_wilson_small_sample_does_not_certify_perfect_predictions():
     module = subject()
     assert module.wilson_lower(0, 0) == 0
     assert module.wilson_lower(50, 50) < .95
-    assert module.wilson_lower(60, 60) == pytest.approx(.956852074218559, abs=1e-12)
+    assert module.wilson_lower(60, 60) == pytest.approx(.9568532014067297, abs=1e-12)
     assert module.wilson_lower(0, 60) == pytest.approx(0)
     for counts in [(True, 10), (1, False), (-1, 10), (11, 10)]:
         with pytest.raises(ValueError):
@@ -68,7 +68,7 @@ def test_unreviewed_quality_limits_hold_with_metrics_not_95_performance_claim():
     assert report['metrics']['count'] == 60
     assert report['metrics']['brier'] == pytest.approx(.0002)
     assert report['metrics']['ece'] == pytest.approx(.01)
-    assert report['bins'][-2]['count'] == 60
+    assert next(b for b in report['bins'] if b['choice'] == 'reobserve' and b['index'] == 9)['count'] == 60
     assert artifact.digest == digest(report)
 
 
@@ -125,3 +125,52 @@ def test_danger_and_abstain_errors_count_in_denominator_and_fail():
     artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
     assert artifact.report['state'] == 'FAIL'
     assert artifact.report['metrics']['count'] == 60 and artifact.report['metrics']['correct'] == 59
+
+
+def selection(artifact, *, score=.99, approved=True, domain='line_follow', objections=None, changed=False):
+    from dataclasses import replace
+    from test_judgment_profiles import problem, profile as runtime_profile, adapter, bind_profile
+    from test_model_judgment import payload
+    from rosy.decision.deliberation.judgment import judgment
+    p = problem(domain)
+    selected = runtime_profile(profile_revision=IDENTITY['profile_revision'],
+                               model_revision=IDENTITY['model_revision'], calibration_revision='calibration-1')
+    b = bind_profile(p, selected, adapter(model_revision=IDENTITY['model_revision']), required_modalities=('text',))
+    raw = payload(p)
+    raw.update(profile_revision=selected.profile_revision,
+               alternatives=[dict(choice='reobserve', probability=score), dict(choice='human', probability=1-score)],
+               objections=objections or [])
+    checked = judgment(p, b, raw)
+    return subject().select_calibrated(p, b, checked, artifact,
+        approved_artifacts={'calibration-1': artifact.digest} if approved else {},
+        current_profile=replace(selected, profile_revision='changed') if changed else selected)
+
+
+def test_only_trusted_matching_artifact_qualifies_and_never_grants_action():
+    fit, evaluation = rows('fit'), rows('evaluation')
+    artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
+    result = selection(artifact)
+    assert result['eligible'] is True and result['action_admissible'] is False
+    assert result['calibrated_confidence'] >= .95 and result['raw_probability'] == .99
+    assert result['input_hash'] and result['case_id'] == 'case'
+    for kwargs in [dict(approved=False), dict(domain='door'), dict(objections=['unsafe']), dict(changed=True)]:
+        assert selection(artifact, **kwargs)['eligible'] is False
+    assert selection(evaluate())['eligible'] is False
+
+
+def test_small_or_empty_confidence_bin_never_promoted_and_raw_gap_is_separate():
+    fit, evaluation = rows('fit', 50), rows('evaluation', 50)
+    artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
+    assert artifact.report['state'] == 'PASS_OFFLINE_ONLY'
+    assert selection(artifact)['eligible'] is False
+    fit, evaluation = rows('fit'), rows('evaluation')
+    artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
+    assert selection(artifact, score=.59)['eligible'] is False
+    assert selection(artifact, score=.89)['eligible'] is False
+    assert selection(artifact, score=.01)['eligible'] is False
+
+
+@pytest.mark.parametrize('sequence', [list, tuple])
+def test_frozen_collection_types_have_identical_metrics(sequence):
+    fit, evaluation = sequence(rows('fit')), sequence(rows('evaluation'))
+    assert evaluate(fit, evaluation).report['metrics']['count'] == 60
