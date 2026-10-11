@@ -43,6 +43,8 @@ D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분�
 
 ### Addendum 2026-10-12 — 두 대 Gazebo 도로 증거 연결
 
+통합 회귀에서 native 실행 파일의 628줄 초과를 확인해 기존 카메라 tick·episode admission·sampling 검증을 같은 tools/sim/isaac의 camera_checks.py로 옮긴다. 기존 run_map_rl import 이름은 같은 함수를 재노출한다. 함수 AST·안전 정지·학습 제외·샘플 주기·오류 의미는 유지하고 SDK 의존성을 추가하지 않는다. 기존 동작 회귀와 export identity로 검증하며 크기 기준을 올리지 않는다.
+
 도로 검출기의 가로 띠 검출은 260919의 진행 방향과 나란한 횡단 줄무늬를 놓친다. 기존 D-491의 crosswalk_extent·BirdsEye를 GroundPlane이 있는 경우 재사용한다. 가로 표식 검출은 우선하며 기존 정지선·신호 판정과 CORE 정책을 변경하지 않는다. 줄무늬 치수·간격·관측된 바닥 grid가 있어야 metric 관측을 만든다. 학습된 차선 검출을 대체하는 새 모델이 아니며 실제 카메라 판정·좌표·오차 수용은 별도 확인한다. A24 첫 카메라 이미지에는 기동 시점의 pose 기록이 없어 명목 높이로 거리 정확도를 단정하지 않는다. 다음 native 시험은 안정된 frame과 odom·Gazebo pose를 함께 보관한다.
 
 A21 runner 설정의 ENFORCED와 Fleet snapshot의 DISABLED가 일치하지 않았다. 실제 CORE 교통 endpoint의 직접 readback 전에는 ENFORCED 실행을 수용하지 않는다. 지면 투영은 기존 simulation guard가 허용하는 GAZEBO source로 연결하며 실제 shared helper의 투영 생성 회귀로 확인한다.

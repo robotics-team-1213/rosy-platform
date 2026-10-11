@@ -21,6 +21,7 @@ from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
 from graph_contract import robot_contract
 from map_task import load_track, MapTask, QPolicy, SimulationOwner
+from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
 
 
 def learn_transition(policy, previous, state, result):
@@ -33,31 +34,6 @@ def learn_transition(policy, previous, state, result):
     return 'updated'
 
 
-def camera_tick(lane, now, *, gain):
-    decision = lane.manager.tick_gain(now, gain=gain)
-    state = lane.state()
-    if state is None:
-        decision = replace(decision, linear=0., angular=0.)
-    return decision, state
-
-
-def camera_episode_usable(phase, visible_frames):
-    usable = visible_frames > 0
-    if not usable and phase != 'train':
-        raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
-    return usable
-
-
-def camera_admission_error(phase, visible_frames, learned_steps):
-    try:
-        camera_episode_usable(phase, visible_frames)
-    except RuntimeError as exc:
-        return str(exc)
-    if phase == 'eval' and learned_steps == 0:
-        return 'evaluation visited no learned state'
-    return None
-
-
 def episode_phases(train_episodes, *, camera, evaluation_only):
     evaluations = ([(707, 0.), (808, math.pi / 2), (909, math.pi), (1001, -math.pi / 2)]
                    if evaluation_only else [(202, 0.), (303, 0.)] + ([(404, 0.)] if camera else []))
@@ -65,10 +41,6 @@ def episode_phases(train_episodes, *, camera, evaluation_only):
                                          *[('train', seed, 0.) for seed in range(train_episodes)]]
     return phases + [(phase, seed, angle) for seed, angle in evaluations
                      for phase in (('baseline', 'eval') if camera else ('eval',))]
-
-
-def camera_sample_due(frame, episode_start_frame):
-    return (frame - episode_start_frame) % 24 == 0
 
 
 def camera_snapshot_due(camera_frames, last, captured):

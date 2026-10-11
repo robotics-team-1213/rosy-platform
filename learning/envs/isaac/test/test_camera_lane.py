@@ -7,6 +7,13 @@ import sys
 import numpy as np
 import pytest
 
+
+@pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due"])
+def test_native_runner_preserves_camera_guard_exports(name):
+    import camera_checks
+    import run_map_rl
+    assert getattr(run_map_rl, name) is getattr(camera_checks, name)
+
 ROOT = Path(__file__).resolve().parents[4]
 for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
              'contracts/skill/src', 'middleware/core/services', 'middleware/core/events',

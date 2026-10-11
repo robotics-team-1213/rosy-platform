@@ -97,8 +97,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · uncommitted · 공유 지도 합법 진입 routing fixture 정합성
 - 2026-10-12 · 51176f181 · D-685 crash-consistent admission
 - 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
 - 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
 - 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
-- 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
