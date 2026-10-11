@@ -242,7 +242,8 @@ class TeachService:
         detail = {"teach_id": session.teach_id, "robot_id": session.robot_id,
                   "points": len(session.points), "kept": len(line), "reason": reason}
         if session.mode == "survey":
-            detail.update(mode="survey", map_id=session.map_id, reference_revision=session.reference["revision"])
+            detail.update(mode="survey", map_id=session.map_id, reference_revision=session.reference["revision"],
+                          survey_reference=session.reference)
         self._store.record_event("teach_stopped", principal_id, detail)
         if len(line) < 2 or polyline_length(line) <= MIN_EDGE_M:
             raise TeachError(422, "TEACH_TOO_SHORT", {**detail, "min_m": MIN_EDGE_M})
@@ -374,5 +375,6 @@ class TeachService:
             recording["points"] = [list(point) for point in live.points]
         if recording is not None and live.reference is not None:
             recording["reference_revision"] = live.reference["revision"]
+            recording["survey_reference"] = live.reference
         return {"recording": recording,
                 "pending": [s.result for s in reversed(self._pending.values())]}  # newest first

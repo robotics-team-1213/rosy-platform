@@ -143,6 +143,10 @@ export const SITE_MAP_ERROR_LABEL = {
   TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
   TEACH_NOT_RECORDING: '기록 중이 아닙니다',
   TEACH_POSE_UNTRUSTED: '로봇 지도 위치가 LOCALIZED가 아닙니다 · Rosy Cam이 로봇을 보는 곳에서 다시 하세요',
+  TEACH_SURVEY_REQUIRED: '조사 기준이 있는 초안을 먼저 만들어 저장하세요',
+  TEACH_SURVEY_CHANGED: '기록의 조사 기준과 현재 초안이 다릅니다 · 기존 기준을 확인하세요',
+  TEACH_ODOM_UNAVAILABLE: '신선한 로봇 주행 좌표를 읽을 수 없습니다 · 로봇 연결과 odom을 확인하세요',
+  TEACH_MODE_INVALID: '기록 좌표 방식과 조사 기준을 확인하세요',
   TEACH_TOO_SHORT: '기록한 길이 0.1 m보다 짧아 버렸습니다',
   TEACH_UNKNOWN: '확정할 기록이 없습니다 · 10분이 지났거나 이미 확정했습니다',
   TEACH_UNKNOWN_PLACE: '없는 장소입니다',
@@ -585,9 +589,27 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
 /** One line for the teach panel from `GET /api/fleet/teach`. */
 export function teachStatusText(view) {
   const live = view?.recording;
-  if (live) return `기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  if (live) return `${live.mode === 'survey' ? '조사 ' : ''}기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  const reason = {pose_lost: '위치 단절', odom_lost: '주행 좌표 단절', odom_reset: '주행 좌표 초기화',
+    survey_changed: '조사 초안 변경'}[newestPending(view)?.reason];
+  if (reason) return `기록 중단 · ${reason} · 유효한 앞부분만 확정 대기 · 로봇 정지는 별도로 확인하세요`;
   if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
   return '기록 없음';
+}
+
+export function teachStartBody({robotId, mode, draft, confirmed}) {
+  if (!robotId) throw new Error('로봇을 고르세요');
+  if (mode === 'map') return {robot_id: robotId};
+  if (mode !== 'survey') throw new Error('기록 좌표 방식을 고르세요');
+  if (!draft?.revision || !draft.map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 저장하세요');
+  if (!confirmed) throw new Error('로봇이 조사 시작점과 방향에 놓였는지 확인하세요');
+  return {robot_id: robotId, mode: 'survey', map_id: draft.map.map_id,
+    reference_revision: draft.map.survey.revision, expected_revision: draft.revision};
+}
+
+export function surveyTeachMatches(record, map) {
+  return Boolean(record?.survey_reference && record.map_id === map?.map_id && map?.survey
+    && Object.entries(record.survey_reference).every(([key, value]) => JSON.stringify(map.survey[key]) === JSON.stringify(value)));
 }
 
 /** `POST /api/fleet/teach/confirm` body; an empty place id means a new address named `name`. */
