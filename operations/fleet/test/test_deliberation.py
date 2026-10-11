@@ -88,6 +88,9 @@ def test_provider_error_unknown_cost_and_global_deadline_hold():
     p = Provider('a')
     p.__class__ = type('Broken', (Provider,), {'__call__': broken})
     assert run(problem(), [p, Provider('b')])['reason'] == 'PROVIDER_UNKNOWN'
+    failed_result = run(problem(), [p, Provider('b')])
+    assert failed_result['cost_usd'] is None and failed_result['cost_complete'] is False
+    assert failed_result['unknown_cost_calls'] == 1
 
     class UnknownCost(Provider):
         async def __call__(self, request, prior, remaining, **kwargs):
