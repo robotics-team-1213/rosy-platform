@@ -101,11 +101,25 @@ def test_invalid_image_abstains_without_inference(tmp_path, fault):
     assert f"image_{fault}" in result["input_errors"] and result["fitness_verdict"] == "HOLD"
 
 
-def test_invalid_anchor_keeps_road_but_abstains_region(tmp_path):
+@pytest.mark.parametrize("change,error", [({"frame_id": "other-frame"}, "frame_mismatch"),
+                                         ({"evidence_refs": ("other",)}, "image_reference_missing")])
+def test_invalid_anchor_keeps_road_but_abstains_region(tmp_path, change, error):
     image, anchor = _snapshots()
-    result = _observe(_model(tmp_path), image, replace(anchor, frame_id="other-frame"))
+    result = _observe(_model(tmp_path), image, replace(anchor, **change))
     assert result["road_surface"] is not None and result["current_region"] is None
-    assert "frame_mismatch" in result["input_errors"] and result["region_reason"] == "invalid_inputs"
+    assert error in result["input_errors"] and result["region_reason"] == "invalid_inputs"
+
+
+def test_raw_road_labels_use_declared_channel_indices_when_manifest_rows_are_unsorted(tmp_path):
+    model = _model(tmp_path)
+    path = model.manifest.folder / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].reverse()
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    model = LaneSegModel.open(model.manifest.folder,
+                             session_factory=lambda *_: RoadSession(n_classes=3))
+    labels, _ = model.infer_road_surface(np.zeros((8, 8, 3), np.uint8))
+    assert (labels[2:] == 2).all()
 
 
 @pytest.mark.parametrize("seeds,reason", [([], "no_anchor"), ([[0, 2]], "anchor_not_on_observed_road"),
