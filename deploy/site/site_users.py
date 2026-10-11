@@ -1,6 +1,7 @@
 """Atomic maintenance for the site Fleet user registry (site-users.yaml).
 
-The file holds only per-principal SHA-256 token digests (D-276). Raw tokens are
+The file holds per-principal SHA-256 token digests (D-276) and password hashes
+(D-519). Raw tokens are
 provisioned out of band; this tool reads one from stdin only, never from argv,
 so it cannot leak through ``ps`` or shell history. Writes are atomic (temp file
 + ``os.replace``) and verified by re-parsing the published bytes with the same
@@ -127,7 +128,7 @@ def read_valid_users(path: Path | str) -> tuple[str, list[dict[str, str]]]:
 
 
 def list_users(path: Path | str) -> list[dict[str, str]]:
-    """Return the registered principals (digests only; no raw tokens exist here)."""
+    """Return registered principals without password hashes or raw credentials."""
     return [{key: value for key, value in entry.items() if key != "password_scrypt"}
             for entry in read_valid_users(path)[1]]
 
