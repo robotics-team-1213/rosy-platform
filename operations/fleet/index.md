@@ -91,8 +91,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 541815508 · feat(fleet): 지도 프로필과 좌표·영상 보기 (D-631)
 - 2026-10-11 · 6d686c65a1 · fix(fleet): 현장 지도 좌표 유지와 위치 조회 연결 실패
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
 - 2026-10-11 · uncommitted · fix(fleet): fresh recovery context (D-623)
 - 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
-- 2026-10-10 · 79402f1f2 · fix: observation-first situation context
