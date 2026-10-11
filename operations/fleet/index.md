@@ -57,6 +57,8 @@
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
 
 ## 계획·결과 문서
 
@@ -94,8 +96,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
+- 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
 - 2026-10-12 · cb7c3396c · D-674 실행 파이프라인 최종 검증
 - 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
-- 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
-- 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토

@@ -11,6 +11,8 @@
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
 | D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
 
 ## 계획·결과 문서
 
@@ -26,4 +28,5 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
+- 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
