@@ -76,6 +76,9 @@ OWN = {
     },
     "site-map.js": {
         "site-map-teach.js",
+        "site-map-survey.js",
+        "site-map-camera.js",
+        "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
     },
 }
 
