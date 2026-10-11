@@ -315,12 +315,12 @@ def test_field_view_review_fixes_are_served():
     # Tablet header (D-359 §6.4 supersedes the 40–70rem three-row grid): below the
     # registered 90rem breakpoint token, role and theme fold behind the connection toggle.
     # The inbox remains outside the fold and the shared 48px stop keeps its own column.
-    assert "@media (width < 90rem)" in styles and '"brand pill inbox more estop"' in styles
-    assert "#fleet-inbox { grid-area: inbox; }" in styles
+    assert '.topbar-extra[data-open="true"]' in styles and '"identity status actions safety"' in styles
+    assert ".fleet-header-actions { grid-area: actions;" in styles
     # D-501/D-641: the single Cell icon keeps its accessible label.
     import re
     assert re.findall(r'<a href="/console/cell" data-action-icon="cell" data-icon-only="">(.*?)</a>', page) == ["Cell"]
-    assert "#estop { grid-area: estop; }" in styles
+    assert ".fleet-header-safety { grid-area: safety; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
     # D-410 — 지도 레이어 안내는 운용 문서에, 보정 도구 문장은 설치 문서에 있다.
