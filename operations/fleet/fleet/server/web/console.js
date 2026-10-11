@@ -4,7 +4,7 @@ import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
-import { CAUSE_LABEL, createLineStuckPanel } from "./line-stuck.js";
+import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText, createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -21,7 +21,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
-import { bindEstop, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
+import { bindEstop, showFleet, showSession, showSignedOut, showInboxCount, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -35,7 +35,103 @@ const layoutPanels = [document.querySelector('.queues-panel'), document.querySel
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
 const contextTabs = [...document.querySelectorAll('[data-context-tab]')];
-let contextChoice = "status";
+let contextChoice = new URLSearchParams(location.search).get("inbox") === "1" ? "inbox" : "status";
+const inboxAttention = new Map();
+let lastLogMessage = "";
+function paintInbox() {
+  const reading = contextChoice === "inbox";
+  if (reading) {
+    for (const item of inboxAttention.values()) item.unread = false;
+    el("log").querySelectorAll('[data-unread]').forEach(line => delete line.dataset.unread);
+  }
+  const count = [...inboxAttention.values()].filter(item => item.unread).length
+    + el("log").querySelectorAll('[data-unread]').length;
+  showInboxCount(count);
+}
+function refreshInbox() {
+  const rows = [...document.querySelectorAll('#critical-list > li, #warning-list > li')];
+  const keys = new Set();
+  const summary = el("inbox-current");
+  const focusedKey = document.activeElement?.closest('#inbox-current > li')?.dataset.key;
+  summary.replaceChildren();
+  for (const row of rows) {
+    const key = row.dataset.key;
+    if (!key) continue;
+    keys.add(key);
+    const text = (row.querySelector('.queue-row') || row).textContent.trim();
+    const signature = text.replace(/\d+/g, "#");
+    const old = inboxAttention.get(key);
+    if (!old || old.signature !== signature) inboxAttention.set(key, {signature, unread: true});
+    const item = document.createElement("li"), link = document.createElement("a");
+    item.dataset.key = key;
+    item.append(document.createTextNode(`${text} `));
+    link.href = "#queues-heading";
+    link.textContent = "개입 목록으로";
+    link.addEventListener("click", () => {
+      const queue = document.querySelector('.queues-panel');
+      queue.tabIndex = -1;
+      queue.focus();
+    });
+    item.append(link);
+    summary.append(item);
+    if (key === focusedKey) link.focus({preventScroll: true});
+  }
+  for (const key of inboxAttention.keys()) if (!keys.has(key)) inboxAttention.delete(key);
+  if (!rows.length) summary.textContent = "현재 개입 요청이 없습니다.";
+  paintInboxMessages();
+  paintInbox();
+}
+function paintInboxMessages() {
+  const list = el("inbox-messages");
+  const old = new Map([...list.children].map(node => [node.dataset.robotId, node]));
+  const nodes = view.robots.filter(robot => robot.line_stuck).map(robot => {
+    const stuck = robot.line_stuck, inquiry = stuck.inquiry, proposal = stuck.ai_proposal, answer = stuck.fleet_answer;
+    let item = old.get(robot.robot_id);
+    if (!item) {
+      item = document.createElement("li");
+      item.dataset.robotId = robot.robot_id;
+      const heading = document.createElement("strong"), stages = document.createElement("dl");
+      heading.textContent = robot.robot_id;
+      stages.className = "diag-readout";
+      for (const label of ["CORE 문의", "AI 판단", "Fleet 판정", "CORE 응답"]) {
+        const term = document.createElement("dt");
+        term.textContent = label;
+        stages.append(term, document.createElement("dd"));
+      }
+      const raw = document.createElement("details"), summary = document.createElement("summary");
+      summary.textContent = "전달 필드 보기";
+      raw.append(summary, document.createElement("pre"));
+      item.append(heading, stages, raw);
+    }
+    const facts = stuck.ai_facts || [];
+    const values = [inquiry ? `${CAUSE_LABEL[inquiry.observations?.cause] || "원인 미확인"} · 문의 수신` : "기록 없음",
+      proposal ? `AI 제안 ${DECISION_LABEL[proposal.decision] || proposal.decision}` : facts.length ? facts.map(fact => `${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`).join(" · ") : "기록 없음",
+      answer ? `전송 ${DECISION_LABEL[answer.decision] || answer.decision}` : proposal ? proposal.verdict === "forwarded" ? "CORE로 전달" : aiProposalText(proposal) : "기록 없음",
+      fleetAnswerText(answer) || (proposal ? `${aiProposalText(proposal)} · 실행 완료는 별도 확인` : "처리 응답 기록 없음 · 실행 완료 미확인")];
+    item.querySelectorAll("dd").forEach((node, index) => { node.textContent = values[index]; });
+    // Show only known message fields; never dump a state row or credentials.
+    const message = JSON.stringify({
+      core_inquiry: inquiry ? {version: inquiry.version, problem_id: inquiry.problem_id, task: inquiry.task,
+        cause: inquiry.observations?.cause, lane_visible: inquiry.observations?.lane_visible,
+        front_clear: inquiry.observations?.front_clear, boundary_revision: inquiry.lane_boundary?.revision} : null,
+      ai_proposal: proposal ? {decision: proposal.decision, class: proposal.class, verdict: proposal.verdict, outcome: proposal.outcome} : null,
+      ai_facts: facts.map(fact => ({kind: fact.kind, source: fact.source, stage: fact.stage, confidence: fact.confidence})),
+      fleet_answer: answer ? {decision: answer.decision, tier: answer.tier, accepted: answer.accepted, code: answer.code, outcome: answer.outcome} : null,
+    }, null, 2);
+    if (item.dataset.message !== message) {
+      item.dataset.message = message;
+      if (contextChoice !== "inbox") {
+        const attention = inboxAttention.get(`${robot.robot_id}|stuck`);
+        if (attention) attention.unread = true;
+      }
+    }
+    item.querySelector("pre").textContent = message;
+    return item;
+  });
+  if (list.childElementCount !== nodes.length || [...list.children].some((node, index) => node !== nodes[index]))
+    list.replaceChildren(...nodes);
+  if (!nodes.length) list.textContent = "현재 열린 판단 문의의 전달 기록이 없습니다. 지난 판단은 사건 기록에서 확인하세요.";
+}
 function selectContext(choice, focus = false) {
   contextChoice = choice;
   for (const tab of contextTabs) {
@@ -45,7 +141,14 @@ function selectContext(choice, focus = false) {
     el(tab.getAttribute("aria-controls")).hidden = !selected;
     if (selected && focus) tab.focus({preventScroll: true});
   }
+  paintInbox();
 }
+pageScope.listen(document, "rosy:inbox", event => {
+  event.preventDefault();
+  selectContext("inbox");
+  el("context-inbox").focus();
+  el("context-inbox").scrollIntoView({block: "nearest"});
+});
 for (const tab of contextTabs) {
   pageScope.listen(tab, "click", () => selectContext(tab.dataset.contextTab));
   pageScope.listen(tab, "keydown", event => {
@@ -58,7 +161,11 @@ for (const tab of contextTabs) {
   });
 }
 // A result link must reveal its destination before native anchor scrolling.
-pageScope.listen(el("cancel-all-details"), "click", () => selectContext("evidence"));
+pageScope.listen(el("cancel-all-details"), "click", () => selectContext("inbox"));
+pageScope.listen(el("inbox-evidence"), "click", () => {
+  selectContext("evidence");
+  el("context-evidence").focus({preventScroll: true});
+});
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
@@ -72,6 +179,10 @@ function layoutConsole() {
   if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
 }
 layoutConsole();
+if (contextChoice === "inbox") {
+  el("context-inbox").focus();
+  el("context-inbox").scrollIntoView({block: "nearest"});
+}
 pageScope.listen(layoutMedia, "change", layoutConsole);
 pageScope.onResume(layoutConsole);
 
@@ -167,7 +278,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -199,12 +310,16 @@ let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
 function log(text, kind) {
   const line = document.createElement("div");
   if (kind) line.className = kind;
+  const signature = `${kind || ""}:${text}`;
+  if (contextChoice !== "inbox" && signature !== lastLogMessage) line.dataset.unread = "true";
+  lastLogMessage = signature;
   const now = new Date().toTimeString().slice(0, 8);
   line.textContent = `${now}  ${text}`;
   const box = el("log");
   box.querySelector("ui-empty")?.remove();
   box.prepend(line);
   while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
+  paintInbox();
 }
 
 const fleetClient = createFleetClient({ credential: () => auth.token });
@@ -499,6 +614,7 @@ function render() {
   }
   signals.render();
   roster.fillQueues();
+  refreshInbox();
   roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
   tripReplan.render();
@@ -1065,6 +1181,8 @@ pageScope.listen(el("log-clear"), "click", () => {
   const box = el("log");
   box.replaceChildren(document.createElement("ui-empty"));
   box.firstChild.textContent = "지웠습니다.";
+  lastLogMessage = "";
+  paintInbox();
   el("cancel-all-details").hidden = true;
 });
 

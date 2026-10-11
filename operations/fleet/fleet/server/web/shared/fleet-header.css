@@ -73,7 +73,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;
     /* D-501 — 다른 문서로 가는 길은 머리 아래 탭 줄(doc-tabs.css)이다. */
-    grid-template-areas: "brand pill clock more estop";
+    grid-template-areas: "brand pill inbox more estop";
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
@@ -82,7 +82,8 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #clock { grid-area: clock; justify-self: end; }
+  #clock { display: none; }
+  #fleet-inbox { grid-area: inbox; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
   .topbar-extra {
@@ -111,7 +112,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 @media (width < 30rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand more estop" "pill clock estop";
+    grid-template-areas: "brand more estop" "pill inbox estop";
     gap: var(--space-1);
     padding: var(--space-2);
   }

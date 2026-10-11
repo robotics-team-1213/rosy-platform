@@ -138,6 +138,8 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 measured[(name, width)] = fact
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
+                inbox = page.locator("#fleet-inbox").bounding_box()
+                assert inbox and inbox["height"] >= 48 and inbox["y"] + inbox["height"] <= height
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
@@ -157,6 +159,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert fact["header"] <= 0.2 * height, (name, width, fact)
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
+            page.locator("#fleet-inbox").click()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:
