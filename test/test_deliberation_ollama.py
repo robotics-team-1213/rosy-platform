@@ -9,6 +9,50 @@ from rosy.decision.deliberation.judgment import judgment_schema
 from rosy.decision.deliberation.profiles import BoundProfile
 
 
+@pytest.mark.parametrize('error,kind', [
+    (TimeoutError('private-detail'), 'TIMEOUT'),
+    (OSError('private-detail'), 'TRANSPORT'),
+    (ValueError('private-detail'), 'VALIDATION'),
+    (RuntimeError('private-detail'), 'INTERNAL'),
+])
+def test_cli_failure_is_diagnostic_without_raw_error_or_retry(monkeypatch, capsys, error, kind):
+    from io import BytesIO
+    from types import SimpleNamespace
+    calls = []
+    def fail(raw, remaining):
+        calls.append((raw, remaining))
+        raise error
+    monkeypatch.setattr(ollama, 'execute', fail)
+    monkeypatch.setattr(ollama.sys, 'argv', ['ollama', '1'])
+    monkeypatch.setattr(ollama.sys, 'stdin', SimpleNamespace(buffer=BytesIO(b'{}')))
+    monkeypatch.setattr(ollama.signal, 'signal', lambda *args: None)
+    timers = []
+    monkeypatch.setattr(ollama.signal, 'setitimer', lambda *args: timers.append(args))
+    assert ollama.main() == 1
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {'state': 'HOLD', 'reason': 'LOCAL_PROVIDER_FAILED', 'failure_kind': kind}
+    assert output.err == '' and 'private-detail' not in output.out
+    assert calls == [(b'{}', 1.0)]
+    assert timers == [(ollama.signal.ITIMER_REAL, 1.0), (ollama.signal.ITIMER_REAL, 0)]
+
+
+def test_cli_success_releases_timer_and_restores_handler(monkeypatch, capsys):
+    from io import BytesIO
+    from types import SimpleNamespace
+    handlers, timers = [], []
+    previous = object()
+    monkeypatch.setattr(ollama, 'execute', lambda *args: {'checked': True})
+    monkeypatch.setattr(ollama.sys, 'argv', ['ollama', '1'])
+    monkeypatch.setattr(ollama.sys, 'stdin', SimpleNamespace(buffer=BytesIO(b'{}')))
+    monkeypatch.setattr(ollama.signal, 'getsignal', lambda *args: previous)
+    monkeypatch.setattr(ollama.signal, 'signal', lambda *args: handlers.append(args))
+    monkeypatch.setattr(ollama.signal, 'setitimer', lambda *args: timers.append(args))
+    assert ollama.main() == 0
+    assert json.loads(capsys.readouterr().out) == {'checked': True}
+    assert timers == [(ollama.signal.ITIMER_REAL, 1.0), (ollama.signal.ITIMER_REAL, 0)]
+    assert handlers[-1] == (ollama.signal.SIGALRM, previous)
+
+
 def body():
     problem = Problem('synthetic', 'case', 'g1', 'line_follow', 1, ('e1',),
                       ('human', 'reobserve'), 'INTERVENE')
