@@ -95,6 +95,7 @@ class TripRunner(TripAdmission, TripProgress):
         self._live: dict[str, LiveTrip] = {}
         self._stop_epoch = 0
         self._start_cancels: dict[str, int] = {}
+        self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
@@ -330,18 +331,28 @@ class TripRunner(TripAdmission, TripProgress):
         live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
         live.lap_start = 0
 
-    async def _ai_confirm(self, live: LiveTrip) -> None:
+    async def _ai_confirm(self, live: LiveTrip, principal_id: str = "fleet-ai") -> None:
         """D-610 7: an AI replan switches without ``replan_hold`` once the new route passes the D-494/D-601
         start checks a first trip passes; a refusal leaves the hold for the operator (D-517 M4)."""
         hold = live.view["hold"]
         if not hold or hold.get("reason") != "replan" or hold.get("plan") is None:
             return
         robot_id, segments = live.view["robot_id"], hold["plan"]["segments"]
+        token = (self._stop_epoch, self._start_cancels.get(robot_id, 0), live.route_rev)
+
+        def current():
+            return (live.open and self._live.get(robot_id) is live and live.view["hold"] is hold
+                    and token == (self._stop_epoch, self._start_cancels.get(robot_id, 0), live.route_rev)
+                    and (principal_id != "fleet-rule" or robot_id in self.autonomous_robots))
+
         try:
             graph = self._graph_for(hold["map_version"])
             await self._caps_checks(robot_id, graph, segments, bool(live.repeat))
+            if not current():
+                return
             await self._pose_checks(robot_id, graph, segments)
-            self._apply_replan(live, hold, "fleet-ai")
+            if current():
+                self._apply_replan(live, hold, principal_id)
         except TripError as exc:
             live.view["detail"]["ai_replan_refused"] = exc.code
 
@@ -480,8 +491,8 @@ class TripRunner(TripAdmission, TripProgress):
                     and remaining <= self.config.arm_distance_m and not self._core_busy(live)
                     and (live.sent is None or live.sent["index"] != index)):
                 self._replan(live, index, frozenset(resolver["blocked_edges"]))
-                if resolver.get("ai"):
-                    await self._ai_confirm(live)
+                if resolver.get("ai") or robot_id in self.autonomous_robots:
+                    await self._ai_confirm(live, "fleet-ai" if resolver.get("ai") else "fleet-rule")
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last

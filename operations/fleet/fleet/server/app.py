@@ -135,6 +135,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
                ai_facts_acting: frozenset = frozenset(),
+               autonomous_robots: frozenset = frozenset(),
                ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
@@ -630,6 +631,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),
                                       painted=lambda: (site_maps.active() or (None,) * 4)[3])
+        resolver_core.autonomous_robots = frozenset(autonomous_robots)
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
@@ -717,6 +719,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    trip_runner.autonomous_robots = frozenset(autonomous_robots)
+    trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:
         from fleet.server.junction_signal import signal_for
         hub.junction_signal = partial(signal_for, traffic=trip_runner.traffic, poses=map_pose,
