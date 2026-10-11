@@ -81,9 +81,9 @@ roads:
       - [-0.157, -0.263]
 caution_markers:
   # D-525 rev.5: four real hatch marks; *_line denotes the OUTER end, not centre.
-  # Rectified overhead image (2026-10-09); CAD-spoke projection < 1.7 cm.
+  # D-525 rectified topdown-raw.png, 400 px/m; CAD-spoke projection < 1.7 cm.
   # shortcut: approximate flat appearance, replace after physical tape/height measurement.
-  source: overhead-robot-moving-15s.mp4, D-525 rev.5, paint-7b220d432c2a
+  source: D-525 rev.5 topdown-raw.png (paint-7b220d432c2a); overhead-robot-moving-15s.mp4 confirms appearance
   uncertainty_m: 0.03
   size: [0.15, 0.04]             # across road / along road; image-derived, not surveyed
   orange_colour: [0.90, 0.73, 0.17]  # observed yellow/orange; not segmentation mask colour
