@@ -45,6 +45,8 @@ async def protect_cleanup(cleanup):
 
 
 async def cleanup_scope(unit):
+    if type(unit) is not str or re.fullmatch(r'rosy-deliberation-[a-z0-9-]+\.scope', unit) is None:
+        raise ValueError('invalid owned sandbox scope')
     code, _ = await bounded_process(('/usr/bin/systemctl', '--user', 'kill',
         '--kill-whom=all', '--signal=KILL', unit), b'', 1, 256)
     if code != 0:

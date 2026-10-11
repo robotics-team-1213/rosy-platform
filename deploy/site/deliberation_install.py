@@ -17,11 +17,15 @@ profile rosy-deliberation-bwrap /usr/local/libexec/rosy-deliberation/bwrap flags
 '''
 
 
-def install_file(path, data, mode):
-    for parent in (path.parent, *path.parent.parents):
-        st = parent.stat()
+def trusted_directory(directory):
+    for parent in (directory, *directory.parents):
+        st = parent.lstat()
         if parent.resolve() != parent or st.st_uid != 0 or st.st_mode & 0o022:
             raise ValueError('UNTRUSTED_INSTALL_PARENT')
+
+
+def install_file(path, data, mode):
+    trusted_directory(path.parent)
     if path.exists() or path.is_symlink():
         st = path.lstat()
         if path.is_symlink() or st.st_uid != 0 or st.st_mode & 0o022 or path.read_bytes() != data:
@@ -58,7 +62,9 @@ def main(argv=None):
         subprocess.run(['/usr/sbin/apparmor_parser', '-Q', '-T'], input=PROFILE, check=True, timeout=10)
         # Install only under the fixed admin-owned hierarchy, never overwrite a foreign file.
         for directory in (BWRAP.parent.parent, BWRAP.parent):
+            trusted_directory(directory.parent)
             directory.mkdir(mode=0o755, exist_ok=True)
+            trusted_directory(directory)
         install_file(BWRAP, data, 0o755)
         install_file(PROFILE_PATH, PROFILE, 0o644)
         subprocess.run(['/usr/sbin/apparmor_parser', '-r', '-T', str(PROFILE_PATH)], check=True, timeout=10)
