@@ -23,3 +23,5 @@ Tailscale이 다른 계정으로 바뀌어 첫 통합 시험의 SSH가 끊겼다
 최신 main 착지, 실제 source image 빌드와 설치, private config/token mount 및 지속 Fleet READY, 사용자 mention 요청→기명 원장→실제 Console 읽기 수용이 남았다. D-669 후보/승인/결과 reply와 위험 사건 조치, provider/로봇 FIELD도 별도다. 로봇 명령/rearm/provider/push는 실행하지 않았다.
 
 Protocol: [Discord Gateway](https://docs.discord.com/developers/events/gateway).
+
+후속27fc0de96: 최종 수신/자격/구조/wheel+sdist 설치83 PASS/NEW0. threshold 재판정 회귀 통과. 배치 runner fallback을 기록하며 resource floor 수용 증거로 쓰지 않는다. main 착지/이미지/현장 수용은 아직 남았다.
