@@ -217,6 +217,26 @@ def _app(tmp_path):
     return TestClient(app), tasks, store, poses
 
 
+def test_activation_preserves_running_teach_and_allows_stopped_pending_records(tmp_path):
+    client, _tasks, store, poses = _app(tmp_path)
+    with client:
+        draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
+        active = store.active_view()
+        started = client.post('/api/fleet/teach/start', headers=OPERATOR, json={'robot_id': 'rosy_60'})
+        assert started.status_code == 200
+        refused = client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+            json={'expected_revision': draft['revision']})
+        assert refused.status_code == 409 and refused.json()['detail']['code'] == 'SITE_MAP_ROUTE_ACTIVE'
+        assert store.active_view() == active and store.draft_view() == draft
+        assert client.get('/api/fleet/teach', headers=VIEWER).json()['recording']['teach_id'] == started.json()['recording']['teach_id']
+        poses.at(1, 0)
+        client.portal.call(client.app.state.teach.sample)
+        assert client.post('/api/fleet/teach/stop', headers=OPERATOR).status_code == 200
+        assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+            json={'expected_revision': draft['revision']}).status_code == 200
+        assert client.get('/api/fleet/teach', headers=VIEWER).json()['pending']
+
+
 def test_teach_api_needs_a_named_operator_and_is_audited(tmp_path):
     client, tasks, store, poses = _app(tmp_path)
     with client:
