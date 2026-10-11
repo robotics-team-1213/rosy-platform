@@ -3251,6 +3251,13 @@
 - 증거: 원격 실제 Chromium의 결정적 RED1 NEW 뒤 roles browser 전체6 pass·NEW0·exit0. 첫 원격 호출은 browser opt-in이 빠져 skip이었으며 실행 증거로 세지 않았다.
 - gate 변화: 시험 준비 순서와 원격 브라우저 회귀를 확인했다. main 통합·새 CI·사이트 배포·Isaac/Gazebo 주행과 두 대 Fleet 수용은 별도다.
 
+## 2026-10-11 · fb54c9f47f · fix(ci): 사건·알림 시험 helper의 xunit 충돌 제거
+
+- 문제: main 4bcfc55d88의 CI 38147167947에서 pytest 7.4가 두 시험 모듈의 setup(tmp_path)을 xunit hook으로 호출해 Path 대신 module을 전달했다. 30개 시험이 준비 단계에서 오류로 끝났으며 원격 시험 PC의 최신 pytest 통과는 이 버전 호환성을 증명하지 못했다.
+- 변경: helper를 make_board와 make_notifications로 바꾸고 전체 16개 정의·호출 위치를 함께 갱신한다. 시험 본문·검증과 제품의 사건 원장·알림·명령 권한은 유지한다.
+- 증거: 수정 SHA에서 두 시험 모듈과 공용 UI 계약 원격 61 PASS, NEW 0. 독립 리뷰가 전체 호출 위치와 본문 보존을 승인했다. 안전 경로 trailer 검사는 통과했다.
+- gate 변화: SOURCE/원격 관련 회귀 확인. pytest 7.4의 실제 새 CI 결과·main 통합·배포·두 대 주행 수용은 후속 확인이다.
+
 ## 2026-10-11 · ea60284994 · D-655 조사용 상대 odom 읽기
 
 - 변경: World tracker의 최신 odom pose/stamp/epoch를 신선할 때만 읽는 survey_odom 포트를 Fleet 서비스로 전달한다. 지도 anchor 없이도 조사 근거를 읽지만 운행 MapPose·pin·명령은 생성하지 않는다. stale/future/unknown robot은 값 없음, 기존 gap/reset epoch를 유지한다.
