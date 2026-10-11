@@ -1,6 +1,7 @@
 """D-628: mode-bound candidates and curvature after the line body judgement."""
 
 import math
+from types import SimpleNamespace
 
 import pytest
 
@@ -131,3 +132,17 @@ def test_other_navigation_and_manual_keep_independent_clip_semantics():
     assert modes.transition(Mode.MANUAL)[0]
     assert command.teleop(.1, .4)[0]
     assert command.select_output() == Twist(.02, .4)
+
+
+def test_line_rejects_actuation_that_changes_the_checked_curve(monkeypatch):
+    command, _, safety = _line_rig()
+    safety._policy_clock = lambda: 10.
+    safety.bind_policy(lambda r: SafetyDecision(r.command_id, r.source, r.calibration_revision,
+                                               10., 10.2, .01, .1, "limit"), "rev")
+    safety._actuation_required = True
+    safety._actuation = SimpleNamespace(revision="rev", expires_at=10.2,
+                                        scan_received_at=10., scan_source_at=10.,
+                                        prepare=lambda *args: SimpleNamespace(
+                                            motor_linear=.01, linear=.01, angular=.1))
+    monkeypatch.setattr(safety, "_simulation_actuation_enabled", lambda: True)
+    assert command.select_output(now=10.) == Twist()

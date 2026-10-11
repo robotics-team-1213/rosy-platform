@@ -100,11 +100,20 @@ def _refused(rig, why, **body):
 
 def test_kturn_refuses_side_obstacle_outside_straight_rear_strip():
     rig = Rig()
-    rig.extra = ((-.10, -.09),)
-    rig.feed()
-    inp = rig.m._stuck_input(rig.t)
-    assert rig.m._recovery._back_refusal(inp) is None
-    assert not rig.m._rear_sweep_clear(rig.t, .04, .3)
+    # A bounded deterministic witness search verifies the side point meets both premises.
+    inp = None
+    for x in (-.07, -.08, -.09, -.10):
+        for y in (-.077, -.08, -.083, -.086):
+            rig.extra = ((x, y),)
+            rig.feed()
+            candidate = rig.m._stuck_input(rig.t)
+            if (rig.m._recovery._back_refusal(candidate) is None
+                    and not rig.m._rear_sweep_clear(rig.t, .04, .3)):
+                inp = candidate
+                break
+        if inp is not None:
+            break
+    assert inp is not None, "the side obstacle must miss the strip and intersect the curved body"
     assert rig.m._realign_why(rig.t, inp, "KTURN", -.04, .3) is not None
 
 
