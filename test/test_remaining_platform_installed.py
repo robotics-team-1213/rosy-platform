@@ -81,7 +81,7 @@ assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rc
 try:
     GoalPredicate.from_mapping({'predicate_id': 'p', 'condition': 'object_in_destination',
                                 'object_id': 'o', 'destination_id': 'd', 'evidence_source': 'model_summary'})
-except GoalEvidenceError:
+except ValueError:
     pass
 else:
     raise AssertionError('model summary admitted as independent goal evidence')
