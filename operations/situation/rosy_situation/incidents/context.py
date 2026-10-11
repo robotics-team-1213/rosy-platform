@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from rosy_situation.assessment import finite
+from rosy_situation.snapshot_assessment import robot_input
 
 SOURCE = "analyzer:incident_context@1"
 CAUSE = {"lane_lost": "line_marking", "obstacle_ahead": "obstacle"}
@@ -42,9 +43,16 @@ class ContextDraft:
                 continue
             if isinstance(current, dict) and current.get('stuck_id') != sid:
                 continue
+            if 'seq' in state or 'timestamp' in state:
+                request = robot_input(row, now=snapshot['observed_at'],
+                                      sampled_at=snapshot.get('_state_requested_at', snapshot['observed_at']),
+                                      pending=stuck)
+                observed = request.evidence[0].observed_at
+                if not finite(observed) or not 0 <= snapshot['observed_at'] - observed < 3.0:
+                    continue
             self.seen.add((rid, sid))
             self._last[(rid, sid)] = snapshot['observed_at']
-            cause = str(stuck.get("cause") or "")
+            cause = str((current.get('cause') if isinstance(current, dict) else None) or stuck.get("cause") or "")
             camera = (context.get("cameras") or {}).get(rid)
             site_map = context.get("map")
             support = [{"source": "core", "field": "line_stuck.cause", "value": cause}]

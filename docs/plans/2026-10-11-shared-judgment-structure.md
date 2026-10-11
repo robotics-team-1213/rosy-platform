@@ -8,7 +8,7 @@
 
 **Tech Stack:** 기존 Python·ROS-free 참조 형식·Fleet SQLite/httpx·static source holder mapping·원격 pytest. 신규 dependency와 범용 orchestration framework는 추가하지 않는다.
 
-**Status:** Proposed. 이번 작업은 이 계획과 구조 제안 문서만 작성했다. 아래 생성/이전 파일은 구현 예정이며 새 API나 설치 완료의 증거가 아니다. D-647 0단계 수용과 D-642~D-646의 단계별 계약을 구현 전에 대조한다.
+**Status:** 단계 0/1의 내부 shadow 구현은 [D-652](../adr/D-652-intervention-assessment-shadow.md) 범위로 진행한다. 공통 필요성 평가와 기존 CORE snapshot adapter만 수용하며 D-647/D-648 전체 구조, 단계 2~4, 외부 API와 현장 활성화는 Proposed/미완료다. [구현 및 검증 기록](../validation/intervention-assessment-2026-10-11.md)에 실제 소비자와 설치 closure를 기록한다.
 
 ## 0. 현재 소비자와 목표 책임 검수
 Read: `operations/{world,situation,decision,execution,fleet}/AGENTS.md`, `rosy.decision` 하위 AGENTS, D-427/D-429/D-430/D-630/D-637, Proposed D-435/D-647/D-648.

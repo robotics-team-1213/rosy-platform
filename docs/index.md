@@ -219,6 +219,7 @@
 | D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
 | D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 
 ## 계획·결과 문서
 

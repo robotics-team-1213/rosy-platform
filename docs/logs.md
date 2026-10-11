@@ -7765,3 +7765,9 @@ osy-d395-s1d\`.
 - 변경: D-650과 tools/sim/isaac의 고정 모델/기존 keep/manager 연결, 카메라 관측 Q 정책의 schema·model revision/SHA 검사를 추가했다. 제품 manager/API·실기 pointer·intake 기준은 변경하지 않았다.
 - 증거: 원격 camera/map-task/SDK-entrypoint60 passed/NEW0. main 098a0c0c0의 D-649 기존 Drive 소스 이동을 병합한 뒤 Isaac 전체 및 기존 drivable/model 회귀 227 passed/2 skipped/NEW0. Native 카메라 R1은 no-wall 모델의 floor_gate 설정 오류, R2는 strict 관측이 카메라 기반 off-line 복귀도 막아 종료됐다. 설정과 provenance/freshness를 수정하고 독립 소스 재검토를 받았으며 실제 완주 재시험은 별도 기록한다.
 - gate 변화: 없음. 두 대 Fleet/신호/횡단보도·실물 수용은 미확인이고 카메라 학습 정책은 HOLD다.
+
+## 2026-10-11 - D-652 common intervention assessment shadow implementation
+
+- Contract: immutable evidence, current owner/case/revision and bounded necessity output; Fleet and Situation share the pure adapter without new commands or wire fields.
+- Evidence: remote RED 36 + 14 expected failures; focused GREEN 178 passed, NEW 0 at 0926fc4fa5. Final integration and added freshness/install checks recorded in landing receipt.
+- Gates: source and isolated wheel/sdist only; no push/deploy, field acceptance, notification or model activation. See docs/validation/intervention-assessment-2026-10-11.md.
