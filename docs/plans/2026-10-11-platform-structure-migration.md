@@ -127,6 +127,10 @@ CORE 전체 후보 `5faad3583`의 원격 2575 성공·10 skip, feature 1675 성�
 
 source-mode facade와 실제 설치는 구분한다. `control` 배포는 정적 source holder mapping과 self-contained sdist snapshot을 사용하고, World wheel은 checkout 밖 독립 import 대상이다. Docker/context/workflow·source path·G2 origin/digest·영향 시험 소비자를 현재 holder에 맞춰 연결했다. 이 소스 연결이 ARM64 image나 현장 runtime readback을 대신하지 않는다.
 
-[기존 D-628 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 source 범위다. 전체 remote/known_failures·구조/harness/Safety·설치 결과와 main 착지 결과는 root가 확정할 검증 기록에서 확인한다. 이 추가 기록은 push·배포·live 활성화 결과를 선언하지 않는다.
+[기존 D-628 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 source 범위다. 전체 remote/known_failures·구조/harness/Safety·설치 결과와 main 착지 결과는 [확정한 검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 확인한다. 이 추가 기록은 push·배포·live 활성화 결과를 선언하지 않는다.
 
 미래 `operations/prediction/world_model`과 대응 학습·독립 평가는 계획으로 남는다. state/action/horizon/model revision·uncertainty/만료·실제 decision 소비자가 연결되기 전에는 빈 holder를 만들지 않는다. ACT policy 연구를 World rollout으로 이름만 바꾸지 않는다. Fleet decision/Console과 장치 demonstration carve는 현재 transaction/package 소비자 결합을 유지하며 보류 이유를 전체 root 안내에 기록했다.
+
+## 2026-10-11 폴더 단계 착지
+
+위의 초기 후보·미실행 표는 당시 SHA의 이력이다. 이후 채택한 M7 조립·M8·M9 실제 holder 이동과 소비자 수정은 `7f391fa2d`로 local main에 반영했다. 85개 root 판정과 빈 제품 폴더 0개 확인을 마쳤으며, 보류한 패키지 carve와 미래 모델은 완료로 집계하지 않는다. 사용자의 최신 순서에 따라 이동·커밋·머지를 먼저 끝내고 설명 수정을 후속 commit으로 분리했다. [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)은 RED와 수정 후 362 passed, local main 착지와 남은 CI·ROS·장치 gate를 구분한다.

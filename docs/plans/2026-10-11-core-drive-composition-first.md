@@ -26,6 +26,6 @@
 - D-628 mode epoch·input epoch·불변 candidate 동일성을 정책 전후에 확인한다. 차선은 profile 상한 이후 traffic 검사를 거치고 동적/정책 제한이 곡률을 보존한다. 복구 답변은 현재 근거로 갱신하고 KTURN 후진은 기존 rear 검사를 거친 뒤 reverse body sweep을 확인한다.
 - D-630 기존 Control의 sensing/vision과 Drive 알고리즘은 실제 책임 holder로 분리했다. 기존 ROS/import/resource identity와 CORE feature owner·OMX Arm writer는 유지한다.
 
-새 후보 전체의 remote/known_failures·설치·harness/Safety·착지 검증 기록은 확정 대기다. [기존 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md), [현재 CORE 구조](../reference/core-drive-responsibilities.md), [전체 root 판정](../reference/platform-folder-responsibilities.md)을 연결한다. 부분 회귀 성공을 전체 GREEN·ROS/ARM64/장치/현장 수용으로 확대하지 않는다.
+remote/known_failures·설치·harness/Safety와 local main `7f391fa2d` 착지는 [확정한 검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 있다. [기존 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md), [현재 CORE 구조](../reference/core-drive-responsibilities.md), [전체 root 판정](../reference/platform-folder-responsibilities.md)을 연결한다. 이전 실패와 수정 후 재검사를 구분하며 CI FULL·ROS/ARM64/장치/현장 수용으로 확대하지 않는다.
 
 같은 NAV mode의 외부 producer/goal identity를 완전히 검증하는 D-442 단계와 action-conditioned 미래 World 예측은 후속 계획이다. 기존 자동 복구·progress watch·REALIGN 기본값은 off이며 새 모델·현장 overlay를 활성화하지 않았다.

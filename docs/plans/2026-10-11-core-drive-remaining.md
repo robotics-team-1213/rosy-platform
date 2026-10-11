@@ -23,3 +23,5 @@
 | 물리 구조 | D-630에 따라 센서·vision과 Drive backend를 분리하고 World 상태 projection·Situation 분석/incident를 별도 holder로 옮겼다. 기존 package/import와 설치 계약은 유지한다. |
 
 독립 Safety/구조 소스 승인은 [CORE 검토](../validation/d628-core-drive-2026-10-11/safety-review.md)와 [holder 검토](../validation/d630-platform-holders-2026-10-11/safety-review.md)에 있다. [현재 전체 폴더 안내](../reference/platform-folder-responsibilities.md)는 채택한 분리와 유지·보류 결정을 구분한다. 원격 검증과 local main 착지는 별도 실행 증거로 기록하며 ROS·ARM64·장치·현장 gate를 올리지 않는다.
+
+2026-10-11 폴더·소비자 수정은 local main `7f391fa2d`에 먼저 반영했다. 이후 설명을 수정했으며 [확정한 검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 시험 SHA와 실패 수정·착지 근거를 남겼다. 추가 주행 알고리즘·World 예측 확장은 이번 폴더 단계 다음의 작업이다.
