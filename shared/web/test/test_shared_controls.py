@@ -30,7 +30,8 @@ TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
-    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions|"
+    r"ui-disclosure-row|ui-disclosure-name|ui-page-heading|ui-section-heading"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 # D-359 §7.4 — outline도 덧칠이다(포커스처럼 보인다). 눌림은 aria-pressed의 공용 표현이다.
@@ -317,6 +318,17 @@ def test_surfaces_do_not_repaint_shared_controls():
             if painted:
                 offenders.append(f"{path.name} {selector.strip()[:60]} -> {painted}")
     assert not offenders, offenders
+
+
+def test_new_shared_role_classes_reject_surface_repaint(tmp_path, monkeypatch):
+    stylesheet = tmp_path / "surface.css"
+    monkeypatch.setitem(globals(), "_surface_texts", lambda: [stylesheet])
+    for role in ["ui-disclosure-row", "ui-disclosure-name", "ui-page-heading", "ui-section-heading"]:
+        stylesheet.write_text(f".{role} {{ font-size: var(--text-display); }}", encoding="utf-8")
+        with pytest.raises(AssertionError, match=role):
+            test_surfaces_do_not_repaint_shared_controls()
+        stylesheet.write_text(f".{role} {{ margin: var(--space-3); }}", encoding="utf-8")
+        test_surfaces_do_not_repaint_shared_controls()
 
 
 def local_button_height_problems(css):

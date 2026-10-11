@@ -514,9 +514,11 @@ FONT_SIZE = re.compile(r"(?<![-a-z])(font-size|font):\s*([^;}]+)")
 def type_size_problems(css):
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     hits = []
+    size = r"var\(--text-(?:micro|label|body|value|title|display)\)"
+    shorthand = rf"(?:var\(--weight-[a-z-]+\)\s+)?{size}(?:\s*/\s*var\(--leading-[a-z-]+\))?\s+var\(--(?:body|mono)\)"
     for prop, value in FONT_SIZE.findall(css):
         text = value.strip()
-        if "--text-" in text or text == "inherit":
+        if text == "inherit" or re.fullmatch(size if prop == "font-size" else shorthand, text):
             continue
         if prop == "font-size" and re.fullmatch(r"[\d.]+em", text):
             continue
@@ -527,6 +529,9 @@ def type_size_problems(css):
 def test_type_and_decoration_guards_reject_drift_but_keep_geometry():
     assert type_size_problems(".label { font-size: 13px; }")
     assert type_size_problems(".label { font-size: var(--text-label); }") == []
+    assert type_size_problems(".label { font-size: calc(var(--text-label) + 5px); }")
+    assert type_size_problems(".label { font: var(--weight-label) calc(var(--text-label) + 5px) var(--body); }")
+    assert type_size_problems(".label { font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); }") == []
     assert decoration_problems(".panel { background: linear-gradient(red, blue); }")
     assert decoration_problems(".stick { background: linear-gradient(var(--line-14), var(--line-14)) center / 1px 100%; }") == []
 
