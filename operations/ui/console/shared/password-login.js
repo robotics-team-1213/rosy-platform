@@ -4,7 +4,7 @@ import {loginHref} from '/console/assets/login-return.js';
 
 const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
-  || sessionStorage.getItem('rosy-console-token') || ''});
+  ?? sessionStorage.getItem('rosy-console-token') ?? ''});
 const FORM = `
   <form class="password-login-form" data-login="form" aria-label="관제 로그인">
     <label for="fleet-login-name">아이디</label>
@@ -32,7 +32,7 @@ function failureText(error) {
 export function createPasswordLogin(host, {onChange = () => {}, standalone = false} = {}) {
   host.innerHTML = standalone ? FORM : WHO;
   const part = name => host.querySelector(`[data-login="${name}"]`);
-  let busy = false, cookie = false, cookiePrincipal = null;
+  let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null;
   const link = document.getElementById('fleet-login');
   if (link) link.href = loginHref(location);
   if (link && ['/console/site-map', '/console/cell'].includes(location.pathname)) {
@@ -60,6 +60,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       const session = await (standalone ? cookieRequest : sessionRequest)('/api/fleet/auth/session');
       cookie = session.via === 'cookie';
       cookiePrincipal = cookie ? session.principal_id : null;
+      cookieRole = cookie ? session.role : null;
       if (standalone) {
         if (cookie) onChange(true);
       } else {
@@ -72,7 +73,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       return cookie;
     } catch (error) {
       if (error?.status === 401 || error?.status === 404) {
-        cookie = false; cookiePrincipal = null;
+        cookie = false; cookiePrincipal = cookieRole = null;
         if (!standalone) host.hidden = true;
       } else if (standalone) {
         host.hidden = false;
@@ -116,14 +117,15 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       try {
         const session = await cookieRequest('/api/fleet/auth/session');
         if (session.via !== 'cookie') return;
-        if (cookie && cookiePrincipal === session.principal_id) return;
+        if (cookie && cookiePrincipal === session.principal_id && cookieRole === session.role) return;
         cookie = true;
         cookiePrincipal = session.principal_id;
+        cookieRole = session.role;
         sessionStorage.removeItem('rosy-console-token');
         onChange(true);
       } catch (error) {
         if (error?.status === 401 && cookie) {
-          cookie = false; cookiePrincipal = null; onChange(false);
+          cookie = false; cookiePrincipal = cookieRole = null; onChange(false);
         }
       }
     });
@@ -139,7 +141,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
           } catch (error) { if (error?.status !== 401) throw error; }
         }
         sessionStorage.removeItem('rosy-console-token');
-        cookie = false; cookiePrincipal = null;
+        cookie = false; cookiePrincipal = cookieRole = null;
         host.hidden = true;
         document.getElementById('fleet-account').open = false;
         onChange(false);
