@@ -514,7 +514,7 @@ FONT_SIZE = re.compile(r"(?<![-a-z])(font-size|font):\s*([^;}]+)")
 def type_size_problems(css):
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     hits = []
-    size = r"var\(--text-(?:micro|label|body|value|title|display)\)"
+    size = r"var\(--(?:text-(?:micro|label|body|value|title|display)|brand-wordmark-size)\)"
     shorthand = rf"(?:var\(--weight-[a-z-]+\)\s+)?{size}(?:\s*/\s*var\(--leading-[a-z-]+\))?\s+var\(--(?:body|mono)\)"
     for prop, value in FONT_SIZE.findall(css):
         text = value.strip()

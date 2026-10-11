@@ -795,7 +795,7 @@ ui-brand a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ri
 ui-brand b {
   color: var(--brand-rose);
   font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body);
-  font-size: min(var(--text-title), 14cqi);
+  font-size: var(--brand-wordmark-size);
   letter-spacing: var(--track-wide);
   white-space: nowrap;
 }
