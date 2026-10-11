@@ -7,6 +7,7 @@ name = "rosy-world"
 version = "0.1.0"
 description = "ROS-free ROSY observation references and current-state projections"
 requires-python = ">=3.12"
+dependencies = ["core_common>=0.0.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

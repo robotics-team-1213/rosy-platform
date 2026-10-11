@@ -8,7 +8,7 @@ import numpy as np
 
 from control.sensing.perception.learned.road_region import observed_road_region, road_masks
 from control.sensing.perception.learned.lane_mask import preprocess
-from rosy.world.state.projections.road_region import road_region_input_errors
+from core_common.observation import road_region_input_errors
 
 
 def _boundary_metrics(pred, target, valid) -> dict:
