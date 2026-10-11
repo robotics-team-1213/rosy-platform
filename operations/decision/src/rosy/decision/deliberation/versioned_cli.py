@@ -1,5 +1,6 @@
 """Explicit v2 consumer of an admitted isolated raw CLI transport, never activation."""
 from dataclasses import asdict
+import asyncio
 import math
 
 from . import canonical
@@ -50,6 +51,7 @@ class VersionedCliProvider:
                           'prior': checked_prior, 'instruction': 'Return only schema version 2 advisory JSON. '
                           'Never use tools or claim verified physical success or calibration.'}).encode()
         argv = _argv(self.transport.kind, self.transport.model, self.transport.cli_version, schema, budget_usd)
-        code, raw = await launch(argv, body, remaining, self.profile.max_output_bytes, budget_usd)
+        async with asyncio.timeout(remaining):
+            code, raw = await launch(argv, body, remaining, self.profile.max_output_bytes, budget_usd)
         payload, cost = _decode_result(self.transport.kind, launch, code, raw, self.profile.max_output_bytes, budget_usd)
         return judgment(problem, bound, payload, missing_allowlist=missing_allowlist), cost
