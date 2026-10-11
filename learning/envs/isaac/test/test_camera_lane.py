@@ -40,6 +40,9 @@ def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
                          robot_path='/World/Imported', stamp_ns=1_000_000_000)
     try:
         assert lane.observe_scan(sample, body=NOMINAL_BODY) is True
+        assert lane.manager._return_view.points == ()
+        assert len(lane.manager._return_view.unknown) == 640
+        assert lane.manager._return_source_high_water_ns == 1_000_000_000
         lane.observe(np.full((240, 320, 3), 100, np.uint8),
                      stamp=1., source_now=1., pose=(0., 0., 0.))
         assert seen == [(None, 1., {'left': None, 'right': None})]
