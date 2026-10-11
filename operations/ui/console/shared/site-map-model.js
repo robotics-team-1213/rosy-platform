@@ -719,7 +719,8 @@ export function trafficAttention(traffic, robotId, clock, now) {
   const mine = resolver.find((row) => row.robot_id === robotId);
   if (Array.isArray(cycle) && cycle.includes(robotId)) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
-    const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
+    const then = mine?.reason?.startsWith("auto_hold:") ? "해결기: 자동 대기 · 상태 관측 중"
+      : mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
     const confirmed = resolver.some((row) => row.trigger === "wait_cycle");
     items.push(confirmed

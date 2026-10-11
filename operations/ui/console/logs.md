@@ -140,3 +140,9 @@
 - 변경: 기본 프로필 기능의 화면 이름과 우상단 링크를 내 계정으로 통일하여 운용 용어 규칙을 지킨다. URL과 본인 정보 관리 동작은 유지한다.
 - 증거: d002c579d 전체 영향 원격 첫 묶음 6921 PASS/800 SKIP/2 NEW, 둘째 묶음 537 PASS/309 SKIP/1 NEW를 확인했다. 용어·API 버전·합친 계획의 공개 commit 표기 문제를 재현했으며 각각 known_failures NEW 2/1이다. 수정 재검증 대기다.
 - gate 변화: 없음. 착지·배포·팀원 발급은 미확인이다.
+
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
