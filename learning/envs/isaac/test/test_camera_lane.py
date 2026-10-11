@@ -19,6 +19,62 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_missing_camera_observation_is_not_a_learning_state():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    lane = LearnedCameraLane(SimpleNamespace(), ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                             camera_x=.03317, clock=lambda: 10.)
+    try:
+        assert lane.state() is None
+    finally:
+        lane.close()
+
+
+def test_learning_state_expires_with_source_age_and_processing_time():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    now = [10.]
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                             camera_x=.03317, clock=lambda: now[0])
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1.15, pose=(0., 0., 0.))
+        assert lane.state() is not None
+        now[0] = 10.151
+        assert lane.state() is None
+        now[0] = 9.9
+        assert lane.state() is None
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('previous,state,reason', [
+    (((2, 1), 3), None, 'invalid_camera_observation'),
+    (None, (3, 1), 'no_previous_observation'),
+    (((None, 3)), (3, 1), 'no_previous_observation'),
+])
+def test_learning_rejects_missing_observations_without_creating_q(previous, state, reason):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    assert learn_transition(policy, previous, state,
+                            dict(reward=1., terminated=False, truncated=False)) == reason
+    assert policy.updates == 0 and policy.table == {}
+
+
+def test_measured_terminal_transition_does_not_bootstrap_and_counts_real_update():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.table[(3, 1)] = [100.] * 4
+    result = dict(reward=-10., terminated=True, truncated=False)
+    assert learn_transition(policy, ((2, 1), 3), (3, 1), result) == 'updated'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
+
+
 def test_two_camera_lanes_keep_distinct_core_event_identity_and_loss_state():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
