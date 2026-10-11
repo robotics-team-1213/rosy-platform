@@ -21,7 +21,11 @@ Branch: `feat/perception-fitness-pipeline`. 계약: D-659, D-663, D-665, D-666, 
 | 별도 export CLI의 semantic 손실 재현 | `acdc9fdb4b` | 새 6개 시험 실패. YAML reader가 semantic을 버리는 원인 확인 |
 | export reader 수정 후 writer/기존 전달 경계 | `c57b59c402` | 원격 training contract 시험 terminal exit 0, NEW0. 2개 ML 의존 시험은 제외이며 실제 모델 변환 실행 증거가 아니다 |
 
-전체 회귀와 최신 main 착지 결과는 해당 실행 후 추가 기록한다. 원격 원본 로그와 receipt는 비공개 세션 artifact 위치에 보존한다.
+최신 main `53b45aafb4`를 통합한 `c41dfcb0aa`를 시험 PC에서 검사하고 local main에 fast-forward로 착지했다. 관련 회귀 세 묶음은 각각 9,494/4,206/3,699개 통과, 444/116/211개 제외이며 모두 terminal exit 0과 known-failure 비교 NEW0이다. 합계는 17,399개 통과, 771개 제외다. lint는 error 0, warning 27이다.
+
+첫 통합 검사에서 발견한 신규 실패 세 가지는 시험 소유 경로, 문서 checksum 표기, Fleet initializer 버전 불일치였다. 모듈 시험 경로와 harness 등록, checksum 문맥, 패키지 버전 일치를 수정했고 예외 목록을 늘리지 않았다. 독립 소스 검토도 수정 후 추가 차단 사항이 없음을 확인했다.
+
+selector가 FULL로 승격했지만 이번 실행은 guard와 mapped suite 범위다. 전체 CI tier는 미확인이다. 원격 원본 로그와 SHA256 receipt는 비공개 세션 artifact 위치에 보존한다. 이 착지는 push·장치 배포·실물 또는 시뮬레이션 성능 수용 증거가 아니다.
 
 ## 독립 소스 검토와 수정
 
