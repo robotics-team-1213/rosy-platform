@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import sqlite3
 import re
+import math
+from contextlib import closing
 
 MAX_EVENT_BYTES = 64 * 1024
 _SENSITIVE_FIELD = re.compile(
@@ -88,6 +90,99 @@ def verify(output):
     if count != manifest["rows"] or digest.hexdigest() != manifest["sha256"]:
         raise ValueError("Fleet observation export hash or row count changed")
     return manifest
+
+
+def capture_window(database, *, robot_id, start, end, max_gap_s, max_rows=4096):
+    """Validate retained append coverage; command, sensor and model coverage are separate."""
+    finite = lambda v: type(v) in (int, float) and math.isfinite(v)
+    if (type(robot_id) is not str or not robot_id or not all(map(finite, (start, end, max_gap_s)))
+            or start >= end or end - start > 86400 or max_gap_s <= 0
+            or type(max_rows) is not int or not 1 <= max_rows <= 4096):
+        raise ValueError('window requires a subject, finite ordered <=24h bounds and positive gap')
+    result = dict(schema='rosy.fleet-observation-window/1', robot_id=robot_id,
+                  start=start, end=end, max_gap_s=max_gap_s, state='HOLD', reasons=[],
+                  capture_complete=False, rows=[], verification='retained_capture_only',
+                  field_accepted=False, normal_commands=None, model_calls=None, recurrence=None)
+
+    def hold(reason):
+        result['reasons'].append(reason)
+        return result
+
+    # Read the live WAL correctly; SQLite immutable=1 would miss uncheckpointed records.
+    with closing(sqlite3.connect(Path(database).resolve().as_uri() + '?mode=ro', uri=True)) as db:
+        db.execute('PRAGMA query_only=ON')
+        db.execute('BEGIN')
+        # A wall clock regression makes epoch-based selection ambiguous, even outside the requested bounds.
+        if db.execute('''SELECT 1 FROM (SELECT received_at,
+                LAG(received_at) OVER (ORDER BY observation_id) AS previous
+                FROM fleet_observations) WHERE received_at < previous LIMIT 1''').fetchone():
+            return hold('CLOCK_REGRESSION')
+        left = db.execute('SELECT MAX(received_at) FROM fleet_observations WHERE received_at<=?',
+                          (start,)).fetchone()[0]
+        right = db.execute('SELECT MIN(received_at) FROM fleet_observations WHERE received_at>=?',
+                           (end,)).fetchone()[0]
+        if left is None or right is None:
+            return hold('MISSING_BOUNDARY')
+        # Include every row of the boundary captures; never filter the requested robot first.
+        bounds = db.execute('''SELECT MIN(observation_id), MAX(observation_id)
+                FROM fleet_observations WHERE received_at>=? AND received_at<=?''', (left, right)).fetchone()
+        rows = db.execute('''SELECT observation_id,robot_id,received_at,payload_json
+                FROM fleet_observations WHERE observation_id BETWEEN ? AND ?
+                ORDER BY observation_id LIMIT ?''', (*bounds, max_rows + 1)).fetchall()
+    if len(rows) > max_rows:
+        return hold('ROW_LIMIT')
+    groups, previous, identities, stamp = [], None, [], None
+    for oid, rid, received, payload in rows:
+        try:
+            body = json.loads(payload)
+            valid = (type(body) is dict and len(payload.encode('utf-8')) <= MAX_EVENT_BYTES
+                     and not _contains_sensitive_field(body) and body.get('robot_id') == rid
+                     and body.get('received_at') == received and finite(received)
+                     and type(body.get('online')) is bool
+                     and body.get('clock') == 'fleet_receive_epoch'
+                     and body.get('verification') == 'observed_not_labeled'
+                     and json.dumps(body, ensure_ascii=False, separators=(',', ':'), allow_nan=False) == payload)
+        except (ValueError, TypeError, RecursionError) as exc:
+            raise ValueError('observation source failed validation') from exc
+        if not valid:
+            raise ValueError('observation source failed validation')
+        capture = body.get('capture')
+        if capture is None:
+            return hold('LEGACY_CAPTURE')
+        if (type(capture) is not dict or set(capture) != {'run_id', 'sequence', 'monotonic_at', 'robot_ids'}
+                or type(capture['run_id']) is not str or not re.fullmatch('[0-9a-f]{32}', capture['run_id'])
+                or type(capture['sequence']) is not int or capture['sequence'] < 1
+                or not finite(capture['monotonic_at']) or type(capture['robot_ids']) is not list
+                or not 1 <= len(capture['robot_ids']) <= 1024
+                or any(type(v) is not str or not v for v in capture['robot_ids'])
+                or capture['robot_ids'] != sorted(set(capture['robot_ids']))):
+            return hold('INVALID_CAPTURE')
+        key = (capture['run_id'], capture['sequence'])
+        if previous is not None and key == (previous['run_id'], previous['sequence']):
+            if capture != previous or received != stamp:
+                return hold('INCONSISTENT_CAPTURE')
+        else:
+            if previous is not None:
+                if sorted(identities) != previous['robot_ids']:
+                    return hold('INCOMPLETE_ROSTER')
+                if capture['run_id'] != previous['run_id']:
+                    return hold('PRODUCER_RESTART')
+                if capture['sequence'] != previous['sequence'] + 1:
+                    return hold('CAPTURE_GAP')
+                delta = capture['monotonic_at'] - previous['monotonic_at']
+                if delta <= 0 or delta > max_gap_s or received - stamp > max_gap_s:
+                    return hold('CLOCK_OR_CADENCE_GAP')
+            if robot_id not in capture['robot_ids']:
+                return hold('SUBJECT_ABSENT')
+            groups.append(capture)
+            previous, identities, stamp = capture, [], received
+        identities.append(rid)
+        result['rows'].append(dict(observation_id=oid, sha256=hashlib.sha256(payload.encode('utf-8')).hexdigest()))
+    if previous is None or sorted(identities) != previous['robot_ids']:
+        return hold('INCOMPLETE_ROSTER')
+    result.update(state='UNREVIEWED', capture_complete=True, run_id=previous['run_id'],
+                  first_sequence=groups[0]['sequence'], last_sequence=previous['sequence'])
+    return result
 
 
 def main():
