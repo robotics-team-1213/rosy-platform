@@ -267,7 +267,8 @@ def main():
             raise
         finally:
             try:
-                app.close()
+                from sdk_entrypoint import close_sdk
+                close_sdk(app, headless=True)
             except Exception as exc:
                 summary['sdk_shutdown_error'] = str(exc)
                 raise
