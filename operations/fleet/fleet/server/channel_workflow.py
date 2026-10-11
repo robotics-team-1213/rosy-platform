@@ -27,10 +27,7 @@ class ChannelWorkflow:
         if row is None:
             raise HTTPException(404, detail='CHANNEL_REQUEST_NOT_FOUND')
         receipt = json.loads(row[0])
-        cfg = self.journal.config
-        if (cfg.users.get(receipt['author_id']) != principal or receipt['guild_id'] != cfg.guild_id
-                or receipt['channel_id'] != cfg.channel_id):
-            raise HTTPException(403, detail='CHANNEL_OWNER_CHANGED')
+        self.journal.current_receipt(receipt)
         return receipt
 
     def _view(self, conn, receipt):

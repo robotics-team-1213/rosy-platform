@@ -33,6 +33,7 @@ class ChannelReplyOutbox:
                      f"ROSY 요청 접수 · {receipt['request_id']}\nFleet Console에서 확인합니다. 실행 승인 전입니다.")
 
     def enqueue(self, conn, receipt, kind, content):
+        self.journal.current_receipt(receipt)
         request_id = receipt['request_id']
         nonce = hashlib.sha256(f'{request_id}:{kind}'.encode()).hexdigest()[:24]
         now = self.clock()
@@ -59,9 +60,26 @@ class ChannelReplyOutbox:
                 ORDER BY t.updated_at LIMIT 50''').fetchall()
             for receipt, status, task_id in rows:
                 receipt = json.loads(receipt)
+                try:
+                    self.journal.current_receipt(receipt)
+                except HTTPException:
+                    continue
                 self.enqueue(conn, receipt, 'TASK:' + status,
                              f"ROSY 작업 원장 · {receipt['request_id']}\nTask {task_id} · {status}"
                              + ('\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else ''))
+
+    def current(self, row, conn=None):
+        if conn is None:
+            with closing(self.journal._connect()) as connection:
+                return self.current(row, connection)
+        receipt = conn.execute("SELECT receipt FROM fleet_channel_requests WHERE principal_id=? "
+                               "AND json_extract(receipt, '$.request_id')=?",
+                               (row['principal_id'], row['request_id'])).fetchone()
+        if receipt is None:
+            raise HTTPException(403, detail='CHANNEL_OWNER_CHANGED')
+        receipt = json.loads(receipt[0])
+        self.journal.current_receipt(receipt)
+        return row['route_hash'] == self.route_hash() and row['message_id'] == receipt['message_id']
 
     def claim(self, *, now):
         with closing(self.journal._connect()) as conn, conn:
@@ -76,11 +94,9 @@ class ChannelReplyOutbox:
                                 "ORDER BY next_attempt_at LIMIT 50", (now,)).fetchall()
             for row in rows:
                 try:
-                    self.journal.operator(row['principal_id'])
+                    current = self.current(row, conn)
                 except HTTPException:
                     current = False
-                else:
-                    current = row['route_hash'] == self.route_hash()
                 if not current:
                     conn.execute("UPDATE fleet_channel_reply_outbox SET state='SUPERSEDED' "
                                  "WHERE request_id=? AND kind=?", (row['request_id'], row['kind']))
@@ -125,8 +141,7 @@ class ChannelReplyWorker:
             return
         result = {'state': 'UNKNOWN', 'provider_id': None}
         try:
-            self.outbox.journal.operator(row['principal_id'])
-            if row['route_hash'] != self.outbox.route_hash() or self.clock() >= row['expires_at']:
+            if not self.outbox.current(row) or self.clock() >= row['expires_at']:
                 raise ValueError('Discord reply scope expired or changed')
             result = await self.sender.send(message_id=row['message_id'], nonce=row['nonce'], content=row['content'])
         except asyncio.CancelledError:
