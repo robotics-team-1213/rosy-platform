@@ -106,6 +106,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       if (current) showDetail(current);
       paint();
       await refreshRequests(life);
+      await channelRequestView.refresh();
     } catch (error) {
       if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.");
     } finally { inFlight = false; }
