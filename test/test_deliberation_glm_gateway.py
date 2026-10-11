@@ -64,7 +64,7 @@ def test_invalid_upstream_never_admitted(change):
 
 def test_secret_rejects_mode_symlink_and_wrong_schema(tmp_path, monkeypatch):
     path = tmp_path / 'secret'
-    monkeypatch.setattr(gate, 'SECRET', path)
+    monkeypatch.setattr(gate, 'CONFIG_PATH', path)
     path.write_text('{"type":"api","key":"fake-unit-token"}')
     path.chmod(0o600)
     assert gate.read_secret() == 'fake-unit-token'
@@ -87,6 +87,7 @@ class Connection(http.client.HTTPConnection):
 @pytest.mark.parametrize('change', ['valid', 'stream', 'model', 'tool', 'history', 'route', 'oversize'])
 def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change):
     seen = []
+    monkeypatch.setattr(gate, 'claim', lambda body: None)
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30

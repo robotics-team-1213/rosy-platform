@@ -113,7 +113,7 @@ def test_timeout_and_cancel_reap_child_group(tmp_path, cancel):
             try:
                 with open(status) as stream:
                     exited = stream.read().split()[2] == 'Z'
-            except FileNotFoundError:
+            except (FileNotFoundError, ProcessLookupError):
                 exited = True
             if exited:
                 break

@@ -127,6 +127,18 @@ for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
     assert Path(module.__file__).resolve().is_relative_to(installed), name
 from rosy.decision.model_tool_contract import ModelToolCall
+from rosy.decision.deliberation import calibration, cli, judgment, profiles
+from rosy.decision.deliberation.contracts import judgment as judgment_owner, profiles as profile_owner
+from rosy.decision.deliberation.providers import cli as cli_owner
+from rosy.decision.deliberation.evaluation import calibration as calibration_owner
+assert profiles.ModelProfile is profile_owner.ModelProfile
+assert judgment.Judgment is judgment_owner.Judgment
+assert cli.CliProvider is cli_owner.CliProvider
+assert cli._argv is cli_owner._argv
+assert cli._decode_result is cli_owner._decode_result
+assert calibration.CalibrationArtifact is calibration_owner.CalibrationArtifact
+assert calibration.evaluate_calibration is calibration_owner.evaluate_calibration
+assert calibration.wilson_lower is calibration_owner.wilson_lower
 from fleet.server import proposal_store
 from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall
@@ -161,6 +173,20 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'rosy.decision.deliberation.profiles', 'rosy.decision.deliberation.judgment',
+               'rosy.decision.deliberation.calibration', 'rosy.decision.deliberation.versioned_request',
+               'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',
+               'rosy.decision.deliberation.contracts.profiles',
+               'rosy.decision.deliberation.contracts.judgment',
+               'rosy.decision.deliberation.providers.cli',
+               'rosy.decision.deliberation.providers.versioned_cli',
+               'rosy.decision.deliberation.providers.versioned_request',
+               'rosy.decision.deliberation.providers.local',
+               'rosy.decision.deliberation.evaluation.calibration',
+               'rosy.decision.deliberation.evaluation.calibration_metrics',
+               'rosy.decision.deliberation.evaluation.calibration_selection',
+               'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
+               'fleet.incidents.automation.observation',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',

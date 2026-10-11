@@ -60,6 +60,14 @@ Read/extend: 기존 Fleet model-feedback dispatcher, Mission journal 및 `operat
 
 Reuse: `learning/curation/perception/incident_feedback.py`, 기존 독립 replay 및 registry promotion 경계. 실패 원인을 판정/관측/지도/설치/장치로 분리하고 팀 검수 결과를 기록한다. 개선 후보를 과거 문제와 새 문제에 비교해 위험·정상 개입·종결·지연·비용 회귀를 검사한다. 승격은 고정 프로파일 revision으로 수행하고 진행 중 사건과 원래 원장/예산은 유지한다.
 
+## 실행 상태 (2026-10-12)
+
+Phase 0·1의 ADR·조건부 검토 source는 로컬 main에 착지했다. Phase 2의 GLM 영속 1회 표식과 Phase 3의 v2 프로파일·판정·공통 CLI 요청·독립 보정은 작업 브랜치에 통합했으며 통합 시험·착지는 확인 후 기록한다. 보정은 모델 프로파일 전체 SHA-256에 고정하며 모델·역할·어댑터·한도 변경 시 다시 수용해야 한다. 원격 component 증거와 미확인 범위는 `../validation/deliberation-host-admission-2026-10-12/versioned-judgment.md`에 둔다.
+
+실제 GLM 첫 호출은 관리자 설치 명령을 준비했으며 실행 receipt를 아직 확인하지 못했다. Phase 4~6의 운영 루프·최종 인수·개선 승격과 현장 수용은 완료하지 않았다.
+
 ## 완료 기준
+
+2026-10-12 checkpoint: Phase 2·3과 Phase 4의 예산 원장·기존 관측 읽기 포트는 `daccbd38be`로 로컬 main에 착지했다. 원격 24개 관련 파일의 364개 source 시험과 known-failure 비교에서 신규 실패 0건을 확인했다. 판단 계약·provider 연결·독립 평가를 실제 하위패키지로 분리했으며 기존 부모의 크기 기준과 +150 한도를 유지했다. 푸시·배포·실제 GLM·현장 수용은 포함하지 않는다. worker·최종 사람 인수 연결은 별도 작업 중이다. Phase 6의 구체적 실행 순서는 [실패 피드백·개선 계획](2026-10-12-model-improvement-feedback.md)에 기록한다.
 
 각 단계의 소스·원격·호스트·실제 제공자·독립 품질·배포·현장 증거를 구분한다. 모델 간 합의나 JSON 성공만으로 현장 완료를 선언하지 않는다. 관측 부족·위험 누락·다른 사건에 조치·정상 불필요 명령 0건 수용 기준은 유지한다. 모델 교체 시 같은 계약/근거/안전/종결 검증이 그대로 통과해야 한다.
