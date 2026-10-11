@@ -876,7 +876,7 @@ def test_console_map_actions_require_hardware_runtime():
           window.__callbacks = callbacks;
         }""")
         # Map fetch completes asynchronously; runtime authority is checked with a usable map.
-        page.locator('.surface-map-readout').wait_for(state='visible')
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
         goal = page.locator('[data-map-click="goal"]')
         assert goal.is_disabled()
         page.evaluate("window.__callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'})")
