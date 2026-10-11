@@ -73,3 +73,10 @@
 - gate: SOURCE/LOCAL GO 유지, 전체 ROS-SIM HOLD. 네 시작 방향은 역순 경로·모든 방향·두 대 Fleet·신호·횡단보도 또는 센서/실물 수용이 아니다.
 - 기록: 사용자의 private 보관 요청에 따라 최종 영상·미리보기·열람 페이지를 `private/isaac/media/2026-10-11-directions/`에 보관한다. 원시 로그/전체 trace는 X: session에 유지한다. 한국 교통 규칙과 Fleet는 새 후속 목표다.
 - 교훈: Fabric의 referenceTimeNumerator/Denominator를 확인하고 프레임 시각 단조성과 실제 마지막 stop을 검사한다. pipe close 실패에도 child wait/kill을 수행해야 encoder가 남지 않는다.
+
+## 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
+
+- 변경: map_task/run_map_rl/native_recording을 기존 시뮬레이션 도구 소유인 tools/sim/isaac로 이동했다. SDK helper 위치·시험·CLI/계획 참조를 갱신했다. 기존 CORE/Drive 내부를 호출하는 도구를 learning package에 넣은 D-427 위반을 제거했다. 물리/학습/cleanup과 CORE 생산 코드 변경은 없다.
+- 증거: 착지 검사에서 발견한 architecture/legacy-path/release guard NEW 4건은 실패로 기록했다. 수정 HEAD 764b591ed6의 원격 Isaac/architecture/release/harness exit 0, NEW 0. 독립 소스 Safety-Review는 저장소 경로·SDK helper 연결·최종 권한·물리 정지·정책 고정·source lineage를 승인했다.
+- gate: SOURCE/LOCAL GO 유지. R8/R9 runtime 증거는 이전 SHA에 귀속하고 ROS-SIM/두 대 Fleet/실물 HOLD를 유지한다.
+- 교훈: CORE를 재사용하는 진단은 여러 package를 조합하는 tools/sim의 기존 소유를 따른다. 이동 전 성공 실행으로 import/소유 검사를 대신하거나 새 위반을 허용 목록에 넣지 않는다.
