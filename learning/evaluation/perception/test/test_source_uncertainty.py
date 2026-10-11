@@ -97,3 +97,12 @@ def test_empty_diagnostic_has_no_interval():
     assert result['domains']['real']['source_count'] == 0
     assert result['domains']['real']['intervals']['road_surface']['iou']['bounds'] is None
     assert result['fitness_verdict'] == 'HOLD'
+
+
+def test_point_boundary_float_sum_uses_stable_identity_order():
+    rows = [report('a', 'a'), report('b', 'b'), report('c', 'c')]
+    for row, distance in zip(rows, (1e16, 1.0, 1.0)):
+        for target in ('road_surface', 'current_region'):
+            row[target].update(boundary_reason='ok', boundary_truth_pixels=1,
+                               boundary_predicted_pixels=1, boundary_distance_sum_px=distance)
+    assert summarize(rows) == summarize(list(reversed(rows)))
