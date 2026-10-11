@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const {
   capabilityReason, chooseConvoyLeader, chooseLeader, motionCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
-} from '../../../ui/console/motion-readiness.js';
+} = await import('../../../ui/console/motion-readiness.js');
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
   const caps = {runtime: {mode: 'motor'}, navigation: {goal_navigation: false}};

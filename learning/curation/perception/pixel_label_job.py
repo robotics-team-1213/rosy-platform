@@ -286,7 +286,7 @@ def run_draft(config, out, min_confidence=0.6):
         if model.manifest.onnx_file().resolve() != checkpoint:
             raise ValueError("model manifest checkpoint differs from verified input")
         prelabel.resolve_classes(build.load_classes(Path(config["classes"]), require_color=False),
-                                 model.manifest.classes)
+                                 model.manifest.classes, model_raw_classes=model.manifest.raw['output']['classes'])
         inputs = {**proof, "min_confidence": min_confidence, "model_revision": model.model_revision,
                   "model_manifest_sha256": sha(model.manifest.folder / "model_manifest.json")}
         from control.sensing.perception.learned.lane_mask import preprocess
