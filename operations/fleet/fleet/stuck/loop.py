@@ -28,9 +28,10 @@ log = logging.getLogger(__name__)
 class StuckResolverLoop:
     def __init__(self, snapshot: Callable[[], Awaitable[dict]], board: LineStuckBoard,
                  resolver: StuckResolver, *, clients: Callable[[], Mapping[str, object]],
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, incident_worker=None) -> None:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
+        self.incident_worker = incident_worker
         #: D-517 5 (M4): a robot on a running trip gets stopping answers only (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
@@ -54,7 +55,13 @@ class StuckResolverLoop:
                                   escalated=previous.get("escalated") or "human_claimed")
 
     async def run_once(self) -> None:
-        robots = [self._row(row) for row in (await self._snapshot())["robots"]]
+        snapshot = await self._snapshot()
+        if self.incident_worker is not None:
+            try:
+                self.incident_worker.feed(snapshot)
+            except (ValueError, TypeError, KeyError):
+                log.warning('incident worker rejected poll')
+        robots = [self._row(row) for row in snapshot["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
         if self._board is not None and self._board._log is not None:
@@ -126,6 +133,13 @@ class StuckResolverLoop:
         self._heading_notes = {rid: note for rid, note in self._heading_notes.items() if rid in active}
 
     async def run(self) -> None:
+        try:
+            await self._run()
+        finally:
+            if self.incident_worker is not None:
+                await self.incident_worker.aclose()
+
+    async def _run(self) -> None:
         last_error = None
         while True:
             try:
