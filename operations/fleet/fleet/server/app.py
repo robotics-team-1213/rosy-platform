@@ -150,6 +150,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
                notification_config=None) -> FastAPI:
+    if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
+        raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
         raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:

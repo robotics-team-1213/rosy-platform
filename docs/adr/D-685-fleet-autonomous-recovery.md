@@ -22,3 +22,5 @@ D-438/D-577/D-489/D-517의 사람 인계 기본은 명시된 자율 대상의 �
 ### Consequences
 
 SOURCE 구현과 원격 시험/로컬 머지는 실제 무인 운영 수용이 아니다. 설치 revision·overlay·기기 센서와 시간 정합·물리 정지/복구 수용은 따로 검증한다. [실행 계획](../plans/2026-10-12-fleet-autonomy.md)과 [통합 규칙집](../reference/fleet-rulebook.md)에 범위와 검증을 연결한다.
+
+자율 대상 설정은 durable Task journal과 백그라운드 stuck resolver가 모두 구성된 경우에만 시작한다. 이동 후보는 owner 호출 전에 기존 원장에 `FLEET_STUCK_DISPATCH_PENDING`을 FULL synchronous로 저장하고, 저장/재대조 실패면 전송하지 않는다. 쓰기 await 뒤 law/AI/사람 점유를 다시 확인한다. 이미 전송을 시작한 pending은 확정 receipt 또는 정확한 CORE 사건 종료를 durable 대조한 뒤에만 해제한다. 강제 프로세스 종료로 receipt 기록이 없어도 재시작에서 pending을 동결하며, 기록 손실을 근거로 재발행하지 않는다. 새 코드들은 Fleet 내부 원장 표식이며 CORE receipt를 위조하지 않는다. 저장 매체 자체의 파손은 별도 현장 장애다.
