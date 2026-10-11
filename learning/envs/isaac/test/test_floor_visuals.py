@@ -30,15 +30,17 @@ def test_shared_floor_assets_have_metric_scale_and_source_poses():
 
 @pytest.mark.parametrize('change', ['missing_texture', 'escaped_texture', 'rotated_parent', 'nonfinite_pose'])
 def test_invalid_shared_assets_fail_before_rendering(tmp_path, change):
+    map_root = tmp_path / 'map'
     tree = ET.parse(MAP / 'training-curved/worlds/map_v2_fleet_real.world')
     carpet = tree.find('./world/model[@name="carpet"]')
     if change in ('missing_texture', 'escaped_texture'):
         carpet.find('.//albedo_map').text = 'model://control/map/map_v2_fleet/' + (
-            '../../outside.png' if change == 'escaped_texture' else 'textures/missing.png')
+            '../outside.png' if change == 'escaped_texture' else 'textures/missing.png')
+        (tmp_path / 'outside.png').write_bytes(b'existing external asset')
     else:
         carpet.find('pose').text = '0 0 0 0 .1 0' if change == 'rotated_parent' else 'nan 0 0 0 0 0'
-    target = tmp_path / 'training-curved/worlds/map_v2_fleet_real.world'
+    target = map_root / 'training-curved/worlds/map_v2_fleet_real.world'
     target.parent.mkdir(parents=True)
     tree.write(target)
     with pytest.raises(ValueError):
-        floor_visuals(tmp_path)
+        floor_visuals(map_root)
