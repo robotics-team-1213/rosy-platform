@@ -50,7 +50,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   if (profile) {
     profile.href = '/console/profile?return=' + encodeURIComponent(loginReturn(location.href, location.origin));
     if (['/console/site-map', '/console/cell'].includes(location.pathname)) {
-      profile.target = '_blank'; profile.rel = 'noopener'; profile.title = '새 탭에서 내 프로필 · 편집 내용 보존';
+      profile.target = '_blank'; profile.rel = 'noopener'; profile.title = '새 탭에서 내 계정 · 편집 내용 보존';
     }
   }
   if (link) link.href = loginHref(location);
