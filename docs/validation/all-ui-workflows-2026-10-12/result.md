@@ -17,6 +17,7 @@
 | `900bd1f708` 세 실패 수정 재검증 | 적정 Site PC 3.3 cores/8.6 GB에서 실패한 세 시험 3 passed, 종료 0, NEW 0. 용어·API 설명·비밀 탐지 기준을 유지하고 소스 표기를 수정했다. `logs/g1-corrections/run-1.txt` |
 | `f4022f1d5` G1 재검사 첫 회차 | 적정 Site PC 4.6 cores/8.6 GB에서 5459 passed/847 skipped와 4525 passed/275 skipped, 각각 종료 0/NEW 0. Node 321 passed/0 failed. 검사 중 main이 바뀌어 착지하지 않고 다음 회차를 시작했다. `logs/land-profile-retry/uiux-header-all-surfaces/run-1-*.txt`, `node-1.txt` |
 | `c4e589628c` 추가 main 통합 회차 | 적정 Model PC 22 cores/9 GB에서 첫 묶음 5459 passed/847 skipped/30 subtests passed, 종료 0/NEW 0. Fleet 묶음은 SSH 연결 종료로 중단되어 통과로 인정하지 않는다. 뒤이은 SSH 접속도 timeout이었다. known_failures 출력 0 NEW는 최종 pytest 결과를 대신하지 않는다. 착지·push·배포되지 않았다. `logs/land-profile-retry/uiux-header-all-surfaces/run-2-*.txt` |
+| `e2d8a0f417` 현장 PC 재시도 | 최초 5.3 cores/8.7 GB의 적정 자원에서 시작했으나 첫 묶음은 SSH 연결 종료, 둘째는 접속 timeout으로 중단됐다. 뒤이어 host uptime이 Site 1분/AI 10분인 재부팅 상태임을 확인했다. 이번 묶음의 최종 pytest 결과와 착지 증거는 없다. 현장 설치 SHA는 종전 설치본이며 사람 계정을 변경하지 않았다. `logs/land-profile-network-retry/uiux-header-all-surfaces/` |
 | 독립 검토 | D-686 원본 설정 변경 세션 무효화, D-689 Unicode 경계, 키보드 초점, 만료 시 비밀 삭제와 타 탭 계정 변경을 발견하고 수정했다. 수정된 서버 명세/품질과 UI에 추가 blocker 없음. 실제 시험과 배포 증거를 대신하지 않는다. |
 
 `83c2a49fd` 통합 브라우저/인증/자산 검사는 통과했으나 비밀 탐지 1 NEW가 남아 전체 실패였다. 변수 참조와 이미 허용된 합성 fixture 표현을 정리하고 탐지 기준을 유지했다. `e592eb8e8` 최종 인증/프로필/실제 Chromium/disabled 사유/비밀 탐지/P6는 143 passed, 종료 0, NEW 0이다 (`logs/profile-final/run-1.txt`, 적정 AI PC 22 cores/9 GB). 최신 main 영향 gate·해당 SHA CI·서명·설치·실제 팀원 발급은 아직 확인하지 않았다. 당사자 대신 최종 비밀번호를 정하지 않았고 실제 첫 변경·실물 수용을 완료로 추정하지 않는다.
