@@ -10,6 +10,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[2]
 DESCRIPTION = REPO / "middleware" / "devices" / "pinky" / "description" / "urdf"
+SAFETY_ADAPTER = REPO / "middleware" / "control" / "drive" / "safety" / "adapter"
 
 
 def _ir():
@@ -20,7 +21,7 @@ def _ir():
 
 
 def _declared(name, path):
-    text = (REPO / "middleware" / "perception" / "control" / path).read_text(encoding="utf-8")
+    text = (SAFETY_ADAPTER / path).read_text(encoding="utf-8")
     return int(re.search(rf"declare_parameter\('{name}', (\d+)\)", text).group(1))
 
 
@@ -39,10 +40,10 @@ def test_no_frame_until_every_channel_has_a_reading():
 
 def test_values_are_valid_ir_on_the_worker_thresholds():
     ir = _ir()
-    hazard = (REPO / "middleware" / "perception" / "control" / "safety" / "hazard.py").read_text(encoding="utf-8")
+    hazard = (SAFETY_ADAPTER / "hazard.py").read_text(encoding="utf-8")
     assert "all(0 < v < 4000 for v in self.ir_raw)" in hazard  # on_ir validity window
-    cliff_max = _declared("cliff_raw_max", "safety/node.py")
-    clear = _declared("cliff_clear_raw", "safety/node.py")
+    cliff_max = _declared("cliff_raw_max", "node.py")
+    clear = _declared("cliff_clear_raw", "node.py")
     assert 0 < ir.CLIFF_RAW < cliff_max          # a valid reading that trips cliff_mode low
     assert clear <= ir.FLOOR_RAW < 4000           # a valid reading that clears it
 
@@ -51,7 +52,7 @@ def test_channel_order_matches_the_device_adc_node():
     ir = _ir()
     control = REPO / "middleware" / "perception" / "control"
     assert "return [values[2], values[1], values[0]]" in (control / "ir_adc_node.py").read_text(encoding="utf-8")
-    calib = (control / "sensing" / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
+    calib = (REPO / "middleware" / "perception" / "vision" / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
     assert 'CHANNELS = ("left", "centre", "right")' in calib
     assert ir.CHANNELS == ("left", "mid", "right")
 
@@ -90,7 +91,7 @@ def test_sim_overlay_fragment_enforces_with_all_three_sensors():
 
 
 def test_no_device_config_carries_the_simulation_flag():
-    roots = [REPO / "contracts" / "foundation" / "config", REPO / "middleware" / "apps" / "device",
+    roots = [REPO / "contracts" / "foundation" / "config", REPO / "middleware" / "devices",
              REPO / "deploy"]
     hits = [p for root in roots for p in root.rglob("*.yaml")
             if "simulation_sensors" in p.read_text(encoding="utf-8", errors="ignore")]

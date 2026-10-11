@@ -139,7 +139,7 @@ def _load(name, path):
 
 def test_lidar_mount_consumers():
     yaw, forward = G["lidar"]["yaw_rad"], G["lidar"]["forward_deg"]
-    lidar = _module_constants(SENSING / "control" / "sensing" / "lidar.py", "MOUNT_YAW_DEG")
+    lidar = _module_constants(SENSING / "sensors" / "sensing" / "lidar.py", "MOUNT_YAW_DEG")
     assert lidar["MOUNT_YAW_DEG"] == 0.0                     # NOSE_YAW = pi + 0 = the URDF yaw
     assert yaw == pytest.approx(math.pi, abs=1e-6)
     params = _yaml(SENSING / "config" / "robot.yaml")["/**"]["ros__parameters"]
@@ -238,20 +238,20 @@ def test_shared_robot_body_matches_geometry():
 
 
 def test_body_and_ir_consumers():
-    body = _module_constants(SENSING / "control" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
+    body = _module_constants(SENSING / "sensors" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
                              "CASTER_EXTRA", "FRONT_X")
     assert body["WHEEL_Y"] == G["wheels"]["joint_y_m"]
     assert body["WHEEL_R"] == G["wheels"]["radius_m"]
     assert body["CASTER_X"] + body["CASTER_EXTRA"] == pytest.approx(-G["caster"]["rear_x_m"], abs=1e-9)
     assert body["FRONT_X"] == G["ir"]["mid"]["x_m"]
     # LIDAR_X and ROTATION_RADIUS come from the shared body (D-424); no literal left in body.py.
-    text = _text(SENSING / "control" / "sensing" / "body.py")
+    text = _text(SENSING / "sensors" / "sensing" / "body.py")
     assert "LIDAR_X = BODY.lidar_x_m" in text and "ROTATION_RADIUS = BODY.rotation_radius_m" in text
     circumradius = max(body["WHEEL_Y"] + body["WHEEL_R"], body["CASTER_X"] + body["CASTER_EXTRA"], body["FRONT_X"])
     for config, block in (("robot.yaml", "/**"), ("auto_calib.yaml", "/**/safety_node")):
         radius = _yaml(SENSING / "config" / config)[block]["ros__parameters"]["robot_radius"]
         assert radius == pytest.approx(circumradius, abs=1e-9), config
-    model = SENSING / "control" / "sensing" / "perception" / "road_state_model.py"
+    model = SENSING / "vision" / "perception" / "road_state_model.py"
     assert _number(model, r"ir_x_m: float = ([0-9.]+)") == G["ir"]["mid"]["x_m"]
     node = SENSING / "control" / "road_state_node.py"
     assert _number(node, r"declare_parameter\('ir_half_span_m', ([0-9.]+)\)") == G["ir"]["half_span_m"]
