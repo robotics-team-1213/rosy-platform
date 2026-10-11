@@ -259,14 +259,14 @@ surfaces:
     surface: robot
     medium: native
     ports: []
-    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 목록 접속 화면
-    role: Pilot의 신뢰된 대상 발견·연결만 소유하며 조종 화면과 명령은 기존 Pilot PWA를 사용한다
+    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 접속·함께 조종
+    role: Pilot의 신뢰된 대상 발견·연결을 소유한다. 조종은 기존 Pilot PWA 또는 두 CORE에 독립 요청하는 native GroupDrive로 구현하며 manual-drive·estop의 소유자는 parent Pilot이다 (D-639).
     owns: [pilot-device-lobby]
     contracts: [token_parity]
     token_source: shared/web/tokens.css
     token_generator: middleware/ui/pilot/android/app/build.gradle.kts
     token_verification: middleware/ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
-    baseline_reason: 실제 태블릿 설치·렌더링은 D-432 장치 검증으로 기록한다; 조종 화면은 Pilot PWA 기준선을 재사용한다.
+    baseline_reason: 태블릿 발견·연결·GroupDrive는 native 장치 검증이 필요하다. PWA 기준선은 웹 조종에만 적용하며 native 두 CORE 제어의 실기 수용을 대신하지 않는다.
 
   - id: cam
     api_owners: [Fleet-pairing, Vision-ingest]
