@@ -25,12 +25,12 @@ host key is pinned under the robot name (ssh HostKeyAlias), never under the addr
 an old address-keyed pin is shown by doctor/init and moved by `rosy_ml repin ROBOT`
 (it never rewrites known_hosts on its own).
 
-The commands wrap model/deliver.py, dataset/harvest.py, dataset/fetch_http.py and model/intake.py;
+The commands wrap learning/registry/perception/deliver.py, learning/curation/perception/harvest.py, learning/curation/perception/fetch_http.py and learning/registry/perception/intake.py;
 they add no behaviour of their own. Exit codes are those of the wrapped tool;
 doctor exits 0 only if every required check passes, 1 otherwise; 2 is a bad
 config or argument. Network failures of deliver/rollback/release-hold/status exit 77
 (host name does not resolve), 78 (refused, timed out, no route) or 79 (host key unknown
-or changed), see model/deliver.py. status and store-status with --watch-config (or a
+or changed), see learning/registry/perception/deliver.py. status and store-status with --watch-config (or a
 `state_file:` in the config) also show each robot's last watcher failure."""
 
 from __future__ import annotations
