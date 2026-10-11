@@ -7809,6 +7809,18 @@ osy-d395-s1d\`.
 - 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
 - gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
 
+
+## 2026-10-11 · db1b69bc0 · D-664 혼합 장치 작업 개념과 책임 검토
+
+- 변경: 장치·작업 공간·공정·작업을 구별하고 공통 읽기 화면→운반/고정 팔 인계→실물/복합 장치 수용의 단계와 반례를 Proposed ADR 및 설계에 기록했다.
+- 증거: 주행 Task와 고정 PICK_PLACE Mission의 분리, Cell의 pallet.transfer 제한을 현행 소스로 확인했다.
+- gate 변화: 없음. 런타임/API/권한/최종 writer는 변경하지 않았다. 문서 검증과 실제 협업 실행은 별도 증거다.
+
+## 2026-10-11 · 1cbe8fa67 · D-664 공통 작업 읽기 첫 구현
+
+- 변경: bounded 작업 목록 API·typed schema·SRS와 공통 Task/Mission 화면을 추가했다. principal 소유 범위, 출처별 identity/state, 목록 갱신 및 세션 상실 시 무효화, 장치·공간·업무·실행 owner 상세를 유지한다.
+- 증거: 첫 API/헤더/팔레트/기능 잠금 원격 28 passed 및 순수 JS 2 passed. 원격 브라우저와 설치 회귀에서 드러난 캡처 파일 확장자 및 추가 자산 수 fixture를 수정했다. 최종 검증 결과는 별도 receipt로 기록한다.
+- gate 변화: SOURCE 구현. 배포/현장 및 다장치 실행 수용은 아직 증명하지 않았다.
 ## 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
 
 - 변경: 모델 원장 중재·순수 작업 규칙을 실제 소유 경로로 분리하고 현재 판단/결과 기록, 이름 있는 사람 인수, 3채널 기본 OFF outbox와 Pinky 독립 offline checker를 구현했다. API Reference v1.207 및 설치 소비 경로를 갱신했다.

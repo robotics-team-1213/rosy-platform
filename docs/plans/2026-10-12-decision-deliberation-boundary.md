@@ -23,6 +23,10 @@ CORE/OMX 실행 권한·기존 Mission 원장·알림 outbox는 그대로 각 �
 observe/server/UI 추출 의무를 유지한다. Fleet의 새 86줄 원장은 부모에 남는다.
 다음 성장은 의견/CLI 책임 안에서 재검토하며 저장·명령 권한을 가져오지 않는다.
 
+최신 main `a78d1f2ea7`의 D-664 작업 현황을 통합하면 Fleet 부모는 52236줄이며
+Decision 하위 단위는 231줄 그대로다. D-664의 읽기 projection·Task/Mission owner와
+기존 camera/auth/trip·observe/server/UI 조건도 합친 판정에 보존한다.
+
 Fleet 배포는 `tools/packaging/fleet_sources.py`의 명시 하위 패키지 mapping을 사용한다.
 직접 호출자는 원장·테스트·기존 offline replay CLI이며 예전 경로 shim은 없다.
 설치 wheel/sdist 양쪽에서 Decision 하위 패키지와 Fleet 원장 import를 확인한다.
