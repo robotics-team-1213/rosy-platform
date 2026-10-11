@@ -65,14 +65,15 @@ export function appendSurveyElement(map, item) {
 }
 
 export function reviewSurveyDraft(map, note) {
-  if (!map?.survey || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
+  if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
   const next = copy(map);
-  next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
+  if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
   for (const edge of next.edges) {
+    if (!next.survey && !edge.evidence) continue;
     const evidenceNote = [edge.evidence?.note, note.trim()].filter(Boolean).join('\n');
     if (evidenceNote.length > 1000) throw new Error('관측 근거와 검토 메모의 합계는 1000자 이내여야 합니다');
     edge.evidence = {...(edge.evidence || {source: 'operator'}),
-      status: 'reviewed', reference_revision: next.survey.revision, note: evidenceNote};
+      status: 'reviewed', reference_revision: next.survey?.revision || edge.evidence.reference_revision, note: evidenceNote};
   }
   return next;
 }
@@ -164,8 +165,9 @@ export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_m
   }
   if (next.survey) {
     next.survey = {...next.survey, reviewed: false, review_note: ''};
-    edge.evidence = {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''};
   }
+  if (next.survey || edge.evidence) edge.evidence = {source: 'operator', status: 'observed',
+    reference_revision: next.survey?.revision || edge.evidence.reference_revision, note: edge.evidence?.note || ''};
   return next;
 }
 

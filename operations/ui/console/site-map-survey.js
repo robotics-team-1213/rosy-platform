@@ -60,7 +60,9 @@ export function createSurveyPanel(host) {
     const draftReason = reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '') || (!map?.survey ? '조사 기준이 있는 초안을 만드세요' : '');
     if (picking && (draftReason || mapId !== map?.map_id)) { picking = false; $('element-pick').setAttribute('aria-pressed', 'false'); }
     gate('survey-new', reason);
-    for (const id of ['element-pick', 'element-point', 'element-clear', 'element-save', 'survey-review']) gate(id, draftReason);
+    for (const id of ['element-pick', 'element-point', 'element-clear', 'element-save']) gate(id, draftReason);
+    gate('survey-review', reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '')
+      || (!map?.survey && !map?.edges?.some(e => e.evidence) ? '검토할 조사 또는 관측 도로가 없습니다' : ''));
     options('element-from', [['', '시작 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-to', [['', '끝 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-lanes', (map?.edges || []).map(e => [e.id, `${e.id} · ${e.from} → ${e.to}`]));
