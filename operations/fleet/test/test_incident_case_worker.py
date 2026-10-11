@@ -161,7 +161,7 @@ def test_cancelled_provider_is_unknown_final_and_cannot_replay(tmp_path):
         scope = store.active_scopes()[0]
         await worker.aclose()
         assert store.case(scope)['state'] == 'HOLD'
-        assert len(handoffs) == 1 and handoffs[0][1]['reason'] == 'WORKER_CANCELLED'
+        assert len(handoffs) == 1 and handoffs[0][1]['reason'] == 'PROVIDER_OUTCOME_UNKNOWN'
         worker.feed(poll()); await settled(worker)
         assert len(seen) == 1
     asyncio.run(run())
@@ -285,6 +285,59 @@ def test_old_policy_scope_cannot_invoke_new_policy_provider(tmp_path):
         assert handoffs[0][1]['reason'] == 'POLICY_CHANGED'
         assert store.case(scope)['started_at'] == 101
         await worker.aclose()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('failure', ['unknown', 'budget'])
+def test_real_outbox_managed_open_is_suppressed_and_final_is_durably_queued(tmp_path, failure):
+    from fleet.incidents.notifications import Channel, NotificationConfig
+    async def run():
+        now, seen, _, log, _, store, worker, poll, _ = setup(tmp_path, change='unknown' if failure == 'unknown' else None,
+                                                         budget_calls=1)
+        async def enqueue(scope, summary):
+            return await asyncio.to_thread(log.notifications.enqueue_final, scope, summary, now=now[0])
+        worker.final_handoff = enqueue
+        log.notifications.set_automation(worker.prepare_receipt)
+        configured = NotificationConfig('https://console.example.test/console',
+                                       (Channel('slack', 'https://hooks.slack.com/services/A/B/C'),))
+        if failure == 'budget': log.notifications.config = configured
+        worker.feed(poll()); await settled(worker)
+        assert log.notifications.rows() == []
+        if failure == 'unknown': assert len(store.pending_handoffs()) == 1
+        log.notifications.config = configured
+        now[0] += 1; worker.feed(poll(2)); await settled(worker)
+        events = log.notifications.rows()
+        assert len(events) == 1 and events[0]['kind'] == 'FINAL_REVIEW'
+        assert events[0]['state'] == 'PENDING' and len(seen) == 1
+        assert store.pending_handoffs() == () and log.handoff.active() == []
+        now[0] += 1; worker.feed(poll(3)); await settled(worker)
+        assert len(log.notifications.rows()) == 1 and len(seen) == 1
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_legacy_poll_does_not_wait_for_model_and_loop_shutdown_cleans_worker(tmp_path):
+    from types import SimpleNamespace
+    from fleet.stuck.loop import StuckResolverLoop
+    async def run():
+        entered = asyncio.Event()
+        async def hang(_): entered.set(); await asyncio.Event().wait()
+        now, _, _, _, board, store, worker, poll, _ = setup(tmp_path, provider_hook=hang)
+        class Resolver:
+            config = SimpleNamespace(poll_s=1)
+            ai_verdicts = []
+            def step(self, *_): return []
+            def is_claimed(self, *_): return False
+        async def snapshot(): return poll()
+        loop = StuckResolverLoop(snapshot, board, Resolver(), clients=lambda: {}, clock=lambda: now[0],
+                                 incident_worker=worker)
+        await asyncio.wait_for(loop.run_once(), .5)
+        await asyncio.wait_for(entered.wait(), .5)
+        await asyncio.wait_for(loop.run_once(), .5)
+        running = asyncio.create_task(loop.run())
+        await asyncio.sleep(.01); running.cancel()
+        await asyncio.gather(running, return_exceptions=True)
+        assert worker.idle and len(store.pending_handoffs()) == 0
     asyncio.run(run())
 
 
