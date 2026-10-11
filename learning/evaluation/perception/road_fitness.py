@@ -52,6 +52,7 @@ def _metrics(pred, truth: np.ndarray, shape) -> dict:
     target = truth == 1
     result = {"valid_truth_pixels": int(valid.sum()), "unknown_truth_pixels": int((~valid).sum()),
               "truth_pixels": int(target.sum()), "outside_truth_pixels": int((valid & ~target).sum()),
+              "roi_excluded_valid_truth_pixels": 0, "roi_excluded_target_truth_pixels": 0,
               "prediction_available": pred is not None, "scored_pixels": 0,
               "scored_truth_pixels": 0, "scored_outside_truth_pixels": 0,
               "true_positive_pixels": None, "iou": None,
@@ -115,13 +116,14 @@ def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, reg
     spec = model.manifest.input
     height = spec.crop[0] if spec.crop is not None else spec.height
     lo, hi = spec.crop[2:] if spec.crop is not None else (0, height)
-    truth_masks, excluded = [], {}
+    truth_masks, excluded, excluded_targets = [], {}, {}
     for name, truth in (("road_surface", road_truth), ("current_region", region_truth)):
         _metrics(None, truth, bgr.shape[:2])
         resized = cv2.resize(truth.astype(np.uint8), (spec.width, height), interpolation=cv2.INTER_NEAREST)
         outside = np.ones(resized.shape, dtype=bool)
         outside[lo:hi] = False
         excluded[name] = int((outside & (resized != 255)).sum())
+        excluded_targets[name] = int((outside & (resized == 1)).sum())
         resized[outside] = 255
         truth_masks.append(resized)
     if ((region_truth == 1) & (road_truth == 0)).any():
@@ -137,6 +139,11 @@ def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, reg
               int(np.floor((c + .5) * spec.width / bgr.shape[1]))] for r, c in seed_pixels]
     report = evaluate_frame(labels, classes, image, anchor, seeds, *truth_masks, domain=domain,
                             conditions=conditions, now_ns=now_ns, max_age_ns=max_age_ns)
+    for name in excluded:
+        # Known truth outside the predicted ROI is excluded, not unknown ground truth.
+        report[name]["unknown_truth_pixels"] -= excluded[name]
+        report[name].update(roi_excluded_valid_truth_pixels=excluded[name],
+                            roi_excluded_target_truth_pixels=excluded_targets[name])
     report.update(model_revision=model.model_revision,
                   preprocessing={"source_shape": list(bgr.shape[:2]), "evaluation_shape": [height, spec.width],
                                  "predicted_rows": [lo, hi], "seed_pixels": seeds,
@@ -152,6 +159,7 @@ def _summarize(rows) -> dict:
         metrics = [r[target] for r in rows]
         counts = {k: sum(m[k] or 0 for m in metrics) for k in (
             "valid_truth_pixels", "unknown_truth_pixels", "truth_pixels", "outside_truth_pixels",
+            "roi_excluded_valid_truth_pixels", "roi_excluded_target_truth_pixels",
             "scored_pixels", "scored_truth_pixels", "scored_outside_truth_pixels",
             "true_positive_pixels", "false_positive_pixels", "false_negative_pixels",
             "boundary_truth_pixels", "boundary_predicted_pixels", "boundary_excluded_truth_pixels",
@@ -165,12 +173,14 @@ def _summarize(rows) -> dict:
         scored = sum(m["scored_pixels"] > 0 for m in metrics)
         paired = [m for m in metrics if m["boundary_status"] == "ok"]
         boundary_pixels = sum(m["boundary_truth_pixels"] + m["boundary_predicted_pixels"] for m in paired)
+        full_grid_valid = counts["valid_truth_pixels"] + counts["roi_excluded_valid_truth_pixels"]
         counts.update(prediction_frames=predicted, scored_frames=scored, abstained_frames=len(rows) - predicted,
                       unscorable_truth_frames=sum(m["prediction_available"] and not m["valid_truth_pixels"]
                                                  for m in metrics),
                       frame_coverage=scored / len(rows) if rows else None,
                       pixel_coverage=counts["scored_pixels"] / counts["valid_truth_pixels"]
                       if counts["valid_truth_pixels"] else None,
+                      full_grid_pixel_coverage=counts["scored_pixels"] / full_grid_valid if full_grid_valid else None,
                       truth_pixel_coverage=counts["scored_truth_pixels"] / counts["truth_pixels"]
                       if counts["truth_pixels"] else None,
                       iou=tp / (tp + fp + fn) if tp + fp + fn else None,

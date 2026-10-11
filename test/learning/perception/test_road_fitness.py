@@ -331,6 +331,11 @@ def test_model_replay_resizes_truth_and_anchor_with_the_model_roi(tmp_path, crop
     assert report["preprocessing"]["seed_pixels"] == [[5, 1]]
     assert report["model_revision"] == model.model_revision
     assert report["fitness_verdict"] == "HOLD"
+    metrics = summarize_frames([report])["domains"]["real"]["road_surface"]
+    assert metrics["unknown_truth_pixels"] == 0
+    assert metrics["pixel_coverage"] == 1
+    assert metrics["full_grid_pixel_coverage"] == pytest.approx(2 / 3 if crop else 1)
+    assert metrics["roi_excluded_target_truth_pixels"] == (10 if crop else 0)
 
 
 def test_replay_unknown_roi_anchor_abstains_and_does_not_score_top_as_background(tmp_path):
@@ -342,7 +347,8 @@ def test_replay_unknown_roi_anchor_abstains_and_does_not_score_top_as_background
                                   now_ns=1050, max_age_ns=100)
     assert report["current_region"]["scored_pixels"] == 0
     assert report["region_reason"] == "anchor_not_on_observed_road"
-    assert report["road_surface"]["unknown_truth_pixels"] == 12
+    assert report["road_surface"]["unknown_truth_pixels"] == 0
+    assert report["road_surface"]["roi_excluded_valid_truth_pixels"] == 12
 
 
 def test_replay_checks_truth_before_resizing_and_rejects_nonfinite_logits(tmp_path):
