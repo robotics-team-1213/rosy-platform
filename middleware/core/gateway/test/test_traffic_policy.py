@@ -468,6 +468,21 @@ def test_signal_observer_is_absent_without_binding(core_client):
     assert services.signal_observer is None
 
 
+@pytest.mark.parametrize("mode", ["DISABLED", "MONITOR_ONLY", "ENFORCED"])
+def test_idle_boot_snapshot_matches_active_traffic_policy_without_observations(core_client, mode):
+    client, services = core_client(config_overrides={
+        "traffic_policy": {"mode": mode, "map_id": "map_v2_fleet",
+                           "scene_revision": "road-scene-v1"},
+    })
+    response = client.get("/api/v1/traffic", headers={"Authorization": "Bearer rosy-dev-viewer"})
+    assert response.status_code == 200
+    status = response.json()["status"]
+    assert status == services.state.snapshot().traffic_policy.model_dump(mode="json")
+    assert status["mode"] == mode
+    assert status["state"] == ("DISABLED" if mode == "DISABLED" else "HOLD")
+    assert status["reason"] == ("policy_disabled" if mode == "DISABLED" else "no_road_evidence")
+
+
 def test_signal_observer_binds_and_starts_when_configured(core_client):
     _client, services = core_client(config_overrides={
         "traffic_policy": {
