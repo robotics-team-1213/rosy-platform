@@ -101,7 +101,43 @@ def test_restarted_result_observation_does_not_reply_to_revoked_receipt(tmp_path
         async def send(self, **kwargs):
             raise AssertionError("revoked original request caused external reply")
     asyncio.run(ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000).run_once())
-    assert outbox.rows("op") == []
+    assert len(outbox.rows("op")) == 1 and outbox.rows("op")[0]["state"] == "SUPERSEDED"
+
+
+def test_revoked_first_batch_does_not_starve_later_valid_result(tmp_path):
+    import asyncio
+    from contextlib import closing
+    from fleet.server.channel_replies import ChannelReplyOutbox, ChannelReplyWorker
+    workflow, journal, tasks, _, _ = fixture(tmp_path)
+    second = str(int(USER) + 100)
+    journal.config = journal.config.model_copy(update={"users": {USER: "op", second: "op"}})
+    for index in range(51):
+        receipt = journal.receive(DiscordRequestEnvelope(
+            guild_id=GUILD, channel_id=CHANNEL, author_id=USER if index < 50 else second,
+            message_id=str(int(MESSAGE) + index + 100), mentions=[BOT], author_bot=False,
+            webhook_id=None, content=f"<@{BOT}> request {index}"))
+        ready = review(workflow, receipt)
+        created = task(tasks, receipt, task_id=f"result-{index}")
+        workflow.link_task(receipt["request_id"], "op", task_id=created["task_id"],
+                           expected_hash=receipt["content_hash"], expected_revision=ready["revision"])
+        tasks.transition(created["task_id"], "FAILED", actor_id="system", source="system", reason="expired")
+        with closing(tasks._connect()) as conn, conn:
+            conn.execute("UPDATE fleet_tasks SET updated_at=? WHERE task_id=?",
+                         (f"2026-10-12T00:00:{index:02d}+00:00", created["task_id"]))
+    journal.config = journal.config.model_copy(update={"users": {USER: "other", second: "op"}})
+    outbox = ChannelReplyOutbox(journal, clock=lambda: 1000)
+    sent = []
+
+    class Sender:
+        async def send(self, **kwargs):
+            sent.append(kwargs)
+            return {"state": "SENT", "provider_id": MESSAGE}
+    worker = ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000)
+    asyncio.run(worker.run_once())
+    asyncio.run(worker.run_once())
+    assert len(sent) == 1 and sent[0]["message_id"] == receipt["message_id"]
+    with closing(journal._connect()) as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE state='SUPERSEDED'").fetchone()[0] == 50
 
 
 @pytest.mark.parametrize("next_state", ["HOLD", "READY"])
