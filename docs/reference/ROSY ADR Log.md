@@ -694,4 +694,3 @@
 
 - 상태: Accepted (2026-10-11).
 - Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
-
