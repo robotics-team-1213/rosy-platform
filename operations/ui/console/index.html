@@ -61,6 +61,7 @@
     <a href="/console" data-action-icon="fleet" data-icon-only="" aria-current="page">관제</a>
     <a href="/console/install" data-action-icon="install" data-icon-only="">설치·보정</a>
     <a href="/console/site-map" data-action-icon="map" data-icon-only="">현장 지도</a>
+    <a href="/console?view=work" data-action-icon="history" data-icon-only="">작업</a>
     <a href="/console/cell" data-action-icon="cell" data-icon-only="">Cell</a>
   </nav>
   <div class="fleet-workspace">
@@ -76,6 +77,20 @@
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <div class="console-primary">
+    <section class="panel work-overview" id="work-overview" aria-labelledby="work-heading" hidden>
+      <div class="map-head">
+        <h2 id="work-heading">작업</h2><span class="spacer"></span>
+        <ui-button kind="quiet" id="work-refresh" type="button" data-action-icon="refresh" data-icon-only="">작업 새로고침</ui-button>
+      </div>
+      <label class="sr-only" for="work-filter">업무 종류</label>
+      <select id="work-filter" class="ui-field" aria-label="업무 종류">
+        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option>
+      </select>
+      <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
+      <p id="work-sources" class="hint"></p>
+      <ul id="work-list" class="work-list" aria-label="조회 가능한 작업"></ul>
+      <p id="work-empty" class="hint">현재 조회 범위에 작업이 없습니다.</p>
+    </section>
 
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
@@ -201,6 +216,12 @@
           <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-icon-only="" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
+      <section class="panel" id="work-context" aria-labelledby="work-detail-heading" hidden>
+        <h2 id="work-detail-heading">작업 상세</h2>
+        <dl id="work-detail" class="work-detail"></dl>
+        <p id="work-evidence" class="hint" role="status">작업을 선택하세요.</p>
+        <a href="/console/cell" data-action-icon="cell">팔 공정 설정</a>
+      </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
           <h2 id="roster-heading">로봇 선택</h2>

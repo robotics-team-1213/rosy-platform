@@ -857,3 +857,8 @@ main {
 .robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
 .robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
 .robot-list-details { margin-top: var(--space-3); }
+.work-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.work-list ui-button { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.work-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
+.work-detail dt { color: var(--ink-quiet); font-size: var(--text-label); }
+.work-detail dd { margin: 0; overflow-wrap: anywhere; }

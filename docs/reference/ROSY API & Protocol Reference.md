@@ -1,6 +1,16 @@
 ﻿# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
+### D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
+
+`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다.
+
+`limit`은 정수 1–100, 기본 50이며 **원장별** 최근 행 수다. 응답은 `observed_at`(조회 UTC 시각), `tasks_available`, `missions_available`, `truncated_sources`(`task`/`mission`), `rows`(최대 200행)다. `observed_at`은 장치 센서의 관측 시각이 아니다. 원장 미설정은 available=false이며 빈 목록과 구별한다. 행은 `updated_at` 내림차순, source/source_id 내림차순으로 정렬한다. 전체 원장 스냅숏의 원자성 또는 두 원장 사이의 동일 시점은 보장하지 않는다.
+
+각 행: `source`(`task`/`mission`), `source_id`, `action_kind`(기존 navigate/PICK_PLACE), `status`(원장 상태 그대로), `device_id`(Task robot_id / Mission instance_id), `workcell_id`(Mission 공간; Task null), `reason`(없으면 null), `updated_at`(원장 UTC 갱신 시각). identity는 `(source, source_id)`이며 두 원장이 같은 ID를 가질 수 있다. plan/candidate/request/receipt/credential은 목록에 포함하지 않는다. 개별 상세는 기존 `/api/fleet/tasks/{id}` 또는 `/api/fleet/missions/{id}`로 조회한다.
+
+인증 없음 401, 권한 부족 403, 잘못된 limit 422. 이 경로는 read projection이며 dispatch/admission/claim/fence/state transition을 수행하지 않는다. 조회 실패·세션 변경·권한 상실 시 UI는 이전 목록·상세를 지우고 미확인으로 표시한다. `ACTION_SUCCEEDED`는 목표 확인 대기이며 `GOAL_CONFIRMED`와 구별한다. 이 추가는 다장치 Mission 실행이나 복합 Asset API를 제공하지 않는다.
+
 **Document ID:** ROSY-API-REF-001
 **Version:** v1.205
 **Status:** Approved
