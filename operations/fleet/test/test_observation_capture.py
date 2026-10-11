@@ -6,6 +6,13 @@ from fleet.server.core_event_store import EventRejected
 from test_observation_store import sample
 
 
+def test_legacy_imports_are_identity_aliases_of_observation_journal_owner():
+    from fleet.observe.events import CoreEventStore as OwnedEvents
+    from fleet.observe.store import ObservationStore as OwnedObservations
+    from fleet.server.core_event_store import CoreEventStore
+    assert CoreEventStore is OwnedEvents and ObservationStore is OwnedObservations
+
+
 def test_one_capture_identity_covers_all_rows_and_next_poll_advances(tmp_path):
     store = ObservationStore(tmp_path / 'fleet.db')
     store.append_snapshot([sample(), dict(sample(), robot_id='rosy_02')], received_at=10, monotonic_now=10)
