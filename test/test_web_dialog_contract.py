@@ -58,8 +58,8 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/fleet/fleet/server/web/host-services.js": 1,  # named operator host control, shared confirmation
     "operations/fleet/fleet/server/web/roster.js": 1,
-    # Activation, camera-draft replacement (D-497); trip cancel left with the 운행 panel (D-540 4).
-    "operations/fleet/fleet/server/web/site-map.js": 2,
+    # Activation, camera-draft and profile-draft replacement (D-497, D-635); trip cancel left with the 운행 panel (D-540 4).
+    "operations/fleet/fleet/server/web/site-map.js": 3,
     "operations/fleet/fleet/server/web/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
