@@ -57,25 +57,18 @@ def test_channel_review_keeps_candidate_separate_from_execution(site, size):
             page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
             assert all(item[0] == path for item in posts)
 
-            def goal(route):
-                assert route.request.headers["idempotency-key"] == review["request_key"]
-                assert route.request.post_data_json == {"x": 1.25, "y": 2.5, "yaw": 0}
-                posts.append(("goal", route.request.post_data_json))
-                route.fulfill(json={"task": {"task_id": "task-one", "status": "QUEUED"}})
-
-            def link(route):
+            def submit_request(route):
                 body = route.request.post_data_json
-                assert body == {"task_id": "task-one", "expected_hash": digest, "expected_revision": 2}
-                posts.append(("link", body))
+                assert body == {"expected_hash": digest, "expected_revision": 2}
+                posts.append(("submit", body))
                 review.update(state="LINKED", work_id="task-one", work_kind="task", work_status="QUEUED", revision=3)
                 route.fulfill(json=review)
 
-            page.route("**/api/fleet/robots/rosy_03/goal", goal)
-            page.route(f"**/api/fleet/channel-requests/{request_id}/task", link)
+            page.route(f"**/api/fleet/channel-requests/{request_id}/submit", submit_request)
             submit.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             expect(page.locator("#channel-review-state")).to_contain_text("LINKED")
-            assert [item[0] for item in posts] == [path, path, "goal", "link"]
+            assert [item[0] for item in posts] == [path, path, "submit"]
             expect(submit).not_to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             _shot(page, f"channel-review-{size[0]}.png", full_page=True)

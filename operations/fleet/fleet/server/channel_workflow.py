@@ -6,8 +6,9 @@ from contextlib import closing
 from fastapi import Depends, HTTPException
 
 from core_common.protocol.channel_requests import (
-    ChannelNavigationCandidate, ChannelReviewRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
+    ChannelNavigationCandidate, ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
 )
+from .task_store import IdempotencyConflict
 
 
 class ChannelWorkflow:
@@ -143,7 +144,7 @@ class ChannelWorkflow:
             return self._view(conn, receipt)
 
 
-def install_workflow_routes(app, workflow, *, require_operator, read_guard):
+def install_workflow_routes(app, workflow, *, require_operator, read_guard, task_service=None, console=None):
     @app.get('/api/fleet/channel-requests/{request_id}/review', dependencies=read_guard,
              response_model=ChannelWorkflowView, tags=['fleet-work'])
     def read_review(request_id: str, principal=Depends(require_operator)):
@@ -158,3 +159,19 @@ def install_workflow_routes(app, workflow, *, require_operator, read_guard):
               response_model=ChannelWorkflowView, tags=['fleet-work'])
     def link_task(request_id: str, body: ChannelTaskLinkRequest, principal=Depends(require_operator)):
         return workflow.link_task(request_id, principal.principal_id, **body.model_dump())
+
+    @app.post('/api/fleet/channel-requests/{request_id}/submit', dependencies=read_guard,
+              response_model=ChannelWorkflowView, tags=['fleet-work'])
+    async def submit_request(request_id: str, body: ChannelSubmitRequest, principal=Depends(require_operator)):
+        if task_service is None:
+            raise HTTPException(503, detail='CHANNEL_TASK_SERVICE_REQUIRED')
+        snapshot = workflow.read(request_id, principal.principal_id)
+        if console is not None and snapshot['candidate'] and console.trip_busy(snapshot['candidate']['robot_id']):
+            raise HTTPException(409, detail='TRIP_ROBOT_BUSY')
+        try:
+            return await workflow.submit(request_id, principal.principal_id,
+                                         task_service=task_service, **body.model_dump())
+        except IdempotencyConflict:
+            raise HTTPException(409, detail='CHANNEL_TASK_PROVENANCE_MISMATCH') from None
+        except ValueError as error:
+            raise HTTPException(404 if str(error) == 'UNKNOWN_ROBOT' else 400, detail=str(error)) from None

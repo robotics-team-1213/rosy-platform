@@ -60,10 +60,13 @@ class ChannelReviewRequest(BaseModel):
         return self
 
 
-class ChannelTaskLinkRequest(BaseModel):
+class ChannelSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_revision: int = Field(ge=0)
+
+
+class ChannelTaskLinkRequest(ChannelSubmitRequest):
     task_id: str = Field(min_length=1, max_length=128)
 
 
