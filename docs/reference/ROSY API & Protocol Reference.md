@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.215
+**Version:** v1.216
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,10 @@
 ### v1.215 병렬 계약 통합
 
 D-686/D-689의 초기 비밀번호 변경·본인 프로필과 D-671/D-680/D-687/D-693의 Discord 접수·검토·기존 작업 및 사건 연결을 함께 적용한다. 병렬 브랜치의 v1.210/v1.211 기록은 당시 계약 증거로 보존한다. 현재 보호된 Console 요청은 초기 쿠키의 PASSWORD_CHANGE_REQUIRED 제한과 비밀번호 변경 후 세션 무효화 규칙을 따른다. Discord transport 인증은 기명 접수만 담당하며 Console 실행 승인 자격을 대신하지 않는다. Robot API/envelope 버전과 CORE 최종 명령 권한은 유지한다.
+
+### v1.212 Rosy Cam은 요청이 있는 동안만 보낸다 (D-691)
+
+`rosy-overhead/1` 하향 `demand`는 `{"type":"demand","wanted":bool}`이다. 유효한 Vision preview lease로 `frame`, `field-proposal`, `map-proposal`을 읽으면 그 source를 30초(`stream_hold_s`) 동안 송출하게 한다. 프레임이 없거나 오래됐거나 429여도 요청이다. 401은 요청이 아니다. 폰은 소켓을 유지한 채 `wanted:false`에서 센서와 JPEG를 멈춘다. 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청보다 먼저 같은 정지를 하고, LIGHT 이하 또는 배터리 41°C 이하에서 다시 따른다. 이전 앱은 `demand`를 무시하고 계속 보낸다. 자세한 결정은 D-691이다.
 
 ### v1.211 본인 기본 프로필 (D-689)
 
@@ -1568,6 +1572,14 @@ bytes. The optional `rectification` object on lease creation is signed into the
 lease, so Vision can verify and bound CPU preview work without a new camera
 credential. No browser or Fleet process connects to ROS/DDS.
 
+D-691: those authorized reads, from any Rosy product, are what asks the phone to
+send. Vision answers on the same socket with `demand.wanted`. The phone keeps
+sending for 30 seconds after the last read, then releases the sensor and stops
+JPEG while the socket stays up. Severe phone heat stops the sensor first and
+resumes after the phone cools, using the same thresholds as the screen-off
+guard. A read that finds no frame, a stale frame, or
+429 still asks. 401 does not. An older phone ignores `demand` and keeps sending.
+
 | Method | Path | Credential | Result |
 |---|---|---|---|
 | GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN address | Configured preview source IDs |
@@ -2838,6 +2850,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
+| v1.212 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
 | v1.215 | 2026-10-12 | Merge (D-686/D-689, D-671/D-680/D-687/D-693): preserve named account/profile and Discord request/work/incident contracts together; initial-cookie restrictions and existing owners remain. Historical parallel revision rows are retained. |

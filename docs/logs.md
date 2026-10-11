@@ -7983,3 +7983,14 @@ osy-d395-s1d\`.
 - 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
 - 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
 - gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.
+
+## 2026-10-12 · d780942b9 · D-691 Rosy Cam은 요청 뒤 30초를 유지하고 대기한다
+
+- 변경: API reference v1.210. 하향 demand.wanted와 공유 벡터 stream_hold_s 30. 인증된 Rosy 미리보기 읽기가 천장 영상을 요청하고, 마지막 읽기 뒤 30초 뒤에 센서와 JPEG를 멈춘다.
+- 증거: 원격 AI PC에서 d780942b9 관련 294 passed, exit 0, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt). Cam JVM 418 passed. rosy_harness lint 0 errors. 실기 전류와 첫 프레임 지연은 측정하지 않았다.
+- gate 변화: 문서·계약 SOURCE. 착지·push·APK 설치·DEVICE/FIELD는 하지 않았다.
+## 2026-10-12 · uncommitted · D-691 심한 발열이면 천장 송출을 멈춘다
+
+- 변경: D-691 4항에 발열 정지를 넣었다. API reference v1.210 문장에 같은 기준을 적었다. 와이어는 그대로다.
+- 증거: Cam JVM 421 passed, 0 failed. S21에서 Fleet lease JPEG 순번이 1285에서 1289로 늘었고, 화면을 끈 뒤 1434가 왔다. 발열 정지와 대기 전류, 첫 프레임 지연은 기기에서 재지 않았다.
+- gate 변화: 문서 SOURCE. 착지와 배포는 이 기록 뒤에 한다.

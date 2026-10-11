@@ -679,6 +679,7 @@
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
+| D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
 | D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
@@ -807,6 +808,11 @@
 
 검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
 
+## D-691 — Rosy Cam은 요청이 있는 동안만 보낸다
+
+- 상태: Accepted (2026-10-12, 사용자 결정).
+- 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다. 심한 발열(화면 끄기와 같은 기준)이면 요청보다 먼저 멈춘다.
+- 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 2026-10-12 S21에서 Fleet lease JPEG 순번이 늘었다. 현장 Vision은 demand를 보내지 않아 2초 유예 송출이었다. 발열 정지는 배터리 36.2°C라 기기에서 확인하지 않았다. 대기 전류와 첫 프레임 지연은 측정하지 않았다.
 ## D-694 — 모델 비용 근거와 사건 receipt v2
 
 **Status:** Accepted (2026-10-12, 소스 계약)
