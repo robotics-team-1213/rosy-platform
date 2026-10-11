@@ -11,7 +11,10 @@ additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노
 
 from __future__ import annotations
 
-from .channel_requests import DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList  # noqa: F401
+from .channel_requests import (  # noqa: F401
+    DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
+    ChannelReviewRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
+)
 
 import enum
 import json

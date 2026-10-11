@@ -3,9 +3,11 @@ import json
 import sqlite3
 from contextlib import closing
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
-from core_common.protocol.channel_requests import ChannelNavigationCandidate
+from core_common.protocol.channel_requests import (
+    ChannelNavigationCandidate, ChannelReviewRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
+)
 
 
 class ChannelWorkflow:
@@ -80,6 +82,7 @@ class ChannelWorkflow:
                           json.dumps(candidate) if candidate else None, reason.strip()))
             return self._view(conn, receipt)
 
+
     def link_task(self, request_id, principal, *, task_id, expected_hash, expected_revision):
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -103,3 +106,22 @@ class ChannelWorkflow:
             conn.execute("UPDATE fleet_channel_workflow SET revision=revision+1, state='LINKED', work_id=? "
                          "WHERE request_id=?", (task_id, request_id))
             return self._view(conn, receipt)
+
+
+
+def install_workflow_routes(app, workflow, *, require_operator, read_guard):
+    @app.get('/api/fleet/channel-requests/{request_id}/review', dependencies=read_guard,
+             response_model=ChannelWorkflowView, tags=['fleet-work'])
+    def read_review(request_id: str, principal=Depends(require_operator)):
+        return workflow.read(request_id, principal.principal_id)
+
+    @app.put('/api/fleet/channel-requests/{request_id}/review', dependencies=read_guard,
+             response_model=ChannelWorkflowView, tags=['fleet-work'])
+    def review_request(request_id: str, body: ChannelReviewRequest, principal=Depends(require_operator)):
+        return workflow.review(request_id, principal.principal_id, **body.model_dump())
+
+    @app.post('/api/fleet/channel-requests/{request_id}/task', dependencies=read_guard,
+              response_model=ChannelWorkflowView, tags=['fleet-work'])
+    def link_task(request_id: str, body: ChannelTaskLinkRequest, principal=Depends(require_operator)):
+        return workflow.link_task(request_id, principal.principal_id, **body.model_dump())
+

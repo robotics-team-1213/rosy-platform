@@ -171,6 +171,9 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
     accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
     app.state.channel_requests = ChannelRequests(task_service.store.path, config, accounts)
     install_channel_routes(app, app.state.channel_requests, require_operator=require_operator, read_guard=read_guard)
+    from .channel_workflow import ChannelWorkflow, install_workflow_routes
+    app.state.channel_workflow = ChannelWorkflow(app.state.channel_requests, task_store=task_service.store)
+    install_workflow_routes(app, app.state.channel_workflow, require_operator=require_operator, read_guard=read_guard)
     if token is not None:
         from .channel_gateway import install_gateway
         install_gateway(app, app.state.channel_requests, token)
