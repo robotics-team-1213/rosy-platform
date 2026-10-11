@@ -664,6 +664,7 @@
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
+| D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -719,9 +720,3 @@
 - 상태: Accepted (2026-10-12).
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
-
-## D-678 ? Fleet ?? ??? ?? ?? ????? ??
-
-- ??: Accepted (2026-10-12).
-- ??: ?? owner? law/candidate/admission/dispatch/readback/?? ??, stop-token? attempt ???, ??? goal receipt, formation ?? ?? ??, Mission ?? ??.
-- ??: [ADR](../adr/D-678-fleet-execution-pipeline-closure.md), [?? ???](fleet-rulebook.md). ???????? ??? ???.

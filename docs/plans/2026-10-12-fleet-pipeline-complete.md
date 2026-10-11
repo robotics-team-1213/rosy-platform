@@ -57,3 +57,11 @@
 2. 경로별 실제 연결과 시험을 규칙집에 기록하고 런타임 opt-in 및 현장 검증의 남은 항목을 명시한다.
 3. 변경된 소스의 영향 범위를 원격으로 검사하고 모든 로그를 known_failures와 비교한다. 구조 예산을 넘기면 기존 책임 경계로 분리하고 독립 검토한다.
 4. 리뷰 후 `python tools/land.py --tests auto`로 최신 main의 통합 검증과 fast-forward 머지를 끝낸다. 푸시/배포/실제 구동은 수행하지 않는다.
+
+## 실행 결과
+
+- D-678로 기존 실행 owner의 최종 승인·receipt·readback 계약을 고정했다. Task policy는 실제 owner 호출 직전에 재검사한다. Console은 단일 로봇의 goal/bay 파이프라인과 follower 무장 경합을 제한하며, stop generation을 queue·교통 후처리까지 유지한다. 늦거나 불명인 bay 응답과 mover stop이 겹치면 보상 취소한다.
+- trip 시작 중 정지는 live trip/lease로 전환하지 않는다. formation의 마지막 무장 응답도 STOPPED를 되살리지 않는다. Mission은 모든 RUNNING/불명 owner를 순환 대조하며 동일 attempt를 재전송하지 않는다.
+- Cell Job·signals·자동 복구·cancel의 기존 계약과 시험을 통합 규칙집의 경로별 표로 연결했다. 별도 엔진/정책 언어/자동 활성화는 추가하지 않았다.
+- 원격 RED에서 admission/receipt, readback, stop, 최종 리뷰의 경합을 재현한 뒤 GREEN으로 검증했다. 최종 source `25c036ae8`의 navigation/traffic/trip/Task policy/formation 회귀는 종료 코드 0, known_failures 신규 0/기존 0이다. 전체 영향 범위·최신 main 통합은 착지 도구의 별도 최종 gate다.
+- 증거: 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/`의 원격 로그와 최종 검증 기록. 현장 revision/overlay, 실제 다중 로봇 정지·양보·재시작·도착, 시뮬레이터 및 배포 gate는 이 변경으로 완료되지 않는다.
