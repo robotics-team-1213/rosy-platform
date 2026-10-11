@@ -913,3 +913,26 @@ def test_viewer_sees_crosswalks_without_band_tools(page_site):
     expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
     expect(page.locator("#crosswalk-form")).to_be_hidden()
     expect(page.locator("#import-crosswalks")).to_be_disabled()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, width):
+    from playwright.sync_api import expect
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    active = store.active_view()
+    pending = {'teach_id': 'old-frame', 'robot_id': 'rosy_60', 'map_id': active['map']['map_id'],
+        'polyline': [[0, 0], [0.2, 0]], 'expires_at': time.time() + 600,
+        'points': 2, 'from_candidates': [], 'to_candidates': [], 'reason': 'operator'}
+    page.route('**/api/fleet/teach', lambda route: route.fulfill(status=200,
+        content_type='application/json', body=json.dumps({'recording': None, 'pending': [pending]})))
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    page.locator('#profile-new').click()
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+    assert store.active_view() == active and store.draft_view()['map'] is None
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
