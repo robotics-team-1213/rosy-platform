@@ -71,8 +71,8 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
     for item in probabilities:
         if (type(item) is not dict or set(item) != {'choice', 'probability'}
                 or type(item['choice']) is not str or item['choice'] not in problem.choices
-                or type(item['probability']) not in (float, int) or not math.isfinite(item['probability'])
-                or not 0 <= item['probability'] <= 1):
+                or type(item['probability']) not in (float, int) or not 0 <= item['probability'] <= 1
+                or not math.isfinite(item['probability'])):
             raise ValueError('INVALID_PROBABILITY')
     if (len({item['choice'] for item in probabilities}) != len(problem.choices)
             or abs(math.fsum(item['probability'] for item in probabilities) - 1) > 1e-6):
