@@ -838,3 +838,9 @@
 - 변경: 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
 - 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 105 passed, 0 failed. X:/DevTemp/ui-role-devices/pilot-gradle-1.txt. 웹 browser와 실제 태블릿 수용은 별도다.
 - gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · uiux: Android 함께 조종 차단 이유와 다음 행동
+
+- 변경: 연결 로비의 함께 조종 설명을 기존 버튼 활성 조건과 같은 연결 가능 수·발열 상태로 갱신한다. 두 대 미만은 Wi-Fi·전원 확인/다시 찾기, 발열은 냉각 후 다시 선택, 준비된 목록은 두 대 선택/연결을 안내한다. 좁은 로비 제목에도 Pilot 역할을 남긴다.
+- 증거: `X:/DevTemp/native-ux-a1f3c9/gradle.txt`의 `:app:testDebugUnitTest :app:assembleDebug` 종료 BUILD SUCCESSFUL; 16 suites, 106 passed, 0 failed, 0 errors. `docs/validation/uiux-native-games-2026-10-12.md`에 Cam·LCD·게임 보드의 기존 역할 검토와 이번 회차 미확인 경계를 기록했다.
+- gate 변화: SOURCE/native compile/JVM 근거만. 실물 태블릿·앱 설치본·두 대 주행·정지 readback은 미확인이다.
