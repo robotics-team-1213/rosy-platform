@@ -165,7 +165,7 @@ def traced_case(tmp_path, count=1):
     store.begin_case(scope, CaseBudget(100, 200, count, 0, .8))
     trace = model_receipt(scope, p, bound, checked, profiles=models)
     for index in range(count):
-        aid = f'model-{index}'
+        aid = f'model-{index}-0123456789abcdef0123456789abcdef'
         store.reserve(scope, attempt_id=aid, input_hash=p.digest, observation_revision=p.generation,
                       kind='model', max_cost_usd=.1, worker_id='worker', role='primary')
         store.mark_submitting(scope, aid, worker_id='worker')
