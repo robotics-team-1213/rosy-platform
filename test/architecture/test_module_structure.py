@@ -251,8 +251,11 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        3163,
-        "accept: independently re-judged at 3163 on 2026-10-12 by pipeline_review for D-674: "
+        3317,
+        "accept: independently re-judged at 3317 on 2026-10-12 by pipeline_review for D-685: "
+        "existing dispatch/readback and receipt owners add crash-consistent admission; no new "
+        "policy, HTTP or journal owner or size unit. +150 and all separation obligations unchanged. "
+        "Previously independently re-judged at 3163 on 2026-10-12 by pipeline_review for D-674: "
         "baseline 3067; shared law and admission keep existing policy/transport/outcome ownership, "
         "candidate selection is an exact extraction. No new size unit; +150 allowance unchanged. "
         "See docs/plans/2026-10-12-fleet-rule-pipeline.md. The ai_facts HTTP/journal separation below "
@@ -322,7 +325,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_366,
+        53_532,
+        "split: independently re-judged on 2026-10-12 by pipeline_review at 53532 for D-685. "
+        "Autonomous waiting/replan retain existing stuck and trip owners; bounded observation history "
+        "stays in server/observation_store.py, read wiring in console_routes.py, offline unlabeled export "
+        "under learning/curation. No new authority, process, SIZE_UNITS or allowance. Keep package +150, "
+        "Console1325 zero-growth and all observe/server/UI split obligations. Previous verdict: "
         "split: responsibility_review rechecked the 2026-10-12 ledger extraction at 53408 parent "
         "lines under the unchanged 53366+150 allowance. The nested ledger leaves automation, "
         "not the parent or incidents a second time. "
@@ -1011,7 +1019,11 @@ SIZE_VERDICTS = {
         "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
     "fleet/fleet/server/app.py": (
-        756,
+        909,
+        "accept: independently re-judged by pipeline_review on 2026-10-12 at 909: D-685 adds "
+        "only approved robot scope and owner-event reader composition wiring; all judgment, storage, "
+        "learning and command logic remain with their existing owners. Keep600 threshold and +150. "
+        "Previous verdict: "
         "accept: re-judged at 756 on 2026-10-08: Service Control (D-524) adds one route install; "
         "the allowlist and helper stay in host_control.py. +150 allowance measured from 756. "
         "Previously: one existing composition/lifespan owner wires bounded route siblings; "
