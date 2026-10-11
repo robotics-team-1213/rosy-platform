@@ -30,7 +30,7 @@
 
 1. 공용: `shared/web/ui.js`, `components.css` 및 기존 `/styleguide` 견본. 의미 아이콘·접근성 이름·focus 설명·상태를 정의하고 예외 없이 검사한다.
 2. Shell: `operations/ui/console`의 네 HTML, `shared/fleet-header.*`, `shared/doc-tabs.css`, 배치 시트. 전역/문서/작업 단계를 구분하고 기존 ID·route·API 소유를 보존한다.
-3. 사건: `operations/ui/console/console.js`의 보고서 렌더링과 관련 표시. 요약 → 역할별 결과 → 근거 → 원시 진단으로 접고 검토 저장·API 거절·내보내기를 보존한다.
+3. 사건: `operations/ui/console/incident-view.js`가 보고서 표시·검토·내보내기를 소유한다. 기존 D-362의 사건 패널 분리 의무를 적용하며 `console.js`는 인증·폴링·명령 호출을 유지한다. 요약 → 역할별 결과 → 근거 → 원시 진단으로 접고 검토 저장·API 거절·내보내기를 보존한다. 새 내부 자산은 Fleet static allowlist와 설치본 검사에 함께 등록한다.
 4. 통합: 원격 브라우저·계약 검사를 실행하고 `known_failures`와 비교한다. 공용 조작 48/14/12, 네 문서·두 테마·네 폭, 원시 진단 기본 숨김, tooltip 키보드, 알림/현재 개입, 검토 완료를 검증한다.
 5. 마감: 공식 main 착지·푸시·CI·서명 관제 설치와 실제 화면 readback. 기기/주행 수용은 별도다.
 
