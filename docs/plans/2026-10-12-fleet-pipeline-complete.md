@@ -67,3 +67,5 @@
 - 증거: 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/`의 원격 로그와 최종 검증 기록. 현장 revision/overlay, 실제 다중 로봇 정지·양보·재시작·도착, 시뮬레이터 및 배포 gate는 이 변경으로 완료되지 않는다.
 
 최종 리뷰 추가 경계: 접수 이후 route/trust cancel의 4xx, observe 중 roster 변경, bay admission 거절은 mover의 확정 실패가 아니다. source `38f51c4c2`의 전체 post-acceptance catch와 원격 158 PASS/NEW 0으로 Task UNKNOWN/점유/단일 전송을 확인했다. 독립 재판정은 Fleet 53355/Console 1325이며 기존 허용량과 분리 의무를 유지한다.
+
+통합 추가: cancel-all 경합 사유와 trip UI label 누락을 영향 gate에서 발견해 수정했다. 보상 cancel 409에서도 Task UNKNOWN/점유를 유지하며 source `5f3f033a8`의 원격 147 PASS/NEW 0으로 확인했다. 일반 전송 오류와 asyncio cancellation은 기존 분류를 유지한다. 최종 착지 검사는 최신 main/HEAD로 다시 실행한다.
