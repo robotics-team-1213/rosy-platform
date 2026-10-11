@@ -1,5 +1,4 @@
 """Fixed loopback v2 broker; admitted local inference grants no tool authority."""
-import asyncio
 from dataclasses import replace
 import json
 import math
@@ -113,7 +112,7 @@ class OllamaTransport:
             'root=Path(sys.argv[1]).parents[2];'
             'sys.path[:0]=[str(root),str(root/"operations/decision/src"),str(root/"contracts/foundation")];'
             'sys.argv=sys.argv[1:];runpy.run_path(sys.argv[0],run_name="__main__")')
-        return await bounded_process((str(Path(sys.executable).resolve()), '-c', bootstrap,
+        return await bounded_process((str(Path(sys.executable).absolute()), '-c', bootstrap,
             str(source), str(remaining)), body, remaining, output_limit)
 
 
