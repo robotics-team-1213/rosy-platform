@@ -143,3 +143,14 @@ def test_real_export_links_to_recording_without_creating_model_truth(tmp_path):
     row = result['matches'][0]
     assert row['model_feedback']['digest'] == exported['digest']
     assert row['model_feedback']['reserved_micros'] == 100000 and row['reviewed_root_cause'] is None
+
+
+def test_zero_call_not_needed_is_exported_as_nonintervention(tmp_path):
+    store, scope, manifest = fixture(tmp_path)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute('DELETE FROM fleet_incident_v2_attempts')
+        conn.execute('UPDATE fleet_incident_v2_cases SET calls=0,reserved_micros=0')
+    store.close_case(scope, state='NOT_NEEDED', reason='NORMAL')
+    result = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+    assert result['case']['outcome'] == 'DO_NOT_INTERVENE'
+    assert result['case']['calls'] == 0 and result['case']['attempts'] == []
