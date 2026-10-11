@@ -9,7 +9,7 @@ import pytest
 
 from browser_harness import browser_tests_enabled, open_page
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401
-from test_fleet_console_browser import _camera_api
+from test_fleet_console_browser import _camera_api, _open_token_access
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium acceptance")
@@ -141,6 +141,7 @@ def test_old_401_cannot_lock_a_reauthenticated_document(console_url, document):
         page.wait_for_function("window.__pending.length === 1")
         if not page.locator("#console-token").is_visible():
             page.locator("#topbar-more").click()
+        _open_token_access(page)
         page.fill("#console-token", "fleet-lifetime-b")
         page.locator("#token-save").click()
         page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
