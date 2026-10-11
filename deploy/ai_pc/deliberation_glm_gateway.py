@@ -15,7 +15,6 @@ import urllib.request
 
 from rosy.decision.deliberation import Problem, canonical, identifier, opinion
 from .deliberation_smoke_budget import claim
-from . import deliberation_glm_judgment as versioned
 
 MODEL = 'glm-5.3-flash'
 UPSTREAM = 'https://api.z.ai/api/coding/paas/v4/chat/completions'
@@ -26,6 +25,7 @@ LIMIT = 16384
 def trusted_body(raw):
     data = json.loads(raw)
     if 'schema' in data or 'profile_revision' in data:
+        from . import deliberation_glm_judgment as versioned
         problem, _, _, body = versioned.request(data)
         return problem, body
     if (set(data) != {'problem', 'prior', 'instruction'}
@@ -98,8 +98,11 @@ def checked_response(problem, response, *, body=None):
             raise ValueError('INVALID_REASONING_USAGE')
         usage['completion_tokens_details'] = {'reasoning_tokens': count}
     payload = json.loads(message['content'])
-    payload = (versioned.result(problem, body, payload) if body is not None
-               and 'schema' in json.loads(body) else opinion(problem, payload))
+    if body is not None and 'schema' in json.loads(body):
+        from . import deliberation_glm_judgment as versioned
+        payload = versioned.result(problem, body, payload)
+    else:
+        payload = opinion(problem, payload)
     return {'id': 'rosy-glm-one-shot', 'object': 'chat.completion', 'model': MODEL,
             'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': canonical(payload)},
                          'finish_reason': 'stop'}], 'usage': usage}
