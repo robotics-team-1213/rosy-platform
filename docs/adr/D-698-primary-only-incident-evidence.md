@@ -14,6 +14,8 @@ CaseScope의 profile_sha256은 실제 전체 목록의 canonical JSON hash다. �
 
 recording binder·실패 분석·독립 비교 소비자는 새 버전을 검증한 뒤 UNREVIEWED 근거로 소비한다. 독립 비교의 primary 전략은 단독 프로파일 근거와만 연결하고 primary_reviewer는 두 역할 근거와만 연결한다. 실제 호출 횟수로 전략을 추정하지 않는다. 규칙 기준 생산, 독립 정답·한계, 정상 명령·재발 추적 범위는 후속 작업이며 promotion과 FIELD는 계속 HOLD다.
 
+새 export /3은 단독 primary의 선언된 역할 예산과 실제 model attempt role을 결속해야 한다. `contracts.learning.incident_profiles`의 JSON 검사를 exporter·recording binder·독립 소비자가 재사용한다. reviewer 또는 역할 없는 model 시도를 단독 근거로 거절한다. 구버전 /1·/2의 역할 없는 과거 자료 호환은 그대로 유지한다. 공통 검사는 inference·원장·출처 인증·owner admission을 수행하지 않는다.
+
 ## Verification
 
 실제 worker의 단독 실행→원장 receipt→export→기존 소비자, 정상 무호출, 검토 필요 시 한 번 호출 후 최종 인수, 단독/두 역할 가장 거절과 기존 호환을 원격 시험한다. 기존 파일·소유자·크기 한도를 유지한다. source/합성 시험은 실제 Qwen·GLM 품질, 팀 인수, 현장 종결을 증명하지 않는다.

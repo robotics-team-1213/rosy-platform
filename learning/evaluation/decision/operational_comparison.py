@@ -84,6 +84,9 @@ def checked_export(exported):
         raise ValueError('UNBOUND_COMPARISON_EXPORT')
     case = exported['case']
     single = exported['schema'].endswith('/3')
+    if single:
+        from rosy.contracts.learning.incident_profiles import validate_primary_roles
+        validate_primary_roles(case)
     base = {'scope', 'budget', 'profiles', 'state', 'reason', 'calls', 'observations',
             'spent_micros', 'reserved_micros', 'attempts', 'closure', 'outcome'}
     fields(case, base | ({'handoff'} if exported['schema'].endswith('/2') or single and 'handoff' in case else set()))

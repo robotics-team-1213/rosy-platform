@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
 from rosy.contracts.learning.incident_handoff import validate_handoff
+from rosy.contracts.learning.incident_profiles import validate_primary_roles
 
 CAUSES = {"line_marking", "obstacle", "robot_fault", "localization", "traffic_wait", "unknown"}
 SCHEMA = "rosy.recording.incident_feedback/1"
@@ -88,6 +89,7 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
         raise ValueError('invalid unreviewed model feedback')
     case = exported['case']
     single = exported['schema'].endswith('/3')
+    if single: validate_primary_roles(case)
     if single or 'profiles' in case:
         profiles = case.get('profiles')
         expected = ['primary'] if single else ['primary', 'reviewer']

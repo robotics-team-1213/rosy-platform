@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'operations/fleet'), str(ROOT / 'operations/decision/src'),
                 str(ROOT / 'contracts/foundation'), str(ROOT / 'contracts/learning/src'), str(ROOT / 'tools')]
 from incident_handoff_snapshot import snapshot_handoff
+from rosy.contracts.learning.incident_profiles import validate_primary_roles
 from fleet.incidents.automation.contract import CaseBudget, CaseScope, sha256, summary_json
 from fleet.incidents.automation.ledger.receipt import ModelReceipt, checked_receipt
 from rosy.decision.deliberation import canonical, identifier
@@ -131,6 +132,7 @@ def snapshot(path, subject_id, case_id, profiles, *, include_handoff=False):
                       reserved_micros=reserved, attempts=attempts, closure=closure,
                       outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE'
                       else 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else 'UNRESOLVED')
+        if len(selected) == 1: validate_primary_roles(result)
         if include_handoff: result['handoff'] = snapshot_handoff(conn, scope, budget, case)
     exported = dict(schema=f'rosy.incident.model_feedback/{3 if len(selected) == 1 else 2 if include_handoff else 1}', case=result, label_state='UNREVIEWED',
                     field_accepted=False, digest=hashlib.sha256(feedback_json(result).encode()).hexdigest())
