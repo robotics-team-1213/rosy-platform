@@ -8,7 +8,7 @@
 
 별도의 짧은 실제 Gateway 연결에서 READY와 서버 ID를 확인했고 즉시 종료했다. intents513, 새 메시지 전송0건이다. 이는 지속 Fleet worker/접수/작업 실행 증거가 아니다. private 토큰과 session ID는 공개 증거에 기록하지 않는다. Portal 토큰을 숨기고 임시 변경한 사용자 Developer Mode를 원래 OFF로 복원했다.
 
-Tailscale이 다른 계정으로 바뀌어 첫 통합 시험의 SSH가 끊겼다. 사용자 복귀 선택 후 원래 tailnet과 세 ROSY PC 연결을 재확인했고 시험을 재개했다. 현재 현장 image는 다른 세션이 갱신한 `d0c4240d5f85c25a55dcc0c59ca222de56f3fe57`다. 기존 HTTPS Console에서 기명 operator cookie session HTTP200을 다시 확인했다. 이후 적용 시 현재 image/config/계정을 재확인해야 한다.
+Tailscale이 다른 계정으로 바뀌어 첫 통합 시험의 SSH가 끊겼다. 사용자 복귀 선택 후 원래 tailnet과 세 ROSY PC 연결을 재확인했고 시험을 재개했다. 현재 현장 image는 다른 세션이 갱신한 `d0c4240d5f85`다. 기존 HTTPS Console에서 기명 operator cookie session HTTP200을 다시 확인했다. 이후 적용 시 현재 image/config/계정을 재확인해야 한다.
 
 ## Source·원격 시험
 

@@ -36,6 +36,8 @@ services:
       - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml
+      - --discord-intake-config-optional
+      - /run/rosy-discord/intake.json
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db
