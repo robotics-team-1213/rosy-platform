@@ -113,3 +113,15 @@ def test_export_rejects_unbounded_scope(tmp_path, change):
     loop, args, _, _ = data(tmp_path)
     with pytest.raises(ValueError):
         exporter().snapshot(loop.rule_selections.path, **{**args, **change})
+
+
+def test_complete_envelope_and_newline_are_inside_byte_limit(tmp_path):
+    loop, args, _, exports = data(tmp_path)
+    module = exporter()
+    value = exports[-1]
+    size = len(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()) + 1
+    module.MAX_EXPORT_BYTES = size
+    assert module.snapshot(loop.rule_selections.path, **args) == value
+    module.MAX_EXPORT_BYTES = size - 1
+    with pytest.raises(ValueError, match='RULE_EXPORT_LIMIT'):
+        module.snapshot(loop.rule_selections.path, **args)

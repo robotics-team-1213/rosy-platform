@@ -9,6 +9,8 @@ import sqlite3
 import sys
 import math
 
+MAX_EXPORT_BYTES = 1024 * 1024
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
 from rosy.contracts.learning.incident_rule import validate_rule
 if __package__:
@@ -20,7 +22,7 @@ else:
 
 def digest(value):
     raw = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
-    if len(raw) > 1024 * 1024: raise ValueError('RULE_EXPORT_LIMIT')
+    if len(raw) > MAX_EXPORT_BYTES: raise ValueError('RULE_EXPORT_LIMIT')
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -59,9 +61,12 @@ def snapshot(database, *, subject_id, case_id, owner_id, config_sha256, policy_r
         records.append(dict(selection_id=oid, received_at=received, receipt=receipt,
                             sha256=hashlib.sha256(payload.encode()).hexdigest()))
     if not records: raise ValueError('NO_RETAINED_RULE_SELECTION')
-    return dict(schema='rosy.incident.rule_feedback/1', scope=scope, records=records,
+    exported = dict(schema='rosy.incident.rule_feedback/1', scope=scope, records=records,
                 digest=digest(dict(scope=scope, records=records)), label_state='UNREVIEWED',
                 field_accepted=False, coverage='retained_selections_only')
+    if len(json.dumps(exported, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()) + 1 > MAX_EXPORT_BYTES:
+        raise ValueError('RULE_EXPORT_LIMIT')
+    return exported
 
 
 def main():
@@ -76,7 +81,7 @@ def main():
     if output.resolve().drive.upper() == 'F:': raise ValueError('export output belongs on X:')
     exported = snapshot(database, **args)
     with output.open('x', encoding='utf-8') as stream:
-        stream.write(json.dumps(exported, sort_keys=True, allow_nan=False)+'\n')
+        stream.write(json.dumps(exported, sort_keys=True, separators=(',', ':'), allow_nan=False)+'\n')
     return 0
 
 
