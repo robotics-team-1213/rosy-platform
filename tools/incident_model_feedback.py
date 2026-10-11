@@ -83,6 +83,9 @@ def snapshot(path, subject_id, case_id, profiles):
                 raise ValueError('INVALID_ATTEMPT_RECEIPT')
             amount = money(row['reserved_micros'])
             actual = money(row['actual_micros']) if row['actual_micros'] is not None else None
+            if (row['state'] in {'RESERVED', 'SUBMITTING'} and actual is not None
+                    or row['kind'] == 'observation' and (amount != 0 or actual not in (None, 0))):
+                raise ValueError('IMPOSSIBLE_ATTEMPT_COST')
             if row['state'] in {'COMPLETED', 'REJECTED'} and actual is None:
                 raise ValueError('MISSING_TERMINAL_COST')
             spent += actual if actual is not None else 0
@@ -104,6 +107,8 @@ def snapshot(path, subject_id, case_id, profiles):
             proof = conn.execute('SELECT receipt_json FROM fleet_incident_v2_closures WHERE subject_id=? AND case_id=?',
                                  (subject_id, case_id)).fetchone()
         closure = closure_receipt(json.loads(proof[0]) if proof else None, scope, budget, case['reason'], case['state'])
+        if closure is not None and any(a['state'] in {'RESERVED', 'SUBMITTING'} for a in attempts):
+            raise ValueError('CLOSURE_WITH_INFLIGHT_ATTEMPT')
         result = dict(scope=asdict(scope), budget=asdict(budget), profiles=manifest, state=case['state'],
                       reason=case['reason'], calls=calls, observations=observations, spent_micros=spent,
                       reserved_micros=reserved, attempts=attempts, closure=closure,
