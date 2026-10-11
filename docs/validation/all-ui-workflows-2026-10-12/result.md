@@ -1,5 +1,22 @@
 # 전체 활성 UI/UX 정보 배치·작업 흐름 검증
 
+## 계정 규칙 후속 정리 — D-683
+
+[공식 참고와 배치 근거](../../plans/2026-10-12-platform-ux-conventions-design.md)를 조사하고 [D-683](../../adr/D-683-fleet-account-entry-and-login-return.md)으로 Fleet 계정 진입 규칙을 채택했다. 네 문서의 우측 로그인/계정, `/console/login`, 허용된 업무 주소 복귀, 서버 세션 확인, 쿠키 로그아웃 결과 검증을 기존 인증 API로 구현했다. 지도·Cell 로그인은 새 탭으로 열고 원래 업무 입력을 보존한다. CORE 권한과 명령을 추가하지 않는다.
+
+| 증거 | 결과와 범위 |
+|---|---|
+| `2180826c3` 원격 인증 회귀 | 21 passed / 2 failed. 옛 내장 폼 전제와 접힌 토큰 클릭을 수정했다. `logs/account-login-first/run-1.txt` |
+| `ab05a034c` 원격 확장 | 66 passed / 2 failed. 390px 안전 그룹 오른쪽 정렬 결함과 지도 보기 선택을 수정했다. `logs/account-login-corrected/run-1.txt` |
+| `b9145fa9b` 원격 인증·전체 지도·헤더·백엔드 | 169 passed / 8 failed, NEW 8. 인증/계정은 통과했으나 전체 묶음은 실패다. 재접속 후 편집 선택의 Apply gating 복원, 인증 확인 후 고급 접속 접힘, 새 계정 노드를 포함한 Node fixture를 수정했다. 충돌 초안을 버리는 옛 기대는 로컬 입력 보존과 기존 CAS 거절 검증으로 바꿨다. `logs/account-login-final/run-1.txt` |
+| `b9145fa9b` 루트 관제 헤더·개발/paired 연결 | 4 passed, 종료 0, NEW 0. `logs/account-root-header/run-1.txt` |
+| `d3dac3633` 전체 Console Node | 312 passed, 종료 0. `logs/account-node-all.txt` |
+| 독립 소스 검토 | `d3dac3633`에서 추가 blocker 없음. 현재 검증된 역할로 편집 조작을 복원하며 원래 revision의 CAS를 보존한다. 읽기 전용 검토이며 배포/브라우저 통과를 대신하지 않는다. |
+
+증거 경로는 공용 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--015344--fleet-header-proof--958a02/` 기준이다. `evidence/account-screens-final/`의 10개 PNG는 시험 서버의 로그인 및 네 계정 메뉴 320/1366px 관측이며 설치본 증거가 아니다. 해당 계정 시나리오는 `b9145fa9b`에서 통과했다. 수정 후 전체 지도/인증 재회귀와 Android proxy 검사는 진행 중이므로 통과로 표시하지 않는다.
+
+현재 계정 변경의 main 착지·push·해당 SHA의 CI·서명·설치·실물 수용은 아직 확인하지 않았다. 아래의 과거 설치 관측과 혼용하지 않는다.
+
 ## 범위와 정보 위치
 
 사용자 요청은 Fleet 네 화면의 공용 헤더에서 모든 활성 UI의 본문·작업 흐름까지 확대되었다. 기준은 `shared/web/surfaces.yaml`, D-658, 기존 표면별 계약이다. 변경은 `uiux/header-all-surfaces`에서 통합했다. 공유 main의 다른 작업은 수정하지 않았다.
