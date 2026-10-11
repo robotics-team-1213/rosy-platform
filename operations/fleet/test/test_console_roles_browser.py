@@ -108,15 +108,14 @@ def _login(playwright, origin):
     page.on("request", lambda req: posts.append((urlparse(req.url).path, req.post_data))
             if req.method == "POST" and "/api/" in req.url else None)
     page.goto(origin + "/console")
+    page.locator('#fleet-login').click()
     page.locator("#password-login").wait_for(state="visible")
-    more = page.locator("#topbar-more")
-    if more.is_visible() and more.get_attribute("aria-expanded") != "true":
-        more.click()
     page.locator("#password-login [data-login=login]").fill("kim")
     page.locator("#password-login [data-login=password]").fill("pw-1234")
     page.locator("#password-login [data-login=submit]").click()
     page.locator('#user-role[title^="kim"]').wait_for(timeout=15000)
-    if more.get_attribute("aria-expanded") == "true":
+    more = page.locator('#topbar-more')
+    if more.get_attribute('aria-expanded') == 'true':
         more.click()
     return browser, page, errors, posts
 
