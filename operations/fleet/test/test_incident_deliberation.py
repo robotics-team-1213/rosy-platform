@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import replace
+from datetime import datetime, timezone
 
 import pytest
 
@@ -42,6 +43,17 @@ def test_current_pinky_judgment_is_advisory_and_not_replayed(tmp_path):
     assert problem.domain == 'line_follow' and problem.observed_at == 100
     assert problem.facts_json == '{"state":"blocked"}'
     assert problem.choices == ('reobserve', 'human')
+
+
+def test_board_explicit_caller_uses_existing_core_observation(tmp_path):
+    from fleet.stuck.board import LineStuckBoard
+    board = LineStuckBoard(wall=lambda: 101)
+    board.observe([dict(robot_id='pinky', online=True, state_age_s=1,
+        state=dict(seq=1, timestamp=datetime.fromtimestamp(100, timezone.utc).isoformat(),
+            line_follow=dict(mode='CAMERA_LINE', stuck=dict(stuck_id='lane-1', phase='ASKING'))))])
+    result = asyncio.run(board.deliberate('pinky', DeliberationJournal(tmp_path / 'fleet.db'),
+        Supervisor(clock=lambda: 101), [Provider('a'), Provider('b')]))
+    assert result['state'] == 'CANDIDATE' and result['action_admissible'] is False
 
 
 @pytest.mark.parametrize('condition,observed,state', [('normal', 100, 'NOT_NEEDED'),
