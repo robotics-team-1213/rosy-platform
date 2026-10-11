@@ -144,3 +144,9 @@
 - 변경: admission 오류를 episode에 넣은 뒤 EPISODE를 출력해 콘솔에도 거절 사유를 남긴다. 기존 최종 수용·명령·학습 판단은 유지한다.
 - 증거: committed-source 원격 camera_lane/map_task 103 PASS·known_failures NEW 0. R19 실제 네 방향 baseline/eval 8회는 모두 차선 상실로 SDK 종료 1, 정방향만 0.220m 진행했다. 실제 영상 8개 hash·ffprobe 960x540·프레임 수 및 원본 57개 복사 hash, episode/cleanup 실제 정지·정책 hash 불변·GPU 작업 종료를 확인했다. 원본 픽셀 14개의 CPU 재현은 모델 drivable 출력이 있으나 pivot/reorient 선택 뒤 native strict 관측이 거절함을 보여준다. 기존 CORE turn_spot/odom_pivot 회전 경로와 camera containment/Fleet cue 연결이 빠져 있으며 지도 pivot_ok=true는 회전 가능 증거가 아니다. 기록 및 재현 결과는 private에 보관했다. 단일 프레임 재현은 scan/시간 기억/주행 증거가 아니다.
 - gate 변화: 없음. CORE 회전 검증 경로 연결·camera 재획득·완주·교통/Fleet·Gazebo 두 대 주행·병렬 RL·실물 수용은 미완료다. 무효 카메라를 학습 상태로 승인하거나 안전 정지를 해제하지 않는다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): native camera containment 관측 연결
+
+- 변경: D-692/API v1.210의 ISAAC 출처로 keeper의 같은 영상 경계·횡단보도 관측을 strict typed CORE에 전달하고 trace에 보존한다. 승인된 projection/detection bounds가 없으므로 uncertainty null을 유지하며 GAZEBO 2px 오차를 상속하지 않는다. invalid 관측·학습 제외·명령 0은 유지한다.
+- 증거: committed-source 원격 camera/producer/crosswalk/protocol alignment 100 PASS·known_failures NEW 0. 첫 시험의 API description·changelog 정합성 NEW 2를 같은 브랜치에서 수정했다. 독립 D-430 소스 리뷰 차단 결함 없음. R21은 fa75953dfe 파일 7314개 hash 검증 후 22 cores·9GB·빈 GPU에서 시작했다. R20은 문서 정합성 수정 전 준비만 했으며 SDK를 실행하지 않았다.
+- gate 변화: SOURCE 관측 연결만 확인했다. unknown error로 lane-return/crosswalk 안전 증거는 생성되지 않는다. 실제 R21 결과·오차 검증·회전/Fleet 연결·재획득·완주·교통·두 대·병렬 RL은 미완료다.
