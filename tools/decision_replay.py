@@ -75,7 +75,8 @@ def replay(data: Path, endpoint: str, model: str, timeout: float) -> dict:
         "p95_latency_ms": latencies[math.ceil(0.95 * len(latencies)) - 1]}}
 
 
-def compare_deliberation(cases, runs, *, training_sessions, limits):
+def compare_deliberation(cases, runs, *, training_sessions, limits,
+                         training_recordings=None, reviewed_profile=None):
     """Independent same-case metrics. No provider call, learned policy write or FIELD approval."""
     if not cases or len(cases) > 10000 or type(training_sessions) is not list:
         raise ValueError('invalid evaluation set')
@@ -85,7 +86,8 @@ def compare_deliberation(cases, runs, *, training_sessions, limits):
         key = case['id']
         source = (case['session_id'], case['recording_id'])
         if (type(key) is not str or not key or key in by_id or source in physical
-                or case['session_id'] in training_sessions or case['expected'] not in {
+                or case['session_id'] in training_sessions
+                or case['recording_id'] in (training_recordings or []) or case['expected'] not in {
                     None, 'reobserve', 'human', 'map_correction', 'object_reacquire'}
                 or type(case['problem_hash']) is not str or len(case['problem_hash']) != 64):
             raise ValueError('invalid, duplicate or leaked evaluation case')
@@ -116,8 +118,17 @@ def compare_deliberation(cases, runs, *, training_sessions, limits):
             raise ValueError('invalid error rate')
     report = {'state': 'PASS_OFFLINE_ONLY', 'field_accepted': False,
               'dataset_sha256': digest, 'modes': {}}
-    if limits is None or any(not c.get('reviewed_by') for c in cases):
+    if (limits is None or training_recordings is None or reviewed_profile is None
+            or any(not c.get('reviewed_by') for c in cases)):
         report['state'] = 'HOLD'
+    if reviewed_profile is not None:
+        if (set(reviewed_profile) != {'dataset_sha256', 'limits', 'reviewed_by', 'minimum_cases'}
+                or reviewed_profile['dataset_sha256'] != digest or reviewed_profile['limits'] != limits
+                or type(reviewed_profile['reviewed_by']) is not str or not reviewed_profile['reviewed_by'].strip()
+                or type(reviewed_profile['minimum_cases']) is not int or reviewed_profile['minimum_cases'] < 1):
+            raise ValueError('invalid frozen reviewed profile')
+        if len(cases) < reviewed_profile['minimum_cases']:
+            report['state'] = 'HOLD'
     for mode in ('rules', 'single', 'deliberation'):
         selected = [rows[(mode, key)] for key in by_id]
         latencies = sorted(r['latency_ms'] for r in selected)
