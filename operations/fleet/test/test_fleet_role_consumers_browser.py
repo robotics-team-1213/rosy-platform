@@ -27,6 +27,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
 
     api = _api()
     api["/api/fleet/state"]["robots"][2]["link"] = "tls-refused"
+    api["/api/fleet/enrollment/robots"] = {"available": True, "robots": [], "static_robot_ids": [], "alarms": []}
     writes = []
     with _fleet(tmp_path, console_token="registry-only", development_sessions=DevelopmentSessions()) as (browser, origin):
         page = browser.new_page()
@@ -72,6 +73,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     else:
                         page.get_by_role("tab", name="로봇 등록", exact=True).click()
                     # Only reveal the existing form to measure its paint; no enrollment request.
+                    expect(page.locator("#enroll-controls")).to_be_visible()
                     page.locator("#enroll-dialog").evaluate("node => node.showModal()")
                     expect(page.locator("#enroll-code")).to_be_visible()
                     field = page.locator("#enroll-code")
