@@ -326,13 +326,15 @@ class LineStuckBoard:
                accepted: Optional[bool], outcome: Optional[str] = None,
                code: Optional[str] = None, message: Optional[str] = None,
                audit_id: Optional[str] = None, tier: Optional[str] = None,
-               rule: Optional[str] = None, escalated: Optional[str] = None) -> dict:
+               rule: Optional[str] = None, escalated: Optional[str] = None, durable: bool = False) -> dict:
         """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
 
         D-438 §8: ``tier`` (human / rule) and ``rule`` say who decided; a resolver hand-off to
         a human is its own row with decision ``ESCALATE`` and the reason in ``escalated``.
         The row also goes to the durable log next to the API audit row (``audit_id``). The
         robot has already been asked, so a log failure is logged, never turned into an error."""
+        if durable and self._log is None:
+            raise OSError("durable stuck journal is not configured")
         row = {"robot_id": robot_id, "stuck_id": stuck_id, "decision": decision,
                "principal_id": principal_id, "accepted": accepted, "outcome": outcome,
                "code": code, "message": message, "audit_id": audit_id,
@@ -345,6 +347,8 @@ class LineStuckBoard:
             try:
                 self._log.append(row)
             except (OSError, sqlite3.Error):
+                if durable:
+                    raise
                 _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
                                robot_id, stuck_id)
         return row

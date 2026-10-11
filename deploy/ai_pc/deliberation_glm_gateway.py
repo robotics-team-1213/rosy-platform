@@ -24,6 +24,10 @@ LIMIT = 16384
 
 def trusted_body(raw):
     data = json.loads(raw)
+    if 'schema' in data or 'profile_revision' in data:
+        from . import deliberation_glm_judgment as versioned
+        problem, _, _, body = versioned.request(data)
+        return problem, body
     if (set(data) != {'problem', 'prior', 'instruction'}
             or type(data['prior']) is not list or len(data['prior']) > 1):
         raise ValueError('INVALID_TRUSTED_JOB')
@@ -76,7 +80,7 @@ def upstream(body, token, remaining):
     return json.loads(raw)
 
 
-def checked_response(problem, response):
+def checked_response(problem, response, *, body=None):
     choice, = response['choices']
     message = choice['message']
     usage = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
@@ -93,7 +97,12 @@ def checked_response(problem, response):
         if type(count) is not int or not 0 <= count <= usage['completion_tokens']:
             raise ValueError('INVALID_REASONING_USAGE')
         usage['completion_tokens_details'] = {'reasoning_tokens': count}
-    payload = opinion(problem, json.loads(message['content']))
+    payload = json.loads(message['content'])
+    if body is not None and 'schema' in json.loads(body):
+        from . import deliberation_glm_judgment as versioned
+        payload = versioned.result(problem, body, payload)
+    else:
+        payload = opinion(problem, payload)
     return {'id': 'rosy-glm-one-shot', 'object': 'chat.completion', 'model': MODEL,
             'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': canonical(payload)},
                          'finish_reason': 'stop'}], 'usage': usage}
@@ -142,11 +151,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'response_format': {'type': 'json_object'}}
             claim(server.body)
             server.calls = 1
-            response = checked_response(server.problem, upstream(request, server.token,
-                max(0.01, server.deadline - time.monotonic())))
+            provider_response = upstream(request, server.token, max(0.01, server.deadline - time.monotonic()))
+            response = checked_response(server.problem, provider_response, body=server.body)
             stream = incoming.get('stream') is True
             raw = stream_response(response) if stream else canonical(response).encode()
             server.metrics = {'state': 'PASS_GLM_PROVIDER_ONLY', 'calls': 1, 'usage': response['usage']}
+            if 'schema' in json.loads(server.body):
+                from .deliberation_glm_receipt import receipt
+                server.metrics.update(receipt(server.body, provider_response,
+                                              credential_sha256=server.credential_sha256))
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream' if stream else 'application/json')
             self.send_header('Content-Length', str(len(raw)))
@@ -159,7 +172,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     job = json.loads(sys.stdin.buffer.readline(LIMIT + 1024))
-    if set(job) != {'body', 'deadline_s', 'socket_path', 'secret_path'} or job['secret_path'] != str(CONFIG_PATH):
+    fields = {'body', 'deadline_s', 'socket_path', 'secret_path'}
+    if set(job) not in (fields, fields | {'credential_sha256'}) or job['secret_path'] != str(CONFIG_PATH):
         raise ValueError('INVALID_JOB')
     duration = job['deadline_s']
     if type(duration) not in (int, float) or not math.isfinite(duration) or not 0 < duration <= 30:
@@ -176,6 +190,9 @@ def main():
         try:
             os.chmod(path, 0o600)
             server.problem, server.body, server.token = problem, body, read_secret()
+            if 'schema' in json.loads(body):
+                from .deliberation_glm_receipt import credential
+                server.credential_sha256 = credential(server.token, job.get('credential_sha256'))
             server.deadline, server.calls = time.monotonic() + duration, 0
             server.metrics = {'state': 'HOLD', 'reason': 'NO_REQUEST', 'calls': 0}
             server.timeout = duration
