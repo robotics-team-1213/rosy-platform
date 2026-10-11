@@ -11,7 +11,7 @@ reviewViewport(document.querySelector('.pixel-stage'),$('pixel-canvas'),document
 const toolOptions=document.querySelector('.pixel-editor-column section .ui-workspace-bar');
 document.querySelector('.pixel-quick-tools').prepend($('pixel-tool-hint'),$('pixel-quick-classes'),document.querySelector('.pixel-quick-actions'));
 document.querySelector('.pixel-quick-actions').after(toolOptions);
-$('pixel-view-status').before(document.querySelector('.pixel-ribbon-nav'),document.querySelector('.pixel-layout .review-view-bar'));
+$('pixel-view-status').before(document.querySelector('.pixel-layout .review-view-bar'));
 document.querySelector('.pixel-editor-column').append(document.querySelector('.pixel-quick-tools'));
 const pixelContent=$('pixel-content'),pixelPreparation=$('pixel-preparation');
 $('pixel-title').after($('pixel-reload'));
@@ -23,6 +23,7 @@ pixelContent.insertBefore($('pixel-frames'),pixelPreparation);
 const pixelResult=document.createElement('p');pixelResult.id='pixel-result';pixelResult.className='review-result';pixelResult.setAttribute('role','status');
 const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-result-note';pixelResultNote.className='review-result-note';pixelResultNote.setAttribute('role','status');
 $('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
+pixelResultNote.after(document.querySelector('.pixel-ribbon-nav'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
 pixelResultNote.after($('pixel-quick-classes'));
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
