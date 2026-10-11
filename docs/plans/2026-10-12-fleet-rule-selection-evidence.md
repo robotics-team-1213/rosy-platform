@@ -18,6 +18,8 @@
 
 ## Source 검증 checkpoint
 
+최신 main 통합 commit `8520b77d663e1922f68518821ed771ad4d080d5e`를 로컬 착지했다. 적격 AI PC 9GB의 12개 시험 그룹은 621 passed/1 skipped, terminal exit 0, known-failures NEW 0과 lint를 통과했다. 실제 wheel/sdist·base loop·local policy loader·계약·기존 resolver/worker와 parent/child 구조 회귀를 포함한다. 고정 로그는 세션 `logs/rule-land-8520b77d66/run-1.txt`다. 아래 측정과 부분 시험은 통합 전 checkpoint이며 실제 모델·CI·배포·현장 수용을 승인하지 않는다.
+
 commit `5a9859b5b`의 원격 8개 그룹은 적격 AI PC 9GB에서 343 passed/1 skipped, terminal exit 0, known-failures NEW 0이다. 실제 wheel·sdist→별도 target 설치에서 SDK 파일 위치·필수 dependency metadata·기본 resolver 생성을 확인했고 기존 local execution loader와 learning artifact 계약을 함께 검사했다. 로그는 세션 `logs/rule-final-green/run-1.txt`다.
 
 독립 검토의 bare Fleet 설치 의존성과 autonomous WAIT 의미 지적은 재현 RED 후 수정했다. SDK 0.1.10을 필수 설치하고 기존 extra 이름을 유지한다. CI offline installer와 local execution의 고정 SDK 버전도 함께 맞췄으며 새 CI-input 환경 준비를 확인했다. 모든 physical ANSWER는 비교 기준 None이며 human 비교는 실제 HANDOFF 선택에만 적용한다. 비활성 AiFirst·기록 실패·claim 경합·현재 rule config 변경도 거절한다. 추가 commit `a12ea31e57`의 실제 selector→factory→worker Problem.fleet_choice 연결과 config fence는 18 passed/NEW 0이다.
