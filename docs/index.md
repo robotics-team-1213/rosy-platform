@@ -318,8 +318,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
 - 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
 - 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
 - 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)
 - 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)
-- 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
