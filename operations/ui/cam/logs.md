@@ -298,4 +298,6 @@
 
 ## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 
-- 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 변경: 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 413 passed, 0 failed. X:/DevTemp/ui-role-devices/cam-gradle-2.txt 및 X-only 재실행 cam-gradle-3.txt. 실제 폰 수용은 별도다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.

@@ -835,4 +835,6 @@
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
 ## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 
-- 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 변경: 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 105 passed, 0 failed. X:/DevTemp/ui-role-devices/pilot-gradle-1.txt. 웹 browser와 실제 태블릿 수용은 별도다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
