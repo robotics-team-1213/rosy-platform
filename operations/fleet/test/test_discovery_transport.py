@@ -11,6 +11,28 @@ from fleet.swarm.discovery_transport import resolve_robot, select_robot
 from core_common.discover import DiscoveredDevice
 
 
+@pytest.mark.parametrize('failure', [ValueError('not_discovered: trusted robot name not found'),
+                                   ValueError('conflict: robot name advertises multiple ports'),
+                                   TimeoutError('robot discovery deadline exceeded')])
+def test_discovery_failure_is_a_transport_error_without_sending_credentials(monkeypatch, failure):
+    import httpx
+    import fleet.swarm.discovery_transport as transport
+
+    async def fail(*args):
+        raise failure
+
+    sent = []
+    monkeypatch.setattr(transport, 'resolve_robot', fail)
+    request = httpx.Request('GET', 'https://robot-a.local:8443/api/v1/robot/state',
+                            headers={'Authorization': 'Bearer fixture-secret'})
+    inner = httpx.MockTransport(lambda req: sent.append(req) or httpx.Response(200))
+    client = transport.DiscoveryTransport(endpoint(), inner=inner)
+    with pytest.raises(httpx.TransportError) as caught:
+        asyncio.run(client.handle_async_request(request))
+    assert caught.value.request is request
+    assert not sent
+
+
 @pytest.fixture(autouse=True)
 def isolated_host_lookups(monkeypatch):
     import fleet.swarm.discovery_transport as transport
