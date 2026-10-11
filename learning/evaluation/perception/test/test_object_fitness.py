@@ -160,3 +160,11 @@ def test_summary_refuses_unrecognised_domain_instead_of_dropping_frame():
     report['domain'] = 'unknown'
     with pytest.raises(ValueError, match='domain'):
         summarize_frames([report])
+
+
+def test_summary_keeps_binding_and_refuses_bound_unbound_mixing():
+    report, _ = model_frame()
+    assert summarize_frames([report])['bindings']['model_revision'] == 'r1'
+    for rows in ([report, score([], [])], [score([], []), report]):
+        with pytest.raises(ValueError, match='binding'):
+            summarize_frames(rows)
