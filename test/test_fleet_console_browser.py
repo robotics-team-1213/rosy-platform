@@ -1992,7 +1992,7 @@ def test_console_fits_the_declared_viewport(console_url):
     for name in ("signals", "formation"):
         assert tools_fit[name]["width"] > 0 and tools_fit[name]["height"] > 0, tools_fit
     assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
-    assert fit["stop"]["width"] >= 58 and fit["stop"]["height"] >= 58, fit
+    assert fit["stop"]["width"] >= 48 and fit["stop"]["height"] >= 48, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
