@@ -49,6 +49,8 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
             page.goto(origin + path)
             expect(page.locator("#user-role")).to_have_text("운영자", timeout=15000)
             page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+            if path == "/console":
+                page.locator("#robot-choice").select_option("rosy_03")
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
