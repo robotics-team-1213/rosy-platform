@@ -141,6 +141,20 @@ assert cli._decode_result is cli_owner._decode_result
 assert calibration.CalibrationArtifact is calibration_owner.CalibrationArtifact
 assert calibration.evaluate_calibration is calibration_owner.evaluate_calibration
 assert calibration.wilson_lower is calibration_owner.wilson_lower
+from fleet.incidents.automation import contract, store
+from fleet.incidents.automation.ledger import contract as ledger_contract, store as ledger_store
+from fleet.incidents.automation import closure, worker
+for name in ('dataclass', 'Decimal', 'ROUND_CEILING', 'ROUND_FLOOR', 'math', 're',
+             'CHOICES', 'canonical', 'identifier', 'sha256', 'micros',
+             'CaseScope', 'CaseBudget', 'summary_json'):
+    assert getattr(contract, name) is getattr(ledger_contract, name), name
+for name in ('closing', 'contextmanager', 'asdict', 'json', 'math', 'Path', 'sqlite3',
+             'time', 'canonical', 'identifier', 'CaseBudget', 'CaseScope', 'micros',
+             'sha256', 'summary_json', 'configure_connection', 'IncidentCaseStore'):
+    assert getattr(store, name) is getattr(ledger_store, name), name
+assert closure.CaseScope is ledger_contract.CaseScope
+assert worker.CaseScope is ledger_contract.CaseScope
+assert worker.CaseBudget is ledger_contract.CaseBudget
 from fleet.server import proposal_store
 from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall
@@ -189,6 +203,8 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.deliberation.evaluation.calibration_selection',
                'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
                'fleet.incidents.automation.observation',
+               'fleet.incidents.automation.closure', 'fleet.incidents.automation.worker',
+               'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
