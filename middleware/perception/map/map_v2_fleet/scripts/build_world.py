@@ -286,6 +286,48 @@ def training_scene(scene):
                    walls=tuple(replace(w, height=REAL_WALL_HEIGHT_M) for w in scene.walls))
 
 
+def caution_meshes():
+    """Shared visual-only warning paint, independent of white lane/crosswalk paint."""
+    rules = yaml.safe_load(RULES.read_text(encoding="utf-8"))['caution_markers']
+    width, depth = rules['size']
+    if not all(math.isfinite(v) and v > 0 for v in (width, depth)) or width <= 2 * depth:
+        raise ValueError('warning patch must have finite width greater than twice depth')
+    parts = []
+    for marker in rules['placements']:
+        cx, cy = marker['centre']
+        yaw = math.radians(marker['yaw_deg'])
+        if marker['id'] not in ('NE', 'NW', 'SW', 'SE') or not all(math.isfinite(v) for v in (cx, cy, yaw)):
+            raise ValueError('invalid warning placement')
+        c, s = math.cos(yaw), math.sin(yaw)
+        for colour, z in (('black', .002), ('orange', .0025)):
+            rgb = rules[colour + '_colour']
+            if len(rgb) != 3 or not all(math.isfinite(v) and 0 <= v <= 1 for v in rgb):
+                raise ValueError('invalid warning colour')
+            # A broad diagonal orange band between black ends, as in the real recording.
+            half = width / 2 if colour == 'black' else width / 4
+            quad = [(-half, -depth / 2), (half, -depth / 2),
+                    (half, depth / 2), (-half, depth / 2)]
+            vertices = []
+            for x, y in quad:
+                x += y if colour == 'orange' else 0
+                vertices.append((cx + c * x - s * y, cy + s * x + c * y, z))
+            parts.append(dict(id=marker['id'], name=f"caution_{marker['id']}_{colour}",
+                              colour=rgb, triangles=[tuple(vertices[i] for i in face)
+                                                     for face in ((0, 1, 2), (0, 2, 3))]))
+    return parts
+
+
+def _caution_xml():
+    return ''.join(f'''    <model name="{part['name']}">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>{MESH_URI.replace('road_lines', part['name'])}</uri></mesh></geometry>
+        <material><ambient>{' '.join(map(str, part['colour']))} 1</ambient>
+          <diffuse>{' '.join(map(str, part['colour']))} 1</diffuse></material>
+      </visual></link>
+    </model>
+''' for part in caution_meshes())
+
+
 def world_xml(scene, line_colour: str, profile: str = "default") -> str:
     floor, paint = COLOURS[line_colour]
     mesh_uri = MESH_URI
@@ -353,7 +395,7 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
       </link>
     </model>
 
-{extra}{_reference_squares_xml()}    <model name="road_lines">
+{extra}{_reference_squares_xml()}{_caution_xml()}    <model name="road_lines">
       <static>true</static>
       <pose>0 0 0.001 0 0 0</pose>
       <link name="link">
@@ -378,6 +420,8 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
 
 def build(source: Path, out: Path, line_colour: str = "bright") -> None:
     scene = _scene_module().load_scene(source)
+    for part in caution_meshes():
+        write_mesh(part['triangles'], out / 'meshes' / (part['name'] + '.stl'))
     write_mesh(scene.lines, out / "meshes" / "road_lines.stl")
     write_tag_texture(out / "textures" / f"dock_tag_{DOCK_TAG_ID}.png")
     world = out / "worlds" / "map_v2_fleet.world"
