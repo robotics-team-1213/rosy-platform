@@ -24,8 +24,8 @@ def exporter():
     return module
 
 
-def fixture(tmp_path):
-    models = (profile(), profile(profile_id='reviewer', role='reviewer'))
+def fixture(tmp_path, primary_id='model-primary'):
+    models = (profile(profile_id=primary_id), profile(profile_id='reviewer', role='reviewer'))
     manifest = [asdict(p) for p in models]
     digest = hashlib.sha256(canonical(manifest).encode()).hexdigest()
     scope = CaseScope('pinky', 'case', 'core', digest, 'policy-1')
@@ -128,8 +128,9 @@ def test_impossible_attempt_states_are_rejected_even_with_matching_totals(tmp_pa
         exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
 
 
-def test_real_export_links_to_recording_without_creating_model_truth(tmp_path):
-    store, scope, manifest = fixture(tmp_path)
+@pytest.mark.parametrize('primary_id', ['model-primary', '로컬-primary'])
+def test_real_export_links_to_recording_without_creating_model_truth(tmp_path, primary_id):
+    store, scope, manifest = fixture(tmp_path, primary_id)
     store.complete(scope, 'attempt', worker_id='private-worker', state='UNKNOWN',
                    actual_cost_usd=None, summary={'reason': 'PROVIDER_OUTCOME_UNKNOWN'})
     exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
