@@ -19,3 +19,5 @@ D-670 관측 함수는 numpy 결과를 반환하지만 호출 입력의 파일 �
 합성 모델/영상으로 정답 없이 실행·mask/계보 roundtrip, model/image/input mutation 및 hash/shape/의미 오류 거절, crop와 image/anchor 보류, 출력 덮어쓰기 거절을 확인한다. CLI는 로봇 설정을 읽기 전에 dispatch한다. source 시험과 파일 readback은 실제 장치 전달이나 실물/시뮬레이션 인지 성능을 증명하지 않는다.
 
 **Related:** D-659, D-663, D-666, D-667, D-670.
+
+Readback은 중복된 영상/model manifest hash와 snapshot ID의 일치 및 입력 오류 시 구역 보류도 확인한다. 예측 grid 제한은 session 생성·warm-up 전에 manifest에서 검사한다. 영상 경로는 기존 `review_evidence.safe_file`의 플랫폼 공통 상대 파일 규칙을 따른다.
