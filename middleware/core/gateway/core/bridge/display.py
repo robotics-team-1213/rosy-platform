@@ -12,6 +12,7 @@ the decide half.
 
 from __future__ import annotations
 
+import enum
 import math
 import socket
 from typing import Any, Callable, Optional
@@ -86,10 +87,11 @@ def _display_percent(snapshot) -> Optional[float]:
 
     While charging is confirmed, this is the held pre-charge estimate.
     The live voltage percent stays on ``snapshot.battery`` for policy.
+    ``BatteryStatus`` declares both fields (D-688). Read them directly (C6).
     """
     status = snapshot.battery_status
-    if getattr(status, "charging", False):
-        shown = _finite(getattr(status, "shown_percent", None))
+    if status.charging:
+        shown = _finite(status.shown_percent)
         if shown is not None:
             return shown
     return _finite(snapshot.battery.percent)
@@ -103,8 +105,11 @@ def _screen_voltage(snapshot) -> Optional[float]:
 
 
 def _screen_level(snapshot) -> Optional[str]:
-    level = getattr(snapshot.battery_status, "level", None)
-    name = getattr(level, "value", level)
+    """SAF-005 level name, or None. Production ``level`` is a ``BatteryLevel``."""
+    level = snapshot.battery_status.level
+    if level is None:
+        return None
+    name = level.value if isinstance(level, enum.Enum) else level
     return name if name in _LEVELS else None
 
 

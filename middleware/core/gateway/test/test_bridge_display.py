@@ -18,7 +18,7 @@ def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
               docking_state=DockState.UNDOCKED):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=percent, voltage=voltage),
-        battery_status=SimpleNamespace(charging=charging),
+        battery_status=SimpleNamespace(charging=charging, shown_percent=None, level=None),
         robot_id="rosy_01",
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),

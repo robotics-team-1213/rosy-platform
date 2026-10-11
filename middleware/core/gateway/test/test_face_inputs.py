@@ -28,7 +28,7 @@ def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=
               line_reason=""):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=55.55, voltage=7.81),
-        battery_status=SimpleNamespace(charging=charging),
+        battery_status=SimpleNamespace(charging=charging, shown_percent=None, level=None),
         robot_id="rosy_01",
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),
