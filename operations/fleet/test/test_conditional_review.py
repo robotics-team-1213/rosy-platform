@@ -128,3 +128,53 @@ def test_cancel_releases_case_and_concurrent_duplicate_is_refused():
             await task
         assert (await policy.run(request, [Provider('qwen'), Provider('glm')], current=lambda: True))['calls'] == 1
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('failure', ['invalid', 'unknown_cost', 'excess_cost', 'exception', 'unsafe'])
+def test_secondary_failure_never_clears_primary_hold(failure):
+    class Second(Provider):
+        async def __call__(self, p, prior, remaining, **kwargs):
+            self.calls.append((prior, remaining))
+            if failure == 'exception':
+                raise OSError('private auth detail')
+            return (changed(p, generation='other') if failure == 'invalid' else
+                changed(p, objections=['unsafe']) if failure == 'unsafe' else reply(p)), (
+                None if failure == 'unknown_cost' else 1 if failure == 'excess_cost' else .01)
+    result, providers = run(Provider('qwen', lambda p: changed(p, objections=['conflict'])), Second('glm'))
+    assert result['state'] == 'HOLD' and result['choice'] is None and result['calls'] == 2
+    assert result['action_admissible'] is False and result['review_trigger'] == 'conflict'
+    assert len(providers[1].calls) == 1 and 'private' not in str(result)
+    assert result['cost_complete'] is (failure not in {'unknown_cost', 'exception'})
+
+
+def test_policy_checks_scope_again_after_reviewer_response():
+    async def scenario():
+        active = True
+        class Changed(Provider):
+            async def __call__(self, p, *args, **kwargs):
+                nonlocal active
+                active = False
+                return reply(p), 0
+        result = await ConditionalReview(clock=lambda: 101).run(problem(necessity='INTERVENE'),
+            [Provider('qwen', lambda p: changed(p, objections=['conflict'])), Changed('glm')],
+            current=lambda: active)
+        assert result['reason'] == 'STALE_OR_CHANGED' and result['calls'] == 2
+        assert len(result['opinions']) == 1 and result['action_admissible'] is False
+    asyncio.run(scenario())
+
+
+def test_exhausted_primary_budget_does_not_submit_zero_budget_review():
+    result, providers = run(Provider('qwen', lambda p: changed(p, objections=['conflict'])), max_cost_usd=.01)
+    assert result['reason'] == 'COST_EXCEEDED' and result['calls'] == 1
+    assert result['cost_complete'] is True and not providers[1].calls
+
+
+def test_invalid_profiles_and_stale_request_never_call_models():
+    policy = ConditionalReview(clock=lambda: 101)
+    first, second = Provider('same'), Provider('same')
+    result = asyncio.run(policy.run(problem(necessity='INTERVENE'), [first, second], current=lambda: True))
+    assert result['reason'] == 'PROFILES_REQUIRED' and result['calls'] == 0
+    result = asyncio.run(policy.run(problem(necessity='INTERVENE', observed_at=90),
+        [first, second], current=lambda: True))
+    assert result['reason'] == 'STALE_OR_CHANGED' and result['calls'] == 0
+    assert not first.calls and not second.calls
