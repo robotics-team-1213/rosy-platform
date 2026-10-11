@@ -39,6 +39,8 @@ preflight는 전용 계정·파일 권한, namespace 분리, 빈 환경·호스�
 
 ## 후속 수용 순서
 
+AI PC의 관리자 적용 후 첫 실제 probe에서 나머지 12개 경계는 true였지만 `PWD`가 허용 목록에 없어 환경 검사만 HOLD였다. 실제 진단의 변수 이름은 HOME·LC_CTYPE·PATH·PWD였고 HOME/PATH는 고정값과 일치했다. 보정은 PWD를 `/tmp`로 제한하고 PATH도 고정값을 검사한다. 수정된 preflight의 실제 HOST 성공은 별도 재실행 결과로 확인한다.
+
 1. source 회귀·독립 코드 검토 후 로컬 main에 병합한다.
 2. AI PC 관리자가 설치를 적용하고 preflight readback을 남긴다.
 3. 고정 공급자·모델 프로파일과 의존성을 stage한 뒤 실제 CLI version/envelope를 확인한다. 외부 인증·네트워크 접속은 승인된 경로만 추가한다.
