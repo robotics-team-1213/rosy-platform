@@ -699,7 +699,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         assert len(held) == 1
         page.locator('#cancel-all').click()
         expect(dialog).to_have_count(0)
-        assert ('POST', '/api/fleet/cancel-all') not in calls
+        assert calls.count(('POST', '/api/fleet/cancel-all')) == 1
         page.locator('#console-token').fill('replacement-fixture-token')
         page.locator('#token-save').click()
         page.wait_for_function('() => !document.querySelector("#dispatch-rearm").disabled')
@@ -711,6 +711,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         page.wait_for_timeout(100)
         page.locator('#cancel-all').click()
         expect(dialog).to_have_count(0)
+        assert calls.count(('POST', '/api/fleet/cancel-all')) == 2
         page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
         snapshot = page.locator('#log').inner_html()
         held[1].fulfill(status=200, json={'generation': 8, 'dispatch_enabled': True})
@@ -1048,6 +1049,7 @@ def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(cons
             if state == "ready":
                 api["/api/fleet/formation"] = HOLDING_FORMATION
                 page.reload(wait_until="networkidle")  # Separate HOLD with no pending trigger.
+                page.locator('[data-context-tab="tools"]').click()
                 page.wait_for_function("() => !document.querySelector('#formation-resume')?.disabled", timeout=7000)
                 assert "재개 차단" not in page.inner_text("#formation-detail")
             stop = page.locator("#estop").bounding_box()
@@ -2036,6 +2038,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
+        page.locator('[data-context-tab="tools"]').click()
         headings = [
             "대형·대열",  # D-540 3
             "신호등",
