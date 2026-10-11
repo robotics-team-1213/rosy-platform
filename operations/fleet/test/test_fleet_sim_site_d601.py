@@ -35,6 +35,7 @@ SIM_FLEETS = {
 }
 # Camera SIM launches that publish CORE's front preview through the relay.
 CAMERA_LAUNCHES = (
+    "integrations/simulation/gazebo/launch/map_v2_fleet_multi_real.launch.py",
     "integrations/simulation/gazebo/launch/map_v2_fleet_lane.launch.py",
     "integrations/simulation/gazebo/launch/map_v2_fleet_real.launch.py",
     "docs/validation/d495-junction-sim-2026-10-07/evidence/d495_real.launch.py",
