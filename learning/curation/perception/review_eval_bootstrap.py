@@ -61,8 +61,10 @@ def start(store_root, state_dir, catalog, classes, *, catalog_sha256, classes_sh
             'added': result['added'], 'catalog_sha256': catalog_sha256}
 
 
-def ready(store_root, state_dir, scratch):
+def ready(store_root, state_dir, scratch, *, target='pixels'):
     """Gate before building a human fixed eval; re-prove every source."""
+    if target not in ('pixels', 'objects'):
+        raise ValueError('evaluation target must be pixels or objects')
     if not (Path(state_dir) / 'reviews.sqlite3').is_file():
         raise ValueError('existing evaluation workspace required')
     review = ReviewStore(state_dir)
@@ -72,11 +74,20 @@ def ready(store_root, state_dir, scratch):
     authority = captured['authority']
     review_evidence.validate_authority(authority)
     binding = captured['classes']
-    if not binding or authority['pixel_classes_sha256'] != binding['sha256']:
-        raise ValueError('frozen pixel classes required')
-    class_file = review.state / 'pixel' / (binding['sha256'] + '.yaml')
-    if class_file.is_symlink() or hashlib.sha256(class_file.read_bytes()).hexdigest() != binding['sha256']:
-        raise ValueError('frozen pixel class file changed')
+    if target == 'pixels':
+        if not binding or authority['pixel_classes_sha256'] != binding['sha256']:
+            raise ValueError('frozen pixel classes required')
+        class_file = review.state / 'pixel' / (binding['sha256'] + '.yaml')
+        if class_file.is_symlink() or hashlib.sha256(class_file.read_bytes()).hexdigest() != binding['sha256']:
+            raise ValueError('frozen pixel class file changed')
+    else:
+        import class_sets
+        object_classes = class_sets.object_set(review)
+        names = tuple(c['name'] for c in object_classes['classes'])
+        if (names != class_sets.OBJECT_CLASSES or object_classes['task'] != 'detect'
+                or object_classes['sha256'] != class_sets._record(names, 'detect', object_classes['source'])['sha256']):
+            raise ValueError('D-602 object classes required')
+        object_class_hash = review_evidence.sha(review_evidence.encoded(object_classes))
     reservations = Store(store_root).eval_reservations()
     groups = {}
     if len(captured['frames']) != len(authority['frames']):
@@ -90,11 +101,21 @@ def ready(store_root, state_dir, scratch):
         if (source.get('fixed_eval_overlap') is not True or reservations.get(session) != group
                 or not isinstance(mcap, dict) or Path(mcap['session_dir']).name != session):
             raise ValueError('reserved MCAP session/group required')
-        if frame['status'] == 'excluded' or row['mask_decision'] != 'approved':
+        if target == 'objects':
+            human = frame['review']
+            if (frame['status'] != 'approved' or row['object_decision'] != 'approved'
+                    or human.get('review_status') != 'approved' or human.get('complete_frame_review') is not True
+                    or not isinstance(human.get('boxes'), list)):
+                raise ValueError('every evaluation frame needs a complete approved object review')
+            review.validate_boxes(source, human['boxes'], classes=names, approved=True)
+            if any('occluded' in b and type(b['occluded']) is not bool for b in human['boxes']):
+                raise ValueError('reviewed occluded flag must be boolean or absent')
+        elif frame['status'] == 'excluded' or row['mask_decision'] != 'approved':
             raise ValueError('every evaluation frame needs an approved mask')
-        mask = captured['masks'].get(frame['index'])
-        approval = row['pixel_approval']
-        if (not mask or not approval or mask['sha256'] != row['mask_sha256']
+        if target == 'pixels':
+            mask = captured['masks'].get(frame['index'])
+            approval = row['pixel_approval']
+            if (not mask or not approval or mask['sha256'] != row['mask_sha256']
                 or approval.get('mask_version') != mask['version']
                 or approval.get('image_sha256') != row['image_sha256']
                 or approval.get('mask_sha256') != mask['sha256']
@@ -102,14 +123,14 @@ def ready(store_root, state_dir, scratch):
                 or approval.get('classes_signature') != authority['classes_signature']
                 or approval.get('complete_frame_review') is not True
                 or approval.get('background_reviewed') is not True):
-            raise ValueError('approved pixel binding changed')
-        pixels = review_masks.pixels(review, dict(mask, width=row['width'], height=row['height']))
-        unknown = int((pixels == 255).sum())
-        if (unknown == pixels.size or unknown != approval.get('reviewed_unknown_count', 0)
+                raise ValueError('approved pixel binding changed')
+            pixels = review_masks.pixels(review, dict(mask, width=row['width'], height=row['height']))
+            unknown = int((pixels == 255).sum())
+            if (unknown == pixels.size or unknown != approval.get('reviewed_unknown_count', 0)
                 or (unknown and approval.get('unknown_pixels_reviewed') is not True)):
-            raise ValueError('approved unknown pixel count differs')
-        if not np.isin(pixels, [c['index'] for c in binding['classes']] + [255]).all():
-            raise ValueError('approved mask has an unknown class index')
+                raise ValueError('approved unknown pixel count differs')
+            if not np.isin(pixels, [c['index'] for c in binding['classes']] + [255]).all():
+                raise ValueError('approved mask has an unknown class index')
         image = review.image(frame['index'])
         review_ingest.image(image.read_bytes(), row['image_sha256'], row['width'], row['height'])
         groups.setdefault(mcap['session_dir'], []).append((source, {**mcap['frame'], 'image': str(image)}))
@@ -126,13 +147,19 @@ def ready(store_root, state_dir, scratch):
                 raise ValueError('MCAP source proof differs from review authority')
     if review_evidence.decisions(review)['decision_sha256'] != authority['decision_sha256']:
         raise ValueError('review authority changed during proof')
+    if target == 'objects' and review_evidence.sha(review_evidence.encoded(class_sets.object_set(review))) != object_class_hash:
+        raise ValueError('object class record changed during proof')
     return {'frames': len(captured['frames']),
             'sessions': {Path(s).name: entries[0][0]['capture_group'] for s, entries in groups.items()},
             'decision_sha256': authority['decision_sha256']}
 
 
-def publish(store_root, state_dir, name, scratch):
+def publish(store_root, state_dir, name, scratch, *, target='pixels'):
     """Publish only currently approved MCAP truth; this never admits training."""
+    if target == 'objects':
+        return _publish_objects(store_root, state_dir, name, scratch)
+    if target != 'pixels':
+        raise ValueError('evaluation target must be pixels or objects')
     if not safe_name(name) or not safe_name(name + '-human'):
         raise ValueError('safe evaluation name required')
     proof = ready(store_root, state_dir, scratch)
@@ -212,6 +239,75 @@ def publish(store_root, state_dir, name, scratch):
             shutil.rmtree(stage)
 
 
+def _publish_objects(store_root, state_dir, name, scratch):
+    """D-682 object eval bytes stay outside the training export path."""
+    import class_sets
+    from store import read_fixed_manifest
+    if not safe_name(name) or not safe_name(name + '-human'):
+        raise ValueError('safe evaluation name required')
+    proof = ready(store_root, state_dir, scratch, target='objects')
+    review = ReviewStore(state_dir)
+    captured = review_evidence.snapshot(review)
+    authority = captured['authority']
+    if authority['decision_sha256'] != proof['decision_sha256']:
+        raise ValueError('review authority changed after proof')
+    classes = class_sets.object_set(review)
+    class_raw = review_evidence.encoded(classes)
+    registry = Store(store_root)
+    parent = registry.evalsets_dir / (name + '-human')
+    group = publication_group(parent)
+    publication_directory(parent)
+    stage = Path(tempfile.mkdtemp(prefix='.staging-', dir=parent))
+    try:
+        (stage / 'object-classes.json').write_bytes(class_raw)
+        (stage / 'authority.json').write_bytes(review_evidence.encoded(authority))
+        frames = []
+        for frame, row in zip(captured['frames'], authority['frames']):
+            source = frame['source']
+            session = source['source_session']
+            if not safe_name(session):
+                raise ValueError('safe source session required')
+            original = review.image(frame['index'])
+            raw = original.read_bytes()
+            human = review_evidence.human_review(frame)
+            if (review_evidence.sha(raw) != row['image_sha256']
+                    or review_evidence.sha(review_evidence.encoded(source)) != row['source_sha256']
+                    or review_evidence.sha(review_evidence.encoded(human)) != row['object_review_sha256']):
+                raise ValueError('approved object image/source/review changed')
+            name_image = f'images/{session}/{frame["index"]:06d}{original.suffix.lower()}'
+            path = stage / name_image
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(raw)
+            frames.append(dict(frame=frame['index'], identity=row['identity'], image=name_image,
+                image_sha256=row['image_sha256'], session=session, capture_group=source['capture_group'],
+                split='eval', object_version=row['object_version'], source=source, review=human))
+        manifest = dict(schema='rosy.perception.dataset/1', purpose='eval', task='object_det',
+                        classes=classes['classes'], classes_sha256=review_evidence.sha(class_raw),
+                        authority_sha256=authority['decision_sha256'], frames=frames,
+                        builder='review_eval_bootstrap.py --target objects (D-682)')
+        (stage / 'manifest.json').write_bytes(review_evidence.encoded(manifest))
+        digest = content_sha(stage)
+        dest = registry.evalset_path(name + '-human', digest)
+        if ready(store_root, state_dir, scratch, target='objects')['decision_sha256'] != authority['decision_sha256']:
+            raise ValueError('review authority changed before publication')
+        if review_evidence.encoded(class_sets.object_set(review)) != class_raw:
+            raise ValueError('object class record changed before publication')
+        if dest.exists() or dest.is_symlink():
+            if dest.is_symlink() or content_sha(dest) != digest:
+                raise ValueError('immutable object evaluation version differs')
+        else:
+            shared_publication_permissions(stage, group)
+            os.rename(stage, dest)
+        read_fixed_manifest(dest)
+        return dict(status='PUBLISHED_CONTENT_NOT_ADMITTED', path=str(dest), content_sha=digest,
+                    frames=len(frames), authority_sha256=authority['decision_sha256'], training_admission=False)
+    finally:
+        if stage.exists():
+            if not stage.resolve().is_relative_to(parent.resolve()):
+                raise ValueError('object staging cleanup outside publication parent')
+            shutil.rmtree(stage)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('store', 'state'):
@@ -220,6 +316,7 @@ def main():
         parser.add_argument('--' + name)
     parser.add_argument('--ready', action='store_true')
     parser.add_argument('--publish', action='store_true')
+    parser.add_argument('--target', choices=('pixels', 'objects'), default='pixels')
     parser.add_argument('--name')
     parser.add_argument('--scratch', default='X:/DevTemp')
     args = parser.parse_args()
@@ -228,9 +325,9 @@ def main():
     if args.publish:
         if not args.name:
             parser.error('--publish requires --name')
-        result = publish(args.store, args.state, args.name, args.scratch)
+        result = publish(args.store, args.state, args.name, args.scratch, target=args.target)
     elif args.ready:
-        result = ready(args.store, args.state, args.scratch)
+        result = ready(args.store, args.state, args.scratch, target=args.target)
     else:
         if not all((args.catalog, args.classes, args.catalog_sha256, args.classes_sha256)):
             parser.error('--catalog, --classes, and their SHA-256 values are required for import')
