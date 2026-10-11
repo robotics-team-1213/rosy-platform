@@ -9,7 +9,7 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     if (!elements.has(id)) elements.set(id, {
       dataset: {}, classList: { add() {}, remove() {} }, querySelectorAll: () => [],
       setAttribute() {}, removeAttribute() {}, getContext: () => ctx,
-      replaceChildren() {},
+      replaceChildren(...rows) {this.rows = rows;},
       getBoundingClientRect: () => ({ width: 800, height: 600 }),
       clientWidth: 800, clientHeight: 600,
     });
@@ -45,5 +45,9 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     assert.equal(el('map-stage').dataset.mapState, 'site');
     assert.equal(view.map, null);
     assert.ok(!calls.includes('/api/fleet/map'));
+    el('map-traffic-status').rows = [{textContent: 'green'}];
+    view.siteMap = null;
+    map.draw();
+    assert.equal(el('map-traffic-status').rows[0].textContent, '교통 상태 대기');
   } finally { globalThis.window = previous; globalThis.document = previousDocument; }
 });
