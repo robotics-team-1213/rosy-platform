@@ -9,13 +9,13 @@
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [fleet_decision](operations/decision/progress.md) | fleet_decision | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [console_source](operations/ui/console/progress.md) | console_source | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [perception_curation](learning/curation/perception/progress.md) | perception_curation | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [perception_registry](learning/registry/perception/progress.md) | perception_registry | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [perception_training](learning/training/perception/progress.md) | perception_training | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
-| [perception_cli](tools/perception/progress.md) | perception_cli | uncommitted (2026-10-11) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
+| [fleet_decision](operations/decision/progress.md) | fleet_decision | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [console_source](operations/ui/console/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_cli](tools/perception/progress.md) | perception_cli | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](operations/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_cell](operations/processes/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
@@ -56,48 +56,34 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
-- fleet_decision SOURCE: D-637 source move verification pending; no deployment or device admission.
-- fleet_decision LOCAL: D-637 source move verification pending; no deployment or device admission.
-- fleet_decision ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- fleet_decision ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- fleet_decision DEVICE: D-637 source move verification pending; no deployment or device admission.
-- fleet_decision FIELD: D-637 source move verification pending; no deployment or device admission.
-- console_source SOURCE: D-637 source move verification pending; no deployment or device admission.
-- console_source LOCAL: D-637 source move verification pending; no deployment or device admission.
-- console_source ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- console_source ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- console_source DEVICE: D-637 source move verification pending; no deployment or device admission.
-- console_source FIELD: D-637 source move verification pending; no deployment or device admission.
-- perception_curation SOURCE: D-637 source move verification pending; no deployment or device admission.
-- perception_curation LOCAL: D-637 source move verification pending; no deployment or device admission.
-- perception_curation ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- perception_curation ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- perception_curation DEVICE: D-637 source move verification pending; no deployment or device admission.
-- perception_curation FIELD: D-637 source move verification pending; no deployment or device admission.
-- perception_registry SOURCE: D-637 source move verification pending; no deployment or device admission.
-- perception_registry LOCAL: D-637 source move verification pending; no deployment or device admission.
-- perception_registry ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- perception_registry ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- perception_registry DEVICE: D-637 source move verification pending; no deployment or device admission.
-- perception_registry FIELD: D-637 source move verification pending; no deployment or device admission.
-- perception_training SOURCE: D-637 source move verification pending; no deployment or device admission.
-- perception_training LOCAL: D-637 source move verification pending; no deployment or device admission.
-- perception_training ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- perception_training ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- perception_training DEVICE: D-637 source move verification pending; no deployment or device admission.
-- perception_training FIELD: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation SOURCE: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation LOCAL: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation DEVICE: D-637 source move verification pending; no deployment or device admission.
-- perception_evaluation FIELD: D-637 source move verification pending; no deployment or device admission.
-- perception_cli SOURCE: D-637 source move verification pending; no deployment or device admission.
-- perception_cli LOCAL: D-637 source move verification pending; no deployment or device admission.
-- perception_cli ROS-SIM: D-637 source move verification pending; no deployment or device admission.
-- perception_cli ARTIFACT: D-637 source move verification pending; no deployment or device admission.
-- perception_cli DEVICE: D-637 source move verification pending; no deployment or device admission.
-- perception_cli FIELD: D-637 source move verification pending; no deployment or device admission.
+- fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- fleet_decision DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- fleet_decision FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- console_source ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- console_source ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- console_source DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- console_source FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_curation ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_curation ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_curation DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_curation FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_registry ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_registry ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_registry DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_registry FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_training ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_training ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_training DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_training FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_evaluation ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_evaluation ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_evaluation DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_evaluation FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_cli ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_cli ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_cli DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- perception_cli FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - rosy_cell ROS-SIM: No Fleet route (C4) or end-to-end Job run (C6). Step z is the item top face, but the OMX-F TCP is at the fingertips, so a box grasp needs a depth below the top that no Rosy Cell or grant field carries yet.
 - palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
 - palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6

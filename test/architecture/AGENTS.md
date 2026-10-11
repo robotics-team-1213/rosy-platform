@@ -30,13 +30,13 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 - Fix the layout, not the test. If a move is intended, update the target/exception table in the same commit.
 - New package: add `AGENTS.md`, a `harness.yaml` entry, `test/`, declare cross-package use in `package.xml`, and add a `FOLDER_TO_PACKAGE` row if folder and package names differ.
 - A file over budget: split it before adding a verdict. Verdict text is a decision record, not a way to pass.
-- Launch coupling is found only through literal package-name calls; dynamic imports are invisible to these scans. Packages are found under every `colcon_roots` entry (`src`, `learning`, `operations`).
+- Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage. Packages are found under manifest `colcon_roots`: `learning`, `operations`, `middleware`, `contracts`, `integrations`, `shared`.
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
 
 ### Testing Requirements
 
 ```bash
-python -m pytest test/architecture -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/architecture-check -- test/architecture -q
 ```
 
 `test_module_structure.py` is also part of the D-346 pre-push fast gate (`tools/hooks/`).
@@ -50,7 +50,7 @@ python -m pytest test/architecture -q
 
 ### Internal
 
-- `tools/harness/harness.yaml`, `shared/web/surfaces.yaml`, every `src/**/package.xml`, `src/AGENTS.md`
+- `tools/harness/harness.yaml`, `platform_parts.yaml`, `shared/web/surfaces.yaml`, package manifests and owner guides under the current declared roots
 
 ### External
 

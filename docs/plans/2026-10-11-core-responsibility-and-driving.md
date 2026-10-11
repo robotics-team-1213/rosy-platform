@@ -1,5 +1,7 @@
 # CORE Common and Device Control Implementation Plan
 
+**현재 폴더 단계:** D-627/D-628 CORE 조립·주행 경계와 D-630 holder 분리는 local main에 반영했다. 현행 경로는 `middleware/core/api`, `middleware/devices/{pinky,omx}`, `middleware/control/drive`, `middleware/perception/{sensors,vision}`이며 [CORE·Drive 책임표](../reference/core-drive-responsibilities.md)를 따른다. 아래 원래 계획의 API/모션 계약 확장·전 producer admission·실기 시험까지 완료한 것으로 읽지 않는다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** CORE 공통 운용·실행 계약과 장치별 Control을 구분하고 Drive/Arm의 소유권, Safety, 복구 수명과 결과 근거를 각 도메인에서 단계적으로 정리한다.
