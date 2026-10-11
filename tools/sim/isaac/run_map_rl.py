@@ -20,7 +20,8 @@ from model_checks import check_urdf
 from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
 from graph_contract import robot_contract
-from map_task import load_track, MapTask, QPolicy, SimulationOwner
+from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
+from floor_visuals import floor_visuals, add_track_visuals
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
 
 
@@ -189,24 +190,7 @@ def main():
         world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
         world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
         scene = track['scene']
-        UsdGeom.Xform.Define(stage, '/World/Track')
-        for i, wall in enumerate(scene.walls):
-            cube = UsdGeom.Cube.Define(stage, f'/World/Track/wall_{i}')
-            cube.CreateSizeAttr(1.)
-            cube.AddTranslateOp().Set(Gf.Vec3d(wall.cx, wall.cy, wall.height / 2))
-            cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
-            cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
-            UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-        for part in [dict(name='paint', triangles=scene.lines, colour=[1., 1., 1.]),
-                     *track['caution_meshes']]:
-            paint = UsdGeom.Mesh.Define(stage, '/World/Track/' + part['name'])
-            vertices = [Gf.Vec3f(*v) for t in part['triangles'] for v in t]
-            paint.CreatePointsAttr(vertices)
-            paint.CreateFaceVertexCountsAttr([3] * len(part['triangles']))
-            paint.CreateFaceVertexIndicesAttr(list(range(len(vertices))))
-            paint.CreateSubdivisionSchemeAttr('none')
-            paint.CreateDoubleSidedAttr(True)
-            paint.CreateDisplayColorAttr([Gf.Vec3f(*part['colour'])])
+        add_track_visuals(stage, track, floor_visuals(MAP))
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
         if args.record_video or perception is not None:
