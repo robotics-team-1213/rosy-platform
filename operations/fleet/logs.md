@@ -3237,3 +3237,9 @@
 - 변경: D-661 알림·이름 있는 사람 인수를 `fleet/incidents`로 그대로 이동하고 직접 호출자·설치 검사·문서를 갱신했다. 판단·resolver·장치 admission은 기존 소유자에 유지한다.
 - 증거: 독립 responsibility_review 경계 확인. physical-line 실측 부모51933/incidents360, 예산·+150 유지. 최종 원격 terminal과 착지는 docs/validation/responsibility-boundaries-2026-10-11/landing.md에 후속 기록한다.
 - gate 변화: 경계 분리만. 실제 팀 채널·현장 수용·모델 토론 HOLD 유지.
+
+## 2026-10-11 · 7afb0e2c4f · 사건 조정 분리 최종 검증과 착지
+
+- 변경: 판단·resolver·장치 명령 소유권을 보존하고 incidents 경계·직접 호출자·설치 계약을 최종 통합했다.
+- 증거: AI PC 원격493 passed/NEW0, 독립 책임·설치 검토 통과, tools/land.py 로컬 main FF `7afb0e2c4f`. 실제 범위·로그·후속 관문은 docs/validation/responsibility-boundaries-2026-10-11/landing.md.
+- gate 변화: 로컬 소스 통합 완료. 새 팀 Discord와 독립 현장 정답 수용은 팀 담당 HOLD; 실제 provider/발송/배포/motion 없음.
