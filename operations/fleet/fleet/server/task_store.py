@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sqlite3
 from collections.abc import Mapping
 from contextlib import closing
@@ -16,12 +15,8 @@ from fleet.server.cancel_all_store import ensure_schema as ensure_cancel_all_sch
 from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
+from fleet.server.task_payloads import safe_json as _safe_json
 
-_SENSITIVE_FIELD = re.compile(
-    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
-    r"api[_-]?key|private[_-]?key|bearer)",
-    re.IGNORECASE,
-)
 _TASK_TRANSITIONS = {
     "REQUESTED": {"QUEUED", "ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
     "QUEUED": {"ACCEPTED", "FAILED", "UNKNOWN", "HOLD", "CANCELED", "EXPIRED"},
@@ -44,29 +39,6 @@ class IdempotencyConflict(ValueError):
 
 class InvalidTaskTransition(ValueError):
     """A task status transition is outside the declared state machine."""
-
-
-def _safe_json(value: object) -> str:
-    def inspect(child: object) -> None:
-        if isinstance(child, Mapping):
-            for key, nested in child.items():
-                if _SENSITIVE_FIELD.search(str(key)):
-                    raise ValueError("task records cannot contain credential fields")
-                inspect(nested)
-        elif isinstance(child, (list, tuple)):
-            for nested in child:
-                inspect(nested)
-
-    inspect(value)
-    try:
-        text = json.dumps(
-            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False, sort_keys=True
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError("task data must be finite JSON") from exc
-    if len(text.encode("utf-8")) > 64 * 1024:
-        raise ValueError("task data exceeds the 64 KiB limit")
-    return text
 
 
 def _now() -> str:
