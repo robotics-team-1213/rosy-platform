@@ -665,6 +665,7 @@
 | D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
+| D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

@@ -2681,3 +2681,15 @@
 - 변경: 정식 Compose에 optional intake 경로와 Fleet-only 읽기 mount 추가; absent OFF, malformed fail closed.
 - 증거: RED3NEW 후 원격138 PASS/NEW0, 독립 source/Safety 검토 승인.
 - gate 변화: source만 수용. 기존 CI/signature/updater gate 유지, unsigned runtime 교체/push/장치 명령 없음.
+
+## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
+
+- 변경: 실제 HOST 수용 결과와 수동 Qwen 스모크 증거를 기록하고 현재 수용 안내를 갱신했다.
+- 증거: 팀 관리자 preflight 13개 true / PASS_HOST_OFFLINE_ONLY. 기존 적재 digest의 로컬 Qwen 실제 strict JSON 응답 및 기존 Supervisor HOLD / UNRESOLVED_OBJECTION / calls=1 확인. `docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md`.
+- gate 변화: 전용 호스트 OFFLINE 경계와 수동 모델 transport 확인. 운영 제공자 admission, 독립 모델 평가·실제 Pinky·FIELD는 미확인 유지. OpenCode CLI 수용은 병렬 작업으로 분리한다.
+
+## 2026-10-12 · 4ebcb80c86 · fix: pinned OpenCode CLI compatibility
+
+- 변경: OpenCode 1.18.35는 --pure로 고정 번역, 기존2.0.22는 유지, 다른 버전 거절. 호스트 주입에서 버전을 전달하며 생성 실패 때도 snapshot을 닫는다.
+- 증거: 병렬 작업 원격 48 passed, NEW 0, 독립 검토 blocker 없음. `docs/plans/2026-10-12-opencode-cli-admission.md`.
+- gate 변화: SOURCE 확인. 실제 sandbox CLI version/help와 최소 제공자 연결·token cap 검수는 후속 단계다. --pure를 도구/설정 격리 수용으로 해석하지 않는다.

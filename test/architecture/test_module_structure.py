@@ -203,8 +203,12 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        2952,
-        "accept: independently re-judged at 2952 on 2026-10-10 by review_fleet_corner: D-619 adds "
+        3163,
+        "accept: independently re-judged at 3163 on 2026-10-12 by pipeline_review for D-674: "
+        "baseline 3067; shared law and admission keep existing policy/transport/outcome ownership, "
+        "candidate selection is an exact extraction. No new size unit; +150 allowance unchanged. "
+        "See docs/plans/2026-10-12-fleet-rule-pipeline.md. The ai_facts HTTP/journal separation below "
+        "remains owed when that owner grows. Previously re-judged at 2952 on 2026-10-10 by review_fleet_corner: D-619 adds "
         "30 net lines above 6512cb70f for shared assessment validation, raw frame provenance, inquiry "
         "and timestamped task context in existing owners. No new size unit; +150 allowance unchanged. "
         "Previously measured at 2800 on 2026-10-10 after the named reports seam in "

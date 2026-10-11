@@ -94,8 +94,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · cb7c3396c · D-674 실행 파이프라인 최종 검증
+- 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
 - 2026-10-12 · b78edf399 · D-675 optional reception caller closure
 - 2026-10-12 · 38941ff24 · D-675 Discord Gateway 수신 source
 - 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
-- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
-- 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
