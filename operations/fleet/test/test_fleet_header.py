@@ -43,6 +43,11 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
     assert re.findall(r'data-header-region="([^"]+)"', header) == [
         "identity", "status", "actions", "safety"]
     assert 'id="fleet-header-actions"' in header
+    entry = re.search(r'<ui-button[^>]*id="topbar-more".*?</ui-button>', header, re.S).group(0)
+    for element_id in ("online-pill", "header-unread", "development-badge"):
+        assert f'id="{element_id}"' in entry
+    assert entry.count("<ui-button") == 1
+    assert 'data-action-icon="connect"' in entry and 'data-action-icon="notification"' in entry
     assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
     controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
     assert '$("topbar-extra").prepend(inbox)' in controller

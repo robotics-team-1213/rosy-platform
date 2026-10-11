@@ -48,7 +48,7 @@ ui-topbar {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-areas: "identity status actions safety";
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
@@ -57,7 +57,8 @@ ui-topbar {
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-safety { grid-area: safety; }
-#topbar-more { display: inline-flex; }
+#topbar-more { display: inline-flex; max-width: 100%; }
+.header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); }
 .topbar-extra {
   display: none;
   grid-column: 1 / -1;
@@ -77,13 +78,12 @@ ui-topbar {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "identity safety" "status actions";
-    gap: var(--space-1);
+    gap: var(--space-2);
     padding: var(--space-1) var(--space-2);
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: calc(var(--space-5) * 2 + var(--space-1)); }
-  .fleet-link-status ui-tag { min-height: var(--space-5); }
+  .fleet-link-status { justify-content: flex-start; align-content: center; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }
