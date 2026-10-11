@@ -685,6 +685,7 @@
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
 | D-697 | 독립 운영 성과 비교와 증거 생산 책임 | Accepted |
 | D-698 | 단독 기본 모델 사건 처리와 프로파일 원장 근거 | Accepted |
+| D-699 | Fleet 관측 capture 식별과 기록 창 무결성 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -841,3 +842,9 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 **Status:** Accepted (2026-10-12, source contract)
 
 실제 단독 primary 실행과 새 receipt/export /3을 결속한다. 검토가 필요하면 미구성 제공자를 호출하지 않고 최종 인수한다. 전문은 [D-698](../adr/D-698-primary-only-incident-evidence.md).
+
+## D-699 — Fleet 관측 capture 식별과 기록 창 무결성
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 관측 이력에 실제 append run/sequence와 snapshot roster를 결속한다. 누락과 재시작을 구분하며 CORE 명령·모델 호출·재발 없음으로 가장하지 않는다. 전문은 [D-699](../adr/D-699-observation-capture-integrity.md).

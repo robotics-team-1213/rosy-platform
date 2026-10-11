@@ -451,6 +451,14 @@ roots:
     wave: "3c"
     import_prefix: [fleet]
     concern: decision
+  - path: operations/fleet/fleet/observe
+    part: operations
+    d427_target: operations/fleet/fleet/observe
+    wave: none
+    import_prefix: [fleet.observe]
+    source_packages: {"": fleet.observe}
+    concern: other
+    note: D-699 credential-free CORE event/observation journals in the same Fleet distribution; server aliases and SQLite policy stay compatible.
   - path: operations/decision
     part: operations
     d427_target: operations/decision
