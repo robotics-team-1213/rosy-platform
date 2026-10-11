@@ -91,6 +91,38 @@ def prepare_mission(client):
     return receipt, path, body
 
 
+def test_reuse_owned_existing_mission_candidate_without_fabricating_observation(tmp_path):
+    from test_mission_api import _create
+    client, _, _ = _client(tmp_path, channel_config=config())
+    source = _create(client).json()['proposal']['proposal_id']
+    receipt, path, body = prepare_mission(client)
+    body.pop('candidate')
+    result = _post(client, path + '/prepare', 'operator-secret', {**body, 'source_proposal_id': source})
+    assert result.status_code == 200, result.text
+    assert result.json()['work_id'] != source and result.json()['work_status'] == 'PROPOSED'
+    proposals = client.app.state.proposal_store
+    assert proposals.get(result.json()['work_id'])['candidate'] == proposals.get(source)['candidate']
+    assert proposals.get(result.json()['work_id'])['request_key'] == 'discord-' + receipt['request_id']
+
+
+@pytest.mark.parametrize('change', ['author', 'scope', 'both'])
+def test_source_candidate_requires_current_owner_scope_and_exclusive_input(tmp_path, change):
+    from test_mission_api import _create
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    source = _create(client).json()['proposal']['proposal_id']
+    receipt, path, body = prepare_mission(client)
+    if change != 'both':
+        body.pop('candidate')
+    if change == 'author':
+        with closing(tasks.store._connect()) as conn, conn:
+            conn.execute("UPDATE fleet_proposals SET principal_id='other' WHERE proposal_id=?", (source,))
+    if change == 'scope':
+        body['instance_id'] = 'other-instance'
+    result = _post(client, path + '/prepare', 'operator-secret', {**body, 'source_proposal_id': source})
+    assert result.status_code == (404 if change == 'author' else 409 if change == 'scope' else 422)
+    assert client.app.state.channel_workflow.read(receipt['request_id'], 'operator-1')['state'] == 'REQUESTED'
+
+
 def test_changed_review_during_resolution_leaves_only_unadmitted_proposal(tmp_path, monkeypatch):
     client, tasks, _ = _client(tmp_path, channel_config=config())
     receipt, path, body = prepare_mission(client)
