@@ -6,6 +6,8 @@ D-697의 정상 명령·재발 평가에는 완전한 관측 범위를 구분할
 
 ## Decision
 
+기존 CORE event journal과 ObservationStore의 실제 구현을 `fleet.observe`에 분리한다. 기존 server 경로는 같은 클래스의 identity alias로 유지한다. 새 SIZE_UNIT의 이전 기준은 137+74+init 1 = 212줄이며 기존 Fleet 부모의 54,074+150과 모든 파일 한도를 유지한다. 소유자·호출자·설치와 동시 측정은 [분리 계획](../plans/2026-10-12-observation-journal-owner.md)에 기록한다.
+
 기존 관측 payload에 선택 `capture {run_id, sequence, monotonic_at, robot_ids}`를 추가한다. run_id는 저장소 인스턴스마다 생성한 UUID hex다. sequence는 append 시도마다 증가하므로 실패·빈 roster 뒤의 성공 기록에 누락이 드러난다. 한 snapshot의 모든 행은 같은 capture를 가지며 중복 robot_id는 전체 snapshot을 거절한다. 성공 기록은 기존 SQLite transaction과 retention으로 저장한다. 이전 기록에 metadata를 추정해 채우지 않는다.
 
 후속 read-only window 도구는 subject와 start/end/max_gap을 명시해 불변 읽기 snapshot의 제한된 행을 검증한다. 양끝 관측, 같은 run의 연속 sequence, clock·간격·subject·내용 hash를 대조한다. 재시작·누락·오래된 자료·retention으로 범위를 입증할 수 없으면 HOLD한다. 원문 state·좌표·계정·endpoint를 결과에 복사하지 않는다.

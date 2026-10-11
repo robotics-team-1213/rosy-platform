@@ -97,6 +97,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "control/drive/behaviors/localization",
               "control/drive/behaviors/swarm",
               "fleet/fleet/traffic",
+              "fleet/fleet/observe",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
@@ -155,6 +156,15 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-12-incident-ledger-subpackage.md records ownership and installed closure. "
         "Previous 322-line boundary: docs/plans/2026-10-12-deliberation-role-subpackages.md and "
         "docs/plans/2026-10-12-incident-observation-budget-store.md. Keep +150 and file limits.",
+    ),
+    "fleet/fleet/observe": (
+        212,
+        "split: D-699 moves the existing 137-line CORE event journal and 74-line observation "
+        "store plus one package init into this actual owner; original relocation basis 212. "
+        "Same Fleet DB/distribution and existing server identity aliases, no dispatch authority. "
+        "docs/plans/2026-10-12-observation-journal-owner.md records callers, installed closure "
+        "and simultaneous parent measurement. Keep +150 and file ceilings; capture growth "
+        "is not included in the relocation basis.",
     ),
     "fleet/fleet/incidents/automation/ledger": (
         370,
@@ -326,6 +336,10 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         54_074,
+        "split: D-699 extracts the existing observation/event journal into fleet.observe, "
+        "counted once by the innermost rule. Keep the existing 54074+150 parent allowance. "
+        "docs/plans/2026-10-12-observation-journal-owner.md records source and installed "
+        "identity aliases and simultaneous parent/child measurements. Previous verdict: "
         "split: independently re-judged on 2026-10-12 by learning_ui at 54074 for D-683/D-686/D-689. "
         "Account/login/profile reuse Fleet authentication, SQLite and Console; no service, dependency, "
         "command authority or SIZE_UNIT added. Keep package +150, all file ceilings and existing "
