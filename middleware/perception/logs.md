@@ -1444,4 +1444,6 @@
 
 ## 2026-10-11 · 9fc0a88c9 · source test import precedence
 
-Perception test bootstrap prepends its canonical foundation holder instead of selecting the installed dependency first. Combined remote collection had cached the wheel config module before source fixtures; installed-delivery tests remain isolated subprocesses. Regression revalidation pending. No runtime or hardware calibration changes.
+- 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
+- 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.

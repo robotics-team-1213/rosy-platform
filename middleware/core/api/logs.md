@@ -865,4 +865,6 @@
 
 ## 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
 
-FastAPI description follows v1.207; documented additive versions recorded in API changelog. Failed version-alignment guards reproduced during responsibility integration; remote revalidation pending. No runtime activation.
+- 변경: FastAPI 계약 설명을 v1.207로 맞추고 API 문서의 additive 버전 변경 이력을 기록했다.
+- 증거: 통합 원격 버전 정렬 시험에서 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. API 동작이나 운영 활성화를 변경하지 않았다.
