@@ -8,6 +8,7 @@ from fleet.incidents.automation.store import IncidentCaseStore, CaseBudget
 from fleet.incidents.automation.ledger.receipt import ModelReceipt, model_receipt, checked_receipt
 from rosy.decision.deliberation import canonical
 from rosy.decision.deliberation.judgment import Judgment, judgment
+from rosy.decision.deliberation.profiles import BoundProfile
 from test_judgment_profiles import adapter, bind_profile, problem, profile
 from test_model_judgment import payload
 
@@ -62,6 +63,15 @@ def test_builder_revalidates_typed_judgment_and_stale_checked_evidence_still_rep
     receipt = model_receipt(scope, p, bound, checked, profiles=profiles)
     attempt.update(state='REJECTED', actual_micros=50000)
     assert checked_receipt(scope, attempt, receipt)['judgment']['input_hash'] == p.digest
+
+
+def test_profile_without_incident_domain_cannot_be_historical_admission_evidence():
+    scope, p, profiles, _, _, _ = fixture()
+    profiles = (replace(profiles[0], domains=('door',)), profiles[1])
+    scope = replace(scope, profile_sha256=hashlib.sha256(canonical([asdict(v) for v in profiles]).encode()).hexdigest())
+    bound = BoundProfile(profiles[0], p.digest)
+    checked = judgment(p, bound, payload(p))
+    with pytest.raises(ValueError): model_receipt(scope, p, bound, checked, profiles=profiles)
 
 
 @pytest.mark.parametrize('forged', [False, True])
