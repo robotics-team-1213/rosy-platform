@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from hashlib import sha256
 
 import pytest
@@ -215,6 +216,29 @@ def _app(tmp_path):
     poses = Poses()
     app = create_app(console, task_service=tasks, site_users=users, site_maps=store, map_pose_port=poses)
     return TestClient(app), tasks, store, poses
+
+
+def test_normal_recording_start_refuses_activation_during_localization_read(tmp_path, monkeypatch):
+    client, _tasks, store, poses = _app(tmp_path)
+    entered, release = threading.Event(), asyncio.Event()
+
+    async def delayed_refresh(*args, **kwargs):
+        entered.set()
+        await release.wait()
+    monkeypatch.setattr(poses, 'refresh', delayed_refresh)
+    with client:
+        future = client.portal.start_task_soon(client.app.state.teach.start, 'rosy_60', 'bob')
+        try:
+            assert entered.wait(5)
+            draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
+            assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+                json={'expected_revision': draft['revision']}).status_code == 200
+        finally:
+            client.portal.call(release.set)
+        with pytest.raises(TeachError) as error:
+            future.result(timeout=5)
+        assert error.value.code == 'TEACH_MAP_CHANGED'
+        assert client.app.state.teach.view()['recording'] is None
 
 
 def test_activation_preserves_running_teach_and_allows_stopped_pending_records(tmp_path):
