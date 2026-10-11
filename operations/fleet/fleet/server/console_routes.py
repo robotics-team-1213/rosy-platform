@@ -398,6 +398,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                         or judgment_revision(receipt) != body.judgment_revision):
                     raise HTTPException(409, detail={'code': 'INCIDENT_JUDGMENT_CHANGED'})
                 # A failed journal keeps the resolver paused, without issuing an ownership receipt.
+                board._handoff_pending.add((robot_id, body.stuck_id))
                 if resolver_loop is not None:
                     resolver_loop.claim(robot_id, body.stuck_id)
                 try:

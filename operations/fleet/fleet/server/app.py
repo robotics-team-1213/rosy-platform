@@ -346,7 +346,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             notification_http = httpx.AsyncClient(trust_env=False)
             notification_task = asyncio.create_task(NotificationWorker(
                 app.state.line_stuck._log.notifications, notification_config, notification_http,
-                snapshot=app.state.fleet_gather).run())
+                board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task

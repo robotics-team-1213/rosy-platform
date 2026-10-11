@@ -51,6 +51,7 @@ class LineStuckBoard:
         self._wall = wall
         self._open: dict[str, dict] = {}
         self._assessment_inputs = {}
+        self._handoff_pending: set[tuple[str, str]] = set()
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
@@ -80,6 +81,7 @@ class LineStuckBoard:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
+        self._handoff_pending = {key for key in self._handoff_pending if key[0] != robot_id or key[1] == keep}
         for notes in (self._resolver, self._previews):
             for key in [k for k in notes if k[0] == robot_id and k[1] != keep]:
                 del notes[key]
