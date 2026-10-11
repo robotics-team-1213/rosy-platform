@@ -26,7 +26,8 @@ test('an active camera map keeps its coordinate view when a robot starts serving
       onMapChanged() {}, onMapUnavailable() {}, call: async (path) => {
         calls.push(path);
         if (path === '/api/fleet/site-map') return { maps: [
-          { map_id: 'track', polygon_m: [[0, 0], [2, 0], [2, 1], [0, 1]] },
+          { map_id: 'track', polygon_m: [[0, 0], [2, 0], [2, 1], [0, 1]],
+            bounds_m: { min_x: 0, min_y: 0, max_x: 2, max_y: 1 }, sources: [] },
         ] };
         if (path === '/api/fleet/site-map/active') return { version: 5, map: { map_id: 'track' } };
         if (path === '/api/fleet/calibrations') return { calibrations: [] };
