@@ -1435,3 +1435,9 @@
 - gate 변화: 없음. 설치본·현장 주행 증거와 구분한다.
 - 결정: D-171, D-630의 기존 경계 유지.
 - 교훈: 물리 폴더 이동 후 구조 검사는 패키지 소스 매핑을 따라야 한다.
+
+## 2026-10-11 · 177e7faff · refactor: legacy Drive entry source ownership (D-649)
+- 변경: control/goal/wander/safety 진입 모듈 네 개를 Drive runtime으로 이전. 기존 control import/entrypoint/provider와 map resource 유지; source audit, runtime wheel/sdist 및 legacy 최종 writer 배제 유지.
+- 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 원격 Perception 3028 passed, 112 skipped, 62 subtests passed, 0 NEW; 고립 설치 시험 통과.
+- gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
+- 결정: D-649

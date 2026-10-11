@@ -34,5 +34,6 @@
 
 ## Progress
 
-- ADR and responsibility inventory recorded; implementation and remote acceptance pending.
+- ADR, 80-file migration, installation/source/archive mappings, Safety review and current responsibility guides committed. Perception: 3,028 passed; corrected CORE/source/install proof: 117 passed; move tool: 23 passed. [Detailed evidence](../validation/d649-drive-boundaries-2026-10-11/result.md) distinguishes initial failures and rechecks.
+- Latest-main integration and affected-test recheck pending. Source folder and install proof do not establish deployment/device acceptance.
 - Previous source candidate `53c557136957` failed CI in `test_console_roles_browser` map-label assertions; it is not signed/applied. Online-target deployment remains an open goal.
