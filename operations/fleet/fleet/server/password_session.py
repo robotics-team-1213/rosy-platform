@@ -172,7 +172,8 @@ class PasswordSessions:
 
     def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
         with self._lock:
-            if verified is not None and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"]):
+            if (verified is not None
+                    and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"])):
                 raise StalePasswordCheck()
             return self._issue(login, remember=remember)
 
@@ -427,14 +428,17 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
                 "code": "PASSWORD_CHANGE_NOT_REQUIRED", "message": "an initial cookie session is required"})
         password = payload.get("password")
         if set(payload) != {"password"} or not isinstance(password, str) or not 8 <= len(password) <= 1024:
-            raise HTTPException(status_code=422, detail={"code": "INVALID_REQUEST", "message": "a new password is required"})
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_REQUEST", "message": "a new password is required"})
         value = request.cookies[COOKIE]
         try:
             replacement, remember = sessions.change_password(value, password)
         except ValueError:
-            raise HTTPException(status_code=422, detail={"code": "INVALID_REQUEST", "message": "choose a different password"}) from None
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_REQUEST", "message": "choose a different password"}) from None
         except StalePasswordCheck:
-            raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "initial session expired"}) from None
+            raise HTTPException(status_code=401, detail={
+                "code": "UNAUTHORIZED", "message": "initial session expired"}) from None
         except LoginRateLimited:
             raise HTTPException(status_code=429, headers={"Retry-After": "1"}, detail={
                 "code": "RATE_LIMITED", "message": "password service is busy"}) from None

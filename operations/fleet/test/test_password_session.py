@@ -267,7 +267,8 @@ def test_login_routes_are_absent_without_login_accounts(tmp_path):
     assert client.post("/api/fleet/auth/logout", headers=ORIGIN).status_code == 404
     assert client.get("/api/fleet/auth/session").status_code == 401
     via_token = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()
-    assert via_token == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None}
+    assert via_token == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None,
+                         "password_change_required": False}
 
 
 # --- expiry and invalidation ---------------------------------------------------
@@ -519,7 +520,8 @@ def test_initial_cookie_is_restricted_before_any_fleet_read_or_command(tmp_path)
         response = getattr(client, method)(path, headers=ORIGIN)
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "PASSWORD_CHANGE_REQUIRED"
-    assert client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()["role"] == "viewer"
+    bearer = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert bearer.json()["role"] == "viewer"
 
 
 def test_password_change_replaces_cookie_revokes_other_sessions_and_survives_restart(tmp_path):
@@ -541,9 +543,9 @@ def test_password_change_replaces_cookie_revokes_other_sessions_and_survives_res
 
 
 @pytest.mark.parametrize("body", [{}, {"password": "alice"}, {"password": "short"},
-                                   {"password": "x" * 1025}, {"password": 123},
-                                   {"password": NEW_PASSWORD, "role": "policy-admin"},
-                                   {"password": NEW_PASSWORD, "principal_id": "other"}])
+                                  {"password": "x" * 1025}, {"password": 123},
+                                  {"password": NEW_PASSWORD, "role": "policy-admin"},
+                                  {"password": NEW_PASSWORD, "principal_id": "other"}])
 def test_password_change_rejects_invalid_payload_without_unlocking(tmp_path, body):
     _, client = _bootstrap(tmp_path)
     assert client.post(CHANGE, headers=ORIGIN, json=body).status_code == 422
@@ -576,6 +578,7 @@ def test_password_change_storage_failure_preserves_initial_restriction(tmp_path,
     app, client = _bootstrap(tmp_path)
     sessions = app.state.password_sessions
     original = sessions._connect
+
     def broken(**kwargs):
         raise sqlite3.OperationalError("locked")
     monkeypatch.setattr(sessions, "_connect", broken)
@@ -598,6 +601,7 @@ def test_concurrent_password_changes_have_exactly_one_winner(tmp_path):
     app, client = _bootstrap(tmp_path)
     sessions, cookie = app.state.password_sessions, client.cookies[COOKIE]
     barrier, results = threading.Barrier(2), []
+
     def change():
         barrier.wait()
         try:
