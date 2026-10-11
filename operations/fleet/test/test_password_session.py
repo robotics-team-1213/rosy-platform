@@ -562,7 +562,7 @@ def test_password_change_requires_same_origin_initial_cookie_not_bearer(tmp_path
 
 
 @pytest.mark.parametrize("change", [{"principal_id": "replacement"}, {"role": "viewer"},
-                                    {"password_scrypt": HASH}])
+                                    {"password_scrypt": hash_password("wrong")}])
 def test_changed_yaml_source_does_not_inherit_password_override(tmp_path, change):
     app, client = _bootstrap(tmp_path)
     assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 204
