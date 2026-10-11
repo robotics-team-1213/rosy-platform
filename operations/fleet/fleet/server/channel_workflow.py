@@ -47,6 +47,10 @@ class ChannelWorkflow:
         value.update(work_kind=row['work_kind'] if value['work_id'] else None, work_status=None,
                      request_key='discord-' + receipt['request_id'])
         if value['work_id']:
+            if value['work_kind'] == 'incident':
+                from .channel_incidents import incident_view
+                value['incident'], value['work_status'] = incident_view(conn, receipt['request_id'], receipt['principal_id'])
+                return value
             table, key = {'task': ('fleet_tasks', 'task_id'), 'mission': ('fleet_missions', 'mission_id'),
                           'cell_job': ('fleet_cell_jobs', 'mission_id')}[value['work_kind']]
             work = conn.execute(f'SELECT status FROM {table} WHERE {key}=?', (value['work_id'],)).fetchone()

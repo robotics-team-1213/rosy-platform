@@ -70,18 +70,34 @@ class ChannelReplyOutbox:
                       AND NOT EXISTS (SELECT 1 FROM fleet_channel_reply_outbox o
                         WHERE o.request_id=w.request_id AND o.kind=? || t.status)
                     ORDER BY t.updated_at LIMIT 50''', (kind, *states, prefix)).fetchall()
-                for receipt, status, work_id in rows:
-                    receipt = json.loads(receipt)
-                    try:
-                        self.journal.current_receipt(receipt)
-                    except HTTPException:
-                        self._insert(conn, receipt, prefix + status, '', 'SUPERSEDED')
-                        continue
-                    note = ('\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else
-                            '\n장치 동작 완료 · 목표 확인 대기입니다.' if status == 'ACTION_SUCCEEDED' else '')
-                    label = 'Task' if kind == 'task' else kind
-                    self.enqueue(conn, receipt, prefix + status,
-                                 f"ROSY 작업 원장 · {receipt['request_id']}\n{label} {work_id} · {status}" + note)
+                self._results(conn, rows, prefix, 'Task' if kind == 'task' else kind)
+            if {'fleet_channel_incidents', 'fleet_line_stuck_episodes', 'fleet_incident_claims'} <= tables:
+                rows = conn.execute('''SELECT r.receipt, 'CLOSED', w.work_id
+                    FROM fleet_channel_workflow w JOIN fleet_channel_requests r
+                      ON json_extract(r.receipt, '$.request_id')=w.request_id
+                    JOIN fleet_channel_incidents i ON i.request_id=w.request_id
+                    JOIN fleet_line_stuck_episodes e USING(robot_id, stuck_id)
+                    JOIN fleet_incident_claims c USING(robot_id, stuck_id)
+                    WHERE w.state='LINKED' AND w.work_kind='incident' AND e.closed_at IS NOT NULL
+                      AND c.principal_id=r.principal_id
+                      AND NOT EXISTS (SELECT 1 FROM fleet_channel_reply_outbox o
+                        WHERE o.request_id=w.request_id AND o.kind='INCIDENT:CLOSED')
+                    ORDER BY e.closed_at LIMIT 50''').fetchall()
+                self._results(conn, rows, 'INCIDENT:', '사건')
+
+    def _results(self, conn, rows, prefix, label):
+        for receipt, status, work_id in rows:
+            receipt = json.loads(receipt)
+            try:
+                self.journal.current_receipt(receipt)
+            except HTTPException:
+                self._insert(conn, receipt, prefix + status, '', 'SUPERSEDED')
+                continue
+            note = ('\n사건 종료 관측입니다. 장치·목표 성공은 별도 확인합니다.' if prefix == 'INCIDENT:' else
+                    '\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else
+                    '\n장치 동작 완료 · 목표 확인 대기입니다.' if status == 'ACTION_SUCCEEDED' else '')
+            self.enqueue(conn, receipt, prefix + status,
+                         f"ROSY 작업 원장 · {receipt['request_id']}\n{label} {work_id} · {status}" + note)
 
     def current(self, row, conn=None):
         if conn is None:

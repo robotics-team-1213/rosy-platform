@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.213
+**Version:** v1.214
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2824,6 +2824,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.211 | 2026-10-12 | Additive (D-680): 기명 Console 요청 검토와 기존 주행 Task 관계 조회·연결. 기존 실행·승인 계약 유지. |
 | v1.212 | 2026-10-12 | Additive (D-680): 기명 요청의 최신 검토와 기존 Task 생성을 같은 트랜잭션에서 확인하는 submit. |
 | v1.213 | 2026-10-12 | Additive (D-687): Discord 요청의 기존 Mission/Cell proposal 준비와 별도 admission. |
+| v1.214 | 2026-10-12 | Additive (D-693): Discord 요청과 현재 열린 사건의 기명 인수·종료 원장 연결. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
@@ -3208,6 +3209,14 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 `GET /api/fleet/incidents`의 line_stuck report에 `handoff`(없으면null), `judgment_revision`(현재 열린 case가 아니면null)을 추가한다. 조회는 선택 `robot_id`와 `stuck_id`를 함께 받으며 기존 limit 안에서 해당 사건만 반환한다. 하나만 주거나 식별자 형식이 잘못되면422다. token 없는 `/console?inbox=1&robot=<id>&incident=<id>` 링크는 기존 viewer/operator 로그인 이후 이 조회와 인수 UI로 연결되며 GET으로 인수하지 않는다. 공개 인수·조회 producer는 Fleet routes/기존 원장, consumer는 Console이다.
 
 `GET /api/fleet/notifications?limit=100`(viewer+)는 `{records:[{event_id,robot_id,stuck_id,kind,channel,state,created_at,expires_at,next_attempt_at,attempts,last_code,provider_id,delivered_at}]}`다. kind는 OPEN/CLOSED, state는 PENDING/SENDING/SENT/RETRY/UNKNOWN/FAILED/EXPIRED/SUPERSEDED, 시각은 UTC epoch seconds다. limit 1..1000, 미인증401/잘못된 limit422이며 private endpoint·메시지 payload·secret·설치 주소를 반환하지 않는다. line_stuck incident report의 `notifications`는 같은 형식의 해당 사건 최근20건이다. SENT는 provider 수락이며 실제 수신/인수/해소가 아니다. UNKNOWN은 맹목 재시도하지 않는다. durable producer는 Fleet 사건/판단 owner, consumer는 opt-in notification worker와 Console이다.
+## v1.214 Discord 현재 사건 인수 (D-693)
+
+`POST /api/fleet/channel-requests/{request_id}/incident`는 현재 등록된 기명 operator의 자기 요청만 허용한다. strict 본문은 `expected_hash`(SHA256 hex64), `expected_revision`(bool 제외 비음수 정수), `robot_id`(1..96자 inert identifier), `stuck_id`(1..64자 inert identifier), `judgment_revision`(SHA256 hex64), `reason`(공백 제외1..256자)다. 원문으로 사건·관측 근거를 생성하지 않는다. Console는 현재 사건을 조회한 뒤 명시 확인으로 인수를 요청한다.
+
+현재 mapping/원문/review와 기존 gather lock/current open case/judgment revision/freshness/담당자 검사를 유지한다. 기존 IncidentHandoff와 같은 DB transaction 안에서 원문 관계·LINKED 회신 intent를 예약한다. 변경·다른 담당자409, 권한 철회403, 다른 원문 owner404, 잘못된 본문422, owner/공통 DB 미설정503이다. 원장/회신 실패는 claim·관계 모두 rollback하며 기존 안전상의 resolver pause는 유지한다. 동일 원문·사건·판단·원래 확인 revision 재시도는 같은 관계를 읽고 다른 사건으로 바꾸지 않는다.
+
+응답은 additive `ChannelWorkflowView`: `work_kind=incident`, `work_id=request_id`, `incident={robot_id,stuck_id,judgment_revision}`, `work_status=CLAIMED|CLOSED|UNKNOWN`이다. 다른 work kind의 incident는 null이다. CLAIMED는 담당 인수, CLOSED는 같은 사건의 종료 관측 원장이며 장치/목표 성공을 보증하지 않는다. 누락·owner 충돌 원장은 UNKNOWN이다. 사건 종료는 현재 mapping과 원래 message에 `INCIDENT:CLOSED` 회신 intent로 연결한다. 기존 기본 OFF/UNKNOWN 전송 계약을 유지한다. 새로운 정지·취소·재개 권한, rearm, E-Stop 해제, provider·motion writer를 만들지 않는다. 조치는 해당 기존 소유자의 별도 확인/admission을 사용한다. WS protocol_version1.0은 유지한다.
+
 ## v1.212 Discord 요청의 원자적 Task 제출 (D-680)
 
 ### v1.213 Mission·Cell Job owner adapter (D-687)
