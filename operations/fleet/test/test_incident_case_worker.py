@@ -15,7 +15,7 @@ from test_judgment_profiles import profile, adapter
 from test_model_judgment import payload
 
 
-def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4,
+def make_incident_worker(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4,
           provider_hook=None, handoff_hook=None, provider_cost=0.0):
     now, seen, handoffs = [101.0], [], []
     log = LineStuckAnswerLog(tmp_path / 'fleet.db')
@@ -72,7 +72,7 @@ async def settled(worker):
 
 def test_normal_and_unadmitted_have_no_model_calls_or_nominal_case_flood(tmp_path):
     async def run():
-        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, admitted=False)
+        _, seen, _, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, admitted=False)
         for seq in range(20): worker.feed(poll(seq, normal=True))
         await settled(worker)
         assert seen == [] and store.active_scopes() == ()
@@ -82,7 +82,7 @@ def test_normal_and_unadmitted_have_no_model_calls_or_nominal_case_flood(tmp_pat
 
 def test_new_poll_only_observation_and_persistent_aggregate_counts(tmp_path):
     async def run():
-        now, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        now, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         first = poll(); worker.feed(first); await settled(worker)
         assert len(seen) == 1 and handoffs == []
         scope = store.active_scopes()[0]
@@ -99,7 +99,7 @@ def test_new_poll_only_observation_and_persistent_aggregate_counts(tmp_path):
 @pytest.mark.parametrize('change,expected_calls', [('conflict', 2), ('invalid', 2), ('unsafe', 1), ('unknown', 1), ('human', 1)])
 def test_review_is_conditional_unknown_stops_and_human_ownership_cancels(tmp_path, change, expected_calls):
     async def run():
-        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path, change=change)
+        _, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, change=change)
         worker.feed(poll()); await settled(worker)
         assert len(seen) == expected_calls
         if change in {'conflict', 'invalid', 'unsafe'}: assert handoffs == []
@@ -114,7 +114,7 @@ def test_review_is_conditional_unknown_stops_and_human_ownership_cancels(tmp_pat
 
 def test_budget_exhaustion_produces_one_final_summary_and_no_named_claim(tmp_path):
     async def run():
-        now, seen, handoffs, log, _, _, worker, poll, _ = setup(tmp_path, budget_calls=1)
+        now, seen, handoffs, log, _, _, worker, poll, _ = make_incident_worker(tmp_path, budget_calls=1)
         worker.feed(poll()); await settled(worker)
         assert handoffs == []
         now[0] += 1; worker.feed(poll(2)); await settled(worker)
@@ -128,7 +128,7 @@ def test_budget_exhaustion_produces_one_final_summary_and_no_named_claim(tmp_pat
 
 def test_cleared_plus_later_normal_is_observed_receipt_without_action_credit(tmp_path):
     async def run():
-        now, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        now, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         worker.feed(poll()); await settled(worker)
         scope = store.active_scopes()[0]
         now[0] += 2; worker.feed(poll(2, normal=True)); await settled(worker)
@@ -142,7 +142,7 @@ def test_cleared_plus_later_normal_is_observed_receipt_without_action_credit(tmp
 
 def test_profile_change_holds_original_case_without_budget_reset(tmp_path):
     async def run():
-        now, seen, handoffs, _, _, store, worker, poll, current = setup(tmp_path)
+        now, seen, handoffs, _, _, store, worker, poll, current = make_incident_worker(tmp_path)
         worker.feed(poll()); await settled(worker)
         scope = store.active_scopes()[0]
         current[0] = (replace(current[0][0], profile_revision='p2'), current[0][1])
@@ -158,7 +158,7 @@ def test_cancelled_provider_is_unknown_final_and_cannot_replay(tmp_path):
         entered = asyncio.Event()
         async def hang(_):
             entered.set(); await asyncio.Event().wait()
-        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path, provider_hook=hang)
+        _, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, provider_hook=hang)
         worker.feed(poll()); await entered.wait()
         scope = store.active_scopes()[0]
         await worker.aclose()
@@ -170,7 +170,7 @@ def test_cancelled_provider_is_unknown_final_and_cannot_replay(tmp_path):
 
 
 def test_prepare_receipt_shares_transaction_and_does_not_reset_parent(tmp_path):
-    _, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+    _, _, _, log, board, store, worker, poll, _ = make_incident_worker(tmp_path)
     poll()
     with log._connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
@@ -182,7 +182,7 @@ def test_prepare_receipt_shares_transaction_and_does_not_reset_parent(tmp_path):
 
 def test_active_foreign_worker_is_not_recovered_or_replayed_automatically(tmp_path):
     async def run():
-        _, seen, handoffs, log, board, store, worker, poll, _ = setup(tmp_path)
+        _, seen, handoffs, log, board, store, worker, poll, _ = make_incident_worker(tmp_path)
         snapshot = poll()
         with log._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -202,7 +202,7 @@ def test_active_foreign_worker_is_not_recovered_or_replayed_automatically(tmp_pa
 
 
 def test_preparation_rejects_foreign_database_without_writing_parent(tmp_path):
-    _, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+    _, _, _, log, board, store, worker, poll, _ = make_incident_worker(tmp_path)
     poll()
     other = LineStuckAnswerLog(tmp_path / 'other.db')
     IncidentCaseStore(other.path)
@@ -217,7 +217,7 @@ def test_preparation_rejects_foreign_database_without_writing_parent(tmp_path):
 @pytest.mark.parametrize('boundary', ['reserve', 'mark_submitting'])
 def test_cancel_during_database_commit_waits_and_closes_only_owned_reservation(tmp_path, boundary):
     async def run():
-        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        _, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         entered, released = threading.Event(), threading.Event()
         original = getattr(store, boundary)
         def delayed(*args, **kwargs):
@@ -242,7 +242,7 @@ def test_cancel_during_database_commit_waits_and_closes_only_owned_reservation(t
 
 def test_restart_without_read_intent_admission_cannot_skip_observation_budget(tmp_path):
     async def run():
-        now, seen, handoffs, _, board, store, worker, poll, _ = setup(tmp_path, budget_observations=0)
+        now, seen, handoffs, _, board, store, worker, poll, _ = make_incident_worker(tmp_path, budget_observations=0)
         worker.feed(poll()); await settled(worker)
         scope = store.active_scopes()[0]
         replacement = IncidentCaseWorker(store, worker.observation, board, profiles=worker.profiles,
@@ -262,7 +262,8 @@ def test_unknown_final_has_durable_revision_and_retries_queue_failure_without_mo
     async def run():
         accept = [False]
         async def queue(*_): return accept[0]
-        now, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path, change='unknown', handoff_hook=queue)
+        now, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(
+            tmp_path, change='unknown', handoff_hook=queue)
         worker.feed(poll()); await settled(worker)
         scope = handoffs[0][0]
         assert handoffs[0][1]['observation_revision'] == seen[0][0].generation
@@ -281,7 +282,7 @@ def test_old_policy_scope_cannot_invoke_new_policy_provider(tmp_path):
     from fleet.incidents.automation.contract import CaseScope
     from fleet.incidents.notifications import Channel, NotificationConfig
     async def run():
-        now, seen, _, log, board, store, worker, poll, _ = setup(tmp_path)
+        now, seen, _, log, board, store, worker, poll, _ = make_incident_worker(tmp_path)
         snapshot = poll()
         scope = CaseScope('pinky', 'lane-1', 'core', worker.profile_sha256, 'old-policy')
         revision = board.judgment_view('pinky')['request']['revision']
@@ -306,8 +307,8 @@ def test_old_policy_scope_cannot_invoke_new_policy_provider(tmp_path):
 def test_real_outbox_managed_open_is_suppressed_and_final_is_durably_queued(tmp_path, failure):
     from fleet.incidents.notifications import Channel, NotificationConfig
     async def run():
-        now, seen, _, log, _, store, worker, poll, _ = setup(tmp_path, change='unknown' if failure == 'unknown' else None,
-                                                         budget_calls=1)
+        now, seen, _, log, _, store, worker, poll, _ = make_incident_worker(
+            tmp_path, change='unknown' if failure == 'unknown' else None, budget_calls=1)
         async def enqueue(scope, summary):
             return await asyncio.to_thread(log.notifications.enqueue_final, scope, summary, now=now[0])
         worker.final_handoff = enqueue
@@ -336,7 +337,7 @@ def test_legacy_poll_does_not_wait_for_model_and_loop_shutdown_cleans_worker(tmp
     async def run():
         entered = asyncio.Event()
         async def hang(_): entered.set(); await asyncio.Event().wait()
-        now, _, _, _, board, store, worker, poll, _ = setup(tmp_path, provider_hook=hang)
+        now, _, _, _, board, store, worker, poll, _ = make_incident_worker(tmp_path, provider_hook=hang)
         class Resolver:
             config = SimpleNamespace(poll_s=1)
             ai_verdicts = []
@@ -358,7 +359,7 @@ def test_legacy_poll_does_not_wait_for_model_and_loop_shutdown_cleans_worker(tmp
 @pytest.mark.parametrize('kind', ['model', 'observation'])
 def test_cancel_at_terminal_commit_preserves_known_receipt_and_closes_active_case(tmp_path, kind):
     async def run():
-        now, _, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        now, _, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         entered, released = threading.Event(), threading.Event()
         original = store.complete
         def delayed(*args, **kwargs):
@@ -387,7 +388,7 @@ def test_cancel_at_terminal_commit_preserves_known_receipt_and_closes_active_cas
 def test_verified_model_receipt_keeps_bounded_judgment_digest_and_scope(tmp_path):
     import json
     async def run():
-        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path)
+        _, seen, _, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         worker.feed(poll()); await settled(worker)
         with store._transaction() as conn:
             row = conn.execute('SELECT summary_json FROM fleet_incident_v2_attempts WHERE kind=?', ('model',)).fetchone()
@@ -401,7 +402,7 @@ def test_verified_model_receipt_keeps_bounded_judgment_digest_and_scope(tmp_path
 
 def test_second_cancellation_does_not_interrupt_durable_shutdown_cleanup(tmp_path):
     async def run():
-        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        _, seen, handoffs, _, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         entered, released = threading.Event(), threading.Event()
         original = store.reserve
         def delayed(*args, **kwargs):
@@ -425,7 +426,7 @@ def test_second_cancellation_does_not_interrupt_durable_shutdown_cleanup(tmp_pat
 @pytest.mark.parametrize('prepared', [False, True])
 def test_cancel_before_first_attempt_closes_only_owned_created_case(tmp_path, prepared):
     async def run():
-        _, seen, handoffs, log, _, store, worker, poll, _ = setup(tmp_path)
+        _, seen, handoffs, log, _, store, worker, poll, _ = make_incident_worker(tmp_path)
         if prepared:
             log.notifications.set_automation(worker.prepare_receipt)
             poll()
@@ -455,7 +456,8 @@ def test_stale_model_response_retains_verified_billing_and_does_not_become_curre
         entered, released = asyncio.Event(), asyncio.Event()
         async def delayed(_):
             if not entered.is_set(): entered.set(); await released.wait()
-        now, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_hook=delayed, provider_cost=.05)
+        now, seen, _, _, _, store, worker, poll, _ = make_incident_worker(
+            tmp_path, provider_hook=delayed, provider_cost=.05)
         worker.feed(poll()); await entered.wait()
         now[0] += 1; worker.feed(poll(2)); released.set(); await settled(worker)
         assert len(seen) == 2
@@ -472,7 +474,7 @@ def test_stale_model_response_retains_verified_billing_and_does_not_become_curre
 @pytest.mark.parametrize('fault', ['replaced', 'left_roster', 'restart', 'stale_normal'])
 def test_non_clearance_closures_never_become_observed_resolution(tmp_path, fault):
     async def run():
-        now, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+        now, _, _, log, board, store, worker, poll, _ = make_incident_worker(tmp_path)
         worker.feed(poll()); await settled(worker)
         scope = store.active_scopes()[0]
         now[0] += 2

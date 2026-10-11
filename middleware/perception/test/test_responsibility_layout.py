@@ -98,16 +98,17 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "sys.path[:0] = sys.argv[1:3]; "
         "from control.control.command_gate import CommandPolicy; "
         "from control.sensor_provider import PROVIDER; "
-        "assert type(PROVIDER.make_policy('layout-test')) is CommandPolicy; "
+        "policy = PROVIDER.make_policy('layout-test'); "
+        "assert type(policy) is CommandPolicy, ('provider identity', type(policy), CommandPolicy); "
         "entries = importlib.metadata.distribution('control').entry_points; "
         "assert any(e.group == 'rosy.sensor_provider' and "
-        "e.value == 'control.sensor_provider:PROVIDER' for e in entries); "
+        "e.value == 'control.sensor_provider:PROVIDER' for e in entries), ('provider entry point', entries); "
         "root = pathlib.Path(sys.argv[1]).resolve(); "
         "modules = ['control.sensing.lidar', 'control.sensing.perception.lane', "
         "'control.control.recover', 'control.planning.goals', "
         "'control.sensing.perception.learned.road_observation', 'core_common.observation']; "
-        "assert all(pathlib.Path(importlib.import_module(m).__file__).resolve()"
-        ".is_relative_to(root) for m in modules)"
+        "paths = {m: pathlib.Path(importlib.import_module(m).__file__).resolve() for m in modules}; "
+        "assert all(path.is_relative_to(root) for path in paths.values()), ('installed source roots', root, paths)"
     )
     foundation = tmp_path / "foundation"
     shutil.copytree(MIDDLEWARE.parent / "contracts/foundation", foundation,
@@ -118,8 +119,14 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
          str(next(dist.glob("core_common-*.whl"))), cwd=tmp_path)
     check += (
         "; import importlib.metadata as metadata; "
-        "assert metadata.version('control') == '0.1.1'; "
-        "assert metadata.version('core_common') == '0.0.1'; "
-        "assert 'core_common>=0.0.1' in metadata.requires('control')"
+        "from packaging.requirements import Requirement; "
+        "from packaging.utils import canonicalize_name; "
+        "assert metadata.version('control') == '0.1.1', ('control version', metadata.version('control')); "
+        "assert metadata.version('core_common') == '0.0.1', ('foundation version', metadata.version('core_common')); "
+        "requirements = [Requirement(raw) for raw in metadata.requires('control')]; "
+        "expected = Requirement('core_common>=0.0.1'); "
+        "assert any(canonicalize_name(r.name) == canonicalize_name(expected.name) "
+        "and r.specifier == expected.specifier and not r.extras and r.marker is None "
+        "and r.url is None for r in requirements), ('control requirements', requirements)"
     )
     _run("-I", "-c", check, str(installed), str(installed), cwd=tmp_path)
