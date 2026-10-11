@@ -75,6 +75,9 @@ async def bounded_process(argv, body, remaining, output_limit):
                 if process is None:
                     process = await asyncio.shield(spawn)
                 kill_group(process)
+                # Drain discarded pipe data so asyncio can finish its subprocess transport.
+                while await process.stdout.read(4096):
+                    pass
                 await process.wait()
             finally:
                 if not spawn.done():
