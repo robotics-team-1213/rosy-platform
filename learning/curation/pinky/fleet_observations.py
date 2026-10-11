@@ -102,7 +102,8 @@ def capture_window(database, *, robot_id, start, end, max_gap_s, max_rows=4096):
     result = dict(schema='rosy.fleet-observation-window/1', robot_id=robot_id,
                   start=start, end=end, max_gap_s=max_gap_s, state='HOLD', reasons=[],
                   capture_complete=False, rows=[], verification='retained_capture_only',
-                  field_accepted=False, normal_commands=None, model_calls=None, recurrence=None)
+                  field_accepted=False, train_eligible=False, labels=None,
+                  normal_commands=None, model_calls=None, recurrence=None)
 
     def hold(reason):
         result['reasons'].append(reason)
@@ -126,13 +127,16 @@ def capture_window(database, *, robot_id, start, end, max_gap_s, max_rows=4096):
         # Include every row of the boundary captures; never filter the requested robot first.
         bounds = db.execute('''SELECT MIN(observation_id), MAX(observation_id)
                 FROM fleet_observations WHERE received_at>=? AND received_at<=?''', (left, right)).fetchone()
-        rows = db.execute('''SELECT observation_id,robot_id,received_at,payload_json
+        rows = db.execute('''SELECT observation_id,robot_id,received_at,
+                CASE WHEN length(CAST(payload_json AS BLOB))<=65536 THEN payload_json ELSE NULL END
                 FROM fleet_observations WHERE observation_id BETWEEN ? AND ?
                 ORDER BY observation_id LIMIT ?''', (*bounds, max_rows + 1)).fetchall()
     if len(rows) > max_rows:
         return hold('ROW_LIMIT')
     groups, previous, identities, stamp = [], None, [], None
     for oid, rid, received, payload in rows:
+        if type(payload) is not str:
+            raise ValueError('observation source failed validation')
         try:
             body = json.loads(payload)
             valid = (type(body) is dict and len(payload.encode('utf-8')) <= MAX_EVENT_BYTES
@@ -190,8 +194,25 @@ def main():
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--robot-id")
+    parser.add_argument('--window', action='store_true', help='Validate retained capture coverage only')
+    parser.add_argument('--start', type=float)
+    parser.add_argument('--end', type=float)
+    parser.add_argument('--max-gap-s', type=float)
     args = parser.parse_args()
-    print(json.dumps(export(args.database, args.output, robot_id=args.robot_id)))
+    if args.window:
+        if args.output.resolve().drive.upper() == 'F:':
+            raise ValueError('recording output belongs on X:, not the source drive')
+        result = capture_window(args.database, robot_id=args.robot_id, start=args.start,
+                                end=args.end, max_gap_s=args.max_gap_s)
+        with args.output.open('xb') as stream:
+            stream.write((json.dumps(result, ensure_ascii=False, allow_nan=False) + '\n').encode('utf-8'))
+            stream.flush()
+            os.fsync(stream.fileno())
+    else:
+        if any(v is not None for v in (args.start, args.end, args.max_gap_s)):
+            parser.error('window bounds require --window')
+        result = export(args.database, args.output, robot_id=args.robot_id)
+    print(json.dumps(result, ensure_ascii=False, allow_nan=False))
 
 
 if __name__ == "__main__":
