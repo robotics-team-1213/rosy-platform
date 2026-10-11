@@ -3,7 +3,7 @@
 - Date: 2026-10-12
 - Contract: [D-672](../../adr/D-672-pinky-advisory-deliberation-host-boundary.md)
 - Plan: [책임과 수용 순서](../../plans/2026-10-12-pinky-deliberation-host-runner.md)
-- Source / local landing: `b4f653c8e3b1b8f583969aaaeb02a3eba76cc387`
+- Source commit / local landing: `b4f653c8e3b1b8f583969aaaeb02a3eba76cc387`
 - Result: SOURCE / REMOTE TEST / WHEEL-SDIST / LOCAL MERGE PASS. HOST ISOLATION / REAL PROVIDER / DEPLOY / FIELD HOLD.
 
 ## Source acceptance
