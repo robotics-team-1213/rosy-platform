@@ -63,11 +63,11 @@ def browser_site(tmp_path):
 def _prepare(page):
     from playwright.sync_api import expect
 
-    if "operator-1" not in page.locator("#user-role").inner_text():
+    if "operator-1" not in (page.locator("#user-role").get_attribute("title") or ""):
         open_token_access(page)
         page.locator("#console-token").fill("operator-secret")
         page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_have_text("operator-1 · 운영자")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -594,7 +594,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
     page.set_viewport_size({"width": width, "height": height})
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("operator-1")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     job = {"mission_id": "sheet-held", "status": "HOLD", "current_step_index": 0,
            "reason": "OPERATOR_SHEET_ACCESS_UNAVAILABLE", "steps": [
                {"step_index": 0, "status": "HOLD", "step": {"inputs": {
@@ -647,7 +647,7 @@ def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):
     page.reload()
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("operator-1")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     for kind in ("recipe", "cell"):
         page.locator(f"#{kind}-load").click()
         expect(page.locator("#notice")).to_contain_text("저장된 문서를 불러왔습니다")

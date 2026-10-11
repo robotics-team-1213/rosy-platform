@@ -83,7 +83,6 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #clock { display: none; }
   #fleet-inbox { grid-area: inbox; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -120,7 +119,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar ui-brand { container-type: inline-size; }
   .fleet-link-status { display: contents; }
   #development-badge { grid-area: brand; align-self: end; justify-self: start; }
-  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-6); }
+  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-5); }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   #clock { font-size: var(--text-micro); }
   /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */
