@@ -186,7 +186,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             assert page.locator(".queues-panel").evaluate("node => !node.closest('[role=tabpanel]')")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             stop = page.locator("#estop").bounding_box()
-            assert stop and stop["height"] >= 58 and stop["y"] + stop["height"] <= height
+            assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= height
             if width >= 1024:
                 left = page.locator(".console-primary").bounding_box()
                 right = page.locator(".console-secondary").bounding_box()

@@ -233,7 +233,7 @@ def _spacing_px(value):
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
-def test_normal_controls_share_geometry_and_keep_the_safety_exception(page, theme):
+def test_all_controls_share_geometry_including_emergency_stop(page, theme):
     page.goto(f"{HOST}/button")
     page.wait_for_function("() => customElements.get('ui-button')")
     sizes = page.evaluate("""theme => {
@@ -254,13 +254,12 @@ def test_normal_controls_share_geometry_and_keep_the_safety_exception(page, them
       result.reason = {height:long.getBoundingClientRect().height, scroll:long.scrollWidth, width:long.clientWidth};
       return result;
     }""", theme)
-    normal = [sizes[kind] for kind in ("primary", "quiet", "segment", "toggle")]
+    normal = [sizes[kind] for kind in ("primary", "quiet", "segment", "toggle", "irreversible")]
     assert {button["height"] for button in normal} == {48}
     assert {button["text"] for button in normal} == {"14px"}
     assert {button["inset"] for button in normal} == {"12px"}
     assert all(button["width"] >= 48 for button in normal)
     assert sizes["field"]["height"] == 48
-    assert sizes["irreversible"]["height"] == 58
     assert sizes["reason"]["height"] >= 48
     assert sizes["reason"]["scroll"] <= sizes["reason"]["width"]
 

@@ -90,10 +90,10 @@ components:
   button-irreversible:
     backgroundColor: "{colors.status-crit}"
     textColor: "{colors.ink-on-crit}"
-    typography: "{typography.value}"
+    typography: "{typography.label}"
     rounded: "{rounded.radius-button}"
-    padding: "8px 16px"
-    height: "58px"
+    padding: "0 12px"
+    height: "48px"
   button-segment-pressed:
     backgroundColor: "{colors.ground-card-2}"
     textColor: "{colors.ink}"
@@ -147,7 +147,7 @@ ROSY 화면은 사람이 로봇을 안전하게 감시·개입·설치·점검�
 D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 1. **아는 만큼 말한다.** 알 수 없는 값을 정상처럼 그리지 않는다. 증거 네 상태(`fresh`/`delayed`/`disconnected`/`unavailable`)를 따로 그린다. `unavailable`은 점선 테다.
-2. **중요한 것이 먼저 보인다.** 비상 정지는 모든 폭에서 첫 화면에 있다. 되돌릴 수 없는 조작이 가장 크다(58px).
+2. **중요한 것이 먼저 보인다.** 비상 정지는 모든 폭에서 첫 화면에 있다. 모든 버튼은 48px이며 위험 조작은 색상과 보이는 동사로 구분한다.
 3. **복잡함을 다룰 수 있게.** 막힌 버튼은 이유를 보이는 글로 말한다(`reason`). 부가 항목은 좁은 창에서 접힌다.
 4. **따뜻함은 작은 곳에.** 장미색은 워드마크와 현재 위치 표식에만 쓴다([D-277](docs/adr/D-277-rosy-brand-colour-tokens.md)).
 5. **현대성은 정교한 품질로.** 닫힌 척도(글자 6단, 간격 6단, 모서리 4종)만 쓴다. 장식 움직임은 없다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
@@ -297,13 +297,13 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **패널 모서리** (`--radius-panel` 12px): 패널.
 - **깃발 모서리** (`--radius-flag` 999px): `ui-tag`, 점 표지.
 
-일반 조작의 크기는 통일하고, 즉시 안전 개입만 명시적 예외로 둔다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)).
+비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)).
 
 - `--target-secondary` 48px: 일반 버튼·필드·체크 라벨의 최소 높이.
 - `--target-primary` 48px: 주 명령.
-- `--target-irreversible` 58px: 비상 정지·되돌릴 수 없는 조작.
+- `--target-irreversible` 48px: 비상 정지·되돌릴 수 없는 조작.
 
-**공통 조작 법칙.** 일반 버튼은 종류에 관계없이 48px·라벨 글자·좌우 여백을 공유한다. 폭은 라벨 길이로 정하고 아이콘 전용은 같은 누름 면의 정사각형이다. 크기는 최소값이므로 긴 문구·비활성 사유는 늘어날 수 있다. 버튼의 의미는 채움과 상태로 구분한다. 58px 위험 조작은 첫 화면에서 즉시 찾기 위한 안전 예외다. 화면별 작은 버튼과 별도 크기 토큰을 만들지 않는다.
+**공통 조작 법칙.** 비상 정지를 포함한 모든 버튼은 종류에 관계없이 48px·라벨 글자·좌우 여백을 공유한다. 폭은 라벨 길이로 정하고 아이콘 전용은 같은 누름 면의 정사각형이다. 크기는 최소값이므로 긴 문구·비활성 사유는 늘어날 수 있다. 버튼의 의미는 채움과 상태, 아이콘과 보이는 동사로 구분한다. 위험 조작의 크기 예외나 화면별 작은 버튼을 만들지 않는다.
 
 ### 관제의 정보 위계와 배치 이유
 
@@ -311,7 +311,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 | 영역 | 순서·강조 | 사용자에게 필요한 이유 |
 |---|---|---|
-| 비상 정지 | 머리에 고정, 위험 채움·58px | 어느 작업 중에도 즉시 정지할 수 있어야 한다. |
+| 비상 정지 | 머리에 고정, 위험 채움·48px·보이는 동사 | 어느 작업 중에도 즉시 정지할 수 있어야 한다. |
 | 현재 개입 | 대응 레일 첫 항목, 실제 위험에만 상태색 | 지금 해결할 문제와 가능한 답을 먼저 찾는다. |
 | 현장 지도 | 넓은 화면 왼쪽 2/3, 탭 전환과 무관하게 고정 | 로봇·경로·관측의 공간 관계를 계속 확인한다. |
 | 등록 로봇 | 현재 개입 다음 | 개별 연결·상태·명령 대상을 찾는다. |
@@ -353,7 +353,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.
 
 ### 버튼 — `<ui-button kind="…">`
-- **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 58px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
+- **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 48px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
 - **상태**: `:hover`·`:active`·`:focus-visible`·비활성이 모두 `components.css`에 있다. 눌림은 `aria-pressed="true"`(또는 `aria-selected`, `.active`)의 공용 표현이다. 채움 종류는 누르는 동안 바탕색 안쪽 테를 얻는다.
 - **비활성 사유**: `reason="운용자 권한이 필요합니다"`처럼 속성을 단다. `ui.js`가 버튼 안 `<small data-reason>`으로 그리고 `aria-describedby`로 잇는다. 사유가 있는 비활성은 흐리지 않고 점선 테와 조용한 글자로 말한다. `title`만으로는 사유가 아니다(터치에서 보이지 않는다).
 - **목록 행 예외** ([D-371](docs/adr/D-371-list-row-irreversible-actions-confirm-before-danger-fill.md)): 같은 종류 항목이 반복되는 목록·표의 행(`li`·`tr`·`[role=row]`)에서 되돌릴 수 없는 조작은 `irreversible`이 아니라 `quiet` `삭제…`다(말줄임표 = 다음 단계가 있다). 누르면 `ui.js`의 `confirmIrreversible({message, action, opener})`가 확인 대화상자(아래)를 연다: 대상을 따옴표로 이름 부르며 묻고(`"operator-tablet" 토큰을 삭제할까요?`), `취소`는 `quiet`, 실행 버튼 하나(`토큰 삭제`)만 `irreversible`이다. Esc·취소는 요청 없이 닫히고 포커스는 행 버튼으로 돌아간다. 첫 화면의 위험 채움은 비상 정지 외에 하나를 넘지 않는다. 비상 정지와 단일 대상 명령은 그대로 위험 채움이다. `test_list_row_irreversible.py`·`test_list_row_confirm_browser.py`가 지킨다.
