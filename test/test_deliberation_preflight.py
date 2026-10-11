@@ -5,6 +5,26 @@ import pytest
 from deploy.site import deliberation_preflight as module
 
 
+@pytest.mark.parametrize('changes,expected', [
+    ({}, True), ({'PWD': '/tmp'}, True), ({'PWD': '/home/operator'}, False),
+    ({'API_TOKEN': 'fixture'}, False), ({'HOME': '/home/operator'}, False),
+    ({'PATH': '/home/operator/bin'}, False),
+])
+def test_probe_environment_accepts_only_fixed_sandbox_paths(changes, expected):
+    import ast
+    import inspect
+    from types import SimpleNamespace
+    tree = ast.parse(inspect.getsource(module.check))
+    script = next(node.value for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        and node.value.startswith('import errno,json,os'))
+    line = next(line for line in script.splitlines() if line.startswith("checks['environment_empty']="))
+    environment = {'HOME': '/tmp/home', 'PATH': '/usr/bin:/bin', 'LC_CTYPE': 'C.UTF-8', **changes}
+    checks = {}
+    exec(line, {'os': SimpleNamespace(environ=environment), 'checks': checks})
+    assert checks['environment_empty'] is expected
+
+
 def test_missing_install_holds_without_spawning(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'BWRAP', tmp_path / 'missing-bwrap')
     def forbidden(*args, **kwargs):
