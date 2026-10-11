@@ -40,7 +40,7 @@ def main():
     output = validate_output_path(args.output_dir / 'result.json').parent
     output.mkdir(parents=True, exist_ok=False)
     for path in ('contracts/motion/src', 'contracts/skill/src', 'contracts/foundation',
-                 'middleware/core/gateway', 'middleware/core/services'):
+                 'middleware/core/gateway', 'middleware/core/services', 'middleware/perception'):
         sys.path.insert(0, str(REPOSITORY / path))
     track = load_track()
     from isaacsim import SimulationApp
@@ -83,7 +83,7 @@ def main():
             else:
                 configure_velocity_drive(drive)
         world = World(stage_units_in_meters=1., physics_dt=1 / 60., rendering_dt=1 / 60.)
-        world.scene.add_default_ground_plane(color=np.array([.3, .3, .3]))
+        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]))
         scene = track['scene']
         UsdGeom.Xform.Define(stage, '/World/Track')
         for i, wall in enumerate(scene.walls):
