@@ -1,4 +1,4 @@
-import {test} from 'node:test';
+﻿import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
@@ -316,3 +316,19 @@ test("soccer profile template uses measured metres and never creates driving lan
   assert.deepEqual(map.edges, []);
   assert.throws(() => soccerProfileMap({length_m: 2, width_m: 1, goal_width_m: 2}, "pitch"));
 });
+
+
+test('survey edits preserve legal IDs shared across categories', async () => {
+  const {editSurveyElement, removeSurveyElement} = await import('../../../ui/console/shared/site-map-edit.js');
+  const map = {schema: 'rosy.site_map/1', places: [{id: 'a', name: 'Place', kind: 'park', x: 0, y: 0}], edges: [],
+    facilities: [{id: 'a', name: 'Marker', kind: 'landmark', geometry: [[1, 1]], approaches: []}],
+    survey: {revision: 's1', reviewed: true}};
+  const edited = editSurveyElement(map, {id: 'a', name: 'Moved', kind: 'park', geometry: [[2, 2]]});
+  assert.deepEqual(edited.facilities, map.facilities);
+  const deleted = removeSurveyElement(map, 'a', 'facilities');
+  assert.deepEqual(deleted.places, map.places);
+  assert.deepEqual(deleted.facilities, []);
+  assert.throws(() => removeSurveyElement(map, 'a'), /category/);
+  assert.equal(map.survey.reviewed, true);
+});
+
