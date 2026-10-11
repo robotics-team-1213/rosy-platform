@@ -39,7 +39,7 @@ def test_connected_fork_is_observed_before_a_drive_branch_is_chosen():
     chosen, info = drivable_target(logits, CLASSES)
     assert info["reason"] == "ok" and info["branches"] == 2
     assert chosen[100, 170:231].all() and not chosen[100, 100:151].any()
-    assert np.all(~chosen | observed)
+    assert np.all(~(chosen & (labels == 5)) | observed)
 
 
 def test_another_disconnected_road_is_not_the_robot_region():
@@ -62,3 +62,8 @@ def test_visible_region_does_not_fill_occlusions_or_unobserved_crop():
     assert not observed[160:180, 145:175].any()
     assert not observed[190:195].any()
     assert observed[150, 120:201].all() and observed[200, 120:201].all()
+    logits = np.eye(len(CLASSES), dtype=np.float32)[labels].transpose(2, 0, 1)[None]
+    chosen, info = drivable_target(logits, CLASSES, ignore_top=128)
+    assert info["reason"] == "ok"
+    assert chosen[160:180, 145:175].all()
+    assert not chosen[:128].any()
