@@ -16,7 +16,7 @@ from incident_handoff_snapshot import snapshot_handoff
 from fleet.incidents.automation.contract import CaseBudget, CaseScope, sha256, summary_json
 from fleet.incidents.automation.ledger.receipt import ModelReceipt, checked_receipt
 from rosy.decision.deliberation import canonical, identifier
-from rosy.decision.deliberation.profiles import ModelProfile
+from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
 
 
 def feedback_json(value):
@@ -54,11 +54,9 @@ def closure_receipt(value, scope, budget, reason, state):
 def snapshot(path, subject_id, case_id, profiles, *, include_handoff=False):
     if type(include_handoff) is not bool: raise ValueError('EXPLICIT_HANDOFF_OPTION_REQUIRED')
     identifier(subject_id), identifier(case_id)
-    if type(profiles) not in (list, tuple) or len(profiles) != 2:
-        raise ValueError('FROZEN_PROFILE_PAIR_REQUIRED')
-    selected = tuple(ModelProfile(**p) for p in profiles)
-    if tuple(p.role for p in selected) != ('primary', 'reviewer') or selected[0].profile_id == selected[1].profile_id:
-        raise ValueError('INVALID_PROFILE_ROLES')
+    if type(profiles) not in (list, tuple) or len(profiles) not in (1, 2):
+        raise ValueError('FROZEN_PROFILE_MANIFEST_REQUIRED')
+    selected = incident_profiles(tuple(ModelProfile(**p) for p in profiles))
     manifest = json.loads(canonical([asdict(p) for p in selected]))
     profile_hash = hashlib.sha256(canonical(manifest).encode()).hexdigest()
     uri = Path(path).resolve().as_uri() + '?mode=ro'
@@ -134,7 +132,7 @@ def snapshot(path, subject_id, case_id, profiles, *, include_handoff=False):
                       outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE'
                       else 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else 'UNRESOLVED')
         if include_handoff: result['handoff'] = snapshot_handoff(conn, scope, budget, case)
-    exported = dict(schema=f'rosy.incident.model_feedback/{2 if include_handoff else 1}', case=result, label_state='UNREVIEWED',
+    exported = dict(schema=f'rosy.incident.model_feedback/{3 if len(selected) == 1 else 2 if include_handoff else 1}', case=result, label_state='UNREVIEWED',
                     field_accepted=False, digest=hashlib.sha256(feedback_json(result).encode()).hexdigest())
     feedback_json(exported)
     return exported
