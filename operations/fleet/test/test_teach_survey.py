@@ -195,6 +195,6 @@ def test_survey_http_start_stop_confirm_are_named_operator_actions_without_motio
             'speed_cap_mps': 0.2, 'expected_revision': draft['revision']})
         assert saved.status_code == 200 and saved.json()['draft']['map']['edges'][0]['evidence']['source'] == 'odometry'
     assert store.active_view() is None and poses.arbitrated_pose('r1').state == 'UNKNOWN'
-    assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'line_follow_mode', 'swarm_arm'}]
+    assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}
     assert {('POST', f'/api/fleet/teach/{action}', 200) for action in ('start', 'stop', 'confirm')} <= {
         (row['method'], row['path'], row['status_code']) for row in tasks.store.api_audit()}

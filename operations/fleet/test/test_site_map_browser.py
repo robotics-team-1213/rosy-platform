@@ -135,7 +135,7 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
     assert body['edges'][0]['polyline'] == [[10, 20], [10, 20.2]]
     assert body['edges'][0]['evidence']['source'] == 'odometry'
     assert body['survey']['reviewed'] is False and store.active_view() is None
-    assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'line_follow_mode', 'swarm_arm'}]
+    assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
