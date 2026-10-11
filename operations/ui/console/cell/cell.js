@@ -47,6 +47,7 @@ const revisions = new Map();
 let previewRefs = null;
 let role = null;
 let busy = false;
+let cellServiceUnavailable = false;
 let job = null;
 let jobGeneration = null;
 let layoutData = null;
@@ -65,7 +66,7 @@ function invalidate() {
   $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); $('layout-preview').hidden = true; refreshControls();
 }
 function clearSession() {
-  role = null; clearJobSnapshot(); invalidate();
+  role = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate();
   revisions.clear();
   for (const kind of ['recipe', 'cell']) {
     $(kind + '-revision').setAttribute('state', 'empty');
@@ -88,10 +89,16 @@ function refreshControls() {
     control.setAttribute('reason', busy ? '요청 처리 중' : '');
   }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
-    $(id).disabled = busy;
-    $(id).setAttribute('reason', busy ? '요청 처리 중' : '');
+    const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
+    $(id).disabled = busy || unavailable;
+    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? 'Cell 서비스 구성 확인 필요' : '');
   }
   for (const id of commands) {
+    if (cellServiceUnavailable) {
+      $(id).disabled = true;
+      $(id).setAttribute('reason', 'Cell 서비스 구성 확인 필요');
+      continue;
+    }
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
@@ -115,6 +122,7 @@ async function action(fn) {
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
+    if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
     if (error.status === 401 || error.status === 403) clearSession();
     // A 403 here is one Cell action refused, not a lost session: the words change, the E-stop stays live.
     if (error.status === 403) showSignedOut({fold: false, refused: false});
@@ -147,7 +155,7 @@ async function list() {
   status.setAttribute('state', 'pending');
   status.textContent = '저장된 문서를 확인하는 중입니다.';
   let result;
-  try { result = await api('/api/fleet/cell-app/documents'); }
+  try { result = await api('/api/fleet/cell-app/documents'); cellServiceUnavailable = false; }
   catch (error) {
     status.setAttribute('state', 'error');
     status.textContent = error.code === 'CELL_APP_UNCONFIGURED'
