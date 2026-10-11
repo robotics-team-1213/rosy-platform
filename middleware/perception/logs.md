@@ -1441,3 +1441,9 @@
 - 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 원격 Perception 3028 passed, 112 skipped, 62 subtests passed, 0 NEW; 고립 설치 시험 통과.
 - gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
 - 결정: D-649
+
+## 2026-10-11 · 9fc0a88c9 · source test import precedence
+
+- 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
+- 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.
