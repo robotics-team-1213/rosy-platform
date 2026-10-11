@@ -710,3 +710,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
 - 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.
+
+## D-672 — Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임
+
+- 상태: Accepted (2026-10-12).
+- 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
+- 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
