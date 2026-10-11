@@ -141,10 +141,14 @@ def main():
             owner.stop()
             since = None
             begin = world.current_time
+            samples = []
             while world.current_time - begin < 2.:
                 cmd_vel_cycle(command=owner, power=power, send=send)
                 step()
                 pose = read_pose()
+                samples.append(dict(sim_s=world.current_time, pose=pose,
+                                    z_m=float(robot.get_world_pose()[0][2]),
+                                    joints=list(map(float, robot.get_joint_velocities()))))
                 if pose[3] < .005 and abs(pose[4]) < .02:
                     if since is None:
                         since = world.current_time
@@ -153,7 +157,8 @@ def main():
                                     settle_s=world.current_time - begin)
                 else:
                     since = None
-            raise RuntimeError('actual stop not confirmed; reset refused')
+            (output / f'stop-failed-{frame}.json').write_text(json.dumps(samples, indent=2))
+            raise RuntimeError('actual stop not confirmed; reset refused; last readback=' + repr(samples[-1]))
 
         stop_robot = physical_stop
         summary['initial_stop'] = physical_stop()
