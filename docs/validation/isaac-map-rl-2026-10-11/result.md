@@ -5,7 +5,7 @@ D-638의 한 대 native CPU 진단에서 기존 CORE·Drive로 학습하고 고�
 ## 실행한 source와 지도
 
 - 전체 맵 R6: `dc25401e6141a365dfee918ca1ecc97254a1ffa5`, 시작 직전 main `19e1c7eef` 포함, source 7,014파일 전후 SHA-256 일치.
-- 종료 수리 R7: `e0e5b38d788d7dbbed73900db0b986e236673838`, source 7,014파일 전후 일치. 전체 맵 재학습이 아닌 별도 URDF/world 종료 생명주기 검사다.
+- 종료 수리 R7: commit `e0e5b38d788d7dbbed73900db0b986e236673838`, source 7,014파일 전후 일치. 전체 맵 재학습이 아닌 별도 URDF/world 종료 생명주기 검사다.
 - 전체 재시험 R8: commit `57ad87993fa1da4daef360224774dda6e11fb414`, source 7,050파일 전후 일치. main `33729c514` 포함, 종료 수리 뒤 전체 baseline·학습·고정 평가를 다시 실행했다.
 - 네 방향 녹화 R9: commit `b6a8d0d2e834d31a5df407ec54a3cf5baeda1837`, source 7,053파일 전후 일치. R8 정책을 한 번 읽고 검증한 뒤 평가만 실행했다. 실행 당시 source SHA는 이후 병합 HEAD로 바꾸지 않는다.
 - 이후 main `d4988bffb`의 D-637 구조 변경을 topic에 통합했다. R6 이후의 GUI 종료 수리를 제외하고 CORE command·최종 port·Drive·Isaac·지도 실행 파일은 그대로다. 이전 실행의 source SHA를 이후 HEAD로 바꿔 기록하지 않는다.
@@ -66,3 +66,5 @@ R6 관련 CORE/Drive/Isaac/harness 원격 회귀 exit 0/NEW 0. 종료 수리 후
 Raw evidence: 관리된 `X:\DevTemp\projects\rosy-platform\2026-10-11--145859--isaac-map-rl--1c5be0\`의 `artifacts/r5`, `artifacts/r6`, `artifacts/r7`, `artifacts/r8`, `artifacts/r9-directions/run-directions`와 `logs/` 및 모델 PC의 작업 전용 scratch. 원시 로그/trace/정책/USD는 source에 넣지 않았다.
 
 D-606 Isaac Lab 준비, 전체 ROS-SIM 회전 추종, 센서 기반 localization·선/벽 인식, Nav2, 두 대 Fleet·신호 준수와 실물 수용은 별도 미확인/HOLD다. 사용자가 main 병합·원격 push를 요청했으며 최종 검사 뒤 수행한다. 대한민국 신호·횡단보도·두 대 Fleet는 별도 후속 목표이며 이번 네 방향 한 대 영상으로 통과시키지 않는다.
+
+최종 착지 검사에서 이번 진단의 CORE/Drive 직접 import가 learning root의 D-427 경계를 위반한 것을 확인했다. 기존 여러 package를 조합하는 도구 소유인 `tools/sim/isaac/`로 task·runner·recorder를 옮기고 helper/test/CLI 참조를 갱신했다. import 숨김·의존 규칙 whitelist 또는 운영 코드 변경은 없다. 경로 이동 이전 R8/R9의 실행 SHA·raw evidence는 그대로 보존한다. legacy-path scan의 문자열 결합 오탐은 tuple 순서만 바꿨고 문서 commit/ledger SHA256 표기를 명확하게 했다.

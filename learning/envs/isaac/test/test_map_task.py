@@ -7,7 +7,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 repo = Path(__file__).resolve().parents[4]
-for path in ('contracts/motion/src', 'contracts/skill/src', 'contracts/foundation',
+sys.path.insert(0, str(repo / 'tools/sim/isaac'))
+for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
              'middleware/core/services', 'middleware/core/gateway', 'middleware/perception'):
     sys.path.insert(0, str(repo / path))
 from map_task import MapTask, QPolicy, SimulationOwner, load_track

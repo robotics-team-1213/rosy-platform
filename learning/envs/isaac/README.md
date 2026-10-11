@@ -73,7 +73,7 @@ The Pinky URDF places wheel joint origins at ±0.04055 m, a geometric center sep
 모델 PC의 격리 SDK Python에서 준비한 URDF와 새 출력 디렉터리를 지정한다. 운영 `ROSY_CONFIG`/`ROSY_NAMESPACE` 환경은 거부한다. 실행 전후 source 파일 해시, 자원 여유와 소유 작업의 종료를 확인한다.
 
 ```bash
-"$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_map_rl.py" \
+"$ISAAC_PYTHON" "$ROSY_REPO/tools/sim/isaac/run_map_rl.py" \
   --urdf /scratch/rosy-isaac/rosy.urdf \
   --output-dir /scratch/rosy-isaac/map-rl-new-run \
   --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" --train-episodes 6
@@ -86,7 +86,7 @@ baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서
 기존 실행의 policy.json을 고정해서 시작 경로 방향 대비 0/+90/180/-90도에서 각각 전체 경로를 평가한다. 재학습 없이 기존 CORE·Drive와 물리 stop/reset을 사용한다. 저장 정책의 gain·state·유한 Q·학습 횟수를 검증하며 동일 입력 bytes를 보관한다.
 
 ```bash
-"$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_map_rl.py" \
+"$ISAAC_PYTHON" "$ROSY_REPO/tools/sim/isaac/run_map_rl.py" \
   --urdf /scratch/rosy-isaac/rosy.urdf \
   --output-dir /scratch/rosy-isaac/directions-new-run \
   --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" \

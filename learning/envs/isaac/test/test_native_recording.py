@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'tools/sim/isaac'))
 from map_task import QPolicy
 
 

@@ -10,7 +10,7 @@
 
 ## 구현·증거 범위
 
-- 기준 main 병합: `f821d27dc5de57c55c81c122d0303f6cff4dd7ae`; 착지 449 passed, 1 skipped, 0 NEW. push 없음.
+- 기준 main 병합 commit `f821d27dc5de57c55c81c122d0303f6cff4dd7ae`; 착지 449 passed, 1 skipped, 0 NEW. push 없음.
 - 실행 브랜치: `feat/isaac-map-rl`. 최신 main 포함 여부를 검사한다.
 - 지도 원본: `map_v2_fleet/260919 MAP FILE.STL`, SHA-256 `cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b`.
 - 변형은 기존 `training_scene`과 `training-curved/lane_graph.yaml`을 함께 사용한다. S자 변형·흰색 0.30m 충돌 벽·시각 전용 차선을 보존한다.
@@ -34,7 +34,7 @@ ROS 서버·센서 없는 진단의 별도 실행은 MemoryMax 4GiB, MemorySwapM
 
 ## 3. Isaac 5.1 바닥 API 불일치
 
-실행 소스 `e8dba4892eb8b50dd10ab88e71274ab9ea38e750`의 6,993개 파일 해시를 실행 전후 확인했다. native SDK는 시작했지만 `Scene.add_default_ground_plane(color=...)`가 `TypeError`로 실패했고 SDK exit 1이었다. 학습·이동 성공은 없었다.
+실행 source commit `e8dba4892eb8b50dd10ab88e71274ab9ea38e750`의 6,993개 파일 해시를 실행 전후 확인했다. native SDK는 시작했지만 `Scene.add_default_ground_plane(color=...)`가 `TypeError`로 실패했고 SDK exit 1이었다. 학습·이동 성공은 없었다.
 
 설치된 SDK의 정의를 읽어 `add_default_ground_plane`에는 color 인자가 없고 `add_ground_plane`에는 있음을 확인했다. 외부 기본 바닥 asset을 요구하지 않는 `add_ground_plane(size=10., color=...)`로 변경했다. 추정에 의한 SDK 버전 교체는 하지 않았다.
 
@@ -46,9 +46,9 @@ ROS 서버·센서 없는 진단의 별도 실행은 MemoryMax 4GiB, MemorySwapM
 
 ## 5. 첫 물리 정지 실패 — 조사 중
 
-`6bc91f8e36caabe43ec2bb603530d79d760d3740`에서 실제 지도·차선·벽·로봇을 불러왔지만 최초 2초 정지 확인이 실패했다. stop을 확인하지 못했으므로 reset과 학습은 시작하지 않았고 exit 1로 끝났다.
+commit `6bc91f8e36caabe43ec2bb603530d79d760d3740`에서 실제 지도·차선·벽·로봇을 불러왔지만 최초 2초 정지 확인이 실패했다. stop을 확인하지 못했으므로 reset과 학습은 시작하지 않았고 exit 1로 끝났다.
 
-원인을 찾기 위해 `253e60bfa8279d3d0f5ccb960c4351975eb136e6`에서 매 물리 step의 차체 pose/속도, 높이, joint 속도를 저장했다. 최초 실패 마지막 관측은 sim time 2.0333초, v=0.0049663m/s, w=0.0696117rad/s, z=0.00000249m다. joint 속도는 약 `[0.731, -0.795, -0.230, 0.439] rad/s`로 0 명령에도 접촉 진동이 남았다. 값 하나만 보고 정지 기준을 넓히지 않는다.
+원인을 찾기 위해 commit `253e60bfa8279d3d0f5ccb960c4351975eb136e6`에서 매 물리 step의 차체 pose/속도, 높이, joint 속도를 저장했다. 최초 실패 마지막 관측은 sim time 2.0333초, v=0.0049663m/s, w=0.0696117rad/s, z=0.00000249m다. joint 속도는 약 `[0.731, -0.795, -0.230, 0.439] rad/s`로 0 명령에도 접촉 진동이 남았다. 값 하나만 보고 정지 기준을 넓히지 않는다.
 
 현재 가설: 새 바닥 API의 기본 restitution 0.8과 초기 접촉·solver가 기존 바닥 runner와 다른 진동을 만들 수 있다. 아직 확인된 원인이 아니다. 다음 검사는 전체 정지 trace의 실제 pose 변화·차체 속도·wheel targets를 비교하고, 기존 바닥의 material/physics 설정을 확인한 뒤 한 변수씩 수정한다.
 
