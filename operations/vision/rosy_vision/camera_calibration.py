@@ -248,7 +248,10 @@ def fit_floor(candidate, pixels, metres, check_pixels, check_metres, *, map_id, 
             or any(np.any(np.all(p == point, axis=1)) for point in cp)
             or any(np.any(np.all(m == point, axis=1)) for point in cm)):
         raise ValueError("independent floor check correspondences required")
-    h, inliers = cv2.findHomography(p, m, cv2.USAC_MAGSAC, .02)
+    # MAGSAC's noise scoring is poorly scaled for sub-unit metre coordinates.
+    h, inliers = cv2.findHomography(p, m * 1000, cv2.USAC_MAGSAC, 20.)
+    if h is not None:
+        h[:2] /= 1000
     if h is None or not np.isfinite(h).all() or abs(np.linalg.det(h)) < 1e-12 or int(inliers.sum()) < 4:
         raise ValueError("floor registration failed")
     accepted = p[inliers.reshape(-1).astype(bool)]
