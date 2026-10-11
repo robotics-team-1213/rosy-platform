@@ -2663,3 +2663,9 @@
 - Change: User-authorized loopback Ollama service with shared tested model digest, f16 KV cache and bounded single-model concurrency; model-PC relay retired after local GPU check.
 - Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
 - Gate: SOURCE; deployment and model accuracy are separate evidence.
+
+## 2026-10-12 · c21b8bea0c · fix: deliberation host admission
+
+- 변경: root 소유 전용 bwrap/AppArmor 설치, 단독 system 계정의 설치·preflight 공통 검증, 실제 자식 종료·cgroup readback, 수집된 scope 정리 확인.
+- 증거: 원격 회귀·구조 검사 66 passed, NEW 0. `docs/validation/deliberation-host-admission-2026-10-12/result.md`.
+- gate 변화: SOURCE 검증. 양쪽 SSH 계정 sudo가 암호를 요구하여 관리자 설치·HOST PASS는 미확인. 운영 제공자·장치·Discord 활성화는 수행하지 않았다.
