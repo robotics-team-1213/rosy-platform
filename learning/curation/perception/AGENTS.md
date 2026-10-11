@@ -8,6 +8,8 @@
 
 ## Purpose
 
+D-663 road review uses explicit semantic bindings: `road_surface/1` is not clipped to ego-lane edges by generic draft merge/import/approval. Legacy/current-region lane restrictions remain. Own-road lane clipping and Qwen completion refuse whole-road inputs before processing; draft state remains pending until explicit review.
+
 Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot, cut frames, label them (by hand through CVAT or automatically from LiDAR geometry), build a session-split dataset and publish it into the store for the trainer. Developer-side only; outputs live in `data/perception/` (gitignored) and `data/teleop/learning/`.
 
 ## Key Files
