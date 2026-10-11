@@ -82,7 +82,10 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     page.locator('#element-load').click()
     page.locator('#element-name').fill('Reviewed signal name')
     page.locator('#element-save').click()
-    page.locator('#save-draft').click()
+    with page.expect_response(lambda response: response.request.method == 'PUT'
+                             and response.url.endswith('/api/fleet/site-map/draft')) as saved_response:
+        page.locator('#save-draft').click()
+    assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     assert store.draft_view()['map']['facilities'][0]['name'] == 'Reviewed signal name'
     assert store.draft_view()['map']['facilities'][0]['approaches'][0]['stop_s_m'] == .8
@@ -762,7 +765,8 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     expect(page.locator("#estop")).to_be_enabled()
     assert pending
     pending[0].abort()
-    expect(page.locator("#notice")).to_contain_text("연결이 끊겼습니다")
+    expect(page.locator("#notice")).to_contain_text("관제 연결을 확인하지 못했습니다")
+    expect(page.locator("#notice")).to_contain_text("현재 상태를 다시 조회하세요")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-disconnected-{width}x{height}.png"), full_page=True)
@@ -886,7 +890,7 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
-def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, width, height):
+def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site, width, height):
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap
 
@@ -908,7 +912,12 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
     open_token_access(page)
     page.locator("#token-save").click()
-    expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    expect(page.locator("#notice")).to_contain_text("보존")
+    expect(page.locator("#draft-status")).to_contain_text("저장 안 된 초안")
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator("#place-name")).to_have_value("북서 정차")
+    page.locator("#save-draft").click()
+    expect(page.locator("#notice")).to_contain_text("변경 내용을 기록한 뒤 다시 접속")
 
 
 def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):
@@ -1167,3 +1176,29 @@ def test_camera_connections_require_review_before_extending_the_saved_map(page_s
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def test_reconnect_preserves_unapplied_and_applied_map_edits(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#site-map-svg [data-place="NW"]')).to_be_visible()
+    page.locator('#map-source').select_option('draft')
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    page.locator('#place-name').fill('Unsaved local name')
+    open_token_access(page)
+    page.locator('#token-save').click()
+    expect(page.locator('#notice')).to_contain_text('보존')
+    expect(page.locator('#place-name')).to_have_value('Unsaved local name')
+    page.locator('#apply-edit').click()
+    open_token_access(page)
+    page.locator('#token-save').click()
+    expect(page.locator('#notice')).to_contain_text('보존')
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator('#place-name')).to_have_value('Unsaved local name')
+    assert store.draft_view()['map'] is None or all(
+        place['name'] != 'Unsaved local name' for place in store.draft_view()['map']['places'])
+    assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'estop'}]
