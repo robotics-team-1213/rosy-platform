@@ -1190,8 +1190,12 @@ SIZE_VERDICTS = {
         "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
     "perception/vision/perception/learned": (
-        2272,
-        "accept: independently re-judged at 2272 on 2026-10-10 by snapshot_review: drivable paint and floor gating remain in the model runner/manifest owner, including the gated fallback; steering remains the separate drivable unit and CORE retains commands. Re-judge after +150. Previous verdict: "
+        2435,
+        "accept: independently re-judged at 2435 on 2026-10-12 by review_fixed_fitness at a34e14dde6 "
+        "(docs/plans/2026-10-12-road-observation-primitive.md): the 16 files remain model validation, "
+        "inference and observation evidence; the observer is 44 lines and largest files are 364 lines. "
+        "Steering remains the separate drivable unit; no transport or command authority is added. "
+        "Re-judge after +150. Previous verdict: "
         "accept: the learned-model backend (manifest, runner, paint worker, drivable way and steering, "
         "shadow, slots) is its own size unit inside the P1a perception unit, by the 2026-10-10 addendum "
         "of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Judged at 2270 on 2026-10-10 "

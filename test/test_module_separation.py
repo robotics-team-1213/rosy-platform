@@ -258,6 +258,8 @@ def test_control_imports_no_core_code():
     ``core_common.calibration_store`` (calibration resolution shared with
     bringup and core, D-397), ``core_common.robot_body`` (the one URDF body
     every near/stop check shares with CORE and the calibration tools, D-424).
+    D-667/D-670 also permit the exact ``core_common.observation`` module:
+    immutable evidence references and pure validity checks.
     Runtime packages stay banned outright.
     """
     runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
@@ -281,7 +283,8 @@ def test_control_imports_no_core_code():
             if top in runtime_tops:
                 rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module}")
-            elif top == "core_common" and not module.startswith(allowed_contracts):
+            elif top == "core_common" and not (module.startswith(allowed_contracts)
+                                               or module == "core_common.observation"):
                 rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module} (contract surface only, D-155 refinement)")
     assert not violations, "control must not depend on core:\n" + "\n".join(violations)
