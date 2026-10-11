@@ -122,6 +122,21 @@ def test_unknown_cost_or_overrun_is_recorded_and_holds_case(tmp_path, cost, expe
     if cost is not None: assert s.case(scope())['spent_micros'] == 200000
 
 
+@pytest.mark.parametrize('cost,spent,reserved', [(.1, 100000, 0), (.05, 50000, 50000), (.2, 200000, 0)])
+def test_unknown_outcome_keeps_known_billing_and_conservative_unused_reservation(tmp_path, cost, spent, reserved):
+    s = store(tmp_path)
+    s.begin_case(scope(), budget())
+    reserve(s)
+    s.mark_submitting(scope(), 'a1', worker_id='w1')
+    result = s.complete(scope(), 'a1', worker_id='w1', state='UNKNOWN',
+                        actual_cost_usd=cost, summary={'reason': 'OUTCOME_UNKNOWN'})
+    row = s.case(scope())
+    assert result['state'] == 'UNKNOWN' and result['actual_micros'] == spent
+    assert (row['spent_micros'], row['reserved_micros'], row['state']) == (spent, reserved, 'HOLD')
+    assert s.attempt(scope(), 'a1')['actual_micros'] == spent
+    with pytest.raises(ValueError): reserve(s, 'a2', cost=0)
+
+
 def test_deadline_blocks_new_effect_but_accepts_late_receipt(tmp_path):
     s = store(tmp_path)
     s.begin_case(scope(), budget())
