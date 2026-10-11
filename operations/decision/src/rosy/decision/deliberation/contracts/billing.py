@@ -13,7 +13,7 @@ def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
 def usd(value):
-    if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1_000_000:
+    if type(value) not in (int, float) or not 0 <= value <= 1_000_000 or not math.isfinite(value):
         raise ValueError('INVALID_COST_EVIDENCE_AMOUNT')
     return value
 
