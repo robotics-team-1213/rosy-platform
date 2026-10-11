@@ -3,7 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
-import { capabilityReason, chooseLeader, formationCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
+import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);
 const shapeLabel = (shape) => enumLabel(FORMATION_SHAPE_LABEL, shape);
@@ -132,7 +132,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     if (!view.formation?.active) return PATH_AFTER;
     const robot = view.robots.find((row) => row.robot_id === view.formation.leader);
     const path = leaderPathKind(robot, pathContext());
-    return path.reason || formationCommandReason(view, robot?.robot_id, path.kind);
+    return path.reason || motionCommandReason(view, robot?.robot_id, path.kind);
   }
 
   function setPath() {

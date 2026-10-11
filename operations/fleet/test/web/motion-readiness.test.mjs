@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityReason, chooseConvoyLeader, chooseLeader, formationCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
+  capabilityReason, chooseConvoyLeader, chooseLeader, motionCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
 } from '../../../ui/console/motion-readiness.js';
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
@@ -31,13 +31,15 @@ test('formation checks the selected leader and followers independently', () => {
 
 test('formation keeps leader goals open but refuses member trips and follower goals', () => {
   const view = {formation: {active: true, leader: 'one', assignment: {two: 0}}};
-  assert.equal(formationCommandReason(view, 'one', 'goal'), '');
-  assert.match(formationCommandReason(view, 'one', 'trip'), /대형.*해제/);
-  assert.match(formationCommandReason(view, 'two', 'goal'), /팔로워.*리더/);
-  assert.match(formationCommandReason(view, 'two', 'trip'), /대형.*해제/);
-  assert.equal(formationCommandReason(view, 'outside', 'trip'), '');
-  assert.equal(formationCommandReason({formation: {...view.formation, active: false}}, 'two', 'goal'), '');
-  assert.match(formationCommandReason({...view, formationUnavailable: true}, 'one', 'goal'), /확인 불가/);
+  assert.equal(motionCommandReason(view, 'one', 'goal'), '');
+  assert.match(motionCommandReason(view, 'one', 'trip'), /대형.*해제/);
+  assert.match(motionCommandReason(view, 'two', 'goal'), /팔로워.*리더/);
+  assert.match(motionCommandReason(view, 'two', 'trip'), /대형.*해제/);
+  assert.equal(motionCommandReason(view, 'outside', 'trip'), '');
+  assert.equal(motionCommandReason({formation: {...view.formation, active: false}}, 'two', 'goal'), '');
+  assert.match(motionCommandReason({...view, formationUnavailable: true}, 'one', 'goal'), /확인 불가/);
+  assert.match(motionCommandReason({trafficTrips: [{robot_id: 'one'}]}, 'one', 'goal'), /운행.*취소/);
+  assert.equal(motionCommandReason({trafficTrips: [{robot_id: 'one'}]}, 'two', 'goal'), '');
 });
 
 function lead(id, { online = true, can = true, x, y, yaw, frame = 'map', estop = false, line = null, goal = false } = {}) {

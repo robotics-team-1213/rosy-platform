@@ -28,7 +28,9 @@ export function formationReason(robots, leader, members) {
   return '';
 }
 
-export function formationCommandReason(view, robotId, command) {
+export function motionCommandReason(view, robotId, command) {
+  if (command === 'goal' && (view.trafficTrips || []).some(trip => trip.robot_id === robotId))
+    return '운행 진행 중 · 운행 취소 뒤 목표를 배정하세요';
   if (view.formationUnavailable) return '대형 상태 확인 불가';
   const formation = view.formation;
   if (!formation?.active) return '';
