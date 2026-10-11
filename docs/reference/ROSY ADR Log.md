@@ -658,6 +658,7 @@
 | D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 | Accepted (2026-10-11) |
 | D-666 | 고정 도로면/현재 구역 정답과 관측 입력의 독립 재생 실행 계약 | Accepted (2026-10-11) |
 | D-667 | 오프라인 인지 평가의 공통 관측 계약 | Accepted (2026-10-12) |
+| D-672 | Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임 | Accepted (2026-10-12) |
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
@@ -716,3 +717,8 @@
 - 상태: Accepted (source only, 2026-10-12).
 - 결정: Fleet 소유 기명 접수 원장과 Console owner read; 실행·모델·장치 권한 없음.
 - 계약: [ADR](../adr/D-671-discord-named-request-intake.md). Gateway/token/runtime 수신은 후속 gate.
+## D-672 — Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임
+
+- 상태: Accepted (2026-10-12).
+- 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
+- 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
