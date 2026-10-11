@@ -59,7 +59,7 @@ ui-topbar {
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
 .fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
-.fleet-link-status ui-tag { flex: none; white-space: nowrap; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: none; white-space: nowrap; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-safety { grid-area: safety; }
