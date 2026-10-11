@@ -15,7 +15,8 @@ from test_judgment_profiles import profile, adapter
 from test_model_judgment import payload
 
 
-def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4, provider_hook=None):
+def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4,
+          provider_hook=None, handoff_hook=None):
     now, seen, handoffs = [101.0], [], []
     log = LineStuckAnswerLog(tmp_path / 'fleet.db')
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
@@ -43,7 +44,9 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observ
     store = IncidentCaseStore(log.path, clock=lambda: now[0])
     def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, budget_observations, 0,
                                        tuple((p.role, p.max_calls) for p in profiles))
-    async def handoff(scope, summary): handoffs.append((scope, summary))
+    async def handoff(scope, summary):
+        handoffs.append((scope, summary))
+        return True if handoff_hook is None else await handoff_hook(scope, summary)
     worker = IncidentCaseWorker(store, IncidentObservationPort(board, human_owned=lambda *_: human[0], clock=lambda: now[0]),
         board, profiles=profiles, providers=tuple(providers), admission=lambda *_: admitted,
         current_profiles=lambda: current[0], human_owned=lambda *_: human[0], budget=budget,
@@ -248,6 +251,40 @@ def test_restart_without_read_intent_admission_cannot_skip_observation_budget(tm
         assert store.case(scope)['state'] == 'HOLD'
         assert handoffs[0][1]['reason'] == 'READ_CONTINUATION_NOT_ADMITTED'
         await replacement.aclose()
+    asyncio.run(run())
+
+
+def test_unknown_final_has_durable_revision_and_retries_queue_failure_without_model_calls(tmp_path):
+    async def run():
+        accept = [False]
+        async def queue(*_): return accept[0]
+        now, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path, change='unknown', handoff_hook=queue)
+        worker.feed(poll()); await settled(worker)
+        scope = handoffs[0][0]
+        assert handoffs[0][1]['observation_revision'] == seen[0][0].generation
+        assert store.pending_handoffs() == (scope,)
+        accept[0] = True; now[0] += 1
+        worker.feed(poll(2)); await settled(worker)
+        assert len(seen) == 1 and len(handoffs) == 2
+        assert store.pending_handoffs() == ()
+        worker.feed(poll(2)); await settled(worker)
+        assert len(handoffs) == 2
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_old_policy_scope_cannot_invoke_new_policy_provider(tmp_path):
+    from fleet.incidents.automation.contract import CaseScope
+    async def run():
+        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        snapshot = poll()
+        scope = CaseScope('pinky', 'lane-1', 'core', worker.profile_sha256, 'old-policy')
+        store.begin_case(scope, worker.budget(scope))
+        worker.feed(snapshot); await settled(worker)
+        assert seen == [] and store.case(scope)['state'] == 'HOLD'
+        assert handoffs[0][1]['reason'] == 'POLICY_CHANGED'
+        assert store.case(scope)['started_at'] == 101
+        await worker.aclose()
     asyncio.run(run())
 
 
