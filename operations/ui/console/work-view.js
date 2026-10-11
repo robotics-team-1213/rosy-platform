@@ -2,12 +2,12 @@
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
-  CANCELED: "취소", EXPIRED: "만료"};
+  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
 
-export function createWorkView({scope, call, el}) {
+export function createWorkView({scope, call, el, channelRequestView}) {
   const active = new URLSearchParams(location.search).get("view") === "work";
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
@@ -21,8 +21,11 @@ export function createWorkView({scope, call, el}) {
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
+    channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     list.replaceChildren(); detail.replaceChildren();
+    el("channel-requests").replaceChildren();
+    el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
     el("work-evidence").textContent = "작업을 선택하세요.";
   }
@@ -90,6 +93,7 @@ export function createWorkView({scope, call, el}) {
       const result = await call("/api/fleet/work"); life.check();
       const previous = rows.find(row => workKey(row) === selected);
       rows = result.rows;
+      channelRequestView.setSources(rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;
@@ -102,9 +106,36 @@ export function createWorkView({scope, call, el}) {
       if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);
       paint();
+      await refreshRequests(life);
+      await channelRequestView.refresh();
     } catch (error) {
       if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.");
     } finally { inFlight = false; }
+  }
+  async function refreshRequests(life) {
+    const requests = el("channel-requests"), state = el("channel-requests-state");
+    try {
+      const result = await call("/api/fleet/channel-requests"); life.check();
+      requests.replaceChildren();
+      for (const row of result.rows) {
+        const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
+        text.textContent = row.content;
+        info.className = "hint";
+        info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
+        item.append(text, info); requests.append(item);
+        const button = document.createElement("ui-button");
+        button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
+        button.textContent = "요청 검토";
+        button.addEventListener("click", () => channelRequestView.select(row)); item.append(button);
+      }
+      state.textContent = `${result.rows.length}건 · 접수된 원문입니다. 실행 승인은 별도로 확인합니다.`;
+    } catch (error) {
+      if (!life.current()) return;
+      requests.replaceChildren();
+      channelRequestView.reset();
+      state.textContent = error.status === 404 ? "대화 요청 접수가 설정되지 않았습니다." :
+        error.status === 401 || error.status === 403 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
+    }
   }
   scope.listen(el("work-filter"), "change", paint);
   scope.listen(el("work-refresh"), "click", refresh);

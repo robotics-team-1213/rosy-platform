@@ -34,6 +34,7 @@ SHARED = {
 OWN = {
     "console.js": {
         "work-view.js",  # D-664: common read view; execution stays with each owner
+        "channel-request-view.js",  # D-680: named review and existing navigation submission
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
