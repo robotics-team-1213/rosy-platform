@@ -692,6 +692,22 @@ class MissionStore:
             connection.commit()
         return self._row(updated)
 
+    def work_summaries(self, *, principal_id: str, limit: int) -> list[dict]:
+        """Match the owner scope of Mission readback without exposing plans."""
+        if not 1 <= limit <= 101:
+            raise ValueError("work summary limit must be 1..101")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT m.mission_id AS source_id, m.action_kind, m.status, "
+                "m.instance_id AS device_id, m.workcell_id, m.reason, m.updated_at "
+                "FROM fleet_missions m WHERE m.principal_id=? AND EXISTS "
+                "(SELECT 1 FROM fleet_proposals p WHERE p.proposal_id=m.mission_id "
+                "AND p.principal_id=? AND p.state='RESOLVED') "
+                "ORDER BY m.updated_at DESC, m.mission_id DESC LIMIT ?",
+                (principal_id, principal_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def get_mission(self, mission_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as connection:
             row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",

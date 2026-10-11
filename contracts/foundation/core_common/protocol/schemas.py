@@ -649,6 +649,31 @@ class MissionProgressEventPage(BaseModel):
     events: list[MissionProgressEvent] = Field(max_length=200)
 
 
+class FleetWorkSummary(BaseModel):
+    """Display projection only; source status is not a common execution state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["task", "mission"]
+    source_id: str = Field(min_length=1)
+    action_kind: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    device_id: str = Field(min_length=1)
+    workcell_id: str | None = None
+    reason: str | None = None
+    updated_at: str
+
+
+class FleetWorkOverview(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    observed_at: str
+    rows: list[FleetWorkSummary] = Field(max_length=200)
+    tasks_available: bool
+    missions_available: bool
+    truncated_sources: list[Literal["task", "mission"]] = Field(max_length=2)
+
+
 class MissionProgressReadResponse(BaseModel):
     """Owner-scoped Mission record, bounded recent history, and snapshot."""
 

@@ -81,4 +81,12 @@ Fleet의 사이트 작업 아래 D-55의 로컬 복합 transaction이 필요하�
 
 ## 이번 검토의 경계
 
+## 첫 구현 · 공통 읽기 화면
+
+사용자의 2026-10-11 구현 요청에 따라 단계 1–2의 첫 단위를 구현한다. 브랜치는 `feat/mixed-work-read`이며 기존 단계 3–5의 실행/장치 수용은 유지한다. `/console?view=work`에서 기존 네 문서의 탐색을 통해 같은 작업 화면에 들어간다. 중심은 업무별 목록, 오른쪽은 담당 장치·공간·실행 owner·상태·사유·갱신 시각·상세 read 근거다. raw 원장 단어는 tooltip/identity에 보존하고 operator 본문은 한국어 상태를 표시한다. Cell 설정은 팔 공정 설정 링크로 구별한다.
+
+기존 목록 API가 없으므로 작은 bounded `GET /api/fleet/work` projection을 추가한다. typed schema/API Reference/SRS `UI-WORK-001`을 함께 갱신하며 Mission의 principal 범위를 넓히지 않는다. 원장별 제한과 절단 여부·미설정을 표시한다. 로그인 세대 변경·실패 시 이전 목록을 지우며 선택한 작업의 원장 revision이 바뀌면 이전 상세 결과를 재사용하지 않는다.
+
+검증은 Task/Mission ID 충돌·principal 격리·limit/auth·원장 불변 API 시험, 상태 의미 Node 시험, desktop/mobile × viewer/operator Chromium 선택/필터/조회 실패 및 가로 넘침 시험을 포함한다. 검증 전 성공 수나 배포를 기록하지 않는다.
+
 소스와 계약을 비교해 분리된 실행 흐름을 확인했다. 이 문서는 현재 UI를 바꾸거나 기존 SQL 제한을 제거하지 않는다. API 테스트 통과, 두 장치 협업 실행, 실물 로봇암의 안전 수용을 주장하지 않는다. 다음 구현의 우선순위는 공통 읽기 화면과 운반→고정 팔 인계 계약이며 범용 TaskGraph 엔진을 선행 구축하지 않는다.

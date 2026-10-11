@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
+import { createWorkView } from "./work-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
@@ -36,12 +37,15 @@ const layoutMedia = matchMedia("(min-width: 64rem)");
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
+const workView = createWorkView({scope: pageScope, call, el});
+layoutPanels.push(el("work-overview"));
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  layoutPanels.forEach((node, index) => {
-    const parent = layoutMedia.matches ? (index === MAP_PANEL ? primary : secondary) : main;
+  const ordered = workView.active ? [el("work-overview"), ...layoutPanels.filter(node => node.id !== "work-overview")] : layoutPanels;
+  ordered.forEach((node) => {
+    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
@@ -97,6 +101,7 @@ function markLocked(reason = "auth") {
   cancelAllNotice();
   const firstLock = !auth.locked;
   auth.locked = true;
+  workView.reset();
   connectionView.open();
   auth.role = null;
   incidents.reset();
@@ -559,6 +564,7 @@ async function refreshAuthorization() {
     // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
       incidents.refresh(),
+      workView.refresh(),
       mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
@@ -909,6 +915,7 @@ function saveToken() {
 }
 
 function useToken(token) {
+  workView.reset();
   stopNotice();
   cancelAllNotice();
   pageScope.invalidate();
@@ -985,6 +992,7 @@ mapView.refresh();
 trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
 pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
