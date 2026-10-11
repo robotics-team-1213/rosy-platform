@@ -110,7 +110,10 @@ class GoalLeases(dict):
                 raise
             if (stop != self.stop_token(robot_id)
                     and not (isinstance(result, dict) and result.get("accepted") is False)):
-                await client.navigation_cancel()
+                try:
+                    await client.navigation_cancel()
+                except Exception:
+                    logger.exception("late accepted goal cancel for %s failed", robot_id)
                 raise NavigationStopped("navigation goal overlapped a stop; result remains unknown")
         finally:
             self.pending[robot_id] -= 1
