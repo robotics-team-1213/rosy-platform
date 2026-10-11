@@ -99,6 +99,7 @@ class LearnedCameraLane:
         self.last = {'model_used': False, 'reason': reason, 'inference_error': self.worker.last_error}
 
     def observe(self, bgr, *, stamp, source_now, pose, guide=None):
+        captured_at = self.clock()
         if (type(stamp) not in (int, float) or type(source_now) not in (int, float)
                 or not math.isfinite(stamp) or not math.isfinite(source_now)
                 or not 0 <= source_now - stamp <= self.manager.config.stale_after_s
@@ -136,16 +137,26 @@ class LearnedCameraLane:
         step, decided = keep_step(self.steer, self.worker, self.keeper.last, self.ground,
             self.camera_x, .0925, self.history.pose_at, stamp, None, guide)
         if decided:
+            info = self.keeper.last.get('drivable_steer', {})
+            strategy = self.keeper.last.get('strategy', '')
+            if (not info.get('target_now_m') or not (strategy == 'drivable_centre'
+                    or strategy.startswith('drivable_turn_'))):
+                self.invalidate('camera_target_unavailable')
+                self.last['strategy'] = strategy
+                return
             observation = None if step is None else LaneObservation(*step)
         now = self.clock()
+        if not 0 <= source_now - stamp + now - captured_at <= self.manager.config.stale_after_s:
+            self.invalidate('camera_processing_stale')
+            return
         accepted = self.manager.observe(LineObservation(LineFollowMode.CAMERA_LINE, stamp,
             observation is not None, None if observation is None else observation.error,
-            0. if observation is None else observation.confidence), received_at=now, source_now=source_now)
+            0. if observation is None else observation.confidence), received_at=captured_at, source_now=source_now)
         self.observation = observation if accepted else None
-        self.received_at = now if accepted else None
+        self.received_at = captured_at if accepted else None
         self.last = {'model_used': True, 'model_revision': self.worker.used_model_revision,
                      'paint_kind': self.worker.used_paint_kind, 'inference_error': None,
-                     'source_stamp': stamp, 'received_at': now,
+                     'source_stamp': stamp, 'received_at': captured_at, 'processing_s': now - captured_at,
                      'reason': self.keeper.last.get('reason'),
                      'strategy': self.keeper.last.get('strategy'),
                      'error': None if self.observation is None else self.observation.error,
