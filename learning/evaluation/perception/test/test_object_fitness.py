@@ -9,7 +9,7 @@ for holder in ('middleware/perception', 'learning/curation/perception',
                'learning/evaluation/perception', 'contracts/foundation'):
     sys.path.insert(0, str(ROOT / holder))
 
-from object_fitness import evaluate_detections, summarize_frames
+from object_fitness import evaluate_detections, summarize_frames, evaluate_model_frame
 
 
 def box(label='person', xyxy=(0, 0, 10, 10), **kwargs):
@@ -103,3 +103,42 @@ def test_summary_cannot_pool_different_metric_profiles():
                                  small_area_fraction=.02)
     with pytest.raises(ValueError, match='profile'):
         summarize_frames([first, second])
+
+
+def model_frame(snapshot_validity=None, **kwargs):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    import numpy as np
+    from core_common.observation import ObservationSnapshot, SnapshotValidity
+    from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+    image = ObservationSnapshot('image', 'camera', 1000, datetime.now(timezone.utc),
+                                'front', 'cal-1', ('capture',),
+                                snapshot_validity or SnapshotValidity.VALID)
+    calls = []
+    def infer(bgr):
+        calls.append(bgr)
+        return SimpleNamespace(detections=[box(confidence=.9)], latency_ms=2., model_revision='r1')
+    model = SimpleNamespace(manifest=SimpleNamespace(task='object_det', model_revision='r1',
+        camera_profile_revision='camera-1', raw={'output': {'classes': [{'name': c} for c in OBJECT_CLASSES]},
+                                              'input': {'shape': [1, 3, 100, 100]}}),
+        infer=infer, _conf=.25, _iou=.5)
+    report = evaluate_model_frame(model, np.zeros((100, 100, 3), np.uint8), image,
+        [box(occluded=True)], now_ns=kwargs.pop('now_ns', 1050), max_age_ns=100,
+        match_iou=.5, small_area_fraction=.02, **kwargs)
+    return report, calls
+
+
+def test_model_adapter_uses_original_camera_boxes_and_binds_thresholds():
+    report, calls = model_frame()
+    assert len(calls) == 1 and calls[0].shape == (100, 100, 3)
+    assert report['classes']['person']['recall'] == 1
+    assert report['model_revision'] == 'r1' and report['image_snapshot_id'] == 'image'
+    assert report['detector_thresholds'] == {'confidence': .25, 'nms_iou': .5}
+    assert report['infer_latency_ms'] == 2.
+
+
+@pytest.mark.parametrize('now_ns,reason', [(999, 'image_future'), (1101, 'image_stale')])
+def test_invalid_camera_time_abstains_before_model(now_ns, reason):
+    report, calls = model_frame(now_ns=now_ns)
+    assert calls == [] and report['input_errors'] == [reason]
+    assert report['classes']['person']['false_negative'] == 1
