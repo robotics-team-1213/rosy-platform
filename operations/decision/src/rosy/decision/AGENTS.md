@@ -1,14 +1,14 @@
-<!-- Parent: ../AGENTS.md -->
+<!-- Parent: ../../../AGENTS.md -->
 <!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
-# ai
+# decision
 
-**Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Parent context:** `../../../AGENTS.md`
+**Updated:** 2026-10-11
 
 ## Purpose
 
-Proposal-only embodied-model adapters used by Fleet services. A model may propose pick/place candidates and request allowlisted, non-executable feedback tools; nothing here moves a robot or calls CORE. Pixel-level identity evidence only: no 3D pose, grasp or physical completion is inferred.
+Actual proposal implementation under `operations/decision/src/rosy/decision`, canonical import `rosy.decision` (D-429 section 5, D-637). The existing Fleet distribution installs this namespace; source composition uses static holder mapping. There is no separate wheel/server or `fleet.ai` shim. Proposal-only embodied-model adapters used by Fleet services. A model may propose pick/place candidates and request allowlisted, non-executable feedback tools; nothing here moves a robot or calls CORE. Pixel-level identity evidence only: no 3D pose, grasp or physical completion is inferred.
 
 ## Key Files
 
@@ -27,6 +27,7 @@ Proposal-only embodied-model adapters used by Fleet services. A model may propos
 
 ### Working In This Directory
 
+- Fleet retains its proposal store, stop/fence generations, watermarks and shared SQLite transaction. Moving the namespace does not redesign the store port/cycle or grant execution authority.
 - Keep the catalog closed: a new tool needs a catalog entry, an effect class and a dispatch allowlist decision together.
 - Model output is untrusted. Selectors must resolve against the candidates of the same frame; reject mismatches rather than guessing.
 - Do not add a robot command path here. Execution belongs to Fleet missions and CORE, the robot's only external API.
@@ -35,11 +36,13 @@ Proposal-only embodied-model adapters used by Fleet services. A model may propos
 
 ### Testing Requirements
 
+D-584: send committed HEAD to a remote test PC and keep logs in the X session. Preserve the existing proposal/catalog/transaction regression suites.
+
 ```bash
-python -m pytest operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/decision -- operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
 ```
 
-Related: `test_model_tool_call_journal.py`, `test_mission_ai_proposal.py`, `test_mission_model_turn_store.py`.
+Related: `test_model_tool_call_journal.py`, `test_mission_ai_proposal.py`, `test_mission_model_turn_store.py`. `test/test_remaining_platform_installed.py` checks installed namespaces and self-contained sdist delivery in both import orders alongside World/execution/skills. Source-move records: [progress.md](../../../progress.md), [logs.md](../../../logs.md), [index.md](../../../index.md).
 
 ### Common Patterns
 

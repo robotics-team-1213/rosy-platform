@@ -1,8 +1,8 @@
 # ROSY Platform 현재 폴더 책임
 
-2026-10-11 local main `7f391fa2d`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
+2026-10-11 local main `d4988bffba`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
 
-구조 결정은 Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. CORE 세부 책임은 [CORE·Drive 안내](core-drive-responsibilities.md), 소유권·import 규칙은 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이 기준이다. 과거 `d427_target`은 소유권 식별자이고 현재 경로는 `path`와 필요한 `layout_target`으로 읽는다.
+구조 결정은 Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md), [D-637](../adr/D-637-remaining-decision-console-learning-folders.md)에 따른다. CORE 세부 책임은 [CORE·Drive 안내](core-drive-responsibilities.md), 소유권·import 규칙은 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이 기준이다. 과거 `d427_target`은 소유권 식별자이고 현재 경로는 `path`와 필요한 `layout_target`으로 읽는다.
 
 `middleware`는 장치 실행과 권한, `operations`는 관측 사실과 작업 조정, `learning`은 경험·학습·평가·아티팩트 관리를 맡는다. `contracts`는 교환 형식, `integrations`는 외부 기술 접점, `shared/web`은 여러 UI가 실제로 공유하는 기반이다. 같은 concern이 같은 실행 권한을 뜻하지 않는다.
 
@@ -34,7 +34,8 @@ rosy-platform/
 │  ├─ execution/local
 │  └─ ui/{robot,pilot,face}
 ├─ operations/
-│  ├─ fleet/ (fleet.ai, fleet.server.web 포함)
+│  ├─ fleet/ (transaction·serving·기존 배포 owner)
+│  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
 │  ├─ world/ (src/rosy/world/api, state/projections)
 │  ├─ situation/ (rosy_situation/analyzers, incidents)
 │  ├─ execution/ (src/rosy/execution/api, site)
@@ -42,11 +43,12 @@ rosy-platform/
 │  ├─ vision/signal_observer
 │  ├─ site_devices/{dock,signal}/firmware
 │  ├─ apps/{fleet,games}
-│  └─ ui/cam
+│  └─ ui/{cam,console}
 ├─ learning/
-│  ├─ curation/{pinky,omx}
-│  ├─ training/{pinky,omx,perception} (perception 내부 dataset·model·training)
-│  ├─ registry/policy
+│  ├─ curation/{pinky,omx,perception}
+│  ├─ training/{pinky,omx,perception} (trainer만)
+│  ├─ registry/{policy,perception}
+│  ├─ evaluation/perception
 │  └─ envs/isaac
 ├─ contracts/{foundation,ros_idl,motion,skill,learning}
 ├─ integrations/{robots/omx,simulation/gazebo}
@@ -60,7 +62,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 
 ## 전체 manifest root 판정
 
-현재 manifest의 **85개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
+현재 manifest의 **89개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
 
 | 현재 manifest root | 실제 패키지·import 또는 형식 | 판정과 현재 책임·소비자 |
 |---|---|---|
@@ -89,7 +91,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `middleware/drivers/pinky_led` | ROS `led`; `led` | 유지 — Pinky LED I/O. 장치 조립·표시 소비 |
 | `middleware/devices/pinky/bringup` | ROS `bringup`; `bringup`, `rosylib` | 이전 완료 — Pinky 장치 기동·writer binding. 기존 entrypoint/share 유지 |
 | `middleware/devices/pinky/profile` | ROS `pinky_pro`; YAML | 이전 완료 — Pinky 장치 capability/profile. 배포 설치 pin인 최상위 `profiles`와 구분 |
-| `middleware/devices/omx/adapter` | ROS `omx_adapter`; `omx_adapter` | 이전 완료 — OMX joint/action owner·body validation·HOLD. demonstration/export는 기존 package 소비자와 함께 유지, curation carve는 후속 분리 보류 |
+| `middleware/devices/omx/adapter` | ROS `omx_adapter`; `omx_adapter` | 이전 완료 — OMX joint/action owner·body validation·HOLD. demonstration은 device capture, offline export는 `learning/curation/omx`, 검증 형태는 `contracts/learning`이 소유 |
 | `middleware/devices/omx/profile` | ROS `omx`; YAML | 이전 완료 — OMX composition config. adapter가 검증·소비하며 설치 pin을 소유하지 않음 |
 | `middleware/devices/pinky/description` | ROS `description`; URDF | 이전 완료 — 실물/Gazebo 공용 Pinky 기구 모델. bringup·시뮬레이션·라벨 geometry의 현재 패키지 소비자 유지 |
 | `middleware/devices/omx/agent` | wheel `rosy-app-agent`; `rosy_agent` | 이전 완료 — cell local Action 조립. site gateway/process와 통신하고 Arm owner 경계 유지 |
@@ -109,8 +111,8 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/site_devices/signal/firmware` | signal MCU firmware | 유지 — boot·supervision-loss failsafe. 관측용 signal observer와 구분 |
 | `operations/vision/signal_observer` | measured-light 관측 서비스·소스 | 유지 — read-only light evidence. CORE traffic observer 소비; 실행 host 결정이나 signal command 권한 추가 없음 |
 | `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose projection을 World로 이전. admission·claim·dispatch·MapPoseService 조립·trip consumer는 Fleet에 유지 |
-| `operations/fleet/fleet/ai` | `fleet.ai` | 후속 분리 보류 — 현재 ER2/VLM·candidate/tool pipeline. `operations/decision`은 아직 별도 소비 wheel이 없고 Fleet transaction/store/provider 연결 유지 |
-| `operations/fleet/fleet/server/web` | Fleet server web assets | 후속 분리 보류 — Console의 현재 serving/build consumer 유지. `operations/ui/console`로 이름만 옮기지 않음 |
+| `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — 기존 ER2/VLM·candidate/tool 제안. Fleet transaction/store/provider 소비 유지; `fleet.ai` shim 없음 |
+| `operations/ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
@@ -119,7 +121,11 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/vision` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
 | `operations/ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
 | `operations/apps/games` | ROS `games`; `games` | 유지 — overhead camera를 쓰는 game host. 범용 process/control backend가 아님 |
-| `learning/training/perception` | dataset/model/training Python CLI·library | 유지 — 현재 실제 소비 loop를 함께 보존. dataset·model·store의 top-level carve는 후속 검토; sensor runtime 소스는 vision holder |
+| `learning/training/perception` | trainer Python CLI·library | 분리 완료 — 학습 job·trainer·COLAB docs. 인식 runtime은 middleware vision 소유 |
+| `learning/curation/perception` | dataset/review Python CLI·app | 분리 완료 — 기록·정답·dataset provenance·review source. 서명 closure와 source mismatch 거절 유지 |
+| `learning/registry/perception` | artifact/store/delivery Python CLI | 분리 완료 — datasets/evalsets/inbox/model 공용 artifact·provenance store, 고정 revision·승격·서명 배포. 실행 writer 아님 |
+| `learning/evaluation/perception` | road replay Python CLI | 분리 완료 — 기존 replay 평가. 미래 World rollout 평가 구현으로 집계하지 않음 |
+| `tools/perception` | rosy_ml·operator SSH CLI | 분리 완료 — 네 learning owner의 운영 조합, 자체 runtime 제어·승격 우회 없음 |
 | `tools/perception_prototype` | calibration·real-run prototype CLI | 유지 — 학습 loop 밖의 개발 prototype. product inference나 학습 승격 경로로 사용하지 않음 |
 | `learning/envs/isaac` | ROS `isaac_sim`; sim assets·scripts | 유지 — 연구 environment·Isaac 자산. Isaac Lab 학습/field acceptance를 이 폴더 존재로 주장하지 않음 |
 | `learning/curation/omx` | offline demonstration/Episode CLI | 유지 — OMX LeRobot export. contract 기반 변환; middleware owner import·activation 없음 |
@@ -164,4 +170,6 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 
-이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 85개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Fleet 내부 `fleet.ai`, `fleet.server.web`의 별도 패키지 분리는 보류이며, 행동 조건부 World model도 후속 계획이다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 확인한다.
+이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 89개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
+
+D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1파일, 총 299파일을 처리했다. Console은 67개 source 파일 중 65개 설치 자산이며 AGENTS와 package.json은 개발 안내/도구 입력이다. `test/learning/perception`은 기존 99파일의 shared workflow 시험 위치다. 퇴역 WSL 도구 6개는 `docs/reference/legacy-tools/wsl`로 동결했고 현재 운영 경로에 재연결하지 않는다.

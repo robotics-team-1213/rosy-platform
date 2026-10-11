@@ -1,5 +1,7 @@
 # CORE 공통·장치 제어 책임 분해와 Drive·Arm·Safety 설계
 
+**현재 폴더 단계:** D-627/D-628 CORE 조립·주행 경계와 D-630 holder 분리는 local main에 반영했다. 현행 경로는 `middleware/core/api`, `middleware/devices/{pinky,omx}`, `middleware/control/drive`, `middleware/perception/{sensors,vision}`이며 [CORE·Drive 책임표](../reference/core-drive-responsibilities.md)를 따른다. 아래 원래 계획의 API/모션 계약 확장·전 producer admission·실기 시험까지 완료한 것으로 읽지 않는다.
+
 **상태:** Proposed — 설계·실행 계획이며 모듈 이동이나 운용 정책의 적용 완료가 아니다.
 **기준:** 2026-10-11, `81b6ed879`, 작업 브랜치 `docs/core-responsibility-plan`.
 **실행:** [구현 계획](2026-10-11-core-responsibility-and-driving.md).

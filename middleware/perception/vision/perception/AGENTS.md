@@ -1,14 +1,14 @@
-<!-- Parent: ../AGENTS.md -->
+<!-- Parent: ../../AGENTS.md -->
 <!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
 
 # perception
 
-**Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Parent context:** `../../AGENTS.md`
+**Updated:** 2026-10-11
 
 ## Purpose
 
-Camera and lane evidence (D-209, D-228). This folder answers what is visible. It does not publish `cmd_vel`. Lidar, body geometry, and dock tags stay in the parent `sensing/` package.
+Camera and lane evidence (D-209, D-228). This folder answers what is visible. It does not publish `cmd_vel`. Lidar, body geometry and dock tags live in `middleware/perception/sensors/sensing`. Static source mapping preserves `control.sensing.perception` imports and the ROS `control` distribution (D-630).
 
 ## Key Files
 
@@ -36,11 +36,11 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 - Do not import `core` or emit a twist.
 - This folder is the P1a perception evidence size unit; package imports remain `control.sensing.perception` until a separately reviewed package move.
 - `learned/` is its own size unit inside it (P1a plan addendum 2026-10-10); its lines do not count toward this folder's verdict.
-- The learned backend (`learned/`) is shadow-only (D-356): it publishes `perception/learned/shadow` and never feeds control. Model weights never live in `src/`; they arrive through `learning/training/perception/model/deliver.py`. It returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
+- The learned backend (`learned/`) is shadow-only (D-356): it publishes `perception/learned/shadow` and never feeds control. Model weights never live in `src/`; they arrive through `learning/registry/perception/deliver.py`. It returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
 
 ### Testing Requirements
 
-`middleware/perception/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`, `test_learned_manifest.py`, `test_learned_lane_mask.py`, `test_learned_runner.py`, `test_learned_drivable_paint.py`, `test_learned_shadow.py`
+D-584: use `tools/remote/remote_pytest.py` to run committed HEAD on a remote test PC and keep logs in the X session. Related suites: `middleware/perception/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`, `test_learned_manifest.py`, `test_learned_lane_mask.py`, `test_learned_runner.py`, `test_learned_drivable_paint.py`, `test_learned_shadow.py`
 
 ## Dependencies
 
