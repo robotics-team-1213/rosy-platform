@@ -462,7 +462,7 @@ $('profile-save').addEventListener('click', () => guarded(async () => {
 $('profile-draft').addEventListener('click', () => guarded(async () => {
   if (operatorReason() || !selectedProfile() || selectedProfile().kind === 'soccer') return;
   if (state.dirty || state.draft?.revision) {
-    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 지도 설정로 바꿀까요?',
+    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 설정으로 바꿀까요?',
       action: '지도 설정을 초안으로', opener: $('profile-draft')});
     if (!allowed) return;
   }

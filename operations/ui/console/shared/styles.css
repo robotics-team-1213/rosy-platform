@@ -785,6 +785,9 @@ main {
   #fleet-main .map-stage { block-size: clamp(20rem, 110vw, 30rem); }
   .map-readouts { grid-template-columns: minmax(0, 1fr); }
 }
+@media (width >= 64rem) and (height >= 40rem) {
+  #fleet-main .map-stage { flex: 1; block-size: auto; min-height: 12.5rem; }
+}
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
 
