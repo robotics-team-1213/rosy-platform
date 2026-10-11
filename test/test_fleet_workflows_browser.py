@@ -57,6 +57,8 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         for tab in tabs.all():
             expect(tab).to_be_enabled()
         expect(page.locator('#peer-picker')).to_be_visible()
+        choose(page, '호스트 서비스')
+        expect(page.locator('#host-services')).to_be_visible()
         choose(page, '로봇 등록')
         expect(page.locator('#robot-enrollment')).to_be_visible()
         page.locator('#enroll-address').fill('192.0.2.55:8080')
@@ -71,7 +73,9 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         expect(page.locator('#camera-calibration')).to_be_visible()
         expect(page.locator('[data-corner="0"][data-axis="0"]')).to_be_disabled()
         choose(page, '호스트 서비스')
-        expect(page.locator('#host-services')).to_be_visible()
+        expect(page.get_by_role('tab', name='호스트 서비스', exact=True)).to_have_attribute('aria-selected', 'true')
+        assert page.locator('#host-services').get_attribute('data-role-lock') is not None
+        choose(page, '카메라 설치·보정')
         assert page.locator('[role=tabpanel]:visible').count() == 1
         api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
         _open_token_access(page)
