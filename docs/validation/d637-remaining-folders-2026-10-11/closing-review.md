@@ -55,4 +55,3 @@ US-001 through US-005 remain APPROVED under independent-closing-architecture-rev
 APPROVE the three prose-only Key Files updates in test/architecture/AGENTS.md. They remove obsolete src/domain/root claims and describe the actual declared-root/package-identity and ownership checks. They change no source, regex, guard evaluator, scan, size/import budget or exception set. Approve recording the terminal and ancestry facts above in the plan/result/review receipt as a final small documentation-only closure commit. That last bookkeeping commit still requires its own prescribed remote guards and local-main landing readback before the root agent reports the entire goal closed.
 
 No blocking source or document issue remains in the reviewed adopted structure. No product edit, staging, commit, local pytest, deployment, service activation or device command was performed by the reviewer.
-
