@@ -435,6 +435,39 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
+def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    roster = {'robots': [{'robot_id': 'alpha', 'online': True}, {'robot_id': 'beta', 'online': True}]}
+    recording = {'recording': None, 'pending': []}
+    page.route('**/api/fleet/state', lambda route: route.fulfill(content_type='application/json', body=json.dumps(roster)))
+    page.route('**/api/fleet/teach', lambda route: route.fulfill(content_type='application/json', body=json.dumps(recording)))
+    page.goto(page.url + '?robot=beta#teach-heading')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-robot')).to_have_value('beta')
+    page.locator('#teach-robot').select_option('alpha')
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-robot')).to_have_value('alpha')
+    roster['robots'][0]['online'] = False
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-target')).to_contain_text('연결 끊김')
+    recording['recording'] = {'teach_id': 'running', 'robot_id': 'beta', 'map_id': store.active_view()['map']['map_id'],
+        'points': [], 'started_at': time.time()}
+    expect(page.locator('#teach-target')).to_contain_text('기록 중인 로봇 beta')
+    expect(page.locator('#teach-robot')).to_have_value('beta')
+    expect(page.locator('#teach-robot')).to_be_disabled()
+    roster['robots'] = roster['robots'][:1]
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-target')).to_contain_text('기록 중인 로봇 beta')
+    expect(page.locator('#teach-robot')).to_have_value('')
+    expect(page.locator('#teach-stop')).to_be_enabled()
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+
+
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     from playwright.sync_api import expect
