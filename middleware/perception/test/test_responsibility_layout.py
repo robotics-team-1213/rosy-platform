@@ -119,9 +119,14 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
          str(next(dist.glob("core_common-*.whl"))), cwd=tmp_path)
     check += (
         "; import importlib.metadata as metadata; "
+        "from packaging.requirements import Requirement; "
+        "from packaging.utils import canonicalize_name; "
         "assert metadata.version('control') == '0.1.1', ('control version', metadata.version('control')); "
         "assert metadata.version('core_common') == '0.0.1', ('foundation version', metadata.version('core_common')); "
-        "requirements = metadata.requires('control'); "
-        "assert 'core_common>=0.0.1' in requirements, ('control requirements', requirements)"
+        "requirements = [Requirement(raw) for raw in metadata.requires('control')]; "
+        "expected = Requirement('core_common>=0.0.1'); "
+        "assert any(canonicalize_name(r.name) == canonicalize_name(expected.name) "
+        "and r.specifier == expected.specifier and not r.extras and r.marker is None "
+        "and r.url is None for r in requirements), ('control requirements', requirements)"
     )
     _run("-I", "-c", check, str(installed), str(installed), cwd=tmp_path)
