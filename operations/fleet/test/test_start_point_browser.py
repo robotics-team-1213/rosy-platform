@@ -102,6 +102,7 @@ def test_console_coordinate_overlay_raw_and_corrected_comparison(browser_site, w
     page.goto(page.origin + '/console')
     expect(page.locator('#map-display-mode')).to_have_value('coordinates')
     expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site', timeout=15000)
+    page.locator('#context-tools-tab').click()
     expect(page.locator('#vision-image')).to_be_visible(timeout=15000)
     page.locator('#camera-comparison summary').click()
     expect(page.locator('#camera-corrected')).to_be_visible()
