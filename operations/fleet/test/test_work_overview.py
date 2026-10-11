@@ -3,6 +3,7 @@
 import pytest
 
 from test_mission_api import _client, _create, _resolve
+from fleet.server.work_read import work_summaries
 
 
 def _headers(token="operator-secret"):
@@ -54,6 +55,13 @@ def test_work_limit_and_authentication(tmp_path):
 def test_store_summary_limits_are_bounded(tmp_path, limit):
     client, tasks, _ = _client(tmp_path)
     with pytest.raises(ValueError):
-        tasks.store.work_summaries(limit=limit)
+        work_summaries(tasks.store, source="task", limit=limit)
     with pytest.raises(ValueError):
-        client.app.state.mission_service.store.work_summaries(principal_id="operator-1", limit=limit)
+        work_summaries(client.app.state.mission_service.store, source="mission", principal_id="operator-1", limit=limit)
+
+
+@pytest.mark.parametrize("source", ["mission", "unknown"])
+def test_summary_cannot_query_missions_without_an_owner(tmp_path, source):
+    _, tasks, _ = _client(tmp_path)
+    with pytest.raises(ValueError):
+        work_summaries(tasks.store, source=source, limit=10)

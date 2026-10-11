@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, Query
 
 from core_common.protocol.schemas import FleetWorkOverview
+from fleet.server.work_read import work_summaries
 
 
 def install_work_routes(app, *, task_service, mission_service, require_viewer, read_guard):
@@ -20,7 +21,7 @@ def install_work_routes(app, *, task_service, mission_service, require_viewer, r
             options = {"limit": limit + 1}
             if source == "mission":
                 options["principal_id"] = principal.principal_id
-            summaries = service.store.work_summaries(**options)
+            summaries = work_summaries(service.store, source=source, **options)
             if len(summaries) > limit:
                 truncated.append(source)
             rows.extend({"source": source, **row} for row in summaries[:limit])
