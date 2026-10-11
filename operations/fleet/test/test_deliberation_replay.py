@@ -22,7 +22,9 @@ def test_independent_same_cases_all_modes_denominators_and_no_field_pass():
     runs = rows(cases)
     limits = {'error_rate': 0.5, 'p95_latency_ms': 20, 'cost_usd': 1}
     profile = {'dataset_sha256': hashlib.sha256(json.dumps(cases, sort_keys=True).encode()).hexdigest(),
-               'limits': limits, 'reviewed_by': 'team', 'minimum_cases': 2}
+               'limits': limits, 'reviewed_by': 'team', 'minimum_cases': 2,
+               'revisions': {mode: {'profile_revision': 'pinned', 'policy_revision': 'd640'}
+                             for mode in ('rules', 'single', 'deliberation')}}
     report = compare_deliberation(cases, runs, training_sessions=['training'],
                                  training_recordings=[], reviewed_profile=profile, limits=limits)
     assert report['state'] == 'PASS_OFFLINE_ONLY' and report['field_accepted'] is False
@@ -55,3 +57,27 @@ def test_frozen_limits_and_recording_lineage_are_required():
     with pytest.raises(ValueError, match='leaked'):
         compare_deliberation(cases, rows(cases), training_sessions=[],
                              training_recordings=['case-1'], limits=limits)
+
+
+def test_same_recording_cannot_be_relabelled_as_independent_cases():
+    cases = [case(), case('case-2', session_id='another', recording_id='case-1')]
+    with pytest.raises(ValueError, match='duplicate'):
+        compare_deliberation(cases, rows(cases), training_sessions=[], limits=None)
+
+
+def test_mixed_or_unreviewed_mode_revisions_cannot_pass():
+    cases = [case(), case('case-2')]
+    limits = {'error_rate': 0, 'p95_latency_ms': 20, 'cost_usd': 1}
+    profile = {'dataset_sha256': hashlib.sha256(json.dumps(cases, sort_keys=True).encode()).hexdigest(),
+               'limits': limits, 'reviewed_by': 'team', 'minimum_cases': 2,
+               'revisions': {mode: {'profile_revision': 'pinned', 'policy_revision': 'd640'}
+                             for mode in ('rules', 'single', 'deliberation')}}
+    runs = rows(cases)
+    runs[-1]['profile_revision'] = 'cherry-picked-v2'
+    with pytest.raises(ValueError, match='revision'):
+        compare_deliberation(cases, runs, training_sessions=[], training_recordings=[],
+                             reviewed_profile=profile, limits=limits)
+    del profile['revisions']
+    with pytest.raises(ValueError, match='profile'):
+        compare_deliberation(cases, rows(cases), training_sessions=[], training_recordings=[],
+                             reviewed_profile=profile, limits=limits)
