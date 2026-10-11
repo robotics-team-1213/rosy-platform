@@ -136,6 +136,20 @@ def content_sha(folder) -> str:
     return hashlib.sha256(b"".join(lines)).hexdigest()
 
 
+def read_fixed_manifest(folder) -> dict:
+    """Read stable manifest bytes bound to an immutable content-addressed directory."""
+    folder = Path(folder)
+    refuse_publication_links(folder)
+    path = folder / "manifest.json"
+    raw = path.read_bytes()
+    if content_sha(folder) != folder.name or path.read_bytes() != raw:
+        raise StoreError("content hash differs from fixed version")
+    doc = json.loads(raw)
+    if not isinstance(doc, dict):
+        raise StoreError("fixed manifest must be an object")
+    return doc
+
+
 def safe_name(name) -> bool:
     return isinstance(name, str) and _NAME.fullmatch(name) is not None
 

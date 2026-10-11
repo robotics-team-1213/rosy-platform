@@ -304,10 +304,7 @@ def _verified_manifest(path: Path) -> dict:
     """Bind the manifest being read to the store's immutable content version."""
     import store
     try:
-        raw = (path / "manifest.json").read_bytes()
-        if store.content_sha(path) != path.name or (path / "manifest.json").read_bytes() != raw:
-            raise EvalSetError(f"dataset {path}: content hash differs from fixed version")
-        doc = json.loads(raw)
+        doc = store.read_fixed_manifest(path)
         if not isinstance(doc, dict) or not isinstance(doc.get("classes"), list):
             raise ValueError("no classes list")
         for c in doc["classes"]:
