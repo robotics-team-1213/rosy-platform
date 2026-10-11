@@ -863,7 +863,9 @@ if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
 view.openFormationWorkspace = () => {
-  confirmedAction.cancel(); disarmGoal('대형 관리로 목표 지정 취소');
+  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; pinStart = null;
+  if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
+  render();
   inbox.select('tools');
   const heading = el('formation-heading'); heading.tabIndex = -1;
   heading.focus({preventScroll: false});
