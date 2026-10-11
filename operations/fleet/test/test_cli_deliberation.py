@@ -92,3 +92,19 @@ def test_cli_rejects_unbound_primary_review_before_launch(change):
     with pytest.raises(ValueError):
         asyncio.run(provider(request, (primary,), 1, budget_usd=.1))
 
+def test_unverified_launcher_billing_is_not_known_zero():
+    class Launch:
+        cost_verified = False
+
+        async def __call__(self, argv, body, remaining, output_limit, budget_usd):
+            request = json.loads(body)['problem']
+            payload = {key: request[key] for key in ('subject_id', 'case_id', 'generation', 'input_hash')}
+            payload.update(choice='reobserve', evidence_ids=request['evidence_ids'], objections=[])
+            records = [dict(type='text', part=dict(text=json.dumps(payload))),
+                       dict(type='step_finish', part=dict(cost=0))]
+            return 0, '\n'.join(json.dumps(row) for row in records).encode()
+
+    provider = CliProvider(kind='opencode', model='glm', profile_id='glm', launch=Launch())
+    with pytest.raises(ValueError, match='CLI_COST_UNKNOWN_OR_EXCEEDED'):
+        asyncio.run(provider(problem(), (), 1, budget_usd=.1))
+
