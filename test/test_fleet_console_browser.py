@@ -1799,7 +1799,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
-        "/api/fleet/formation": FORMATION,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
         goal_path: {"accepted": True, "task": {"task_id": "keyboard-goal", "status": "ACCEPTED"}},
     }
     with sync_playwright() as playwright:
