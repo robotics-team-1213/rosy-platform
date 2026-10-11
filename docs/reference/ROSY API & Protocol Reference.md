@@ -1,8 +1,8 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.210
+**Version:** v1.212
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -12,9 +12,23 @@
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
-### v1.210 Rosy Cam은 요청이 있는 동안만 보낸다 (D-691)
+### v1.212 Rosy Cam은 요청이 있는 동안만 보낸다 (D-691)
 
 `rosy-overhead/1` 하향 `demand`는 `{"type":"demand","wanted":bool}`이다. 유효한 Vision preview lease로 `frame`, `field-proposal`, `map-proposal`을 읽으면 그 source를 30초(`stream_hold_s`) 동안 송출하게 한다. 프레임이 없거나 오래됐거나 429여도 요청이다. 401은 요청이 아니다. 폰은 소켓을 유지한 채 `wanted:false`에서 센서와 JPEG를 멈춘다. 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청보다 먼저 같은 정지를 하고, LIGHT 이하 또는 배터리 41°C 이하에서 다시 따른다. 이전 앱은 `demand`를 무시하고 계속 보낸다. 자세한 결정은 D-691이다.
+
+### v1.211 본인 기본 프로필 (D-689)
+
+GET `/api/fleet/auth/profile` returns `login`, `principal_id`, `email` (null for non-email principals), `role`, `display_name` for a valid completed cookie login only. PATCH accepts exactly `display_name`: trim whitespace, 1..80 characters, reject control characters. ID, email and role are read-only. Success is 200 with the same profile shape and no-store. Profiles persist in existing SQLite bound to login+principal and survive password rotation and restart. Reassigned principals do not inherit names. Initial cookies remain 403 PASSWORD_CHANGE_REQUIRED; Bearer/development credentials are 403 COOKIE_SESSION_REQUIRED. No arbitrary account selection is accepted.
+
+POST `/api/fleet/auth/change-password` additionally accepts normal cookies with exactly `current_password` and `password`. The current password must match; a mismatch is 422 CURRENT_PASSWORD_INCORRECT without revoking the session. A new password is 8..1024 characters and differs from ID and the current password. Initial cookies still accept only `password`. Existing same-origin CSRF, source binding, atomic replacement cookie, prior-session revocation, rate/capacity limit and rollback behavior apply. Invalid input is 422 INVALID_REQUEST; stale or raced sessions are 401 UNAUTHORIZED; unavailable DB is 503 SESSION_STORAGE_UNAVAILABLE. UI renders names as text, re-reads saved state and clears password inputs after each submission. Robot API/envelope versions are unchanged.
+
+### v1.210 첫 로그인 비밀번호 변경 (D-686)
+
+초기 비밀번호가 로그인 ID와 같은 계정은 서버가 scrypt로 확인하여 제한된 쿠키를 발급한다. GET `/api/fleet/auth/session`은 `password_change_required` boolean을 추가한다. 초기 쿠키에서 이 필드는 true이고, 변경된 쿠키 및 기존 Bearer/development 자격에서는 false다. 제한된 쿠키는 session 조회·logout·change-password만 사용할 수 있고 다른 보호된 Fleet API 읽기·쓰기는 403 `PASSWORD_CHANGE_REQUIRED`다. 기존 Bearer·기계 자격과 CORE 권한은 유지한다.
+
+POST `/api/fleet/auth/change-password`는 같은 출처의 유효한 초기 쿠키만 받는다. 본문은 `password` 문자열 하나만 받으며 8~1024자이고 ID와 달라야 한다. principal·role 및 추가 필드는 받지 않는다. 성공은 204, `Cache-Control: no-store`와 새 HttpOnly/Secure/SameSite=Strict 쿠키다. 기존 remember 선택을 유지하고 해당 계정의 이전 세션을 무효화한다. UI는 새 session 조회에서 제한 해제를 확인한 뒤 업무로 돌아간다. 새 scrypt 해시는 기존 tasks SQLite에 원본 YAML의 principal·role·초기 해시 지문과 결합해 저장한다. 재시작 후 유지되며 YAML 계정 제거·자격/역할 변경 뒤에는 적용하지 않는다.
+
+CSRF 실패는403 `CSRF_REJECTED`, 초기 쿠키가 아닌 자격은403 `PASSWORD_CHANGE_NOT_REQUIRED`, 잘못된 본문은422 `INVALID_REQUEST`, 만료·변경 경합은401 `UNAUTHORIZED`, scrypt 작업 포화는429 `RATE_LIMITED`(Retry-After 1), 세션 DB 실패는503 `SESSION_STORAGE_UNAVAILABLE`다. 감사 원장 실패는 기존503 `AUDIT_STORAGE_UNAVAILABLE`이다. DB 오류는 변경 성공으로 표시하지 않는다. 이전 비밀번호의 검증 결과로 변경 이후 세션을 발급하지 않는다. 사람 로그인 계정이 없으면 change-password도404다. Robot API/envelope 버전은 유지한다.
 
 ### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
@@ -1865,6 +1879,9 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | GET | `/api/fleet/auth/connection` | none | D-473 (v1.108): `{mode: "development"\|"paired"}` with `Cache-Control: no-store`. `development` only when Fleet started with both `ROSY_DEPLOYMENT=development` and `--connection-mode development`; any other combination, or a missing setting, is `paired`. D-519 (v1.137): also `password_login: bool`, true when site-users holds at least one login account; the console then offers 아이디·비밀번호 and folds the token field. |
 | POST | `/api/fleet/auth/development-session` | none (development mode only) | D-473 (v1.108): 201 `{token, principal_id, role: "operator", expires_at}` with `Cache-Control: no-store`. `principal_id` is `development-<8 hex>`; the token is returned once and lives 1 h in Fleet memory only (gone on restart). The caller address (the last `X-Forwarded-For` entry when Fleet runs with `--lan-camera-proxy` behind the site proxy, otherwise the TCP peer) must be loopback, RFC1918, link-local or the Tailscale tailnet `100.64.0.0/10`; `Host` must be a LAN IP literal, `localhost`, a `.local` name or the host name, and a present `Origin` must equal `Host`; otherwise, and always in paired mode, 403 `FORBIDDEN`. More than 6 requests per address per minute is 429 `RATE_LIMITED` with `Retry-After: 60`. At most 8 sessions are live; a ninth evicts the oldest. The session is a named operator: it passes the named-operator gate (missions included), and the issue and every later POST are written to the API audit under that principal; an unavailable audit is 503 `AUDIT_STORAGE_UNAVAILABLE` and no session. Robot credentials (`robots.yaml`, D-361 enrollment) and stop paths are unchanged. |
 | POST | `/api/fleet/auth/login` | none (site-users login accounts only) | D-519 (v1.137): body `{login, password, remember?: bool}`. 204 with `Cache-Control: no-store` and `Set-Cookie: rosy_fleet_session=<random>; HttpOnly; Secure; SameSite=Strict; Path=/`, plus `Max-Age=2592000` (30 d) only when `remember` is true. Accounts are `site-users.yaml` entries with `login` (`^[a-z0-9._-]{1,32}$`, unique) and `password_scrypt` (`scrypt$<n>$<r>$<p>$<salt b64>$<hash b64>`, made by `python -m fleet.server.site_users hash-password`); `service` cannot have a login. A wrong password and an unknown login give the same 401 `LOGIN_FAILED`. More than 5 failures per address or 10 per login in a minute is 429 `RATE_LIMITED` with `Retry-After: 60`. A present `Origin` must equal `Host`, else 403 `CSRF_REJECTED`; a malformed body is 422 `INVALID_REQUEST`. Success is audited under the principal, failure as `login:<name>` (role `viewer`); 429 is audited the same way at most once per address per minute. A login that does not match the pattern is the same 401 (after the dummy scrypt) and is audited as `login:?`. At most two password checks run at once; one that cannot start within 5 s is 429 `RATE_LIMITED`. Without any login account in site-users this route and logout are 404. The session lives in the `--tasks-db` (SHA-256 of the cookie only) and survives a Fleet restart: idle limit 12 h (sliding), 30 d with `remember`, never more than 30 d after login; account changes take effect when Fleet restarts with the edited site-users file (as for tokens), and then every session whose login's principal, role or password changed, or whose entry was removed, ends at once. A session read that cannot reach the DB is 503 `SESSION_STORAGE_UNAVAILABLE`; a cookie validated in the last 60 s needs no DB, and `POST /api/fleet/estop` also accepts an older cached cookie while the DB is unavailable. |
+| GET | `/api/fleet/auth/profile` | completed human session cookie | D-689 (v1.211): own login, principal_id, email, role and display_name; no-store. |
+| PATCH | `/api/fleet/auth/profile` | completed human session cookie, same-origin | D-689 (v1.211): display_name only, trim 1..80 characters without controls; own profile response. |
+| POST | `/api/fleet/auth/change-password` | valid human session cookie, same-origin | D-686 (v1.210): `password` body only, 8..1024 characters different from login ID; 204 replacement cookie, revoke prior account sessions, persist source-bound scrypt in existing SQLite. Initial sessions have no other protected Fleet read/write authority. See first-login contract above for refusal and storage errors. |
 | POST | `/api/fleet/auth/logout` | session cookie | D-519 (v1.137): 204; deletes the cookie's session and expires the cookie. With a cookie, `Origin` must equal `Host`, else 403 `CSRF_REJECTED`. |
 | GET | `/api/fleet/auth/session` | site-user bearer, development session or session cookie | D-519 (v1.137): `{principal_id, role, via: "cookie"\|"bearer"\|"development", expires_at}` with `Cache-Control: no-store`; `expires_at` is the cookie session's UTC ISO end, `null` for bearer and development. 401 without a credential. **Cookie rule (all `/api/fleet/*` routes):** an `Authorization: Bearer` header is checked exactly as before and wins; only without it is `rosy_fleet_session` read. A cookie-authenticated request other than `GET`/`HEAD` needs an `Origin` whose authority equals `Host`, else 403 `CSRF_REJECTED`. The cookie principal is a named operator for `require_named_operator`. Machine clients keep their Bearer tokens. |
 | POST | `/api/fleet/robots/{robot_id}/goal` | named `operator` (D-540 9, v1.161) + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
@@ -2829,9 +2846,11 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.210 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |
+| v1.212 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
+| v1.211 | 2026-10-12 | Additive (D-689): cookie-owned basic profile and verified-current-password rotation; no human authority via Bearer, no role/account edits. |
+| v1.210 | 2026-10-12 | Additive (D-686): initial-cookie password-change gate, auth/session boolean, POST auth/change-password and source-bound durable scrypt override; existing machine/Bearer and CORE authority unchanged. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |

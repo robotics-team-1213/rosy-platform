@@ -272,6 +272,12 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("Cell 서비스 구성을 확인")
     expect(page.locator("#saved-status")).to_contain_text("Cell 서비스 구성을 확인")
+    for control in ("recipe-save", "cell-save", "compile", "recipe-load", "cell-load", "read-job"):
+        expect(page.locator(f"#{control}")).to_be_disabled()
+        expect(page.locator(f"#{control}")).to_have_attribute("reason", "Cell 서비스 구성 확인 필요")
+    expect(page.locator("#token-save")).to_be_enabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    expect(page.locator("#recipe-id")).to_be_enabled()
     assert "CELL_APP_UNCONFIGURED" not in page.locator("main").inner_text()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
@@ -280,6 +286,12 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
             page.evaluate("window.scrollTo(0, 0)")
             page.screenshot(path=str(Path(output) / f"fleet-cell-purpose-{width}x{height}.png"))
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.unroute("**/api/fleet/cell-app/documents")
+    open_token_access(page)
+    page.locator("#token-save").click()
+    expect(page.locator("#notice")).to_contain_text("접속 완료")
+    for control in ("recipe-save", "cell-save", "recipe-load", "cell-load", "read-job"):
+        expect(page.locator(f"#{control}")).to_be_enabled()
 
 
 @pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
@@ -363,6 +375,8 @@ def test_cell_save_unavailable_does_not_claim_success(browser_site):
     revision = page.locator("#recipe-revision")
     expect(revision).to_contain_text("저장 결과 확인 불가")
     expect(revision).to_contain_text("최신 버전")
+    expect(page.locator("#notice")).to_contain_text("현재 상태를 다시 조회하세요")
+    expect(page.locator("#notice")).not_to_contain_text("HTTP 503")
     assert page.locator("#propose").is_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
