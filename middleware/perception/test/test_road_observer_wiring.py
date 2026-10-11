@@ -100,5 +100,5 @@ def test_road_observer_overlays_recent_advisory_detections():
     source = (ROOT / "control/road_observer_node.py").read_text(encoding="utf-8")
     assert "String, DETECTIONS_TOPIC" in source and "TOPIC as DETECTIONS_TOPIC" in source
     assert "detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S)" in source
-    road = (ROOT / "control/sensing/perception/road.py").read_text(encoding="utf-8")
+    road = (ROOT / "vision/perception/road.py").read_text(encoding="utf-8")
     assert "detections=detections" in road

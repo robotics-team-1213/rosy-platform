@@ -210,6 +210,9 @@
 | D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
 | D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
+| D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
 
 ## 계획·결과 문서
 
@@ -288,6 +291,12 @@
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 - [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
+- [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
+- [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
+- [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
+- [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
+- [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -307,3 +316,8 @@
 - 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
+- 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
+- 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
+- 2026-10-11 · f2f9945c7 · docs: D-625 이전 도구 준비 검증
+- 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
+- 2026-10-11 · 179738b17 · docs: 최대 5단계 구조안 문서 계약 검증

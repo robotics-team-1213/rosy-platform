@@ -19,6 +19,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_control_absorption_safety.py",
     "middleware/core/gateway/test/test_control_policy_link.py",
     "middleware/core/gateway/test/test_control_sensor_adapter.py",
+    # D-628 gateway admission/Safety integration; pure feature decisions stay in services/test.
+    "middleware/core/gateway/test/test_drive_output_boundaries.py",
     "middleware/core/gateway/test/test_crosswalk_gate_wiring.py",
     "middleware/core/gateway/test/test_core_logic.py",
     "middleware/core/gateway/test/test_domain_model.py",

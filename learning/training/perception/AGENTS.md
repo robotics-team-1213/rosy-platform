@@ -4,11 +4,11 @@
 # perception
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-11
 
 ## Purpose
 
-Developer-side half of the D-356 perception learning loop: turn robot recordings into datasets, hand them to a trainer that lives outside this repository, and check and deliver the returned model. Not installed on the robot and not a ROS package. The robot side is `middleware/perception/control/sensing/perception/learned/`.
+Developer-side half of the D-356 perception learning loop: turn robot recordings into datasets, hand them to a trainer that lives outside this repository, and check and deliver the returned model. Not installed on the robot and not a ROS package. The robot side is `middleware/perception/vision/perception/learned/`.
 
 ## Key Files
 
@@ -23,7 +23,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 | `operator_ssh.py` | Operator SSH options shared by `deliver.py` and `harvest.py`: user `rosy`, key + pinned known_hosts, BatchMode (D-373) |
 | `training/` | Trainer contract (`README.md`), step-by-step Colab manual (`COLAB.md`), `check_manifest.py`, `export_cell.py`, `handover.py` (drop a READY folder into the store inbox), the Colab notebook (`gen_notebook.py` generates it). Training itself runs outside this repo |
 | `test/` | Host tests for the above |
-| `prototype/` | Unreviewed D-205 prototypes, see `prototype/README.md` |
+| `../../../tools/perception_prototype/` | Unreviewed D-205 prototypes outside this learning holder (see `../../../tools/perception_prototype/README.md`) |
 
 ## Subdirectories
 
@@ -33,7 +33,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 | `model/` | Export, intake, delivery (see `model/AGENTS.md`) |
 | `training/` | Trainer contract (see `training/AGENTS.md`) |
 | `test/` | Tests |
-| `prototype/` | D-205 prototypes, not the learned loop (see `prototype/AGENTS.md`) |
+| `../../../tools/perception_prototype/` | D-205 prototypes, not the learned loop (see `../../../tools/perception_prototype/AGENTS.md`) |
 
 ## For AI Agents
 
@@ -59,7 +59,7 @@ Needs `onnxruntime`, `torch` and `mcap`; use a venv that has them. Tests skip cl
 
 ### Internal
 
-- `middleware/perception/control/sensing/perception/learned/manifest.py` (manifest contract)
+- `middleware/perception/vision/perception/learned/manifest.py` (manifest contract)
 
 ### External
 

@@ -78,7 +78,10 @@ class RealignMixin:
         if inp.cause == CROSSWALK or self._crosswalk_armed():
             return "crosswalk_gate"
         if linear < 0.0:                         # KTURN reverse arc: the stuck back-off rules as they are
-            return self._recovery._back_refusal(inp, starting=starting)
+            why = self._recovery._back_refusal(inp, starting=starting)
+            if why is not None:
+                return why
+            return None if self._rear_sweep_clear(now, -linear, angular) else "rear_sweep_blocked"
         if kind == "PIVOT":
             if inp.turn_m is None or inp.turn_m < SWEEP_PAD_M + _TURN_CLEAR_M:
                 return "turn_blocked"

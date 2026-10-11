@@ -612,6 +612,7 @@
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 | Accepted (2026-10-10, 사용자 결정; SOURCE·원격 시험·ARTIFACT·DEVICE·FIELD 별도) |
 
 | D-619 | 공통 상황 판단과 장치별 처리 방향: 관찰을 영상 ID에 묶고 상황 유형·불확실성·처리 방향을 반환, 모델 검증은 unverified, 이동 로봇·로봇암 실행 권한은 장치별 기존 계약 유지 | Accepted (2026-10-10, 사용자 결정; 구현·원격 계약·현장 모델 증거는 별도) |
+| D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 | Accepted (2026-10-11, 사용자 결정; 구조 방향·계획·이전 도구 준비에 한정, 실제 이동·실행 권한 변경·장치 수용은 별도) |
 | D-623 | 최신 RAW 사건 영상과 지도 방향을 Fleet·AI·프론트에 전달하고 경계 기하 변화에서만 재문의한다; 프레임 캐시·신선도 수정, 수락과 완료 구분, 이동 권한 유지 | Accepted (2026-10-10; SOURCE·원격 시험·배포·현장 별도) |
 | D-624 | 색상 역할·공용 컴포넌트·디자인 법칙; 팔레트 값 보존, 전체 웹 CSS 역할 소비, 갤러리 통합, Fleet·로봇 레이아웃 개선 | Accepted (2026-10-11; SOURCE·원격 G1·G2·G3·장치 수용 별도) |
 | D-631 | Named map profiles and coordinate/overlay/raw views; activation and calibration remain explicit | Accepted (2026-10-11) |
@@ -619,3 +620,21 @@
 | D-634 | 카메라 촬영·교정·관측·좌표 표시의 역할 분담과 표시 안정성 | Proposed |
 | D-635 | 지도 프로필의 용도와 기본 정보 및 Games 경기장 재사용 | Accepted (2026-10-11) |
 | D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 | Accepted (2026-10-11) |
+| D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 | Accepted (2026-10-11, 사용자 후속 실행 요청; M3–M6 source 이전, 설치·장치·현장 수용은 별도) |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
+| D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |
+| D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
+
+## D-628 — CORE Drive 출력과 복구의 현재 근거
+
+- 상태: Accepted (2026-10-11).
+- 결정: owning-mode epoch 아래 불변 후보를 원자적으로 저장하고 정책 평가 전후 identity를 확인한다. line 후보의 profile/traffic 검토 뒤 공통 감속은 곡률을 유지하며 비동일 actuation을 거절한다. 복구 응답은 현재 근거를 재검사하고 KTURN 후진은 차체 sweep을 확인한다.
+- 계약과 범위: [ADR 본문](../adr/D-628-core-drive-output-and-recovery-boundaries.md). 기존 Base/Arm writer와 bounded budget을 유지한다. D-442 전체 producer identity와 장치 수용은 후속이다.
+- 검토: [독립 소스 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md).
+
+## D-630 — 나머지 Platform 의미 holder와 설치 경계
+
+- 상태: Accepted (2026-10-11).
+- 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
+- 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
+- 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).

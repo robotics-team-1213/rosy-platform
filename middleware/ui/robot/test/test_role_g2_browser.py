@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[4]
-for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+for package in ("middleware/core/api", "middleware/core/gateway", "middleware/core/events",
                 "middleware/core/services", "contracts/foundation"):
     sys.path.insert(0, str(ROOT / package))
 

@@ -46,7 +46,7 @@
     # corner handoff (both odometry-bounded).
     lane_corner_turning: true
     # Lens offset ahead of base_link: the URDF nominal of the Pinky Pro front camera,
-    # copied from middleware/apps/device/pinky/profile/config/camera_nominal.yaml
+    # copied from middleware/devices/pinky/profile/config/camera_nominal.yaml
     # x_offset_m (geometry.yaml camera.*, cam_tilt_deg 8; drift-tested). Corner and
     # junction geometry is measured from base_link, so 0.0 put them 33 mm short.
     camera_x_offset_m: 0.03317

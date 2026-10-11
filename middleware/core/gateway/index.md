@@ -63,6 +63,7 @@
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-11-core-drive-composition-first.md](../../../docs/plans/2026-10-11-core-drive-composition-first.md)
 
 ## 교훈 (docs/solutions)
 
@@ -74,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 5faad3583 · refactor: CORE Drive 조립 책임 분리
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전을 인계에 싣는다
 - 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
 - 2026-10-09 · uncommitted · feat(core): D-531 경로 문맥 발행
-- 2026-10-09 · uncommitted · feat(core): D-541 trip lease 배선

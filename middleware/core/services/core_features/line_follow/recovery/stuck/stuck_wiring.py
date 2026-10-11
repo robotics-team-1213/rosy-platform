@@ -22,7 +22,7 @@ from core_features.line_follow.recovery.junction.gate import MANEUVER
 from core_features.line_follow.recovery.stuck.stuck_recovery import REPORT_ONLY, StuckInput, StuckRecovery
 from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
-#: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
+#: Providers CORE binds at start (core/drive/line_follow.py). Unbound or failing ones read as
 #: the fail-closed default: no console link, a calibration session, a zero linear limit.
 _PROVIDERS = {"console_linked": False, "calibration_active": True,
               "linear_ceiling": 0.0, "preview_seq": None}
@@ -183,6 +183,10 @@ class StuckRecoveryMixin:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
+            if (decision in ("RESUME", "BACK_AND_RETRY", "YIELD", "REALIGN")
+                    and not self._recovery._answer_clock_invalid(current)):
+                # Refresh evidence without advancing phases or replenishing the attempt budget.
+                self._recovery._last = self._stuck_input(current)
             outcome = self._recovery.answer(
                 current, stuck_id, decision, by, principal_ref,
                 yield_m=yield_m, yield_turn_rad=yield_turn_rad)

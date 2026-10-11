@@ -9,7 +9,7 @@ from control.control.recover import is_stuck_motion
 
 class FinalSpeedStuckTest(unittest.TestCase):
     def check(self, elapsed, moved, raw_speed=.005, age=.05):
-        path = Path(__file__).parents[1] / 'control/wander/motion.py'
+        path = Path(__file__).parents[2] / 'control/drive/tracking/wander/motion.py'
         cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_is_stuck')
         scope = dict(math=math, is_stuck_motion=is_stuck_motion)

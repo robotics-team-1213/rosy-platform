@@ -26,15 +26,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
-CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
 #: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;
 #: every other name resolves under PREFIX.
 JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/vision/rosy_vision/lane_map.py"}
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
+SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
+                       "middleware/perception/package.xml",
+                       *("middleware/control/drive/" + name + "/" for name in
+                         ("safety", "recovery", "tracking", "calibration", "planning/grid")))
+SPLIT_REQUIRED = ("middleware/perception/package.xml",
+                  "middleware/perception/sensors/sensing/__init__.py",
+                  "middleware/perception/vision/perception/__init__.py",
+                  "middleware/control/drive/safety/command_gate.py",
+                  "middleware/control/drive/recovery/recover.py",
+                  "middleware/control/drive/tracking/path_follow.py",
+                  "middleware/control/drive/calibration/modes.py",
+                  "middleware/control/drive/planning/grid/__init__.py",
+                  "middleware/control/drive/safety/adapter/__init__.py",
+                  "middleware/control/drive/tracking/wander/__init__.py")
 CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES)
+                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
@@ -252,6 +266,9 @@ def unpack(archive, dest):
     for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
+    if (dest / "middleware/perception/control/_source_layout.py").is_file():
+        if not all((dest / name).is_file() for name in SPLIT_REQUIRED):
+            raise ValueError("missing perception or Drive source-holder dependency")
     if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
@@ -436,6 +453,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
         map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                            CAMERA_MAP_ENTRY]).strip()
         paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
+        split_layout = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                                "middleware/perception/control/_source_layout.py"]).strip()
+        if not split_layout:
+            paths = tuple(p for p in paths if p not in SPLIT_CODE_PREFIXES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.

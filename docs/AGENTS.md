@@ -64,7 +64,7 @@ python3 tools/harness/rosy_harness.py lint
 
 ### Internal
 
-- Implementation: `middleware/core/gateway`, `middleware/apps/device/pinky/bringup`, `deploy/`
+- Implementation: `middleware/core/gateway`, `middleware/devices/pinky/bringup`, `deploy/`
 - Traceability matrix in Implementation Plan §11
 
 ### External

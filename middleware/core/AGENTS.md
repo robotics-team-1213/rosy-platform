@@ -12,16 +12,16 @@ CORE process and the libraries it loads. One robot process: rclpy on the main th
 | Directory | Purpose |
 |-----------|---------|
 | `gateway/` | ROS package `core`. Entry `core.main:main`, port 8080 (see `gateway/AGENTS.md`) |
-| `api_web/` | FastAPI routes served in-process (see `api_web/AGENTS.md`) |
+| `api/` | FastAPI routes served in-process; package `core_api_web` (see `api/AGENTS.md`) |
 | `events/` | Event catalogue and bus (see `events/AGENTS.md`) |
 | `services/` | Command, safety, power, docking, navigation facade, and the other managers (see `services/AGENTS.md`) |
-| `navigation/` | Nav2 launch, params, and maps (see `navigation/AGENTS.md`) |
+| `../control/drive/planning/nav2/` | Nav2 planning backend; CORE keeps its navigation facade and final command authority (D-626) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Do not split CORE into two processes. Do not publish `/cmd_vel` from `api_web` or from Nav2 directly.
+- Do not split CORE into two processes. Do not publish `/cmd_vel` from `api` or from Nav2 directly.
 - Policy modules stay free of ROS imports so pytest runs without rclpy.
 - `slam_toolbox` is optional and is imported inside try/except, not at module top.
 

@@ -1023,3 +1023,9 @@
 - 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
 - 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
 - gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · refactor: CORE Drive 조립 책임 분리
+
+- 변경: D-627 core/drive의 line-follow 배선·docking/swarm 조립을 추출하고 legacy import와 CoreServices 공개 attribute·동일 객체·listener 순서를 유지했다. services.py는 481줄이다. 새 배선 Safety 추적과 앵커 4개를 등록했다.
+- 증거: 추출 전 원격 257 성공, 후보 전체 CORE와 실제 wheel 설치 2575 성공·10 skip, feature 1675 성공. 독립 Safety source 승인과 최초 구현 trailer, 현재 holder를 따르는 종료/사건 scanner 검증. 세부 결과는 docs/validation/d626-holder-migration-2026-10-11/result.md.
+- gate 변화: 없음. 기존 ROS-SIM evidence를 이 후보에 확대하지 않는다. 새 graph·ARM64·장치·현장 수용 미확인.
