@@ -1627,3 +1627,10 @@ Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안
 조작은 검증된 장치·앱의 최신 UI를 확인하며, 잠긴 보안 화면·미지원 렌즈·발열
 제한·중복/변경 UI는 거절한다. 보안 잠금을 우회하거나 송출을 자동 시작하지 않는다.
 화면 방향 등 UI 배치가 인식 범위를 벗어나면 수동 조작이 필요하다.
+
+## 후보 토론 호스트 실행 책임
+
+`deliberation_sandbox.py`는 D-672의 Linux 호스트 실행 경계다. Decision의 CLI 번역기에
+검수된 실행 파일 SHA256과 모델·프로파일을 `sandbox_provider`로 주입하고 context 종료 시
+snapshot을 정리한다. 네트워크·호스트 홈·설정은 상속하지 않으며 현재 offline-only다.
+설치만으로 제공자 호출을 활성화하지 않는다. [계획과 실제 격리 HOLD](../../docs/plans/2026-10-12-pinky-deliberation-host-runner.md)를 먼저 확인한다.
