@@ -289,10 +289,10 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
               const panel = document.querySelector('[data-panel="setup.traffic_policy"]');
               if (!panel) return null;
               const card = panel.parentElement.getBoundingClientRect();
-              const slot = panel.closest('[data-slot="main"]').getBoundingClientRect();
+              const content = panel.closest('.procedure-content').getBoundingClientRect();
               const facts = panel.querySelector('.traffic-policy-facts').getBoundingClientRect();
               const form = panel.querySelector('form').getBoundingClientRect();
-              return {cardWidth:card.width, slotWidth:slot.width,
+              return {cardWidth:card.width, contentWidth:content.width,
                 factColumns:getComputedStyle(panel.querySelector('.traffic-policy-facts')).gridTemplateColumns.split(' ').length,
                 factsRight:facts.right, formLeft:form.left, formTop:form.top, factsTop:facts.top};
             })(),
@@ -305,7 +305,7 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
     assert layout["overlaps"] == [], layout
     assert layout["procedureCards"] == layout["sectionCount"], layout
     if surface == "setup" and width == 1366:
-        assert layout["traffic"]["cardWidth"] >= layout["traffic"]["slotWidth"] - 2, layout
+        assert layout["traffic"]["cardWidth"] >= layout["traffic"]["contentWidth"] - 2, layout
         assert layout["traffic"]["factsRight"] <= layout["traffic"]["formLeft"], layout
     if surface == "setup" and width == 390:
         assert layout["traffic"]["formTop"] >= layout["traffic"]["factsTop"], layout
