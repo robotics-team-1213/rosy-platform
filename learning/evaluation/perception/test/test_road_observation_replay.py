@@ -175,3 +175,60 @@ def test_readback_rejects_inconsistent_lineage_with_matching_hash(tmp_path, monk
     out.write_text(json.dumps(doc))
     with pytest.raises(ValueError):
         replay.read_artifact(out, sha(out.read_bytes()))
+
+
+@pytest.mark.parametrize('target', ['image_invalid', 'anchor_invalid', 'calibration', 'clock',
+    'errors', 'region', 'reason', 'mapped_seeds', 'rows', 'crop_labels', 'latency', 'max_age',
+    'digest', 'model_revision', 'camera_profile', 'valid_abstention'])
+def test_readback_recomputes_validity_and_region_even_when_hash_matches(tmp_path, monkeypatch, target):
+    replay, model, inputs, _ = bundle(tmp_path, monkeypatch)
+    out = tmp_path / 'out.json'
+    assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=inputs,
+                                          max_age_ns=100, out=out)) == 0
+    doc = json.loads(out.read_bytes())
+    observed = doc['observation']
+    if target in ('image_invalid', 'anchor_invalid'):
+        doc['inputs'][target.split('_')[0] + '_snapshot']['validity'] = 'INVALID'
+    elif target == 'calibration':
+        doc['inputs']['anchor_snapshot']['calibration_revision'] = 'other'
+    elif target == 'clock':
+        doc['inputs']['now_ns'] = 1200
+    elif target == 'errors':
+        observed.update(input_errors=['invented_error'], current_region=None, region_reason='invalid_inputs')
+    elif target == 'region':
+        observed['current_region'] = np.zeros_like(observed['current_region'], dtype=bool).tolist()
+    elif target == 'reason':
+        observed['region_reason'] = 'no_anchor'
+    elif target == 'mapped_seeds':
+        observed['preprocessing']['seed_pixels'] = [[0, 0]]
+    elif target == 'rows':
+        observed['preprocessing']['predicted_rows'] = [0, 6]
+    elif target == 'crop_labels':
+        observed['labels'][0][0] = 0
+    elif target == 'latency':
+        observed['infer_latency_ms'] = -1
+    elif target == 'max_age':
+        doc['bindings']['max_age_ns'] = True
+    elif target == 'digest':
+        doc['bindings']['inputs_sha256'] = 'unverified'
+    elif target == 'model_revision':
+        observed['model_revision'] = 'invalid'
+    elif target == 'camera_profile':
+        observed['camera_profile_revision'] = ''
+    else:
+        observed.update(labels=None, road_surface=None, current_region=None,
+                        region_reason='invalid_inputs', infer_latency_ms=None)
+    out.write_text(json.dumps(doc))
+    with pytest.raises(ValueError):
+        replay.read_artifact(out, sha(out.read_bytes()))
+
+
+def test_backend_failure_is_diagnostic_exit_two_without_artifact(tmp_path, monkeypatch):
+    replay, model, inputs, _ = bundle(tmp_path, monkeypatch)
+    def fail(image):
+        raise RuntimeError('backend execution failed')
+    model._session.run = fail
+    out = tmp_path / 'out.json'
+    assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=inputs,
+                                          max_age_ns=100, out=out)) == 2
+    assert not out.exists()
