@@ -226,6 +226,9 @@ def test_total_support_cannot_hide_under_supported_probability_bin(split):
     target = fit if split == 'fit' else evaluation
     for row in (target[1:] if split == 'fit' else target[:1]):
         row['alternatives'] = [dict(choice='reobserve', probability=.89), dict(choice='human', probability=.11)]
+    if split == 'evaluation':
+        for row in fit[:10]:
+            row['alternatives'] = [dict(choice='reobserve', probability=.89), dict(choice='human', probability=.11)]
     report = evaluate(fit, evaluation, profile(fit, evaluation, limits())).report
     assert report['state'] == 'HOLD'
     assert min(report['metrics']['count'], report['fit_metrics']['count']) == 60
