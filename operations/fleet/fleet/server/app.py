@@ -796,6 +796,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                                robot_credential_key, pairing_sync_token)
                 or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)):
             raise ValueError("Discord transport credential must be isolated")
+        if ((sightings is not None and sightings.uses_token(key))
+                or (policy_evidence is not None and policy_evidence.uses_token(key))):
+            raise ValueError("Discord transport credential must be isolated")
         accounts = {p.principal_id: p.role for p in principals.values()}
         accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
         app.state.channel_requests = ChannelRequests(task_service.store.path, channel_config, accounts)
