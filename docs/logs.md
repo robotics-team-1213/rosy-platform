@@ -8006,3 +8006,9 @@ osy-d395-s1d\`.
 - 변경: pytest 7.4의 module setup hook과 충돌하던 Fleet 시험 도우미 이름 및 모든 호출자를 바꿨다. Cell 401 검사는 실제 로그인·고급 접속 안내를 기대하며 세션 초기화와 조작 잠금 단언을 유지한다. 고립 설치 의존성 검사는 PEP 508 이름·공백만 정규화하고 정확한 버전 조건·무조건 의존성을 유지한다.
 - 증거: commit 40e7287971의 G1 307 passed와 pre-push 7828 passed 이후 전체 CI 38180852375는 Fleet hook·Cell 구문·sdist Requires-Dist 문자열 차이로 실패했다. CI 도구 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0의 원격 RED 1 NEW로 실제 core-common >=0.0.1 표기를 재현했다. 수정 후 동일 도구 원격 95 passed 및 Cell 실제 Chromium 6 passed, 각 terminal exit 0/known-failures NEW 0. 로그는 X: 검증 폴더 ci-compatible-diagnostic/ci-compatible-green/ci-compatible-cell에 보존한다.
 - gate 변화: 시험 호환성 수정과 선택 원격 회귀만 확인했다. 최신 통합·전체 CI·서명·새 설치본·사람 계정 발급은 별도 확인 중이다. production 권한·기계 토큰·비밀 검사·기존 실패 목록은 변경하지 않았다.
+
+## 2026-10-12 · 1e29edaed · 최신 통합과 CI 도우미 회귀
+
+- 변경: 최신 관측 기록·채널 작업 계약을 보존하며 통합했다. 새 채널 사건 시험의 setup 도우미와 세 호출만 이름을 바꿨다. 계정 규칙 문서에 확정된 첫 변경·기본 내 계정·현재 비밀번호 검증·결과 재조회를 반영했다.
+- 증거: 최신 도구 선택 회귀 101 passed/exit 0/NEW 0. canonical G1 두 회차는 6165+4371 및 6165+4396 passed, 각 NEW 0; Node 각 318 passed. commit 03378323e를 로컬 main에 착지했다. 새 도우미는 CI 도구 원격 RED 9 NEW 후 commit 1e29edaed의 pytest 7.4 및 최신 도구에서 각각 9 passed/exit 0/NEW 0. native_games_ui가 이름 변경 AST 동등성과 문서 범위를 독립 승인했다. 출하 범위 171개 커밋의 안전 검토 기록 검사도 통과했다.
+- gate 변화: 최신 소스 통합·원격 회귀·독립 검토를 확인했다. 이 후속 도우미 변경의 착지·푸시·전체 CI·서명·설치·계정 발급은 다음 gate다. 선택적 외부 채널 설정은 현장에 없으며 활성화하지 않았다.
