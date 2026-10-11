@@ -1,5 +1,5 @@
 // D-632: view-only notification owner; transport and polling stay in the console shell.
-import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText } from "./line-stuck.js";
+import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText, stuckSummary } from "./line-stuck.js";
 import { showInboxCount } from "/console/assets/fleet-header.js";
 
 const LOG_MAX = 120;
@@ -67,20 +67,36 @@ export function createInboxPanel({scope, el, readView}) {
         item = document.createElement("li");
         item.dataset.robotId = robot.robot_id;
         const heading = document.createElement("strong"), stages = document.createElement("dl");
+        const status = document.createElement("p");
+        status.dataset.messageSummary = "";
         heading.textContent = robot.robot_id;
         stages.className = "diag-readout";
-        for (const label of ["CORE 문의", "AI 판단", "Fleet 판정", "CORE 응답"]) {
+        for (const label of ["로봇 문의 (CORE)", "AI 분석", "관제 전달 (Fleet)", "로봇 응답 (CORE)"]) {
           const term = document.createElement("dt");
           term.textContent = label;
           stages.append(term, document.createElement("dd"));
         }
         const raw = document.createElement("details"), summary = document.createElement("summary");
         summary.className = "ui-disclosure-row";
-        summary.textContent = "전달 필드 보기";
-        raw.append(summary, document.createElement("pre"));
-        item.append(heading, stages, raw);
+        summary.textContent = "개발 진단 · 전달 필드 보기";
+        raw.append(summary, stages, document.createElement("pre"));
+        const evidence = document.createElement("details"), title = document.createElement("summary");
+        title.className = "ui-disclosure-row";
+        title.textContent = "판단 근거";
+        const receipt = document.createElement("p");
+        receipt.dataset.messageEvidence = "";
+        evidence.append(title, receipt, raw);
+        item.append(heading, status, evidence);
       }
+      if (item.dataset.stuckId && item.dataset.stuckId !== stuck.stuck_id) {
+        const focused = item.contains(document.activeElement);
+        item.querySelectorAll("details").forEach(fold => { fold.open = false; });
+        if (focused) item.querySelector(":scope > details > summary").focus({preventScroll: true});
+      }
+      item.dataset.stuckId = stuck.stuck_id;
       const facts = stuck.ai_facts || [];
+      item.querySelector('[data-message-summary]').textContent = stuckSummary(stuck);
+      item.querySelector('[data-message-evidence]').textContent = `로봇 문의: ${CAUSE_LABEL[inquiry?.observations?.cause || stuck.cause] || "원인 미확인"} · AI 분석: ${proposal ? "제안 있음" : facts.length ? "참고 관측 있음" : "기록 없음"} · 관제: ${answer ? "지시 기록 있음" : "전달 기록 미확인"} · 로봇: ${answer?.accepted === true ? "수락 · 완료는 별도 확인" : answer?.code === "ROBOT_UNREACHABLE" ? "연결 실패 · 전달하지 못함" : answer?.accepted === false ? "거절 · 개발 진단에서 응답 확인" : "응답 미확인"}`;
       const values = [inquiry ? `${CAUSE_LABEL[inquiry.observations?.cause] || "원인 미확인"} · 문의 수신` : "기록 없음",
         proposal ? `AI 제안 ${DECISION_LABEL[proposal.decision] || proposal.decision} · ${proposal.reason || "판단 근거 기록 없음"}` : facts.length ? facts.map(fact => `${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`).join(" · ") : "기록 없음",
         answer ? `전송 ${DECISION_LABEL[answer.decision] || answer.decision}` : proposal ? proposal.verdict === "forwarded" ? "CORE로 전달" : aiProposalText(proposal) : "기록 없음",

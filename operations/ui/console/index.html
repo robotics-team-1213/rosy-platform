@@ -18,8 +18,9 @@
 </head>
 <body>
   <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
-  <ui-shell grammar="exception">
+  <ui-shell grammar="exception" class="fleet-shell">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
+  <header class="fleet-header">
   <ui-topbar>
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
@@ -43,18 +44,20 @@
       </div>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
+    <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
-    <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  </header>
   <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" aria-current="page">관제</a>
-    <a href="/console/install">설치·보정</a>
-    <a href="/console/site-map">현장 지도</a>
-    <a href="/console/cell">Cell</a>
+    <a href="/console" data-action-icon="fleet" aria-current="page">관제</a>
+    <a href="/console/install" data-action-icon="install">설치·보정</a>
+    <a href="/console/site-map" data-action-icon="map">현장 지도</a>
+    <a href="/console/cell" data-action-icon="cell">Cell</a>
   </nav>
+  <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
@@ -126,11 +129,14 @@
       </div>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
+        <details id="tracking-coordinate-details">
+        <summary class="ui-disclosure-row">관측 좌표</summary>
         <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
           <caption>지도 좌표 · m · 카메라 관측</caption>
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
         </table>
+        </details>
       </div>
       </div>
       </details>
@@ -154,7 +160,7 @@
       </details>
     </section>
     </div>
-    <div class="console-secondary">
+    <aside class="console-secondary" aria-label="현재 상태와 대응">
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
@@ -186,10 +192,10 @@
           </section>
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
       <section class="panel" aria-labelledby="roster-heading">
@@ -374,9 +380,12 @@
 
         </div>
       </section>
-    </div>
+    </aside>
   </main>
 
+  </div>
+  </div>
+  <footer class="fleet-footer" aria-label="운영 정보"><span>현재 시각</span><ui-text id="clock" scale="value">--:--:--</ui-text><a href="/console?inbox=1" data-action-icon="notification">관제 알림</a></footer>
   </ui-shell>
 </body>
 </html>
