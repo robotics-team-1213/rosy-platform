@@ -710,9 +710,3 @@
 - 상태: Accepted (2026-10-12).
 - 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
 - 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.
-
-## D-670 — 정답 없는 도로면·현재 구역 관측
-
-- 상태: Accepted (2026-10-12).
-- 결정: raw 모델 추론과 내부 관측 함수를 정답·주행 정책 없이 공통화한다. 운영 API/토픽/전달 활성화와 장치 성능 수용은 별도다.
-- 계약: [ADR 본문](../adr/D-670-truth-free-road-observation-primitive.md).
