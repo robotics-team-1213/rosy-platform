@@ -121,6 +121,7 @@ def preflight(run, *, sdk):
     origins = verify_module_origins({
         "core_common.protocol.schemas": "contracts/foundation",
         "fleet.server.app": "operations/fleet",
+        "rosy.decision.model_tool_contract": "operations/decision/src",
         "rosy.world.state.projections.map_pose": "operations/world/src",
         "rosy.processes.palletizing.compiler": "operations/processes/palletizing/src",
         "rosy.execution.site.item_pose": "operations/execution/src",

@@ -18,7 +18,7 @@ import surface_registry as registry
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
 GAMES = SRC.parent / "operations" / "apps" / "games" / "games" / "web"
 
 CANVAS_FILES = [
@@ -35,8 +35,8 @@ CANVAS_FILES = [
     FLEET / "site-map.js",
     FLEET / "console.js",
     GAMES / "board.js",
-    SRC.parent / "learning/training/perception/dataset/review_app_web/app.js",
-    SRC.parent / "learning/training/perception/dataset/review_app_web/pixels.js",
+    SRC.parent / "learning/curation/perception/review_app_web/app.js",
+    SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")
