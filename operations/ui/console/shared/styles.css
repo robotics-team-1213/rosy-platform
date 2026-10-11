@@ -546,6 +546,9 @@ main {
   .queues-panel { order: 0; }
   .panel[aria-labelledby="map-heading"] { order: 1; }
   .console-context { order: 2; }
+  #fleet-main:has(#work-overview:not([hidden])) > #work-overview { order: -1; }
+  #fleet-main:has(#work-overview:not([hidden])) > .console-context { order: 0; }
+  #fleet-main:has(#work-overview:not([hidden])) > .queues-panel { order: 1; }
 }
 
 
