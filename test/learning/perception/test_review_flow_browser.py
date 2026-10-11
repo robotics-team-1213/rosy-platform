@@ -535,7 +535,7 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
     title = page.locator('ui-topbar h1').bounding_box()
-    theme = page.locator('ui-topbar #theme').bounding_box()
+    theme = page.locator('ui-topbar .theme-label select').bounding_box()
     assert title['x'] + title['width'] <= theme['x'], (route, title, theme)
     for link in page.locator('.workspace-tabs a').all():
         bounds = link.bounding_box()
