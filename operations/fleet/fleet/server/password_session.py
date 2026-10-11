@@ -70,14 +70,20 @@ class LoginRateLimited(Exception):
     """Too many failed logins, or too many password checks already running."""
 
 
+class StalePasswordCheck(Exception):
+    """The credential changed after verification, or this is not an initial session."""
+
+
 class PasswordSessions:
     def __init__(self, path: Path | str, logins: Mapping[str, Mapping[str, str]], *,
                  clock: Callable[[], float] = time.time) -> None:
         self.path = Path(path)
         # D-519 3: the site-users snapshot loaded at startup; account changes apply on restart.
-        self._logins = dict(logins)
+        self._logins = {login: dict(account) for login, account in logins.items()}
+        self._sources = {login: _digest("\0".join(account[key] for key in
+                         ("principal_id", "role", "password_scrypt"))) for login, account in logins.items()}
         self._clock = clock
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._failures: dict[tuple[str, str], deque[float]] = {}
         self._limit_audited: dict[str, float] = {}
         # digest -> session row plus "validated_at": recent cookies authenticate without the DB.
@@ -91,6 +97,17 @@ class PasswordSessions:
                 session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL,
                 principal_id TEXT NOT NULL, role TEXT NOT NULL, password_sha256 TEXT NOT NULL,
                 created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_passwords (
+                login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)""")
+            for row in db.execute("SELECT * FROM fleet_console_passwords").fetchall():
+                if self._sources.get(row["login"]) == row["source_sha256"]:
+                    self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
+                else:
+                    # Source rotation invalidates sessions even if YAML now contains the effective hash.
+                    db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
+                    db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
+        self._required = {login: verify_password(login, account["password_scrypt"])
+                          for login, account in self._logins.items()}
 
     def _connect(self, *, timeout: float = _AUTH_DB_TIMEOUT_S) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=timeout)
@@ -146,7 +163,8 @@ class PasswordSessions:
             _SCRYPT_SLOTS.release()
         if ok and account is not None:
             self._refund(keys, now)
-            return SitePrincipal(account["principal_id"], account["role"])
+            return SitePrincipal(account["principal_id"], account["role"],
+                                 self._required[login], _digest(account["password_scrypt"]))
         return None
 
     def _refund(self, keys, stamp: float) -> None:
@@ -156,7 +174,14 @@ class PasswordSessions:
                 if hits is not None and stamp in hits:
                     hits.remove(stamp)
 
-    def issue(self, login: str, *, remember: bool) -> str:
+    def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
+        with self._lock:
+            if (verified is not None
+                    and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"])):
+                raise StalePasswordCheck()
+            return self._issue(login, remember=remember)
+
+    def _issue(self, login: str, *, remember: bool) -> str:
         account = self._logins[login]
         value = secrets.token_urlsafe(32)
         now = self._clock()
@@ -174,6 +199,44 @@ class PasswordSessions:
             raise SessionStorageUnavailable() from None
         self._remember(_digest(value), row, now)
         return value
+
+    def change_password(self, value: str, password: str) -> tuple[str, bool]:
+        if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
+            raise LoginRateLimited()
+        try:
+            encoded = hash_password(password)
+        finally:
+            _SCRYPT_SLOTS.release()
+        with self._lock:
+            now, key = self._clock(), _digest(value)
+            replacement = secrets.token_urlsafe(32)
+            try:
+                with closing(self._connect()) as db, db:
+                    db.execute("BEGIN IMMEDIATE")
+                    row = db.execute("SELECT * FROM fleet_console_sessions WHERE session_sha256 = ?", (key,)).fetchone()
+                    if (row is None or self._tombstoned(key) or self._expiry(row, now) is None
+                            or not self._required[row["login"]]):
+                        raise StalePasswordCheck()
+                    login = row["login"]
+                    if password == login or not 8 <= len(password) <= 1024:
+                        raise ValueError("invalid new password")
+                    db.execute("INSERT OR REPLACE INTO fleet_console_passwords VALUES (?,?,?)",
+                               (login, self._sources[login], encoded))
+                    db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (login,))
+                    fresh = {**dict(row), "password_sha256": _digest(encoded),
+                             "created_at": now, "last_used_at": now}
+                    db.execute("INSERT INTO fleet_console_sessions VALUES (?,?,?,?,?,?,?,?)", (
+                        _digest(replacement), login, fresh["principal_id"], fresh["role"],
+                        fresh["password_sha256"], now, now, fresh["remember"]))
+            except sqlite3.Error:
+                raise SessionStorageUnavailable() from None
+            self._logins[login] = {**self._logins[login], "password_scrypt": encoded}
+            self._required[login] = False
+            for cached_key in [k for k, cached in self._cache.items() if cached["login"] == login]:
+                self._forget(cached_key, revoked=True)
+            self._forget(key, revoked=True)
+            self._remember(_digest(replacement), fresh, now)
+            return replacement, bool(fresh["remember"])
 
     def _tombstoned(self, key: str) -> bool:
         # Caller holds the lock. Tombstones outlive any cache entry that could have been in flight.
@@ -255,9 +318,10 @@ class PasswordSessions:
             cached["last_used_at"] = now
         self._remember(key, cached, cached["validated_at"])
         with self._lock:
-            if self._tombstoned(key):
+            expiry = self._expiry(cached, now)
+            if self._tombstoned(key) or expiry is None:
                 return None  # logged out while this request was in flight
-        return SitePrincipal(cached["principal_id"], cached["role"]), _iso(self._expiry(cached, now))
+            return SitePrincipal(cached["principal_id"], cached["role"], self._required[cached["login"]]), _iso(expiry)
 
     def revoke(self, value: str) -> None:
         key = _digest(value)
@@ -310,6 +374,7 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             "principal_id": principal.principal_id, "role": principal.role,
             "via": getattr(request.state, "site_auth_via", "bearer"),
             "expires_at": getattr(request.state, "site_auth_expires_at", None),
+            "password_change_required": principal.password_change_required,
         })
 
     if sessions is None:
@@ -348,11 +413,43 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=401, detail={
                 "code": "LOGIN_FAILED", "message": "login or password is incorrect"})
         try:
-            value = sessions.issue(login, remember=remember)
+            value = sessions.issue(login, remember=remember, verified=principal)
+        except SessionStorageUnavailable:
+            raise _storage_unavailable() from None
+        except StalePasswordCheck:
+            raise HTTPException(status_code=401, detail={
+                "code": "LOGIN_FAILED", "message": "login or password is incorrect"}) from None
+        response = Response(status_code=204, headers=NO_STORE)
+        _set_cookie(response, value, remember=remember)
+        return response
+
+    @app.post("/api/fleet/auth/change-password", status_code=204, tags=["fleet-auth"])
+    def fleet_auth_change_password(request: Request, payload: dict = Body(...),
+                                   principal: SitePrincipal = Depends(authorize)) -> Response:
+        if (getattr(request.state, "site_auth_via", None) != "cookie"
+                or not principal.password_change_required):
+            raise HTTPException(status_code=403, detail={
+                "code": "PASSWORD_CHANGE_NOT_REQUIRED", "message": "an initial cookie session is required"})
+        password = payload.get("password")
+        if set(payload) != {"password"} or not isinstance(password, str) or not 8 <= len(password) <= 1024:
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_REQUEST", "message": "a new password is required"})
+        value = request.cookies[COOKIE]
+        try:
+            replacement, remember = sessions.change_password(value, password)
+        except ValueError:
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_REQUEST", "message": "choose a different password"}) from None
+        except StalePasswordCheck:
+            raise HTTPException(status_code=401, detail={
+                "code": "UNAUTHORIZED", "message": "initial session expired"}) from None
+        except LoginRateLimited:
+            raise HTTPException(status_code=429, headers={"Retry-After": "1"}, detail={
+                "code": "RATE_LIMITED", "message": "password service is busy"}) from None
         except SessionStorageUnavailable:
             raise _storage_unavailable() from None
         response = Response(status_code=204, headers=NO_STORE)
-        _set_cookie(response, value, remember=remember)
+        _set_cookie(response, replacement, remember=remember)
         return response
 
     @app.post("/api/fleet/auth/logout", status_code=204, tags=["fleet-auth"])
