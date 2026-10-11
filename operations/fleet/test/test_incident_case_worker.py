@@ -14,7 +14,7 @@ from test_judgment_profiles import profile, adapter
 from test_model_judgment import payload
 
 
-def setup(tmp_path, *, admitted=True, change=None, budget_calls=4):
+def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, provider_hook=None):
     now, seen, handoffs = [101.0], [], []
     log = LineStuckAnswerLog(tmp_path / 'fleet.db')
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
@@ -23,6 +23,7 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4):
     human = [False]
     async def provider(p, bound, prior, remaining, **kwargs):
         seen.append((p, bound, prior))
+        if provider_hook is not None: await provider_hook(p)
         raw = payload(p)
         raw['evidence_ids'] = list(p.evidence_ids)
         for key in ('next_step', 'success_check'):
@@ -142,5 +143,72 @@ def test_profile_change_holds_original_case_without_budget_reset(tmp_path):
         now[0] += 1; worker.feed(poll(2)); await settled(worker)
         assert len(seen) == 1 and store.case(scope)['state'] == 'HOLD'
         assert handoffs[0][1]['reason'] == 'PROFILE_CHANGED'
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_cancelled_provider_is_unknown_final_and_cannot_replay(tmp_path):
+    async def run():
+        entered = asyncio.Event()
+        async def hang(_):
+            entered.set(); await asyncio.Event().wait()
+        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path, provider_hook=hang)
+        worker.feed(poll()); await entered.wait()
+        scope = store.active_scopes()[0]
+        await worker.aclose()
+        assert store.case(scope)['state'] == 'HOLD'
+        assert len(handoffs) == 1 and handoffs[0][1]['reason'] == 'WORKER_CANCELLED'
+        worker.feed(poll()); await settled(worker)
+        assert len(seen) == 1
+    asyncio.run(run())
+
+
+def test_prepare_receipt_shares_transaction_and_does_not_reset_parent(tmp_path):
+    _, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+    poll()
+    with log._connect() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        assert worker.prepare_receipt(conn, board.judgment_view('pinky')) is True
+        scope = store.active_scopes()[0]
+        assert worker.prepare_receipt(conn, board.judgment_view('pinky')) is True
+        conn.rollback()
+    assert store.active_scopes() == ()
+
+
+def test_active_foreign_worker_is_not_recovered_or_replayed_automatically(tmp_path):
+    async def run():
+        _, seen, handoffs, log, board, store, worker, poll, _ = setup(tmp_path)
+        snapshot = poll()
+        with log._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            assert worker.prepare_receipt(conn, board.judgment_view('pinky'))
+            conn.commit()
+        scope = store.active_scopes()[0]
+        store.reserve(scope, attempt_id='foreign-attempt', input_hash='c' * 64,
+                      observation_revision='r1', kind='model', max_cost_usd=0, worker_id='foreign', role='primary')
+        store.mark_submitting(scope, 'foreign-attempt', worker_id='foreign')
+        worker.feed(snapshot); await settled(worker)
+        assert store.attempt(scope, 'foreign-attempt')['state'] == 'SUBMITTING'
+        assert seen == [] and handoffs == []
+        await worker.aclose()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('fault', ['replaced', 'left_roster', 'restart', 'stale_normal'])
+def test_non_clearance_closures_never_become_observed_resolution(tmp_path, fault):
+    async def run():
+        now, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+        worker.feed(poll()); await settled(worker)
+        scope = store.active_scopes()[0]
+        now[0] += 2
+        snapshot = poll(2, normal=True)
+        if fault == 'stale_normal': now[0] += 4
+        else:
+            with log._connect() as conn:
+                conn.execute('UPDATE fleet_line_stuck_episodes SET close_reason=? WHERE robot_id=? AND stuck_id=?',
+                             (dict(replaced='replaced', left_roster='left_roster', restart='fleet_restart')[fault], 'pinky', 'lane-1'))
+                conn.commit()
+        worker.feed(snapshot); await settled(worker)
+        assert store.observed_closure(scope) is None
         await worker.aclose()
     asyncio.run(run())
