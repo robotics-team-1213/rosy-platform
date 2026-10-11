@@ -41,7 +41,31 @@ def test_profile_api_permissions_validation_and_conflict(tmp_path):
         body['expected_revision'] = saved.json()['revision']
         body['map']['edges'][0]['to'] = 'missing'
         assert client.put(url, json=body, headers=OPERATOR).status_code == 422
+        assert client.put('/api/fleet/site-map/profiles/bad%20id', json=body, headers=OPERATOR).status_code == 422
+        body['map'] = _line()
+        body['name'] = ' '
+        assert client.put(url, json=body, headers=OPERATOR).status_code == 422
+        body['name'] = 'updated'
+        updated = client.put(url, json=body, headers=OPERATOR)
+        assert updated.status_code == 200
+        assert updated.json()['revision'] != saved.json()['revision']
         assert client.put(url, content=b'x' * (2 * 1024 * 1024 + 1), headers=OPERATOR).status_code == 413
         rows = client.get('/api/fleet/site-map/profiles', headers=VIEWER).json()['profiles']
-        assert rows == [saved.json()]
+        assert rows == [updated.json()]
         assert client.get('/api/fleet/site-map/active', headers=VIEWER).json() == active
+
+
+def test_profile_limit_does_not_prevent_revision_checked_updates():
+    store = SiteMapStore()
+    site = SiteMap.model_validate(_line())
+    for index in range(100):
+        row = store.save_profile(str(index), name='map', site_map=site,
+                                 expected_revision=None, principal_id='bob')
+    with pytest.raises(SiteMapError) as err:
+        store.save_profile('overflow', name='map', site_map=site,
+                           expected_revision=None, principal_id='bob')
+    assert err.value.code == 'SITE_MAP_PROFILE_LIMIT'
+    updated = store.save_profile('99', name='update', site_map=site,
+                                 expected_revision=row['revision'], principal_id='bob')
+    assert updated['name'] == 'update' and len(store.profiles()) == 100
+    store.close()

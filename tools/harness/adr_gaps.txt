@@ -27,3 +27,9 @@ D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lan
 
 D-621 reserved by another active session; ADR not yet landed in this branch
 D-622 reserved by another active session; ADR not yet landed in this branch
+D-625 reserved by another active session (refs/adr/D-625); remove when its ADR lands
+D-626 reserved by another active session (refs/adr/D-626); remove when its ADR lands
+D-627 reserved by another active session (refs/adr/D-627); remove when its ADR lands
+D-628 reserved by another active session (refs/adr/D-628); remove when its ADR lands
+D-629 reserved by another active session (refs/adr/D-629); remove when its ADR lands
+D-630 reserved by another active session (refs/adr/D-630); remove when its ADR lands
