@@ -238,6 +238,8 @@ fun SettingsScreen(
 
         OutlinedTextField(
             value = link,
+            textStyle = MaterialTheme.typography.bodySmall,
+            shape = MaterialTheme.shapes.extraSmall,
             onValueChange = { link = it },
             label = { Text(stringResource(R.string.settings_link)) },
             singleLine = true,
@@ -292,6 +294,8 @@ fun SettingsScreen(
         Field(port, { port = it; saved = false }, R.string.settings_port, invalid == "port", KeyboardType.Number)
         OutlinedTextField(
             value = token,
+            textStyle = MaterialTheme.typography.bodySmall,
+            shape = MaterialTheme.shapes.extraSmall,
             onValueChange = { token = it; saved = false },
             label = { Text(stringResource(R.string.settings_token)) },
             isError = invalid == "token",
@@ -400,6 +404,8 @@ private fun Field(
 ) {
     OutlinedTextField(
         value = value,
+        textStyle = MaterialTheme.typography.bodySmall,
+        shape = MaterialTheme.shapes.extraSmall,
         onValueChange = onChange,
         label = { Text(stringResource(label)) },
         isError = isError,
