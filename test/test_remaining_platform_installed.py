@@ -76,10 +76,23 @@ installed = Path(sys.argv[1]).resolve()
 assert not (installed / '_build').exists()
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
 from rosy.execution.site.goal_evidence import GoalEvidence
-from rosy.execution.site.workflow import mission_step_state
+from rosy.execution.site.workflow import mission_step_state, project_progress
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+assert 'core_common' not in sys.modules
 assert mission_step_state('ACTION_SUCCEEDED') == 'AWAITING_GOAL_EVIDENCE'
 import importlib.metadata
+assert 'core_common==0.0.0' in importlib.metadata.requires('rosy-execution')
+from datetime import datetime, timezone
+projected = project_progress({
+    'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': 100.0,
+                'reason': None, 'dispatch_generation': 1, 'action_id': 'a', 'attempt_id': 't'},
+    'progress_events': [], 'snapshot_event_id': 1, 'stop_control': None,
+    'history': [], 'history_truncated': False,
+}, now=datetime.fromtimestamp(100, timezone.utc))
+assert projected['progress']['step']['state'] == 'AWAITING_GOAL_EVIDENCE'
+assert projected['progress']['goal_evidence']['state'] == 'PENDING'
+assert projected['progress']['stop']['physical_state'] == 'UNKNOWN'
+assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
 assert 'rosy-execution==0.1.0' in importlib.metadata.requires('fleet')
