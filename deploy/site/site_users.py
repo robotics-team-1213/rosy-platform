@@ -141,9 +141,11 @@ def _publish(path: Path, text: str) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
             stream.flush()
+            if os.name == "posix":
+                if os.geteuid() == 0:
+                    os.fchown(stream.fileno(), 0, FLEET_GID)
+                os.fchmod(stream.fileno(), FILE_MODE)
             os.fsync(stream.fileno())
-        if os.name == "posix":
-            os.chmod(temporary, FILE_MODE)
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
