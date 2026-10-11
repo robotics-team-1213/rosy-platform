@@ -143,6 +143,8 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
         try:
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
             table = page.locator("#tracking-positions")
+            expect(table).not_to_be_visible()
+            page.locator("#tracking-coordinate-details > summary").click()
             expect(table).to_be_visible()
             expect(table).to_contain_text("1.25")
             map_box = page.locator("#map-stage").bounding_box()

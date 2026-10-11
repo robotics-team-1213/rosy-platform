@@ -114,7 +114,7 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.route("**/test-camera-frame", lambda route: route.fulfill(body=encoded, content_type="image/png", headers=headers))
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     plane_tools = page.locator(".plane-tools")
     expect(plane_tools).not_to_have_attribute("open", "")
     plane_tools.locator("summary").focus()
@@ -195,7 +195,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     page.route("**/test-camera-frame", serve_frame)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     page.locator(".plane-tools summary").click()
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("Rosy Cam 평면 영상")
@@ -239,7 +239,7 @@ def test_import_camera_map_draft_never_activates(page_site):
     page, store, robot = page_site
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     previous = store.active_view()
     camera_fixture = os.environ.get("ROSY_CAMERA_MAP_FIXTURE")
     draft = json.loads(Path(camera_fixture).read_text(encoding="utf-8")) if camera_fixture \
@@ -306,7 +306,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     expect(page.locator("#token-access")).not_to_have_attribute("open", "")
     # D-540 2: below 90rem the reconnect summary sits in the header fold behind 설정.
     expect(page.locator("#token-access summary" if width >= 1440 else "#topbar-more")).to_be_visible()
@@ -742,7 +742,7 @@ def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_sit
     page, store, _robot = page_site
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)  # active map, read-only
     page.select_option("#map-source", "draft")
     page.locator("#map-viewport").scroll_into_view_if_needed()
