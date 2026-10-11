@@ -52,3 +52,17 @@ D-670은 정답·목적지·통행 정책 없이 기존 모델 세션과 D-665/D
 설치 closure 검토 지적은 control 0.1.1과 Foundation 최소 0.0.1 의존 선언으로 수정했다. `db1eb3058b`의 설치 metadata RED 뒤 `dc3148cdde`의 sdist→wheel·Foundation wheel 설치·격리 import 및 관련 회귀가 terminal exit 0이다. Foundation source 경로를 import에 넣지 않고 설치본만으로 새 관측 함수와 공통 타입을 읽었다. 실제 ARM64 이미지 또는 장치 설치는 미확인이다.
 
 물체 평가, 조건별 최소 표본·coverage와 출처 단위 불확실성, 사전 고정 수용 임계값, 실제 장치의 관측 전용 전달·버전 readback·지연/손실도 미확인이다. 이 작업에서 push·장치 배포·운영 활성화·주행·실물/시뮬레이션 성능 수용을 수행하지 않았다. SOURCE 시험과 local main 착지를 이 단계의 수용으로 확대하지 않는다.
+
+## 검수의 도로면 의미 보존
+
+`be11481c27` 원격 RED 4건은 전체 도로면의 unknown 병합·indexed draft import에 자기 차선 제한이 적용되던 문제와 차선 전용 도구의 잘못된 입력 수용을 재현했다. `3cdbe9d244`에서 공통 검수는 명시적 `road_surface/1`에만 자기 차선 제한을 적용하지 않고, lane clipping/Qwen completion은 전체 도로면을 처리 전에 거절하도록 수정했다. 구형/현재 구역 제한과 검수 화소 불변, 255 및 pending/명시 승인·classes hash 결속은 유지한다.
+
+관련 원격 회귀 56건은 terminal exit 0, NEW0이다. 추가하려던 bootstrap 시험 파일이 없는 첫 GREEN 호출은 collection exit 4였으므로 통과 근거에 포함하지 않았다. 교정한 기존 시험 경로로 GREEN을 확인했다. 합성 import/apply/approve 시험은 검수 기능의 증거이며 실제 독립 사람이 정답을 검수했다는 증거가 아니다. 기존 Desktop 원본·classes·검수 승인은 수정하지 않았다. 실제 도로면 정답·다른 자동 라벨 producer의 지원·장치 관측 전달은 여전히 별도다.
+
+독립 소스 검토는 별도 whole-road 클래스가 현재 구역 클래스의 제한까지 해제하는 혼합 binding 문제를 지적했다. `59731df3a3`에서 RED 1건으로 재현한 뒤, 제한 해제를 해당 경계 검사가 대상으로 삼는 이름 `drivable` 클래스의 명시적 도로면 의미에만 적용하도록 좁혔다. 다른 이름의 도로면 클래스가 존재해도 기존 현재 구역 화소의 차선 제한은 유지한다.
+
+## 모델 기반 초안의 의미 계보
+
+`211ac02af6`의 원격 RED는 semantic 검사와 raw model classes 결속의 미구현을 확인했다. `57d7455c47`의 CLI RED는 현재 구역 모델에 도로면 YAML을 연결해도 exit 0으로 출력 디렉터리를 만들던 동작을 재현했다. 그 이전 CLI 실행은 불완전 fixture에서 AttributeError로 끝났으므로 CLI 동작 근거로 사용하지 않는다.
+
+`b4ac3362a8`은 공통 prelabel 검사 및 prelabel/pixel draft job의 두 호출을 raw manifest에 결속한다. 독립 소스 검토에서 남은 blocker는 없었다. 수정 후 원격 GREEN 호출은 SSH 연결 단절로 exit 255였으며 시험 결과는 미확인이다. 원격 프로세스 상태 확인도 연결 timeout으로 완료하지 못했다. 이 기록 시점에는 회귀 통과·통합·local main 병합을 주장하지 않는다. 원본 로그는 X: 세션의 `logs/prelabel-*`에 있다.

@@ -161,6 +161,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
                'rosy.execution.site.workflow']
