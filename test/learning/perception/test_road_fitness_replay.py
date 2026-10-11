@@ -181,6 +181,26 @@ def test_exact_training_image_overlap_is_rejected_with_distinct_groups(tmp_path,
         run(paths)
 
 
+@pytest.mark.parametrize("semantic", ["current_road_region/1", None])
+def test_renamed_training_road_still_requires_whole_surface_semantic(tmp_path, monkeypatch, semantic):
+    paths = list(bundle(tmp_path, monkeypatch))
+    train = next((paths[1] / "datasets/train").iterdir())
+    def change(doc):
+        road = next(c for c in doc["classes"] if c["role"] == "drivable")
+        road["name"] = "renamed_road"
+        if semantic is None:
+            road.pop("semantic")
+        else:
+            road["semantic"] = semantic
+    train = revise(train, change)
+    model_doc = json.loads((paths[0] / "model_manifest.json").read_bytes())
+    model_doc["dataset"]["revision"] = train.name
+    (paths[0] / "model_manifest.json").write_bytes(review.encoded(model_doc))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(training_refs=[f"train@{train.name}"]))
+    with pytest.raises(ValueError, match="drivable semantic"):
+        run(paths)
+
+
 @pytest.mark.parametrize("slot", [0, 2, 3, 4])
 def test_root_alias_is_refused_before_resolving(tmp_path, monkeypatch, slot):
     paths = list(bundle(tmp_path, monkeypatch))
