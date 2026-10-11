@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -25,4 +26,4 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가

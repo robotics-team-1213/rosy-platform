@@ -81,4 +81,6 @@ module: docs
 
 구현 증거: D-663의 버전별 drivable 의미가 검수 classes→dataset→export→model/eval/champion까지 보존되며, 기존 조향 슬롯에는 도로면 의미를 전달하지 않는다. `0ab4b7d073` 전체 perception 학습·모델 manifest·harness 원격 회귀는 terminal exit 0, NEW 0이다. `c90bf2d94f`의 엄격 학습/평가 content SHA 및 학습 classes 의미 결속 관련 원격 회귀도 terminal exit 0, NEW 0이다. 이 결과는 소스 시험이며 실제 정답·모델 성능의 수용 증거가 아니다.
 
-남은 구현: 현재 구역 로직의 입력·보류·소비자 계약, 독립 정답과 실물/시뮬레이션별 평가·coverage 보고, 관측 전용 장치 전달과 지연 readback. 새 데이터 검수·학습과 현장 수용은 아직 확인되지 않았다.
+현재 구역 로직: D-665가 내부 입력·보류·소비자를 정의한다. World는 관측 snapshot의 시각·유효성·frame/calibration/transform/reference를 확인하고, perception은 확인된 기준점이 하나의 연결 영역에 속하는 경우만 현재 구역을 산출한다. learning의 `road_fitness.evaluate_frame`은 도로면/현재 구역의 독립 정답을 각각 점수화하고 구역 보류에서도 정답 분모를 보존한다. `b64dc94e0a` 원격 합성 로직·기존 기준선·World 설치 wheel 시험은 terminal exit 0, NEW 0이다.
+
+남은 구현: 실제 기준점 투영 생산자와 보정/위치 오차 검증, 독립 정답 데이터/예약/split과 실물·시뮬레이션별 실행·coverage 보고, 물체 독립 평가, 사전 고정 수용 profile, 관측 전용 장치 전달과 지연 readback. 새 데이터 검수·학습과 현장 수용은 아직 확인되지 않았다.
