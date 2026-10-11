@@ -65,3 +65,11 @@
 - gate: SOURCE/LOCAL GO 유지, 전체 ROS-SIM HOLD 유지. 단일 native CPU 진단은 D-606 Isaac Lab, ROS localization/sensors, 두 대 Fleet·신호 및 실물 수용을 대신하지 않는다. baseline도 완주했으므로 성능 향상은 주장하지 않는다.
 - 기록: 내부 날짜별 상세 일지는 `private/isaac/{plans,journal,results,templates}/`, 원시 로그는 관리된 X: session이다. 이번 RL topic은 main 착지·push 전 상태다.
 - 교훈: 작은 caster의 60Hz 접촉 진동은 zero target만으로 stop이 아니다. 240Hz 재시험도 raw body velocity와 dwell로 확인한다. importer가 시작 뒤 GUI 메뉴를 다시 켤 수 있으므로 headless stage-close 전에 실제 메뉴를 제거하고 종료 코드와 raw traceback을 따로 확인한다.
+
+## 2026-10-11 · b6a8d0d2e8 · feat(isaac): 고정 정책 네 시작 방향 실제 화면 녹화
+
+- 변경: 정책 JSON을 한 번만 제한 크기로 읽고 기존 QPolicy를 검증 복원한다. 평가 전용 0/+90/180/-90도 시작 방향, SDK Camera의 실제 RGBA→H.264·Fabric 시각/pose 기록, 실패 시에도 encoder close/wait/reap을 추가했다. 기존 CORE 최종 port·Drive·생산 API는 유지한다.
+- 증거: TDD RED 뒤 b6a8d0d2e8 원격 Isaac/Drive/CORE cycle/harness exit 0/NEW 0, 독립 Safety-Review APPROVE. R8 전체 baseline/6학습/2고정 eval 재시험은 SDK exit 0/error 0, source 7,050파일 일치. R9는 고정 정책 네 방향 모두 9.342m ordered 경로 complete·물리 stop, 실제 960×540 영상 4개, source 7,053파일 일치, SDK exit 0/error 0. 원시 trace/프레임/MP4 전체 디코딩과 해시를 독립 검증했다. 상세 수치·정확한 실행 source는 [결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다.
+- gate: SOURCE/LOCAL GO 유지, 전체 ROS-SIM HOLD. 네 시작 방향은 역순 경로·모든 방향·두 대 Fleet·신호·횡단보도 또는 센서/실물 수용이 아니다.
+- 기록: 사용자의 private 보관 요청에 따라 최종 영상·미리보기·열람 페이지를 `private/isaac/media/2026-10-11-directions/`에 보관한다. 원시 로그/전체 trace는 X: session에 유지한다. 한국 교통 규칙과 Fleet는 새 후속 목표다.
+- 교훈: Fabric의 referenceTimeNumerator/Denominator를 확인하고 프레임 시각 단조성과 실제 마지막 stop을 검사한다. pipe close 실패에도 child wait/kill을 수행해야 encoder가 남지 않는다.

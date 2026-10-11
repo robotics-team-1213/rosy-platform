@@ -15,3 +15,5 @@
 추가 검토 `72a4c5aa2`: 기존 PathFollower 연결, 1/240초 물리 간격, reset 후 실제 gains 기록, 0.5초 대기 유지와 고정 경로 창을 확인했다. 매 진행점마다 끝점이 바뀌어 alignment 이력이 초기화되던 문제는 동일 suffix를 유지하도록 수정했다. 새로운 중요 소스 안전 결함을 발견하지 않았으며 소스 범위 수용 가능으로 판정했다. 이전 R5 snapshot과 최신 R6 실행 결과는 별도 증거다. 리뷰어는 해당 런타임을 직접 검증하지 않았다.
 
 추가 종료 수리 `e0e5b38d78`: 리뷰어가 설치 SDK의 stage-close와 GUI 메뉴의 event/action 제거 경로를 확인했다. 공통 close_sdk를 모든 caller의 기존 zero/정지 뒤 finally에 연결했다. disable 확인 실패에도 SDK close를 시도하고 예외는 비정상 종료로 전달한다. 소스 검토는 수용 가능이다. R7 raw 로그·종료 readback은 실행자가 별도로 확인했다.
+
+추가 네 방향·실제 녹화 b6a8d0d2e8: 별도 리뷰어가 saved policy 동일 bytes의 bounded read/restore/copy, 평가 중 정책 불변, 기존 CORE/물리 reset 경로, native SDK5.1 Fabric renderer receipt 형식을 확인했다. 물리 cleanup 실패에도 encoder close를 시도하고 pipe close 오류에도 child wait/timeout kill을 수행하도록 교정했다. 실패는 nonzero로 전달된다. 최신 HEAD 재확인 뒤 소스 범위 APPROVE. 실제 영상·원격 회귀·방향별 주행은 리뷰어가 직접 실행한 증거가 아니며 실행자가 별도로 검증한다.

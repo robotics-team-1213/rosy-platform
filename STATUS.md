@@ -44,7 +44,7 @@
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [isaac_sim](learning/envs/isaac/progress.md) | sim | e0e5b38d78 (2026-10-11) | GO | GO | HOLD | N/A | N/A | N/A |
+| [isaac_sim](learning/envs/isaac/progress.md) | sim | b6a8d0d2e8 (2026-10-11) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 
@@ -122,4 +122,4 @@
 - dock DEVICE: 물리 도크 벤치 설치와 device-readback류 증거 없음. `dock/firmware/rosy_dock/rosy_dock.ino` 참조 구현만 존재하고 실기 조립·통전 시험 기록이 없다
 - signal ARTIFACT: ESP32 Arduino 펌웨어 빌드·플래시 증거 없음. 이 호스트에는 ESP32 toolchain이 없어 실행하지 않았다
 - signal DEVICE: 물리 벤치(G-S1) 미실행 — 수용 기준·절차는 docs/plans/2026-09-22-signals-acceptance-plan.md 로 고정했다. 최초 관문은 B0 신호등 입고 특성화(전압/배선/색당 전류), 이후 B2 부팅 글리치 10회(AC-02), B3 침묵→점멸 12 s(AC-11), B4 공유기 재시작 자기 복귀(AC-12, W1 위험)
-- isaac_sim ROS-SIM: Full ROS-SIM rotation tracking remains failed (0.3 target versus 0.19396 measured). D-638 native one-Pinky CPU Q-learning completed ordered 9.342m curved-map route at frozen eval seeds 202/303 with physical stop; this is not ROS/Fleet or Isaac Lab acceptance. dc25401e61 SDK exit 0 had one asynchronous menu shutdown traceback; e0e5b38d78 shutdown-only SDK probe fixed it, exit 0/error 0. Sensors/localization, Nav2, two-robot Fleet/signals and device acceptance remain unverified. See docs/validation/isaac-map-rl-2026-10-11/result.md.
+- isaac_sim ROS-SIM: Full ROS-SIM rotation tracking remains failed (0.3 target versus 0.19396 measured). D-638 native one-Pinky CPU Q-learning completed ordered 9.342m curved-map route; R8 full post-shutdown-fix retraining at 57ad87993f had SDK exit 0/error 0. R9 b6a8d0d2e8 frozen evaluations at four initial headings completed with native Camera recordings and physical stop, SDK exit 0/error 0. These are not ROS/Fleet or Isaac Lab acceptance. Sensors/localization, Nav2, two-robot Fleet/signals and device acceptance remain unverified. See docs/validation/isaac-map-rl-2026-10-11/result.md.

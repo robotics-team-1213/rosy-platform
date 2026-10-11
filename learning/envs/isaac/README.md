@@ -80,3 +80,19 @@ The Pinky URDF places wheel joint origins at ±0.04055 m, a geometric center sep
 ```
 
 baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 X: 세션과 모델 PC scratch에 보관한다.
+
+### 실제 화면 녹화와 네 시작 방향
+
+기존 실행의 policy.json을 고정해서 시작 경로 방향 대비 0/+90/180/-90도에서 각각 전체 경로를 평가한다. 재학습 없이 기존 CORE·Drive와 물리 stop/reset을 사용한다. 저장 정책의 gain·state·유한 Q·학습 횟수를 검증하며 동일 입력 bytes를 보관한다.
+
+```bash
+"$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_map_rl.py" \
+  --urdf /scratch/rosy-isaac/rosy.urdf \
+  --output-dir /scratch/rosy-isaac/directions-new-run \
+  --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" \
+  --policy-file /scratch/rosy-isaac/map-rl-new-run/policy.json --record-video
+```
+
+SDK 호스트의 기존 ffmpeg가 필요하다. --record-video는 headless Isaac 상공 카메라의 실제 RGBA를 960×540 H.264 MP4로 저장한다. simulation 약0.2초마다 실제 frame을 받아 25fps로 표시하므로 5배속이며 위치 보간을 만들지 않는다. .frames.jsonl에는 native Fabric renderer receipt·시각·실제 pose가 남고 encoder 오류나 stale frame은 실패다. 영상은 isaac-eval-<seed>.mp4, 정책·영상 hash와 방향별 완주·정지는 result.json을 따른다. 카메라는 녹화 관측용이며 로봇 센서/인식 수용을 뜻하지 않는다.
+
+네 시작 방향 검사이며 역순 경로·모든 각도·두 대 Fleet·신호·횡단보도 통제 수용과 구분한다. 실행 순서는 [녹화 계획](../../../docs/plans/2026-10-11-isaac-direction-video.md)을 따른다.
