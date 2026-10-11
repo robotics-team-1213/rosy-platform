@@ -105,3 +105,24 @@ def test_cli_writes_once_and_never_creates_missing_input_database(tmp_path):
     args[2], args[-1] = str(absent), str(tmp_path / 'other.json')
     assert subprocess.run(args, capture_output=True).returncode != 0
     assert not absent.exists()
+
+
+@pytest.mark.parametrize('tamper', ['pending_cost', 'observation_cost', 'inflight_closure'])
+def test_impossible_attempt_states_are_rejected_even_with_matching_totals(tmp_path, tamper):
+    store, scope, manifest = fixture(tmp_path)
+    with sqlite3.connect(store.path) as conn:
+        if tamper == 'pending_cost':
+            conn.execute('UPDATE fleet_incident_v2_attempts SET actual_micros=50000')
+            conn.execute('UPDATE fleet_incident_v2_cases SET spent_micros=50000,reserved_micros=50000')
+        elif tamper == 'observation_cost':
+            conn.execute("UPDATE fleet_incident_v2_attempts SET kind='observation'")
+            conn.execute('UPDATE fleet_incident_v2_cases SET calls=0,observations=1')
+        else:
+            conn.execute('CREATE TABLE IF NOT EXISTS fleet_incident_v2_closures '
+                         '(subject_id TEXT,case_id TEXT,receipt_json TEXT)')
+            proof = dict(scope=asdict(scope), requested_at=100, observed_at=102, closed_at=102,
+                         normal_revision='r2', action_credit='NONE', state='RESOLVED_OBSERVED')
+            conn.execute('INSERT INTO fleet_incident_v2_closures VALUES (?,?,?)', ('pinky', 'case', canonical(proof)))
+            conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='RESOLVED_OBSERVED'")
+    with pytest.raises(ValueError):
+        exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
