@@ -7727,3 +7727,9 @@ osy-d395-s1d\`.
 - 변경: D-635/API reference에 차선 코스·축구장·일반 지도 종류, 설명과 경기장 치수 저장 계약을 기록했다. 기존 Games 재사용과 자동 실행·Vision 축구 인식의 별도 연결 범위를 명시했다.
 - 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 원격 계약 175·Node 285·Chromium 4·DB 재개방 포함 프로필 11 passed, known_failures NEW 0, lint 오류 0.
 - gate 변화: SOURCE/원격 계약/브라우저. main 착지·push·배포·실측 경기장 교정·게임 수용은 별도다.
+
+## 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
+
+- 변경: docs/fleet-deliberation-loop에서 D-640 Proposed와 주행·암 사건 폐루프, Claude Code/OpenCode 제한 토론, 독립 평가·그림자·되돌리기 기준 및 파일별 구현 계획을 기록했다.
+- 증거: 기존 D-392/D-516/D-527/D-608/D-619/D-637와 현재 source owner, 실행기 공식 문서를 대조했다. 문서 검증은 이 커밋의 원격 계약/lint 결과로 별도 보고한다.
+- gate 변화: 없음. 실제 모델 호출·런타임 구현·배포·장치 움직임·FIELD 수용은 미실행.
