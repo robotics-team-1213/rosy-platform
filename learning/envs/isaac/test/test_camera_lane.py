@@ -19,6 +19,36 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_two_camera_lanes_keep_distinct_core_event_identity_and_loss_state():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    from core_features.line_follow import LineFollowMode, LineObservation
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    lanes = [LearnedCameraLane(SimpleNamespace(), ground, camera_x=.03317, clock=lambda: 10.,
+                              device_id=device_id)
+             for device_id in ('isaac-pinky-a', 'isaac-pinky-b')]
+    try:
+        for lane, device_id in zip(lanes, ('isaac-pinky-a', 'isaac-pinky-b')):
+            events = lane.manager._events.history()
+            assert events and {event.robot_id for event in events} == {device_id}
+            lane.manager.observe(LineObservation(LineFollowMode.CAMERA_LINE, 10., True, .2, 1.),
+                                 received_at=10., source_now=10.)
+        lanes[0].invalidate('test_camera_loss')
+        assert lanes[0].manager.tick_gain(10., gain=1.).linear == 0
+        assert lanes[1].manager.tick_gain(10., gain=1.).linear > 0
+    finally:
+        for lane in lanes:
+            lane.close()
+
+
+@pytest.mark.parametrize('device_id', ['real-pinky', '', None, True])
+def test_camera_manager_refuses_non_simulation_identity(device_id):
+    from camera_lane import CameraLineManager
+    from core_features.line_follow import LineFollowConfig
+    with pytest.raises(ValueError, match='simulation device'):
+        CameraLineManager(config=LineFollowConfig(), clock=lambda: 10., device_id=device_id)
+
+
 def test_camera_policy_roundtrip_refuses_path_policy_and_other_model():
     from camera_lane import CameraQPolicy
     from map_task import QPolicy
