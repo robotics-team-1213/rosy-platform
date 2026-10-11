@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7941,3 +7941,9 @@ osy-d395-s1d\`.
 - 증거: 관련 원격 회귀 103 PASS / 3 SKIP, terminal exit 0, known-failures NEW0 및 독립 소스 리뷰 blocker 없음. 기존 ONNX Runtime 설치 환경의 합성 CLI/readback에서 도로면 16화소·현재 구역 8화소, 입력 보류와 matching-hash 모순 5개 거절을 확인했다.
 - 자료: 초기 drivable 검수본 1,428장의 이미지·mask 실제 해시가 일치하지만 모두 기존 2,769장에 포함된다. 전체 도로면 독립 정답으로 승격하지 않는다.
 - gate 변화: SOURCE/원격 관련 회귀와 합성 실행 검증 완료. [후속 실행 기록](validation/road-observation-readback-2026-10-12.md). 최신 main 통합·착지는 별도 최종 gate로 확인한다. 독립 인지 성능·실제 장치 전달·CI·push·배포·주행·현장 수용은 미확인이다.
+## 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+
+- 변경: v2 프로파일·판정 JSON·공통 요청·CLI/로컬 어댑터·독립 보정을 구현하고 모델 프로파일 전체 SHA에 보정을 고정했다. GLM 첫 호출의 영속 표식과 Pinky 전용 읽기/지속 예산 계약을 추가했다. 로컬 실행은 기본 미수용이다.
+- 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
+- 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
+- gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
