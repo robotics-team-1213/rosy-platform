@@ -595,6 +595,7 @@ roots:
   # --- integrations ---------------------------------------------------------
   - path: integrations/messaging/discord
     part: integrations
+    integration: messaging
     d427_target: integrations/messaging/discord
     wave: none
     import_prefix: [rosy_discord]

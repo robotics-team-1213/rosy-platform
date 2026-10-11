@@ -81,6 +81,12 @@ def test_transport_auth_freshness_revocation_and_capacity(tmp_path):
     accounts["op"] = "viewer"
     assert post(client, envelope()).status_code == 403
     assert client.get("/api/fleet/channel-requests").status_code == 403
+    accounts["op"] = "operator"
+    for identity in ("site-console", "development-operator"):
+        accounts[identity] = "operator"
+        with pytest.raises(Exception) as rejected:
+            journal.read(identity)
+        assert rejected.value.status_code == 403
 
 
 def test_config_rejects_unknown_fields_and_short_key():
@@ -121,3 +127,11 @@ def test_create_app_wiring_requires_accounts_and_isolated_key(tmp_path):
     client = TestClient(app)
     assert client.get("/api/fleet/channel-requests").status_code == 401
     assert client.get("/api/fleet/channel-requests", headers={"Authorization": "Bearer operator-secret"}).json() == {"rows": []}
+
+
+def test_transport_rejects_oversize_and_nonascii_signature(tmp_path):
+    client, _, _ = fixture(tmp_path)
+    assert client.post("/api/fleet/channel-requests/discord", content=b"x" * 8193).status_code == 413
+    response = client.post("/api/fleet/channel-requests/discord", json=envelope(),
+                           headers={"X-ROSY-Timestamp": "1000", "X-ROSY-Signature": "wrong"})
+    assert response.status_code == 401
