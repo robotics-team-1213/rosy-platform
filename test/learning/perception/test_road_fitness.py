@@ -274,23 +274,28 @@ def test_conditions_require_an_explicit_sequence_of_names(conditions):
                        domain="real", conditions=conditions, now_ns=1050, max_age_ns=100)
 
 
-def _onnx_model(tmp_path, crop=True):
+def _replay_model(tmp_path, crop=True, real_runtime=False):
     import hashlib
     import json
     import cv2
-    import onnx
-    from onnx import helper, numpy_helper, TensorProto
     from control.sensing.perception.learned.runner import LaneSegModel
     height = 4 if crop else 6
     labels = cv2.resize(_labels(), (6, 6), interpolation=cv2.INTER_NEAREST)[-height:]
     logits = np.eye(len(CLASSES), dtype=np.float32)[labels].transpose(2, 0, 1)[None]
-    graph = helper.make_graph([helper.make_node("Constant", [], ["logits"],
-                               value=numpy_helper.from_array(logits))], "fixture",
-                              [helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 3, height, 6])],
-                              [helper.make_tensor_value_info("logits", TensorProto.FLOAT, list(logits.shape))])
-    doc = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=9)
     model_path = tmp_path / "model.onnx"
-    model_path.write_bytes(doc.SerializeToString())
+    if real_runtime:
+        onnx = pytest.importorskip("onnx")
+        pytest.importorskip("onnxruntime")
+        graph = onnx.helper.make_graph([onnx.helper.make_node("Constant", [], ["logits"],
+                                         value=onnx.numpy_helper.from_array(logits))], "fixture",
+                                       [onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT,
+                                                                          [1, 3, height, 6])],
+                                       [onnx.helper.make_tensor_value_info("logits", onnx.TensorProto.FLOAT,
+                                                                          list(logits.shape))])
+        doc = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 17)], ir_version=9)
+        model_path.write_bytes(doc.SerializeToString())
+    else:
+        model_path.write_bytes(b"synthetic-session-fixture")
     spec = {"shape": [1, 3, height, 6], "layout": "nchw", "color": "rgb", "scale": 1 / 255,
             "mean": [0, 0, 0], "std": [1, 1, 1]}
     if crop:
@@ -302,12 +307,17 @@ def _onnx_model(tmp_path, crop=True):
            "output": {"layout": "nchw_logits", "classes": CLASSES},
            "dataset": {"repo": "fixture", "revision": "a" * 64}, "camera_profile_revision": "cal-v1"}
     (tmp_path / "model_manifest.json").write_text(json.dumps(raw), encoding="utf-8")
-    return LaneSegModel.open(tmp_path)
+    if real_runtime:
+        return LaneSegModel.open(tmp_path)
+    from types import SimpleNamespace
+    return LaneSegModel.open(tmp_path, session_factory=lambda path, threads:
+                             SimpleNamespace(run=lambda x: logits.copy()))
 
 
 @pytest.mark.parametrize("crop", [True, False])
-def test_onnx_replay_resizes_truth_and_anchor_with_the_model_roi(tmp_path, crop):
-    model = _onnx_model(tmp_path, crop)
+@pytest.mark.parametrize("real_runtime", [False, True])
+def test_model_replay_resizes_truth_and_anchor_with_the_model_roi(tmp_path, crop, real_runtime):
+    model = _replay_model(tmp_path, crop, real_runtime)
     image, anchor = _snapshots()
     truth = (_labels() == 2).astype(np.uint8)
     region_truth = np.zeros_like(truth)
@@ -324,7 +334,7 @@ def test_onnx_replay_resizes_truth_and_anchor_with_the_model_roi(tmp_path, crop)
 
 
 def test_replay_unknown_roi_anchor_abstains_and_does_not_score_top_as_background(tmp_path):
-    model = _onnx_model(tmp_path)
+    model = _replay_model(tmp_path)
     image, anchor = _snapshots()
     truth = (_labels() == 2).astype(np.uint8)
     report = evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor,
@@ -336,7 +346,7 @@ def test_replay_unknown_roi_anchor_abstains_and_does_not_score_top_as_background
 
 
 def test_replay_checks_truth_before_resizing_and_rejects_nonfinite_logits(tmp_path):
-    model = _onnx_model(tmp_path)
+    model = _replay_model(tmp_path)
     image, anchor = _snapshots()
     truth = (_labels() == 2).astype(np.uint8)
     invalid = truth.copy()
