@@ -146,10 +146,10 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | 현재 기능·공백 조사 | 완료 | camera lane·teach·profile·formation 소유 경로 추적 후 Task 1~5에서 연결·검증 |
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
-| Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
+| Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. 아래 카메라 누적과 함께 Task 3을 구성하며 실물 주행 수용은 별도 |
 | Task 3 카메라 관측 누적 | 완료 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어 및 명시적 endpoint 연결 구현. 연결·비동기 경합 원격 16 PASS/NEW 0, Node 29 PASS. main 통합·배포·실물 정확도는 Task 6 |
-| Task 4 선택 로봇·기록·대형 맥락 | 완료 · source/remote | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 5 source 충돌 처리를 완료했고 Task 6 실제 수용은 남음 |
-| Task 5 개입·작업 충돌 | 완료 · source/remote | 활성화 busy·조회 경합·대형/운행 명령 사유·복구 수락 표시 보강. 최종 d6abc8e863 원격 140 PASS, 개입 253 PASS, Node 301 PASS/NEW 0. 독립 검토 수용; Task 6 미완료 |
+| Task 4 선택 로봇·기록·대형 맥락 | 완료 · source/remote/site | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 6에서 사이트 연결도 확인; 실물 대형 수용은 미확인 |
+| Task 5 개입·작업 충돌 | 완료 · source/remote | 활성화 busy·조회 경합·대형/운행 명령 사유·복구 수락 표시 보강. 최종 d6abc8e863 원격 140 PASS, 개입 253 PASS, Node 301 PASS/NEW 0. 독립 검토 수용; Task 6 사이트 완료, 실물 개입 수용은 별도 |
 | Task 1–5 구현·검증 | 완료 · source/remote | 각 단계의 새 source·원격 근거를 아래 기록. main 통합·CI·배포·실제 사이트 수용은 Task 6에서 별도 확인 |
 | Task 6 통합·배포·사이트 확인 | 완료 · 사이트 범위 | `5f4040f306` 원격 회귀·FULL CI·서명 릴리스·불변 image readback 및 실제 desktop/mobile 검증. [최종 기록](../validation/2026-10-12-mapless-fleet-control.md) |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
