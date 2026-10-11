@@ -7,7 +7,8 @@ package io.github.livsbittt.rosy.cam.service
  * an older Vision never sends demand, so after [LEGACY_GRACE_MS] the phone sends
  * as it did before. False stops the uplink. The sensor still runs while the
  * operator is looking at the preview, so the ceiling camera can be aimed, but
- * those frames are not sent.
+ * those frames are not sent. Severe heat stops both, even while a Rosy is
+ * watching and even while the operator is aiming (D-691).
  */
 data class CaptureGate(val cameraOn: Boolean, val sendFrames: Boolean) {
     companion object {
@@ -18,7 +19,9 @@ data class CaptureGate(val cameraOn: Boolean, val sendFrames: Boolean) {
             wanted: Boolean?,
             previewVisible: Boolean,
             legacyStream: Boolean,
+            thermalPause: Boolean = false,
         ): CaptureGate {
+            if (thermalPause) return CaptureGate(cameraOn = false, sendFrames = false)
             if (!paired) return CaptureGate(cameraOn = true, sendFrames = false)
             if (wanted == null) {
                 return if (legacyStream) CaptureGate(cameraOn = true, sendFrames = true)
