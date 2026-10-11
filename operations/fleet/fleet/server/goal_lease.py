@@ -49,6 +49,7 @@ class GoalLeases(dict):
         #: ``(task_id, attempt_id) -> bool``: the D-316 attempt is still open. Set by app.py when
         #: there is a task store; without one a dispatch lease is never renewed (it expires).
         self.attempt_open: Optional[Callable[[str, str], bool]] = None
+        self.admit_attempt: Optional[Callable[[str, str], None]] = None
         self._present_at: Optional[float] = None
         self.pending: dict[str, int] = {}
         self._stop_epoch = 0
@@ -57,6 +58,9 @@ class GoalLeases(dict):
     def operator_present(self) -> None:
         """A named operator's console is open (``POST /api/fleet/goal-lease/presence``)."""
         self._present_at = self._clock()
+
+    def stop_token(self, robot_id: str) -> tuple[int, int]:
+        return self._stop_epoch, self._stop_generation.get(robot_id, 0)
 
     def view(self, robot_id: str, goal: Optional[dict]) -> Optional[dict]:
         """The console goal record with today's lease state (``goal_lease``); as is when none."""
@@ -82,19 +86,21 @@ class GoalLeases(dict):
                      "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
         if correlation_id is not None:
             options["correlation_id"] = correlation_id
-        stop = (self._stop_epoch, self._stop_generation.get(robot_id, 0))
+        if task_id is not None and self.admit_attempt is not None:
+            self.admit_attempt(task_id, correlation_id)
+        stop = self.stop_token(robot_id)
         self.pending[robot_id] = self.pending.get(robot_id, 0) + 1
         try:
             try:
                 result = await client.navigation_goal(x, y, yaw, **options)
             except (Exception, asyncio.CancelledError):
-                if stop != (self._stop_epoch, self._stop_generation.get(robot_id, 0)):
+                if stop != self.stop_token(robot_id):
                     try:
                         await client.navigation_cancel()
                     except Exception:
                         logger.exception("late goal cancel for %s failed", robot_id)
                 raise
-            if (stop != (self._stop_epoch, self._stop_generation.get(robot_id, 0))
+            if (stop != self.stop_token(robot_id)
                     and not (isinstance(result, dict) and result.get("accepted") is False)):
                 await client.navigation_cancel()
                 raise RuntimeError("navigation goal overlapped a stop; result remains unknown")
