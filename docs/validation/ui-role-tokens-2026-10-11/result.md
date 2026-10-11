@@ -15,10 +15,14 @@
 | 관제·지도·Cell·실제 영상 기록 | 438ea67a0 | 116 PASS, NEW 0 | X:/DevTemp/ui-role-integrated-fleet-browser-correct/run-1.txt |
 | Robot·Pilot 브라우저 | 354b55cfb0 | 179 PASS, NEW 0 | X:/DevTemp/ui-role-devices/pilot-robot-3.txt |
 | 기존 실패 목록 독립 재검증 | 7775c5eca7 | 45 PASS, NEW 0 | X:/DevTemp/ui-role-final-baseline/run-2.txt |
+| Learning 전체 브라우저 3개 suite | 1d9595374a | 168 PASS, NEW 0 | X:/DevTemp/ui-role-devices/learning-final-6.txt |
+| 인라인 스타일 금지·canvas 토큰·정지 완료 | b44a8a7525 | 7 PASS, NEW 0 | X:/DevTemp/ui-role-canvas-csp-final/run-1.txt |
 | Android Cam 최신 shapes·입력 서체 | ab17c6cac 포함 | 413 PASS, debug APK 빌드 성공 | X:/DevTemp/ui-role-devices/cam-gradle-5.txt |
 | Android Pilot | 354b55cfb0 포함 | 105 PASS, debug APK 빌드 성공 | X:/DevTemp/ui-role-devices/pilot-gradle-1.txt |
 
 기존 실패 43개 선택 항목 중 변경된 parametrization 한 항목은 함수 전체로 재검증하여 45개가 실행됐다. 오래된 fixture는 현재 API·준비 상태·유효 지도 목표에 맞췄으며 권한 취소, CORE 거절, no-POST 검사를 유지했다. 결과 수는 서로 겹치므로 합산하지 않는다. Python과 Chromium은 원격 시험 PC에서 실행했다.
+
+첫 착지 검사에서 6,245 PASS·968 SKIP와 함께 canvas 서체 탐침의 인라인 스타일 쓰기 1건이 NEW로 검출됐다. 같은 파일을 기존 CSSOM 방식으로 고쳤으며 관련 7개 시험이 통과했다. 검사 규칙을 완화하거나 실패 목록에 추가하지 않았다. 폴더 이동 후 독립 검토에서 새 P1/P2는 확인되지 않았다. 공식 착지 검사는 수정된 소스에서 다시 수행한다.
 
 ## 수용 경계
 
