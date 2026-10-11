@@ -115,6 +115,38 @@ def test_compact_frees_disk_without_becoming_a_training_input(tmp_path):
     assert doc["sessions"][0]["status"] == "compact_ok"
 
 
+def test_orphan_compact_goes_when_its_video_checks_out(tmp_path):
+    compact = tmp_path / "raw" / DEVICE / f"{STAMP}_{DEVICE}.compact"
+    (compact / "bag").mkdir(parents=True)
+    (compact / "session.json").write_text(json.dumps({"device": DEVICE}), encoding="utf-8")
+    video = tmp_path / "video"
+    _video(video)
+    code, doc = media.run(tmp_path / "raw", video, shrink=False, apply=True,
+                          probe=lambda _p: 2, encode=lambda *_a: 1, compact=lambda _s: (False, _s))
+    assert code == 0
+    assert not compact.exists()
+    assert doc["compacts"] == [{
+        "session": f"{STAMP}_{DEVICE}",
+        "compact": str(compact),
+        "compact_state": "removed",
+    }]
+    assert media.trainer_recordings(doc) == []
+    assert (video / f"{STEM}.mp4").is_file()
+
+
+def test_compact_without_a_video_stays(tmp_path):
+    compact = tmp_path / "raw" / f"{STAMP}_{DEVICE}.compact"
+    compact.mkdir()
+    (compact / "session.json").write_text(json.dumps({"device": DEVICE}), encoding="utf-8")
+    video = tmp_path / "video"
+    video.mkdir()
+    code, doc = media.run(tmp_path / "raw", video, shrink=False, apply=True,
+                          probe=lambda _p: 2, encode=lambda *_a: 1, compact=lambda _s: (False, _s))
+    assert code == 0
+    assert compact.is_dir()
+    assert doc["compacts"] == []
+
+
 def test_receipt_schema_is_required():
     with pytest.raises(ValueError):
         media.trainer_recordings({"schema": "other"})
