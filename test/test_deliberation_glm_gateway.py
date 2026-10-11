@@ -27,7 +27,8 @@ def reply():
 
 
 def response():
-    return {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(reply())}}],
+    return {'model': gate.MODEL,
+            'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': json.dumps(reply())}}],
             'usage': {'completion_tokens': 100, 'prompt_tokens': 90, 'total_tokens': 190}}
 
 
@@ -40,7 +41,7 @@ def test_trusted_payload_requires_current_hash_and_no_prior():
         gate.trusted_body(json.dumps(body))
 
 
-@pytest.mark.parametrize('change', ['tool', 'length', 'tokens', 'scope'])
+@pytest.mark.parametrize('change', ['tool', 'length', 'tokens', 'scope', 'model', 'missing_model', 'role'])
 def test_invalid_upstream_never_admitted(change):
     data = response()
     if change == 'tool':
@@ -49,6 +50,12 @@ def test_invalid_upstream_never_admitted(change):
         data['choices'][0]['finish_reason'] = 'length'
     elif change == 'tokens':
         data['usage']['completion_tokens'] = 1025
+    elif change == 'model':
+        data['model'] = 'other'
+    elif change == 'missing_model':
+        data.pop('model')
+    elif change == 'role':
+        data['choices'][0]['message']['role'] = 'user'
     else:
         data['choices'][0]['message']['content'] = json.dumps({**reply(), 'case_id': 'other'})
     with pytest.raises(ValueError):
