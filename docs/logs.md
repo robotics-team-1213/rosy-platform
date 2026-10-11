@@ -7796,3 +7796,9 @@ osy-d395-s1d\`.
 - 결정: 공통 평가·모델 후보·순수 작업 규칙·현장 원장 어댑터·CORE/OMX writer·독립 평가의 책임을 구별한다. 모델 런과 작업 실행, 비개입/보류/자연 해소와 조치 성공을 구별하며 종료 writer와 Mission/claim transaction을 유지한다.
 - 증거: 현재 HEAD 063676cbcb, 기존 dispatcher/진행/목표 근거·model-turn/설치 시험 및 ADR를 읽었다. 문서 generate/lint와 커밋 HEAD 원격 계약 검증은 후속 receipt로 기록한다.
 - gate 변화: 없음. Accepted는 책임/진행 원칙이며 새 runtime 구현·모델 호출·외부 발송·운영 활성화·서비스 분산·배포/현장 수용을 뜻하지 않는다.
+
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 계약 (D-659)
+
+- 변경: branch `docs/perception-fitness-design`에서 사용자 합의 설계를 D-659 Accepted로 기록했다. 도로면·현재 구역·선택 경로의 의미, 독립 정답과 split, 시뮬레이션 입력 누설, 불확실/지연 판정 및 인지/주행 승인 경계를 구현 전 선행 조건으로 묶었다.
+- 증거: 기존 D-475/D-576/D-379/D-356과 학습·평가 소유 경로를 대조했다. ADR 번호 선점, Log BOM/CRLF 보존, generate/lint 및 커밋 HEAD 원격 계약 시험 결과는 검증 기록으로 구분한다.
+- gate 변화: 없음. 계약 수용이며 의미별 출력 구현, 실제 정답 검수·모델 평가·장치 추론 승인·주행 활성화는 미완료다.
