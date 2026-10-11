@@ -100,7 +100,8 @@ def snapshot(path, subject_id, case_id, profiles):
         observations = len(attempts) - calls
         if ((calls, observations, spent, reserved) != (case['calls'], case['observations'],
                 money(case['spent_micros']), money(case['reserved_micros']))
-                or calls > budget.max_calls or observations > budget.max_observations):
+                or calls > budget.max_calls or observations > budget.max_observations
+                or case['state'] == 'NOT_NEEDED' and (calls or observations)):
             raise ValueError('CASE_ATTEMPT_TOTALS_DIFFER')
         proof = None
         if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_incident_v2_closures'").fetchone():
@@ -112,7 +113,8 @@ def snapshot(path, subject_id, case_id, profiles):
         result = dict(scope=asdict(scope), budget=asdict(budget), profiles=manifest, state=case['state'],
                       reason=case['reason'], calls=calls, observations=observations, spent_micros=spent,
                       reserved_micros=reserved, attempts=attempts, closure=closure,
-                      outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE' else 'UNRESOLVED')
+                      outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE'
+                      else 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else 'UNRESOLVED')
     return dict(schema='rosy.incident.model_feedback/1', case=result, label_state='UNREVIEWED',
                 field_accepted=False, digest=hashlib.sha256(canonical(result).encode()).hexdigest())
 
