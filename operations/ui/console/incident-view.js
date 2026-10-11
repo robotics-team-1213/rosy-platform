@@ -104,7 +104,9 @@ async function refreshIncidents() {
       incidentLine(detail, `상태: 라인 정지 · ${report.closed_at ? "종료 기록 있음" : "종료 기록 없음"} · 교착 여부는 별도 판정합니다.`);
       incidentLine(detail, `로봇 관측: 정지 ${core.held_s_max ?? "미확인"}초 · 재시도 ${core.attempts_max ?? "미확인"}`);
       incidentLine(detail, `관제 관측: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"} · 관측 나이 ${fleet.pose_age_s ?? "미확인"}초`);
-      incidentLine(raw, `CORE 단계 ${core.phase_at_open || "미확인"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"} · 해결 ${fleet.resolved_by || "미확인"}`);
+      const closure = {OPEN: "진행 기록 · 현재 관측은 별도 확인", NATURAL_CLEARANCE: "관측상 자연 해소 · 조치 기록 없음", CLEARANCE_OBSERVED: "관측상 해소 · 조치 성공은 미검증", OBSERVATION_ENDED: "관측 종료 · 문제 해결은 미확인"}[report.closure?.status] || "해소 결과 미확인";
+      incidentLine(detail, `해소 확인: ${closure}`);
+      incidentLine(raw, `당시 CORE 단계 ${core.phase_at_open || "미확인"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"} · 마지막 수락 답 주체 ${fleet.resolved_by || "미확인"}`);
       const cam = report.evidence.rosy_cam;
       incidentLine(detail, cam ? `현장 카메라: 사건 당시 관측 · 촬영 ${new Date(cam.captured_at * 1000).toLocaleString()}`
         : "Rosy Cam: 사건 시작 ±5초 관측 없음");
@@ -116,7 +118,7 @@ async function refreshIncidents() {
       const draft = ai.find(f => f.kind === "incident_context");
       if (draft) {
         const names = {line_marking: "차선 표시 또는 인식", obstacle: "전방 장애물", unknown: "원인 미확정"};
-        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 신뢰도 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
+        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 검증되지 않은 초안 점수 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
         for (const item of draft.value.support || []) incidentLine(raw, `${item.source} ${item.field}: ${JSON.stringify(item.value)}`);
         incidentLine(detail, `추가 확인: ${(draft.value.missing || []).length ? "누락된 근거가 있습니다. 개발 진단에서 항목을 확인하세요." : "누락 기록 없음"}`);
         incidentLine(raw, `누락 근거: ${(draft.value.missing || []).join(", ")}`);
