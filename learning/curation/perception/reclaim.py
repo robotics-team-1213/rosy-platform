@@ -15,8 +15,9 @@ candidates.
 --shrink compacts sessions that still have no video; a compact that verifies
 becomes a candidate and the .compact folder stays.
 --apply deletes the candidate raw directories after every path is checked.
-Without --apply nothing is deleted. Unmatched videos stay. The robot copy
-and recording_job are untouched.
+A verified video also removes that session's .compact sibling. A compact that
+is the only remaining bag stays. Without --apply nothing is deleted.
+Unmatched videos stay. The robot copy and recording_job are untouched.
 """
 from __future__ import annotations
 
@@ -147,11 +148,35 @@ def guard(path: Path, raw: Path) -> Path:
     return path_resolved
 
 
+def compact_sibling(session: Path) -> Path:
+    return session.with_name(session.name + ".compact")
+
+
+def guard_compact(path: Path, raw: Path) -> Path:
+    """A .compact directory under raw/. Partials and ordinary sessions are refused."""
+    raw_resolved = raw.resolve()
+    path_resolved = path.resolve()
+    if path_resolved == raw_resolved or raw_resolved not in path_resolved.parents:
+        raise ValueError(f"not under raw: {path}")
+    if path_resolved.name.endswith(".compact.partial") or not path_resolved.name.endswith(".compact"):
+        raise ValueError(f"not a compact sibling: {path}")
+    if not path_resolved.is_dir():
+        raise ValueError(f"not a compact directory: {path}")
+    return path_resolved
+
+
 def delete_targets(rows: list[dict], raw: Path) -> list[Path]:
+    """Delete reclaimable raw sessions. A verified video also drops its .compact sibling."""
     chosen = [Path(row["path"]) for row in rows if row["status"] in RECLAIM_STATUS]
+    compacts = [compact_sibling(Path(row["path"])) for row in rows
+                if row["status"] == "ok" and compact_sibling(Path(row["path"])).is_dir()]
     checked = []
     seen = set()
     for path in (guard(path, raw) for path in chosen):
+        if path not in seen:
+            seen.add(path)
+            checked.append(path)
+    for path in (guard_compact(path, raw) for path in compacts):
         if path not in seen:
             seen.add(path)
             checked.append(path)
