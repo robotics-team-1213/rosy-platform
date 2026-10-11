@@ -370,6 +370,8 @@ class TeachService:
         live = self._recording
         recording = None if live is None else {k: v for k, v in asdict(live).items()
             if k not in {"reference", "odom_anchor", "odom_epoch"}}
+        if recording is not None:
+            recording["points"] = [list(point) for point in live.points]
         if recording is not None and live.reference is not None:
             recording["reference_revision"] = live.reference["revision"]
         return {"recording": recording,
