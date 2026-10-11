@@ -377,3 +377,14 @@ test('camera observations accumulate in the same survey without invented joins o
   assert.ok(reviewed.edges[1].evidence.note.includes('Frame abc'));
   assert.ok(reviewed.edges[1].evidence.note.includes('Measured lanes'));
 });
+
+test('camera maps without a survey can be reviewed and edits require re-review', () => {
+  const map = {...MAP, edges: MAP.edges.map(e => ({...e, evidence: {source: 'camera', status: 'observed',
+    reference_revision: 'cal_123', note: 'frame sha256 abc'}}))};
+  const reviewed = reviewSurveyDraft(map, 'Checked metric calibration and lane direction');
+  assert.equal(reviewed.survey, undefined);
+  assert.equal(reviewed.edges[0].evidence.status, 'reviewed');
+  assert.equal(reviewed.edges[0].evidence.reference_revision, 'cal_123');
+  assert.ok(reviewed.edges[0].evidence.note.includes('frame sha256 abc'));
+  assert.equal(editEdge(reviewed, 'ab', {direction: 'two_way'}).edges[0].evidence.status, 'observed');
+});
