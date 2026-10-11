@@ -17,10 +17,14 @@
 | 헤더 네 문서·크기, 인증·세션·수명 | d73e03894 | 24 PASS; 별도 traffic 실패 3건은 아래 통합에서 재검증 | X:/DevTemp/operator-shell-fleet-d73/run-1.txt |
 | 통합 네 문서 두 테마·네 폭, traffic, 개입, 의미 아이콘, 세션·수명 | 354b7f95fd | 45 PASS, NEW 0 | X:/DevTemp/operator-shell-root-integrated/run-1.txt |
 | 관측 만료의 지도 위치 보존·낮은 창의 작업 흐름·네 문서 두 테마/네 폭 | 3410a453bf | 4 PASS, NEW 0 | X:/DevTemp/operator-shell-root-map-flows-fixed/run-1.txt |
+| 축소 지도 로봇 식별자·동일 자리 겹침 방지·최우선 표시와 기존 역할 | ff534fae66 | 6 PASS, NEW 0 | X:/DevTemp/operator-shell-map-labels-ff534/run-1.txt |
+| 탐색·지도 자산·전체 Node 단위 wrapper의 현재 shell 계약 | 511f62c90 | 28 PASS, NEW 0 | X:/DevTemp/operator-shell-static-node-511f/run-1.txt |
 
 통합 시험은 main의 지도 높이 수정과 profiles fixture를 포함한다. 하위 브랜치의 오래된 fixture 실패는 통합 시험에서 재검증했다. 별도 기존 지도 흐름 검사에서 좌표 만료 시 높이 변동과 낮은 창의 고정 프레임 2건이 NEW로 확인됐다. 펼친 좌표에만 안정된 높이를 적용하고 낮은 창은 문서 흐름을 사용하도록 수정했다. 같은 두 검사와 네 문서 두 테마·네 폭을 다시 실행하여 모두 통과했다. 실패 목록이나 검사 기준은 완화하지 않았다.
 
 스크린샷 경로 권한 오류가 있었던 이전 실행은 수용 증거로 사용하지 않는다. Python과 Chromium은 원격 PC에서 실행했으며 공용 최신 회귀와 통합 실행은 각각 가용 메모리 7.6 GB, 8.2 GB로 pytest 하한을 충족했다. 마지막 지도 흐름 회귀도 가용 메모리 10.2 GB로 하한을 충족했다. 중복된 시험 수는 합산하지 않는다.
+
+기존 main의 CI에서 실패했던 로봇 이름표 검사를 현재 소스에서도 재현했다. 축소 지도에서 글자 상자와 자기 로봇 표식이 겹쳐 일반 이름표가 숨겨지는 원인을 공용 글자 크기와 배율에 맞춘 간격 계산으로 수정했다. 같은 자리의 중복 숨김과 최우선 식별자 조건은 유지했다. 전체 검사에서 신규 탐색 속성과 역할 표시를 거부했던 옛 fixture는 실제 현재 계약에 맞춰 갱신했으며 제품 권한 기준은 변경하지 않았다.
 
 ## 수용 경계
 
