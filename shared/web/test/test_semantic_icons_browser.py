@@ -1,6 +1,7 @@
 """D-641: 실제 갤러리에서 의미·이름·선택·설명과 공용 누름면을 확인한다."""
 
 from pathlib import Path
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -125,3 +126,42 @@ def test_tooltip_closes_when_its_owner_leaves_the_visible_surface(page, mutation
     tooltip.wait_for(state="visible")
     owner.evaluate(f"node => {{ {mutation}; }}")
     tooltip.wait_for(state="hidden")
+
+
+def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descriptions(page):
+    page.goto(f"{HOST}/styleguide")
+    page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
+    source = (ROOT / "operations/ui/console/index.html").read_text(encoding="utf-8")
+    # 실제 호출자의 마크업을 재사용한다. title뿐인 테마·새로고침과 좁은 접속 조작이다.
+    snippets = [re.search(rf'<ui-button\b[^>]*\b{attribute}="{value}"[^>]*>.*?</ui-button>', source, re.S).group()
+                for attribute, value in [("data-theme-choice", "dark"), ("id", "vision-refresh"), ("id", "topbar-more")]]
+    page.evaluate("""async markup => {
+      const {actionIcon} = await import('/common/ui.js');
+      const stage = document.createElement('div'); stage.id = 'existing-icons';
+      stage.innerHTML = markup.join(''); document.body.append(stage);
+      for (const button of stage.querySelectorAll('ui-button')) actionIcon(button, button.dataset.actionIcon);
+      // 화면 배치가 라벨을 숨겨도 helper가 보존한 title 설명은 그대로 사용한다.
+      stage.querySelector('#topbar-more .ui-icon-label').hidden = true;
+    }""", snippets)
+    tooltip = page.get_by_role("tooltip")
+    for name, target in [("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
+                         ("접속과 화면 표시", "#topbar-more")]:
+        control = page.locator(f"#existing-icons {target}")
+        assert control.get_attribute("data-ui-tooltip") == name
+        assert control.get_attribute("title") == name
+        control.focus()
+        tooltip.wait_for(state="visible")
+        assert tooltip.inner_text() == name
+        assert control.get_attribute("aria-describedby") == "rosy-shared-tooltip"
+        assert control.get_attribute("data-icon-only") is None
+        assert control.evaluate("node => getComputedStyle(node).minHeight") == "48px"
+    assert page.locator("#existing-icons [data-theme-choice]").get_attribute("aria-pressed") == "true"
+    fallback = page.evaluate("""async () => {
+      const {actionIcon} = await import('/common/ui.js');
+      const button = document.createElement('button'); button.setAttribute('aria-label', '접속 확인');
+      actionIcon(button, 'connect');
+      const automatic = button.dataset.uiTooltip;
+      button.dataset.uiTooltip = '별도 접속 설명'; button.title = '기존 설명'; actionIcon(button, 'connect');
+      return {automatic, explicit: button.dataset.uiTooltip, label: button.getAttribute('aria-label')};
+    }""")
+    assert fallback == {"automatic": "접속 확인", "explicit": "별도 접속 설명", "label": "접속 확인"}
