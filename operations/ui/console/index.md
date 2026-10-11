@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
 - 2026-10-12 · b45e54d05a · D-680 요청 검토와 기존 Fleet 제출 화면
 - 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
 - 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
-- 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace

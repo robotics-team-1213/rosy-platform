@@ -3360,3 +3360,32 @@
 
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
 
+
+## 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결
+
+- 변경: 실행 경로별 law/후보/최종 승인/owner/접수/readback/종결을 통합 규칙집에 연결했다. Task의 실제 발행 직전 policy/attempt/fence 검사, goal/bay의 명시적 receipt와 stop generation, trip 시작 취소, 늦은 formation 무장 rollback, Mission 다중 owner의 순환 대조를 구현했다. mover 취소와 겹친 불명 bay 전송에는 보상 cancel을 요청한다.
+- 증거: source 25c036ae8의 원격 navigation/traffic/trip/Task policy/formation 324 PASS, exit 0, known_failures NEW 0/known 0. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/logs/traffic-green-3/run-1.txt. RED로 재현한 실패를 known_failures 목록에 추가하지 않았다.
+- 추가 검증: source 38f51c4c2의 접수 후 owner 거절/cancel 409/roster 변경은 UNKNOWN으로 보존한다. RED 3 NEW 뒤 원격 Task/goal/bay/traffic/policy 158 PASS, exit 0, NEW 0. 근거 logs/post-acceptance-green/run-1.txt. 이전 착지 후보 d6205067f와 최종 HEAD를 혼동하지 않으며 최종 영향 검사를 다시 수행한다.
+- 검토: pipeline_review가 최종 소스/규칙집을 승인하고 Fleet parent 53366, Console 1325줄 재판정을 독립 수용했다. 기존 package +150/Console zero-growth와 observe/server/UI 분리 의무를 유지한다.
+- 통합 추가 검증: d6205067f의 영향 시험은 4997 PASS/252 SKIP/2 NEW로 머지가 거절됐다. cancel-all 사유를 typed NavigationStopped로 보존하고 trip 시작 취소 UI 안내를 연결했다. 보상 cancel 409 RED 1 NEW 뒤 source 5f3f033a8의 원격 취소/label/goal/Task/policy 147 PASS, exit 0, NEW 0; Node site-map 29 PASS. Generic transport 오류와 CancelledError 분류는 유지한다. 최종 HEAD의 영향 gate는 다시 실행한다.
+- main 통합 guard: 64d60b3d9 원격 영향 시험은 5050 PASS/252 SKIP/1 NEW로 멈췄다. main의 gateway Path 상수가 credential 검사에 오인되어 CONFIG_PATH로 명확히 바꾸고 유일한 시험 monkeypatch를 연결했다. source 7ab44069a의 보안/gateway/opencode/relay/sandbox 원격 134 PASS, exit 0, NEW 0; 독립 검토 승인. 경로·job·권한 검사와 스캐너 기준은 유지하며 최종 영향 검사를 다시 실행한다.
+- gate 변화: SOURCE/원격 회귀/리뷰 완료. 최신 main 통합과 전체 영향 범위는 tools/land.py의 최종 gate로 별도 기록한다. CI, push, 배포, 현장 overlay 및 실제 다중 로봇/물리 수용은 미확인이다. CORE/Arm writer와 policy/AI opt-in을 유지한다.
+
+## 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+
+- 변경: v2 프로파일·판정 JSON·공통 요청·CLI/로컬 어댑터·독립 보정을 구현하고 모델 프로파일 전체 SHA에 보정을 고정했다. GLM 첫 호출의 영속 표식과 Pinky 전용 읽기/지속 예산 계약을 추가했다. 로컬 실행은 기본 미수용이다.
+- 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
+- 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
+- gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · c7afe628ca · D-681 모델 실패 피드백 export
+
+- 변경: 고정 프로파일 SHA와 subject/case를 대조한 단일 SQLite 읽기 snapshot에서 시도·비용·종결 근거를 export한다. 결과 불명·진행 중·미개입을 구분하며 비밀/원문/worker ID는 export하지 않는다. 기존 녹화 feedback 경로에 미검수 근거로 연결했다.
+- 증거: 관련 5개 원격 파일 87 passed, exit 0, known-failures NEW 0. 모델/장치/알림 호출 없이 실제 SQLite와 CLI 연결을 합성 검증했다. 기존 부모 크기 기준은 유지한다.
+- gate 변화: SOURCE/원격 관련 회귀만 확인했다. 최신 worker schema 통합과 로컬 착지를 이어서 확인한다. 실제 제공자·현장 recording export·독립 품질·학습·후보 승격은 미확인이다.
+
+## 2026-10-12 · d8d4d4058 · D-684 사건 원장 책임 분리
+
+- 변경: 실제 예산·creator·시도·종결·FINAL 원장을 `incidents/automation/ledger`로 옮기고 기존 import의 클래스·helper identity를 유지한다. DB 본문과 수치는 동일하며 store의 closure import 깊이만 조정했다.
+- 증거: 분리 전 실제 wheel/sdist 부재와 automation 초과를 AI PC 9 GB 유효 원격 RED 3 NEW로 확인했다. 추출 후 GREEN은 별도 확인한다. 실측 Fleet53408/incidents502/automation429/ledger370; 기존 부모 기준과 +150은 유지한다.
+- gate 변화: 책임 분리 source 검증 중이다. provider·운영 활성화·배포·push·물리 수용을 추가하지 않는다.

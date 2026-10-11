@@ -661,6 +661,7 @@
 | D-672 | Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임 | Accepted (2026-10-12) |
 | D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 | Accepted (2026-10-12) |
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 | Accepted (2026-10-12) |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 | Accepted (2026-10-12, 계약; 운영 활성화·현장 수용 별도) |
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
@@ -670,6 +671,10 @@
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
+| D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
+| D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -742,6 +747,11 @@
 - 상태: Accepted (source design only, 2026-10-12).
 - 결정: 기명 접수와 기존 작업의 관계, Console 확인, 고정 목적지의 durable 결과 회신을 연결한다. 기존 승인과 장치 권한을 유지한다.
 - 계약: [ADR](../adr/D-680-discord-request-workflow-and-reply-boundary.md). 실제 수신·승인·결과 회신과 FIELD는 별도 증거로 검증한다.
+## D-682 — 예약된 물체 정답과 고정 detector의 인지 적합성 재생
+
+- 상태: Accepted (2026-10-12).
+- 결정: 학습 export와 구별한 예약 MCAP 물체 정답 출판, 고정 detector·관측·학습 참조 결속과 HOLD 재생을 정의한다.
+- 계약: [ADR](../adr/D-682-fixed-object-truth-and-fitness-replay.md). 실제 독립 성능·장치 수용은 별도다.
 ## D-679 — Fleet·Qwen 불일치와 제한된 GLM 재평가
 
 - 상태: Accepted (2026-10-12).
@@ -765,3 +775,14 @@
 - 상태: Accepted (source design only, 2026-10-12).
 - 결정: 기존 current case/revision/freshness와 기명 claim 소유자를 유지하고 같은 트랜잭션으로 원문 관계·회신을 예약한다.
 - 계약: [ADR](../adr/D-693-discord-current-incident-handoff.md). 정지·취소/CORE 권한, source·크기·배포·실제 왕복은 별도 gate다.
+## D-684 — Pinky 사건 재관측과 지속 예산 원장
+
+- 상태: Accepted (2026-10-12, 계약).
+- 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
+- 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
+
+## D-690 — 도로 인지 평가의 출처 단위 불확실성
+
+**Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
+
+검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).

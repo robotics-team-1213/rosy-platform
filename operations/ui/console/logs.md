@@ -96,3 +96,10 @@
 - 변경: 별도 channel-request-view owner가 원문 확인, 기명 검토, 보류/거절/이동 후보 저장을 담당한다. 실행 요청은 기존 confirmedAction/current safety gate와 Fleet goal API의 고정 request key를 재사용하고 기존 Task에 연결한다. textContent, 권한 철회 시 지우기와 LINKED 재제출 숨김을 보존한다.
 - 증거: 실제 Chromium 320/1366과 viewer/operator 목록 6 PASS/NEW0. 취소 시 요청 없음, 저장 시 장치 요청 없음, 명시 확인 후 동일 request key/Task 연결을 검증했다. wheel/sdist 71개 자산 해시 readback과 allowlist 시험 통과. workflow-source.md 참조.
 - gate 변화: source와 fake API의 실제 브라우저 경로만 검증했다. 최신 main 착지·독립 검토·CI·서명 배포·실제 Discord 왕복·장치/FIELD 수용은 후속이다.
+
+
+## 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
+
+- 변경: TRIP_START_CANCELED에 한국어 운행 안내를 연결한다. 원시 오류 코드 대신 상태 확인 뒤 재시작을 안내한다.
+- 증거: source 5f3f033a8의 원격 trip code label/취소/Task/goal 회귀 147 PASS, NEW 0; Node site-map 29 PASS. 서버와 물리 stop 권한은 바꾸지 않는다.
+- gate 변화: SOURCE/호스트 회귀만 추가한다. 배포된 UI와 실제 운행 수용은 미확인이다.

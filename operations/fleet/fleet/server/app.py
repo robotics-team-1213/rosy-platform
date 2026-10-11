@@ -727,6 +727,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
+        console.goal_leases.admit_attempt = task_service.admit_attempt
 
     @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
     def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
