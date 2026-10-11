@@ -12,6 +12,7 @@
 
 - Terminal result: SSH exit 0; `PASS_LOCAL_MODEL_TRANSPORT_ONLY` 및 `PASS_SYNTHETIC_SUPERVISOR_HOLD`.
 - Raw receipt: `X:/DevTemp/projects/rosy-platform/2026-10-12--023355--deliberation-host-admission--4a3286/logs/qwen-supervisor-smoke.jsonl`.
+- Raw SHA256: `f0fc9f100aa3f73a3c918359cb1b5cf44954b45926da88b551dea63c90166ad7`.
 - 재현 입력/실행 script: 같은 세션 `scratch/qwen-supervisor-smoke.py`. 기존 Decision 소스를 고정 commit에서 별도 임시 경로에 stage하여 사용했다.
 
 이번 모델 요청은 기존 AI PC loopback 서비스의 수동 transport smoke다. 네트워크 차단 sandbox의 제공자 접속을 승인하거나 자동 worker에 연결하지 않았다. 호스트 OFFLINE 수용과 모델 transport 수용은 별도 증거다. 실제 Pinky 사건·사람 정답 기반 독립 평가·FIELD는 미확인이다.

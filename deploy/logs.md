@@ -2678,6 +2678,7 @@
 
 ## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
 
+- 변경: 실제 HOST 수용 결과와 수동 Qwen 스모크 증거를 기록하고 현재 수용 안내를 갱신했다.
 - 증거: 팀 관리자 preflight 13개 true / PASS_HOST_OFFLINE_ONLY. 기존 적재 digest의 로컬 Qwen 실제 strict JSON 응답 및 기존 Supervisor HOLD / UNRESOLVED_OBJECTION / calls=1 확인. `docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md`.
 - gate 변화: 전용 호스트 OFFLINE 경계와 수동 모델 transport 확인. 운영 제공자 admission, 독립 모델 평가·실제 Pinky·FIELD는 미확인 유지. OpenCode CLI 수용은 병렬 작업으로 분리한다.
 
