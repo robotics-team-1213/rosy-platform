@@ -249,3 +249,26 @@ def test_summary_preserves_other_region_errors_and_boundary_denominator():
     assert metrics["boundary_mean_error_px"] == pytest.approx(
         metrics["boundary_distance_sum_px"] / metrics["boundary_scored_pixels"])
     assert metrics["boundary_statuses"] == {"ok": 1, "abstained": 1}
+
+
+def test_unknown_truth_is_unscorable_rather_than_an_abstained_prediction():
+    image, anchor = _snapshots()
+    labels = _labels()
+    truth = np.full_like(labels, 255)
+    frame = evaluate_frame(labels, CLASSES, image, anchor, ((10, 2),), truth, truth,
+                           domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+    metrics = summarize_frames([frame])["domains"]["real"]["current_region"]
+    assert metrics["prediction_frames"] == metrics["unscorable_truth_frames"] == 1
+    assert metrics["scored_frames"] == metrics["abstained_frames"] == 0
+    assert metrics["frame_coverage"] == 0 and metrics["pixel_coverage"] is None
+    assert metrics["unknown_truth_pixels"] == labels.size and metrics["iou"] is None
+
+
+@pytest.mark.parametrize("conditions", ["junction", None, {"junction": True}, [""]])
+def test_conditions_require_an_explicit_sequence_of_names(conditions):
+    image, anchor = _snapshots()
+    labels = _labels()
+    truth = (labels == 2).astype(np.uint8)
+    with pytest.raises(ValueError, match="conditions"):
+        evaluate_frame(labels, CLASSES, image, anchor, (), truth, truth,
+                       domain="real", conditions=conditions, now_ns=1050, max_age_ns=100)
