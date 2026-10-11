@@ -38,6 +38,7 @@ class Problem:
     necessity: str
     goal: str = 'inspect'
     facts_json: str = '{"state":"unknown"}'
+    fleet_choice: str | None = None
 
     def __post_init__(self):
         for value in (self.subject_id, self.case_id, self.generation):
@@ -67,6 +68,9 @@ class Problem:
                 if allowed is not None and value not in allowed:
                     raise ValueError('unsupported advisory choice')
             object.__setattr__(self, name, tuple(values))
+        if self.fleet_choice is not None and (type(self.fleet_choice) is not str
+                or self.fleet_choice not in self.choices):
+            raise ValueError('invalid Fleet advisory baseline')
         canonical(asdict(self))
 
     @property
