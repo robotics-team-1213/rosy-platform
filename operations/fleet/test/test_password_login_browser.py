@@ -69,7 +69,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                     expect(tab.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                     expect(tab.locator("#user-role")).to_contain_text("운영자")
                     expect(tab.locator("#estop")).to_be_enabled()
-                    for width in (768, 1366, 1440, 1920):
+                    for width in (480, 640, 768, 1366, 1440, 1920):
                         tab.set_viewport_size({"width": width, "height": 900})
                         toggle = tab.locator("#topbar-more")
                         if toggle.is_visible() and toggle.get_attribute("aria-expanded") == "true":
@@ -79,11 +79,12 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                         expect(tab.locator(".fleet-link-status [data-login=logout]")).to_be_visible()
                         account = principal.bounding_box()
                         brand = tab.locator("ui-brand").bounding_box()
-                        assert account["x"] >= brand["x"] + brand["width"]
+                        if width >= 768:
+                            assert account["x"] >= brand["x"] + brand["width"]
+                            assert max(account["y"], brand["y"]) < min(
+                                account["y"] + account["height"], brand["y"] + brand["height"])
                         if width >= 1024:
                             assert account["x"] > width / 2
-                        assert max(account["y"], brand["y"]) < min(
-                            account["y"] + account["height"], brand["y"] + brand["height"])
                         assert tab.evaluate("""() => {
                             const bar = document.querySelector('ui-topbar'), who = bar.querySelector('[data-login=who]');
                             const height = bar.getBoundingClientRect().height;

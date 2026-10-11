@@ -85,7 +85,7 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                 expect(page.locator("#estop")).to_be_enabled()
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')")
                 expect(page.locator("#console-token")).to_be_hidden()
-                for width in (320, 390, 768, 1366, 1440, 1920):
+                for width in (320, 390, 480, 640, 768, 1366, 1440, 1920):
                     page.set_viewport_size({"width": width, "height": 900})
                     expect(page.locator(identity)).to_be_visible()
                     role = page.locator(identity).bounding_box()
