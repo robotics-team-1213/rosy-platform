@@ -3225,3 +3225,10 @@
 - 변경: `model_feedback_dispatch`가 기존 store/journal/fence 도구 중재를 소유하고, goal_evidence 및 진척 시각/step 투영은 기존 execution wheel을 소비한다. store/auth/claim/transport는 이전하지 않았다.
 - 검증: `fb2e5e07d3` 원격 212 passed / NEW 0, 독립 소스 리뷰 승인. 기존 execution wheel dependency와 source image COPY/allowlist를 함께 검증했고 Fleet wheel에 execution을 중복 포장하지 않는다.
 - gate: 소스·설치 구성. main 착지·push/CI·실제 Docker build·배포·장치/현장 정확도는 각각 별도 증거다.
+
+## 2026-10-11 · 89c9b79bbd · fix(test): 추적 응답 fixture 설치 뒤 화면 초기화
+
+- 문제: 좌표 수명 브라우저 시험은 로그인 뒤에 tracking 응답을 가로챘다. 그 전에 실제 미설정404를 받으면 tracking view가 unavailable을 기억하므로 fixture가 있어도 표가 숨겨져 CI가 간헐 실패했다.
+- 변경: 먼저 실제404 응답을 기다리는 새로고침으로 실패 조건을 고정하고, 모의 응답 설치 뒤 화면을 새로 초기화한다. 좌표 만료·복귀·표 가시성·지도 크기·페이지 오류 검사는 유지한다. 제품 UI/API·관측 수명·CORE·Fleet 명령은 바꾸지 않는다.
+- 증거: 원격 실제 Chromium의 결정적 RED1 NEW 뒤 roles browser 전체6 pass·NEW0·exit0. 첫 원격 호출은 browser opt-in이 빠져 skip이었으며 실행 증거로 세지 않았다.
+- gate 변화: 시험 준비 순서와 원격 브라우저 회귀를 확인했다. main 통합·새 CI·사이트 배포·Isaac/Gazebo 주행과 두 대 Fleet 수용은 별도다.
