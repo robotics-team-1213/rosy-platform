@@ -102,7 +102,7 @@ def test_split_or_training_lineage_relabel_leak_refuses(field, value):
         evaluate(fit, evaluation)
 
 
-@pytest.mark.parametrize('bad', [math.nan, math.inf, True, -.1, 1.1])
+@pytest.mark.parametrize('bad', [math.nan, math.inf, True, -.1, 1.1, 10**400])
 def test_invalid_probability_and_unknown_latency_refuse(bad):
     fit, evaluation = rows('fit'), rows('evaluation')
     evaluation[0]['alternatives'][0]['probability'] = bad

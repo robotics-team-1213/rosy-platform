@@ -199,6 +199,7 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.deliberation.providers.versioned_request',
                'rosy.decision.deliberation.providers.local',
                'rosy.decision.deliberation.evaluation.calibration',
+               'rosy.decision.deliberation.evaluation.comparison',
                'rosy.decision.deliberation.evaluation.calibration_metrics',
                'rosy.decision.deliberation.evaluation.calibration_selection',
                'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
