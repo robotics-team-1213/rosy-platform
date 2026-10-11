@@ -185,7 +185,7 @@ fun StreamScreen(
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
             OutlinedButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
+                modifier = Modifier.fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
             ) {
                 Text(stringResource(R.string.button_settings))
             }
@@ -193,17 +193,17 @@ fun StreamScreen(
                 Button(
                     // Stopping is routine and reversible: neutral primary, not the crit fill (D-277 3).
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
                 ) {
-                    Text(stringResource(R.string.button_stop), fontSize = 22.sp)
+                    Text(stringResource(R.string.button_stop), fontSize = RosyMetrics.TextLabel.sp)
                 }
             } else {
                 Button(
                     onClick = onStart,
                     enabled = CameraSessionPlan.from(pairing).startCamera,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
                 ) {
-                    Text(stringResource(R.string.button_start), fontSize = 22.sp)
+                    Text(stringResource(R.string.button_start), fontSize = RosyMetrics.TextLabel.sp)
                 }
             }
         }

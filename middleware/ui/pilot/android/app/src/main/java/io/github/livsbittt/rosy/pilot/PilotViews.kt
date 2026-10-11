@@ -14,17 +14,17 @@ import android.widget.TextView
 /** Tablet navigation and device rows share the established Pilot palette and 48dp targets. */
 class PilotViews(private val context: Context) {
     fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
-    fun label(text: String, size: Float = 16f, quiet: Boolean = false) = TextView(context).apply {
+    fun label(text: String, size: Float = RosyMetrics.TextBody, quiet: Boolean = false) = TextView(context).apply {
         this.text = text; textSize = size; setTextColor(if (quiet) PilotColors.muted else PilotColors.foreground)
         setPadding(0, dp(4), 0, dp(4))
     }
     private fun fill(color: Int, focus: Boolean = false) = GradientDrawable().apply {
-        setColor(color); cornerRadius = dp(8).toFloat()
+        setColor(color); cornerRadius = dp(RosyMetrics.RadiusButton.toInt()).toFloat()
         if (focus) setStroke(dp(2), PilotColors.foreground)
     }
     fun button(text: String, primary: Boolean = false, action: () -> Unit) = Button(context).apply {
-        this.text = text; isAllCaps = false; textSize = 16f; minimumHeight = dp(48)
-        setPadding(dp(16), dp(8), dp(16), dp(8))
+        this.text = text; isAllCaps = false; textSize = RosyMetrics.TextLabel; minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
+        setPadding(dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()), dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()))
         val ink = if (primary) PilotColors.background else PilotColors.foreground
         setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf()), intArrayOf(ink, PilotColors.muted)))
         val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿", "기기·연결" -> R.drawable.ic_tablet; else -> null }
