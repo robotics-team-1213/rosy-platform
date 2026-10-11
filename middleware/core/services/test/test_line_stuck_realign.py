@@ -98,6 +98,16 @@ def _refused(rig, why, **body):
     assert caught.value.code == "STUCK_DECISION_REFUSED" and why in str(caught.value), str(caught.value)
 
 
+def test_kturn_refuses_side_obstacle_outside_straight_rear_strip():
+    rig = Rig()
+    rig.extra = ((-.10, -.09),)
+    rig.feed()
+    inp = rig.m._stuck_input(rig.t)
+    assert rig.m._recovery._back_refusal(inp) is None
+    assert not rig.m._rear_sweep_clear(rig.t, .04, .3)
+    assert rig.m._realign_why(rig.t, inp, "KTURN", -.04, .3) is not None
+
+
 def test_pivot_at_a_turn_spot_turns_on_odom_through_the_ir_centre_and_closes_on_lane_evidence():
     rig = Rig()
     rig.ir = 0.0                                              # paint under the IR centre: exempt on a spot

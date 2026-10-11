@@ -57,6 +57,17 @@ def _blocked_until_stuck(m):
     _run(m, 0.0, 5.5, front=0.15)                  # obstacle_escalate_s = 5 s
 
 
+def test_back_answer_rechecks_current_calibration_without_another_tick():
+    m, _ = _manager(linked=True)
+    _blocked_until_stuck(m)
+    current_id = m.status().stuck.stuck_id
+    _feed(m, 5.5, front=.15)
+    m.bind_recovery(calibration_active=lambda: True)
+    with pytest.raises(AnswerRefused, match="calibration_active"):
+        m.stuck_decision(current_id, "BACK_AND_RETRY", by="operator", now=5.51)
+    assert m.status().stuck.attempts == 0
+
+
 def test_obstacle_escalation_opens_one_stuck_with_body_clearances():
     m, events = _manager(linked=True)
     _blocked_until_stuck(m)

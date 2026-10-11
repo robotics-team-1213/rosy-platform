@@ -43,6 +43,24 @@ def _inp(now, **kw):
     return StuckInput(**base)
 
 
+@pytest.mark.parametrize("decision", ["RESUME", "BACK_AND_RETRY", "YIELD"])
+@pytest.mark.parametrize("answer_at", [2., -.1, math.nan, math.inf])
+def test_moving_answer_rejects_stale_or_invalid_snapshot_clock(decision, answer_at):
+    machine, bus = _machine()
+    machine.step(_inp(0., turn_m=.3))
+    kwargs = {"yield_m": .1, "yield_turn_rad": .3} if decision == "YIELD" else {}
+    with pytest.raises(AnswerRefused):
+        machine.answer(answer_at, machine.stuck_id, decision, "operator", **kwargs)
+    assert machine.status(0.)["attempts"] == 0
+
+
+@pytest.mark.parametrize("decision", ["WAIT", "MANUAL", "ABORT"])
+def test_stopping_answer_remains_available_with_old_snapshot(decision):
+    machine, _ = _machine()
+    machine.step(_inp(0.))
+    assert machine.answer(100., machine.stuck_id, decision, "operator") in ("hold", "manual", "idle")
+
+
 # ---- opening -------------------------------------------------------------------------
 def test_no_cause_passes_and_opens_nothing():
     machine, bus = _machine()
