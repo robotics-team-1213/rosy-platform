@@ -5,7 +5,6 @@ ui-section { display: grid; gap: var(--space-3); }
 .map-workflow > [aria-labelledby="run-heading"] { grid-area: run; }
 .map-workflow > [aria-labelledby="edit-heading"] { grid-area: edit; }
 .plane-tools { min-width: 0; }
-.plane-tools summary { box-sizing: border-box; cursor: pointer; min-height: var(--target-secondary); padding-block: var(--space-2); }
 .plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
