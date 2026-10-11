@@ -7802,3 +7802,9 @@ osy-d395-s1d\`.
 - 변경: branch `docs/perception-fitness-design`에서 사용자 합의 설계를 D-659 Accepted로 기록했다. 도로면·현재 구역·선택 경로의 의미, 독립 정답과 split, 시뮬레이션 입력 누설, 불확실/지연 판정 및 인지/주행 승인 경계를 구현 전 선행 조건으로 묶었다.
 - 증거: 기존 D-475/D-576/D-379/D-356과 학습·평가 소유 경로를 대조했다. ADR 번호 선점, Log BOM/CRLF 보존, generate/lint 및 커밋 HEAD 원격 계약 시험 결과는 검증 기록으로 구분한다.
 - gate 변화: 없음. 계약 수용이며 의미별 출력 구현, 실제 정답 검수·모델 평가·장치 추론 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · fb2e5e07d3 · D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
+
+- 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
+- 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
+- gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.

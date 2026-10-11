@@ -40,7 +40,7 @@ rosy-platform/
 │  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
 │  ├─ world/ (src/rosy/world/api, state/projections)
 │  ├─ situation/ (rosy_situation/assessment, snapshot_assessment, analyzers, incidents)
-│  ├─ execution/ (src/rosy/execution/api, site)
+│  ├─ execution/ (src/rosy/execution/api, site: goal_evidence, workflow 등)
 │  ├─ processes/{cell,palletizing}
 │  ├─ vision/signal_observer
 │  ├─ site_devices/{dock,signal}/firmware
@@ -102,7 +102,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
 | `middleware/execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
 | `operations/execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
-| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 유지 — site 실행·권한 projection. local loader나 장치 writer가 아님 |
+| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 시각/step 상태 투영. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
 | `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
 | `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
 | `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
@@ -112,8 +112,8 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/site_devices/signal` | signal contract·driver library | 유지 — Fleet 소비 signal 장치. Fleet가 sequence·command owner를 유지 |
 | `operations/site_devices/signal/firmware` | signal MCU firmware | 유지 — boot·supervision-loss failsafe. 관측용 signal observer와 구분 |
 | `operations/vision/signal_observer` | measured-light 관측 서비스·소스 | 유지 — read-only light evidence. CORE traffic observer 소비; 실행 host 결정이나 signal command 권한 추가 없음 |
-| `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose projection을 World로 이전. admission·claim·dispatch·MapPoseService 조립·trip consumer는 Fleet에 유지 |
-| `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — 기존 ER2/VLM·candidate/tool 제안. Fleet transaction/store/provider 소비 유지; `fleet.ai` shim 없음 |
+| `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose는 World, 순수 목표/진척 규칙은 execution 소비. D-657 `server/model_feedback_dispatch` 원장 어댑터와 admission·claim·dispatch·producer 인증·MapPoseService 조립·trip consumer는 Fleet 소유 |
+| `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
 | `operations/ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
@@ -170,6 +170,8 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 ## 현재 상태와 미래 행동 예측
 
 D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`만 포함한다. 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
+
+D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제 원장 모델 도구 구현은 `fleet.server.model_feedback_dispatch`, 순수 목표 검증은 `rosy.execution.site.goal_evidence`, 기존 시각·신선도·step 상태 투영은 `rosy.execution.site.workflow`가 소유한다. Fleet는 기존 execution wheel dependency를 사용하고 execution 파일을 중복 포장하지 않는다. site source image도 해당 source closure를 포함한다. 다른 Mission 전이·복구 규칙 및 D-648 단계 4는 후속으로 유지한다. 소스/설치 검증과 실제 이미지 빌드·배포·현장 정확도는 별도다.
 
 현재 World 구현은 `ObservationSnapshot`과 관측/odom을 합성하는 `MapPoseTracker`다. `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 이를 소비한다. World 내부의 `predicted` 표기는 마지막 관측에서 odom으로 갱신하는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
 

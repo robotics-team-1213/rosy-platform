@@ -31,7 +31,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'rosy-world==0.1.0'],
+    install_requires=['setuptools', 'rosy-world==0.1.0', 'rosy-execution==0.1.0'],
     extras_require={'learning': ['rosy-contracts-learning>=0.1.9']},
     zip_safe=True,
     maintainer='rosy',

@@ -647,6 +647,7 @@
 | D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 | Accepted (2026-10-11) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+| D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
 | D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
 
