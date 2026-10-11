@@ -157,14 +157,16 @@ class StuckResolverLoop:
 
     async def _admission_row(self, robot_id: str) -> Optional[dict]:
         rows = (await self._snapshot())["robots"]
-        row = next((row for row in rows if row["robot_id"] == robot_id), None)
-        return self._row(row) if row is not None else None
+        self._rows = {str(row["robot_id"]): self._row(row) for row in rows}
+        return self._rows.get(robot_id)
 
     async def _answer(self, answer: Answer, now: float) -> None:
+        selected = self._rows.get(answer.robot_id)
         row = await self._admission_row(answer.robot_id)
         if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
             return
-        hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id)
+        hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
+            or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
         if hold is not None:
             self._resolver.claim(answer.robot_id, answer.stuck_id)
             self._escalated(Escalate(answer.robot_id, answer.stuck_id, hold),

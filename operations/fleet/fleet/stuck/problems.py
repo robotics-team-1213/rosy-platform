@@ -93,18 +93,23 @@ class ProblemWatch:
                    else first.evidence_invalid(proposal, rid) or first.limit(rid, pid, decision, now)
                    or ("trip" if row.get("trip") and decision != "WAIT" else None) or "forwarded")
         code = None
-        client = loop._clients().get(rid)
-        if verdict == "forwarded" and client is None:
-            verdict = "no_resolver_token"
         if verdict == "forwarded":
             current = await loop._admission_row(rid)
             verdict = law_hold(current, decision=decision) or first.evidence_invalid(proposal, rid) or "forwarded"
+            if verdict == "forwarded":
+                key = problem_key(current, kind, None, loop._resolver.at_crosswalk(rid))
+                verdict = ("ai_disabled" if not first.on(rid) else f"human_class:{key}"
+                           if key in first.human_classes() else "forwarded")
             if verdict == "forwarded":
                 active = self._lost(current) if kind == "pose_lost" else self._stalled(rid, current, now)
                 if not active:
                     verdict = "problem_changed"
                 else:
                     row = current
+        if verdict == "forwarded":
+            client = loop._clients().get(rid)
+            if client is None:
+                verdict = "no_resolver_token"
         if verdict == "forwarded":
             first.sent(rid, pid, decision, now)
             code = await self._send(client, decision)
