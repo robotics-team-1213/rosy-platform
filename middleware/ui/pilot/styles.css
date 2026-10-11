@@ -874,9 +874,18 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   opacity: var(--disabled-opacity);
 }
 @media (width < 64rem) {
-  body[data-pilot-screen="connect"] ui-topbar { flex-wrap: wrap; gap: var(--space-2); }
-  body[data-pilot-screen="connect"] ui-brand { flex: 1 1 100%; min-width: 0; }
-  body[data-pilot-screen="connect"] #pilot-notice { flex: 1 1 100%; overflow-wrap: anywhere; }
+  body[data-pilot-screen="connect"] ui-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "brand brand stop" "state nav stop" "notice notice notice";
+    gap: var(--space-1) var(--space-2);
+  }
+  body[data-pilot-screen="connect"] ui-brand { grid-area: brand; min-width: 0; }
+  body[data-pilot-screen="connect"] [data-gate-state] { grid-area: state; }
+  body[data-pilot-screen="connect"] [data-goto] { grid-area: nav; justify-self: start; }
+  body[data-pilot-screen="connect"] [data-estop] { grid-area: stop; align-self: stretch; }
+  body[data-pilot-screen="connect"] #pilot-notice { grid-area: notice; overflow-wrap: anywhere; }
+  body[data-pilot-screen="connect"] #pilot-notice:empty { display: none; }
   body[data-pilot-screen="connect"] ui-topbar [data-spacer] { display: none; }
 }
 
