@@ -355,3 +355,32 @@ def test_path_policy_keeps_its_existing_training_and_four_heading_protocol():
     phases = episode_phases(2, camera=False, evaluation_only=False)
     assert [phase for phase, _, _ in phases] == ['baseline', 'train', 'train', 'eval', 'eval']
     assert all(phase == 'eval' for phase, _, _ in episode_phases(2, camera=False, evaluation_only=True))
+
+
+def comparison_episodes():
+    shared = dict(seed=202, initial_heading_offset_rad=0., initial_target_pose=[0., 0., .1],
+                  initial_pose=[0., 0., .1, 0., 0.], time_limit_s=400., policy_sha256='a' * 64)
+    return (dict(shared, phase='baseline', epoch=8, complete=False, sim_s=200.),
+            dict(shared, phase='eval', epoch=9, complete=True, sim_s=190.))
+
+
+def test_camera_comparison_preserves_a_failed_baseline_and_successful_fixed_policy():
+    from run_map_rl import camera_comparison
+    baseline, evaluated = comparison_episodes()
+    pair = camera_comparison(baseline, evaluated)
+    assert pair['baseline_epoch'] == 8 and pair['eval_epoch'] == 9
+    assert pair['baseline_complete'] is False and pair['eval_complete'] is True
+    assert pair['initial_position_delta_m'] == 0. and pair['initial_heading_delta_rad'] == 0.
+
+
+@pytest.mark.parametrize('change', [
+    {'seed': 303}, {'phase': 'train'}, {'time_limit_s': 200.}, {'policy_sha256': 'b' * 64},
+    {'initial_target_pose': [0., 0., .2]}, {'initial_heading_offset_rad': 1.},
+    {'initial_pose': [.016, 0., .1, 0., 0.]}, {'initial_pose': [0., 0., .126, 0., 0.]},
+])
+def test_camera_comparison_rejects_different_conditions_or_physical_start(change):
+    from run_map_rl import camera_comparison
+    baseline, evaluated = comparison_episodes()
+    evaluated.update(change)
+    with pytest.raises(ValueError, match='paired camera'):
+        camera_comparison(baseline, evaluated)

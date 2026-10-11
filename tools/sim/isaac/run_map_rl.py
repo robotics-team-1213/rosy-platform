@@ -41,6 +41,15 @@ def camera_tick(lane, now, *, gain):
     return decision, state
 
 
+def episode_phases(train_episodes, *, camera, evaluation_only):
+    evaluations = ([(707, 0.), (808, math.pi / 2), (909, math.pi), (1001, -math.pi / 2)]
+                   if evaluation_only else [(202, 0.), (303, 0.)] + ([(404, 0.)] if camera else []))
+    phases = [] if evaluation_only else [('baseline', 101, 0.),
+                                         *[('train', seed, 0.) for seed in range(train_episodes)]]
+    return phases + [(phase, seed, angle) for seed, angle in evaluations
+                     for phase in (('baseline', 'eval') if camera else ('eval',))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--urdf', type=Path, required=True)
@@ -277,10 +286,8 @@ def main():
         stop_robot = physical_stop
         summary['initial_stop'] = physical_stop()
         baseline = None
-        phases = ([('eval', 707, 0.), ('eval', 808, math.pi / 2),
-                   ('eval', 909, math.pi), ('eval', 1001, -math.pi / 2)] if saved is not None else
-                  [('baseline', 101, 0.), *[('train', i, 0.) for i in range(args.train_episodes)],
-                   ('eval', 202, 0.), ('eval', 303, 0.)])
+        phases = episode_phases(args.train_episodes, camera=perception is not None,
+                                evaluation_only=saved is not None)
         for phase, seed, heading_offset in phases:
             physical_stop()
             rng = random.Random(seed)
