@@ -61,7 +61,7 @@ def test_claim_rejects_late_changed_closed_and_unnamed_requests(tmp_path):
 def test_api_claim_has_named_readback_and_no_device_command(tmp_path):
     from fakes import FakeRobot
     from test_line_stuck_api import _console, _named_app, _state, _auth, OPERATOR, VIEWER
-    from fleet.stuck.handoff import judgment_revision
+    from fleet.incident_handoff import judgment_revision
     robot = FakeRobot('rosy_01', state=_state())
     client, _ = _named_app(_console(robot), tmp_path)
     receipt = client.get('/api/fleet/state', headers=_auth(VIEWER)).json()['robots'][0]['judgment']
@@ -112,7 +112,7 @@ def test_claim_and_motion_submit_have_one_order(tmp_path, monkeypatch):
     import httpx
     from fakes import FakeRobot
     from test_line_stuck_api import _console, _named_app, _state, _auth, OPERATOR, VIEWER
-    from fleet.stuck.handoff import judgment_revision
+    from fleet.incident_handoff import judgment_revision
     robot = FakeRobot('rosy_01', state=_state())
     client, _ = _named_app(_console(robot), tmp_path)
     receipt = client.get('/api/fleet/state', headers=_auth(VIEWER)).json()['robots'][0]['judgment']
