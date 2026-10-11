@@ -14,6 +14,7 @@ import {
 } from '/console/assets/site-map-model.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
+import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
@@ -33,6 +34,12 @@ let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
+const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,
+  render: () => render(),
+  reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
+  begin: () => { clearPlane(); $('trip-pick').checked = false; state.band = null; },
+  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
+    clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -59,6 +66,7 @@ function el(name, attrs, parent) {
 }
 
 function render() {
+  survey.sync();
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
@@ -106,6 +114,7 @@ function render() {
     const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
       class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
     el('title', {}, path).textContent = `${edge.id} · ${edge.direction === 'two_way' ? '양방' : '일방'} · ${edge.speed_cap_mps} m/s`;
+    if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
     for (const mark of arrowMarks(edge)) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
@@ -117,7 +126,7 @@ function render() {
   }
   if ($('map-source').value !== 'profile')
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
-  for (const place of map.places) {
+  for (const [index, place] of map.places.entries()) {
     const [px, py] = view.toPx(place.x, place.y);
     const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
       class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
@@ -126,8 +135,19 @@ function render() {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
+    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = index + 1;
   }
+  for (const facility of map.facilities || []) {
+    const points = facility.geometry.map(([x, y]) => view.toPx(x, y));
+    const mark = facility.kind === 'exclusion'
+      ? el('polygon', {points: points.map(p => p.join(',')).join(' '), class: 'facility exclusion'}, svg)
+      : facility.kind === 'stop_line'
+        ? el('polyline', {points: points.map(p => p.join(',')).join(' '), class: 'facility stop-line'}, svg)
+        : el('circle', {cx: points[0][0], cy: points[0][1], r: 6, class: `facility ${facility.kind}`}, svg);
+    el('title', {}, mark).textContent = facility.name;
+  }
+  if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
+  svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
     const [px, py] = view.toPx(state.point.x, state.point.y);
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
@@ -215,6 +235,7 @@ function select(selection) {
 }
 
 function syncButtons() {
+  survey.sync();
   const reason = operatorReason();
   gate('profile-new', reason);
   gate('profile-copy', reason || (!shown() ? '복사할 지도가 없습니다' : ''));
@@ -356,7 +377,7 @@ $('token-save').addEventListener('click', async () => {
     syncButtons();
     await load();
     notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
-      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
+      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 없이 시작에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
     state.loadState = error.status === 401 ? 'idle' : 'error';
@@ -429,11 +450,7 @@ $('profile-new').addEventListener('click', () => guarded(async () => {
     $('profile-rules').closest('details').open = true;
     return;
   }
-  profileInputs({schema: 'rosy.site_map/1', map_id: id,
-    places: [{id: 'A', name: '시작', kind: 'park', x: 0, y: 0},
-      {id: 'B', name: '끝', kind: 'park', x: 2, y: 0}],
-    edges: info.kind === 'general' ? [] : [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [2, 0]],
-      direction: 'two_way', drive_mode: 'lane', width_m: 0.2, speed_cap_mps: 0.2}]}, id, '새 지도', info);
+  profileInputs({schema: 'rosy.site_map/1', map_id: id, places: [], edges: []}, id, '새 지도', info);
   $('profile-rules').closest('details').open = true;
 }));
 $('profile-file').addEventListener('change', () => guarded(async () => {
@@ -559,6 +576,7 @@ function clearPlan() {
 }
 
 $('site-map-svg').addEventListener('click', event => {
+  if (survey.pick(event)) return;
   if ($('plane-pick').checked) {
     if (plane?.mapId !== shown()?.map_id) return;
     const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
