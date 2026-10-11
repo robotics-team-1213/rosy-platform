@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parents[1]))
 repo = Path(__file__).resolve().parents[4]
 for path in ('contracts/motion/src', 'contracts/skill/src', 'contracts/foundation',
-             'middleware/core/services', 'middleware/core/gateway'):
+             'middleware/core/services', 'middleware/core/gateway', 'middleware/perception'):
     sys.path.insert(0, str(repo / path))
 from map_task import MapTask, QPolicy, SimulationOwner, load_track
 from rosy.contracts.motion import BaseTwist, MotionHeader, MotionIntent, MotionKind, PriorityClass
@@ -72,6 +72,21 @@ def test_q_update_learns_from_reward_and_eval_does_not_mutate():
     before = p.export()
     p.choose((99, 99), explore=False)
     assert p.export() == before and p.updates == 1
+
+
+def test_drive_tracker_alignment_boundary_is_preserved():
+    t = MapTask([(0., 0.), (.1, 0.), (.2, 0.)], half_size=(2., 2.))
+    _, speed, angular = t.pursuit(0., 0., .4)
+    assert speed == 0. and angular < 0.
+
+
+def test_closed_loop_tracker_gets_local_ordered_route_not_arrived_at_start():
+    track = load_track()
+    t = MapTask(track['points'], half_size=(2., 2.))
+    x, y = t.points[0]
+    yaw = math.atan2(t.points[1][1] - y, t.points[1][0] - x)
+    _, speed, angular = t.pursuit(x, y, yaw)
+    assert speed > 0. or angular != 0.
 
 
 def intent(epoch=1, **overrides):
