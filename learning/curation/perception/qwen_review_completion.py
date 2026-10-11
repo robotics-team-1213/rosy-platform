@@ -99,6 +99,8 @@ def ask(photo, mask, drivable, endpoint):
 
 def compose(human, proposals, binding):
     """Use only unknown pixels and decline conflicting SAM regions."""
+    if not review_masks.lane_boundary_classes(binding):
+        raise ValueError('road_surface/1 cannot use own-road completion')
     out = human.copy()
     ids = {entry['name']: entry['index'] for entry in binding['classes']}
     accepted = {}
@@ -210,6 +212,8 @@ def main():
         parser.error('new output directory and positive limit required')
     state = args.state.resolve()
     meta, binding, rows = snapshot(state, args.limit)
+    if not review_masks.lane_boundary_classes(binding):
+        parser.error('road_surface/1 cannot use own-road completion')
     class_ids = {entry['name']: entry['index'] for entry in binding['classes']}
     if not {'background', 'drivable'} <= class_ids.keys():
         parser.error('background and drivable classes required')
