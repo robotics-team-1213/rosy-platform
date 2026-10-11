@@ -631,7 +631,7 @@
 | D-641 | 운용 화면의 다섯 영역·의미 아이콘·단계별 근거 공개 | Accepted (2026-10-11; implementation and installed acceptance separate) |
 
 | D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
-| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Proposed (2026-10-11) |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Accepted (2026-10-12) |
 | D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 | Proposed (2026-10-11) |
 | D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 | Proposed (2026-10-11) |
 | D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 | Proposed (2026-10-11) |

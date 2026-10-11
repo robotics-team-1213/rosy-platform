@@ -1,0 +1,63 @@
+"""Fixed CLI translation. Deployment must inject a proven isolated launcher."""
+import json
+import math
+import re
+from dataclasses import asdict
+
+from . import canonical, identifier, opinion
+
+
+class CliProvider:
+    def __init__(self, *, kind, model, profile_id, launch):
+        if not callable(launch):
+            raise ValueError('ISOLATED_LAUNCHER_REQUIRED')
+        if kind not in {'claude', 'opencode'}:
+            raise ValueError('unsupported CLI')
+        if type(model) is not str or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/:#-]{0,127}', model) is None:
+            raise ValueError('invalid configured model ID')
+        self.kind, self.model, self.profile_id = kind, identifier(model), identifier(profile_id)
+        self.launch = launch
+
+    async def __call__(self, problem, prior, remaining, *, budget_usd):
+        if (type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30
+                or type(budget_usd) not in (int, float) or not math.isfinite(budget_usd)
+                or not 0 < budget_usd <= 10 or len(prior) not in (0, 2)):
+            raise ValueError('invalid CLI budget')
+        body = canonical({'problem': {**asdict(problem), 'input_hash': problem.digest}, 'prior': prior,
+                          'instruction': 'Return only an advisory choice, evidence IDs and unresolved objections. '
+                                         'Never use tools or claim physical verification.'}).encode()
+        if self.kind == 'claude':
+            schema = {'type': 'object', 'additionalProperties': False,
+                      'properties': {key: {'type': 'string'} for key in
+                                     ('subject_id', 'case_id', 'generation', 'input_hash', 'choice')}}
+            schema['properties'].update({key: {'type': 'array', 'items': {'type': 'string'}}
+                                         for key in ('evidence_ids', 'objections')})
+            schema['required'] = list(schema['properties'])
+            argv = ('claude', '--bare', '-p', '--tools', '', '--setting-sources', '',
+                    '--disable-slash-commands', '--no-session-persistence', '--strict-mcp-config',
+                    '--mcp-config', '{"mcpServers":{}}', '--output-format', 'json',
+                    '--json-schema', canonical(schema), '--model', self.model,
+                    '--max-turns', '1', '--max-budget-usd', str(budget_usd))
+        else:
+            # shortcut: v2.0.22 has no CLI token/cost cap; isolated launcher must enforce both before activation.
+            argv = ('opencode', 'run', '--standalone', '--format', 'json', '--model', self.model)
+        code, raw = await self.launch(argv, body, remaining, 16384, budget_usd)
+        if code != 0 or type(raw) is not bytes or len(raw) > 16384:
+            raise ValueError('CLI_RESULT_UNKNOWN')
+        if self.kind == 'claude':
+            envelope = json.loads(raw)
+            if envelope.get('is_error') is not False:
+                raise ValueError('CLI_RESULT_UNKNOWN')
+            payload, cost = envelope['structured_output'], envelope['total_cost_usd']
+        else:
+            records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+            if any(record.get('type') not in {'text', 'step_start', 'step_finish'} for record in records):
+                raise ValueError('CLI_UNEXPECTED_EVENT')
+            texts = [record['part']['text'] for record in records if record['type'] == 'text']
+            costs = [record['part']['cost'] for record in records if record['type'] == 'step_finish']
+            if len(texts) != 1 or len(costs) != 1:
+                raise ValueError('CLI_RESULT_UNKNOWN')
+            payload, cost = json.loads(texts[0]), costs[0]
+        if type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd:
+            raise ValueError('CLI_COST_UNKNOWN_OR_EXCEEDED')
+        return opinion(problem, payload), cost
