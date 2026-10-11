@@ -3163,3 +3163,9 @@
 - 변경: 만료·관측 없음에서 좌표 표는 유지하고 숫자는 대시로 교체한다. 지도 위 만료 관측은 제거한다. source 소실·재연결·목록 순서 변경 때 다른 카메라로 자동 전환하지 않는다. Cam/Vision/Fleet/Console의 기존 책임과 노출 제어 writer 우선순위를 D-634에 기록했다.
 - 검증: 기존 표 숨김·source 자동 전환을 Node 시험으로 재현한 뒤 전체 Node 284 passed. 관련 원격 pytest는 별도 검증한다.
 - gate 변화: SOURCE/Node 검증만. 현장 발생 기록 대조·Cam 장치 검증·착지·push·배포는 별도다.
+
+## 2026-10-11 · 26181c12d · test(fleet): 좌표 관측 수명과 화면 배치 검증
+
+- 변경: D-634의 역할 분담과 좌표 표 안정성 검증을 기록했다. 사용자 정정에 따라 증상은 하단 좌표 표 소실로 분류하며, 별도 source 자동 전환 수정과 구분한다.
+- 검증: b1b8214c5 원격 pytest 151 passed, 26181c12d Chromium 1 passed. 두 실행 known_failures NEW 0. Node 284 passed, harness lint 오류 0·기존 경고 25. 로그는 X:/DevTemp의 이 세션 logs/camera-ownership 및 camera-ownership-browser.
+- gate 변화: SOURCE/원격 계약/Chromium 검증. 현장 APK·Vision 런타임·실장치 발생 기록 대조 및 배포는 검증하지 않았다.
