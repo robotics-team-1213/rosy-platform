@@ -93,6 +93,7 @@ API = {
                                       "sources": [{"source_id": "cam-1"}]}]},
     "/api/fleet/site-map/active": ACTIVE,
     "/api/fleet/site-map/draft": {"map": None, "revision": None},
+    "/api/fleet/site-map/profiles": {"profiles": []},
     "/api/fleet/calibrations": {"calibrations": []},
     "/api/fleet/traffic": TRAFFIC,
     "/api/fleet/trips": {"running": OPEN[1], "trips": OPEN, "open": OPEN},
