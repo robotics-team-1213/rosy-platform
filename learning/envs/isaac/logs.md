@@ -156,3 +156,9 @@
 - 변경: native camera_route_guide의 무조건 pivot_ok=true를 제거했다. 지도 방향은 유지하지만 실제 Fleet turn spot·native sweep clearance 증거가 없는 prior는 false다. invalid camera의 명령 0·학습 제외는 유지한다.
 - 증거: 원격 camera/map_task 104 PASS·known_failures NEW 0. R21 맵 정적 기하 비교에서 시작점은 Fleet 허용 지점에서 37.66mm로 18mm 허용 범위 밖이며 남쪽 두 spot의 native 충돌 원 페인트 겹침 29.78/37.30mm는 기존 25mm 한도를 넘었다. static paint/AABB 계산은 센서/회전 승인 증거가 아니며 원본 JSON을 private hash 대조 보관했다. R22 committed source 7331개 파일 검증 준비 후 strict Isaac 자원 floor에 거절되어 SDK는 미실행이다.
 - gate 변화: 없음. 실제 Fleet cue·CORE 회전 연결·재획득·native 완주·교통/Fleet·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. geometry 승인·SDK 결과 없는 회전을 성공이나 안전 증거로 보고하지 않는다.
+
+## 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
+
+- 변경: lane_rules의 기존 TurnBan으로 NW·SE 재진입을 금지하고 두 lane_graph를 재생성했다. Fleet import·신호 접근로 검사가 금지를 보존하며 camera sim site는 cap1 roundabout과 NE·SW 신호 접근로를 설정한다. Isaac 경로는 reverse 도로로 합법적인 진입을 사용한다.
+- 증거: 두 파생 지도의 접근로·cap1·신호 plan과 실제 routing successor, native 금지 경로 거절 회귀를 추가했다. 원격 시험과 독립 안전 리뷰 결과는 후속 기록한다. 실제 Fleet A18 readback은 이전 설정에서 signals=[]·링 분리 블록을 확인한 원인 증거이며 새 설정의 성공 증거가 아니다.
+- gate 변화: 아직 없음. 새 경로 baseline/RL·네 실제 신호 표시 연결·CORE/Fleet 회전 연결·완주·교통/장애물·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. 다른 경로의 R17/R21 수치를 개선 비교에 사용하지 않는다.

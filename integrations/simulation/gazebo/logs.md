@@ -324,3 +324,9 @@
 - 변경: 검증 allocator·run_spec·sim-only watchdog 80..99, 일반 sim 20..79. CORE 0..101/localhost/partition/namespace/실제 context/monotonic expiry 유지. 기존 120..199 catalog는 거절하며 새 output_root가 필요하다.
 - 증거: 관련 원격 87PASS1SKIP·known_failures 0NEW·독립 소스 안전 검토 차단 없음. 신규 17 packages 빌드 후 실제 headless Gazebo 두 CORE domain 80, 각 320x240 camera 311·finite640 LiDAR389·odom1143·최종 publisher 한 개·명령 0 확인. ROS ERROR가 사라지고 FOREIGN_NAMESPACE 경고는 유지. 자체 partition 종료 후 잔여 0.
 - gate 변화: 정지 runtime 도메인 결함 해결. Fleet 서버·교통·주행·완주·카메라 RL 수용은 미완료. 당시 모델 PC의 Isaac 한 대 재시험은 7.6GB로 8GB 기준을 넘지 못해 SDK 기동 전 거절됐다. 이후 실제 학습은 Isaac 일지에 별도 기록한다.
+
+## 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
+
+- 변경: lane_rules의 기존 TurnBan으로 NW·SE 재진입을 금지하고 두 lane_graph를 재생성했다. Fleet import·신호 접근로 검사가 금지를 보존하며 camera sim site는 cap1 roundabout과 NE·SW 신호 접근로를 설정한다. Isaac 경로는 reverse 도로로 합법적인 진입을 사용한다.
+- 증거: 두 파생 지도의 접근로·cap1·신호 plan과 실제 routing successor, native 금지 경로 거절 회귀를 추가했다. 원격 시험과 독립 안전 리뷰 결과는 후속 기록한다. 실제 Fleet A18 readback은 이전 설정에서 signals=[]·링 분리 블록을 확인한 원인 증거이며 새 설정의 성공 증거가 아니다.
+- gate 변화: 아직 없음. 새 경로 baseline/RL·네 실제 신호 표시 연결·CORE/Fleet 회전 연결·완주·교통/장애물·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. 다른 경로의 R17/R21 수치를 개선 비교에 사용하지 않는다.

@@ -41,6 +41,14 @@ D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분�
 
 **Related:** D-2, D-18, D-517, D-525, D-541, D-573, D-606, D-638, D-650, D-653.
 
+### Addendum 2026-10-12 — 공유 지도 진입·진출 규칙 정합성
+
+기존 양방향 지도는 링 진입 네 방향을 열었고 Isaac 경로도 NW·SE에서 재진입했다. 승인한 NE·SW 진입/NW·SE 진출 구조에 맞춰 원본 `lane_rules.yaml`에 기존 TurnBan 계약으로 NW의 west→ring_w 및 SE의 east→ring_e 금지를 기록한다. 두 파생 lane_graph는 생성기로 갱신하며 Fleet 지도 가져오기가 이를 보존한다. 신호 접근로 검사는 연결된 진입 중 금지된 전이를 제외한다. 도로의 양방향과 링에서 도로로 나가는 합법적 진출은 유지한다.
+
+Gazebo camera site 설정은 ring 네 edge를 capacity 1 roundabout으로 묶고 east:rev(NE)·west:rev(SW) 접근로에 기존 sig_ring을 설정한다. 네 실제 신호 표시 연결은 별도 구현·실행 검증이 남았다. 기존 occupancy 모드의 FREE/UNKNOWN 판단과 CORE 최종 권한을 변경하지 않는다.
+
+Isaac ordered 경로는 두 도로를 reverse 방향으로 지나 합법적인 NE·SW 진입을 사용한다. 경로 적재 시 금지 전이를 거절하며 전체 링과 두 도로를 포함한다. 이전 R17/R21의 경로와 달라졌으므로 그 수치를 새 경로의 개선 비교에 재사용하지 않는다. 같은 새 source·경로·초기 조건의 baseline과 frozen RL 재평가가 필요하다. 원격 계약 시험과 실제 Fleet 설정 readback, native 완주·교통 수용은 각각 별도 증거다.
+
 ### Addendum 2026-10-12 — 실행 분리와 Gazebo 도메인 계약 수정
 
 사용자 요청에 따라 모델 PC의 headless Isaac은 한 대의 기존 segmentation·line_follow·CORE 조향 gain RL과 완주를 검증하고, 다른 PC의 headless Gazebo는 두 대의 독립 CORE와 실제 Fleet·신호·횡단·주의 표시·장애물 완주를 검증한다. 동일 map_v2_fleet/STL 파생을 사용하며 Isaac 한 대 결과를 두 대 Fleet 수용으로 계산하지 않는다. 병렬 RL 환경과 독립 평가 요구는 아직 미완료인 별도 증거로 유지한다.
