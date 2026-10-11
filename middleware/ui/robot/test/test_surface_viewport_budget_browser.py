@@ -128,9 +128,9 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
             }""")
             page.wait_for_timeout(300)
             first = page.evaluate(MEASURE)
-            if surface == "console" and (shot_dir := os.environ.get("ROSY_SHOT_DIR")):
+            if shot_dir := os.environ.get("ROSY_SHOT_DIR"):
                 Path(shot_dir).mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(Path(shot_dir) / f"robot-console-{width}x{height}.png"))
+                page.screenshot(path=str(Path(shot_dir) / f"robot-{surface}-{width}x{height}.png"))
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
             scrolled = page.evaluate(MEASURE)
