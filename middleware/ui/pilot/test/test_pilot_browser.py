@@ -806,7 +806,7 @@ def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_v
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
-    """D-460 결정 2: 자기 방 운전 상태 라벨(MANUAL+움직임 → '운전 중', 아니면 '대기')."""
+    """Manual movement is explicitly attributed to this robot."""
     base_url, page, errors = tablet_page
     page.route("**/api/v1/site/rooms",
                lambda route: route.fulfill(json={"rooms": []}))
@@ -818,7 +818,7 @@ def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     tag = page.locator("[data-lobby-self]")
     tag.wait_for(state="visible")
-    assert tag.inner_text() == "운전 중"
+    assert tag.inner_text() == "이 로봇 · 운전 중"
     assert errors == [], errors
 
 
@@ -834,7 +834,37 @@ def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     tag = page.locator("[data-lobby-self]")
     tag.wait_for(state="visible")
-    assert tag.inner_text() == "대기"
+    assert tag.inner_text() == "이 로봇 · 정지 상태"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("status,state,word", [
+    (503, {}, "상태 확인 불가"),
+    (200, {"mode": "MANUAL", "velocity": {"linear": 0}}, "상태 확인 불가"),
+    (200, {"mode": "SAFE_STOP", "safety": {"estop": True}}, "안전 정지"),
+    (200, {"mode": "NAVIGATION", "velocity": {"linear": 0, "angular": 0.1}}, "이동 중"),
+])
+def test_lobby_self_state_never_turns_missing_or_moving_evidence_into_idle(tablet_page, status, state, word):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(status=status, json=state))
+    page.goto(f"{base_url}/pilot")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == f"이 로봇 · {word}"
+    assert page.locator("[data-lobby-retry]").is_visible()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("stored", ["null", "{}", "[null, 1]", '[{"host":"other.test","label":"다른 로봇"}]'])
+def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin(tablet_page, stored):
+    base_url, page, errors = tablet_page
+    page.add_init_script(f"localStorage.setItem('rosy.pilot.recent', {json.dumps(stored)})")
+    page.goto(f"{base_url}/pilot")
+    page.locator("form[data-pilot-token-form] ui-field input").wait_for(state="visible")
+    assert page.locator("[data-recent-connect]").count() == 0
     assert errors == [], errors
 
 
