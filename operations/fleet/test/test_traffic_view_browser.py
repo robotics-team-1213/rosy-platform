@@ -184,7 +184,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console", posts)
         try:
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)  # the first 1 s traffic poll
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
@@ -285,7 +285,7 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
         try:
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)
             expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
             expect(page.locator('#site-map-svg [data-robot="rosy_02"]')).to_have_class("robot c2 degraded")
