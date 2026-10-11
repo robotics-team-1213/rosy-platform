@@ -12,10 +12,11 @@ import {
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
   planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
-import {editEdge, editPlace, mergeCameraMap} from '/console/assets/site-map-edit.js';
+import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
+import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
@@ -42,6 +43,10 @@ const survey = createSurveyPanel({map: () => shown(), source: () => $('map-sourc
   begin: () => { clearPlane(); $('trip-pick').checked = false; state.band = null; },
   changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
     clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
+
+const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(),
+  draft: () => state.draft, dirty: () => state.dirty, notice,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -237,6 +242,7 @@ function select(selection) {
 }
 
 function syncButtons() {
+  cameraMap.sync();
   survey.sync();
   const reason = operatorReason();
   gate('profile-new', reason);
@@ -247,8 +253,6 @@ function syncButtons() {
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
-  gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
-  gate('merge-camera-map', reason || (state.dirty ? '수정한 초안을 먼저 저장하세요' : '') || (!state.draft?.map?.survey ? '조사 기준이 있는 초안을 먼저 저장하세요' : '') || (!$('camera-map-file').files.length ? '카메라 관측 JSON 파일을 고르세요' : ''));
   gate('map-view-turn', reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   const crosswalk = state.selected?.crosswalk;
@@ -652,33 +656,6 @@ $('trip-pick').addEventListener('change', () => {
 });
 $('trip-place').addEventListener('change', clearPlan);
 $('trip-robot').addEventListener('change', clearPlan);
-
-$('camera-map-file').addEventListener('change', syncButtons);
-for (const button of ['import-camera-map', 'merge-camera-map']) $(button).addEventListener('click', () => guarded(async () => {
-  if (operatorReason()) return;
-  const accumulate = button === 'merge-camera-map', revision = state.draft?.revision || null, base = state.draft?.map;
-  if (accumulate && (state.dirty || !base?.survey)) throw new Error('조사 기준이 있는 초안을 먼저 저장하세요');
-  const file = $('camera-map-file').files[0];
-  if (!file) return;
-  if (file.size > 2 * 1024 * 1024 - 1024) throw new Error('지도 초안 파일은 2 MiB보다 작아야 합니다.');
-  let map = JSON.parse(await file.text());
-  if (map?.schema !== 'rosy.site_map/1') throw new Error('rosy.site_map/1 지도 초안 파일이 필요합니다.');
-  if (accumulate) {
-    if (state.dirty || revision !== state.draft?.revision) throw new Error('초안이 바뀌었습니다 · 저장 상태를 확인하세요');
-    map = mergeCameraMap(base, map);
-  } else if (state.dirty || revision) {
-    const allowed = await confirmIrreversible({message: '기존 초안을 카메라 지도 초안으로 바꿀까요? 활성 지도는 바뀌지 않습니다.',
-      action: '카메라 초안 가져오기', opener: $('import-camera-map')});
-    if (!allowed) return;
-  }
-  // The existing bounded, named-operator endpoint validates every coordinate and reference.
-  await request('/api/fleet/site-map/draft', {method: 'PUT', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({map, expected_revision: revision})});
-  await load();
-  $('map-source').value = 'draft';
-  clearPlan();
-  notice(accumulate ? '카메라 관측을 초안에 누적했습니다. 연결·통행 방향을 검토하세요.' : '카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
-}));
 
 // D-513 7: one orientation for every Fleet map and camera view; saved and activated like any edit.
 $('map-view-turn').addEventListener('change', () => guarded(async () => {

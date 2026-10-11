@@ -202,6 +202,9 @@
         <ui-head><h2 class="ui-section-heading" id="edit-heading">초안 편집</h2></ui-head>
         <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
         <ui-button id="import-camera-map" kind="quiet" disabled>카메라 지도 초안 가져오기</ui-button>
+        <ui-button id="preview-camera-connections" kind="quiet" disabled>연결 후보 보기</ui-button>
+        <div id="camera-connections" class="form" aria-live="polite"></div>
+        <label id="camera-connect-check" class="ui-check" hidden><input class="ui-field" id="camera-connect-confirm" type="checkbox">후보 장소와 실제 도로 연결을 확인했습니다</label>
         <ui-button id="merge-camera-map" kind="quiet" disabled>현재 초안에 관측 누적</ui-button>
         <ui-text>가져온 차로의 연결·통행 방향을 검토하세요. 활성 지도는 초안 활성화 전까지 바뀌지 않습니다.</ui-text>
         <ui-text id="selection">선택 없음</ui-text>
