@@ -10,6 +10,8 @@ function getRecent() {
   let list = [];
   try { list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
   catch { return []; }
+  if (!Array.isArray(list)) return [];
+  list = list.filter(entry => entry && typeof entry.host === "string" && typeof entry.label === "string");
   if (list.some((entry) => "token" in entry)) {
     // 이전 판이 남긴 평문 토큰을 걷어낸다.
     list = list.map(({host, label}) => ({host, label}));
@@ -99,9 +101,13 @@ async function refreshLobby(host) {
     // D-460 결정 2: 자기 방 운전 상태 표시 — rooms 라우터는 CoreServices에 접근하지
     // 않으므로 여기(같은 origin)에서 mode·velocity 증거를 읽어 라벨만 단다.
     const self = await api("/api/v1/robot/state").catch(() => null);
-    const driving = self?.ok && self.body?.mode === "MANUAL"
-      && Math.abs(self.body?.velocity?.linear ?? 0) > 0.002;
-    const tag = el("ui-tag", driving ? "운전 중" : "대기", {"data-lobby-self": ""});
+    const state = self?.ok ? self.body : null;
+    const measured = typeof state?.mode === "string"
+      && Number.isFinite(state?.velocity?.linear) && Number.isFinite(state?.velocity?.angular);
+    const moving = measured && (Math.abs(state.velocity.linear) > 0.002 || Math.abs(state.velocity.angular) > 0.002);
+    const word = state?.mode === "SAFE_STOP" || state?.safety?.estop === true ? "안전 정지"
+      : !measured ? "상태 확인 불가" : moving ? (state.mode === "MANUAL" ? "운전 중" : "이동 중") : "정지 상태";
+    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": ""});
     host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
@@ -117,7 +123,7 @@ async function refreshLobby(host) {
 
 // --- 최근 접속 목록 (게임 "계속하기") ---
 function renderRecentList(root, onConnect) {
-  const recent = getRecent();
+  const recent = getRecent().filter(entry => entry.host === location.host);
   if (recent.length === 0) return null;
 
   const section = el("div", null, {"data-recent-list": ""});
@@ -127,7 +133,7 @@ function renderRecentList(root, onConnect) {
   for (const entry of recent.slice(0, 3)) {
     const row = el("div", null, {"data-recent-item": ""});
     const button = el("ui-button", entry.label || entry.host, {type: "button", "data-recent-connect": entry.host});
-    button.setAttribute("kind", "primary");
+    button.setAttribute("kind", "quiet");
     button.addEventListener("click", () => {
       // 이 탭에 토큰이 있으면 바로 확인, 없으면 코드·토큰 입력으로.
       if (token()) onConnect();
@@ -226,10 +232,6 @@ function renderTokenForm(root, onConnect, message) {
   const head = el("ui-head", "접속", {id: "pilot-gate-heading"});
   root.replaceChildren(head);
 
-  // 최근 접속 목록
-  const recent = renderRecentList(root, onConnect);
-  if (recent) root.append(recent);
-
   // 이 화면의 로봇이 먼저다. 옆 로봇 목록은 코드 입력 아래에 둔다.
   const offer = el("div", null, {"data-connection-offer": ""});
   root.append(offer);
@@ -267,6 +269,8 @@ function renderTokenForm(root, onConnect, message) {
 
   root.append(divider, form);
   if (message) root.append(el("ui-status", message, {role: "status"}));
+  const recent = renderRecentList(root, onConnect);
+  if (recent) root.append(recent);
   const lobby = el("div", null, {"data-lobby-list": ""});
   root.append(lobby);
   refreshLobby(lobby);
