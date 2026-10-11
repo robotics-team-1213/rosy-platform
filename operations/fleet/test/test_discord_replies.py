@@ -32,8 +32,8 @@ def test_reply_is_bound_to_fixed_channel_original_message_and_no_mentions():
         assert str(request.url) == f"https://discord.com/api/v10/channels/{CHANNEL}/messages"
         assert request.headers["Authorization"] == "Bot test-bot-token"
         body = json.loads(request.content)
-        assert body["message_reference"] == {"message_id": MESSAGE, "channel_id": CHANNEL,
-                                               "fail_if_not_exists": True}
+        assert body["message_reference"] == {
+            "message_id": MESSAGE, "channel_id": CHANNEL, "fail_if_not_exists": True}
         assert body["allowed_mentions"] == {"parse": [], "replied_user": False}
         assert body["nonce"] == "a" * 24 and body["enforce_nonce"] is True
         return httpx.Response(200, json=accepted_body())
@@ -49,10 +49,11 @@ def test_unproven_provider_response_is_unknown(body):
     assert deliver(lambda request: httpx.Response(200, json=body))["state"] == "UNKNOWN"
 
 
-@pytest.mark.parametrize("status,state", [(429, "RETRY"), (403, "FAILED"), (404, "FAILED"),
-                                         (500, "UNKNOWN"), (302, "FAILED")])
+@pytest.mark.parametrize("status,state", [
+    (429, "RETRY"), (403, "FAILED"), (404, "FAILED"), (500, "UNKNOWN"), (302, "FAILED")])
 def test_no_blind_retry_after_ambiguous_or_refused_delivery(status, state):
     calls = []
+
     def handler(request):
         calls.append(request)
         return httpx.Response(status, json={})
@@ -60,8 +61,8 @@ def test_no_blind_retry_after_ambiguous_or_refused_delivery(status, state):
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("error,state", [(httpx.ConnectError, "RETRY"),
-                                        (httpx.ReadTimeout, "UNKNOWN")])
+@pytest.mark.parametrize("error,state", [
+    (httpx.ConnectError, "RETRY"), (httpx.ReadTimeout, "UNKNOWN")])
 def test_network_failure_distinguishes_not_connected_from_unknown(error, state):
     def handler(request):
         raise error("private credential must never reach result", request=request)

@@ -74,6 +74,7 @@ def test_current_account_and_identity_mapping_are_checked_before_claim(tmp_path)
 
 def test_queue_failure_rolls_back_receipt(tmp_path, monkeypatch):
     journal, outbox, _, envelope = fixture(tmp_path)
+
     def unavailable(*args):
         raise OSError("journal unavailable")
     monkeypatch.setattr(outbox, "received", unavailable)
@@ -91,6 +92,7 @@ def test_reply_worker_records_outcome_and_does_not_replay(tmp_path):
     journal, outbox, _, envelope = fixture(tmp_path)
     journal.receive(envelope)
     calls = []
+
     class Sender:
         async def send(self, **kwargs):
             calls.append(kwargs)
@@ -106,6 +108,7 @@ def test_cancelled_send_is_unknown_and_cancellation_propagates(tmp_path):
     from fleet.server.channel_replies import ChannelReplyWorker
     journal, outbox, _, envelope = fixture(tmp_path)
     journal.receive(envelope)
+
     class Sender:
         async def send(self, **kwargs):
             raise asyncio.CancelledError
@@ -120,11 +123,13 @@ def test_revocation_after_claim_prevents_send(tmp_path, monkeypatch):
     journal, outbox, accounts, envelope = fixture(tmp_path)
     journal.receive(envelope)
     claim = outbox.claim
+
     def claim_then_revoke(**kwargs):
         result = claim(**kwargs)
         accounts["op"] = "viewer"
         return result
     monkeypatch.setattr(outbox, "claim", claim_then_revoke)
+
     class Sender:
         async def send(self, **kwargs):
             raise AssertionError("revoked operator triggered send")
