@@ -30,9 +30,9 @@
 
 기존 main의 CI에서 실패했던 로봇 이름표 검사를 현재 소스에서도 재현했다. 축소 지도에서 글자 상자와 자기 로봇 표식이 겹쳐 일반 이름표가 숨겨지는 원인을 공용 글자 크기와 배율에 맞춘 간격 계산으로 수정했다. 같은 자리의 중복 숨김과 최우선 식별자 조건은 유지했다. 전체 검사에서 신규 탐색 속성과 역할 표시를 거부했던 옛 fixture는 실제 현재 계약에 맞춰 갱신했으며 제품 권한 기준은 변경하지 않았다.
 
-사건 표시가 console의 기존 zero-growth 제한을 넘겨 명시된 분리 의무를 적용했다. console.js는 994줄, incident-view.js는 219줄이다. 패키지와 지도 표시의 성장 판정은 독립 검토를 받았으며 기존 예산·분리 의무를 유지했다. 전체 브라우저 실행의 공통 tree는 `19e29a3851161efdb32689b1038daee245f397bc`이며 실행 커밋과 통합 커밋을 구분했다. 이후 main의 지도 상황 패널 변경은 별도 14개와 영상 3개 시험으로 재검증했다.
+사건 표시가 console의 기존 zero-growth 제한을 넘겨 명시된 분리 의무를 적용했다. console.js는 994줄, incident-view.js는 219줄이다. 패키지와 지도 표시의 성장 판정은 독립 검토를 받았으며 기존 예산·분리 의무를 유지했다. 전체 브라우저 실행의 공통 tree는 `19e29a385116`이며 실행 커밋과 통합 커밋을 구분했다. 이후 main의 지도 상황 패널 변경은 별도 14개와 영상 3개 시험으로 재검증했다.
 
-공식 `tools/land.py --tests auto`는 `2a57511acc538d64c1c1fb2c938c615fede53870`을 main에 fast-forward했다. 원격 검사 첫 호출 4,605 PASS·696 SKIP, 두 번째 호출 492 PASS·81 SKIP, known_failures 모두 NEW 0이다. 로그는 `X:/DevTemp/land/uiux-operator-shell-icons/run-1-1.txt`와 `run-1-2.txt`이다. 건너뛴 검사는 실행 증거로 계산하지 않는다.
+공식 `tools/land.py --tests auto`는 `2a57511acc53`을 main에 fast-forward했다. 원격 검사 첫 호출 4,605 PASS·696 SKIP, 두 번째 호출 492 PASS·81 SKIP, known_failures 모두 NEW 0이다. 로그는 `X:/DevTemp/operator-shell-land-2a57511acc/run-1-1.txt`와 `run-1-2.txt`이다. 건너뛴 검사는 실행 증거로 계산하지 않는다.
 
 ## 수용 경계
 
