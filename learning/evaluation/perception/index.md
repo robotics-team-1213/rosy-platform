@@ -26,6 +26,7 @@
 ## 시험
 
 - `test/learning/perception`
+- `learning/evaluation/perception/test`
 
 ## 최근 기록
 
