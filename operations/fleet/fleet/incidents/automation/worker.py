@@ -79,7 +79,7 @@ class IncidentCaseWorker:
                                           (scope.subject_id, scope.case_id)).fetchone()
             budget = CaseBudget(**json.loads(existing[0])) if existing else self.budget(scope)
             self._check_budget(budget)
-            case = self.store.begin_case(scope, budget, connection=connection)
+            case = self.store.begin_case(scope, budget, connection=connection, initial_revision=problem.generation)
             return case['state'] == 'ACTIVE' and self.clock() < case['deadline']
         except (ValueError, TypeError, KeyError):
             return False
@@ -116,6 +116,13 @@ class IncidentCaseWorker:
     async def _drain(self):
         while self._snapshot is not None and not self._closed:
             snapshot, self._snapshot = self._snapshot, None
+            for scope in await self._db('pending_handoffs'):
+                current = self.board.intervention_assessment(scope.subject_id)
+                if (isinstance(current, Assessment) and current.request.case_id == scope.case_id
+                        and current.request.owner == scope.owner_id
+                        and current.applies_to(current.request, now=self.clock(), policy_revision=POLICY.revision)
+                        and self.human_owned(scope.subject_id, scope.case_id) is False):
+                    await self._finish(scope, (await self._db('case', scope))['reason'])
             scopes = await self._db('active_scopes')
             for scope in scopes:
                 await self._process(scope, snapshot)
@@ -130,7 +137,7 @@ class IncidentCaseWorker:
                     except ValueError:
                         selected = self.budget(scope)
                         self._check_budget(selected)
-                        case = await self._db('begin_case', scope, selected)
+                        case = await self._db('begin_case', scope, selected, initial_revision=problem.generation)
                     if case['state'] != 'ACTIVE': continue
                     await self._process(scope, snapshot)
                 except (ValueError, TypeError, KeyError):
@@ -139,10 +146,10 @@ class IncidentCaseWorker:
     async def _finish(self, scope, reason):
         case = await self._db('case', scope)
         if case['state'] == 'ACTIVE': case = await self._db('close_case', scope, state='HOLD', reason=reason)
-        summary = {key: case[key] for key in ('calls', 'observations', 'spent_micros', 'reserved_micros')}
-        summary.update(reason=reason, profile_sha256=scope.profile_sha256,
-                       observation_revision=self._waiting.get(scope, (None, None))[0])
-        await self.final_handoff(scope, summary)
+        summary = await self._db('final_summary', scope)
+        try:
+            if await self.final_handoff(scope, summary) is True: await self._db('handoff_queued', scope)
+        except (ValueError, OSError): pass
 
     def _fresh(self, problem):
         try:
@@ -151,6 +158,8 @@ class IncidentCaseWorker:
 
     async def _process(self, scope, snapshot):
         case = await self._db('case', scope)
+        if scope.policy_revision != POLICY.revision or scope.owner_id != 'core':
+            await self._finish(scope, 'POLICY_CHANGED'); return
         if self.current_profiles() != self.profiles or scope.profile_sha256 != self.profile_sha256:
             await self._finish(scope, 'PROFILE_CHANGED'); return
         if self.human_owned(scope.subject_id, scope.case_id) is not False:
@@ -160,6 +169,8 @@ class IncidentCaseWorker:
                                     human_owned=self.human_owned, now=self.clock())
             await self._db('observed_closure', scope, proof); return
         except (ValueError, KeyError, TypeError): pass
+        if await self._db('requires_resume_admission', scope, self._worker_id):
+            await self._finish(scope, 'READ_CONTINUATION_NOT_ADMITTED'); return
         if self.clock() >= case['deadline']:
             await self._finish(scope, 'CASE_DEADLINE_EXHAUSTED'); return
         try: problem = self._problem(self.board.intervention_assessment(scope.subject_id))
