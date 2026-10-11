@@ -102,7 +102,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
 | `middleware/execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
 | `operations/execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
-| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 유지 — site 실행·권한 projection. local loader나 장치 writer가 아님 |
+| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 순수 목표 근거 검증(`goal_evidence`)·Mission 진행 계산(`workflow`) 및 기존 site 권한 projection. Fleet가 일관된 스냅샷·원장·admission·transport를 소유 |
 | `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
 | `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
 | `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |

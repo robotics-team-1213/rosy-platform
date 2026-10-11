@@ -38,7 +38,8 @@ Two namespace packages in one wheel: `api` and `site`.
 
 ### Internal
 
-- `contracts/skill/`.
+- `contracts/skill/`; `contracts/foundation/` for progress schemas.
+- `site/goal_evidence.py` validates independent evidence; `site/workflow.py` projects immutable Mission snapshots. Fleet retains stores, authorization, admission and transport.
 - Used by `operations/apps/fleet/` and palletizing.
 
 ### External
