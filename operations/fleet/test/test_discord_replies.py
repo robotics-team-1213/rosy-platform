@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 
+import fleet  # noqa: F401 -- production source-holder bootstrap
 from rosy_discord.replies import DiscordReplies
 
 
