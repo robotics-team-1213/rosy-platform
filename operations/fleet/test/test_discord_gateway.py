@@ -26,6 +26,14 @@ class Socket:
         self.closed = True
         self.close_code = options.get("code")
 
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.events:
+            raise StopAsyncIteration
+        return await self.recv()
+
 
 def packet(event, data, seq):
     return {"op": 0, "t": event, "d": data, "s": seq}
@@ -92,6 +100,36 @@ def test_session_loss_stops_when_receipt_is_unresolved():
     worker.pending = True
     with pytest.raises(GatewayStop):
         worker.forget_session()
+
+
+@pytest.mark.parametrize("failure", ["journal", "reconnect", "invalid-resumable"])
+def test_session_retries_keep_resume_valid(monkeypatch, failure):
+    import rosy_discord.gateway as module
+    async def scenario():
+        async def consume(envelope):
+            raise OSError("journal unavailable")
+        worker = gateway(consume)
+        await worker.dispatch(packet("READY", {"user": {"id": BOT, "bot": True}, "session_id": "s"}, 4))
+        event = {"journal": packet("MESSAGE_CREATE", message(), 5),
+                 "reconnect": {"op": 7}, "invalid-resumable": {"op": 9, "d": True}}[failure]
+        socket = Socket([{"op": 10, "d": {"heartbeat_interval": 45000}}, event])
+        class Connection:
+            async def __aenter__(self):
+                return socket
+            async def __aexit__(self, *args):
+                if not socket.closed:
+                    await socket.close(code=1000)
+        monkeypatch.setattr(module, "connect", lambda *a, **kw: Connection())
+        if failure == "journal":
+            with pytest.raises(OSError):
+                await worker.session()
+        else:
+            await worker.session()
+        assert socket.close_code == 4000 and worker.sequence == 4
+        next_socket = Socket([])
+        await worker.authenticate(next_socket)
+        assert next_socket.sent[0]["op"] == 6 and next_socket.sent[0]["d"]["seq"] == 4
+    asyncio.run(scenario())
 
 
 def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
