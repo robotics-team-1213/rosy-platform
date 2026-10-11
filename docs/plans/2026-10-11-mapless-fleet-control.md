@@ -231,3 +231,10 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
+
+## Task 6 · 최신 main 통합과 회귀 수정
+
+- `ed901a0249`에서 main `4bcfc55d88`을 작업 브랜치에 합쳤다. 새 사건 계약과 조사 계약의 export를 모두 보존하고, API 문서 번호 충돌은 v1.208로 정리했다. Fleet 재측정 52790 및 별도 incident 360은 기존 +150·파일 상한·분리 의무를 유지한다. 아직 공유 main에 착지하지 않았다.
+- 첫 넓은 원격 회귀는 세 호출에서 9232/3542/3638 PASS와 각각 4/3/7 NEW였다. 자원 부족 fallback 실행이므로 수용 증거로 승격하지 않았다. NEW는 v1.208 헤더 정합성, 신규 자산 설치 목록, 분리된 확인 창 소유 목록, 비활성 이유, 문서 import 소유 목록, 거절 odom의 조사 연속성 기대값을 수정했다. 기존 실패 목록에 추가하지 않았다.
+- `e9fd1c42fe`에서 자원 기준 통과 AI PC 원격 계약·Chromium·설치 회귀 275 PASS/NEW 0 (`logs/merged-contracts-final/run-1.txt`), Node 302 PASS (`logs/merged-node-final.txt`). 이전 잘못된 시험 경로 실행은 exit 4/시험 없음이며 수용 증거가 아니다. 독립 검토는 수정 소스를 수용했다.
+- 전체 회귀 재실행·착지·CI·서명 사이트 배포·실제 desktop/mobile 화면 확인은 남아 있다. 현장 설치는 `5cfd0b7cd36a506baee567043121a29f3fad1877`이며 이번 브랜치 설치가 아니다. 기본 브라우저 연결 없음과 Windows Application Control 차단을 우회하지 않고 기존 원격 Chromium 경로를 사용한다. 공개 HTTPS 접속의 시간 초과도 아직 해결·확인 대상이다.
