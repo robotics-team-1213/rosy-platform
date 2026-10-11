@@ -60,6 +60,16 @@ def test_profile_requires_normal_cookie_and_same_origin(tmp_path):
                         json={"display_name": "Name"}).status_code == 403
 
 
+@pytest.mark.parametrize("body", [r'{"display_name":"\ud800"}', r'{"display_name":"\udfff"}'])
+def test_profile_rejects_unpaired_surrogates_as_invalid_input(tmp_path, body):
+    client = _client(_app(tmp_path)[0])
+    _login(client)
+    response = client.patch(PROFILE, headers={**ORIGIN, "Content-Type": "application/json"}, content=body)
+    assert response.status_code == 422
+    assert client.get(PROFILE).json()["display_name"] == "alice"
+    assert client.patch(PROFILE, headers=ORIGIN, json={"display_name": "한글 🙂"}).status_code == 200
+
+
 def test_normal_password_change_checks_current_and_rotates_all_sessions(tmp_path):
     app, _ = _app(tmp_path)
     client = _client(app)
