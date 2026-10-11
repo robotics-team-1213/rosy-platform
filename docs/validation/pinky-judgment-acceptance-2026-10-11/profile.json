@@ -19,6 +19,7 @@
     "miss_rate": null,
     "unnecessary_rate": null,
     "abstain_rate": null,
+    "abstain_required_error_rate": null,
     "p95_judgment_ms": null,
     "p95_notification_ms": null,
     "resolution_rate_min": null
