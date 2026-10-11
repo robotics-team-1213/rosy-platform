@@ -7673,3 +7673,9 @@ osy-d395-s1d\`.
 - 변경: D-633 조사 기록에 검증 커밋·로그·알고리즘 미검증 경계를 남겼다. Proposed 상태와 기존 교정 계약을 유지한다.
 - 증거: 원격 network/harness/document placement/folder layout 계약 137 passed(exit 0), known_failures NEW 0. 렌즈·기하 담당의 독립 문헌/설계 검토 반영.
 - gate 변화: 문서 계약 검증만. 알고리즘 구현·성능·실물 교정·배포·FIELD 승격 없음.
+
+## 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
+
+- 변경: D-635/API reference에 차선 코스·축구장·일반 지도 종류, 설명과 경기장 치수 저장 계약을 기록했다. 기존 Games 재사용과 자동 실행·Vision 축구 인식의 별도 연결 범위를 명시했다.
+- 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 원격 계약 175·Node 285·Chromium 4·DB 재개방 포함 프로필 11 passed, known_failures NEW 0, lint 오류 0.
+- gate 변화: SOURCE/원격 계약/브라우저. main 착지·push·배포·실측 경기장 교정·게임 수용은 별도다.
