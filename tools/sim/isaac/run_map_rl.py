@@ -1,0 +1,360 @@
+"""Bounded native Isaac map diagnostic with CPU residual Q-learning (D-638).
+
+Uses the CORE final port in process, never ROS, Fleet or a robot endpoint.
+"""
+import argparse
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import random
+import sys
+import time
+import xml.etree.ElementTree as ET
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/envs/isaac'))
+from prepare_urdf import REPOSITORY, validate_output_path
+from model_checks import check_urdf
+from importer_compat import import_model, reference_model
+from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
+from graph_contract import robot_contract
+from map_task import load_track, MapTask, QPolicy, SimulationOwner
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--urdf', type=Path, required=True)
+    parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--train-episodes', type=int, default=6)
+    parser.add_argument('--time-limit', type=float, default=400.)
+    parser.add_argument('--source-revision', required=True)
+    parser.add_argument('--policy-file', type=Path, help='fixed saved policy; evaluate four initial directions')
+    parser.add_argument('--record-video', action='store_true', help='record actual headless Isaac camera frames')
+    args = parser.parse_args()
+    if not 1 <= args.train_episodes <= 20 or not 0 < args.time_limit <= 600 or not math.isfinite(args.time_limit):
+        raise ValueError('bounded episode count and time limit required')
+    if len(args.source_revision) != 40 or any(c not in '0123456789abcdef' for c in args.source_revision):
+        raise ValueError('exact committed source revision required')
+    if os.environ.get('ROSY_CONFIG') or os.environ.get('ROSY_NAMESPACE'):
+        raise ValueError('diagnostic refuses operational CORE environment')
+    check_urdf(args.urdf, 'pinky', allow_package=False)
+    saved = None
+    policy_bytes = None
+    if args.policy_file:
+        with args.policy_file.open('rb') as policy_input:
+            policy_bytes = policy_input.read(65537)
+        if len(policy_bytes) > 65536:
+            raise ValueError('bounded saved policy required')
+        saved = QPolicy.restore(json.loads(policy_bytes))
+    passive = passive_caster_joints(ET.parse(args.urdf).getroot())
+    output = validate_output_path(args.output_dir / 'result.json').parent
+    output.mkdir(parents=True, exist_ok=False)
+    for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
+                 'middleware/core/gateway', 'middleware/core/services', 'middleware/perception'):
+        sys.path.insert(0, str(REPOSITORY / path))
+    track = load_track()
+    from isaacsim import SimulationApp
+    app = SimulationApp({'headless': True, 'fast_shutdown': False, 'width': 640, 'height': 480,
+                         'anti_aliasing': 0, 'extra_args': ['--/app/extensions/excluded=["isaacsim.gui.menu"]']})
+    owner = None
+    stop_robot = None
+    recorder = None
+    camera = None
+    summary = dict(source_revision=args.source_revision, map_sha256=track['source_sha256'],
+                   segments=track['segments'], algorithm='CPU residual Q-learning, pursuit yaw gain',
+                   operating_acceptance='HOLD', episodes=[])
+    try:
+        import numpy as np
+        import omni.kit.app
+        import omni.kit.commands
+        import omni.usd
+        from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+        manager = omni.kit.app.get_app().get_extension_manager()
+        manager.set_extension_enabled_immediate('isaacsim.asset.importer.urdf', True)
+        import isaacsim.asset.importer.urdf as urdf_api
+        from isaacsim.core.api import World
+        from isaacsim.robot.wheeled_robots.robots import WheeledRobot
+        from isaacsim.robot.wheeled_robots.controllers import DifferentialController
+        from core.bridge.cmd_vel import cmd_vel_cycle
+        from rosy.contracts.motion import MotionIntent, MotionHeader, MotionKind, PriorityClass, BaseTwist
+
+        usd_path = import_model(urdf_api, omni.kit.commands.execute, args.urdf, output, 'Wheeled')
+        stage = reference_model(omni.usd.get_context(), usd_path, Usd, UsdGeom)
+        app.update()
+        roots = [str(p.GetPath()) for p in stage.Traverse() if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
+        if len(roots) != 1:
+            raise RuntimeError('single articulation root required: ' + repr(roots))
+        contract = robot_contract('rosy_98')
+        for name in (*contract['wheel_joints'], *passive):
+            matches = [p for p in stage.Traverse() if p.GetName() == name and p.IsA(UsdPhysics.RevoluteJoint)]
+            if len(matches) != 1:
+                raise RuntimeError('unique joint required: ' + name)
+            drive = UsdPhysics.DriveAPI.Apply(matches[0], 'angular')
+            if name in passive:
+                configure_passive_drive(drive)
+            else:
+                configure_velocity_drive(drive)
+        world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
+        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
+        scene = track['scene']
+        UsdGeom.Xform.Define(stage, '/World/Track')
+        for i, wall in enumerate(scene.walls):
+            cube = UsdGeom.Cube.Define(stage, f'/World/Track/wall_{i}')
+            cube.CreateSizeAttr(1.)
+            cube.AddTranslateOp().Set(Gf.Vec3d(wall.cx, wall.cy, wall.height / 2))
+            cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
+            cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
+            UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+        paint = UsdGeom.Mesh.Define(stage, '/World/Track/paint')
+        vertices = [Gf.Vec3f(*v) for t in scene.lines for v in t]
+        paint.CreatePointsAttr(vertices)
+        paint.CreateFaceVertexCountsAttr([3] * len(scene.lines))
+        paint.CreateFaceVertexIndicesAttr(list(range(len(vertices))))
+        paint.CreateSubdivisionSchemeAttr('none')
+        paint.CreateDoubleSidedAttr(True)
+        paint.CreateDisplayColorAttr([Gf.Vec3f(1.)])
+        robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
+                               wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
+        if args.record_video:
+            from isaacsim.sensors.camera import Camera
+            from pxr import UsdLux
+            light = UsdLux.DomeLight.Define(stage, '/World/RecordingLight')
+            light.CreateIntensityAttr(1000.)
+            camera = Camera(prim_path='/World/RecordingCamera', resolution=(960, 540))
+            camera.set_world_pose(position=np.array([0., 0., 2.]),
+                                  orientation=np.array([1., 0., 0., 0.]), camera_axes='usd')
+            camera.set_focal_length(20.)
+            camera.set_horizontal_aperture(36.)
+        world.reset()
+        if camera is not None:
+            camera.initialize()
+            summary['recording'] = dict(kind='native Isaac camera RGBA', resolution=[960, 540],
+                sample_sim_s=.2, encoded_fps=25, playback_speed=5., camera_axes='usd',
+                position=[0., 0., 2.], orientation=[1., 0., 0., 0.])
+        stiffness, damping = robot.get_articulation_controller().get_gains()
+        summary['physics'] = dict(dt_s=world.get_physics_dt(), restitution=0.,
+                                 dofs=robot.dof_names, stiffness=stiffness.tolist(), damping=damping.tolist())
+        print('PHYSICS ' + json.dumps(summary['physics']), flush=True)
+        diff = DifferentialController(name='pinky_diff', wheel_radius=contract['wheel_radius'],
+                                      wheel_base=contract['wheel_distance'], max_linear_speed=.06,
+                                      max_angular_speed=.8)
+        owner = SimulationOwner()
+        policy = saved or QPolicy(seed=17)
+        if saved is not None:
+            (output / 'policy.json').write_bytes(policy_bytes)
+            summary['evaluation_only'] = True
+        frame = 0
+        epoch = 0
+        power = type('DiagnosticPower', (), {'on_activity': lambda self, source: None})()
+
+        def send(twist):
+            robot.apply_wheel_actions(diff.forward(command=np.array([twist.linear, twist.angular])))
+
+        def read_pose():
+            position, quaternion = robot.get_world_pose()
+            linear = robot.get_linear_velocity()
+            angular = robot.get_angular_velocity()
+            w, x, y, z = map(float, quaternion)
+            yaw = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+            values = (float(position[0]), float(position[1]), yaw,
+                      math.hypot(float(linear[0]), float(linear[1])), float(angular[2]))
+            if not all(math.isfinite(v) for v in (*values, *position, *quaternion, *linear, *angular)):
+                raise RuntimeError('nonfinite physical readback')
+            if abs(float(position[2])) > .1 or abs(x) > .3 or abs(y) > .3:
+                raise RuntimeError('robot lost floor contact or tipped')
+            return values
+
+        def step():
+            nonlocal frame
+            if not app.is_running():
+                raise RuntimeError('SDK stopped before task result')
+            world.step(render=frame % (48 if recorder is not None else 30) == 0)
+            frame += 1
+
+        def physical_stop():
+            owner.stop()
+            since = None
+            begin = world.current_time
+            samples = []
+            while world.current_time - begin < 2.:
+                cmd_vel_cycle(command=owner, power=power, send=send)
+                step()
+                pose = read_pose()
+                samples.append(dict(sim_s=world.current_time, pose=pose,
+                                    z_m=float(robot.get_world_pose()[0][2]),
+                                    joints=list(map(float, robot.get_joint_velocities()))))
+                if pose[3] < .005 and abs(pose[4]) < .02:
+                    if since is None:
+                        since = world.current_time
+                    if world.current_time - since >= .3:
+                        return dict(linear_mps=pose[3], angular_radps=pose[4],
+                                    settle_s=world.current_time - begin)
+                else:
+                    since = None
+            (output / f'stop-failed-{frame}.json').write_text(json.dumps(samples, indent=2))
+            raise RuntimeError('actual stop not confirmed; reset refused; last readback=' + repr(samples[-1]))
+
+        stop_robot = physical_stop
+        summary['initial_stop'] = physical_stop()
+        baseline = None
+        phases = ([('eval', 707, 0.), ('eval', 808, math.pi / 2),
+                   ('eval', 909, math.pi), ('eval', 1001, -math.pi / 2)] if saved is not None else
+                  [('baseline', 101, 0.), *[('train', i, 0.) for i in range(args.train_episodes)],
+                   ('eval', 202, 0.), ('eval', 303, 0.)])
+        for phase, seed, heading_offset in phases:
+            physical_stop()
+            rng = random.Random(seed)
+            route = track['points']
+            if phase == 'train':
+                # shortcut: short route curricula learn local yaw correction; full-map eval must still pass.
+                start = rng.randrange(0, len(route) - 120)
+                route = route[start:start + 100]
+            heading = math.atan2(route[1][1] - route[0][1], route[1][0] - route[0][0])
+            heading += rng.uniform(-.025, .025)
+            heading += heading_offset
+            robot.set_world_pose(position=np.array([*route[0], .005]),
+                                 orientation=np.array([math.cos(heading / 2), 0., 0., math.sin(heading / 2)]))
+            robot.set_world_velocity(np.zeros(6))
+            robot.set_joint_velocities(np.zeros(robot.num_dof))
+            for _ in range(round(.5 / world.get_physics_dt())):
+                cmd_vel_cycle(command=owner, power=power, send=send)
+                step()
+            initial = read_pose()
+            if math.dist(initial[:2], route[0]) > .015 or initial[3] >= .005 or abs(initial[4]) >= .02:
+                raise RuntimeError('reset pose or rest readback differs')
+            epoch += 1
+            owner.begin(epoch)
+            task = MapTask(route, half_size=(scene.size_x / 2, scene.size_y / 2),
+                           time_limit=min(60., args.time_limit) if phase == 'train' else args.time_limit)
+            start_time = world.current_time
+            initial_pose = read_pose()
+            wall_start = time.monotonic()
+            previous = None
+            frozen = policy.export() if phase == 'eval' else None
+            if phase == 'eval' and (policy.updates == 0 or not any(
+                    value != 0. for values in policy.table.values() for value in values)):
+                raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
+            learned_steps = 0
+            if camera is not None and phase == 'eval':
+                from native_recording import NativeRecorder
+                # Initialize the native render product before accepting episode frames.
+                for _ in range(20):
+                    world.render()
+                pixels = camera.get_rgba()
+                if pixels.shape != (540, 960, 4) or np.ptp(pixels[:, :, :3]) < 20:
+                    raise RuntimeError('native recording camera has no visible image')
+                recorder = NativeRecorder(output / f'isaac-eval-{seed}.mp4')
+            with (output / f'trace-{epoch}-{phase}-{seed}.jsonl').open('w') as trace:
+                while True:
+                    pose = read_pose()
+                    if recorder is not None and (recorder.frames == 0 or (frame - 1) % 48 == 0):
+                        image_frame = camera.get_current_frame()
+                        recorder.write(camera.get_rgba(),
+                            render_frame=image_frame['rendering_frame'],
+                            render_time=float(image_frame['rendering_time']),
+                            sim_s=world.current_time - start_time, pose=pose)
+                    now = time.monotonic()
+                    elapsed = world.current_time - start_time
+                    result = task.observe(*pose, elapsed)
+                    state, speed, angular = task.pursuit(*pose[:3])
+                    if phase == 'train' and previous is not None:
+                        policy.update(*previous, result['reward'], state,
+                                      terminated=result['terminated'] or result['truncated'])
+                    action = 1 if phase == 'baseline' else policy.choose(state, explore=phase == 'train')
+                    angular = max(-.8, min(.8, angular * policy.gains[action]))
+                    if result['goal_reached'] or result['terminated'] or result['truncated']:
+                        owner.stop()
+                        speed, angular = 0., 0.
+                    else:
+                        if phase == 'eval' and any(value != 0. for value in policy.table.get(state, ())):
+                            learned_steps += 1
+                        intent = MotionIntent(MotionKind.BASE_TWIST,
+                            MotionHeader(f'isaac:{epoch}:{frame}', 'isaac-pinky', 'learned_policy',
+                                PriorityClass.POLICY, now, .1, envelope_ref='isaac-map-v1', state_sequence=epoch,
+                                limits={'linear_mps': .06, 'angular_radps': .8}), BaseTwist(speed, angular))
+                        owner.submit(intent, observed_at=now, now=now)
+                    cmd_vel_cycle(command=owner, power=power, send=send)
+                    trace.write(json.dumps(dict(frame=frame, sim_s=elapsed, wall_s=time.monotonic() - wall_start,
+                                                pose=pose, action=action, candidate=[speed, angular], **result)) + '\n')
+                    if result['terminated'] or result['truncated']:
+                        break
+                    if owner.halted and not result['goal_reached']:
+                        raise RuntimeError('policy envelope HOLD during active route')
+                    previous = (state, action)
+                    step()
+            episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
+                           sim_s=elapsed, wall_s=time.monotonic() - wall_start,
+                           initial_heading_offset_rad=heading_offset, initial_pose=initial_pose,
+                           learned_state_steps=learned_steps, stop=physical_stop())
+            if recorder is not None:
+                # Record the true completed stop even when it falls between sample ticks.
+                for _ in range(2):
+                    world.render()
+                image_frame = camera.get_current_frame()
+                recorder.write(camera.get_rgba(), render_frame=image_frame['rendering_frame'],
+                    render_time=float(image_frame['rendering_time']),
+                    sim_s=world.current_time - start_time, pose=read_pose())
+                recorder.close()
+                episode['video'] = dict(file=recorder.path.name, frames=recorder.frames,
+                    sha256=hashlib.sha256(recorder.path.read_bytes()).hexdigest())
+                recorder = None
+            summary['episodes'].append(episode)
+            print('EPISODE ' + json.dumps(episode), flush=True)
+            if phase == 'baseline':
+                baseline = result
+            if phase == 'eval' and policy.export() != frozen:
+                raise RuntimeError('evaluation mutated policy')
+            if phase == 'eval' and learned_steps == 0:
+                raise RuntimeError('evaluation visited no learned state')
+            if phase == 'train':
+                (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
+        summary['updates'] = policy.updates
+        summary['policy_sha256'] = hashlib.sha256((output / 'policy.json').read_bytes()).hexdigest()
+        summary['full_map_complete'] = all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval')
+        summary['baseline_complete'] = baseline['complete'] if baseline is not None else None
+        summary['final_stop'] = physical_stop()
+        (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
+        print('RESULT ' + json.dumps(summary), flush=True)
+        if not summary['full_map_complete']:
+            raise RuntimeError('held-out full-map completion failed; candidate not accepted')
+    except Exception as exc:
+        summary['error'] = str(exc)
+        (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
+        raise
+    finally:
+        try:
+            cleanup_error = None
+            try:
+                if stop_robot is not None:
+                    summary['cleanup_stop'] = stop_robot()
+            except Exception as exc:
+                summary['cleanup_error'] = str(exc)
+                cleanup_error = exc
+            try:
+                if recorder is not None:
+                    recorder.close()
+            except Exception as exc:
+                summary['video_cleanup_error'] = str(exc)
+                cleanup_error = cleanup_error or exc
+            if cleanup_error is not None:
+                raise cleanup_error
+        finally:
+            try:
+                try:
+                    if camera is not None:
+                        camera.pause()
+                        camera.destroy()
+                finally:
+                    from sdk_entrypoint import close_sdk
+                    close_sdk(app, headless=True)
+            except Exception as exc:
+                summary['sdk_shutdown_error'] = str(exc)
+                raise
+            finally:
+                (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
+
+
+if __name__ == '__main__':
+    from sdk_entrypoint import run_cli
+    run_cli(main)
