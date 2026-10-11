@@ -66,3 +66,28 @@ D-670은 정답·목적지·통행 정책 없이 기존 모델 세션과 D-665/D
 `211ac02af6`의 원격 RED는 semantic 검사와 raw model classes 결속의 미구현을 확인했다. `57d7455c47`의 CLI RED는 현재 구역 모델에 도로면 YAML을 연결해도 exit 0으로 출력 디렉터리를 만들던 동작을 재현했다. 그 이전 CLI 실행은 불완전 fixture에서 AttributeError로 끝났으므로 CLI 동작 근거로 사용하지 않는다.
 
 `b4ac3362a8`은 공통 prelabel 검사 및 prelabel/pixel draft job의 두 호출을 raw manifest에 결속한다. 독립 소스 검토에서 남은 blocker는 없었다. 수정 후 원격 GREEN 호출은 SSH 연결 단절로 exit 255였으며 시험 결과는 미확인이다. 원격 프로세스 상태 확인도 연결 timeout으로 완료하지 못했다. 이 기록 시점에는 회귀 통과·통합·local main 병합을 주장하지 않는다. 원본 로그는 X: 세션의 `logs/prelabel-*`에 있다.
+
+## 연결 복구 후 착지와 관측 파일 증거
+
+연결 복구 후 보존된 원격 통합 회귀 결과를 확인했다. prelabel 통합 회귀는 1,897 passed / 228 skipped, NEW 0이며 local main commit `abcab27ebf`에 착지했다. 앞 미확인 기록은 당시 상태이며 이 후속 결과와 구별한다. 연결이 끊긴 호출 자체의 결과를 확인했다는 뜻은 아니다.
+
+D-673은 정답 없는 `rosy_ml observe`의 입력/model hash 결속, exclusive 파일 작성 및 hash·mask·중복 계보 readback을 연결한다. 링크 입력 거절, session 생성 전 예측 grid 제한, snapshot ID/hash 불일치와 입력 오류 시 구역 보류를 원격 RED/GREEN으로 확인했다. 실제 ONNX Runtime 합성 실행을 포함한 관련 시험 71건은 terminal exit 0이다. 독립 소스 검토에서 수정 후 merge blocker는 없었다.
+
+최신 main 통합 회귀는 6,467 passed / 483 skipped / 33 warnings, terminal exit 0 및 known failures NEW 0이다. lint가 통과한 뒤 local main commit `9f31764332`에 착지했으며 push하지 않았다. 보존 로그는 비공개 세션 `logs/observe-integrated-green-9f31764332/run-1-1.txt`, source receipt는 `road-observation-artifact-landing-receipt.json`이다. 일반 통합 환경에서 제외된 ONNX dependency 사례의 실행 증거는 별도 실제 ONNX Runtime 시험에 있다.
+
+## D-659 요구사항별 완료 감사 (2026-10-12)
+
+| 요구사항 | 현재 증거 | 남은 작업 |
+|---|---|---|
+| 도로면/현재 구역/선택 경로 의미 분리 | D-663/665 및 runtime·검수·prelabel 거절 회귀 | 실제 새 도로면 정답과 모델 |
+| 라벨→학습→model/eval 의미 계보 | builder/export/intake 및 호출자 회귀 | 실제 upstream 학습 출처 closure |
+| 독립 실물 정답·출처 예약/split | 20261010 검수 데이터 hash와 추가 1,341장 저장 mask 대조 | 전체 도로면/현재 구역 독립 pair, 원본 영상별 분리·독립 authority |
+| 독립 시뮬레이션 정답과 실물 분리 | D-666 loader·조건/도메인 집계 합성 회귀 | 기존 map_v2_fleet 출처를 유지한 실제 장면/정답 실행 |
+| 현재 구역의 검증된 기준점 | D-667 유효성 및 D-670 보류 회귀 | 실제 투영 생산자·보정/위치 오차·시각 정렬 증거 |
+| 도로/구역 지표와 제외 분모 | D-665/666 ROI·경계·보류·집계 회귀 | 독립 모델 성능과 조건별 최소 표본·coverage |
+| 물체 정밀도/재현율·작음/가림 | 기존 물체 검수·모델 실행과 변환 동등성은 별도 경로 | 독립 물체 fitness 평가 연결과 실행 |
+| 사전 고정 수용 profile | 현재 진단은 항상 HOLD | 기준선 측정 후 범위·표본·임계값 사전 고정 |
+| 관측 전달·버전 readback·지연/손실 | D-673 내부 파일 생성/readback | 실제 관측 전용 장치 전달과 capture-to-result 지연/손실 |
+| 후속 주행 권한 분리 | 기존 조향 거절과 CORE final writer 계약 | 주행 활성화·배포·현장 수용은 별도 권한/증거 |
+
+이 감사는 목표 완료 판정이 아니다. 파일 진단·소스 회귀·local main 착지는 독립 성능 승인 또는 실제 장치 전달을 대신하지 않는다. 20261010 원본과 mask를 전체 도로면으로 재태깅하지 않는다.

@@ -11,6 +11,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from deploy.site.deliberation_install import BWRAP
+
 
 _CLEANUPS = set()
 
@@ -40,6 +42,18 @@ async def protect_cleanup(cleanup):
             pass
         raise asyncio.CancelledError
     return task.result()
+
+
+async def cleanup_scope(unit):
+    if type(unit) is not str or re.fullmatch(r'rosy-deliberation-[a-z0-9-]+\.scope', unit) is None:
+        raise ValueError('invalid owned sandbox scope')
+    code, _ = await bounded_process(('/usr/bin/systemctl', '--user', 'kill',
+        '--kill-whom=all', '--signal=KILL', unit), b'', 1, 256)
+    if code != 0:
+        code, raw = await bounded_process(('/usr/bin/systemctl', '--user', 'show',
+            '--property=LoadState', '--value', unit), b'', 1, 256)
+        if code != 0 or raw != b'not-found\n':
+            raise RuntimeError('SANDBOX_CLEANUP_UNCONFIRMED')
 
 
 async def bounded_process(argv, body, remaining, output_limit):
@@ -129,7 +143,7 @@ class SandboxLauncher:
         return ('/usr/bin/systemd-run', '--user', '--quiet', '--scope', '--collect', f'--unit={unit}',
             '-p', 'MemoryMax=1G', '-p', 'CPUQuota=100%', '-p', 'TasksMax=32',
             '-p', 'RuntimeMaxSec=35s', '--',
-            '/usr/bin/bwrap', '--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL',
+            str(BWRAP), '--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL',
             '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin',
             '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
             '--ro-bind', str(self.executable), '/provider', '--proc', '/proc', '--dev', '/dev',
@@ -150,10 +164,7 @@ class SandboxLauncher:
                 remaining - (asyncio.get_running_loop().time() - started), output_limit)
         finally:
             # Kill only this generated scope, including children that changed their process group.
-            code, _ = await protect_cleanup(bounded_process(('/usr/bin/systemctl', '--user', 'kill',
-                '--kill-whom=all', '--signal=KILL', unit), b'', 1, 256))
-            if code not in (0, 5):
-                raise RuntimeError('SANDBOX_CLEANUP_UNCONFIRMED')
+            await protect_cleanup(cleanup_scope(unit))
 
 
 @contextmanager
