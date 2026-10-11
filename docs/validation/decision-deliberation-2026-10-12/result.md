@@ -1,6 +1,6 @@
 # D-640 후보 전용 숙고 SOURCE 검증
 
-날짜: 2026-10-12. 기준 source: `8036d90c09a4ae41a12f1d47a8dfbd7ed489410d`.
+날짜: 2026-10-12. 기준 source: `8036d90c09`.
 시작 main: `4bcfc55d8`. 사용자 범위: Discord 제외 나머지 진행, 기존 로컬 병합 승인.
 
 Decision supervisor/고정 CLI 번역, Fleet 기존 DB의 advisory journal,
