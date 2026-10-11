@@ -51,26 +51,37 @@ class ChannelReplyOutbox:
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if not {'fleet_channel_workflow', 'fleet_tasks'} <= tables:
+            if 'fleet_channel_workflow' not in tables:
                 return
-            rows = conn.execute('''SELECT r.receipt, t.status, w.work_id
-                FROM fleet_channel_workflow w JOIN fleet_channel_requests r
-                  ON json_extract(r.receipt, '$.request_id')=w.request_id
-                JOIN fleet_tasks t ON t.task_id=w.work_id
-                WHERE w.state='LINKED' AND t.status IN ('COMPLETED','FAILED','HOLD','CANCELED','EXPIRED','UNKNOWN')
-                  AND NOT EXISTS (SELECT 1 FROM fleet_channel_reply_outbox o
-                    WHERE o.request_id=w.request_id AND o.kind='TASK:' || t.status)
-                ORDER BY t.updated_at LIMIT 50''').fetchall()
-            for receipt, status, task_id in rows:
-                receipt = json.loads(receipt)
-                try:
-                    self.journal.current_receipt(receipt)
-                except HTTPException:
-                    self._insert(conn, receipt, 'TASK:' + status, '', 'SUPERSEDED')
+            for kind, table, key, states in (
+                ('task', 'fleet_tasks', 'task_id', ('COMPLETED', 'FAILED', 'HOLD', 'CANCELED', 'EXPIRED', 'UNKNOWN')),
+                ('mission', 'fleet_missions', 'mission_id', ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD')),
+                ('cell_job', 'fleet_cell_jobs', 'mission_id', ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD')),
+            ):
+                if table not in tables:
                     continue
-                self.enqueue(conn, receipt, 'TASK:' + status,
-                             f"ROSY 작업 원장 · {receipt['request_id']}\nTask {task_id} · {status}"
-                             + ('\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else ''))
+                prefix = kind.upper() + ':'
+                placeholders = ','.join('?' for _ in states)
+                rows = conn.execute(f'''SELECT r.receipt, t.status, w.work_id
+                    FROM fleet_channel_workflow w JOIN fleet_channel_requests r
+                      ON json_extract(r.receipt, '$.request_id')=w.request_id
+                    JOIN {table} t ON t.{key}=w.work_id
+                    WHERE w.state='LINKED' AND w.work_kind=? AND t.status IN ({placeholders})
+                      AND NOT EXISTS (SELECT 1 FROM fleet_channel_reply_outbox o
+                        WHERE o.request_id=w.request_id AND o.kind=? || t.status)
+                    ORDER BY t.updated_at LIMIT 50''', (kind, *states, prefix)).fetchall()
+                for receipt, status, work_id in rows:
+                    receipt = json.loads(receipt)
+                    try:
+                        self.journal.current_receipt(receipt)
+                    except HTTPException:
+                        self._insert(conn, receipt, prefix + status, '', 'SUPERSEDED')
+                        continue
+                    note = ('\n실행 결과 미확인입니다. Console에서 확인하세요.' if status == 'UNKNOWN' else
+                            '\n장치 동작 완료 · 목표 확인 대기입니다.' if status == 'ACTION_SUCCEEDED' else '')
+                    label = 'Task' if kind == 'task' else kind
+                    self.enqueue(conn, receipt, prefix + status,
+                                 f"ROSY 작업 원장 · {receipt['request_id']}\n{label} {work_id} · {status}" + note)
 
     def current(self, row, conn=None):
         if conn is None:
