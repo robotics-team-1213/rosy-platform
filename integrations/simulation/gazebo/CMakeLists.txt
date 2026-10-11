@@ -54,7 +54,7 @@ install(
     scripts/sim_ir_floor.py
     # D-601 in SIM: front preview of the camera launches. The file stays in tools/,
     # where the pilot and validation scripts run it.
-    ../../../tools/sim_jpeg_relay.py
+    scripts/sim_jpeg_relay.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
   DESTINATION lib/${PROJECT_NAME}

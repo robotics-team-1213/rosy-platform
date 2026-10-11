@@ -2,10 +2,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../fleet/server/web/shared/authorization.js";
+import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
 import {
   SESSION_REASON, bindEstop, estopReason, roleLabel, showSession, showSignedOut,
-} from "../../fleet/server/web/shared/fleet-header.js";
+} from "../../../ui/console/shared/fleet-header.js";
 
 function fakeNode(id) {
   const attributes = new Map();

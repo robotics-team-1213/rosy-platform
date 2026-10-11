@@ -36,7 +36,7 @@
 surfaces:
   - id: pinky-review
     api_owners: []
-    path: learning/training/perception/dataset/review_app_web
+    path: learning/curation/perception/review_app_web
     themes: [dark, light]
     surface: dev
     medium: web
@@ -48,7 +48,7 @@ surfaces:
       - {value: 23rem, reason: 368px 미만 전화에서 픽셀 편집 이동 버튼과 빠른 행동을 두 칸·한 칸으로 쌓아 누를 수 있게 한다.}
       - {value: 700px, reason: 높이 700px 이하의 짧은 데스크톱 창에서 픽셀 검수 사진이 화면 안에 들어오게 한다. 40rem(640px) 프레임 높이보다 큰 1366×768 노트북 브라우저 창을 덮는다.}
     ports:
-      - {port: 8767, source: learning/training/perception/dataset/review_app.py}
+      - {port: 8767, source: learning/curation/perception/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
     role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462). Rosy Learning은 작업 화면 표시 이름이며 별도 런처·PWA·ROS·Android 앱 등록이 아니다 (D-461).
     owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
@@ -88,7 +88,7 @@ surfaces:
     app_name_en: Rosy Fleet
     short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
-    path: operations/fleet/fleet/server/web
+    path: operations/ui/console
     themes: [dark, light]
     surface: site
     medium: web

@@ -14,7 +14,9 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
-WEB_ROOT = Path(__file__).resolve().parent / "web"
+from fleet._source_layout import console_root
+
+WEB_ROOT = console_root()
 
 CONSOLE_ASSETS = {
     "cell.js": ("cell/cell.js", "application/javascript"),

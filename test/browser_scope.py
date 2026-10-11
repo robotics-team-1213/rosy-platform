@@ -51,9 +51,9 @@ PILOT = [
 ]
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
-    "learning/training/perception/test/test_review_flow_browser.py",
-    "learning/training/perception/test/test_pixel_review_browser.py",
-    "learning/training/perception/test/test_review_app_smoke.py",
+    "test/learning/perception/test_review_flow_browser.py",
+    "test/learning/perception/test_pixel_review_browser.py",
+    "test/learning/perception/test_review_app_smoke.py",
 ]
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
@@ -61,12 +61,13 @@ EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
 
 SCOPE: dict[str, list[str]] = {
     "operations/fleet/fleet/server/": FLEET,
+    "operations/ui/console/": FLEET,
     "middleware/ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
     "middleware/ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": PILOT[1:],
     "operations/apps/games/": GAMES,
-    "learning/training/perception/dataset/": REVIEW,
+    "learning/curation/perception/": REVIEW,
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     # Every surface loads /common (ui.js, components.css, tokens.css).
     "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW,
