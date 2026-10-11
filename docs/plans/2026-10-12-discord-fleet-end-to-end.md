@@ -26,3 +26,9 @@
 제품 변경은 이 worktree에서만 한다. 로그와 임시 파일은 X의 기존 discord-fleet-pipeline 세션에 둔다. committed HEAD의 pytest는 원격 PC에서만 실행하고 각 로그를 known_failures와 비교한다. 승인·중복·UNKNOWN·권한·원문 XSS·설치/이미지 closure와 변경된 Console의 실제 browser 경로를 확인한다. safety 경계 변경은 독립 검토를 거친다.
 
 모델 provider 수용과 실제 로봇 주행은 Discord 소스 검증으로 승격하지 않는다. 기명 사용자 요청을 Bot 공용 operator나 임의 principal로 대체하지 않는다. CORE와 OMX의 최종 장치 권한 및 기존 Fleet transaction/fence를 유지한다.
+
+## 진행 기록
+
+- D-680 source design과 원래 메시지 회신 transport를 작성했다. 접수 회신 intent와 원문 receipt의 atomic commit, bounded retry/UNKNOWN/fence, 전송 전 권한·목적지 재검사와 기본 OFF worker를 구현했다.
+- Source `4bb95bc516` 원격 67 PASS/NEW 0. 변경 파일 style 0 errors. [증거](../validation/discord-fleet-pipeline-2026-10-12/reply-source.md).
+- 다음 작업: 실제 opt-in lifespan 전송 경로 시험, Console 확인과 기존 작업 관계·처리 결과 회신, 위험 사건 어댑터. 운영 배포와 실제 대화 왕복 수용은 미완료다.
