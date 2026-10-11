@@ -167,14 +167,18 @@ class LearnedCameraLane:
                      'camera_provenance': provenance,
                      'paint_kind': self.worker.used_paint_kind, 'inference_error': None,
                      'source_stamp': stamp, 'received_at': captured_at, 'processing_s': now - captured_at,
+                     'source_age_s': source_now - stamp,
                      'reason': self.keeper.last.get('reason'),
                      'strategy': self.keeper.last.get('strategy'),
                      'error': None if self.observation is None else self.observation.error,
                      'confidence': 0. if self.observation is None else self.observation.confidence}
 
     def state(self):
-        error = 0. if self.observation is None else self.observation.error
-        confidence = 0. if self.observation is None else self.observation.confidence
+        if (self.observation is None or self.received_at is None or not self.last.get('model_used')
+                or not 0 <= self.last['source_age_s'] + self.clock() - self.received_at
+                <= self.manager.config.stale_after_s):
+            return None
+        error, confidence = self.observation.error, self.observation.confidence
         return (bisect.bisect_right((-.6, -.2, -.05, .05, .2, .6), error),
                 bisect.bisect_right((.35, .8), confidence))
 

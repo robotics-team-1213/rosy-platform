@@ -54,7 +54,7 @@ def test_learning_state_expires_with_source_age_and_processing_time():
 @pytest.mark.parametrize('previous,state,reason', [
     (((2, 1), 3), None, 'invalid_camera_observation'),
     (None, (3, 1), 'no_previous_observation'),
-    (((None, 3)), (3, 1), 'no_previous_observation'),
+    ((None, 3), (3, 1), 'no_previous_observation'),
 ])
 def test_learning_rejects_missing_observations_without_creating_q(previous, state, reason):
     from camera_lane import CameraQPolicy
