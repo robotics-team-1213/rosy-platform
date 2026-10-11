@@ -44,3 +44,12 @@ D-680 reserved by another active session; ADR not yet landed in this branch
 
 D-683 reserved by another active session; ADR not yet landed in this branch
 
+D-685 reserved by another active session; ADR not yet landed in this branch
+
+D-686 reserved by another active session; ADR not yet landed in this branch
+
+D-687 reserved by another active session; ADR not yet landed in this branch
+
+D-688 reserved by another active session; ADR not yet landed in this branch
+
+D-689 reserved by another active session; ADR not yet landed in this branch
