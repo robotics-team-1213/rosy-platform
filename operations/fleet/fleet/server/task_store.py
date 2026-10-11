@@ -845,18 +845,6 @@ class FleetTaskStore:
             event_type=event_type, correlation_id=correlation_id, source=source,
         )
 
-    def work_summaries(self, *, limit: int) -> list[dict]:
-        """Bounded read projection; never exposes request, receipt or credentials."""
-        if not 1 <= limit <= 101:
-            raise ValueError("work summary limit must be 1..101")
-        with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT task_id AS source_id, task_type AS action_kind, status, "
-                "robot_id AS device_id, reason, updated_at FROM fleet_tasks "
-                "ORDER BY updated_at DESC, task_id DESC LIMIT ?", (limit,),
-            ).fetchall()
-        return [dict(row) for row in rows]
-
     def get_task(self, task_id: str) -> dict | None:
         with closing(self._connect()) as connection:
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",

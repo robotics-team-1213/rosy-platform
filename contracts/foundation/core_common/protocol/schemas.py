@@ -1,6 +1,4 @@
-"""core_common.protocol.schemas — Fleet 프로토콜 envelope/이벤트 스키마 (P1-19, ADR-D-10).
-
-계약 원천: ROSY-API-REF-001 §6~§9.
+"""Fleet protocol schemas and canonical read exports (ROSY-API-REF-001, D-10, D-664).
 - Envelope: 모든 Fleet↔Robot WS 메시지 공통 포장 (API Ref §7.1)
 - HelloPayload / WelcomePayload: 핸드셰이크 (API Ref §7.2)
 - HeartbeatPayload: 1 Hz 상태 전송 (API Ref §7.3)
@@ -24,6 +22,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
 from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
@@ -647,31 +646,6 @@ class MissionProgressEventPage(BaseModel):
     next_after_event_id: int = Field(strict=True, ge=0)
     has_more: bool
     events: list[MissionProgressEvent] = Field(max_length=200)
-
-
-class FleetWorkSummary(BaseModel):
-    """Display projection only; source status is not a common execution state."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    source: Literal["task", "mission"]
-    source_id: str = Field(min_length=1)
-    action_kind: str = Field(min_length=1)
-    status: str = Field(min_length=1)
-    device_id: str = Field(min_length=1)
-    workcell_id: str | None = None
-    reason: str | None = None
-    updated_at: str
-
-
-class FleetWorkOverview(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    observed_at: str
-    rows: list[FleetWorkSummary] = Field(max_length=200)
-    tasks_available: bool
-    missions_available: bool
-    truncated_sources: list[Literal["task", "mission"]] = Field(max_length=2)
 
 
 class MissionProgressReadResponse(BaseModel):
