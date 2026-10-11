@@ -152,7 +152,7 @@ async function refreshIncidents() {
           const claim = document.createElement('ui-button');
           claim.setAttribute('kind', 'quiet');
           claim.textContent = '이 사건 맡기';
-          claim.addEventListener('click', scope.listener(async () => {
+          claim.addEventListener('click', scope.guard(async () => {
             claim.setAttribute('reason', '담당 인수를 기록하고 있습니다');
             claim.disabled = true;
             try {
