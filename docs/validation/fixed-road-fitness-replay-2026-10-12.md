@@ -91,3 +91,11 @@ D-673은 정답 없는 `rosy_ml observe`의 입력/model hash 결속, exclusive 
 | 후속 주행 권한 분리 | 기존 조향 거절과 CORE final writer 계약 | 주행 활성화·배포·현장 수용은 별도 권한/증거 |
 
 이 감사는 목표 완료 판정이 아니다. 파일 진단·소스 회귀·local main 착지는 독립 성능 승인 또는 실제 장치 전달을 대신하지 않는다. 20261010 원본과 mask를 전체 도로면으로 재태깅하지 않는다.
+
+## 물체 지표·기존 detector 프레임 어댑터 (2026-10-12)
+
+D-659의 물체 정밀도·재현율 공백에 `object_fitness.py`를 추가했다. D-602 여섯 클래스의 원본 grid 박스, confidence 순서의 같은 클래스 one-to-one 매칭, 중복 FP·미검출 FN, 작은/명시적 가림 정답의 recall, 가림 미확인 분모와 추론 보류를 처리한다. 기존 ObjectDetModel의 infer만 호출하며 독립 정답은 모델 입력에 넣지 않는다. 카메라 시간/유효성 오류는 추론 전에 보류하고 모델 revision·전처리·camera profile·confidence/NMS를 남긴다. 서로 다른 결속/지표 기준의 결과를 합산하지 않는다.
+
+새 모듈과 모델 어댑터가 없을 때 각각 원격 import RED를 확인했다. 집계 결속 혼용을 거절하는 RED 5개도 재현하고 수정했다. 수정 커밋 SHA `2a6405baa4`의 원격 지표/어댑터 회귀는 33개 통과했다. 로그는 X 세션 `logs/object-fitness-red`, `object-model-red`, `object-pooling-red`, `object-pooling-green`에 보존했다. 소스 리뷰에서 집계 모델 결속 누락을 지적받아 공통 결속 보존과 bound/unbound 혼용 거절을 보완했다.
+
+이 증거는 SOURCE 수준이다. 고정 물체 검수 출판물 loader/CLI, 학습·평가 원본 closure, 인증된 가림·완전 negative 검수, 실제 고정 후보의 독립 실물/시뮬레이션 성능과 장치 관측 전달은 남아 있다. 지표 함수나 열린 모델 어댑터를 전체 물체 fitness 재생 완성으로 주장하지 않는다. 사전 수용 profile 및 물체 적합성은 HOLD이며 배포·주행을 수행하지 않았다.
