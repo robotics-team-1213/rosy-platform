@@ -35,6 +35,14 @@ class IncidentCaseStore:
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, receipt_json TEXT NOT NULL,
                 PRIMARY KEY(subject_id,case_id),
                 FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_origins (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, observation_revision TEXT NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_handoff_queues (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, queued_at REAL NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
 
     @contextmanager
     def _transaction(self):
@@ -61,17 +69,18 @@ class IncidentCaseStore:
                 raise ValueError('CASE_NOT_ACTIVE_OR_EXPIRED')
         return result
 
-    def begin_case(self, scope, budget, *, connection=None):
+    def begin_case(self, scope, budget, *, connection=None, initial_revision=None):
+        if initial_revision is not None: identifier(initial_revision)
         if connection is not None:
             if (type(connection) is not sqlite3.Connection or not connection.in_transaction
                     or not any(row[1] == 'main' and Path(row[2]).resolve() == self.path.resolve()
                                for row in connection.execute('PRAGMA database_list'))):
                 raise ValueError('CALLER_TRANSACTION_REQUIRED')
-            return self._begin_case(connection, scope, budget)
+            return self._begin_case(connection, scope, budget, initial_revision)
         with self._transaction() as conn:
-            return self._begin_case(conn, scope, budget)
+            return self._begin_case(conn, scope, budget, initial_revision)
 
-    def _begin_case(self, conn, scope, budget):
+    def _begin_case(self, conn, scope, budget, initial_revision):
         if type(budget) is not CaseBudget:
             raise ValueError('EXPLICIT_CASE_BUDGET_REQUIRED')
         key, scope_json, budget_json = self._key(scope), canonical(asdict(scope)), canonical(asdict(budget))
@@ -84,7 +93,36 @@ class IncidentCaseStore:
                 raise ValueError('CASE_CAPACITY')
             conn.execute('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
                          (*key, scope_json, budget_json, 'ACTIVE', 'OPEN', 0, 0, 0, 0))
+            if initial_revision is not None:
+                conn.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)', (*key, initial_revision))
         return self._case(conn, scope)
+
+    def requires_resume_admission(self, scope, worker_id):
+        with self._transaction() as conn:
+            self._case(conn, scope)
+            return conn.execute("SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND kind='model' AND state='COMPLETED' AND worker_id!=? LIMIT 1",
+                                (*self._key(scope), worker_id)).fetchone() is not None
+
+    def pending_handoffs(self):
+        with self._transaction() as conn:
+            return tuple(CaseScope(**json.loads(row[0])) for row in conn.execute('''
+                SELECT c.scope_json FROM fleet_incident_v2_cases c LEFT JOIN fleet_incident_v2_handoff_queues q
+                USING(subject_id,case_id) WHERE c.state='HOLD' AND q.queued_at IS NULL
+                AND c.reason NOT IN ('RESOLVED_OBSERVED','INCIDENT_HUMAN_OWNED')'''))
+
+    def final_summary(self, scope):
+        with self._transaction() as conn:
+            case = self._case(conn, scope)
+            row = conn.execute('SELECT observation_revision FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? ORDER BY rowid DESC LIMIT 1', self._key(scope)).fetchone()
+            if row is None:
+                row = conn.execute('SELECT observation_revision FROM fleet_incident_v2_origins WHERE subject_id=? AND case_id=?', self._key(scope)).fetchone()
+            return {**{key: case[key] for key in ('reason', 'calls', 'observations', 'spent_micros', 'reserved_micros')},
+                    'profile_sha256': scope.profile_sha256, 'observation_revision': row[0] if row else None}
+
+    def handoff_queued(self, scope):
+        with self._transaction() as conn:
+            if self._case(conn, scope)['state'] != 'HOLD': raise ValueError('FINAL_REVIEW_NOT_PENDING')
+            conn.execute('INSERT OR IGNORE INTO fleet_incident_v2_handoff_queues VALUES (?,?,?)', (*self._key(scope), self.clock()))
 
     def active_scopes(self):
         with self._transaction() as conn:
