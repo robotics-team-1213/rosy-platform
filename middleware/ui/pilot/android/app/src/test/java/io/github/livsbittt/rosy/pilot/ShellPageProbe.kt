@@ -56,7 +56,7 @@ class ShellPageProbe {
                     }
                 }
                 val ready = checkNotNull(proxy) { "no Chromium-safe proxy port" }
-                address.writeText("${ready.origin}\n${ready.capability}\n")
+                address.writeText("${ready.origin}\n${ready.capability}\n${ready.cookieName}\n")
                 val deadline = System.nanoTime() + 120_000_000_000L
                 while (!done.exists()) {
                     check(System.nanoTime() < deadline) { "page probe timed out" }

@@ -52,7 +52,7 @@ def test_bundled_page_uses_the_app_proxy(tmp_path):
     PROBE.mkdir()
     gradle_log = PROBE / "gradle.txt"
     gradle, gradle_handle = _gradle(PROBE, gradle_log)
-    origin = capability = ""
+    origin = capability = cookie_name = ""
     try:
         deadline = time.monotonic() + 180
         address = PROBE / "address.txt"
@@ -60,8 +60,8 @@ def test_bundled_page_uses_the_app_proxy(tmp_path):
             if gradle.poll() is not None:
                 raise AssertionError(
                     f"proxy exited {gradle.returncode} before the page was ready\n{gradle_log.read_text(encoding='utf-8')}")
-            if address.is_file() and len(address.read_text(encoding="utf-8").splitlines()) >= 2:
-                origin, capability = address.read_text(encoding="utf-8").splitlines()[:2]
+            if address.is_file() and len(address.read_text(encoding="utf-8").splitlines()) >= 3:
+                origin, capability, cookie_name = address.read_text(encoding="utf-8").splitlines()[:3]
                 break
             time.sleep(0.2)
         else:
@@ -71,7 +71,7 @@ def test_bundled_page_uses_the_app_proxy(tmp_path):
             try:
                 context = browser.new_context(viewport={"width": 1200, "height": 800})
                 context.add_cookies([{
-                    "name": "rosy-shell", "value": capability, "domain": "127.0.0.1",
+                    "name": cookie_name, "value": capability, "domain": "127.0.0.1",
                     "path": "/", "httpOnly": True, "sameSite": "Strict",
                 }])
                 page = context.new_page()
