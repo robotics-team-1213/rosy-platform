@@ -193,6 +193,19 @@ def test_active_foreign_worker_is_not_recovered_or_replayed_automatically(tmp_pa
     asyncio.run(run())
 
 
+def test_preparation_rejects_foreign_database_without_writing_parent(tmp_path):
+    _, _, _, log, board, store, worker, poll, _ = setup(tmp_path)
+    poll()
+    other = LineStuckAnswerLog(tmp_path / 'other.db')
+    IncidentCaseStore(other.path)
+    with other._connect() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        assert worker.prepare_receipt(conn, board.judgment_view('pinky')) is False
+        assert conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] == 0
+        conn.rollback()
+    assert store.active_scopes() == ()
+
+
 @pytest.mark.parametrize('fault', ['replaced', 'left_roster', 'restart', 'stale_normal'])
 def test_non_clearance_closures_never_become_observed_resolution(tmp_path, fault):
     async def run():
