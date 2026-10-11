@@ -65,8 +65,8 @@ def test_queue_and_roster_attention_share_one_rule():
     """D-493 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
     roster, queues = ROSTER.read_text(encoding="utf-8"), QUEUES.read_text(encoding="utf-8")
     assert "function attentionItems(robot)" in queues
-    assert "const { attentionItems, attentionKey, fillQueues } = createQueues(" in roster
-    assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in roster
+    assert "const { attentionItems, fillQueues } = createQueues(" in roster
+    assert "return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;" in roster
     assert "for (const item of attentionItems(r))" in queues
 
 
