@@ -82,7 +82,6 @@ class ChannelWorkflow:
                           json.dumps(candidate) if candidate else None, reason.strip()))
             return self._view(conn, receipt)
 
-
     def link_task(self, request_id, principal, *, task_id, expected_hash, expected_revision):
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -108,7 +107,6 @@ class ChannelWorkflow:
             return self._view(conn, receipt)
 
 
-
 def install_workflow_routes(app, workflow, *, require_operator, read_guard):
     @app.get('/api/fleet/channel-requests/{request_id}/review', dependencies=read_guard,
              response_model=ChannelWorkflowView, tags=['fleet-work'])
@@ -124,4 +122,3 @@ def install_workflow_routes(app, workflow, *, require_operator, read_guard):
               response_model=ChannelWorkflowView, tags=['fleet-work'])
     def link_task(request_id: str, body: ChannelTaskLinkRequest, principal=Depends(require_operator)):
         return workflow.link_task(request_id, principal.principal_id, **body.model_dump())
-
