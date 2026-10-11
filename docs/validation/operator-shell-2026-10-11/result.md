@@ -16,8 +16,11 @@
 | 사건 요약·근거·진단, 카메라 만료, 검토·거절·focus 보존 | 92592fc2ef | 16 PASS, NEW 0 | X:/DevTemp/ui-shell-evidence/run-3.txt |
 | 헤더 네 문서·크기, 인증·세션·수명 | d73e03894 | 24 PASS; 별도 traffic 실패 3건은 아래 통합에서 재검증 | X:/DevTemp/operator-shell-fleet-d73/run-1.txt |
 | 통합 네 문서 두 테마·네 폭, traffic, 개입, 의미 아이콘, 세션·수명 | 354b7f95fd | 45 PASS, NEW 0 | X:/DevTemp/operator-shell-root-integrated/run-1.txt |
+| 관측 만료의 지도 위치 보존·낮은 창의 작업 흐름·네 문서 두 테마/네 폭 | 3410a453bf | 4 PASS, NEW 0 | X:/DevTemp/operator-shell-root-map-flows-fixed/run-1.txt |
 
-통합 시험은 main의 지도 높이 수정과 profiles fixture를 포함한다. 하위 브랜치의 지도 영역 축소·오래된 fixture 실패는 통합 시험에서 재검증했다. 스크린샷 경로 권한 오류가 있었던 이전 실행은 수용 증거로 사용하지 않는다. Python과 Chromium은 원격 PC에서 실행했으며 공용 최신 회귀와 통합 실행은 각각 가용 메모리 7.6 GB, 8.2 GB로 pytest 하한을 충족했다. 중복된 시험 수는 합산하지 않는다.
+통합 시험은 main의 지도 높이 수정과 profiles fixture를 포함한다. 하위 브랜치의 오래된 fixture 실패는 통합 시험에서 재검증했다. 별도 기존 지도 흐름 검사에서 좌표 만료 시 높이 변동과 낮은 창의 고정 프레임 2건이 NEW로 확인됐다. 펼친 좌표에만 안정된 높이를 적용하고 낮은 창은 문서 흐름을 사용하도록 수정했다. 같은 두 검사와 네 문서 두 테마·네 폭을 다시 실행하여 모두 통과했다. 실패 목록이나 검사 기준은 완화하지 않았다.
+
+스크린샷 경로 권한 오류가 있었던 이전 실행은 수용 증거로 사용하지 않는다. Python과 Chromium은 원격 PC에서 실행했으며 공용 최신 회귀와 통합 실행은 각각 가용 메모리 7.6 GB, 8.2 GB로 pytest 하한을 충족했다. 마지막 지도 흐름 회귀도 가용 메모리 10.2 GB로 하한을 충족했다. 중복된 시험 수는 합산하지 않는다.
 
 ## 수용 경계
 
