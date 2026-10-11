@@ -282,6 +282,27 @@ def test_stalled_on_a_trip_robot_is_wait_only():
     assert loop.ai_board.verdicts[-1]["verdict"] == "trip" and robot.calls == []
 
 
+def test_other_problem_obeys_calibration_law_before_ai():
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    row["state"]["activity"] = {"kind": "calibration"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+
+
+def test_offline_readback_cannot_close_an_accepted_answer_as_resolved():
+    outcomes, row = Outcomes(), _row()
+    outcomes.answered("stuck", "rosy_01", "stuck-1", "BACK_AND_RETRY", None, 0.0)
+    row["online"] = False
+    row["state"]["line_follow"]["stuck"] = None
+    assert outcomes.check(1.0, [row]) == []
+    assert outcomes.check(20.0, [row])[0]["outcome"] == "unresolved"
+
+
 def test_judged_at_is_wall_clock_on_the_d577_path_too():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
     proposal = {"robot_id": "rosy_01", "stuck_id": "stuck-1", "decision": "BACK_AND_RETRY", "reason": "x",

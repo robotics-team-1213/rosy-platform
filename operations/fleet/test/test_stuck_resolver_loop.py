@@ -75,6 +75,58 @@ def test_one_pass_answers_and_records_as_the_resolver():
     assert board.view("rosy_01")["resolver"]["rule"] == "R2"
 
 
+@pytest.mark.parametrize("change,reason", [
+    ("estop", "estop"), ("calibration", "calibration"),
+    ("trip", "trip"), ("case", "stuck_changed"), ("offline", "offline"),
+])
+def test_pipeline_rechecks_law_after_candidate_before_dispatch(change, reason):
+    from copy import deepcopy
+
+    loop, board, robot = _setup()
+    gather, calls = loop._snapshot, 0
+
+    async def snapshot():
+        nonlocal calls
+        calls += 1
+        value = deepcopy(await gather())
+        if calls > 1:
+            row = value["robots"][0]
+            if change == "estop":
+                row["state"]["safety"]["estop"] = True
+            elif change == "calibration":
+                row["state"]["activity"] = {"kind": "calibration"}
+            elif change == "case":
+                row["state"]["line_follow"]["stuck"]["stuck_id"] = "new-case"
+            elif change == "offline":
+                row["online"] = False
+            else:
+                loop.trip_busy = lambda rid: True
+        return value
+
+    loop._snapshot = snapshot
+    asyncio.run(loop.run_once())
+    assert not [c for c in robot.calls if c[0] == "line_stuck_decision"]
+    assert board.answers()[-1]["escalated"] == reason
+
+
+def test_pipeline_human_claim_during_admission_silences_candidate():
+    loop, board, robot = _setup()
+    gather, calls = loop._snapshot, 0
+
+    async def snapshot():
+        nonlocal calls
+        calls += 1
+        value = await gather()
+        if calls > 1:
+            loop.claim("rosy_01", "stuck-abc")
+        return value
+
+    loop._snapshot = snapshot
+    asyncio.run(loop.run_once())
+    assert not [c for c in robot.calls if c[0] == "line_stuck_decision"]
+    assert board.view("rosy_01")["resolver"]["tier"] == "human"
+
+
 def test_durable_rows_carry_the_tier_rule_and_every_escalation(tmp_path):
     log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
     robot = _failing(RobotApiError("rosy_01", 409, "CALIBRATION_ACTIVE", "calibrating"))
