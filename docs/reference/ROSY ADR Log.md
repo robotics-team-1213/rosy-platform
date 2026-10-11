@@ -666,6 +666,7 @@
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
 | D-680 | Discord 요청의 Fleet 작업 연결과 결과 회신 | Accepted (source design only, 2026-10-12) |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 | Accepted (source design only, 2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
@@ -752,3 +753,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: 같은 판정 계약으로 Qwen·GLM·Jev·Laya를 교체하고 독립 보정·안전·결과 확인으로 자동 처리한다. 사람은 최종 미해결 사건을 인수한다.
 - 계약: [ADR](../adr/D-681-model-led-incident-closure.md). 모델 보고 확률과 실측 신뢰도를 구분하며 첫 연결 시험 한도와 HOLD는 유지한다.
+
+## D-687 — Discord Mission·Cell Job의 기존 소유자 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 proposal/resolve/admit과 service author·독립 승인 규칙을 보존한다. 원문 owner/hash/revision을 확인하고 실행 전 관계부터 연결한다.
+- 계약: [ADR](../adr/D-687-discord-mission-cell-owner-adapters.md). source/size 검토·CI·서명 배포·실제 왕복과 FIELD는 별도 gate다.
