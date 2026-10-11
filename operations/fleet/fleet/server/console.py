@@ -528,10 +528,13 @@ class FleetConsole(TripAware):
         self.goal_leases.check_stop(robot_id, stop)
         standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
         if standing:
-            return await self._make_room(
-                robot_id, x, y, yaw, intended, standing,
-                task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-            )
+            try:
+                return await self._make_room(
+                    robot_id, x, y, yaw, intended, standing,
+                    task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                )
+            except (HubError, RobotApiError) as exc:
+                raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
         self._claims[robot_id] = route
         return result
 
