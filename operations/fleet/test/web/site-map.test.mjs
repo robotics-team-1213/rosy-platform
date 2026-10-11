@@ -4,6 +4,7 @@ import {
   arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
   addApproach, removeApproach, mergeCrosswalks,
   createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
+  editSurveyElement, removeSurveyElement,
 } from '../../../ui/console/shared/site-map-model.js';
 
 const MAP = {
@@ -47,6 +48,22 @@ test('elements grow only the draft, preserve geometry and require review after a
   assert.equal(next.facilities[0].approaches[0].edge_id, 'ab');
   assert.ok(fitView(next, 800, 480).toPx(1, .2).every(Number.isFinite));
   assert.throws(() => appendSurveyElement(map, {id: 'x', kind: 'road', name: 'X', from: 'a', to: 'missing', geometry: []}));
+});
+
+test('survey corrections preserve lane endpoints and refuse deleting referenced elements', () => {
+  let map = createSurveyDraft('new', {revision: 'r1', origin: [0, 0], heading_rad: 0,
+    scale_source: 'odometry', description: 'Start'});
+  map = appendSurveyElement(map, {id: 'a', kind: 'junction', name: 'A', geometry: [[0, 0]]});
+  map = appendSurveyElement(map, {id: 'b', kind: 'park', name: 'B', geometry: [[2, 0]]});
+  map = appendSurveyElement(map, {id: 'ab', kind: 'road', name: 'ab', geometry: [[0, 0], [2, 0]],
+    from: 'a', to: 'b', width_m: .2, direction: 'two_way'});
+  assert.throws(() => removeSurveyElement(map, 'a'));
+  const corrected = editSurveyElement(map, {id: 'b', kind: 'park', name: 'B', geometry: [[2, .1]]});
+  assert.deepEqual(corrected.edges[0].polyline.at(-1), [2, .1]);
+  assert.deepEqual(map.edges[0].polyline.at(-1), [2, 0]);
+  assert.equal(corrected.survey.reviewed, false);
+  const removed = removeSurveyElement(removeSurveyElement(corrected, 'ab'), 'b');
+  assert.equal(removed.places.length, 1);
 });
 
 test('rectangular camera view preserves metric aspect and rejects mismatched or singular calibration', () => {

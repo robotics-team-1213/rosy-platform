@@ -19,6 +19,80 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, width):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도 없음')
+    page.locator('#survey-setup > summary').click()
+    page.locator('#survey-description').fill('Start mark facing east, calibrated wheel odom')
+    page.locator('#survey-new').click()
+    expect(page.locator('#map-status')).to_contain_text('초안')
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(0)
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(0)
+    page.locator('#survey-editor > summary').click()
+
+    def point(x, y):
+        page.locator('#element-x').fill(str(x))
+        page.locator('#element-y').fill(str(y))
+        page.locator('#element-point').click()
+
+    for id_, name, x, y in [('a', 'Start', 0, 0), ('b', 'Destination', 1, 0)]:
+        page.locator('#element-id').fill(id_)
+        page.locator('#element-name').fill(name)
+        page.locator('#element-kind').select_option('park')
+        point(x, y)
+        page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
+    page.locator('#element-id').fill('ab')
+    page.locator('#element-name').fill('Road')
+    page.locator('#element-kind').select_option('road')
+    page.locator('#element-from').select_option('a')
+    page.locator('#element-to').select_option('b')
+    page.locator('#element-direction').select_option('two_way')
+    page.locator('#element-endpoints').click()
+    page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    page.locator('#element-id').fill('sig')
+    page.locator('#element-name').fill('Junction signal')
+    page.locator('#element-kind').select_option('traffic_signal')
+    page.locator('#element-signal-id').fill('sig-ring')
+    page.locator('#element-lanes').select_option(['ab'])
+    page.locator('#element-stop').fill('.8')
+    point(.8, .1)
+    page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    saved = store.draft_view()['map']
+    assert saved['survey']['reviewed'] is False
+    assert saved['edges'][0]['evidence']['status'] == 'observed'
+    assert saved['facilities'][0]['approaches'] == [{'edge_id': 'ab', 'forward': True, 'stop_s_m': .8}]
+    assert store.active_view() is None
+    page.locator('#element-existing').select_option('sig')
+    page.locator('#element-load').click()
+    page.locator('#element-name').fill('Reviewed signal name')
+    page.locator('#element-save').click()
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    assert store.draft_view()['map']['facilities'][0]['name'] == 'Reviewed signal name'
+    assert store.draft_view()['map']['facilities'][0]['approaches'][0]['stop_s_m'] == .8
+    page.reload()
+    open_token_access(page)
+    page.locator('#token-save').click()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
+    expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not [call for call in robot.calls if call[0] in ('navigation_goal', 'swarm_arm', 'line_follow_start')]
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_soccer_profile_basic_information_and_template(page_site, width):
     from playwright.sync_api import expect
     page, store, robot = page_site
@@ -265,11 +339,12 @@ def test_import_camera_map_draft_never_activates(page_site):
 
 
 @pytest.fixture
-def page_site(tmp_path):
+def page_site(tmp_path, request):
     from playwright.sync_api import sync_playwright
 
-    client, tasks, store, robot = _app(tmp_path)
-    robot._state = _on_ring_s(store)
+    client, tasks, store, robot = _app(tmp_path, imported=getattr(request, 'param', True))
+    if store.active() is not None:
+        robot._state = _on_ring_s(store)
     client.app.state.web_common = ROOT / "shared" / "web"
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"

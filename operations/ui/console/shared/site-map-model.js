@@ -371,6 +371,45 @@ export function reviewSurveyDraft(map, note) {
   return next;
 }
 
+export function editSurveyElement(map, item) {
+  const group = [map.places, map.edges, map.facilities || []].find(rows => rows.some(row => row.id === item.id));
+  if (!group) throw new Error('수정할 요소가 없습니다');
+  const old = group.find(row => row.id === item.id);
+  if ((group === map.places && !PLACE_KINDS.includes(item.kind))
+      || (group === map.edges && item.kind !== 'road')
+      || (group === map.facilities && item.kind !== old.kind)) throw new Error('기존 요소의 분류를 유지하세요');
+  const base = copy(map);
+  for (const key of ['places', 'edges', 'facilities']) if (base[key]) base[key] = base[key].filter(row => row.id !== item.id);
+  const next = appendSurveyElement(base, item);
+  if (group === map.edges) {
+    const edge = next.edges.find(row => row.id === item.id);
+    edge.drive_mode = old.drive_mode;
+    edge.speed_cap_mps = old.speed_cap_mps;
+    if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
+  }
+  if (group === map.places) {
+    const [x, y] = item.geometry[0];
+    for (const edge of next.edges) {
+      if (edge.from === item.id) edge.polyline[0] = [x, y];
+      if (edge.to === item.id) edge.polyline[edge.polyline.length - 1] = [x, y];
+      if (edge.from === item.id || edge.to === item.id) edge.evidence = {...(edge.evidence || {source: 'operator'}),
+        status: 'observed', reference_revision: next.survey.revision, note: ''};
+    }
+  }
+  return next;
+}
+
+export function removeSurveyElement(map, id) {
+  if (map.edges.some(edge => edge.from === id || edge.to === id)
+      || (map.facilities || []).some(f => f.approaches?.some(a => a.edge_id === id))
+      || (map.turn_bans || []).some(b => b.at === id || b.from_edge === id || b.to_edge === id))
+    throw new Error('연결된 차로·시설·통행 규칙을 먼저 수정하거나 삭제하세요');
+  const next = copy(map);
+  for (const key of ['places', 'edges', 'facilities']) if (next[key]) next[key] = next[key].filter(row => row.id !== id);
+  if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
+  return next;
+}
+
 export function editPlace(map, id, {name, kind}) {
   const next = copy(map);
   const place = next.places.find(item => item.id === id);
