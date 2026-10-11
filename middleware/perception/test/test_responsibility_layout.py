@@ -14,6 +14,7 @@ MIDDLEWARE = PACKAGE.parent
 SOURCE_MODULES = {
     "sensors/sensing/lidar.py": "control.sensing.lidar",
     "vision/perception/lane.py": "control.sensing.perception.lane",
+    "vision/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
     "../control/drive/safety/command_gate.py": "control.control.command_gate",
     "../control/drive/recovery/recover.py": "control.control.recover",
     "../control/drive/tracking/path_follow.py": "control.control.path_follow",
@@ -101,5 +102,17 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "assert all(pathlib.Path(importlib.import_module(m).__file__).resolve()"
         ".is_relative_to(root) for m in modules)"
     )
-    foundation = MIDDLEWARE.parent / "contracts/foundation"
-    _run("-I", "-c", check, str(installed), str(foundation), cwd=tmp_path)
+    foundation = tmp_path / "foundation"
+    shutil.copytree(MIDDLEWARE.parent / "contracts/foundation", foundation,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "build", "dist"))
+    _run("-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(dist),
+         str(foundation), cwd=tmp_path)
+    _run("-m", "pip", "install", "--no-deps", "--no-index", "--target", str(installed),
+         str(next(dist.glob("core_common-*.whl"))), cwd=tmp_path)
+    check += (
+        "; import importlib.metadata as metadata; "
+        "assert metadata.version('control') == '0.1.1'; "
+        "assert metadata.version('core_common') == '0.0.1'; "
+        "assert 'core_common>=0.0.1' in metadata.requires('control')"
+    )
+    _run("-I", "-c", check, str(installed), str(installed), cwd=tmp_path)
