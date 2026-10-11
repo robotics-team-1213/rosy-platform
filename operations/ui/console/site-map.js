@@ -45,6 +45,7 @@ const survey = createSurveyPanel({map: () => shown(), source: () => $('map-sourc
     clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
 
 const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(),
+  context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice,
   reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
 
@@ -348,6 +349,7 @@ async function guarded(work) {
 }
 
 $('token-save').addEventListener('click', async () => {
+  state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   planeEpoch += 1; plane = null; calibrations = [];
   $('plane-pick').checked = false;
   $('plane-source').replaceChildren();
