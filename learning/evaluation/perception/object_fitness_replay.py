@@ -119,6 +119,12 @@ def run(model_folder, *, store_root, eval_dir, inputs, max_age_ns):
         doc = intake._verified_manifest(path)
         if doc.get('purpose') != 'train' or not isinstance(doc.get('frames'), list) or not doc['frames']:
             raise ValueError('non-empty fixed training dataset required')
+        if digest == manifest.raw['dataset']['revision']:
+            if (len(doc['classes']) != len(OBJECT_CLASSES)
+                    or any(type(c.get('index')) is not int or c['index'] != i
+                           or c['name'] != OBJECT_CLASSES[i] or c['role'] != 'object'
+                           for i, c in enumerate(doc['classes']))):
+                raise ValueError('candidate training class order or role differs')
         for frame in doc['frames']:
             if not all(isinstance(frame.get(k), str) and frame[k] for k in ('session', 'capture_group')):
                 raise ValueError('training source group is unverified')
@@ -176,8 +182,9 @@ def execute(args):
         raw = json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False) + '\n'
         with output.open('x', encoding='utf-8') as stream:
             stream.write(raw)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f'object fitness diagnostic error: {exc}')
+    except Exception as exc:
+        # Backend-specific failures also close the diagnostic without a report.
+        print(f'object fitness diagnostic error ({type(exc).__name__}): {exc}')
         return 2
     print(f'object fitness diagnostic HOLD: {output}')
     return 0
