@@ -53,6 +53,14 @@ SHA256 `55f3216c53e4f4c96019d0e32bd0c4411cf19eb04710e431af30f32d113de1c1`.
 재시작 read 한도, stale known billing, 정책 변경, 같은 사건 정상 관측,
 실제 outbox pending/retry, 기존 loop/handoff/notification 회귀를 포함한다.
 
+notification 정책 변경 수정과 실제 worker→outbox 회귀를 합친
+`1014551aa4d08b8f30b0a1907533ea407444efd6` 재시험은 AI PC
+resource floor 충족(9.0 GB), **161 passed, NEW 0**이다.
+로그 `X:/DevTemp/projects/rosy-platform/2026-10-12--044435--incident-case-worker--8d6f18/logs/policy-integration-floor-green/run-1.txt`,
+SHA256 `260720c09377fec2c2a268d0ebb705ab96121b2fdc8d08f5496393500a783b34`.
+원래 정책 scope는 유지하며, 정확히 `POLICY_CHANGED` HOLD의 진단 인수만
+현재 trusted 정책의 같은 CORE 사건 관측을 허용한다. 모델 호출은 0회다.
+
 원격 resource floor fallback 경고가 있었던 이전 terminal-green 결과는 수용 근거로
 쓰지 않는다. 최종 GREEN은 자원 기준을 충족한 재시험이다.
 
