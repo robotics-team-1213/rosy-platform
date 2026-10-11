@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
-from fleet.site_map import SiteMap, crosswalks_from_lane_graph
+from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
 
 #: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
@@ -33,7 +33,7 @@ class ActivateRequest(BaseModel):
     expected_revision: str = Field(min_length=1, max_length=64)
 
 
-class ProfileRequest(DraftRequest):
+class ProfileRequest(DraftRequest, MapProfileInfo):
     name: str = Field(min_length=1, max_length=64, pattern=r"\S")
 
 
@@ -81,6 +81,10 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                                                          "detail": {"errors": invalid_errors(exc)}}) from exc
         try:
             return site_maps.save_profile(profile_id, name=body.name, site_map=body.map,
+                                          info=(MapProfileInfo(kind=body.kind, description=body.description,
+                                                               soccer_field=body.soccer_field)
+                                                if body.model_fields_set & {"kind", "description", "soccer_field"}
+                                                else None),
                                           expected_revision=body.expected_revision,
                                           principal_id=principal.principal_id)
         except SiteMapError as exc:

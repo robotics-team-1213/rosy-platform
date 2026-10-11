@@ -215,3 +215,11 @@ test('D-573 waiting bands are added mm-rounded, capped at four, removed by index
     {id: 'cw2', polygon: [[2, 0], [3, 0], [3, 1]], approach: [], lanes: [], revision: 'r2'}]);
   assert.deepEqual(merged.crosswalks.map(c => [c.id, c.revision, c.approach.length]), [['cw1', 'r2', 1], ['cw2', 'r2', 0]]);
 });
+test("soccer profile template uses measured metres and never creates driving lanes", async () => {
+  const { soccerProfileMap } = await import("../../fleet/server/web/shared/site-map-model.js");
+  const map = soccerProfileMap({length_m: 2, width_m: 1.4, goal_width_m: 0.35}, "pitch");
+  assert.equal(map.map_id, "pitch");
+  assert.deepEqual(map.places.map(p => [p.x, p.y]), [[-1, -0.7], [1, -0.7], [1, 0.7], [-1, 0.7]]);
+  assert.deepEqual(map.edges, []);
+  assert.throws(() => soccerProfileMap({length_m: 2, width_m: 1, goal_width_m: 2}, "pitch"));
+});

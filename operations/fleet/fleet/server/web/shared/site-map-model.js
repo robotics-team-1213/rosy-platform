@@ -781,3 +781,12 @@ export function mergeCrosswalks(map, imported) {
   next.crosswalks = imported.map(item => ({...copy(item), approach: had.get(item.id)?.approach || []}));
   return next;
 }
+// A centre-origin pitch template; its boundary marks are places, never driving lanes.
+export function soccerProfileMap(field, mapId) {
+  if (![field.length_m, field.width_m, field.goal_width_m].every(v => Number.isFinite(v) && v > 0)
+      || field.goal_width_m > field.width_m) throw new Error('경기장 치수는 양수이며 골대 폭은 경기장 폭 이하여야 합니다.');
+  const x = field.length_m / 2, y = field.width_m / 2;
+  return {schema: 'rosy.site_map/1', map_id: mapId,
+    places: [[-x, -y], [x, -y], [x, y], [-x, y]].map(([px, py], i) =>
+      ({id: `corner_${i}`, name: `경기장 모서리 ${i + 1}`, kind: 'park', x: px, y: py})), edges: []};
+}

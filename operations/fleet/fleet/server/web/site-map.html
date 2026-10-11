@@ -105,6 +105,15 @@
       </div>
       <label>프로필 ID<input class="ui-field" id="profile-id" maxlength="64" pattern="[A-Za-z0-9_.-]{1,64}"></label>
       <label>지도 이름<input class="ui-field" id="profile-name" maxlength="64"></label>
+      <label>지도 종류<select class="ui-field" id="profile-kind"><option value="lane_course">차선 주행 코스</option><option value="soccer">로봇 축구장</option><option value="general">일반 지도</option></select></label>
+      <label>설명<textarea class="ui-field" id="profile-description" rows="2" maxlength="1000"></textarea></label>
+      <fieldset id="profile-soccer" hidden>
+        <legend>축구장 기본 정보 · m</legend>
+        <label>길이<input class="ui-field" id="profile-length" type="number" min="0.01" step="any" value="2"></label>
+        <label>폭<input class="ui-field" id="profile-width" type="number" min="0.01" step="any" value="1.4"></label>
+        <label>골대 폭<input class="ui-field" id="profile-goal-width" type="number" min="0.01" step="any" value="0.35"></label>
+        <ui-text>예시 치수입니다. 실측값을 입력한 뒤 새 지도 규칙 작성을 누르면 중심 원점의 경기장 경계를 만듭니다. 경기 시작과 카메라 교정은 별도입니다.</ui-text>
+      </fieldset>
       <details>
         <summary>파일 가져오기 · 좌표와 차로 규칙</summary>
         <label>지도 JSON 파일<input class="ui-field" id="profile-file" type="file" accept="application/json,.json"></label>
