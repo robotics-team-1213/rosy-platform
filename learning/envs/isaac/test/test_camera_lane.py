@@ -323,3 +323,35 @@ def test_existing_camera_derived_off_line_recovery_keeps_its_provenance():
     assert lane.last['strategy'] == 'drivable_off_line_left'
     assert lane.last['camera_provenance'] == 'observed_straddle'
     assert lane.manager.tick_gain(10., gain=1.).angular > 0.
+
+
+def test_camera_training_has_three_paired_held_out_comparisons():
+    from run_map_rl import episode_phases
+    phases = episode_phases(6, camera=True, evaluation_only=False)
+    assert phases[0] == ('baseline', 101, 0.)
+    training = [item for item in phases if item[0] == 'train']
+    assert [item[1] for item in training] == list(range(6))
+    evaluations = [(index, seed, angle) for index, (phase, seed, angle) in enumerate(phases) if phase == 'eval']
+    assert len(evaluations) >= 3 and len({seed for _, seed, _ in evaluations}) == len(evaluations)
+    for index, seed, angle in evaluations:
+        assert phases[index - 1] == ('baseline', seed, angle)
+        assert seed not in {item[1] for item in training}
+        assert all(item[0] != 'train' for item in phases[index:])
+
+
+def test_saved_camera_policy_pairs_all_four_headings_without_training():
+    import math
+    from run_map_rl import episode_phases
+    phases = episode_phases(6, camera=True, evaluation_only=True)
+    assert len(phases) == 8 and all(phase != 'train' for phase, _, _ in phases)
+    assert {angle for phase, _, angle in phases if phase == 'eval'} == {0., math.pi / 2, math.pi, -math.pi / 2}
+    for index, (phase, seed, angle) in enumerate(phases):
+        if phase == 'eval':
+            assert phases[index - 1] == ('baseline', seed, angle)
+
+
+def test_path_policy_keeps_its_existing_training_and_four_heading_protocol():
+    from run_map_rl import episode_phases
+    phases = episode_phases(2, camera=False, evaluation_only=False)
+    assert [phase for phase, _, _ in phases] == ['baseline', 'train', 'train', 'eval', 'eval']
+    assert all(phase == 'eval' for phase, _, _ in episode_phases(2, camera=False, evaluation_only=True))
