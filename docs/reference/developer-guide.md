@@ -1,7 +1,9 @@
 # ROSY 개발 가이드 — 구조·빌드·시뮬·테스트·배포
 
+현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 모든 pytest는 D-584에 따라 원격 시험 PC 또는 CI에서 실행한다.
+
 - **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
-- **갱신:** 2026-10-05 (README에서 옮김)
+- **갱신:** 2026-10-11 (D-637 실제 source holder 반영)
 - 처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
 
 ## 구조
@@ -11,14 +13,14 @@
 | 폴더 | 무엇 |
 |---|---|
 | `contracts/` | 공유 계약: `foundation`(core_common 타입·프로토콜·설정), `ros_idl`(ROS 인터페이스), `motion`, `skill`, `learning`. 계약은 동작을 실행하지 않는다 |
-| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API·내비게이션), `perception`(패키지 `control`), `apps/device`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `execution`, `ui`(대시보드·Pilot·face) |
-| `operations/` | 현장 서버 쪽: `fleet`(미션·작업 원장·콘솔), `vision`(천장 카메라), `processes`, `execution`, `world`, `apps`, `ui/cam`(Rosy Cam 앱), `site_devices`(도크·신호등 펌웨어) |
-| `learning/` | 데이터 정리·학습·모델 등록(`curation`, `training`, `registry`), `envs/isaac`(Isaac Sim) |
+| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `control/drive`(길찾기·추종·복구·보정), `perception`(센서·vision, 기존 배포 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `execution`, `ui`(대시보드·Pilot·face) |
+| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `decision`(기존 제안 코드), `ui/console`(Fleet가 설치·제공하는 자산), `vision`(천장 카메라), `processes`, `execution`, `world`, `apps`, `ui/cam`(Rosy Cam 앱), `site_devices`(도크·신호등 펌웨어) |
+| `learning/` | 데이터 정리·학습·모델 등록(`curation`, `training`, `registry`, `evaluation`), `envs/isaac`(Isaac Sim) |
 | `integrations/` | 로봇·시뮬레이션 adapter (`robots`, `simulation` — Gazebo 월드·다로봇 시뮬) |
 | `shared/web/` | 공용 웹 자산 (패키지 `web_common`) |
 | `deploy/` | 설치·이미지·서명 릴리스: `robot/pinky_pro`, `robot/omx`, `site` |
 | `profiles/` | 설치 프로필 |
-| `tools/` | 개발 도구(harness, hooks, release, sim, calibration …). 로봇에 설치되지 않는다 |
+| `tools/` | 개발 도구(harness, hooks, release, sim, calibration, perception 운영 CLI …). 로봇에 설치되지 않는다 |
 | `test/` | 저장소 단위 계약 시험, `known_failures` |
 | `docs/` | SRS, API reference, ADR, 계획, 검증 기록 |
 | `data/` | 로컬 주행 기록. 세션 파일은 커밋하지 않는다 (`data/README.md`) |
@@ -54,7 +56,7 @@ bash tools/run_fleet_sim.sh
 
 ```mermaid
 flowchart LR
-    a["affected<br/>작업 중 · 로컬<br/>바꾼 범위만"] --> q["quick<br/>push 직전 · pre-push 훅<br/>약 3분"] --> f["full<br/>GitHub CI<br/>main · PR · 야간 · 릴리스"]
+    a["affected<br/>작업 중 · 원격 시험 PC<br/>바꾼 범위만"] --> q["quick<br/>push 직전 · pre-push 훅<br/>약 3분"] --> f["full<br/>GitHub CI<br/>main · PR · 야간 · 릴리스"]
 ```
 
 | 단계 | 언제 | 명령 |
@@ -66,14 +68,14 @@ flowchart LR
 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
 
 ```bash
-python -m pytest <paths> -q -rfE -p no:cacheprovider > ../run.txt
-python test/known_failures.py ../run.txt
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- <paths> -q
+python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
 ```
 
 pre-push가 돌리는 quick 묶음을 손으로 돌릴 때:
 
 ```bash
-python -m pytest test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
@@ -81,11 +83,11 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 
 실제 Chromium 시험은 옵트인이다. 정식 이름은 `ROSY_RUN_BROWSER_TESTS=1`이고, 예전 Fleet 이름 `ROSY_BROWSER_TESTS=1`도 받는다(`test/browser_harness.py`의 `browser_tests_enabled()`). 로컬 서버 포트는 `safe_listener()`/`free_port()`로 잡는다. Windows 동적 포트 범위가 1024부터면(`netsh int ipv4 show dynamicport tcp`) port 0이 Chromium 차단 포트(2049, 6000, 10080 등)를 주고 `net::ERR_UNSAFE_PORT`로 실패한다.
 
-작업 중에는 바꾼 경로에 걸린 브라우저 시험만 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
+선택한 Linux 시험 PC에서 바꾼 경로에 걸린 브라우저 시험만 돌린다. 아래 browser 명령은 그 PC에서 실행하며, 노트북 환경 변수는 remote runner가 전달하지 않는다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
 
 ```bash
-t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > X:/DevTemp/<이름>/browser.txt
-python test/known_failures.py X:/DevTemp/<이름>/browser.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > <scratch>/browser.txt
+python test/known_failures.py <scratch>/browser.txt
 ```
 
 전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.

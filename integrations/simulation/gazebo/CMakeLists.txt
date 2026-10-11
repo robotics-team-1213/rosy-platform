@@ -52,8 +52,8 @@ install(
     scripts/live_view_model.py
     scripts/live_view_demo.py
     scripts/sim_ir_floor.py
-    # D-601 in SIM: front preview of the camera launches. The file stays in tools/,
-    # where the pilot and validation scripts run it.
+    # D-601 in SIM: front preview of camera launches. Canonical source is scripts/;
+    # preserve the installed lib/${PROJECT_NAME}/sim_jpeg_relay.py entrypoint.
     scripts/sim_jpeg_relay.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
