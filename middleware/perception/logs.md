@@ -1442,6 +1442,6 @@
 - gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
 - 결정: D-649
 
-## 2026-10-11 - source test import precedence
+## 2026-10-11 · 9fc0a88c9 · source test import precedence
 
 Perception test bootstrap prepends its canonical foundation holder instead of selecting the installed dependency first. Combined remote collection had cached the wheel config module before source fixtures; installed-delivery tests remain isolated subprocesses. Regression revalidation pending. No runtime or hardware calibration changes.

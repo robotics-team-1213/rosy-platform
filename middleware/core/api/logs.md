@@ -863,6 +863,6 @@
 - 증거: 배포 통합 원격 검사에서 버전 핀 불일치를 재현했습니다. 재검증 대기입니다.
 - gate 변화: 없음.
 
-## 2026-10-11 - D-660/D-661 API reference alignment
+## 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
 
 FastAPI description follows v1.207; documented additive versions recorded in API changelog. Failed version-alignment guards reproduced during responsibility integration; remote revalidation pending. No runtime activation.

@@ -618,6 +618,6 @@
 - 증거: 현장 Fleet 두 호스트의 주소 해석 3.007초를 재현했다. 원격 RED에서 빈 warm cache 시험이 3초 지연으로 실패했고, 수정 후 발견·TLS 역할·Fleet transport·등록 TLS 시험 77건이 통과했다. known_failures 신규 실패 0건.
 - gate 변화: SOURCE. 현장 새 payload 적용과 연속주행은 아직 확인하지 않았다.
 
-## 2026-10-11 - D-660 Fleet judgment DTO holder
+## 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder
 
 Read-only Fleet judgment and observed-closure DTOs moved unchanged into protocol/fleet_judgment.py with canonical schemas.py exports. Responsibility split fixes actual size regression without changing size verdicts/allowances or wire fields. Remote guards/installed regression revalidation pending.
