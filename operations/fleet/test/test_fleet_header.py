@@ -64,6 +64,9 @@ def test_estop_is_live_in_markup_and_one_module_gates_it():
 
 
 def test_document_sheets_do_not_paint_the_header():
+    header_sheet = (WEB / "shared/fleet-header.css").read_text(encoding="utf-8")
+    assert "body { margin: 0; }" in header_sheet
+    assert ".fleet-header { position: sticky; top: 0;" in header_sheet
     for sheet in ("shared/styles.css", "site-map.css", "cell/cell.css"):
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
