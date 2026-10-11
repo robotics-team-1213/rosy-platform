@@ -3312,3 +3312,9 @@
 - 변경: 기존 Fleet lifespan 수신 worker, private Bot token 파일, 원장 commit 후 resume 및 미해결 session 공백 정지 구현.
 - 증거: 원격 RED는 gateway 모듈 누락 확인. GREEN43 PASS, resume/secret/API/structure86 PASS+size1NEW; ACK/session 종료 코드 보완 및 독립 검토 중.
 - gate 변화: source 구현 검증 중; 실제 이미지/수신은 미확인. 장치 명령 없음.
+
+## 2026-10-12 · b78edf399 · D-675 optional reception caller closure
+
+- 변경: required/optional intake flag 상호 배제와 FileNotFoundError 전용 OFF; Fleet-only signed Compose 경로.
+- 증거: 원격138 PASS/NEW0, 독립 검토 승인, Fleet53617/CLI890/app906 기존 상한 유지.
+- gate 변화: source 검증 완료; 전체 통합과 실제 signed image/현장 접수는 미완료.
