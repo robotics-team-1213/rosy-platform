@@ -37,7 +37,6 @@
                autocomplete="off" aria-label="관제 토큰">
         <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       </details>
-      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
         <ui-text id="theme-choice-label" scale="label">화면 표시</ui-text>
         <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게" data-action-icon="theme-dark"><span class="sr-only">어둡게</span></ui-button>
@@ -45,9 +44,12 @@
         <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
     </div>
-    <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-    <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
-    <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+    <div class="fleet-link-status">
+      <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
+      <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
+      <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+    </div>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
   </header>
