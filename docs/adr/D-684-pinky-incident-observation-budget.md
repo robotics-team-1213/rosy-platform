@@ -12,7 +12,7 @@
 
 Fleet이 opt-in v2 사건 worker와 별도 부모/시도 원장을 소유한다. `StuckResolverLoop.run_once()`의 shared gather 이후 현재 Assessment를 입력으로 삼는다. 정상은 모델·명령 0회로 미개입을 기록한다. 실제 baseline producer가 검증한 선택만 비교 기준으로 사용하며 `WAIT`를 `reobserve`로 추정하지 않는다.
 
-공통 tool catalog에 읽기 전용 `get_incident_status`를 추가한다. arguments는 빈 object이며 호출 scope의 subject/case와 근거를 Fleet이 고정한다. 모델이 로봇·URL·파일 경로를 지정하지 못한다. trusted observation adapter는 기존 shared gather·CORE 상태를 읽고 현재 사건·관측 시간·revision을 반환한다. 이는 기존 Mission dispatcher를 호출하지 않는다.
+공통 tool catalog에 읽기 전용 `get_incident_status`를 추가한다. arguments는 빈 object이며 호출 scope의 subject/case와 근거를 Fleet이 고정한다. 모델이 로봇·URL·파일 경로를 지정하지 못한다. trusted observation adapter는 기존 polling이 만든 immutable snapshot·Assessment를 소비하고 현재 사건·관측 시간·revision을 반환한다. 재관측은 독립 기존 polling의 새 관측을 기다리거나 별도 CORE 상태 읽기 경로를 사용한다. cached 결과를 새 관측으로 계산하지 않는다. shared gather는 교통·인계·속도 관리 효과가 있으므로 모델의 읽기 도구가 직접 재호출하지 않는다. 이는 기존 Mission dispatcher를 호출하지 않으며 Mission schema·dispatcher에서 사건 도구를 제외한다.
 
 부모 원장은 `(subject_id, case_id)`에 고정 프로파일 SHA·정책 revision·시작 시간·전체 deadline·호출/관측/비용 상한을 보존한다. 시도 원장은 각 입력 hash·관측 revision·종류·상태를 기록한다. 실행 전에 원자적으로 누적 예산을 예약하며 새 관측·재시작·모델 교체로 초기화하지 않는다. 제출 이후 결과 불명은 UNKNOWN으로 보존하고 동일 시도를 재발행하지 않는다. 사건 소유자나 프로파일이 바뀌면 자동 작업을 중단한다.
 
