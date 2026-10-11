@@ -22,11 +22,11 @@ def compare(cohort, exports):
     return module.compare(cohort, exports)
 
 
-def evidence(tmp_path):
+def evidence(tmp_path, *, handoff=False):
     store, scope, profiles = fixture(tmp_path)
     store.complete(scope, 'attempt', worker_id='private-worker', state='UNKNOWN',
                    actual_cost_usd=None, summary={'reason': 'PROVIDER_OUTCOME_UNKNOWN'})
-    exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles)
+    exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles, include_handoff=handoff)
     lineage = dict(session_id='session-eval', recording_id='recording-eval', source_sha256='d' * 64)
     cohort = dict(schema='rosy.incident.operational_cohort/1', domain='line_stuck', training=[], fit=[],
         evaluation=[dict(subject_id=scope.subject_id, case_id=scope.case_id, **lineage)],
@@ -81,8 +81,9 @@ def test_closed_report_contains_no_provider_or_person_text(tmp_path):
     assert 'profiles' not in report['candidates'][0]
 
 
-def test_cli_joins_actual_export_and_never_overwrites(tmp_path):
-    cohort, exports = evidence(tmp_path)
+@pytest.mark.parametrize('handoff', [False, True])
+def test_cli_joins_actual_export_and_never_overwrites(tmp_path, handoff):
+    cohort, exports = evidence(tmp_path, handoff=handoff)
     cohort_path = tmp_path / 'cohort.json'; cohort_path.write_text(json.dumps(cohort))
     export_path = tmp_path / 'case.json'; export_path.write_text(json.dumps(exports[0]))
     output = tmp_path / 'report.json'
@@ -94,3 +95,13 @@ def test_cli_joins_actual_export_and_never_overwrites(tmp_path):
     original = output.read_bytes()
     assert subprocess.run(command, capture_output=True).returncode != 0
     assert output.read_bytes() == original
+
+
+def test_missing_resolved_receipt_cannot_be_refrozen_as_unresolved(tmp_path):
+    import hashlib
+    cohort, exports = evidence(tmp_path)
+    exports[0]['case']['reason'] = 'RESOLVED_OBSERVED'
+    encoded = json.dumps(exports[0]['case'], sort_keys=True, separators=(',', ':')).encode()
+    exports[0]['digest'] = hashlib.sha256(encoded).hexdigest()
+    cohort['candidates'][0]['exports'][0]['digest'] = exports[0]['digest']
+    with pytest.raises(ValueError): compare(cohort, exports)
