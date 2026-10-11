@@ -89,6 +89,14 @@ def test_closed_loop_tracker_gets_local_ordered_route_not_arrived_at_start():
     assert speed > 0. or angular != 0.
 
 
+def test_route_progress_preserves_drive_alignment_hysteresis():
+    t = MapTask([(i * .01, 0.) for i in range(100)], half_size=(2., 2.))
+    assert t.pursuit(0., 0., .4)[1] == 0.
+    t.index = 1
+    assert t.pursuit(.01, 0., .25)[1] == 0.
+    assert t.pursuit(.01, 0., .19)[1] > 0.
+
+
 def intent(epoch=1, **overrides):
     fields = dict(intent_id='sim:1', device_id='isaac-pinky', source='learned_policy',
                   priority_class=PriorityClass.POLICY, issued_at=10., valid_for_s=.1,
