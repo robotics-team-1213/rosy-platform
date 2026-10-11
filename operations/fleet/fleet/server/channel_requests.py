@@ -25,6 +25,7 @@ class ChannelConfig(BaseModel):
     transport_key: str = Field(min_length=32, max_length=128, repr=False, exclude=True)
     users: dict[str, str] = Field(min_length=1, max_length=100)
     bot_token_file: str | None = Field(default=None, min_length=1, max_length=4096)
+    replies_enabled: bool = False
 
     @classmethod
     def load(cls, path, *, optional=False):
@@ -153,6 +154,8 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
             raise ValueError("Discord Bot credential file unavailable") from None
         if not re.fullmatch(r"[A-Za-z0-9_.-]{40,200}", token) or token == key:
             raise ValueError("invalid or shared Discord Bot credential")
+    if config.replies_enabled and token is None:
+        raise ValueError("Discord replies require a Bot credential")
     for credential in (key, token):
         if credential is None:
             continue

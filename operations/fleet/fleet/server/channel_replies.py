@@ -1,6 +1,8 @@
 """Fleet-owned Discord reply journal in the existing tasks database."""
+import asyncio
 import hashlib
 import json
+import logging
 import sqlite3
 import time
 from contextlib import closing
@@ -86,3 +88,33 @@ class ChannelReplyOutbox:
                 FROM fleet_channel_reply_outbox WHERE principal_id=? ORDER BY rowid DESC LIMIT 50''',
                 (principal,)).fetchall()
         return [dict(row) for row in rows]
+
+
+class ChannelReplyWorker:
+    def __init__(self, outbox, sender, *, clock=time.time):
+        self.outbox, self.sender, self.clock = outbox, sender, clock
+
+    async def run_once(self):
+        row = await asyncio.to_thread(self.outbox.claim, now=self.clock())
+        if row is None:
+            return
+        result = {'state': 'UNKNOWN', 'provider_id': None}
+        try:
+            self.outbox.journal.operator(row['principal_id'])
+            if row['route_hash'] != self.outbox.route_hash() or self.clock() >= row['expires_at']:
+                raise ValueError('Discord reply scope expired or changed')
+            result = await self.sender.send(message_id=row['message_id'], nonce=row['nonce'], content=row['content'])
+        except asyncio.CancelledError:
+            await asyncio.shield(asyncio.to_thread(self.outbox.finish, row, now=self.clock(), **result))
+            raise
+        except (HTTPException, OSError, ValueError):
+            pass
+        await asyncio.to_thread(self.outbox.finish, row, now=self.clock(), **result)
+
+    async def run(self):
+        while True:
+            try:
+                await self.run_once()
+            except Exception as error:
+                logging.getLogger(__name__).warning('Discord reply scan failed (%s)', type(error).__name__)
+            await asyncio.sleep(1)
