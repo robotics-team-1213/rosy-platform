@@ -90,7 +90,7 @@ ui-topbar {
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  .fleet-link-status { justify-content: flex-start; }
+  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: calc(var(--space-5) * 2 + var(--space-1)); }
   .fleet-link-status ui-tag { min-height: var(--space-5); }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
