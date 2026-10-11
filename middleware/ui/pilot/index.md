@@ -39,4 +39,3 @@
 - 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동
 - 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
-- 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
