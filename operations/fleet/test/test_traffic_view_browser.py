@@ -219,6 +219,40 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             browser.close()
 
 
+def test_map_context_keeps_place_names_off_the_floor(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, "/console", [])
+        try:
+            expect(page.locator("#map-places li")).to_have_count(len(PLACES))
+            expect(page.locator("#map-places li").first).to_have_text("남서 · 0.00, 0.00 m")
+            page.evaluate("""() => {
+                window.__floorWords = [];
+                const original = CanvasRenderingContext2D.prototype.fillText;
+                CanvasRenderingContext2D.prototype.fillText = function(text, ...args) {
+                    if (this.canvas.id === 'map-canvas') window.__floorWords.push(String(text));
+                    return original.call(this, text, ...args);
+                };
+            }""")
+            for width, height in [(1920, 1080), (390, 844)]:
+                page.set_viewport_size({"width": width, "height": height})
+                page.select_option("#map-display-mode", "coordinates")
+                page.clock.run_for(1500)
+                plane = page.locator("#map-stage").bounding_box()
+                context = page.locator(".map-readouts").bounding_box()
+                if width >= 1024:
+                    assert context["x"] >= plane["x"] + plane["width"] - 1
+                else:
+                    assert context["y"] >= plane["y"] + plane["height"] - 1
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            words = page.evaluate("window.__floorWords")
+            assert words and not any(place["name"] in word for place in PLACES for word in words), words
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 def _guide_row(robot_id, x, y, yaw, state, u_m):
     return {"robot_id": robot_id, "online": True, "body_radius_m": 0.09, "lane": None, "findings": [], "worst": None,
             "pose": {"x": x, "y": y, "yaw": yaw, "state": state, "source": "sighting", "u_m": u_m, "age_s": 0.2}}
