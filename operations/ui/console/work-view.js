@@ -70,6 +70,7 @@ export function createWorkView({scope, call, el}) {
       const item = document.createElement("li"), button = document.createElement("ui-button");
       button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
       button.dataset.workKey = workKey(row);
+      button.setAttribute("data-work-read", "");
       button.setAttribute("aria-pressed", String(selected === workKey(row)));
       button.title = `${row.source} · ${row.source_id} · ${row.status}`;
       button.textContent = `${workKind(row)} · ${row.device_id} · ${workStatus(row.status)}`;
