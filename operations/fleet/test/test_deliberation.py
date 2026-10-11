@@ -26,7 +26,7 @@ class Provider:
         self.answer = answer
         self.calls = []
 
-    async def __call__(self, request, prior, remaining):
+    async def __call__(self, request, prior, remaining, *, budget_usd):
         self.calls.append((prior, remaining))
         return (self.answer or reply)(request), 0.01
 
@@ -83,19 +83,19 @@ def test_stale_future_generation_change_and_duplicate_profiles_refuse():
 
 
 def test_provider_error_unknown_cost_and_global_deadline_hold():
-    async def broken(*args):
+    async def broken(*args, **kwargs):
         raise OSError('private secret error')
     p = Provider('a')
     p.__class__ = type('Broken', (Provider,), {'__call__': broken})
     assert run(problem(), [p, Provider('b')])['reason'] == 'PROVIDER_UNKNOWN'
 
     class UnknownCost(Provider):
-        async def __call__(self, request, prior, remaining):
+        async def __call__(self, request, prior, remaining, **kwargs):
             return reply(request), None
     assert run(problem(), [UnknownCost('a'), Provider('b')])['state'] == 'HOLD'
 
     class Slow(Provider):
-        async def __call__(self, *args):
+        async def __call__(self, *args, **kwargs):
             await asyncio.sleep(1)
     result = asyncio.run(Supervisor(clock=lambda: 101, timeout_s=0.01).run(
         problem(), [Slow('a'), Provider('b')], current=lambda: True))
@@ -106,7 +106,7 @@ def test_same_case_concurrency_is_rejected_and_cancel_releases():
     async def scenario():
         entered = asyncio.Event()
         class Waiting(Provider):
-            async def __call__(self, *args):
+            async def __call__(self, *args, **kwargs):
                 entered.set()
                 await asyncio.Event().wait()
         supervisor = Supervisor(clock=lambda: 101)
@@ -126,3 +126,28 @@ def test_same_case_concurrency_is_rejected_and_cancel_releases():
 def test_input_boundary_rejects_invalid(changes):
     with pytest.raises(ValueError):
         problem(**changes)
+
+
+def test_invalid_profiles_and_owner_read_failure_hold_without_calls():
+    for providers in ([None, Provider('b')], [Provider(''), Provider('b')]):
+        assert run(problem(), providers)['reason'] == 'PROFILES_REQUIRED'
+    def failed():
+        raise OSError('owner unavailable')
+    assert run(problem(), current=failed)['reason'] == 'STALE_OR_CHANGED'
+
+
+def test_goal_and_approved_facts_are_bound_into_input_hash():
+    first = problem()
+    second = problem(facts_json='{"door_state":"closed"}', goal='reach_destination')
+    assert second.digest != first.digest
+
+
+def test_remaining_cost_budget_is_not_reset():
+    budgets = []
+    class Costed(Provider):
+        async def __call__(self, request, prior, remaining, *, budget_usd):
+            budgets.append(budget_usd)
+            return reply(request), 0.01
+    result = run(problem(), [Costed('a'), Costed('b')])
+    assert result['calls'] == 3
+    assert budgets == pytest.approx([0.30, 0.29, 0.28])
