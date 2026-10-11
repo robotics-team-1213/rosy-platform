@@ -72,6 +72,8 @@ export function showSession(identity) {
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
+  const token = $('token-access');
+  if (token) token.open = false;
   const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = `${identity.principal_id} · ${identity.role}`;
