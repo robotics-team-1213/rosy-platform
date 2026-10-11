@@ -41,6 +41,22 @@ def test_trusted_payload_requires_current_hash_and_no_prior():
         gate.trusted_body(json.dumps(body))
 
 
+def test_legacy_job_does_not_require_versioned_codec(monkeypatch):
+    import builtins
+    original = builtins.__import__
+    def restricted(name, globals=None, locals=None, fromlist=(), level=0):
+        if 'deliberation_glm_judgment' in fromlist:
+            raise ImportError('Versioned deployment absent')
+        return original(name, globals, locals, fromlist, level)
+    monkeypatch.setattr(builtins, '__import__', restricted)
+    p = problem()
+    raw = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
+                      'prior': [], 'instruction': 'test'})
+    parsed, body = gate.trusted_body(raw)
+    assert parsed == p
+    assert gate.checked_response(p, response(), body=body)['usage']['completion_tokens'] == 100
+
+
 @pytest.mark.parametrize('change', ['tool', 'length', 'tokens', 'scope', 'model', 'missing_model', 'role'])
 def test_invalid_upstream_never_admitted(change):
     data = response()
@@ -85,13 +101,23 @@ class Connection(http.client.HTTPConnection):
 
 
 @pytest.mark.parametrize('change', ['valid', 'stream', 'model', 'tool', 'history', 'route', 'oversize'])
-def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize('schema_version', [1, 2])
+def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change, schema_version):
     seen = []
     monkeypatch.setattr(gate, 'claim', lambda body: None)
+    answer = response()
+    p = problem()
+    body = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
+                       'prior': [], 'instruction': 'test'})
+    if schema_version == 2:
+        from test_deliberation_glm_judgment import fixture, opinion
+        p, bound, body = fixture(prior=True)
+        body = body.decode()
+        answer['choices'][0]['message']['content'] = json.dumps(opinion(p, bound))
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
-        return response()
+        return answer
     monkeypatch.setattr(gate, 'upstream', upstream)
     path = str(tmp_path / 'gateway.sock')
     incoming = {'model': gate.MODEL, 'messages': [{'role': 'user', 'content': 'untrusted injected text'}]}
@@ -104,7 +130,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     raw = json.dumps(incoming).encode() if change != 'oversize' else b'x' * 16385
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
-        server.problem, server.body, server.token = problem(), 'trusted canonical job', 'fake-unit-token'
+        server.problem, server.body, server.token = p, body, 'fake-unit-token'
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
@@ -117,7 +143,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         assert not worker.is_alive()
         if change in {'valid', 'stream'}:
             assert result.status == 200 and len(seen) == server.calls == 1
-            assert seen[0]['messages'][1]['content'] == 'trusted canonical job'
+            assert seen[0]['messages'][1]['content'] == body
             assert seen[0]['max_tokens'] == 1024 and seen[0]['stream'] is False
             assert 'tools' not in seen[0]
             assert b'[DONE]' in output if change == 'stream' else json.loads(output)['usage']
