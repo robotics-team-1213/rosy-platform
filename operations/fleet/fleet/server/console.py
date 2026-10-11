@@ -693,7 +693,15 @@ class FleetConsole(TripAware):
         if self.trip_busy(robot_id):
             raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
         self.goal_leases.check_stop(mover, mover_stop)
-        result = await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
+        try:
+            result = await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
+        except (Exception, asyncio.CancelledError):
+            if mover_stop != self.goal_leases.stop_token(mover):
+                try:
+                    await self.goal_leases.cancel(robot_id, client)
+                except Exception:
+                    logger.exception("abandoned bay cancel for %s failed", robot_id)
+            raise
         if mover_stop != self.goal_leases.stop_token(mover):
             await self.goal_leases.cancel(robot_id, client)
             self.goal_leases.check_stop(mover, mover_stop)

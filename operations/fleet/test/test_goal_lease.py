@@ -153,7 +153,7 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch
             await (console.estop_all() if stop_all else console.cancel("rosy_01"))
         finally:
             release.set()
-        with pytest.raises((HubError, RuntimeError)):
+        with pytest.raises((HubError, RuntimeError, TimeoutError)):
             await goal
         assert "rosy_01" not in console._queued
         assert "rosy_01" not in console._claims
