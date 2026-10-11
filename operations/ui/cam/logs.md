@@ -296,6 +296,6 @@
 - 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 413 passed(`RecognitionTuningTest` 23, `TuningWriterTest` 8). 시험이 손전등 끔 직후 재잠금 결함(목표가 같으면 잠금을 풀지 않던 조기 반환)을 잡아 고쳤다. 로그 X: `DevTemp/cam-auto-tune-s2/build-5.txt`.
 - gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
 
-## 2026-10-11 — UI 역할·공용 토큰 소비 (D-639)
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 
 - 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
