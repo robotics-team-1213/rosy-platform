@@ -29,6 +29,11 @@ def snapshot_handoff(conn, scope, budget, case):
         if len(rows) > 32: raise ValueError('HANDOFF_OUTBOX_LIMIT')
         for source in rows:
             row = dict(source)
+            if row['state'] == 'SENT' and (row['last_code'] != 'PROVIDER_ACCEPTED'
+                    or type(row['last_attempt_at']) not in (int, float)
+                    or type(row['delivered_at']) not in (int, float)
+                    or not row['created_at'] <= row['last_attempt_at'] <= row['delivered_at']):
+                raise ValueError('HANDOFF_PROVIDER_ACCEPTANCE_UNBOUND')
             if type(row['payload']) is not str or len(row['payload'].encode()) > 4096: raise ValueError('HANDOFF_SOURCE_LIMIT')
             facts = json.loads(row['payload'])
             scope_json = json.dumps(asdict(scope), sort_keys=True, separators=(',', ':'), allow_nan=False)

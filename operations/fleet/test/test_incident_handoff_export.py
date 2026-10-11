@@ -100,7 +100,7 @@ def test_actual_final_queue_provider_acceptance_and_claim_producers_bind_to_expo
     store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
     assert log.notifications.enqueue_final(scope, store.final_summary(scope), now=101)
     store.handoff_queued(scope)
-    run(log, board, channels, 101, lambda request: httpx.Response(200, json={'id': 'private-provider-id'}))
+    run(log, board, channels, 101, lambda request: httpx.Response(200, json={'id': '7'}))
     log.handoff.claim(scope.subject_id, scope.case_id, board.judgment_view('pinky'), 'private-principal', now=102)
     proof = exporter().snapshot(log.path, scope.subject_id, scope.case_id, profiles, include_handoff=True)['case']['handoff']
     assert proof['queue']['queued_at'] == 100
