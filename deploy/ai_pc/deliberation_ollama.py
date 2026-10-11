@@ -16,7 +16,7 @@ from rosy.decision.deliberation.profiles import AdapterCapabilities, BoundProfil
 MODEL = 'qwen3-vl:8b-instruct'
 DIGEST = '0533d74300e4f9bc367d675d4e64ffd073d50ff16a2b4096cc2e8a1cf8c96319'
 CAPABILITIES = AdapterCapabilities('local', MODEL, DIGEST, 'ollama-json-v2', 2,
-    ('line_follow', 'door', 'arm_target'), ('text',), True, True, True)
+    ('line_follow', 'door', 'arm_target'), ('text',), False, False, False)
 LIMIT = 16384
 
 
@@ -102,11 +102,20 @@ def execute(raw, remaining):
 
 
 class OllamaTransport:
-    adapter_capabilities = CAPABILITIES
     schema_versions = (2,)
-    cost_verified = True
+
+    def __init__(self, *, admission=None):
+        selected = CAPABILITIES if admission is None else admission
+        if (type(selected) is not AdapterCapabilities
+                or replace(selected, ready=False, isolated=False, cost_verified=False) != CAPABILITIES):
+            raise ValueError('LOCAL_BACKEND_MISMATCH')
+        # Runtime admission must come from host verification, never source inspection.
+        self.adapter_capabilities = selected
+        self.cost_verified = selected.cost_verified
 
     async def __call__(self, body, remaining, output_limit):
+        if not all((self.adapter_capabilities.ready, self.adapter_capabilities.isolated, self.cost_verified)):
+            raise ValueError('LOCAL_RUNTIME_NOT_ADMITTED')
         source = Path(__file__).resolve()
         bootstrap = ('import sys,runpy;from pathlib import Path;'
             'root=Path(sys.argv[1]).parents[2];'
