@@ -125,3 +125,18 @@ def install_channel_routes(app, journal, *, require_operator, read_guard, clock=
              response_model=ChannelRequestList, tags=["fleet-work"])
     def requests(principal=Depends(require_operator)):
         return {"rows": journal.read(principal.principal_id)}
+
+
+def install_channel_feature(app, *, config, task_service, principals, site_logins,
+                            require_operator, read_guard, console, secrets, secret_owners):
+    if task_service is None:
+        raise ValueError("Discord intake requires the existing tasks DB")
+    key = config.transport_key
+    if (hashlib.sha256(key.encode()).hexdigest() in principals or key in secrets
+            or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)
+            or any(owner is not None and owner.uses_token(key) for owner in secret_owners)):
+        raise ValueError("Discord transport credential must be isolated")
+    accounts = {p.principal_id: p.role for p in principals.values()}
+    accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
+    app.state.channel_requests = ChannelRequests(task_service.store.path, config, accounts)
+    install_channel_routes(app, app.state.channel_requests, require_operator=require_operator, read_guard=read_guard)
