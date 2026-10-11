@@ -37,6 +37,15 @@ def test_off_frame_pixels_have_a_mask_and_crop_specific_coverage():
     assert plane_observed_fraction(plane, (4.5, 2.5, .1)) == 0
 
 
+def test_margin_beyond_projective_horizon_does_not_sample_mirrored_camera_pixels():
+    record = {**RECORD, "map_to_image": [100., 1., 101., 100., -10., 100., 1., 0., 1.],
+              "track_bounds_m": {"min_x": -.9, "min_y": 0., "max_x": -.8, "max_y": .05}}
+    plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert plane is not None
+    assert not plane.valid_mask[:, 0].any()
+    assert plane.valid_mask[:, -1].any()
+
+
 def _frame_jpeg():
     """640x360 frame (half the record size) with a white dot at the image of POINT."""
     image = np.full((360, 640, 3), 120, np.uint8)
