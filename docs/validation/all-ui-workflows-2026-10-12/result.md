@@ -11,9 +11,13 @@
 | `b9145fa9b` 원격 인증·전체 지도·헤더·백엔드 | 169 passed / 8 failed, NEW 8. 인증/계정은 통과했으나 전체 묶음은 실패다. 재접속 후 편집 선택의 Apply gating 복원, 인증 확인 후 고급 접속 접힘, 새 계정 노드를 포함한 Node fixture를 수정했다. 충돌 초안을 버리는 옛 기대는 로컬 입력 보존과 기존 CAS 거절 검증으로 바꿨다. `logs/account-login-final/run-1.txt` |
 | `b9145fa9b` 루트 관제 헤더·개발/paired 연결 | 4 passed, 종료 0, NEW 0. `logs/account-root-header/run-1.txt` |
 | `d3dac3633` 전체 Console Node | 312 passed, 종료 0. `logs/account-node-all.txt` |
-| 독립 소스 검토 | `d3dac3633`에서 추가 blocker 없음. 현재 검증된 역할로 편집 조작을 복원하며 원래 revision의 CAS를 보존한다. 읽기 전용 검토이며 배포/브라우저 통과를 대신하지 않는다. |
+| `d3dac3633` 수정 후 인증·전체 지도·관제 헤더 | 95 passed / 1 failed, NEW 1. 반복 재접속이 끝나기 전에 펼침을 여는 경쟁 조건을 수정했다. `logs/account-map-restored/run-1.txt` |
+| `440385e24` 같은 브라우저 묶음 | 95 passed / 1 failed, NEW 1. 실패는 대기 helper의 문자열 predicate가 CSP eval 거절을 받은 것이며 CSP를 유지하고 함수 predicate로 수정했다. `logs/account-map-settled/run-1.txt` |
+| `0d01b320c` 재접속·편집 보존·충돌 최종 | 5 passed, 종료 0, NEW 0. 반복 재접속, 적용 전/후 편집 보존과 3개 크기 충돌 후 CAS 거절을 실제 조작으로 확인했다. `logs/account-reconnect-final/run-1.txt` |
+| `06ce50c4a` Android proxy | JVM/assemble BUILD SUCCESSFUL, 실제 번들 proxy 브라우저 1 passed, 종료 0, NEW 0. 앞선 403은 시험의 고정 쿠키 이름을 앱의 세션별 이름으로 전달해 해결했다. Guard와 신원 확인은 보존한다. `logs/pilot-proxy-cookie/run-1.txt` |
+| 독립 소스 검토 | `440385e24` 계정/편집 복원과 `06ce50c4a` proxy fixture에 추가 blocker 없음. 현재 검증된 역할로 편집 조작을 복원하며 원래 revision의 CAS를 보존한다. 읽기 전용 검토이며 배포/브라우저 통과를 대신하지 않는다. |
 
-증거 경로는 공용 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--015344--fleet-header-proof--958a02/` 기준이다. `evidence/account-screens-final/`의 10개 PNG는 시험 서버의 로그인 및 네 계정 메뉴 320/1366px 관측이며 설치본 증거가 아니다. 해당 계정 시나리오는 `b9145fa9b`에서 통과했다. 수정 후 전체 지도/인증 재회귀와 Android proxy 검사는 진행 중이므로 통과로 표시하지 않는다.
+증거 경로는 공용 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--015344--fleet-header-proof--958a02/` 기준이다. `evidence/account-screens-final/`의 10개 PNG는 시험 서버의 로그인 및 네 계정 메뉴 320/1366px 관측이며 설치본 증거가 아니다. 해당 계정 시나리오는 `b9145fa9b`와 후속 묶음에서 통과했다. 실패한 전체 묶음을 통과로 합산하지 않으며, 나머지 95개 통과와 마지막 5개 재접속 통과를 각 SHA/범위로 구분한다.
 
 현재 계정 변경의 main 착지·push·해당 SHA의 CI·서명·설치·실물 수용은 아직 확인하지 않았다. 아래의 과거 설치 관측과 혼용하지 않는다.
 
