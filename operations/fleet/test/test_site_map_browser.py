@@ -890,7 +890,7 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
-def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, width, height):
+def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site, width, height):
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap
 
@@ -912,7 +912,12 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
     open_token_access(page)
     page.locator("#token-save").click()
-    expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    expect(page.locator("#notice")).to_contain_text("보존")
+    expect(page.locator("#draft-status")).to_contain_text("저장 안 된 초안")
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator("#place-name")).to_have_value("북서 정차")
+    page.locator("#save-draft").click()
+    expect(page.locator("#notice")).to_contain_text("변경 내용을 기록한 뒤 다시 접속")
 
 
 def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):
