@@ -30,6 +30,17 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
+def test_dedicated_login_document_and_allowlisted_assets_keep_csp():
+    client = _client(FakeRobot('rosy_01'), token='operator-secret')
+    page = client.get('/console/login')
+    assert page.status_code == 200
+    assert page.headers['cache-control'] == 'no-cache'
+    assert "script-src 'self'" in page.headers['content-security-policy']
+    for asset in ('login-page.js', 'login-return.js', 'password-login.js', 'password-login.css'):
+        assert client.get('/console/assets/' + asset).status_code == 200
+    assert client.get('/console/assets/unknown-login.js').status_code == 404
+
+
 def _named_client(tmp_path, *robots: FakeRobot) -> TestClient:
     """D-540 9: moving routes need a named operator, and site-users need the task store."""
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",

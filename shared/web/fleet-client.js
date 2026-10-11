@@ -15,7 +15,7 @@ export function createFleetClient(options = {}) {
     }
     const {status, ok, body} = response;
     if (status === 401) {
-      const error = new Error('관제 토큰이 필요합니다 — 상단에 입력하고 접속을 누르세요');
+      const error = new Error('관제 인증이 필요합니다 — 로그인하거나 고급 접속을 확인하세요');
       error.status = status;
       throw error;
     }
