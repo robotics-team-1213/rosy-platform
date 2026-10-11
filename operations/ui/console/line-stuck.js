@@ -207,8 +207,8 @@ function watchChainStatus({ scope, call }) {
 
 const OUTCOME_TEXT = Object.freeze({
   hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
-  back: "후진 후 재시도를 시작했습니다",
-  resume: "재개했습니다 — 차선 추종을 다시 시작합니다",
+  back: "CORE가 후진 후 재시도를 수락했습니다 · 실제 진행은 로봇 상태에서 확인하세요",
+  resume: "CORE가 재개를 수락했습니다 · 실제 진행은 로봇 상태에서 확인하세요",
   manual: "수동 모드로 넘겼습니다",
   idle: "차선 추종을 중단했습니다",
 });

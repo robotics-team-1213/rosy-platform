@@ -142,6 +142,9 @@ test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /차선 추종을 중단했습니다/);
   assert.doesNotMatch(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
   assert.match(outcomeText("rosy_01", "MANUAL", {}), /CORE가 받았습니다/);
+  for (const [decision, outcome] of [['RESUME', 'resume'], ['BACK_AND_RETRY', 'back']]) {
+    assert.match(outcomeText('rosy_01', decision, {outcome}), /CORE.*수락.*로봇 상태.*확인/);
+  }
 });
 
 test("resolverText says what the Fleet resolver did, or why a human is needed", () => {
