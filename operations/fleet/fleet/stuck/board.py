@@ -15,6 +15,7 @@ import logging
 import sqlite3
 import time
 from collections import deque
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, Iterable, Optional
 
@@ -22,6 +23,7 @@ from .lane_lost import peer_ahead
 from .resolver import ResolverConfig
 from rosy_situation.assessment import assess
 from rosy_situation.snapshot_assessment import POLICY, robot_input
+from core_common.protocol.schemas import FleetJudgmentReceipt
 
 if TYPE_CHECKING:
     from .reports import LineStuckAnswerLog
@@ -49,6 +51,7 @@ class LineStuckBoard:
         self._wall = wall
         self._open: dict[str, dict] = {}
         self._assessment_inputs = {}
+        self._handoff_pending: set[tuple[str, str]] = set()
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
@@ -78,6 +81,7 @@ class LineStuckBoard:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
+        self._handoff_pending = {key for key in self._handoff_pending if key[0] != robot_id or key[1] == keep}
         for notes in (self._resolver, self._previews):
             for key in [k for k in notes if k[0] == robot_id and k[1] != keep]:
                 del notes[key]
@@ -156,19 +160,31 @@ class LineStuckBoard:
             del self._open[robot_id]   # left the roster
             self._drop_notes(robot_id)
             self._close_episode(robot_id, "left_roster")
+        if self._log is not None:
+            for robot_id in self._assessment_inputs:
+                receipt = self.judgment_view(robot_id)
+                self._pending.append(lambda r=receipt: self._log.record_judgment(r))
 
     def intervention_assessment(self, robot_id: str):
         """Internal shadow read; recheck age without refreshing the original evidence."""
         request = self._assessment_inputs.get(robot_id)
         return assess(request, now=self._wall(), policy=POLICY) if request is not None else None
 
+    def judgment_view(self, robot_id: str) -> Optional[dict]:
+        assessment = self.intervention_assessment(robot_id)
+        return (FleetJudgmentReceipt(**asdict(assessment)).model_dump(mode="json")
+                if assessment is not None else None)
+
+    def judgments(self, limit: int = 100) -> list[dict]:
+        return self._log.judgments(limit) if self._log is not None else []
+
     # ---- episode log: one write per open / close transition, never per poll -------------
 
     def episodes(self, limit: int = 100) -> list[dict]:
         return self._log.episodes(limit) if self._log is not None else []
 
-    def reports(self, limit: int = 100) -> list[dict]:
-        return self._log.reports(limit) if self._log is not None else []
+    def reports(self, limit: int = 100, **filters) -> list[dict]:
+        return self._log.reports(limit, **filters) if self._log is not None else []
 
     def traffic_reports(self, limit: int = 100) -> list[dict]:
         return self._log.traffic_reports(limit) if self._log is not None else []

@@ -58,7 +58,7 @@ Modify: `operations/fleet/fleet/server/mission_service.py`, `mission_progress.py
 Existing tests: `operations/fleet/test/test_mission_service.py`, `test_mission_store.py`, `test_mission_progress.py`, `test_mission_dispatcher.py`, `test_dispatch_admission.py`, `test_cell_job_recovery.py`, `test_cell_job_store.py`, `test/test_platform_item_pose.py`, `test/test_platform_cell_submission.py`, `test/test_structure_installed_packages.py`. 각 unit의 실제 소비자를 확인한 뒤 관련 invocation을 확정한다. 의미 전이는 전이표로, I/O/경쟁은 기존 integration suite로 검증하며 구현을 그대로 복제한 시험을 늘리지 않는다.
 
 ## 4. 중앙 처리·알림·화면·독립 수용 연결
-Modify: 위 현재 사건/작업 어댑터와 D-644 원장·결과 기록. Create only in D-645 implementation: `operations/fleet/fleet/notifications.py`와 해당 설정/시험. Console은 `operations/ui/console`의 기존 화면과 D-646 계약을 따른다.
+Modify: 위 현재 사건/작업 어댑터와 D-644 원장·결과 기록. Create only in D-645 implementation: `operations/fleet/fleet/incidents/notifications.py`와 해당 설정/시험. Console은 `operations/ui/console`의 기존 화면과 D-646 계약을 따른다.
 
 1. 권고 revision→owner 채택/보류→기존 조치 제출→수락/거절/불명→실제 목표/해소를 같은 원장으로 대조한다. 활성 Mission 없는 사건도 새 Mission을 자동 만들지 않고 같은 case owner로 처리한다.
 2. 알림 outbox는 기존 사건 transaction에서 생성하고 normal 비개입 zero-send·dedupe·expiry·부분 실패·제한 retry·재시작을 시험한다. 발송·읽음·담당 접수·실제 종료를 구별한다.

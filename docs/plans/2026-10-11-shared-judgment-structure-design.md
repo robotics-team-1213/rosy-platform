@@ -40,7 +40,7 @@ operations/
 │  ├─ stuck/                            기존 이동 도메인 정책·사건/transport 어댑터
 │  ├─ traffic/, routing/                로봇 교통·경로·공유 자원 조정
 │  ├─ formation/, swarm/                집합 배정·협업
-│  └─ notifications.py [D-645 제안]      같은 사건의 알림 outbox/채널 어댑터
+│  └─ incidents/ [D-661 구현]           이름 있는 담당 인수·같은 사건의 알림 outbox/채널 어댑터
 ├─ processes/{cell,palletizing}/         공정·도메인 목표 정의
 └─ ui/console/                          판단·담당·조치·실제 결과와 사람 처리
 

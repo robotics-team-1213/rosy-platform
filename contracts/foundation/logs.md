@@ -617,3 +617,9 @@
 - 변경: 최초 광고 수집 이후에는 빈 캐시도 바로 반환해 저장된 TLS 호스트의 LAN 조회로 넘어간다. 매 요청의 3초 대기를 제거하며 최초 경쟁 광고 수집, 충돌 거절과 TLS 신원 검증은 유지한다.
 - 증거: 현장 Fleet 두 호스트의 주소 해석 3.007초를 재현했다. 원격 RED에서 빈 warm cache 시험이 3초 지연으로 실패했고, 수정 후 발견·TLS 역할·Fleet transport·등록 TLS 시험 77건이 통과했다. known_failures 신규 실패 0건.
 - gate 변화: SOURCE. 현장 새 payload 적용과 연속주행은 아직 확인하지 않았다.
+
+## 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder
+
+- 변경: 읽기 판단·관측 종료 DTO를 protocol/fleet_judgment.py로 옮기고 schemas.py의 정식 export를 유지했다. 크기 제한·예외·wire 필드는 변경하지 않았다.
+- 증거: 통합 원격 크기 검사에서 초과를 재현했다. 책임 분리 후 수정 HEAD의 구조/설치 재검증 대기.
+- gate 변화: SOURCE 책임 분리. 실제 설치·배포·현장 수용은 별도다.
