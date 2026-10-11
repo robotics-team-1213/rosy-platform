@@ -71,6 +71,23 @@ class ChannelTaskLinkRequest(ChannelSubmitRequest):
     task_id: str = Field(min_length=1, max_length=128)
 
 
+class ChannelIncidentReference(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    robot_id: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_.-]+$")
+    stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    judgment_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ChannelIncidentClaimRequest(ChannelIncidentReference, ChannelSubmitRequest):
+    reason: str = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def reason_required(self):
+        if not self.reason.strip():
+            raise ValueError("review reason required")
+        return self
+
+
 class ChannelWorkflowView(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     request_id: str
@@ -79,10 +96,11 @@ class ChannelWorkflowView(BaseModel):
     state: Literal["REQUESTED", "READY", "HOLD", "REJECTED", "LINKED"]
     candidate: ChannelNavigationCandidate | None
     reason: str | None
-    work_kind: Literal["task", "mission", "cell_job"] | None
+    work_kind: Literal["task", "mission", "cell_job", "incident"] | None
     work_id: str | None
     work_status: str | None
     request_key: str
+    incident: ChannelIncidentReference | None = None
 
 
 class ChannelWorkPrepareRequest(ChannelSubmitRequest):

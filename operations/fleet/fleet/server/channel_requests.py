@@ -191,6 +191,9 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
         cell_service_id=cell_service_id)
     install_channel_mission_routes(app, app.state.channel_missions, require_operator=require_operator,
                                    read_guard=read_guard)
+    from .channel_incidents import install_channel_incident_routes
+    install_channel_incident_routes(app, app.state.channel_workflow, require_operator=require_operator,
+                                    read_guard=read_guard)
     if token is not None:
         from .channel_gateway import install_gateway
         install_gateway(app, app.state.channel_requests, token)

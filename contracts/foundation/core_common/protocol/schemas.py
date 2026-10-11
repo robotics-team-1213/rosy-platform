@@ -15,6 +15,7 @@ from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
     ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
     ChannelWorkPrepareRequest, ChannelMissionPrepareRequest, ChannelCellPrepareRequest, ChannelWorkAdmitRequest,
+    ChannelIncidentReference, ChannelIncidentClaimRequest,
 )
 
 import enum
