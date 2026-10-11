@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("middleware/core/api_web", "middleware/core/services", "middleware/core/events"):
+for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)

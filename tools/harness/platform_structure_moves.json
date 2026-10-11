@@ -1,0 +1,33 @@
+{
+  "adr": "D-625",
+  "units": {
+    "core-api": {
+      "source": "middleware/core/api_web",
+      "target": "middleware/core/api",
+      "manual_safety": true,
+      "preserve": ["core_api_web", "HTTP/WebSocket contracts", "ROS package and entry points"],
+      "consumers": ["gateway composition", "api/v1/safety.py and safety anchors", "deploy image/Docker COPY", "harness.yaml module registration", "platform_parts.yaml current path", "test sys.path and installed imports"]
+    },
+    "pinky-device": {
+      "source": "middleware/apps/device/pinky",
+      "target": "middleware/devices/pinky",
+      "manual_safety": false,
+      "preserve": ["bringup, profile and description ROS packages", "URDF and launch install paths"],
+      "consumers": ["profiles and launch consumers", "deploy robot image/native closure", "harness.yaml three module roots", "platform_parts.yaml three current paths", "package-share/URDF installation", "device stop/readback smoke"]
+    },
+    "omx-device": {
+      "source": "middleware/apps/device/omx",
+      "target": "middleware/devices/omx",
+      "manual_safety": true,
+      "preserve": ["omx_adapter, agent and profile identities", "ActionPort and arm command owner", "cancel-to-HOLD and fresh-feedback recovery"],
+      "consumers": ["Safety modules/anchors and independent review", "local execution and manipulation imports", "integration robot adapter consumers", "profiles/deploy and entry points", "harness.yaml and platform_parts.yaml nested roots", "installed imports and stop/readback"]
+    },
+    "drive-nav2": {
+      "source": "middleware/core/navigation",
+      "target": "middleware/control/drive/planning/nav2",
+      "manual_safety": false,
+      "preserve": ["navigation ROS package identity", "CMake package-share installs", "CORE final cmd_vel ownership"],
+      "consumers": ["Pinky bringup launch", "map/params/rviz and relative paths", "CMake install and package.xml dependencies", "deploy image/native closure", "harness.yaml and platform_parts.yaml current path", "navigation module and consumer tests"]
+    }
+  }
+}

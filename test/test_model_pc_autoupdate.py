@@ -213,7 +213,7 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
-                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False),
+                                      ("middleware/devices/pinky/profile/config/camera_nominal.yaml.extra", False),
                                       ("operations/vision/rosy_vision/cli.py", False),
                                       ("operations/vision/rosy_vision/lane_map.py.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
@@ -271,7 +271,7 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     (code / "model").mkdir(parents=True)
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
-    profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+    profile = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
     dependencies = ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
                     "shared/web/shared-assets.json", profile]
     if camera_map:

@@ -175,7 +175,7 @@ def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
     assert "cmd_vel" not in source
 
 
-URDF = (Path(__file__).resolve().parents[4] / "middleware" / "apps" / "device" / "pinky") / "description" / "urdf" / "rosy.urdf.xacro"
+URDF = (Path(__file__).resolve().parents[4] / "middleware" / "devices" / "pinky") / "description" / "urdf" / "rosy.urdf.xacro"
 
 
 def _urdf_camera_on_base_footprint(tilt_rad, cam_mount_z=None):

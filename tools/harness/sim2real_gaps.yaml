@@ -39,7 +39,7 @@ gaps:
     gap: CORE worker rejects sim /scan; the only opt-in accepts 720 beams with a pinky/ frame while the shared Gazebo LiDAR has 640 samples
     evidence:
       - middleware/perception/control/sensing/lidar.py:32-64
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:98
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro:98
       - {path: docs/validation/d476-gazebo-model-pc-2026-10-06/result.md, branch: docs/d476-gazebo-model-pc}
     tier: [M]
     owner: core gateway + gz_sim
@@ -49,7 +49,7 @@ gaps:
   - id: G-04
     gap: no IR sensor in Gazebo while the sensor adapter requires lidar, imu, ir
     evidence:
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro
       - middleware/core/gateway/test/test_control_sensor_adapter.py:72
     tier: [M]
     owner: gz_sim
@@ -59,7 +59,7 @@ gaps:
   - id: G-05
     gap: sim imu_raw is noiseless and the worker does not receive it; device IMU has no output
     evidence:
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:154-162
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro:154-162
       - integrations/simulation/gazebo/launch/gz_multi_parts.py:120
       - D-384
     tier: [M, D]
@@ -80,7 +80,7 @@ gaps:
   - id: G-07
     gap: LiDAR forward 181-182 deg measured, range_min 0.05 (sim) vs 0.12 (device), rear blind band, beam count and range_max differ
     evidence:
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:98-119
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro:98-119
       - middleware/core/services/core_features/line_follow/clearance.py:208
       - middleware/core/services/core_features/line_follow/recovery/stuck/stuck_recovery.py:322
     tier: [M]
@@ -91,7 +91,7 @@ gaps:
   - id: G-08
     gap: ideal model-pose odometry vs real yaw error 3 %, distance error 1-8 %, wheel slip
     evidence:
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:20-42
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro:20-42
       - D-384
       - D-426
     tier: [M, D]
@@ -132,7 +132,7 @@ gaps:
   - id: G-12
     gap: motor lag and battery sag are unmodelled; sim acceleration is a literal +-2.0
     evidence:
-      - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:13-17
+      - middleware/devices/pinky/description/urdf/rosy_gz.urdf.xacro:13-17
     tier: [R, M]
     owner: bringup / gz_sim
     status: OPEN

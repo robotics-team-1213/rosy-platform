@@ -122,7 +122,7 @@ def test_gazebo_ground_declares_the_detector_pixel_error_only():
 # camera_profile record's score bands (D-47 table: 8kcn pitch 11.2 +-0.25 deg, roll -1.5 deg,
 # height 0.0575 +-0.005 m; the roll band is not in the table, 0.5 deg is one fine roll step).
 REPO = Path(__file__).resolve().parents[3]
-PROFILE = yaml.safe_load((REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" /
+PROFILE = yaml.safe_load((REPO / "middleware" / "devices" / "pinky" / "profile" / "config" /
                           "camera_nominal.yaml").read_text(encoding="utf-8"))
 RECORD = {**PROFILE, "pitch_rad": math.radians(11.2), "roll_rad": math.radians(-1.5), "height_m": .0575}
 BANDS = {"pitch_deg": .25, "roll_deg": .5, "height_m": .005}

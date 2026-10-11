@@ -22,7 +22,7 @@ from core_features.line_follow.recovery.junction.gate import MANEUVER
 from core_features.line_follow.recovery.stuck.stuck_recovery import REPORT_ONLY, StuckInput, StuckRecovery
 from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
-#: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
+#: Providers CORE binds at start (core/drive/line_follow.py). Unbound or failing ones read as
 #: the fail-closed default: no console link, a calibration session, a zero linear limit.
 _PROVIDERS = {"console_linked": False, "calibration_active": True,
               "linear_ceiling": 0.0, "preview_seq": None}
