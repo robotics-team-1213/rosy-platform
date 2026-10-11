@@ -633,3 +633,11 @@
 - 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
 - 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
 - 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).
+
+| D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
+
+## D-637 - Remaining Decision Console learning holders
+
+- Status: Accepted (2026-10-11).
+- Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
+- Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.
