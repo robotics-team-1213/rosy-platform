@@ -7,9 +7,10 @@
 import {
   convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody,
   repeatTripReason, startTrip,
-  trafficCardLine, tripRefusalText, tripStartReason,
+  trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason,
 } from "/console/assets/site-map-model.js";
 import { chooseConvoyLeader, motionCommandReason } from "./motion-readiness.js";
+import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 
 export { endedTripText, openTrip };
@@ -70,7 +71,20 @@ function line(className, text) {
 export function createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason = () => "" }) {
   let form = null;  // { robotId, to, start, plan, busy, note }: one form open at a time
   const gate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
+  const ready = (robot) => gate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
+    : tripPoseReason(view.guide, robot?.robot_id, view.activeSiteMap, robotMapPose(robot)));
   const places = () => view.activeSiteMap?.map?.places || [];
+  function checkReady(robotId) {
+    const reason = ready(view.robots.find(row => row.robot_id === robotId));
+    if (reason) throw new Error(reason);
+  }
+  function checkedStart(robotId, plan) {
+    checkReady(robotId);
+    const reason = tripStartReason({ role: isOperator() ? "operator" : "viewer", plan,
+      active: view.activeSiteMap, running: openTrip(view, robotId) });
+    if (reason) throw new Error(reason);
+    return startTrip(call, plan.plan_id);
+  }
 
   // Plan then start, or start a plan already previewed; the opened trip shows before the next poll.
   async function send(robotId, holder, work, done) {
@@ -80,6 +94,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     holder.note = null;
     render();
     try {
+      checkReady(robotId);
       const trip = await work();
       life.check();
       view.trafficTrips = [...(view.trafficTrips || []).filter((row) => row.robot_id !== robotId), trip];
@@ -118,7 +133,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
   function section(robot) {
     if (form?.robotId !== robot.robot_id) return null;
     const mine = form, id = robot.robot_id, active = view.activeSiteMap, running = openTrip(view, id);
-    const lock = gate(robot) || (mine.busy ? "보내는 중" : "");
+    const lock = ready(robot) || (mine.busy ? "보내는 중" : "");
     const box = document.createElement("div");
     box.className = "card-trip";
     box.setAttribute("role", "group");
@@ -160,8 +175,11 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       mine.note = null;
       render();
       try {
-        mine.plan = await planTrip(call, id, { to: mine.to });
+        checkReady(id);
+        const to = mine.to;
+        const plan = await planTrip(call, id, { to });
         life.check();
+        if (form === mine && mine.to === to) mine.plan = plan;
       } catch (err) {
         if (err.name === "AbortError") return;
         mine.note = `경로 계산 거절 · ${tripRefusalText(err)}`;
@@ -174,7 +192,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setReason(go, lock || tripStartReason({ role: "operator", plan: mine.plan, active, running }));
     go.addEventListener("click", scope.guard(() => {
       const plan = mine.plan;
-      if (plan) send(id, mine, () => startTrip(call, plan.plan_id), "운행을 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "운행을 시작했습니다");
     }));
     const once = document.createElement("div");
     once.className = "robot-actions";
@@ -190,7 +208,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setReason(repeat, lock || repeatTripReason({ active, running, start: mine.start }));
     repeat.addEventListener("click", scope.guard(() => send(id, mine, async () => {
       const plan = await planTrip(call, id, repeatTripBody(active?.map, mine.start, ""));
-      return startTrip(call, plan.plan_id);
+      return checkedStart(id, plan);
     }, `반복 운행을 시작했습니다 · ${mine.start}`)));
     const laps = document.createElement("div");
     laps.className = "robot-actions";
@@ -211,8 +229,11 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       mine.note = null;
       render();
       try {
-        mine.lapPlan = await planTrip(call, id, oneLapBody(active?.map, mine.lapStart, mine.via));
+        checkReady(id);
+        const start = mine.lapStart, via = mine.via;
+        const plan = await planTrip(call, id, oneLapBody(active?.map, start, via));
         life.check();
+        if (form === mine && mine.lapStart === start && mine.via === via) mine.lapPlan = plan;
       } catch (err) {
         if (err.name === "AbortError") return;
         mine.note = `한 바퀴 계획 거절 · ${tripRefusalText(err)}`;
@@ -225,7 +246,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     setReason(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
     lapGo.addEventListener("click", scope.guard(() => {
       const plan = mine.lapPlan;
-      if (plan) send(id, mine, () => startTrip(call, plan.plan_id), "한 바퀴를 시작했습니다");
+      if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴를 시작했습니다");
     }));
     const lapActions = document.createElement("div");
     lapActions.className = "robot-actions";
@@ -274,7 +295,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     const reason = (convoy.busy ? "보내는 중" : "")
       || (leaders.length ? "" : "반복 운행 중인 리더가 없습니다 · 리더 카드의 운행…에서 반복 운행을 먼저 시작하세요")
       || (free.length ? "" : "따라갈 로봇이 없습니다 · 운행 중이 아닌 로봇이 필요합니다")
-      || gate(robot)
+      || ready(robot)
       || repeatTripReason({ active: view.activeSiteMap, running: openTrip(view, chosen), start });
     setReason(el("convoy-go"), reason);
     el("convoy-detail").textContent = convoy.note || (reason ? "" : `팔로워 ${chosen} · 리더 ${lead} 뒤에서 반복 운행 · 출발 ${start}`);
@@ -294,7 +315,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       const id = el("convoy-follower").value, leader = el("convoy-leader").value, start = el("convoy-start").value;
       send(id, convoy, async () => {
         const plan = await planTrip(call, id, repeatTripBody(view.activeSiteMap?.map, start, leader));
-        return startTrip(call, plan.plan_id);
+        return checkedStart(id, plan);
       }, `대열 반복 운행을 시작했습니다 · ${leader} 뒤 · ${start}`);
     });
   }
