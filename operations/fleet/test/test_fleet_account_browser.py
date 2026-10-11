@@ -1,6 +1,7 @@
 """D-683 account discovery, verified authentication and no automatic operation replay."""
 import threading
 import os
+import json
 import time
 from pathlib import Path
 
@@ -82,6 +83,7 @@ def test_account_entry_returns_to_each_document_without_commands(account_page, p
     expect(login.locator('#fleet-account')).to_be_visible()
     login.locator('#fleet-account > summary').click()
     expect(login.locator('#fleet-account-identity')).to_contain_text('alice')
+    expect(login.locator('[data-login=logout]')).to_be_enabled()
     for width in (320, 1366):
         login.set_viewport_size({'width': width, 'height': 900})
         assert login.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -125,3 +127,36 @@ def test_login_waits_for_session_readback_and_rejects_duplicate_submit(account_p
     expect(page.locator('[data-login=login]')).to_have_value('alice')
     assert '/console/login?' in page.url
     assert writes == [origin + '/api/fleet/auth/login']
+
+
+def test_focus_revalidates_changed_role_for_the_same_principal(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    identity = {'principal_id': 'alice', 'role': 'viewer', 'via': 'cookie'}
+    for path in ['/api/fleet/auth/session', '/api/fleet/session']:
+        page.route('**' + path, lambda route: route.fulfill(content_type='application/json', body=json.dumps(identity)))
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · viewer')
+    expect(page.locator('#estop')).to_be_disabled()
+
+
+def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):
+    from playwright.sync_api import expect
+    from browser_harness import open_token_access
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fcell')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#fleet-account')).to_be_visible()
+    page.evaluate("sessionStorage.setItem('rosy-console-token', 'stale-token')")
+    open_token_access(page)
+    page.locator('#console-token').fill('')
+    page.locator('#token-save').click()
+    page.locator('#fleet-account > summary').click()
+    expect(page.locator('[data-login=logout]')).to_be_visible()
+    expect(page.locator('[data-login=logout]')).to_have_text('로그아웃')
+    expect(page.locator('[data-login=logout]')).to_be_enabled()

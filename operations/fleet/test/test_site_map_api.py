@@ -320,7 +320,7 @@ def test_field_view_review_fixes_are_served():
     # D-501/D-641: the single Cell icon keeps its accessible label.
     import re
     assert re.findall(r'<a href="/console/cell" data-action-icon="cell" data-icon-only="">(.*?)</a>', page) == ["Cell"]
-    assert ".fleet-header-safety { grid-area: safety; }" in styles
+    assert ".fleet-header-safety { grid-area: safety; justify-self: end; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
     # D-410 — 지도 레이어 안내는 운용 문서에, 보정 도구 문장은 설치 문서에 있다.

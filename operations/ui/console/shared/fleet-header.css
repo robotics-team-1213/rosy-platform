@@ -69,7 +69,7 @@ ui-topbar {
 .fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
 .fleet-account-panel .password-login-who { flex-wrap: wrap; }
 .fleet-account-panel [data-login="principal"] { display: none; }
-.fleet-header-safety { grid-area: safety; }
+.fleet-header-safety { grid-area: safety; justify-self: end; }
 #topbar-more { display: inline-flex; }
 .topbar-extra {
   display: none;

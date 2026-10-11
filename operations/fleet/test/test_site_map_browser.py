@@ -1181,6 +1181,7 @@ def test_reconnect_preserves_unapplied_and_applied_map_edits(page_site):
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#site-map-svg [data-place="NW"]')).to_be_visible()
+    page.locator('#map-source').select_option('draft')
     page.locator('#site-map-svg [data-place="NW"]').click()
     page.locator('#place-name').fill('Unsaved local name')
     open_token_access(page)

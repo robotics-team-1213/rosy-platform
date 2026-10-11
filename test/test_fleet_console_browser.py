@@ -2580,9 +2580,9 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
-        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
+        page.get_by_role("button", name="화면 표시와 고급 접속", exact=True).click()
         opened = page.evaluate(probe)
-        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
+        page.get_by_role("button", name="화면 표시와 고급 접속", exact=True).click()
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         scrolled = page.evaluate(probe)
         save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
