@@ -42,6 +42,46 @@ def task(tasks, receipt, **changes):
     return tasks.create_task(**body)["task"]
 
 
+def test_review_and_existing_task_outcome_reply_once_without_execution_claim(tmp_path):
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    workflow, journal, tasks, _, receipt = fixture(tmp_path)
+    outbox = ChannelReplyOutbox(journal, clock=lambda: 1000)
+    journal.reply_outbox = outbox
+    held = review(workflow, receipt, state="HOLD", candidate=None, reason="clarify location")
+    row = outbox.claim(now=1000)
+    assert row["kind"] == "REVIEW:1" and "HOLD" in row["content"]
+    assert "clarify location" not in row["content"]
+    outbox.finish(row, state="SENT", provider_id=USER, now=1000)
+    ready = review(workflow, receipt, expected_revision=held["revision"])
+    created = task(tasks, receipt)
+    workflow.link_task(receipt["request_id"], "op", task_id=created["task_id"],
+                       expected_hash=receipt["content_hash"], expected_revision=ready["revision"])
+    tasks.transition(created["task_id"], "UNKNOWN", actor_id="system", source="system", reason="unproven")
+    outbox.observe_results()
+    outbox.observe_results()
+    rows = outbox.rows("op")
+    assert len([row for row in rows if row["kind"] == "TASK:UNKNOWN"]) == 1
+    tasks.transition(created["task_id"], "FAILED", actor_id="system", source="system", reason="expired")
+    outbox.observe_results()
+    rows = outbox.rows("op")
+    assert len([row for row in rows if row["kind"] == "TASK:FAILED"]) == 1
+    assert tasks.get_task(created["task_id"])["status"] == "FAILED"
+
+
+def test_review_reply_intent_failure_rolls_back_review(tmp_path, monkeypatch):
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    workflow, journal, _, _, receipt = fixture(tmp_path)
+    outbox = ChannelReplyOutbox(journal)
+    journal.reply_outbox = outbox
+
+    def fail(*args, **kwargs):
+        raise OSError("reply journal unavailable")
+    monkeypatch.setattr(outbox, "enqueue", fail)
+    with pytest.raises(OSError):
+        review(workflow, receipt, state="HOLD", candidate=None, reason="clarify")
+    assert workflow.read(receipt["request_id"], "op")["state"] == "REQUESTED"
+
+
 def test_review_is_durable_owner_scoped_revision_checked_and_not_execution(tmp_path):
     workflow, journal, tasks, _, receipt = fixture(tmp_path)
     assert workflow.read(receipt["request_id"], "op")["revision"] == 0
