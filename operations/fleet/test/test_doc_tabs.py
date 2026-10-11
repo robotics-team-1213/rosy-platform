@@ -33,6 +33,7 @@ def test_every_document_has_the_same_tabs_and_marks_itself():
         assert [link["href"] for link in links] == ORDER, name
         assert [link["href"] for link in links if link.get("aria-current") == "page"] == [current], name
         assert [link.get("data-action-icon") for link in links] == ICONS, name
+        assert all("data-icon-only" in link for link in links), name
         assert '/console/assets/doc-tabs.css' in page, name
 
 
