@@ -168,8 +168,9 @@ class LaneSegModel:
         "drivable"), or the lane_marking mask (kind "lane_marking") when the model has no
         drivable class or too little of it is near; info says which and why. Rows above a
         cropped model's input (manifest input.crop) are never drivable. With a class named
-        `crosswalk`, info["crosswalk_mask"] is its mask at the frame's size (the D-491 crosswalk
-        extent, D-597 amendment); the paint worker takes it out of info."""
+        `crosswalk` or `speed_bump`, info["<name>_mask"] is its mask at the frame's size;
+        the paint worker takes these class observations out of info. The ignore role is
+        passable for lane geometry; it does not authorize crossing a traffic mark."""
         t0 = time.perf_counter()
         logits = self._logits(bgr)
         spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
