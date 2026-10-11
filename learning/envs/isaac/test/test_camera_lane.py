@@ -436,6 +436,22 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     out = lane.manager.tick_gain(10., gain=1.7)
     assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
     assert lane.last['reason'] == 'camera_target_unavailable'
+    assert 'camera_target' in lane.last
+    import json
+    json.dumps(lane.last, allow_nan=False)
+    lane.close()
+
+
+def test_camera_failure_snapshots_preserve_distinct_reasons_without_unbounded_output():
+    from run_map_rl import camera_snapshot_due
+    current = dict(reason='camera_target_unavailable', strategy='drivable_pivot_right')
+    key = (current['reason'], current['strategy'])
+    assert camera_snapshot_due(0, {}, set())
+    assert not camera_snapshot_due(1, dict(reason=None, strategy='drivable_centre'), set())
+    assert camera_snapshot_due(1, current, set())
+    assert not camera_snapshot_due(2, current, {key})
+    assert camera_snapshot_due(2, dict(reason='native_scan_unknown'), {key})
+    assert not camera_snapshot_due(3, current, {(str(i), None) for i in range(8)})
 
 
 def test_inference_wall_time_cannot_refresh_an_old_camera_frame():

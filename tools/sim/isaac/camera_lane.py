@@ -197,6 +197,8 @@ class LearnedCameraLane:
             else:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
+                self.last['camera_target'] = {key: info.get(key) for key in
+                    ('target_m', 'target_now_m', 'ahead_m', 'guided', 'guide_deg', 'straddle')}
                 return
             observation = None if step is None else LaneObservation(*step)
         now = self.clock()
