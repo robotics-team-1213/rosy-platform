@@ -354,3 +354,9 @@
 - 변경: 두 namespace에 기존 road_observer_node를 연결하고 중복 preview relay를 제거했다. CORE와 map/scene 식별자를 맞췄다. simulation 지면 guard가 거절하는 GZ 값을 GAZEBO로 수정하고 실제 shared projection helper의 생성 회귀를 추가했다.
 - 증거: A21 실제 두 CORE·Fleet online 2/2, 카메라·차선·scan·odom 수신과 namespace별 최종 cmd_vel publisher CORE 하나를 확인했다. 모든 명령·최종 odom 속도 0, 종료 후 소유 프로세스·포트 부재 확인. private 원본 39개 SHA 대조 보관. roslogs/latest 절대 symlink는 안전 추출에서 제외했다. 새 도로 연결의 원격 회귀·native 실행은 아직 미확인이다.
 - gate 변화: 실제 정지 연결 증거만 추가했다. 위치 UNKNOWN, 설정 ENFORCED와 snapshot DISABLED 불일치로 교통 모드 수용은 보류다. 주행·도로 검출 정확도·신호 표시·완주·병렬 RL 개선은 미완료다.
+
+## 2026-10-12 · 493894894 · 道路 관측 연결 원격 회귀
+
+- 변경: 새 Gazebo 도로 관측 연결의 source 검토와 원격 계약 시험 결과를 기록했다.
+- 증거: 독립 Safety-Review SOURCE APPROVE. AI PC의 committed HEAD 시험은 관련 네 파일 60 PASS·exit 0, known_failures 0 new·0 known이다. 실제 projection helper에 launch params를 전달한 회귀가 포함됐다. harness lint 0 errors·28 warnings.
+- gate 변화: 원격 회귀만 통과했다. 실제 road/observation 수신·교통 endpoint 모드·preview 단일 발행과 주행 완주는 별도 미확인이다.
