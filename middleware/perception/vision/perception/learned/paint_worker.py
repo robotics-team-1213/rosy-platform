@@ -8,8 +8,8 @@ its fallback paint source for that frame and says so.
 target "drivable" (learned_paint_target): the model's infer_drivable gives the drivable way
 (kind "drivable") or, without a usable drivable class, the lane_marking mask (kind
 "lane_marking"); the caller cleans each kind with its own function and reads `used_paint_kind`.
-The same inference's crosswalk class mask (info "crosswalk_mask", D-597 amendment) is served beside
-the paint as `used_crosswalk`, moved like the paint when the paint is warped (D-570).
+The same inference's crosswalk and speed_bump class masks are served beside the paint as
+`used_crosswalk` and `used_speed_bump`, moved like the paint when it is warped (D-570).
 """
 
 from __future__ import annotations

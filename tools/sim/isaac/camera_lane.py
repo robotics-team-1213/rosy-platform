@@ -193,6 +193,8 @@ class LearnedCameraLane:
         self.last = {'model_used': True, 'model_revision': self.worker.used_model_revision,
                      'camera_provenance': provenance,
                      'paint_kind': self.worker.used_paint_kind, 'inference_error': None,
+                     'speed_bump_pixels': (None if self.worker.used_speed_bump is None
+                                           else int(np.count_nonzero(self.worker.used_speed_bump))),
                      'source_stamp': stamp, 'received_at': captured_at, 'processing_s': now - captured_at,
                      'source_age_s': source_now - stamp,
                      'reason': self.keeper.last.get('reason'),
