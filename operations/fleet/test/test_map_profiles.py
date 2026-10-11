@@ -1,8 +1,59 @@
 """D-631 profile library never changes the active map or draft."""
 import pytest
+import json
+import sqlite3
 from fleet.server.site_map_store import SiteMapStore, SiteMapError
 from fleet.site_map import SiteMap
 from test_site_map_trip import _app, _line, OPERATOR, VIEWER
+
+
+def test_profile_basic_information_survives_updates_and_restart(tmp_path):
+    client, _, store, _ = _app(tmp_path)
+    with client:
+        body = {'name': '축구장', 'map': _line(), 'kind': 'soccer', 'description': '연습 경기장',
+                'soccer_field': {'length_m': 2.0, 'width_m': 1.4, 'goal_width_m': 0.35}}
+        url = '/api/fleet/site-map/profiles/pitch'
+        saved = client.put(url, json=body, headers=OPERATOR)
+        assert saved.status_code == 200, saved.text
+        assert saved.json()['soccer_field'] == body['soccer_field']
+        revision = saved.json()['revision']
+        body.update(description='수정한 설명', expected_revision=revision)
+        updated = client.put(url, json=body, headers=OPERATOR)
+        assert updated.status_code == 200
+        assert updated.json()['revision'] != revision
+        assert client.put(url, json=body, headers=OPERATOR).status_code == 409
+        assert store.profiles()[0]['description'] == '수정한 설명'
+
+
+@pytest.mark.parametrize('info', [
+    {'kind': 'soccer'}, {'kind': 'unknown'}, {'description': 'x' * 1001},
+    {'kind': 'soccer', 'soccer_field': {'length_m': -1, 'width_m': 1.4, 'goal_width_m': 0.35}},
+    {'kind': 'soccer', 'soccer_field': {'length_m': 2, 'width_m': 1.4, 'goal_width_m': 2}},
+    {'kind': 'general', 'soccer_field': {'length_m': 2, 'width_m': 1.4, 'goal_width_m': 0.35}},
+])
+def test_profile_rejects_invalid_type_specific_information(tmp_path, info):
+    client, _, _, _ = _app(tmp_path)
+    with client:
+        result = client.put('/api/fleet/site-map/profiles/invalid',
+                            json={'name': 'map', 'map': _line(), **info}, headers=OPERATOR)
+        assert result.status_code == 422, result.text
+
+
+def test_existing_profile_database_gets_default_information_without_losing_map(tmp_path):
+    path = tmp_path / 'old.sqlite'
+    with sqlite3.connect(path) as db:
+        db.execute('CREATE TABLE site_map_profiles (profile_id TEXT PRIMARY KEY, name TEXT NOT NULL, '
+                   'body TEXT NOT NULL, revision TEXT NOT NULL, saved_by TEXT NOT NULL, saved_at REAL NOT NULL)')
+        db.execute('INSERT INTO site_map_profiles VALUES (?, ?, ?, ?, ?, ?)',
+                   ('old', 'old map', json.dumps(_line()), 'revision', 'bob', 100))
+    store = SiteMapStore(path)
+    row = store.profiles()[0]
+    assert row['kind'] == 'lane_course' and row['description'] == '' and row['soccer_field'] is None
+    assert row['map'] == _line() and row['revision'] == 'revision'
+    store.close()
+    again = SiteMapStore(path)
+    assert again.profiles()[0] == row
+    again.close()
 
 
 def test_profiles_survive_restart_and_refuse_lost_updates(tmp_path):

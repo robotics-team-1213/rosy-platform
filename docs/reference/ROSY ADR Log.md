@@ -617,3 +617,4 @@
 | D-631 | Named map profiles and coordinate/overlay/raw views; activation and calibration remain explicit | Accepted (2026-10-11) |
 | D-633 | 심한 렌즈 왜곡과 부분 시야를 위한 측정 카메라 교정 | Proposed |
 | D-634 | 카메라 촬영·교정·관측·좌표 표시의 역할 분담과 표시 안정성 | Proposed |
+| D-635 | 지도 프로필의 용도와 기본 정보 및 Games 경기장 재사용 | Accepted (2026-10-11) |
