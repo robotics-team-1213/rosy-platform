@@ -3150,3 +3150,10 @@
 - 검증: AI PC 원격 관련 pytest 205 passed(exit 0), 안에 콘솔 Node 280개 포함. 운영자 핀의 odom→map 변환·신선도·재시작, 카메라 역변환·회전, TLS·자격 증명 미전송 시험 포함.
 - 증거: docs/validation/fleet-map-stability-2026-10-11/README.md. 현재 로봇 offline과 전날 사건 원인은 구분한다.
 - gate 변화: SOURCE/원격 관련 계약 검증. 착지·push·배포·실물 위치 추종 확인은 아직 없다.
+
+## 2026-10-11 · 541815508 · feat(fleet): 지도 프로필과 좌표·영상 보기 (D-631)
+
+- 변경: 기본 2D 좌표·선, 승인 교정 영상 오버레이, 교정 전 원본 영상 및 교정 후 비교. SQLite 프로필 라이브러리·JSON 파일/규칙 입력·선택 미리보기·초안 불러오기. 프로필은 활성 지도와 별도로 저장하고 revision·권한·입력 크기·개수 제한을 검사한다.
+- 검증: 원격 계약 회귀 86 passed, 관련 Chromium 전체 68 passed. 마지막 영상 조건 변경 후 API/전체 Node 계약 26 passed 및 새 Chromium 시나리오 4 passed. known_failures NEW 0, harness lint 오류 0.
+- 증거: docs/validation/fleet-map-stability-2026-10-11/README.md에 커밋별 검증과 로그 위치를 기록했다. 표시 전환·프로필 저장은 로봇 이동 명령을 발생시키지 않는다.
+- gate 변화: SOURCE/원격 계약/Chromium 검증. main 착지·push·현장 배포·실물 위치 추종 수용은 별도다.
