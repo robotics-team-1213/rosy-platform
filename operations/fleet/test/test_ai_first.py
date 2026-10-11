@@ -245,6 +245,9 @@ class _Loop:
     def _clients(self):
         return {"rosy_01": self._robot}
 
+    async def _admission_row(self, robot_id):
+        return self.row
+
 
 def test_stalled_line_off_and_pose_lost_identify_are_sent_and_watched():
     from fakes import FakeRobot
@@ -256,6 +259,7 @@ def test_stalled_line_off_and_pose_lost_identify_are_sent_and_watched():
     loop = _Loop(first, {stalled["stuck_id"]: stalled, lost["stuck_id"]: lost}, robot)
     watch = ProblemWatch()
     row = _row()
+    loop.row = row
     row["state"]["line_follow"].update(state="HOLD", linear=0.0, angular=0.0)
     asyncio.run(watch.run(loop, 0.0, [row]))
     assert watch.open == {}
@@ -275,6 +279,7 @@ def test_stalled_on_a_trip_robot_is_wait_only():
     stalled = _vlm("STOP", stuck_id=f"stalled:rosy_01:{int(WALL)}", reason="dark_hold")
     loop = _Loop(_first(), {stalled["stuck_id"]: stalled}, robot)
     watch, row = ProblemWatch(), _row()
+    loop.row = row
     row["state"]["line_follow"].update(state="HOLD", linear=0.0, angular=0.0)
     row["trip"] = True
     asyncio.run(watch.run(loop, 0.0, [row]))
@@ -292,6 +297,35 @@ def test_other_problem_obeys_calibration_law_before_ai():
     loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
     asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
     assert robot.calls == []
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("estop", "estop"), ("calibration", "calibration"),
+    ("trip", "trip"), ("resolved", "problem_changed"), ("offline", "offline"),
+])
+def test_other_problem_rechecks_law_and_condition_before_dispatch(change, reason):
+    from copy import deepcopy
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+    latest = deepcopy(row)
+    if change == "estop":
+        latest["state"]["safety"]["estop"] = True
+    elif change == "calibration":
+        latest["state"]["activity"] = {"kind": "calibration"}
+    elif change == "trip":
+        latest["trip"] = True
+    elif change == "offline":
+        latest["online"] = False
+    else:
+        latest["map_pose"] = {"state": "LOCALIZED"}
+    loop.row = latest
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == reason
 
 
 def test_offline_readback_cannot_close_an_accepted_answer_as_resolved():
