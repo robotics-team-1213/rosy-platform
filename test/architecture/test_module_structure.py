@@ -100,6 +100,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
+              "decision/src/rosy/decision/deliberation",
               "perception/vision/perception",
               "perception/vision/perception/learned",
               "perception/vision/perception/drivable")
@@ -108,6 +109,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "decision/src/rosy/decision/deliberation": (
+        231,
+        "accept: responsibility_review independently confirmed the proposal-only Python subpackage "
+        "boundary; measured 231 lines on 2026-10-12. Contract/supervisor and fixed CLI translation "
+        "share this owner; Fleet journal, admission and writers stay outside. "
+        "docs/plans/2026-10-12-decision-deliberation-boundary.md records callers, installation and "
+        "same-change parent measurement; keep the existing +150 allowance.",
+    ),
     "web/ui.js": (
         811,
         "accept: independently reviewed 2026-10-11: the 11 lines above the existing "
@@ -261,8 +270,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_012,
-        "split: independently re-judged on 2026-10-11 by survey_feature_review at 53012 after "
+        53_093,
+        "split: re-judged on 2026-10-12 with D-655/D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
+        "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
+        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53093; "
+        "package +150 and observe/server/UI obligations remain. Previous verdict: "
+        "independently re-judged on 2026-10-11 by survey_feature_review at 53012 after "
         "merging D-655 survey/recording/UI and D-664 source-scoped work read; incidents remains "
         "a separate 360-line unit. Keep +150, every file ceiling and both existing split obligations. "
         "Work reading adds no execution authority; dispatch remains with owning Task/Mission services. "
