@@ -29,7 +29,9 @@ def data(tmp_path):
                 config_sha256=receipt['config_sha256'], policy_revision=receipt['assessment']['policy_revision'],
                 start=99, end=102)
     result = exporter().snapshot(loop.rule_selections.path, **args)
-    cohort, models = evidence(tmp_path / 'models')
+    model_path = tmp_path / 'models'
+    model_path.mkdir()
+    cohort, models = evidence(model_path)
     cohort['schema'] = 'rosy.incident.operational_cohort/2'
     cohort['rules'] = [dict(strategy_sha256='f'*64, config_sha256=args['config_sha256'],
         owner_id='core', policy_revision=args['policy_revision'],
@@ -91,3 +93,23 @@ def test_export_and_compare_cli_need_no_fleet_import_and_never_overwrite(tmp_pat
     assert result.returncode == 0, result.stderr
     assert json.loads(output.read_bytes()) == exports[-1]
     assert subprocess.run(command, capture_output=True, timeout=15).returncode != 0
+    cohort_path = tmp_path / 'cohort.json'
+    cohort_path.write_text(json.dumps(cohort), encoding='utf-8')
+    model_path = tmp_path / 'model.json'
+    model_path.write_text(json.dumps(exports[0]), encoding='utf-8')
+    report_path = tmp_path / 'comparison.json'
+    command = [sys.executable, '-I', '-S',
+               str(ROOT / 'learning/evaluation/decision/operational_comparison.py'),
+               str(cohort_path), str(model_path), str(output), '--out', str(report_path)]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(report_path.read_bytes()) == compare(cohort, exports)
+    assert subprocess.run(command, capture_output=True, timeout=15).returncode != 0
+
+
+@pytest.mark.parametrize('change', [dict(case_id='x'*513), dict(start=True),
+                                  dict(end=float('nan')), dict(end=90000)])
+def test_export_rejects_unbounded_scope(tmp_path, change):
+    loop, args, _, _ = data(tmp_path)
+    with pytest.raises(ValueError):
+        exporter().snapshot(loop.rule_selections.path, **{**args, **change})
