@@ -2,6 +2,7 @@
 import http.client
 import http.server
 import socket
+from contextlib import closing
 
 LIMIT = 16384
 
@@ -30,7 +31,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = self.rfile.read(size)
             if len(body) != size:
                 raise ValueError('RELAY_REQUEST_REFUSED')
-            with UnixConnection('localhost', timeout=30) as upstream:
+            with closing(UnixConnection('localhost', timeout=30)) as upstream:
                 upstream.request('POST', '/v1/chat/completions', body, {'Content-Type': 'application/json'})
                 response = upstream.getresponse()
                 raw = response.read(LIMIT + 1)

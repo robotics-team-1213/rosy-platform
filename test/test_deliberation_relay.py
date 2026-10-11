@@ -1,6 +1,7 @@
 import http.client
 import http.server
 import threading
+from contextlib import closing
 
 import pytest
 
@@ -13,9 +14,10 @@ def test_relay_rejects_route_and_size_without_socket(path, body, monkeypatch):
         raise AssertionError('gateway must not be contacted')
     monkeypatch.setattr(relay, 'UnixConnection', forbidden)
     with http.server.HTTPServer(('127.0.0.1', 0), relay.Handler) as server:
-        worker = threading.Thread(target=server.handle_request)
+        server.timeout = 2
+        worker = threading.Thread(target=server.handle_request, daemon=True)
         worker.start()
-        with http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3) as conn:
+        with closing(http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)) as conn:
             conn.request('POST', path, body)
             response = conn.getresponse()
             response.read()
@@ -35,13 +37,15 @@ def test_relay_forwards_body_only_to_fixed_unix_route(monkeypatch):
             assert host == 'localhost' and timeout == 30
         def __enter__(self): return self
         def __exit__(self, *args): pass
+        def close(self): pass
         def request(self, *args): seen.append(args)
         def getresponse(self): return Result()
     monkeypatch.setattr(relay, 'UnixConnection', Gateway)
     with http.server.HTTPServer(('127.0.0.1', 0), relay.Handler) as server:
-        worker = threading.Thread(target=server.handle_request)
+        server.timeout = 2
+        worker = threading.Thread(target=server.handle_request, daemon=True)
         worker.start()
-        with http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3) as conn:
+        with closing(http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)) as conn:
             conn.request('POST', '/v1/chat/completions', b'{}', {'Authorization': 'untrusted'})
             response = conn.getresponse()
             assert response.read() == b'data: [DONE]\n\n' and response.status == 200
