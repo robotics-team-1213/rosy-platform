@@ -27,6 +27,9 @@
 
 ### v1.206 지도 없는 조사 좌표와 도로 시설 (D-655)
 
+- 일반 teach의 시작·샘플·확정과 pose/마커 장소 추가는 활성 지도와 대상 초안의 map_id·전체 survey 기준을 비교한다. 다른 기준은 409 `TEACH_MAP_CHANGED`로 거절한다. 기록 시작의 활성 버전이 바뀌면 기록은 `map_changed`로 종료되고 이전 기록 확정은 거절된다. 기록 종료는 로봇 정지 명령이 아니다. 일반 recording/pending도 시작 시 고정한 `map_id`와, 조사 기준이 있으면 `survey_reference`를 반환하며 화면은 일치하는 좌표계에서만 선을 표시한다.
+- 거절된 odom(시각 역행·동일 시각의 다른 위치 포함)은 조사 기록의 연속성 토큰을 변경한다. 운행 pose의 기존 앵커와 odom epoch는 이를 이유로 초기화하지 않는다. 기존 정상 teach로 같은 조사 지도에 도로를 확정할 때도 odometry observed 근거를 추가하고 조사 검토를 무효화한다. pose/마커 장소 편집도 조사 검토를 무효화하며 마커로 바뀐 간선은 operator observed로 재검토한다.
+- 장소·간선·시설의 ID 유일성은 각 분류 안에서 적용한다. 기존 프로필의 분류 간 같은 ID를 허용하며 편집·삭제는 분류와 ID를 함께 식별한다. 기존 `schemas.HostStatusEvidence` 이름·본문은 유지하고 구현 소유만 기존 `protocol.evidence`로 이동한다.
 - 기존 `rosy.site_map/1`에 선택 `survey`와 `facilities`, edge의 선택 `evidence`를 추가한다. 기계 계약은 `core_common.protocol.site_survey`이며 `core_common.protocol.schemas`에서 재노출한다. 없는 필드는 기존 지도 body와 해시에 추가하지 않는다.
 - `survey`: `{revision, origin:[x,y], heading_rad, scale_source:odometry|measured, measured_distance_m?:number|null, description, reviewed:false, review_note:string}`. 좌표는 m, 방향은 rad이며 유한 값이다. 원점 좌표는 ±1000 m, 방향은 ±2π, revision은 영문·숫자·밑줄·점·하이픈 1–64자다. description은 비공백 1–1000자다. 실측 축척에는 양의 `measured_distance_m`(≤2000), reviewed=true에는 비공백 review_note(≤1000)가 필요하다. odometry 축척은 측량 정확도나 운행 위치 승인 증거가 아니다.
 - edge `evidence`: `{source:camera|odometry|operator,status:observed|inferred|reviewed,reference_revision,note}`. note 기본 빈 문자열, reviewed에는 비공백 note(≤1000) 필수. 조사 기준이 있으면 reference_revision이 일치해야 한다.
