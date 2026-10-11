@@ -248,3 +248,33 @@ def test_config_requires_private_endpoint_and_durable_journal(tmp_path, monkeypa
     assert 'private_token' not in repr(config)
     with pytest.raises(ValueError, match='durable Fleet journal'):
         create_app(_console(FakeRobot('pinky')), notification_config=config)
+
+
+def test_expiry_is_rechecked_after_dequeue(tmp_path, monkeypatch):
+    now, log, board, config = setup(tmp_path)
+    observe(board, 100.0)
+    original = log.notifications.claim_due
+    def advance(*args):
+        result = original(*args)
+        if result is not None:
+            now[0] = 701.0
+            observe(board, now[0])
+        return result
+    monkeypatch.setattr(log.notifications, 'claim_due', advance)
+    async def deliver():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: pytest.fail('expired notification sent'))) as http:
+            await NotificationWorker(log.notifications, config, http, board=board, clock=lambda: now[0]).run_once()
+    asyncio.run(deliver())
+    assert log.notifications.rows()[0]['state'] == 'EXPIRED'
+
+
+def test_closure_outbox_failure_rolls_back_episode_close(tmp_path):
+    now, log, board, config = setup(tmp_path)
+    observe(board, 100.0)
+    with closing(log._connect()) as connection, connection:
+        connection.execute("CREATE TRIGGER reject_closed BEFORE INSERT ON fleet_notification_outbox WHEN NEW.kind='CLOSED' BEGIN SELECT RAISE(ABORT, 'disk unavailable'); END")
+    with pytest.raises(sqlite3.IntegrityError):
+        log.close_episode('pinky', 'case-1', closed_at='1970-01-01T00:01:40+00:00',
+                          close_reason='cleared', held_s_max=None, attempts_max=None)
+    assert log.episodes()[0]['closed_at'] is None
+    assert log.notifications.rows()[0]['state'] == 'PENDING'
