@@ -226,6 +226,9 @@ class NotificationWorker:
             elif channel.kind == 'telegram':
                 payload = {'chat_id': channel.chat_id, 'text': text, 'link_preview_options': {'is_disabled': True}}
             state, code, provider_id, retry_after = 'UNKNOWN', 'PROVIDER_OUTCOME_UNKNOWN', None, 60
+            if self.clock() >= row['expires_at']:
+                await asyncio.to_thread(self.outbox.finish, row, 'EXPIRED', 'DELIVERY_EXPIRED_BEFORE_HTTP', now=self.clock())
+                continue
             # Event-loop state is checked after dequeue; no await separates this check and HTTP entry.
             if row['kind'] == 'OPEN':
                 receipt = self.board.judgment_view(row['robot_id'])
