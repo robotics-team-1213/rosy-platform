@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import shlex
@@ -127,6 +128,37 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.model_feedback_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
+    if delivery == 'wheel':
+        native = tmp_path / 'native/lib/python3.12/site-packages'
+        excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
+        dependencies = [str(path) for path in wheels.glob('*.whl')
+                        if not path.name.startswith(excluded)]
+        run(['-m', 'pip', 'install', '--no-deps', '--no-index', '--target', str(native),
+             *dependencies], tmp_path)
+        script = ROOT / 'deploy/robot/pinky_pro/image/install-motion-contracts.sh'
+        environment = {**os.environ, 'TMPDIR': str(tmp_path)}
+        command = ['bash', str(script), str(staging), str(tmp_path / 'native')]
+        result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=180)
+        assert result.returncode == 0, result.stdout + result.stderr
+        native_probe = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+from fleet.server.mission_service import MissionService
+from fleet.server.mission_progress import MissionProgressService
+from rosy.execution.site.goal_evidence import GoalPredicate
+from rosy.execution.site.workflow import project_progress
+from rosy.decision.model_tool_contract import ModelToolCall
+from rosy.contracts.motion import BaseTwist
+assert BaseTwist(0.0, 0.0).linear_mps == 0
+'''
+        run(['-I', '-c', native_probe, str(native)], tmp_path)
+        before = {path.relative_to(native).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in native.rglob('*') if path.is_file() and '__pycache__' not in path.parts}
+        repeated = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=180)
+        assert repeated.returncode != 0
+        after = {path.relative_to(native).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                 for path in native.rglob('*') if path.is_file() and '__pycache__' not in path.parts}
+        assert before == after
 
 
 def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
