@@ -75,3 +75,75 @@ def test_untrusted_prepare_fields_never_create_proposal(tmp_path, change):
     assert response.status_code == 422
     with closing(tasks.store._connect()) as conn:
         assert conn.execute("SELECT COUNT(*) FROM fleet_proposals").fetchone()[0] == 0
+
+
+def prepare_mission(client):
+    receipt = receive(client)
+    path = f"/api/fleet/channel-requests/{receipt['request_id']}"
+    body = {"kind": "mission", "expected_hash": receipt["content_hash"], "expected_revision": 0,
+            "reason": "trusted evidence", "workcell_id": "omx_01", "instance_id": "omx_01_control",
+            "candidate": _candidate()}
+    return receipt, path, body
+
+
+def test_changed_review_during_resolution_leaves_only_unadmitted_proposal(tmp_path, monkeypatch):
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    receipt, path, body = prepare_mission(client)
+    owners = client.app.state.channel_missions
+    resolve = owners.resolve
+
+    def resolve_then_hold(*args, **kwargs):
+        result = resolve(*args, **kwargs)
+        owners.workflow.review(receipt['request_id'], 'operator-1', expected_hash=receipt['content_hash'],
+                               expected_revision=0, state='HOLD', reason='another tab held this request')
+        return result
+    monkeypatch.setattr(owners, 'resolve', resolve_then_hold)
+    response = _post(client, path + '/prepare', 'operator-secret', body)
+    assert response.status_code == 409
+    assert owners.workflow.read(receipt['request_id'], 'operator-1')['state'] == 'HOLD'
+    with closing(tasks.store._connect()) as conn:
+        assert conn.execute("SELECT status FROM fleet_missions").fetchone()[0] == 'PROPOSED'
+    assert tasks.store.resource_claims(resource_kind='workcell', resource_id='omx_01') == []
+
+
+def test_revoked_mapping_blocks_existing_admission(tmp_path):
+    client, tasks, _ = _client(tmp_path, channel_config=config())
+    receipt, path, body = prepare_mission(client)
+    assert _post(client, path + '/prepare', 'operator-secret', body).status_code == 200
+    client.app.state.channel_requests.accounts['operator-1'] = 'viewer'
+    response = _post(client, path + '/admit', 'operator-secret', {
+        'expected_hash': receipt['content_hash'], 'expected_revision': 1, 'expected_generation': 0})
+    assert response.status_code == 403
+    assert tasks.store.resource_claims(resource_kind='workcell', resource_id='omx_01') == []
+
+
+@pytest.mark.parametrize('kind', ['mission', 'cell_job'])
+def test_existing_work_result_replies_distinguish_action_and_goal(tmp_path, kind):
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    if kind == 'mission':
+        client, tasks, _ = _client(tmp_path, channel_config=config())
+        candidate = {'candidate': _candidate()}
+    else:
+        client, tasks, _ = _setup(tmp_path, channel_config=config(), cell_app_service_id='cell-service')
+        candidate = _refs(client)
+    journal = client.app.state.channel_requests
+    journal.reply_outbox = outbox = ChannelReplyOutbox(journal)
+    receipt, path, body = prepare_mission(client)
+    body.pop('candidate')
+    response = _post(client, path + '/prepare', 'operator-secret', {**body, 'kind': kind, **candidate})
+    assert response.status_code == 200, response.text
+    table = 'fleet_missions' if kind == 'mission' else 'fleet_cell_jobs'
+    for status in ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD'):
+        with closing(tasks.store._connect()) as conn, conn:
+            conn.execute(f'UPDATE {table} SET status=? WHERE mission_id=?', (status, response.json()['work_id']))
+        if status == 'HOLD':
+            journal.accounts['operator-1'] = 'viewer'
+        outbox.observe_results()
+        outbox.observe_results()
+    with closing(tasks.store._connect()) as conn:
+        rows = conn.execute("SELECT kind, state, content FROM fleet_channel_reply_outbox WHERE kind LIKE ?",
+                            (kind.upper() + ':%',)).fetchall()
+    assert [(row[0], row[1]) for row in rows] == [
+        (kind.upper() + ':ACTION_SUCCEEDED', 'PENDING'),
+        (kind.upper() + ':GOAL_CONFIRMED', 'PENDING'), (kind.upper() + ':HOLD', 'SUPERSEDED')]
+    assert 'ACTION_SUCCEEDED' in rows[0][2] and 'GOAL_CONFIRMED' in rows[1][2] and rows[2][2] == ''
