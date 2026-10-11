@@ -23,7 +23,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
-from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
 from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
@@ -45,16 +45,6 @@ from core_common.protocol.site_survey import SurveyReference, RoadEvidence, Faci
 # Import that response from its module to avoid a schema import cycle.
 
 PROTOCOL_VERSION = "1.0"
-
-
-class HostStatusEvidence(BaseModel):
-    """CORE judgment of one Host Agent network or release status sample."""
-
-    evidence: EvidenceState = EvidenceState.UNAVAILABLE
-    observed_at: str | None = None
-    age_s: float | None = None
-    stale_after_s: float = 15.0
-    reason: str = ""
 
 
 def utc_now_iso() -> str:

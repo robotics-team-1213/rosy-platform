@@ -282,6 +282,8 @@ class TeachService:
         return active["map"] if active else {"schema": "rosy.site_map/1", "places": [], "edges": []}
 
     def _save(self, body: dict, expected_revision: Optional[str], principal_id: str) -> dict:
+        if body.get("survey"):
+            body["survey"] = {**body["survey"], "reviewed": False, "review_note": ""}
         try:
             site_map = SiteMap.model_validate(body)
         except ValidationError as exc:
@@ -320,10 +322,10 @@ class TeachService:
                 width_m=width_m if width_m is not None else IMPORT_WIDTH_M)
         except teach.TeachRefused as exc:
             raise TeachError(422, exc.code, exc.detail) from exc
-        if session.mode == "survey":
+        if body.get("survey"):
             edge = next(edge for edge in body["edges"] if edge["id"] == edge_id)
             edge["evidence"] = {"source": "odometry", "status": "observed",
-                                "reference_revision": session.reference["revision"], "note": ""}
+                                "reference_revision": body["survey"]["revision"], "note": ""}
             body["survey"] = {**body["survey"], "reviewed": False, "review_note": ""}
         draft = self._save(body, expected_revision, principal_id)  # SiteMapError passes through
         del self._pending[teach_id]
@@ -383,6 +385,9 @@ class TeachService:
                     edge["polyline"] = [list(p) for p in edge["polyline"]]
                     for index in (i for i, hit in ends.items() if hit):
                         edge["polyline"][index] = [place["x"], place["y"]]
+                    if body.get("survey"):
+                        edge["evidence"] = {"source": "operator", "status": "observed",
+                            "reference_revision": body["survey"]["revision"], "note": ""}
         draft = self._save(body, expected_revision, principal_id)
         self._store.record_event("teach_place", principal_id, {
             "marker_id": marker_id, "source_id": row["source_id"], "place_id": place_id,

@@ -78,7 +78,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     assert saved['edges'][0]['evidence']['status'] == 'observed'
     assert saved['facilities'][0]['approaches'] == [{'edge_id': 'ab', 'forward': True, 'stop_s_m': .8}]
     assert store.active_view() is None
-    page.locator('#element-existing').select_option('sig')
+    page.locator('#element-existing').select_option('facilities:sig')
     page.locator('#element-load').click()
     page.locator('#element-name').fill('Reviewed signal name')
     page.locator('#element-save').click()
