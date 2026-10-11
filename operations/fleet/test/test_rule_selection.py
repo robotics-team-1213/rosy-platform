@@ -93,3 +93,55 @@ def test_rule_store_validates_hashes_kinds_and_keeps_retention(tmp_path):
         with pytest.raises(ValueError): store.append_batch([{**receipt, **changes}], now=101)
     with pytest.raises(ValueError): store.append_batch([receipt, receipt], now=101)
     assert len(store.read()) == 1
+
+
+def test_disabled_ai_first_is_not_mixed_and_default_factory_uses_actual_selection(tmp_path):
+    from fleet.stuck.ai_first import AiFirst
+    loop, _ = make_loop(tmp_path, autonomous=True)
+    loop._resolver.ai_first = AiFirst()
+    asyncio.run(loop.run_once())
+    assert loop.rule_selections.read()[0]['receipt']['strategy'] == 'RULE_ONLY'
+    assert loop.rule_baseline(loop._board.intervention_assessment('pinky')).choice == 'reobserve'
+    from test_incident_runtime import app, settings
+    config, _ = settings()
+    application = app(tmp_path / 'runtime', config)
+    actual = application.state.stuck_resolver
+    assert actual.incident_worker.baseline == actual.rule_baseline
+    custom = lambda _: None
+    application = app(tmp_path / 'custom', {**config, 'baseline': custom})
+    assert application.state.stuck_resolver.incident_worker.baseline is custom
+
+
+def test_claim_during_journal_await_preserves_human_ownership(tmp_path):
+    async def run():
+        loop, _ = make_loop(tmp_path, autonomous=True)
+        original, running = loop.rule_selections.append_batch, asyncio.get_running_loop()
+        def append(receipts, **kwargs):
+            running.call_soon_threadsafe(loop.claim, 'pinky', 'case-1')
+            return original(receipts, **kwargs)
+        loop.rule_selections.append_batch = append
+        await loop.run_once()
+        assert loop._board.resolver_note('pinky', 'case-1')['tier'] == 'human'
+        assert loop.rule_baseline(loop._board.intervention_assessment('pinky')) is None
+    asyncio.run(run())
+
+
+def test_rule_contract_and_storage_reject_malformed_or_impossible_receipts(tmp_path):
+    from copy import deepcopy
+    from rosy.contracts.learning.incident_rule import validate_rule
+    from fleet.observe.rules import RuleSelectionStore
+    loop, _ = make_loop(tmp_path, autonomous=True)
+    asyncio.run(loop.run_once())
+    receipt = loop.rule_selections.read()[0]['receipt']
+    for path, value in [('schema', 'other'), ('strategy', []), ('source_sha256', 'g'*64),
+                         ('assessment.evaluated_at', float('nan')), ('assessment.request.extra', True),
+                         ('selection.kind', 'UNKNOWN'), ('selection.yield_m', 1),
+                         ('selection.reason', '-----BEGIN PRIVATE KEY-----')]:
+        changed = deepcopy(receipt)
+        target, *_, = [changed]
+        keys = path.split('.')
+        for key in keys[:-1]: target = target[key]
+        target[keys[-1]] = value
+        with pytest.raises(ValueError): validate_rule(changed)
+    for maximum in (True, 0, -1, 100_001):
+        with pytest.raises(ValueError): RuleSelectionStore(tmp_path / 'invalid.db', max_rows=maximum)
