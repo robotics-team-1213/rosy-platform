@@ -294,7 +294,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
         expect(page.locator(f"#{control}")).to_be_enabled()
 
 
-@pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
+@pytest.mark.parametrize("denial,notice", [(401, "로그인하거나 고급 접속을 확인하세요"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, width, height):
     from playwright.sync_api import expect
