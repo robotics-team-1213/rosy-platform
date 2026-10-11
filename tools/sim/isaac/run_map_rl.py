@@ -61,6 +61,11 @@ def camera_sample_due(frame, episode_start_frame):
     return (frame - episode_start_frame) % 24 == 0
 
 
+def camera_snapshot_due(camera_frames, last, captured):
+    key = (last.get('reason'), last.get('strategy'))
+    return camera_frames == 0 or (bool(key[0]) and key not in captured and len(captured) < 8)
+
+
 def camera_route_guide(task, pose, result, stamp):
     ahead = task.index
     while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
@@ -400,6 +405,7 @@ def main():
                 raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
             learned_steps = 0
             camera_frames = camera_visible_frames = 0
+            captured_failures = set()
             if camera is not None and (phase == 'eval' or (perception is not None and phase == 'baseline')):
                 from native_recording import NativeRecorder
                 # Initialize the native render product before accepting episode frames.
@@ -440,9 +446,14 @@ def main():
                                     lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
                                         stamp=float(image['rendering_time']), source_now=world.current_time,
                                         pose=pose[:3], guide=guide)
-                                if camera_frames == 0:
+                                if camera_snapshot_due(camera_frames, lane.last, captured_failures):
                                     import cv2
-                                    cv2.imwrite(str(output / f'front-camera-{epoch}-{phase}-{seed}.png'), rgba[:, :, 2::-1])
+                                    name = (f'front-camera-{epoch}-{phase}-{seed}.png' if camera_frames == 0 else
+                                            f'front-camera-failure-{epoch}-{phase}-{seed}-{camera_frames}.png')
+                                    if not cv2.imwrite(str(output / name), rgba[:, :, 2::-1]):
+                                        raise RuntimeError('native camera diagnostic frame could not be saved')
+                                    lane.last['diagnostic_frame'] = name
+                                    captured_failures.add((lane.last.get('reason'), lane.last.get('strategy')))
                             camera_frames += 1
                             camera_visible_frames += int(lane.observation is not None)
                         if lane.stamp is not None and world.current_time - lane.stamp > lane.manager.config.stale_after_s:
