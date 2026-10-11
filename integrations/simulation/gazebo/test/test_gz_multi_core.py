@@ -368,7 +368,7 @@ def test_validation_domain_is_delivered_before_all_participants(tmp_path):
     from launch.actions import SetEnvironmentVariable, IncludeLaunchDescription
     spec = {"run_id": "d426-test", "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
-            "gz_partition": "d426-test", "ros_domain_id": 150,
+            "gz_partition": "d426-test", "ros_domain_id": 80,
             "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
     (tmp_path / "core_rosy_01.yaml").write_text(yaml.safe_dump({
         "robot": {"id": "rosy_01"}, "network": {"api_host": "127.0.0.1", "api_port": 31001}}),
@@ -383,7 +383,7 @@ def test_validation_domain_is_delivered_before_all_participants(tmp_path):
             if _text(action.name, context) == "ROS_DOMAIN_ID":
                 applied = True
         elif isinstance(action, (IncludeLaunchDescription, Node, TimerAction)):
-            assert applied and context.environment["ROS_DOMAIN_ID"] == "150"
+            assert applied and context.environment["ROS_DOMAIN_ID"] == "80"
     assert applied and _set_env(actions, context)["GZ_PARTITION"] == "d426-test"
     legacy, context = _setup(_module(), robots="1", core="false")
     assert "ROS_DOMAIN_ID" not in _set_env(legacy, context)
