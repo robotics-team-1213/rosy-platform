@@ -5,7 +5,7 @@
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
 } from '/console/assets/site-map-model.js';
-import {teachStartBody, surveyTeachMatches} from '/console/assets/site-map-edit.js';
+import {teachStartBody, surveyTeachMatches, teachFrameMatches} from '/console/assets/site-map-edit.js';
 
 const POLL_MS = 1000;
 
@@ -167,7 +167,7 @@ export function createTeachPanel(host) {
     /** Lines in map metres to draw over the map: the live recording, then the newest stopped one. */
     lines() {
       return [view?.recording, newestPending(view)]
-        .filter(record => record && (record.mode !== 'survey' || surveyTeachMatches(record, host.map())))
+        .filter(record => teachFrameMatches(record, host.map()))
         .map(record => Array.isArray(record.points) ? record.points : record.polyline)
         .filter(points => points && points.length > 1);
     },

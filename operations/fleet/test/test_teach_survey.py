@@ -256,14 +256,17 @@ def test_operational_teach_preserves_active_survey_and_invalidates_draft_review(
     store.import_if_empty(SiteMap.model_validate(body), source='test')
     active = store.active_view()
     poses = Poses()
+    poses.at(0.3, 0)
     service = TeachService(poses=poses, site_maps=store, roster=lambda: ['r1'],
         place_markers=lambda _: {'map_id': 'site', 'source_id': 'floor', 'x': 0.1, 'y': 0, 'yaw': 0})
     if action == 'confirm':
         async def run():
             await service.start('r1', 'bob')
-            await _drive(service, poses, [(0.2, 0)])
+            await _drive(service, poses, [(0.5, 0)])
             return await service.stop('bob')
         result = asyncio.run(run())
+        assert result['map_id'] == 'site'
+        assert result['survey_reference']['origin'] == body['survey']['origin']
         saved = confirm(service, result, None)['draft']['map']
         assert saved['edges'][-1]['evidence']['source'] == 'odometry'
         assert saved['edges'][-1]['evidence']['status'] == 'observed'

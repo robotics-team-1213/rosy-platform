@@ -176,7 +176,13 @@ export function teachStartBody({robotId, mode, draft, confirmed}) {
 }
 
 export function surveyTeachMatches(record, map) {
-  return Boolean(record?.survey_reference && record.map_id === map?.map_id && map?.survey
+  return Boolean(record?.survey_reference && record.map_id === (map?.map_id || 'site') && map?.survey
     && Object.entries(record.survey_reference).every(([key, value]) => JSON.stringify(map.survey[key]) === JSON.stringify(value)));
+}
+
+export function teachFrameMatches(record, map) {
+  if (!record || !map || record.map_id !== (map.map_id || 'site')) return false;
+  if (record.mode === 'survey' || record.survey_reference) return surveyTeachMatches(record, map);
+  return !map.survey;
 }
 

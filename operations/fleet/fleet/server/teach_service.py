@@ -248,7 +248,10 @@ class TeachService:
         session.stopped_at = self._clock()
         line = teach.simplify(session.points)
         detail = {"teach_id": session.teach_id, "robot_id": session.robot_id,
-                  "points": len(session.points), "kept": len(line), "reason": reason}
+                  "points": len(session.points), "kept": len(line), "reason": reason,
+                  "map_id": session.map_id}
+        if session.mode == "map" and session.map_frame[1] is not None:
+            detail["survey_reference"] = session.map_frame[1]
         if session.mode == "survey":
             detail.update(mode="survey", map_id=session.map_id, reference_revision=session.reference["revision"],
                           survey_reference=session.reference)
@@ -402,6 +405,8 @@ class TeachService:
             if k not in {"reference", "odom_anchor", "odom_epoch", "map_frame"}}
         if recording is not None:
             recording["points"] = [list(point) for point in live.points]
+            if live.mode == "map" and live.map_frame[1] is not None:
+                recording["survey_reference"] = live.map_frame[1]
         if recording is not None and live.reference is not None:
             recording["reference_revision"] = live.reference["revision"]
             recording["survey_reference"] = live.reference
