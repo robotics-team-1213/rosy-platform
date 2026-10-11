@@ -22,6 +22,15 @@ def localizer(pose=START, particles=300):
                           particles=particles, seed=7).initialise(pose)
 
 
+def test_installed_bundle_path_is_supplied_by_the_caller(monkeypatch, tmp_path):
+    import control.sensing.perception.paint_localizer as paint
+
+    bundle = tmp_path / "share/control/map/map_v2_fleet"
+    monkeypatch.setattr(paint, "_load_stl_scene", lambda path: path)
+    monkeypatch.setattr(PaintMap, "from_scene", classmethod(lambda cls, scene: scene))
+    assert PaintMap.from_bundle(bundle) == bundle
+
+
 def test_a_still_robot_keeps_its_pose():
     loc = localizer()
     for k in range(5):

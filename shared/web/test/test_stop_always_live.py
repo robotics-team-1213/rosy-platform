@@ -94,7 +94,7 @@ WEB_SCRIPT_ROOTS = (
     REPO / "middleware" / "ui" / "robot",
     REPO / "shared" / "web",
     REPO / "middleware" / "ui" / "pilot",
-    REPO / "operations" / "fleet" / "fleet" / "server" / "web",
+    REPO / "operations" / "ui" / "console",
     REPO / "operations" / "apps" / "games" / "games" / "web",
 )
 

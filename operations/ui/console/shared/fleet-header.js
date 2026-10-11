@@ -7,6 +7,34 @@ export const SESSION_REASON = "접속이 필요합니다";
 const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
 const $ = id => document.getElementById(id);
 
+// Every Fleet document has one inbox entry; only the console owns its local unread state.
+function inboxButton() {
+  if (!document.querySelector(".fleet-link-status")) {
+    const status = document.createElement("div");
+    status.className = "fleet-link-status";
+    $("online-pill").before(status);
+    status.append($("online-pill"), $("development-badge"));
+  }
+  if ($("fleet-inbox")) return $("fleet-inbox");
+  const inbox = document.createElement("ui-button");
+  inbox.id = "fleet-inbox";
+  inbox.setAttribute("kind", "quiet");
+  inbox.setAttribute("type", "button");
+  inbox.textContent = "알림";
+  $("estop").before(inbox);
+  inbox.addEventListener("click", () => {
+    const request = new CustomEvent("rosy:inbox", {cancelable: true});
+    if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
+  });
+  return inbox;
+}
+export function showInboxCount(count) {
+  const inbox = inboxButton();
+  inbox.textContent = count ? `알림 ${count}` : "알림";
+  inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
+  inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+}
+
 export const roleLabel = role => ROLE[role] || "권한 없음";
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
@@ -32,6 +60,7 @@ export function setTopbarOpen(open) {
   $("topbar-extra").dataset.open = String(open);
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
+  inboxButton();
   listen($("topbar-more"), "click", () => {
     openedForLock = false;
     setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");

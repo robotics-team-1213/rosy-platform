@@ -18,7 +18,7 @@ import surface_registry as registry
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
 GAMES = SRC.parent / "operations" / "apps" / "games" / "games" / "web"
 
 CANVAS_FILES = [

@@ -27,11 +27,13 @@ def test_modern_importer_preserves_wheel_configuration(tmp_path):
                           URDFImporter=lambda config: SimpleNamespace(import_urdf=lambda: str(destination)))
     assert helper().import_model(api, None, tmp_path / "robot.urdf", tmp_path, "Wheeled") == str(destination)
     assert options["fix_base"] is False
+    assert options["merge_fixed_joints"] is True
     assert options["joint_target_type"] == {".*wheel_joint": "velocity"}
     assert options["override_joint_stiffness"] == {".*wheel_joint": 0.0}
 
 
-def test_legacy_import_writes_explicit_usd_and_checks_result(tmp_path):
+@pytest.mark.parametrize("robot_type", ["Wheeled", "Manipulator"])
+def test_legacy_import_writes_explicit_usd_and_checks_result(tmp_path, robot_type):
     config = SimpleNamespace(merge_fixed_joints=True, fix_base=False, collision_from_visuals=True,
                              import_inertia_tensor=False, make_default_prim=False)
     calls = []
@@ -43,10 +45,10 @@ def test_legacy_import_writes_explicit_usd_and_checks_result(tmp_path):
         Path(kwargs["dest_path"]).write_text("USD")
         return True, "/robot"
 
-    result = helper().import_model(SimpleNamespace(), execute, tmp_path / "robot.urdf", tmp_path, "Manipulator")
+    result = helper().import_model(SimpleNamespace(), execute, tmp_path / "robot.urdf", tmp_path, robot_type)
     assert Path(result).is_file()
-    assert config.fix_base is True
-    assert config.merge_fixed_joints is False
+    assert config.fix_base is (robot_type == "Manipulator")
+    assert config.merge_fixed_joints is (robot_type == "Wheeled")
     assert config.import_inertia_tensor is True
     assert config.collision_from_visuals is False
     assert config.make_default_prim is True
