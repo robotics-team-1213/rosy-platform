@@ -42,3 +42,6 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 D-680 reserved by another active session; ADR not yet landed in this branch
 D-683 reserved by another active session; ADR not yet landed in this branch
+D-685 reserved by another active session (Fleet autonomous observation and checked recovery); ADR not yet landed in this branch
+D-686 reserved by another active session (Fleet team bootstrap accounts and mandatory first-login password change); ADR not yet landed in this branch
+D-687 reserved by another active session (Discord existing Mission and Cell Job owner adapters); ADR not yet landed in this branch

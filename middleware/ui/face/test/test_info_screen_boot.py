@@ -44,6 +44,16 @@ def _has_ink(image, box):
     ("CORE_READY", "READY", _FG),
     ("FAILED:rosy-core", "FAILED", _CRIT),
 ])
+def test_booting_shows_rosy_in_the_header():
+    image = render_boot({"stage": "BOOTING", "device_name": "rosy-pinky-e4us"}, frame=0)
+    header = _colors(image, (0, 0, 140, 30))
+    assert any(red > 180 and blue > 140 and red > green for red, green, blue in header)
+    dim = render_boot({"stage": "BOOTING"}, frame=1)
+    dim_header = _colors(dim, (0, 0, 140, 30))
+    assert any(red > 180 and blue > 140 and red > green for red, green, blue in dim_header) is False
+    assert not _has_ink(image, (0, 160, 320, 240))
+
+
 def test_every_stage_has_its_title_and_colour(stage, title, color):
     rows = _rows({**READY, "stage": stage})
 

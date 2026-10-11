@@ -669,6 +669,7 @@
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
