@@ -1,6 +1,6 @@
 # 실제 호스트 수용과 로컬 Qwen 스모크
 
-- Source validator: `742a72bed96aae1cc995297366036ef9e56b6924`.
+- Source validator commit SHA `742a72bed96aae1cc995297366036ef9e56b6924`.
 - 사용자 SSH 재실행 결과: `PASS_HOST_OFFLINE_ONLY`, `OFFLINE_HOST_ONLY`, 13개 검사 모두 true. 취소·시간 초과 자손 종료, namespace, cgroup, 빈 환경과 고정 경로, 전용 계정, read-only runtime을 확인했다.
 - 후속 readback: 설치된 preflight SHA256 `6649d2f85bbae99432aba2325893250de9963aed8927dc1743d7df09445d56ac`, 전용 UID 997 / GID 984, 단독 그룹. root 실행 수용 자체는 사용자 터미널 출력 증거다.
 
