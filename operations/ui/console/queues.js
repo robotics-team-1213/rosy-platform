@@ -52,7 +52,7 @@ export function openDecisionKey(keys, choice) {
 export function disclosure(className, expanded, onClick) {
   const node = document.createElement("button");
   node.type = "button";
-  node.className = className;
+  node.className = `${className} ui-disclosure-row`;
   node.setAttribute("aria-expanded", String(expanded));
   node.addEventListener("click", onClick);
   return node;
@@ -246,7 +246,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       li.dataset.group = "1";
       const details = document.createElement("details");
       details.className = "queue-group";
-      details.append(document.createElement("summary"), nodeWithText("p", "hint", ""));
+      const summary = document.createElement("summary");
+      summary.className = "ui-disclosure-row";
+      details.append(summary, nodeWithText("p", "hint", ""));
       li.append(details);
     }
     const summary = li.querySelector("summary"), all = li.querySelector("p");

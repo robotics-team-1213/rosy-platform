@@ -246,7 +246,7 @@ h1 {
 #halt-status[data-state="pending"],
 #halt-status[data-state="sent"] { color: var(--pitch-ink); }
 
-#halt-status[data-state="error"] { color: var(--lost); }
+#halt-status[data-state="error"] { color: var(--status-crit); }
 
 #halt { min-width: 96px; }
 
