@@ -1,6 +1,6 @@
 # D-657 원장 모델 어댑터와 순수 실행 규칙 분리 검증
 
-시작 `063676cbcb4427234a1eb9f666bba077caea5b30`, branch `refactor/judgment-adapter-extraction`. [D-657](../adr/D-657-judgment-adapter-and-pure-execution-extraction.md)은 D-648 단계 2와 단계 3 첫 계산 단위만 수용한다. 공유 main의 후속 D-656 책임·권한 계약과도 같은 경계다. 다른 workflow 상태 전이/복구 추출과 단계 4는 미구현 후속이다.
+시작 `063676cbcb`, branch `refactor/judgment-adapter-extraction`. [D-657](../adr/D-657-judgment-adapter-and-pure-execution-extraction.md)은 D-648 단계 2와 단계 3 첫 계산 단위만 수용한다. 공유 main의 후속 D-656 책임·권한 계약과도 같은 경계다. 다른 workflow 상태 전이/복구 추출과 단계 4는 미구현 후속이다.
 
 ## 소스와 소비자
 
