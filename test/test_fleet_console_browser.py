@@ -410,7 +410,7 @@ def test_empty_fleet_renders_zero_online_and_no_ghosts(console_url):
         browser, page, errors = _open_console(p, api)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
-            "() => document.getElementById('online-pill')?.textContent === '0/0 연결'"
+            "() => document.getElementById('online-pill')?.textContent === '0/0'"
         )
         assert "rosy" not in page.inner_text("#roster")
         assert "등록된 로봇이 없습니다" in page.inner_text("#roster")
@@ -509,7 +509,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
         for state in ("loading", "recovered"):
             if state == "recovered":
                 page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
-                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
+                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3'")
                 assert "rosy_03" in page.inner_text("#roster")
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
@@ -919,7 +919,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
-            "() => document.getElementById('online-pill')?.textContent === '2/3 연결'"
+            "() => document.getElementById('online-pill')?.textContent === '2/3'"
         )
         roster = page.inner_text("#roster")
         assert "닿지 않음: CONNECT_ERROR" in roster

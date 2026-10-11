@@ -81,7 +81,6 @@
 
 ## 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
 
-- One upper-right theme button consumes RosyTheme choices/get/set and is usable without operator rights.
-- One status entry opens connection, role and messages; summary open does not mark messages read. Development warning and E-stop remain outside the fold.
-- Shared header owns click toggling; connection view retains auth guidance and focus. Escape closes and restores entry focus. Four documents share identical markup and existing tokens/components.
-- Remote static, token, Node wrapper and architecture regressions passed (103 collected; NEW 0). Independent source review found no new core regression. Opt-in Chromium and integration evidence follow in deployment receipts; no device actuation tested.
+- 변경: 공용 테마 순환과 접속·알림 진입점을 구현했다. 권한 예외와 요약 열기/읽음의 구별을 유지하고 Escape 포커스를 제공한다.
+- 검증: 첫 구현의 원격 정적·권한·토큰·Node·구조 검사 103건과 Chromium 25건이 통과했으나, 사용자 검토에서 상태 표지의 의미와 묶음이 불명확해 거절됐다. 스킬 기반 의미·배치 평가 후 상태 센터의 한 누름 영역으로 재구성한다. 첫 구현의 통과를 최종 디자인 수용으로 보지 않는다.
+- gate 변화: 기존 게이트는 유지한다. 수정된 디자인의 원격 회귀·CI·서명 설치는 별도 검증하며 장치 명령은 시험하지 않았다.

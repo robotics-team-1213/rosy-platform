@@ -7,7 +7,7 @@ import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
-  SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, roleLabel, showSession, showSignedOut,
+  SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, roleLabel, showFleet, showInboxCount, showSession, showSignedOut,
 } = await import("../../../ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
@@ -24,7 +24,7 @@ function fakeNode(id) {
 
 function fakeHeader() {
   const nodes = Object.fromEntries(["user-role", "development-badge", "estop", "estop-feedback", "topbar-more",
-    "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-inbox", "fleet-theme"].map(id => [id, fakeNode(id)]));
+    "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-inbox", "fleet-theme", "header-unread"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
   globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
@@ -38,6 +38,7 @@ test("one theme button cycles the shared choices; one status click toggles once"
     {value: "light", label: "light", icon: "theme-light"},
     {value: "system", label: "system", icon: "theme-system"}];
   globalThis.window = {RosyTheme: {choices, get: () => preference, set: value => {preference = value;}}};
+  globalThis.MutationObserver = class { observe() {} };
   bindTopbarToggle();
   for (const value of ["light", "system", "dark"]) {
     nodes["fleet-theme"].listeners.click();
@@ -57,6 +58,18 @@ test("the E-stop locks only on a press the server would refuse", () => {
   assert.equal(estopReason(null), SESSION_REASON);     // 401
   assert.equal(estopReason({role: "viewer"}), OPERATOR_REASON);
   assert.equal(estopReason({role: "operator"}), "");
+});
+
+test("message counts update one summary value without replacing its connection or mode", () => {
+  const nodes = fakeHeader();
+  showFleet({name: "site", online: 2, total: 3});
+  showInboxCount(4);
+  assert.equal(nodes["online-pill"].textContent, "2/3");
+  assert.equal(nodes["header-unread"].textContent, "4");
+  assert.equal(nodes["header-unread"].hidden, false);
+  showInboxCount(0);
+  assert.equal(nodes["header-unread"].hidden, true);
+  assert.equal(nodes["online-pill"].textContent, "2/3");
 });
 
 test("role words are Korean; English stays out of the text", () => {

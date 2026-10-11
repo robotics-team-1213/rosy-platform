@@ -215,6 +215,12 @@
         <ui-tag status="warn">CAUTION</ui-tag>
         <ui-tag status="crit">DANGER</ui-tag>
       </div>
+      <p class="rule">하나의 상태 요약 조작 안에는 <code>variant="inline"</code>으로 값을 표시한다. 내부 값마다 새 누름 영역이나 배지 외곽선을 만들지 않는다.</p>
+      <div class="demo demo-row">
+        <ui-tag variant="inline">2/2</ui-tag>
+        <ui-tag variant="inline" status="crit">1/2</ui-tag>
+        <ui-tag variant="inline" status="warn">개발</ui-tag>
+      </div>
       <p class="gate">게이트: <code>test_nominal_carries_no_colour</code></p>
     </section>
 
