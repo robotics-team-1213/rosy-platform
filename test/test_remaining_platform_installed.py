@@ -74,13 +74,13 @@ import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
 assert not (installed / '_build').exists()
-assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
-assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
                           (EvidenceRef('robot', 'core', 'state-1', 99.0),))
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
+assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
+assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
     assert Path(module.__file__).resolve().is_relative_to(installed), name
