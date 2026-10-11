@@ -116,7 +116,7 @@ SIZE_VERDICTS = {
     "decision/src/rosy/decision/deliberation": (
         231,
         "split: responsibility_review applied three actual responsibility subpackages on 2026-10-12. "
-        "The remaining supervisor and import-only stable API paths measure 343 lines, within the "
+        "The remaining supervisor and import-only stable API paths measure 339 lines, within the "
         "unchanged original 231+150 allowance. Contract validation, provider translation and pure "
         "offline evaluation are counted once in their innermost units; Fleet admission and writers "
         "stay outside. docs/plans/2026-10-12-deliberation-role-subpackages.md records installed "
