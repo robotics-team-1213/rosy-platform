@@ -54,6 +54,23 @@ def test_write_manifest_valid_and_revision(tmp_path):
     assert doc["trainer"] == "colab-x"
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "current_road_region/1", "trajectory_band/1"])
+def test_export_preserves_road_meaning(tmp_path, semantic):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": semantic}]
+    out, doc = _write(tmp_path, classes=classes)
+    assert doc["output"]["classes"][-1]["semantic"] == semantic
+    assert load_manifest(out).raw["output"]["classes"][-1]["semantic"] == semantic
+
+
+@pytest.mark.parametrize("semantic", [None, "", "road_suface/1", 1])
+def test_export_refuses_unknown_road_meaning(tmp_path, semantic):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": semantic}]
+    with pytest.raises(ValueError, match="semantic"):
+        _write(tmp_path, classes=classes)
+
+
 def test_v13_drivable_revision_is_separate_and_requires_class(tmp_path):
     lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
                "torchscript_sha256": "c" * 64}
