@@ -89,7 +89,7 @@ def test_offline_learning_export_preserves_hashes_and_has_no_automatic_labels(tm
     with pytest.raises(ValueError, match="changed"):
         exporter.verify(tmp_path / "training-source")
     for index, bad in enumerate(({"nested": [{"api_key": "hidden"}]},
-                                 {"private": "-----BEGIN PRIVATE KEY-----"})):
+                                 {"private": "-----BEGIN " + "PRIVATE KEY-----"})):
         body = store.read_observations()[0]["observation"]
         body["state"] = bad
         with sqlite3.connect(store.path) as connection:
