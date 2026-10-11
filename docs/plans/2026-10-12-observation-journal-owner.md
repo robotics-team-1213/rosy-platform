@@ -20,6 +20,8 @@ D-699를 구현한다. 변경 전 Fleet 부모는 54,211줄이며 기존 54,074+
 
 ## 이전·기능 추가 후 동시 측정
 
+최신 main 통합 commit `0bedd7809c`의 동일 생산 필터 독립 실측은 Fleet 부모 55,460줄 / 기존 main 독립 검토 기준 55,664+150 = 55,814, observe 232줄 / 이전 기준 212+150 = 362다. 기존 events 137+store 74가 부모에서 빠지고 aliases 5+2만 남아 부모 감소는 204줄이다. capture 증가 20줄은 child에만 계산한다. 동료가 검토한 main 기준과 observe 이전 기준을 올리지 않았으며 통합 source·충돌 보존 검토에서도 중요 blocker는 없었다. 이전 아래 실측은 그 당시 main 기준이다.
+
 `1a1df82325`의 기존 source 필터 실측은 Fleet 부모 54,007줄(기존 54,074+150 = 54,224 한도), observe 232줄(이전 기준 212+150 = 362 한도)이다. aliases는 각각 5·2줄이며 CORE event body는 SQLite 정책 import 외에는 그대로 유지했다. 독립 검토에서 실제 동일 DB 원장 책임 분리와 기준 유지에 동의했고 중요 source blocker를 찾지 못했다.
 
 같은 후보의 capture·기존 observation/export·Core event/API·Hub와 ownership/size를 포함한 7개 파일은 적격 AI PC 9GB에서 원격 79개 시험과 known-failures 신규 실패 0건, lint를 통과했다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/observation-capture-green/run-1.txt`다. `8dfb4be989`의 실제 wheel build→별도 target 설치→`python -I -S`의 source 없는 import·identity alias·DB capture와 capture 회귀는 적격 Model PC에서 6 passed, terminal exit 0, known-failures 신규 실패 0건이다. 설치 로그는 같은 세션의 `logs/observation-installed-green/run-1.txt`다. 이는 direct wheel 증거이며 sdist·read-only window·로컬 착지·실제 배포·현장 수용은 미완료다.
