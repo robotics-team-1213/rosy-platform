@@ -82,7 +82,7 @@ def main():
                 configure_passive_drive(drive)
             else:
                 configure_velocity_drive(drive)
-        world = World(stage_units_in_meters=1., physics_dt=1 / 60., rendering_dt=1 / 60.)
+        world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
         world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
         scene = track['scene']
         UsdGeom.Xform.Define(stage, '/World/Track')
@@ -104,6 +104,10 @@ def main():
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
         world.reset()
+        stiffness, damping = robot.get_articulation_controller().get_gains()
+        summary['physics'] = dict(dt_s=world.get_physics_dt(), restitution=0.,
+                                 dofs=robot.dof_names, stiffness=stiffness.tolist(), damping=damping.tolist())
+        print('PHYSICS ' + json.dumps(summary['physics']), flush=True)
         diff = DifferentialController(name='pinky_diff', wheel_radius=contract['wheel_radius'],
                                       wheel_base=contract['wheel_distance'], max_linear_speed=.06,
                                       max_angular_speed=.8)
@@ -178,7 +182,7 @@ def main():
                                  orientation=np.array([math.cos(heading / 2), 0., 0., math.sin(heading / 2)]))
             robot.set_world_velocity(np.zeros(6))
             robot.set_joint_velocities(np.zeros(robot.num_dof))
-            for _ in range(30):
+            for _ in range(round(.5 / world.get_physics_dt())):
                 cmd_vel_cycle(command=owner, power=power, send=send)
                 step()
             initial = read_pose()
