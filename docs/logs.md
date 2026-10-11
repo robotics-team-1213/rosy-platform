@@ -7784,17 +7784,27 @@ osy-d395-s1d\`.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
 
-<<<<<<< HEAD
-## 2026-10-11 — D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
 
-- 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
-- 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
-- gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
-=======
+- 변경: 사용자 합의에 따라 도로면·현재 도로 구역을 별도 인지 평가 대상으로 정리하고, 목적지에 따른 경로 선택과 주행 수용을 후속 단계로 분리했다. 독립 정답, 세션 분리, 시뮬레이션/실물 비교, 불확실 처리, 기존 drivable 의미의 전환 경계를 설계 문서에 명시했다.
+- 증거: 설계 문서와 기존 D-475/D-576/D-379 계약의 대조. 문서 lint 및 원격 계약 시험 결과는 검증 후 별도 보고한다.
+- gate 변화: 없음. 의미별 출력 구현, 평가 정답 검수, 모델 인지 승인, 장치 배포 및 주행 수용은 수행하지 않았다.
+
 ## 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
 
 - 변경: branch `docs/responsibility-contract`에서 D-656의 논리 책임 계약과 후속 통합 계획을 기록했다. 기존 D-648/D-652·중앙 판단·모델 토론 계획의 세부를 재사용하고 실제 파일/consumer/설치/시험과 완료 관문을 단계별로 연결했다.
 - 결정: 공통 평가·모델 후보·순수 작업 규칙·현장 원장 어댑터·CORE/OMX writer·독립 평가의 책임을 구별한다. 모델 런과 작업 실행, 비개입/보류/자연 해소와 조치 성공을 구별하며 종료 writer와 Mission/claim transaction을 유지한다.
 - 증거: 현재 HEAD 063676cbcb, 기존 dispatcher/진행/목표 근거·model-turn/설치 시험 및 ADR를 읽었다. 문서 generate/lint와 커밋 HEAD 원격 계약 검증은 후속 receipt로 기록한다.
 - gate 변화: 없음. Accepted는 책임/진행 원칙이며 새 runtime 구현·모델 호출·외부 발송·운영 활성화·서비스 분산·배포/현장 수용을 뜻하지 않는다.
->>>>>>> main
+
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 계약 (D-659)
+
+- 변경: branch `docs/perception-fitness-design`에서 사용자 합의 설계를 D-659 Accepted로 기록했다. 도로면·현재 구역·선택 경로의 의미, 독립 정답과 split, 시뮬레이션 입력 누설, 불확실/지연 판정 및 인지/주행 승인 경계를 구현 전 선행 조건으로 묶었다.
+- 증거: 기존 D-475/D-576/D-379/D-356과 학습·평가 소유 경로를 대조했다. ADR 번호 선점, Log BOM/CRLF 보존, generate/lint 및 커밋 HEAD 원격 계약 시험 결과는 검증 기록으로 구분한다.
+- gate 변화: 없음. 계약 수용이며 의미별 출력 구현, 실제 정답 검수·모델 평가·장치 추론 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 — D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
+
+- 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
+- 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
+- gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
