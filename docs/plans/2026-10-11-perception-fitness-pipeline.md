@@ -6,11 +6,11 @@ module: docs
 
 **Goal:** 최신 인지 학습 경로를 확장하되, 관측한 도로·현재 구역 추정·따라갈 구역 선택의 책임을 먼저 구별한다.
 
-**Architecture:** D-659의 의미 분리는 유지한다. 현재 도로 구역을 새로운 segmentation 출력으로 강제하지 않고 기존 인지 결과와 위치에서 산출하는 기준선을 먼저 검토한다. 경로 선택과 운영 권한은 기존 Drive/Fleet/CORE 계약을 따른다.
+**Architecture:** D-659의 의미 분리는 유지한다. 사용자 보완에 따라 인지 모델은 길 자체를 `drivable`로 검출하고 현재 구역/따라갈 구역은 관측과 위치·경계·미션을 사용하는 로직에서 판단한다. 경로 선택과 운영 권한은 기존 Drive/Fleet/CORE 계약을 따른다.
 
 **Tech Stack:** 기존 Python/NumPy/OpenCV, ONNX manifest, ROS 2 Jazzy, 기존 Isaac/Gazebo 기록, remote committed-HEAD pytest.
 
-상태: 책임 배치 검토 중. 새 role/필드, 모델 구조, 운영 소비자의 변경은 아직 확정하지 않았다. 코드 기준은 착수 HEAD `8c10dd8a3`이며 통합 전에 최신 main과 다시 대조한다.
+상태: 도로 검출과 구역 판단의 분리 방향 확정; 구역 로직의 운영 owner/입력 유효성은 상세 검토 중. [D-663](../adr/D-663-versioned-road-label-semantics.md)의 선택 semantic 필드를 기존 builder/export/eval/delivery에 연결한다. 새 role·구역 segmentation head·운영 소비 활성화는 추가하지 않는다. 코드 기준은 착수 HEAD `8c10dd8a3`이며 통합 전에 최신 main과 다시 대조한다.
 
 ## 책임 배치 제안
 
@@ -41,9 +41,11 @@ module: docs
 ## Task 1: 현재 구역의 산출 책임과 평가 대상을 결정한다
 
 1. 위 source 경로와 실제 호출자를 추적해 선택 전 관측, 구역 추정, 추종용 선택을 표시한다.
-2. 기존 도로·경계·검증된 위치로 구역을 산출하는 기준선과 모델 직접 예측을 비교한다. 단순 segmentation에 목적지/통행 정책을 라벨로 섞는 방식은 제외한다.
+2. 모델의 `drivable`은 도로면 전체를 학습한다. 현재 구역은 기존 도로·경계·검증된 위치로 산출하는 로직을 평가한다. 구역 segmentation head와 목적지/통행 정책을 라벨로 섞는 방식은 추가하지 않는다. 독립 현재 구역 정답은 로직 평가용이며 도로면 학습 라벨로 대체하지 않는다.
 3. 같은 영상·위치에서 목적지만 바꾼 경우 도로면과 현재 구역 후보는 같고 선택 경로만 달라야 한다는 독립 사례를 작성한다. 경계 가림·위치 무효·두 갈래 연결부도 포함한다.
 4. owner, 입력, 불확실 상태, 출력 소비자, 기존 `drivable` 호환·거절 조건을 상세 ADR로 기록한다. 이 결정 전에는 모델 클래스와 라벨을 변경하지 않는다.
+
+도로면 검수의 새 정의는 `learning/curation/perception/classes/road_surface_v1.yaml`을 사용한다. 기존 lr6/v13 데이터셋에 파일만 덮어씌우지 않는다. class 이름·role은 기존 기본 lane-seg 목록이며 `drivable.semantic`으로 범위를 결속한다. 차선/정지선/횡단보도 칠은 자기 class를 유지하고 가림/미관측은 255로 남긴다.
 
 ## Task 2: 라벨부터 평가까지 의미를 보존한다
 
