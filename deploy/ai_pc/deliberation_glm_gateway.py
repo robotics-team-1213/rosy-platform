@@ -151,11 +151,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'response_format': {'type': 'json_object'}}
             claim(server.body)
             server.calls = 1
-            response = checked_response(server.problem, upstream(request, server.token,
-                max(0.01, server.deadline - time.monotonic())), body=server.body)
+            provider_response = upstream(request, server.token, max(0.01, server.deadline - time.monotonic()))
+            response = checked_response(server.problem, provider_response, body=server.body)
             stream = incoming.get('stream') is True
             raw = stream_response(response) if stream else canonical(response).encode()
             server.metrics = {'state': 'PASS_GLM_PROVIDER_ONLY', 'calls': 1, 'usage': response['usage']}
+            if 'schema' in json.loads(server.body):
+                from .deliberation_glm_receipt import receipt
+                server.metrics.update(receipt(server.body, provider_response))
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream' if stream else 'application/json')
             self.send_header('Content-Length', str(len(raw)))

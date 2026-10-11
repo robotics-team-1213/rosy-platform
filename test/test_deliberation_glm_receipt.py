@@ -17,6 +17,7 @@ def setup():
             'role': 'assistant', 'content': canonical(opinion(problem, bound))}}],
         usage={'prompt_tokens': 2000, 'completion_tokens': 100, 'total_tokens': 2100})
     receipt = bridge.receipt(raw, response)
+    receipt.update(state='PASS_GLM_PROVIDER_ONLY', calls=1)
     policy = bridge.TrustedIncludedPlanPolicy('plan-v1', 'a' * 64, 'account-ref',
         'key-ref', receipt['profile_sha256'], time.time() + 60)
     sdk = (canonical({'type': 'text', 'part': {'text': canonical(opinion(problem, bound))}})
