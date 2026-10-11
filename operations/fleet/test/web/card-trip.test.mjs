@@ -6,10 +6,26 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../ui/console/card-trip.js");
-const { createRoster } = await import("../../../ui/console/roster.js");
+const { createRoster, selectRobot } = await import("../../../ui/console/roster.js");
 
 const robot = (estop = false, extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop } }, ...extra });
 const ACTIVE = { version: 4, map: { places: [] } };
+
+test("workspace inspection never arms a goal and a different robot withdraws goal, pin and cursor", () => {
+  const view = { robots: [robot(), { ...robot(), robot_id: "b" }], focusRobot: null, selected: null, pinning: null, cursor: null };
+  assert.equal(selectRobot(view, "a"), true);
+  assert.equal(view.focusRobot, "a");
+  assert.equal(view.selected, null);
+  Object.assign(view, { selected: "a", pinning: "a", cursor: { col: 4, row: 5 } });
+  assert.equal(selectRobot(view, "a"), false);  // polling the same selection does not withdraw an explicit arm
+  assert.equal(view.selected, "a");
+  assert.equal(selectRobot(view, "missing"), false);
+  assert.equal(view.focusRobot, "a");
+  assert.equal(selectRobot(view, "b"), true);
+  assert.deepEqual([view.focusRobot, view.selected, view.pinning, view.cursor], ["b", null, null, null]);
+  assert.equal(selectRobot(view, null), true);
+  assert.equal(view.focusRobot, null);
+});
 
 test("trip gate: Fleet state, role, named operator, link, E-stop, safety, active map — first reason wins", () => {
   const view = { stateUnavailable: false, activeSiteMap: ACTIVE };

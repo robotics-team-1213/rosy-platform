@@ -106,7 +106,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     button.setAttribute("aria-expanded", String(open));
     setReason(button, open ? "" : gate(robot));
     button.addEventListener("click", scope.guard(() => {
-      form = open ? null : { robotId: robot.robot_id, to: "", start: "", lapStart: "", via: "", plan: null,
+      form = open ? null : { robotId: robot.robot_id, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null,
         lapPlan: null, busy: false, note: null };
       render();
     }));
@@ -122,6 +122,17 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     box.className = "card-trip";
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", `${id} 운행`);
+    const kind = pick("작업 종류", value => {
+      mine.kind = value;
+      for (const panel of box.querySelectorAll(".trip-mode")) panel.hidden = panel.dataset.tripMode !== value;
+    });
+    kind.select.dataset.tripKind = id;
+    for (const [value, name] of [["route", "목적지로 이동"], ["lap", "한 바퀴"], ["repeat", "반복 운행"]]) {
+      const option = document.createElement("option"); option.value = value; option.textContent = name;
+      kind.select.append(option);
+    }
+    kind.select.value = mine.kind || "route";
+    kind.select.disabled = mine.busy;
 
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
     // drops the previewed plan from the buttons on screen now.
@@ -216,7 +227,13 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       : "출발 장소에 있는 로봇만 계획할 수 있습니다");
     lapSummary.setAttribute("role", "status");
 
-    box.append(to.wrap, once, summary, lapStart.wrap, lapVia.wrap, lapActions, lapSummary, start.wrap, laps);
+    box.append(kind.wrap);
+    for (const [mode, children] of [["route", [to.wrap, once, summary]],
+      ["lap", [lapStart.wrap, lapVia.wrap, lapActions, lapSummary]], ["repeat", [start.wrap, laps]]]) {
+      const panel = document.createElement("div");
+      panel.className = "trip-mode"; panel.dataset.tripMode = mode;
+      panel.hidden = mode !== (mine.kind || "route"); panel.append(...children); box.append(panel);
+    }
     const loops = loopCapacityText(view.traffic);  // D-517 3: "고리 2/3대"
     if (loops) box.append(line("hint", loops));
     if (mine.note) {
@@ -277,9 +294,9 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
 
   function focus(robotId) {
     form = {
-      robotId, to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
+      robotId, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
     };
   }
 
-  return { toggle, section, syncConvoy, focus };
+  return { toggle, section, syncConvoy, focus, close: () => { form = null; } };
 }
