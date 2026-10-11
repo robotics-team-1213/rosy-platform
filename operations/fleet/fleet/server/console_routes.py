@@ -26,6 +26,7 @@ from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
+from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
@@ -56,6 +57,7 @@ class LineStuckDecisionRequest(BaseModel):
 class LineStuckClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    judgment_revision: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 class IncidentReviewRequest(BaseModel):
@@ -144,7 +146,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         now = console._clock()
         rows = []
         for row in snapshot["robots"]:
-            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            row = {**row, "line_stuck": board.view(row["robot_id"]),
+                   "judgment": board.judgment_view(row["robot_id"])}
             if lane is not None:   # D-511 M0: the monitor's latest result, read only
                 row["lane_compliance"] = lane.view(row["robot_id"])
             observed = row.pop("_state_mono", None)
@@ -281,8 +284,21 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"episodes": board.episodes(limit)}
 
     @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
-    def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
-        return {"reports": board.reports(limit), "traffic_reports": board.traffic_reports(limit)}
+    def incident_reports(limit: int = Query(20, ge=1, le=100),
+                         robot_id: Optional[str] = Query(None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_.:-]+$'),
+                         stuck_id: Optional[str] = Query(None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_.:-]+$')) -> dict:
+        if (robot_id is None) != (stuck_id is None):
+            raise HTTPException(422, detail={'code': 'INCIDENT_FILTER_PAIR_REQUIRED'})
+        return {"reports": board.reports(limit, robot_id=robot_id, stuck_id=stuck_id),
+                "traffic_reports": board.traffic_reports(limit) if robot_id is None else []}
+
+    @app.get("/api/fleet/judgments", dependencies=read_guard, tags=["line-stuck"])
+    def judgment_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {"records": board.judgments(limit)}
+
+    @app.get('/api/fleet/notifications', dependencies=read_guard, tags=['line-stuck'])
+    def notification_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {'records': board._log.notifications.rows(limit) if board._log is not None else []}
 
     @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
               tags=["line-stuck"])
@@ -316,6 +332,14 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
             raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
         try:
+            if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
+                # Claim and motion admission have one order; stops never wait on this lock.
+                async with gather._lock:
+                    owner = await asyncio.to_thread(board._log.handoff.get, robot_id, body.stuck_id)
+                    if owner is not None and owner['principal_id'] != principal.principal_id:
+                        raise HTTPException(409, detail={'code': 'INCIDENT_ALREADY_CLAIMED',
+                                                        'message': 'another named operator owns this incident'})
+                    return await _forward_stuck_decision(robot_id, body, request, principal, client)
             return await _forward_stuck_decision(robot_id, body, request, principal, client)
         finally:
             runner = getattr(app.state, "trip_runner", None)
@@ -361,10 +385,33 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if console.clients().get(robot_id) is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
         resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if body.judgment_revision is not None:
+            require_named_operator(principal)
+            if principal.principal_id == 'site-console':
+                raise HTTPException(403, detail={'code': 'OPERATOR_IDENTITY_REQUIRED'})
+            if board._log is None:
+                raise HTTPException(503, detail={'code': 'INCIDENT_JOURNAL_UNAVAILABLE'})
+            await gather()
+            async with gather._lock:
+                receipt = board.judgment_view(robot_id)
+                if (not board.is_open(robot_id, body.stuck_id) or receipt is None
+                        or judgment_revision(receipt) != body.judgment_revision):
+                    raise HTTPException(409, detail={'code': 'INCIDENT_JUDGMENT_CHANGED'})
+                # A failed journal keeps the resolver paused, without issuing an ownership receipt.
+                board._handoff_pending.add((robot_id, body.stuck_id))
+                if resolver_loop is not None:
+                    resolver_loop.claim(robot_id, body.stuck_id)
+                try:
+                    claim = await asyncio.to_thread(board._log.handoff.claim,
+                        robot_id, body.stuck_id, receipt, principal.principal_id, now=time.time())
+                except ValueError as exc:
+                    raise HTTPException(409, detail={'code': str(exc)}) from exc
+            return {'robot_id': robot_id, 'stuck_id': body.stuck_id,
+                    'claimed_by': principal.principal_id, 'kind': 'incident_handoff', 'handoff': claim}
         if resolver_loop is not None:
             resolver_loop.claim(robot_id, body.stuck_id)
         return {"robot_id": robot_id, "stuck_id": body.stuck_id,
-                "claimed_by": principal.principal_id}
+                "claimed_by": principal.principal_id, 'kind': 'resolver_pause'}
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:

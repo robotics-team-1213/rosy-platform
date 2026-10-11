@@ -87,7 +87,7 @@ owner/사람 우선/사건·세대 fence와 중복·불명 결과의 실패 시�
 ### 4. 외부 알림과 사람 처리
 
 Reuse/read: `fleet/server/sqlite_policy.py`, `mission_model_turn_store.py`의 원자 claim 패턴, `site_users.py`, D-632 Console inbox. 기존 ER2 큐에는 외부 알림을 넣지 않는다.
-Proposed create: `operations/fleet/fleet/notifications.py` (bounded outbox/세 채널 adapter; 크기가 실제로 분리 기준을 넘을 때만 나눈다), `deploy/site/notifications.env.example`.
+Proposed create: `operations/fleet/fleet/incidents/notifications.py` (bounded outbox/세 채널 adapter; 크기가 실제로 분리 기준을 넘을 때만 나눈다), `deploy/site/notifications.env.example`.
 Modify: 실제 Fleet 사건 transaction·설정 로더·worker 설치와 lifecycle 소비자. 기존 파일 위치는 구현 직전 caller inventory로 확정한다.
 New tests: `operations/fleet/test/test_incident_notifications.py`.
 

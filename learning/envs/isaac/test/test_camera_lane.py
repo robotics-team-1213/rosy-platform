@@ -19,6 +19,117 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+@pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
+def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
+    import math
+    from run_map_rl import camera_route_guide
+    task = SimpleNamespace(points=((0., 0.), (.1, 0.), (.1, -.3)), distance=(0., .1, .4), index=0)
+    result = dict(deviation_m=.012, progress_m=.03)
+    guide = camera_route_guide(task, (0., 0., yaw), result, 17.)
+    wrap = lambda angle: math.degrees(math.atan2(math.sin(angle), math.cos(angle)))
+    assert guide[0] == pytest.approx(wrap(math.atan2(-.3, .1) - yaw))
+    assert guide[3] == pytest.approx(wrap(-yaw))
+    assert guide[1:3] == (17., True)
+    assert guide[4:] == (.012, .03)
+
+
+@pytest.mark.parametrize('index', [0, 2, 3])
+def test_camera_route_guide_uses_nonzero_tangent_at_duplicates_and_route_end(index):
+    from run_map_rl import camera_route_guide
+    task = SimpleNamespace(points=((0., 0.), (0., 0.), (0., .3), (0., .3)),
+                           distance=(0., 0., .3, .3), index=index)
+    guide = camera_route_guide(task, (*task.points[index], 0.),
+                               dict(deviation_m=0., progress_m=task.distance[index]), 1.)
+    assert guide[3] == pytest.approx(90.)
+
+
+def test_missing_camera_observation_is_not_a_learning_state():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    lane = LearnedCameraLane(SimpleNamespace(), ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                             camera_x=.03317, clock=lambda: 10.)
+    try:
+        assert lane.state() is None
+    finally:
+        lane.close()
+
+
+def test_learning_state_expires_with_source_age_and_processing_time():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    now = [10.]
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                             camera_x=.03317, clock=lambda: now[0])
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1.15, pose=(0., 0., 0.))
+        assert lane.state() is not None
+        now[0] = 10.151
+        assert lane.state() is None
+        now[0] = 9.9
+        assert lane.state() is None
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('previous,state,reason', [
+    (((2, 1), 3), None, 'invalid_camera_observation'),
+    (None, (3, 1), 'no_previous_observation'),
+    ((None, 3), (3, 1), 'no_previous_observation'),
+])
+def test_learning_rejects_missing_observations_without_creating_q(previous, state, reason):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    assert learn_transition(policy, previous, state,
+                            dict(reward=1., terminated=False, truncated=False)) == reason
+    assert policy.updates == 0 and policy.table == {}
+
+
+def test_measured_terminal_transition_does_not_bootstrap_and_counts_real_update():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.table[(3, 1)] = [100.] * 4
+    result = dict(reward=-10., terminated=True, truncated=False)
+    assert learn_transition(policy, ((2, 1), 3), (3, 1), result) == 'updated'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
+
+
+def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    from run_map_rl import camera_tick
+    now = [10.]
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda frame: (way, 'drivable', {}, 1.)),
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+        camera_x=.03317, clock=lambda: now[0])
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+        original = lane.manager.tick_gain
+        def delayed_tick(current, *, gain):
+            decision = original(current, gain=gain)
+            assert decision.linear > 0.
+            now[0] += .002
+            return decision
+        monkeypatch.setattr(lane.manager, 'tick_gain', delayed_tick)
+        now[0] = 10.299
+        decision, state = camera_tick(lane, now[0], gain=1.)
+        assert state is None
+        applied = []
+        assert lane.manager.apply_if_current(decision, lambda command:
+                                             applied.append((command.linear, command.angular)))
+        assert applied == [(0., 0.)]
+    finally:
+        lane.close()
+
+
 def test_two_camera_lanes_keep_distinct_core_event_identity_and_loss_state():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
@@ -135,7 +246,7 @@ def test_camera_source_age_and_replay_invalidate_existing_observation():
     lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
     lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1.31, pose=(0., 0., 0.))
     assert lane.last['reason'] == 'camera_source_stale'
-    assert lane.state() == (3, 0)
+    assert lane.state() is None
 
 
 def test_low_light_image_never_calls_model():
@@ -236,3 +347,89 @@ def test_existing_camera_derived_off_line_recovery_keeps_its_provenance():
     assert lane.last['strategy'] == 'drivable_off_line_left'
     assert lane.last['camera_provenance'] == 'observed_straddle'
     assert lane.manager.tick_gain(10., gain=1.).angular > 0.
+
+
+def test_camera_training_has_three_paired_held_out_comparisons():
+    from run_map_rl import episode_phases
+    phases = episode_phases(6, camera=True, evaluation_only=False)
+    assert phases[0] == ('baseline', 101, 0.)
+    training = [item for item in phases if item[0] == 'train']
+    assert [item[1] for item in training] == list(range(6))
+    evaluations = [(index, seed, angle) for index, (phase, seed, angle) in enumerate(phases) if phase == 'eval']
+    assert len(evaluations) >= 3 and len({seed for _, seed, _ in evaluations}) == len(evaluations)
+    for index, seed, angle in evaluations:
+        assert phases[index - 1] == ('baseline', seed, angle)
+        assert seed not in {item[1] for item in training}
+        assert all(item[0] != 'train' for item in phases[index:])
+
+
+def test_saved_camera_policy_pairs_all_four_headings_without_training():
+    import math
+    from run_map_rl import episode_phases
+    phases = episode_phases(6, camera=True, evaluation_only=True)
+    assert len(phases) == 8 and all(phase != 'train' for phase, _, _ in phases)
+    assert {angle for phase, _, angle in phases if phase == 'eval'} == {0., math.pi / 2, math.pi, -math.pi / 2}
+    for index, (phase, seed, angle) in enumerate(phases):
+        if phase == 'eval':
+            assert phases[index - 1] == ('baseline', seed, angle)
+
+
+def test_path_policy_keeps_its_existing_training_and_four_heading_protocol():
+    from run_map_rl import episode_phases
+    phases = episode_phases(2, camera=False, evaluation_only=False)
+    assert [phase for phase, _, _ in phases] == ['baseline', 'train', 'train', 'eval', 'eval']
+    assert all(phase == 'eval' for phase, _, _ in episode_phases(2, camera=False, evaluation_only=True))
+
+
+def comparison_episodes():
+    shared = dict(seed=202, initial_heading_offset_rad=0., initial_target_pose=[0., 0., .1],
+                  initial_pose=[0., 0., .1, 0., 0.], time_limit_s=400., policy_state_sha256='a' * 64)
+    return (dict(shared, phase='baseline', epoch=8, complete=False, sim_s=200.),
+            dict(shared, phase='eval', epoch=9, complete=True, sim_s=190.))
+
+
+def test_camera_comparison_preserves_a_failed_baseline_and_successful_fixed_policy():
+    from run_map_rl import camera_comparison
+    baseline, evaluated = comparison_episodes()
+    pair = camera_comparison(baseline, evaluated)
+    assert pair['baseline_epoch'] == 8 and pair['eval_epoch'] == 9
+    assert pair['baseline_complete'] is False and pair['eval_complete'] is True
+    assert pair['initial_position_delta_m'] == 0. and pair['initial_heading_delta_rad'] == 0.
+
+
+@pytest.mark.parametrize('change', [
+    {'seed': 303}, {'phase': 'train'}, {'time_limit_s': 200.}, {'policy_state_sha256': 'b' * 64},
+    {'initial_target_pose': [0., 0., .2]}, {'initial_heading_offset_rad': 1.},
+    {'initial_pose': [.016, 0., .1, 0., 0.]}, {'initial_pose': [0., 0., .126, 0., 0.]},
+    {'initial_pose': [float('nan'), 0., .1, 0., 0.]}, {'epoch': 10},
+])
+def test_camera_comparison_rejects_different_conditions_or_physical_start(change):
+    from run_map_rl import camera_comparison
+    baseline, evaluated = comparison_episodes()
+    evaluated.update(change)
+    with pytest.raises(ValueError, match='paired camera'):
+        camera_comparison(baseline, evaluated)
+
+
+def test_camera_sample_offsets_match_despite_previous_episode_and_stop_frames():
+    from run_map_rl import camera_sample_due
+    for start in (0, 1, 23, 24, 3124, 5569):
+        offsets = [offset for offset in range(100) if camera_sample_due(start + offset, start)]
+        assert offsets == [0, 24, 48, 72, 96]
+
+
+def test_saved_policy_json_format_changes_file_hash_but_not_comparison_state_hash():
+    import hashlib
+    import json
+    from camera_lane import CameraQPolicy
+    from run_map_rl import policy_state_sha256, camera_comparison
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.update((3, 1), 1, 1., (3, 1), terminated=True)
+    raws = [json.dumps(policy.export(), sort_keys=True).encode(),
+            (json.dumps(policy.export(), indent=2) + '\n').encode()]
+    assert hashlib.sha256(raws[0]).digest() != hashlib.sha256(raws[1]).digest()
+    restored = [CameraQPolicy.restore(json.loads(raw), perception=perception_id()) for raw in raws]
+    baseline, evaluated = comparison_episodes()
+    baseline['policy_state_sha256'] = policy_state_sha256(restored[0].export())
+    evaluated['policy_state_sha256'] = policy_state_sha256(restored[1].export())
+    assert camera_comparison(baseline, evaluated)['eval_complete'] is True

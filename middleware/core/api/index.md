@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
 - 2026-10-11 · c9480b464 · docs: 지도 설정 계약 버전 정렬
 - 2026-10-11 · 5faad3583 · refactor: API holder 이전 검증
 - 2026-10-10 · d7f032f513 · test: D-620 API contracts verified
 - 2026-10-10 · 10955eeaa4 · docs: D-620 live API version alignment
-- 2026-10-09 · uncommitted · docs(api): 경로 문맥 굽이 단계 v1.166

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import shlex
@@ -29,7 +30,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
-                     'contracts/foundation', 'contracts/skill', 'operations/world',
+                     'contracts/foundation', 'contracts/skill', 'contracts/motion', 'operations/world',
                      'operations/execution', 'middleware/skills/api'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
@@ -74,17 +75,54 @@ import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
 assert not (installed / '_build').exists()
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
+from rosy.execution.site.workflow import project_progress
+assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy', 'core'))
+try:
+    GoalPredicate.from_mapping({'predicate_id': 'p', 'condition': 'object_in_destination',
+                                'object_id': 'o', 'destination_id': 'd', 'evidence_source': 'model_summary'})
+except ValueError:
+    pass
+else:
+    raise AssertionError('model summary admitted as independent goal evidence')
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
+from rosy.execution.site.goal_evidence import GoalEvidence
+from rosy.execution.site.workflow import mission_step_state, project_progress
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+assert 'core_common' not in sys.modules
+assert mission_step_state('ACTION_SUCCEEDED') == 'AWAITING_GOAL_EVIDENCE'
+import importlib.metadata
+assert 'core_common==0.0.0' in importlib.metadata.requires('rosy-execution')
+from datetime import datetime, timezone
+projected = project_progress({
+    'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
+                'reason': None, 'dispatch_generation': 1, 'action_id': 'a', 'attempt_id': 't'},
+    'progress_events': [], 'snapshot_event_id': 1, 'stop_control': None,
+    'history': [], 'history_truncated': False,
+}, now=datetime.fromtimestamp(100, timezone.utc))
+assert projected['progress']['step']['state'] == 'AWAITING_GOAL_EVIDENCE'
+assert projected['progress']['goal_evidence']['state'] == 'PENDING'
+assert projected['progress']['stop']['physical_state'] == 'UNKNOWN'
+assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+fleet_files = importlib.metadata.distribution('fleet').files
+assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
+assert 'rosy-execution==0.1.0' in importlib.metadata.requires('fleet')
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
                           (EvidenceRef('robot', 'core', 'state-1', 99.0),))
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
+assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
+assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
     assert Path(module.__file__).resolve().is_relative_to(installed), name
 from rosy.decision.model_tool_contract import ModelToolCall
 from fleet.server import proposal_store
+from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall
+assert mission_store.GoalEvidence is mission_service.GoalEvidence is goal_evidence_service.GoalEvidence is GoalEvidence
+assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 assert importlib.util.find_spec('fleet.ai') is None
 assert importlib.util.find_spec('rosy_situation.service') is None
 assert importlib.util.find_spec('rosy_situation.analyzers') is None
@@ -111,9 +149,43 @@ print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
-               'rosy.decision.tool_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
+               'fleet.server.model_feedback_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
+               'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
+               'rosy.execution.site.workflow']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
+    if delivery == 'wheel':
+        native = tmp_path / 'native/lib/python3.12/site-packages'
+        excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
+        dependencies = [str(path) for path in wheels.glob('*.whl')
+                        if not path.name.startswith(excluded)]
+        run(['-m', 'pip', 'install', '--no-deps', '--no-index', '--target', str(native),
+             *dependencies], tmp_path)
+        script = ROOT / 'deploy/robot/pinky_pro/image/install-motion-contracts.sh'
+        environment = {**os.environ, 'TMPDIR': str(tmp_path),
+                       'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']}
+        command = ['bash', str(script), str(staging), str(tmp_path / 'native')]
+        result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=180)
+        assert result.returncode == 0, result.stdout + result.stderr
+        native_probe = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+from fleet.server.mission_service import MissionService
+from fleet.server.mission_progress import MissionProgressService
+from rosy.execution.site.goal_evidence import GoalPredicate
+from rosy.execution.site.workflow import project_progress
+from rosy.decision.model_tool_contract import ModelToolCall
+from rosy.contracts.motion import BaseTwist
+assert BaseTwist(0.0, 0.0).linear_mps == 0
+'''
+        run(['-I', '-c', native_probe, str(native)], tmp_path)
+        before = {path.relative_to(native).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in native.rglob('*') if path.is_file() and '__pycache__' not in path.parts}
+        repeated = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=180)
+        assert repeated.returncode != 0
+        after = {path.relative_to(native).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                 for path in native.rglob('*') if path.is_file() and '__pycache__' not in path.parts}
+        assert before == after
 
 
 def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
@@ -140,6 +212,13 @@ import json
 import sys
 sys.path[:0] = json.loads(sys.argv[1])
 from fleet.stuck.board import LineStuckBoard
+from fleet.server.mission_service import MissionService
+from rosy.execution.site.goal_evidence import verify_goal
+from rosy.execution.site.workflow import project_progress
+from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
+from fleet.server import mission_service
+from rosy.execution.site.goal_evidence import GoalEvidence
+assert mission_service.GoalEvidence is GoalEvidence
 from rosy_situation.assessment import Assessment
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)

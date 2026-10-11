@@ -85,6 +85,34 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                 expect(page.locator("#estop")).to_be_enabled()
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')")
                 expect(page.locator("#console-token")).to_be_hidden()
+                for width in (320, 390, 480, 640, 768, 1366, 1440, 1920):
+                    page.set_viewport_size({"width": width, "height": 900})
+                    expect(page.locator(identity)).to_be_visible()
+                    role = page.locator(identity).bounding_box()
+                    badge = page.locator("#development-badge").bounding_box()
+                    stop = page.locator("#estop").bounding_box()
+                    brand = page.locator("ui-brand").bounding_box()
+                    status = page.locator('[data-header-region="status"]').bounding_box()
+                    for item in (role, badge):
+                        assert status["y"] <= item["y"] and item["y"] + item["height"] <= status["y"] + status["height"]
+                    if width >= 768:
+                        assert max(role["y"], badge["y"]) < min(
+                            role["y"] + role["height"], badge["y"] + badge["height"])
+                        assert max(role["y"], brand["y"]) < min(
+                            role["y"] + role["height"], brand["y"] + brand["height"])
+                        assert role["x"] >= brand["x"] + brand["width"]
+                        assert badge["x"] + badge["width"] <= stop["x"]
+                    if width >= 1024:
+                        assert role["x"] > width / 2
+                    assert page.evaluate("""() => {
+                        const bar = document.querySelector('ui-topbar'), badge = document.getElementById('development-badge');
+                        const height = bar.getBoundingClientRect().height;
+                        badge.hidden = true;
+                        const withoutBadge = bar.getBoundingClientRect().height;
+                        badge.hidden = false;
+                        return height === withoutBadge;
+                    }""")
+                page.set_viewport_size({"width": 390, "height": 844})
                 if path == "/console":
                     expect(page.locator("#topbar-more")).to_have_attribute("aria-expanded", "false")
                     expect(page.locator("#topbar-extra")).to_be_hidden()

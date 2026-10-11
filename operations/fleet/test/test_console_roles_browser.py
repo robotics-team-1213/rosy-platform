@@ -108,6 +108,7 @@ def _login(playwright, origin):
     page.on("request", lambda req: posts.append((urlparse(req.url).path, req.post_data))
             if req.method == "POST" and "/api/" in req.url else None)
     page.goto(origin + "/console")
+    page.locator("#password-login").wait_for(state="visible")
     more = page.locator("#topbar-more")
     if more.is_visible() and more.get_attribute("aria-expanded") != "true":
         more.click()
@@ -172,7 +173,12 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
     with sync_playwright() as playwright:
         browser, page, errors, _ = _login(playwright, origin)
         try:
+            with page.expect_response(lambda response:
+                    urlparse(response.url).path == "/api/fleet/tracking" and response.status == 404):
+                page.reload()
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
+            # Recreate the view after installing the route; an earlier 404 stays unavailable.
+            page.reload()
             page.locator("#map-readouts > summary").click()
             table = page.locator("#tracking-positions")
             expect(table).to_be_visible()

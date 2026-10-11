@@ -147,7 +147,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_maps=None, routing_config=None, map_pose_config=None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
-               identity_config=None, lane_compliance_config=None) -> FastAPI:
+               identity_config=None, lane_compliance_config=None,
+               notification_config=None) -> FastAPI:
+    if notification_config is not None and task_service is None:
+        raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -335,6 +338,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         localization_task = None
         signal_task = None
         calibration_drift_task = None
+        notification_http = None
+        notification_task = None
+        if notification_config is not None:
+            import httpx
+            from fleet.incidents.notifications import NotificationWorker
+            notification_http = httpx.AsyncClient(trust_env=False)
+            notification_task = asyncio.create_task(NotificationWorker(
+                app.state.line_stuck._log.notifications, notification_config, notification_http,
+                board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
@@ -384,13 +396,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task):
+                               lease_task, path_task, calibration_drift_task, notification_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            if notification_http is not None:
+                await notification_http.aclose()
             if calibration_drift_watch is not None:
                 await calibration_drift_watch.aclose()
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
@@ -586,6 +600,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
+    if app.state.line_stuck._log is not None:
+        app.state.line_stuck._log.notifications.config = notification_config
     from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
                                            db_path=task_service.store.path if task_service else None,

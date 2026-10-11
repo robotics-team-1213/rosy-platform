@@ -10,12 +10,6 @@ const $ = id => document.getElementById(id);
 
 // Every Fleet document has one inbox entry; only the console owns its local unread state.
 function inboxButton() {
-  if (!document.querySelector(".fleet-link-status")) {
-    const status = document.createElement("div");
-    status.className = "fleet-link-status";
-    $("online-pill").before(status);
-    status.append($("online-pill"), $("development-badge"));
-  }
   if ($("fleet-inbox")) return $("fleet-inbox");
   const inbox = document.createElement("ui-button");
   inbox.id = "fleet-inbox";
@@ -25,7 +19,7 @@ function inboxButton() {
   inbox.setAttribute("data-ui-tooltip", "알림 창");
   inbox.setAttribute("data-action-icon", "notification");
   actionIcon(inbox, "notification");
-  $("estop").before(inbox);
+  $("fleet-header-actions").prepend(inbox);
   inbox.addEventListener("click", () => {
     const request = new CustomEvent("rosy:inbox", {cancelable: true});
     if (document.dispatchEvent(request)) location.assign("/console?inbox=1");

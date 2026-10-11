@@ -136,6 +136,12 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(400)
                 fact = page.evaluate(PROBE)
+                assert page.locator('ui-topbar [data-header-region]').count() == 4
+                for region in ("identity", "status", "actions", "safety"):
+                    expect(page.locator(f'[data-header-region="{region}"]')).to_be_visible()
+                assert page.locator('[data-header-region="actions"] #fleet-inbox').count() == 1
+                assert page.locator('[data-header-region="safety"] #estop').count() == 1
+                expect(page.locator('#topbar-extra')).not_to_be_visible()
                 measured[(name, width)] = fact
                 nav = page.locator(".doc-tabs").bounding_box()
                 main = page.locator("main").bounding_box()

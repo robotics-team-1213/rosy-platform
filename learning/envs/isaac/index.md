@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · c229738784 · fix(isaac): 명시적 렌더에서 카메라 receipt 갱신
+- 2026-10-11 · e2a94abaa3 · fix(isaac): 현재 경로 접선과 전방 안내각 분리
+- 2026-10-11 · 152cb908fe · feat(isaac): 동일 조건 카메라 기준선과 고정 정책 비교
+- 2026-10-11 · fb355522f5 · fix(isaac): 유효 카메라 관측만 Q-learning에 반영
 - 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
-- 2026-10-11 · b6a8d0d2e8 · feat(isaac): 고정 정책 네 시작 방향 실제 화면 녹화
-- 2026-10-11 · dc25401e61 · feat(isaac): 실제 맵 한 대 CPU RL 진단
-- 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
-- 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
