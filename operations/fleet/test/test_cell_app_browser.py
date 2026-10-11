@@ -25,10 +25,19 @@ ROOT = Path(__file__).resolve().parents[3]
 @pytest.fixture
 def browser_site(tmp_path):
     from playwright.sync_api import sync_playwright
+    from core_common.protocol.channel_requests import DiscordRequestEnvelope
+    from fleet.server.channel_requests import ChannelConfig
 
     client, tasks, _ = _setup(
         tmp_path, compiler=PalletizingCellJobCompiler(tol_m=0.001),
-        cell_app_service_id="cell-service", web_common=ROOT / "shared/web", start_task_dispatcher=False)
+        cell_app_service_id="cell-service", web_common=ROOT / "shared/web", start_task_dispatcher=False,
+        channel_config=ChannelConfig(guild_id='100000000000000000', channel_id='100000000000000001',
+            bot_id='100000000000000002', transport_key='test-transport-' * 3,
+            users={'100000000000000003': 'operator-1'}))
+    tasks.discord_request = client.app.state.channel_requests.receive(DiscordRequestEnvelope(
+        guild_id='100000000000000000', channel_id='100000000000000001', author_id='100000000000000003',
+        message_id='100000000000000004', mentions=['100000000000000002'], author_bot=False,
+        webhook_id=None, content='<@100000000000000002> <script>window.discordXss=true</script> prepare cell'))
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(
@@ -80,6 +89,37 @@ def _prepare(page):
         expect(page.locator(f"#{kind}-revision")).to_contain_text("저장된 버전")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(browser_site, width, height):
+    from playwright.sync_api import expect
+    page, tasks, origin = browser_site
+    page.set_viewport_size({'width': width, 'height': height})
+    request_id = tasks.discord_request['request_id']
+    page.goto(origin + '/console/cell?channel_request=' + request_id)
+    _prepare(page)
+    expect(page.locator('#cell-channel-original')).to_contain_text('<script>')
+    assert page.evaluate('window.discordXss === undefined')
+    page.locator('#workcell').fill('omx_sim')
+    page.locator('#instance').fill('omx_sim_01')
+    page.locator('#cell-channel-reason').fill('reviewed saved recipe and cell')
+    page.locator('#propose').click()
+    expect(page.locator('#proposal')).to_contain_text('운영자 별도 승인 대기')
+    proposal_id = page.locator('#mission-id').input_value()
+    from fleet.server.cell_job_store import CellJobStore
+    jobs = CellJobStore(tasks.store.path)
+    assert jobs.get(proposal_id)['status'] == 'PROPOSED'
+    page.locator('#read-job').click()
+    expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+    page.locator('#admit').click()
+    page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+    assert jobs.get(proposal_id)['status'] == 'PROPOSED'
+    page.locator('#admit').click()
+    page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+    expect(page.locator('#job-summary')).to_contain_text('실행 대기')
+    assert jobs.get(proposal_id)['status'] == 'READY'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
