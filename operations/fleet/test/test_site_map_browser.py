@@ -25,6 +25,10 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
 
     page, store, robot = page_site
     page.set_viewport_size({'width': width, 'height': 1000})
+    assert page.evaluate('''() => {
+        const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
+        return ids.length === new Set(ids).size;
+    }''')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()

@@ -90,7 +90,7 @@ export function createSurveyPanel(host) {
     act(() => {
       const id = `survey_${crypto.randomUUID()}`;
       host.changed(createSurveyDraft(id, {revision: id, origin: [Number($('survey-x').value), Number($('survey-y').value)],
-        heading_rad: Number($('survey-heading').value) * Math.PI / 180, scale_source: $('survey-scale').value,
+        heading_rad: Number($('survey-yaw').value) * Math.PI / 180, scale_source: $('survey-scale').value,
         measured_distance_m: $('survey-scale').value === 'measured' ? Number($('survey-distance').value) : null,
         description: $('survey-description').value.trim()}));
       clear(); message('빈 조사 초안을 만들었습니다. 요소를 추가한 뒤 초안을 저장하세요. 활성 지도는 유지됩니다.');
