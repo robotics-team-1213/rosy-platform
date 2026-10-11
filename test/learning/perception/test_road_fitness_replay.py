@@ -118,6 +118,66 @@ def run(paths):
     return replay.run(model, store_root=root, road_eval=road, region_eval=region, inputs=inputs, max_age_ns=100)
 
 
+def revise(folder, change):
+    doc = json.loads((folder / "manifest.json").read_bytes())
+    change(doc)
+    (folder / "manifest.json").write_bytes(review.encoded(doc))
+    return seal(folder)
+
+
+@pytest.mark.parametrize("field,value,error", [
+    ("preprocessing_sha256", "0" * 64, "input binding"),
+    ("training_refs", [], "training refs"),
+    ("frames", [], "non-empty frame"),
+])
+def test_resealed_inputs_still_require_exact_bindings(tmp_path, monkeypatch, field, value, error):
+    paths = list(bundle(tmp_path, monkeypatch))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update({field: value}))
+    with pytest.raises(ValueError, match=error):
+        run(paths)
+
+
+def test_resealed_truth_requires_exact_pixel_approval(tmp_path, monkeypatch):
+    paths = list(bundle(tmp_path, monkeypatch))
+    paths[2] = revise(paths[2], lambda doc: doc["frames"][0].update(approval_sha256="0" * 64))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(road_eval_sha256=paths[2].name))
+    with pytest.raises(ValueError, match="pixel approval"):
+        run(paths)
+
+
+@pytest.mark.parametrize("slot", [0, 2, 3, 4])
+def test_root_alias_is_refused_before_resolving(tmp_path, monkeypatch, slot):
+    paths = list(bundle(tmp_path, monkeypatch))
+    alias = tmp_path / "alias"
+    alias.symlink_to(paths[slot], target_is_directory=True)
+    paths[slot] = alias
+    with pytest.raises(ValueError, match="symlink"):
+        run(paths)
+
+
+def test_changed_model_during_inference_is_refused(tmp_path, monkeypatch):
+    paths = bundle(tmp_path, monkeypatch)
+    model = replay.LaneSegModel.open(paths[0])
+    original = model._session.run
+    def changed(*args):
+        result = original(*args)
+        with (paths[0] / "model_manifest.json").open("a") as stream:
+            stream.write(" ")
+        return result
+    monkeypatch.setattr(model._session, "run", changed)
+    with pytest.raises(ValueError, match="model manifest changed during replay"):
+        run(paths)
+
+
+def test_empty_declared_training_cannot_prove_disjointness(tmp_path, monkeypatch):
+    paths = list(bundle(tmp_path, monkeypatch))
+    train = next((paths[1] / "datasets/train").iterdir())
+    train = revise(train, lambda doc: doc.update(frames=[]))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(training_refs=[f"train@{train.name}"]))
+    with pytest.raises(ValueError, match="non-empty training"):
+        run(paths)
+
+
 def test_fixed_pair_replays_with_separate_truth_and_holds_acceptance(tmp_path, monkeypatch):
     report = run(bundle(tmp_path, monkeypatch))
     assert report["fitness_verdict"] == "HOLD"
