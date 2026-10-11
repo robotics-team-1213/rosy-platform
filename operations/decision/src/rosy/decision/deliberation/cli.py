@@ -73,6 +73,7 @@ class CliProvider:
             if len(texts) != 1 or len(costs) != 1:
                 raise ValueError('CLI_RESULT_UNKNOWN')
             payload, cost = json.loads(texts[0]), costs[0]
-        if type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd:
+        if (getattr(self.launch, 'cost_verified', True) is not True
+                or type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd):
             raise ValueError('CLI_COST_UNKNOWN_OR_EXCEEDED')
         return opinion(problem, payload), cost
