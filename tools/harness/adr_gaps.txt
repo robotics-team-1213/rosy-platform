@@ -35,14 +35,5 @@ D-622 reserved by another active session; ADR not yet landed in this branch
 
 
 
-D-640 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-641 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-642 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-643 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-644 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-645 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-646 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-647 reserved by another active session; absent from D-649 candidate, remove when integrated
-D-648 reserved by another active session; absent from D-649 candidate, remove when integrated
 
 D-641 reserved in another local branch (refs/adr); not included in docs/fleet-judgment-stages
