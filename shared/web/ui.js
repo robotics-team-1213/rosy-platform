@@ -603,6 +603,13 @@ markHangulTree(document.documentElement);
 // on a stroked outline. .sr-only stays a screen-reader label and is not copied into the visible span.
 export function actionIcon(button, name) {
   const paths = {
+    fleet: "M9 9h6v6H9zM3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4zM7 7l2 2M15 9l2-2M7 17l2-2M15 15l2 2",
+    map: "M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16M15 5v16",
+    install: "M4 13h16v8H4zM12 2v12M8 10l4 4 4-4M8 17h8",
+    cell: "M3 3h18v18H3zM7 17v-4l5-6 5 4M7 13l5 4M12 7h.01M17 11h.01",
+    notification: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4M12 2v2",
+    history: "M3 3v5h5M3 8a9 9 0 1 1-1 7M12 7v5l3 2",
+    connect: "M9 15l6-6M7 13l-2 2a4 4 0 0 0 6 6l2-2M11 5l2-2a4 4 0 0 1 6 6l-2 2",
     wifi: "M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01",
     fit: "M4 4h16v16H4zM8 8h8v8H8z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
@@ -684,12 +691,85 @@ export function actionIcon(button, name) {
   const children = [svg];
   if (visible) {
     const label = document.createElement("span");
+    label.className = "ui-icon-label";
     label.textContent = visible;
     children.push(label);
   }
   button.replaceChildren(...children, ...quiet, ...details);
+  if (button.hasAttribute("data-icon-only")) {
+    const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
+    if (!label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
+    if (!button.hasAttribute("data-ui-tooltip")) button.setAttribute("data-ui-tooltip", label);
+  }
   return button;
 }
+
+// D-641: 공용 설명은 문서 위에 띄워 가로 탐색의 overflow에도 잘리지 않는다.
+// 이름과 선택 상태는 원래 조작에 남고 설명은 명령이나 권한을 만들지 않는다.
+let tooltip, tooltipOwner, tooltipHover, tooltipFocus, tooltipDismissed;
+function hideTooltip() {
+  if (tooltipOwner) {
+    const ids = (tooltipOwner.getAttribute("aria-describedby") || "").split(/\s+/).filter(id => id && id !== "rosy-shared-tooltip");
+    if (ids.length) tooltipOwner.setAttribute("aria-describedby", ids.join(" "));
+    else tooltipOwner.removeAttribute("aria-describedby");
+  }
+  if (tooltip) tooltip.hidden = true;
+  tooltipOwner = null;
+}
+function tooltipTarget(node) {
+  return node instanceof Element ? node.closest("[data-ui-tooltip]") : null;
+}
+function placeTooltip() {
+  if (!tooltip || tooltip.hidden || !tooltipOwner?.isConnected) return;
+  const rect = tooltipOwner.getBoundingClientRect(), box = tooltip.getBoundingClientRect();
+  const inset = parseFloat(getComputedStyle(tooltip).paddingTop);
+  tooltip.style.left = `${Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2))}px`;
+  const below = rect.bottom + inset;
+  tooltip.style.top = `${Math.max(inset, below + box.height <= innerHeight - inset ? below : rect.top - box.height - inset)}px`;
+}
+function showTooltip() {
+  const owner = tooltipHover || tooltipFocus;
+  if (!owner || !owner.isConnected || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) {
+    hideTooltip();
+    return;
+  }
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "ui-tooltip";
+    tooltip.id = "rosy-shared-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.append(tooltip);
+    tooltip.addEventListener("pointerleave", () => { tooltipHover = null; showTooltip(); });
+  }
+  if (tooltipOwner !== owner) hideTooltip();
+  tooltipOwner = owner;
+  tooltip.textContent = owner.getAttribute("data-ui-tooltip");
+  const ids = new Set((owner.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+  ids.add(tooltip.id);
+  owner.setAttribute("aria-describedby", [...ids].join(" "));
+  tooltip.hidden = false;
+  placeTooltip();
+}
+document.addEventListener("pointerover", event => {
+  if (tooltip?.contains(event.target)) return;
+  const owner = tooltipTarget(event.target);
+  if (owner !== tooltipHover) { tooltipHover = owner; tooltipDismissed = null; showTooltip(); }
+});
+document.addEventListener("pointerout", event => {
+  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || tooltip?.contains(event.relatedTarget)) return;
+  tooltipHover = null; tooltipDismissed = null; showTooltip();
+});
+document.addEventListener("focusin", event => {
+  tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
+});
+document.addEventListener("focusout", () => { tooltipFocus = null; showTooltip(); });
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && tooltip && !tooltip.hidden) {
+    tooltipDismissed = tooltipOwner; hideTooltip();
+  }
+});
+window.addEventListener("resize", placeTooltip);
+document.addEventListener("scroll", placeTooltip, true);
 
 for (const button of document.querySelectorAll("[data-action-icon]")) {
   if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
