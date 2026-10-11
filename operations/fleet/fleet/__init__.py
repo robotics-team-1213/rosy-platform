@@ -6,13 +6,13 @@ Fleet 서버 본체(Phase 4)는 아직 없다. 여기 있는 것은 로봇 계�
 
 __version__ = "0.1.0"
 
-# Source checkouts load the canonical Decision and pure assessment holders.
-# Installed Fleet distributions include these namespaces directly.
+# Source checkouts load canonical Decision, assessment and execution holders.
+# Installed Fleet includes Decision/assessment and depends on the execution wheel.
 from pathlib import Path as _Path
 
 if (_Path(__file__).resolve().parents[1] / "package.xml").is_file():
-    from ._source_layout import bootstrap_decision as _bootstrap_decision
+    from ._source_layout import bootstrap_sources as _bootstrap_sources
 
-    _bootstrap_decision()
-    del _bootstrap_decision
+    _bootstrap_sources()
+    del _bootstrap_sources
 del _Path

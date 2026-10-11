@@ -88,3 +88,11 @@
 - 증거: 원격 RED 6 NEW/19 pass 및 만료 회귀 RED 1 NEW/25 pass 뒤 전체 Isaac 152 pass/1 skip, known_failures NEW 0. 독립 소스 Safety-Review 수용. native 재시험과 카메라 완주·두 대 Fleet·ROS-SIM·실물 수용은 아직 별도다.
 - 목표: 같은 기존 인식 모델·CORE 주행의 고정 gain 기준선과 비교해 곡선의 오차·흔들림을 줄이는 효과를 검증한다. 신호·횡단보도·Fleet 통행권은 학습 보상으로 우회하지 않는다.
 - gate 변화: SOURCE/LOCAL 유지. 카메라 전체 완주·두 대 Fleet·ROS-SIM·DEVICE·FIELD는 HOLD이며 이번 소스 회귀로 승격하지 않는다.
+
+## 2026-10-11 · 152cb908fe · feat(isaac): 동일 조건 카메라 기준선과 고정 정책 비교
+
+- 문제: baseline101과 eval202/303은 시작 조건이 달라 RL 개선의 직접 비교 근거가 아니었다. 전역 frame 기반 카메라 cadence도 episode마다 달랐다.
+- 변경: 카메라 학습 후 세 seed, 저장 정책의 네 시작 방향마다 고정 gain baseline과 고정 정책 eval을 짝짓는다. seed·방향·목표 초기 pose·시간 제한·정책 상태 hash 일치 및 실제 초기 pose 오차 한도를 검사하며 baseline 실패도 보존한다. 카메라 관측과 녹화를 episode 시작 기준으로 정렬하고 각각 실제 화면을 기록한다. 정책 상태 canonical hash와 원본 정책 파일 bytes hash를 구분한다. 기존 경로 정책 일정·CORE 최종 권한·물리 정지·독립 cleanup은 유지한다.
+- 증거: 원격 RED 3 NEW/26 pass, 비교 admission RED 9 NEW/29 pass, 독립 리뷰 회귀 RED 7 NEW/35 pass 뒤 전체 Isaac 168 pass/1 skip·known_failures NEW 0·exit 0. 독립 Safety-Review는 152cb908fe의 cadence/hash blocker 해소를 확인하고 source 범위를 승인했다. 이후 main UI 통합 commit 4799c1972는 Isaac source 변경이 없다.
+- gate 변화: SOURCE/LOCAL 유지. 실제 paired native freshness·완주·RL 개선은 아직 미입증이며 두 대 Fleet·한국 교통·ROS-SIM·실물 HOLD를 유지한다.
+- 목표: 같은 기존 모델과 line_follow에서 곡선 오차·조향 변동을 비교해 RL의 추가 효과를 검증한다. 관측 손실·신호·통행권을 학습으로 우회하지 않는다.

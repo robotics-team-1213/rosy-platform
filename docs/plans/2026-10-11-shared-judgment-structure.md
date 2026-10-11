@@ -14,6 +14,8 @@
 
 사용자 선택(2026-10-11): 이번 병합은 판단·현장 연결·설치 책임부터 분리한다. 설치 구성의 실제 holder는 `tools/packaging/fleet_sources.py`; Fleet 메타데이터, source-layout 계산, site image COPY와 self-contained wheel/sdist를 함께 대조한다. 2/3단계 모델 도구 중재와 작업 규칙 이전은 이번 착지 범위에 넣지 않는다.
 
+후속 진행(2026-10-11): 사용자의 이어서 처리 요청에 따라 [D-657](../adr/D-657-judgment-adapter-and-pure-execution-extraction.md)에서 단계 2와 단계 3 첫 계산 단위를 별도 수용했다. dispatcher는 `fleet.server.model_feedback_dispatch`, 순수 목표 검증과 진척 시각/step 상태 투영은 `rosy.execution.site.{goal_evidence,workflow}`로 분리한다. 전체 상태 전이/복구 및 단계 4를 완료로 집계하지 않는다. [실행 계획](2026-10-11-judgment-adapter-extraction.md)과 [검증 기록](../validation/judgment-adapter-extraction-2026-10-11.md)에서 이번 단위의 실제 증거를 확인한다.
+
 ## 0. 현재 소비자와 목표 책임 검수
 Read: `operations/{world,situation,decision,execution,fleet}/AGENTS.md`, `rosy.decision` 하위 AGENTS, D-427/D-429/D-430/D-630/D-637, Proposed D-435/D-647/D-648.
 
