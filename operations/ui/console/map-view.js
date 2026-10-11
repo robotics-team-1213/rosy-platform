@@ -439,7 +439,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
     // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
-    const drift = calibration && view.trackingDrift ? view.trackingDrift : null;
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
@@ -468,22 +467,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
-    if (drift) {
-      const text = drift.origin === "server"
-        ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}).`
-        : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
-        + " 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).";
-      ctx.save();
-      ctx.font = font("label");
-      const boxWidth = ctx.measureText(text).width + 24;
-      ctx.fillStyle = css("--scrim");
-      ctx.fillRect(Math.max(4, (width - boxWidth) / 2), 8, boxWidth, 28);
-      ctx.fillStyle = css("--status-warn");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(text, width / 2, 14);
-      ctx.restore();
-    }
     const labelFont = font("micro");
 
     // 0.5 m 격자
@@ -515,24 +498,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.lineWidth = 2;
       ctx.strokeStyle = css("--series-primary");
       ctx.stroke();
-      const b = entry.bounds_m;
-      const bottom = toPx((b.min_x + b.max_x) / 2, b.min_y);
-      const right = toPx(b.max_x, (b.min_y + b.max_y) / 2);
-      const top = toPx(b.min_x, b.max_y);
-      ctx.fillStyle = css("--ink-quiet");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(`${(b.max_x - b.min_x).toFixed(2)} m`, bottom.x, bottom.y + 6);
-      ctx.save();
-      ctx.translate(right.x + 6, right.y);
-      ctx.rotate(Math.PI / 2);
-      ctx.textBaseline = "bottom"; // 회전 뒤 "bottom" 이 사각형 바깥쪽이다
-      ctx.fillText(`${(b.max_y - b.min_y).toFixed(2)} m`, 0, 0);
-      ctx.restore();
-      ctx.textAlign = "left";
-      ctx.textBaseline = "bottom";
-      const sources = (entry.sources || []).map((src) => src.source_id).join(", ");
-      ctx.fillText(`${entry.map_id} · 카메라 ${sources}`, top.x, top.y - 6);
     }
     ctx.restore();
 
@@ -589,10 +554,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         });
         ctx.stroke();
       }
-      for (const place of activeMap.places || []) {
+      for (const [index, place] of (activeMap.places || []).entries()) {
         const p = toPx(place.x, place.y);
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(`${place.name} (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) m`, p.x + 8, p.y - 8);
+        ctx.fillText(String(index + 1), p.x + 8, p.y - 8);
       }
       ctx.restore();
     }
@@ -633,6 +598,25 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
 
   function draw() {
+    const activeMap = view.activeSiteMap?.map;
+    const places = layerOn("lanes") && view.siteMap?.maps.some(row => row.map_id === activeMap?.map_id) ? activeMap.places || [] : [];
+    const placeList = el("map-places");
+    if (placeList) {
+      placeList.hidden = !places.length;
+      placeList.replaceChildren(...places.map(place => {
+        const row = document.createElement("li");
+        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+        return row;
+      }));
+    }
+    const calibrationStatus = el("map-calibration-status");
+    if (calibrationStatus) {
+      const drift = camera.calibration() && view.trackingDrift;
+      calibrationStatus.hidden = !drift;
+      calibrationStatus.textContent = !drift ? "" : drift.origin === "server"
+        ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`
+        : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`;
+    }
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;

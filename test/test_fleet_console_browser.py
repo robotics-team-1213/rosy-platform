@@ -1529,12 +1529,13 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
-            "() => window.__mapTexts?.filter(text => text.includes('카메라 교정 어긋남')).at(-1)?.includes('카메라 교정 어긋남(자동 검사)')",
+            "() => document.querySelector('#map-calibration-status')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
             timeout=20000)
         tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
         assert "카메라 교정 어긋남 — 맵 고정 다시 필요" in tag and "paint-test" in tag
-        caption = page.evaluate("window.__mapTexts.filter(text => text.includes('카메라 교정 어긋남')).at(-1)")
+        caption = page.locator("#map-calibration-status").inner_text()
         assert "자동 검사" in caption and "ceiling_north" in caption
+        assert not page.evaluate("window.__mapTexts.some(text => text.includes('카메라 교정 어긋남'))")
         # D-560 retains the accepted camera calibration; the outer canvas margin stays dark.
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
@@ -1594,11 +1595,11 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
-            "() => window.__mapTexts?.filter(text => text.includes('카메라 교정 어긋남')).at(-1)?.includes('정지 로봇 관측 차이')",
+            "() => document.querySelector('#map-calibration-status')?.textContent.includes('정지 로봇 관측 차이')",
             timeout=20000)
         tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
         aria = page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')")
-        caption = page.evaluate("window.__mapTexts.filter(text => text.includes('카메라 교정 어긋남')).at(-1)")
+        caption = page.locator("#map-calibration-status").inner_text()
         assert "정지 로봇 관측 차이" in caption and "rosy_01" in caption
         assert "자동 검사" not in caption  # The rendered robot verdict outranks the server check.
         assert "paint-test" in tag and "그림은 수락된 보정 그대로" in aria
