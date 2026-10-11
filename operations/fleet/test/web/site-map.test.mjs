@@ -208,6 +208,16 @@ test('teach status reads the recording, then what waits for confirm', async () =
   assert.match(teachStatusText({recording: null, pending: [{}]}), /확정 대기 1건/);
 });
 
+test('survey teach start requires a saved explicit basis and a checked physical origin', async () => {
+  const {teachStartBody} = await import('../../../ui/console/shared/site-map-model.js');
+  const draft = {revision: 'd1', map: {map_id: 'yard', survey: {revision: 'r1'}}};
+  assert.deepEqual(teachStartBody({robotId: 'r1', mode: 'map'}), {robot_id: 'r1'});
+  assert.throws(() => teachStartBody({robotId: 'r1', mode: 'survey', draft, confirmed: false}), /시작점/);
+  assert.throws(() => teachStartBody({robotId: 'r1', mode: 'survey', confirmed: true}), /저장/);
+  assert.deepEqual(teachStartBody({robotId: 'r1', mode: 'survey', draft, confirmed: true}),
+    {robot_id: 'r1', mode: 'survey', map_id: 'yard', reference_revision: 'r1', expected_revision: 'd1'});
+});
+
 test('teach confirm body: a place id, or a new address name; speed is bounded', async () => {
   const {teachConfirmBody} = await import('../../../ui/console/shared/site-map-model.js');
   const args = {teachId: 't1', from: 'A', fromName: '', to: '', toName: ' 새 곳 ', direction: 'two_way',
