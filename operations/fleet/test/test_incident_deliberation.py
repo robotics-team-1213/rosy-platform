@@ -138,3 +138,17 @@ def test_no_fleet_advisory_choice_is_invented_from_assessment(tmp_path):
         ConditionalReview(clock=lambda: 101), providers, current=lambda: receipt))
     assert result['calls'] == 1 and providers[0].calls[0].fleet_choice is None
     assert not providers[1].calls
+
+
+def test_board_forwards_scoped_baseline_for_shadow_comparison(tmp_path):
+    from fleet.stuck.board import LineStuckBoard
+    board = LineStuckBoard(wall=lambda: 101)
+    board.observe([dict(robot_id='pinky', online=True, state_age_s=1,
+        state=dict(seq=1, timestamp=datetime.fromtimestamp(100, timezone.utc).isoformat(),
+            line_follow=dict(mode='CAMERA_LINE', stuck=dict(stuck_id='lane-1', phase='ASKING'))))])
+    baseline = FleetBaseline.from_assessment(board.intervention_assessment('pinky'), 'human')
+    result = asyncio.run(board.deliberate('pinky', DeliberationJournal(tmp_path / 'fleet.db'),
+        ConditionalReview(clock=lambda: 101), [Provider('qwen'), Provider('glm')],
+        baseline=baseline, current_baseline=lambda: baseline))
+    assert result['calls'] == 2 and result['review_trigger'] == 'fleet_qwen_disagreement'
+    assert result['state'] == 'HOLD' and result['action_admissible'] is False
