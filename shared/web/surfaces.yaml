@@ -65,8 +65,6 @@ surfaces:
     themes: [dark, light]
     surface: robot
     medium: web
-    breakpoints:
-      - {value: 23rem, reason: 320px 전화에서 운용 지도의 네 줄 상태 HUD가 로봇·경로를 가리므로 그 폭에서만 HUD를 캔버스 아래로 옮긴다. 390px는 지도 위 HUD를 유지한다.}
     ports:
       - {port: 8080, source: contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
@@ -286,7 +284,9 @@ surfaces:
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
-    token_copy: operations/ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
+    token_source: shared/web/tokens.css
+    token_generator: shared/web/native-tokens.gradle
+    token_verification: operations/ui/cam/app/src/test/java/io/github/livsbittt/rosy/cam/ui/RosyColorSchemeTest.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.
