@@ -87,9 +87,11 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     return cameraFrame && fresh(cameraFrame) && frame?.source === cameraFrame.source ? frame : null;
   };
   const setCalibrations = (rows) => { calibrations = rows; redraw(); };
-  const usesPlane = () => Boolean(planeCalibration(planeFrame(), calibrations, view.siteMap));
-  const calibration = () => planeCalibration(planeFrame(), calibrations, view.siteMap)
-    || cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+  const calibration = () => cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+  const usesPlane = () => {
+    const plane = planeCalibration(planeFrame(), calibrations, view.siteMap);
+    return Boolean(plane && plane.calibration_revision === calibration()?.calibration_revision);
+  };
   function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot) {
     if (!usesPlane()) {
       drawCameraTopDown(ctx, cameraFrame, record, bounds, toPx, width, height, dpr, rot);
@@ -162,15 +164,8 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
     };
     setLive(null);
-    // 돌린 조감도는 보일 때만 다시 그린다 — 숨은 동안 프레임마다 JPEG 을 만들지 않는다.
     let lastFrame = null;
     const showFrame = () => setLive(lastFrame?.url);
-    // 지도 상태가 바뀌어 조감도가 드러나면 다음 프레임을 기다리지 않고 돌린 그림으로 바꾼다.
-    scope.subscribe(() => {
-      const observer = new MutationObserver(showFrame);
-      observer.observe(stage, { attributes: true, attributeFilter: ["data-map-state"] });
-      return () => observer.disconnect();
-    });
     scope.listen(toggle, "click", () => {
       setMode(view.displayMode === "camera" ? "coordinates" : "camera");
       showFrame();
@@ -182,7 +177,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
         lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false); return;
       }
       lastFrame = frame;
-      // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
+      // D-631: the before-correction picture keeps the camera's original orientation.
       (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", "0");
       setCameraFrame(frame);
       showFrame();
