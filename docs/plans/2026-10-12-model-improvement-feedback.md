@@ -76,3 +76,11 @@ RED: 평가 통과만으로 운영 활성화, 진행 중 사건 profile 교체, 
 export는 같은 읽기 전용 snapshot에서 시도와 receipt를 결합하고 각각 재검증한다. 고아 receipt·다른 입력·원문 필드는 거절한다. 과거 DB의 receipt 누락은 null로 표시한다. 개별 요청의 16KiB 한도를 사건 전체에 적용하지 않으며 전체 export는 1MiB 미만으로 제한한다. 이 자료는 계속 `UNREVIEWED`이고 검수 정답을 만들지 않는다.
 
 이전 export 구현에 새 시험을 실행하여 예상한 6 NEW를 실제로 확인했다. 관련 로그는 `logs/trace-export-valid-red/run-1.txt`이며 적격 AI PC 9GB에서 실행했다. GLM v2 bridge를 포함한 `e0666b3e3f`의 9개 파일 통합 시험은 적격 Model PC 9GB에서 204 passed, exit 0이다. 로그는 `logs/trace-glm-integrated-green/run-1.txt`다. 두 경로의 기준 폴더는 위 source 실행 기록과 같다. 독립 source 검토의 중요 지적은 반영했다. 실제 provider 호출·런타임 admission·팀 검수·훈련·후보 비교·승격은 아직 미완료다.
+
+## D-694·D-695 source checkpoint
+
+호출별 비용 근거의 원자 기록과 export 연결은 `bc7ba9106fb83e3810237ceb2afa30c8deba1cc3`으로 로컬 main에 착지했다. 관련 9개 파일 원격 162 passed, known-failures 신규 실패 0건, lint 0 errors다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--051704--incident-model-trace--416dac/logs/cost-land-bc7ba9106f/run-1.txt`이며 SHA256 `3832618a324300590ea3560b20d77c9120dec77b69a53abf7fd107d532cc5730`이다. 실제 청구 null과 정책 한계 비용을 구분하고 근거 오류에서도 이미 확인한 비용을 보존한다.
+
+실패 분류의 원래 사건·모델 근거 결속, 모델 제안과 최종 검토 후보의 분리, 기존 recording 원인·정답 상태 보존은 `1eab62769c0b57f260c48f938e78311bcdd88689`로 로컬 main에 착지했다. 시험 추가의 17 NEW를 확인한 뒤 최종 관련 5개 파일은 적격 AI PC 9GB에서 89 passed, exit 0, known-failures 신규 실패 0건과 lint를 통과했다. 독립 source 검토에 중요 미해결 지적은 없다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/failure-analysis-land-1eab62769c/run-1.txt`이며 SHA256 `9d2ae3ded04360ffc106f93a140d744e62f14c45a8fcac7ca31e5df9aa8ef6a9`이다.
+
+자동 분류 모델 연결, 실제 팀 정답·훈련 데이터 수용, Task 3의 전체 운영 성과 비교와 Task 4의 승격·복귀는 아직 완료하지 않았다. 소스·합성/offline 시험만으로 실제 모델 품질·운영 활성화·현장 성공을 승인하지 않는다.
