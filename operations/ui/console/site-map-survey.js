@@ -1,7 +1,7 @@
 // D-655 survey drafting UI; it changes the local draft and never commands a robot.
 import {confirmIrreversible} from '/common/ui.js';
-import {createSurveyDraft, appendSurveyElement, editSurveyElement, removeSurveyElement, reviewSurveyDraft,
-  PLACE_KIND_LABEL} from '/console/assets/site-map-model.js';
+import {createSurveyDraft, appendSurveyElement, editSurveyElement, removeSurveyElement, reviewSurveyDraft} from '/console/assets/site-map-edit.js';
+import {PLACE_KIND_LABEL} from '/console/assets/site-map-model.js';
 
 const KINDS = {...PLACE_KIND_LABEL, road: '도로', traffic_signal: '신호등', stop_line: '정지선', landmark: '기준 표식', exclusion: '금지 구역'};
 

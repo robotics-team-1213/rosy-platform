@@ -1,11 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
+  arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
   addApproach, removeApproach, mergeCrosswalks,
+} from '../../../ui/console/shared/site-map-model.js';
+import {
+  editEdge, editPlace,
   createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
   editSurveyElement, removeSurveyElement,
-} from '../../../ui/console/shared/site-map-model.js';
+} from '../../../ui/console/shared/site-map-edit.js';
 
 const MAP = {
   places: [{id: 'A', name: 'A', x: 0, y: 0, kind: 'junction'}, {id: 'B', name: 'B', x: 2, y: 0, kind: 'park'}],
@@ -209,7 +212,7 @@ test('teach status reads the recording, then what waits for confirm', async () =
 });
 
 test('survey teach start requires a saved explicit basis and a checked physical origin', async () => {
-  const {teachStartBody} = await import('../../../ui/console/shared/site-map-model.js');
+  const {teachStartBody} = await import('../../../ui/console/shared/site-map-edit.js');
   const draft = {revision: 'd1', map: {map_id: 'yard', survey: {revision: 'r1'}}};
   assert.deepEqual(teachStartBody({robotId: 'r1', mode: 'map'}), {robot_id: 'r1'});
   assert.throws(() => teachStartBody({robotId: 'r1', mode: 'survey', draft, confirmed: false}), /시작점/);
@@ -219,7 +222,7 @@ test('survey teach start requires a saved explicit basis and a checked physical 
 });
 
 test('survey records are shown only against their original coordinate reference', async () => {
-  const {surveyTeachMatches} = await import('../../../ui/console/shared/site-map-model.js');
+  const {surveyTeachMatches} = await import('../../../ui/console/shared/site-map-edit.js');
   const reference = {revision: 'r1', origin: [1, 2], heading_rad: 0, description: 'mark'};
   const record = {mode: 'survey', map_id: 'yard', survey_reference: reference};
   const map = {map_id: 'yard', survey: {...reference, reviewed: true, review_note: 'checked'}};

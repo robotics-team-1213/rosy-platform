@@ -66,6 +66,7 @@ CONSOLE_ASSETS = {
     "site-map.css": ("site-map.css", "text/css"),
     "site-map.js": ("site-map.js", "application/javascript"),
     "site-map-model.js": ("shared/site-map-model.js", "application/javascript"),
+    "site-map-edit.js": ("shared/site-map-edit.js", "application/javascript"),
     "site-map-teach.js": ("site-map-teach.js", "application/javascript"),
     "site-map-survey.js": ("site-map-survey.js", "application/javascript"),
     "site-layer.js": ("site-layer.js", "application/javascript"),
