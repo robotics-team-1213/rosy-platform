@@ -7894,3 +7894,9 @@ osy-d395-s1d\`.
 - 변경: 빈 조사 기준·시설·도로·카메라/relative odom 근거·CAS, 선택 로봇 기록과 대형 작업 연결, 지도 busy guard와 충돌/개입 결과 구분을 구현·통합했다. 실행 계획과 날짜 검증 기록을 최종 상태로 정리했다.
 - 증거: 착지 원격16,523 PASS/NEW0, Node312 PASS, pre-push292 PASS. exact SHA FULL CI15 jobs 및 site build 성공, 운영자 서명·사이트 updater 종료0·세 healthy image identity·교정/조사 import 확인. 실제 사이트1440/390 px 세 모드 크기 안정·선택→기록·대형 패널·로컬 시설 작성·기존 지도/profile 보존 PASS. 상세 docs/validation/2026-10-12-mapless-fleet-control.md.
 - gate 변화: 이번 기능의 사이트 설치/UI 증거를 추가했다. 로봇 두 대 오프라인으로 실물 주행·측량·대형 수용 미확인; FIELD 승격·로봇 배포·이동·E-Stop 해제 없음. 일반 외부 IP URL의 연결/TLS 문제는 별도 제한으로 유지한다.
+
+## 2026-10-12 · uncommitted · Discord 대화 작업 요청·Fleet 대응 파이프라인 점검
+
+- 변경: D-669 Proposed와 설계/구현 계획을 작성했다. 일반 관리는 Console, 위험 대응은 Discord로 협업하되 transport·기명 principal·후보·기존 작업/사건 원장·장치 writer와 목표 근거의 경계를 분리했다. 일반 Mission 동일 owner와 Cell Job 별도 approver 계약을 구분했다.
+- 증거: 현재 source/승인·인수·통지·work/progress 경로와 독립 책임 검토를 대조했다. 사용자 계정에서 지정 팀 webhook을 생성하고 승인된 연결 확인 1건 HTTP 200·메시지 ID·UI readback을 확인했다. 비공개 receipt/화면은 X 세션에 보관한다.
+- gate 변화: Discord 연결 확인만 완료했다. Fleet outbox·Bot 대화 intake·기명 principal 연결·실제 조치/목표/FIELD는 미확인이며, source 문서·원격 계약 검증은 별도 기록이다. Bot은 operator 자격을 공유하지 않고 device/provider/push/deploy를 활성화하지 않는다.
