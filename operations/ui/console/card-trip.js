@@ -9,7 +9,7 @@ import {
   repeatTripReason, startTrip,
   trafficCardLine, tripRefusalText, tripStartReason,
 } from "/console/assets/site-map-model.js";
-import { chooseConvoyLeader } from "./motion-readiness.js";
+import { chooseConvoyLeader, formationCommandReason } from "./motion-readiness.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 
 export { endedTripText, openTrip };
@@ -28,7 +28,8 @@ export function tripReason(robot, { view, operator, named }) {
         : !robot.online ? "로봇 오프라인"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
-              : view.activeSiteMap ? "" : "활성 현장 지도 없음");
+              : formationCommandReason(view, robot.robot_id, 'trip')
+                || (view.activeSiteMap ? "" : "활성 현장 지도 없음"));
 }
 
 /** What `운행 취소` stops: the open trip if there is one, else the goal; `lane` (lane driving is on) also

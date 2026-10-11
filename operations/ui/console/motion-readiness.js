@@ -28,6 +28,16 @@ export function formationReason(robots, leader, members) {
   return '';
 }
 
+export function formationCommandReason(view, robotId, command) {
+  if (view.formationUnavailable) return '대형 상태 확인 불가';
+  const formation = view.formation;
+  if (!formation?.active) return '';
+  const follower = Object.hasOwn(formation.assignment || {}, robotId);
+  if (command === 'trip' && (formation.leader === robotId || follower))
+    return '대형 참여 중 · 대형 관리에서 해제한 뒤 개별 운행하세요';
+  return follower && formation.leader !== robotId ? '대형 팔로워 · 목적지는 리더에게 배정하세요' : '';
+}
+
 // Field check 2026-10-10: with only manual-only robots (CAP-001 runtime.maps.occupancy false) the console
 // still asked /api/fleet/map every 30 s and logged a 404 each time. True only when every robot says so.
 export function noRobotServesGrid(robots) {
