@@ -1,10 +1,16 @@
 import json
 import os
+import http.client
+import socket
+import threading
+import time
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from deploy.ai_pc import deliberation_smoke_budget as budget
+from deploy.ai_pc import deliberation_glm_gateway as gate
 
 
 @pytest.fixture
@@ -75,3 +81,35 @@ def test_fsync_failure_preserves_claim(marker, monkeypatch):
     assert marker.exists()
     with pytest.raises(ValueError, match='ALREADY_CLAIMED'):
         budget.claim('{}')
+
+
+def test_gateway_upstream_failure_preserves_claim_across_fresh_servers(marker, monkeypatch):
+    calls = []
+    def upstream(*args):
+        assert marker.exists()
+        calls.append(1)
+        raise TimeoutError('synthetic request outcome unknown')
+    monkeypatch.setattr(gate, 'claim', budget.claim)
+    monkeypatch.setattr(gate, 'upstream', upstream)
+    class Client(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.socket(socket.AF_UNIX)
+            self.sock.settimeout(3)
+            self.sock.connect(self.host)
+    for index in range(2):
+        path = str(marker.parent / ('socket-' + str(index)))
+        with gate.Gateway(path, gate.Handler) as server:
+            server.timeout = 2
+            server.body, server.token, server.calls = '{}', 'fake-unit-token', 0
+            server.deadline, server.problem = time.monotonic() + 5, None
+            worker = threading.Thread(target=server.handle_request, daemon=True)
+            worker.start()
+            with closing(Client(path)) as client:
+                client.request('POST', '/v1/chat/completions', json.dumps({'model': gate.MODEL, 'messages': []}))
+                response = client.getresponse()
+                response.read()
+                assert response.status == 400
+            worker.join(3)
+            assert not worker.is_alive()
+            assert server.metrics['state'] == 'HOLD' and server.calls == (1 if index == 0 else 0)
+    assert calls == [1] and marker.exists()

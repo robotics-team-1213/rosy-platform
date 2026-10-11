@@ -87,6 +87,7 @@ class Connection(http.client.HTTPConnection):
 @pytest.mark.parametrize('change', ['valid', 'stream', 'model', 'tool', 'history', 'route', 'oversize'])
 def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change):
     seen = []
+    monkeypatch.setattr(gate, 'claim', lambda body: None)
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
