@@ -1638,4 +1638,7 @@ snapshot을 정리한다. 네트워크·호스트 홈·설정은 상속하지 �
 Ubuntu AppArmor의 namespace 거절은 `deliberation_install`의 전용 계정·실행 파일 프로파일로
 처리한다. 관리자가 적용한 뒤 `deliberation_preflight`의 실제 격리·자손 종료·cgroup readback을
 확인한다. [관리자 명령과 후속 수용](../../docs/plans/2026-10-12-deliberation-host-admission.md)을 따른다.
-현재 접속 계정으로는 관리자 적용을 수행하지 못했으며 운영 모델은 활성화하지 않았다.
+팀의 관리자 적용과 재검사에서 HOST_OFFLINE 수용 13개 검사가 통과했다.
+로컬 Qwen의 수동 호출과 Decision의 관측 부족 HOLD도 확인했다.
+[실제 수용 증거와 제한](../../docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)을 따른다.
+운영 제공자·자동 worker·로봇 실행은 활성화하지 않았다.
