@@ -169,6 +169,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             expect(page.locator("#context-status")).not_to_be_visible()
             page.get_by_role("tab", name="기록·근거").press("End")
             expect(page.locator("#context-tools")).to_be_visible()
+            assert page.locator("#context-tools .signals").evaluate("node => getComputedStyle(node).gridColumnStart") == "1"
             page.get_by_role("tab", name="운영 도구").press("Home")
             expect(status).to_be_focused()
             expect(page.locator("#context-status")).to_be_visible()
