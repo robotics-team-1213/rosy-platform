@@ -220,10 +220,13 @@ def test_prelabel_cli_refuses_road_semantic_substitution_before_output(tmp_path,
     raw[-1]['semantic'] = 'current_road_region/1'
     model = SimpleNamespace(manifest=SimpleNamespace(
         classes=[SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries],
-        raw={'output': {'classes': raw}}))
+        raw={'output': {'classes': raw}}, input=None))
     monkeypatch.setattr(prelabel, '_open_model', lambda *args: (model, None))
+    frames = tmp_path / 'frames'
+    frames.mkdir()
+    (frames / 'frames.jsonl').write_text('')
     out = tmp_path / 'out'
-    assert prelabel.main([str(tmp_path / 'frames'), '--model', str(tmp_path / 'model'),
+    assert prelabel.main([str(frames), '--model', str(tmp_path / 'model'),
                           '--classes', str(classes), '--out', str(out)]) == 1
     assert not out.exists()
 
