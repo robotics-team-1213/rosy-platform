@@ -9,6 +9,7 @@ Fleet; this tool never holds a Fleet token or calls a robot.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +17,8 @@ import re
 
 CAUSES = {"line_marking", "obstacle", "robot_fault", "localization", "traffic_wait", "unknown"}
 SCHEMA = "rosy.recording.incident_feedback/1"
+FAILURE_OWNERS = dict(judgment='Decision', observation='Perception', map='SiteMap',
+                      field_connection='Fleet', device='CORE/device', unknown='unassigned')
 
 
 def bind(incidents: dict, markers: dict) -> dict:
@@ -109,13 +112,52 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
     return result
 
 
+def attach_failure_analysis(recording_feedback, exported, analysis):
+    result = attach_model_feedback(recording_feedback, exported)
+    scope = exported['case']['scope']
+    fields = {'schema', 'subject_id', 'case_id', 'model_feedback_digest', 'reviews'}
+    if (type(analysis) is not dict or set(analysis) != fields
+            or analysis['schema'] != 'rosy.incident.failure_analysis/1'
+            or analysis['subject_id'] != scope['subject_id'] or analysis['case_id'] != scope['case_id']
+            or analysis['model_feedback_digest'] != exported['digest']
+            or type(analysis['reviews']) is not list or not 1 <= len(analysis['reviews']) <= 8
+            or len(json.dumps(analysis, allow_nan=False).encode()) > 65536):
+        raise ValueError('invalid bound failure analysis')
+    candidates, seen, human = [], set(), set()
+    for review in analysis['reviews']:
+        if (type(review) is not dict or set(review) != {'category', 'source', 'author_id', 'at'}
+                or type(review['category']) is not str or review['category'] not in FAILURE_OWNERS
+                or type(review['source']) is not str or review['source'] not in {'model', 'human'}
+                or type(review['author_id']) is not str or not 1 <= len(review['author_id']) <= 128
+                or review['author_id'] != review['author_id'].strip() or type(review['at']) is not str
+                or len(review['at']) > 64 or datetime.fromisoformat(review['at']).tzinfo is None):
+            raise ValueError('invalid named failure proposal or review')
+        encoded = json.dumps(review, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+        digest = hashlib.sha256(encoded).hexdigest()
+        if digest in seen: raise ValueError('duplicate failure review')
+        seen.add(digest)
+        if review['source'] == 'human': human.add(review['category'])
+        candidates.append(dict(category=review['category'], owner=FAILURE_OWNERS[review['category']],
+                               source=review['source'], review_digest=digest))
+    for row in result['matches']:
+        if (row['robot_id'], row['stuck_id']) == (scope['subject_id'], scope['case_id']):
+            row['failure_analysis'] = dict(candidates=candidates, label_state='UNREVIEWED',
+                review_state='unreviewed' if not human else 'review_candidate' if len(human) == 1 else 'disputed',
+                reviewed_category=next(iter(human)) if len(human) == 1 else None)
+    result['schema'] = 'rosy.recording.incident_feedback/3'
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("incidents", type=Path)
     parser.add_argument("markers", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--model-feedback", type=Path, help="unreviewed fixed Fleet model feedback export")
+    parser.add_argument("--failure-analysis", type=Path, help="bound failure proposals and final review candidates")
     args = parser.parse_args()
+    if args.failure_analysis is not None and args.model_feedback is None:
+        raise ValueError('failure analysis requires model feedback')
     result = bind(json.loads(args.incidents.read_text(encoding="utf-8-sig")),
                   json.loads(args.markers.read_text(encoding="utf-8-sig")))
     if args.model_feedback is not None:
@@ -123,7 +165,14 @@ def main() -> None:
             raw = source.read(1024 * 1024 + 1)
         if len(raw) > 1024 * 1024:
             raise ValueError('model feedback file limit exceeded')
-        result = attach_model_feedback(result, json.loads(raw))
+        exported = json.loads(raw)
+        if args.failure_analysis is None:
+            result = attach_model_feedback(result, exported)
+        else:
+            with args.failure_analysis.open('rb') as source:
+                raw = source.read(65537)
+            if len(raw) > 65536: raise ValueError('failure analysis file limit exceeded')
+            result = attach_failure_analysis(result, exported, json.loads(raw))
     with args.out.open("x", encoding="utf-8") as output:
         output.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(f"{len(result['matches'])} matched, {len(result['missing_incidents'])} missing: {args.out}")

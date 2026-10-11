@@ -16,6 +16,7 @@ from fleet.server.incident_deliberation import FleetBaseline
 from .closure import observe_closure
 from .contract import CaseBudget, CaseScope, micros
 from .ledger.receipt import model_receipt
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 
 
 class IncidentCaseWorker:
@@ -235,15 +236,18 @@ class IncidentCaseWorker:
         case = await self._db('case', scope)
         remaining = min(profile.timeout_s, case['deadline'] - self.clock())
         cost, checked, state = None, None, 'UNKNOWN'
+        cost_evidence, evidence_error = None, False
         try:
             if remaining <= 0 or not self._fresh(problem): raise ValueError('INCIDENT_SCOPE_CHANGED')
             async with asyncio.timeout(remaining):
                 self._submitted.add(attempt)
-                result, cost = await provider(problem, bound, prior, remaining, budget_usd=profile.max_cost_usd)
+                invocation = await provider(problem, bound, prior, remaining, budget_usd=profile.max_cost_usd)
+                result, cost = invocation
             micros(cost)
             state = 'REJECTED'
             checked = judgment(problem, bound, result.payload if type(result) is Judgment else result)
-            if self._fresh(problem): state = 'COMPLETED'
+            cost_evidence, evidence_error = call_cost_evidence(invocation, problem, bound, checked, cost)
+            if self._fresh(problem) and not evidence_error: state = 'COMPLETED'
         except asyncio.CancelledError:
             await asyncio.shield(self._db('complete', scope, attempt, worker_id=self._worker_id,
                 state='UNKNOWN', actual_cost_usd=cost, summary={'reason': 'WORKER_CANCELLED'}))
@@ -255,12 +259,13 @@ class IncidentCaseWorker:
                 except ValueError: cost, state = None, 'UNKNOWN'
         summary = {'reason': 'MODEL_CHECKED' if state == 'COMPLETED' else 'MODEL_RESULT_REJECTED',
                    'observation_revision': problem.generation}
+        if evidence_error: summary['reason'] = 'COST_EVIDENCE_REJECTED'
         if state == 'COMPLETED' and checked is not None:
             summary.update(verdict=checked.payload['verdict'], choice=checked.choice,
                            receipt_sha256=hashlib.sha256(checked.payload_json.encode()).hexdigest())
         trace = None
-        if checked is not None and state != 'UNKNOWN':
-            try: trace = model_receipt(scope, problem, bound, checked, profiles=self.profiles)
+        if checked is not None and state != 'UNKNOWN' and not evidence_error:
+            try: trace = model_receipt(scope, problem, bound, checked, profiles=self.profiles, cost_evidence=cost_evidence)
             except (ValueError, TypeError):
                 state, summary = 'REJECTED', {'reason': 'MODEL_TRACE_REJECTED'}
         completed = await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
@@ -269,7 +274,7 @@ class IncidentCaseWorker:
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
         if completed['state'] != 'COMPLETED' and checked is not None:
-            if self._fresh(problem): await self._finish(scope, 'MODEL_TRACE_REJECTED')
+            if self._fresh(problem): await self._finish(scope, 'COST_EVIDENCE_REJECTED' if evidence_error else 'MODEL_TRACE_REJECTED')
             return None
         if self.human_owned(scope.subject_id, scope.case_id) is not False:
             await self._db('close_case', scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED'); return None
