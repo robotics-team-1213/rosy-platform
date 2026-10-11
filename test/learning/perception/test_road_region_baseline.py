@@ -67,3 +67,13 @@ def test_visible_region_does_not_fill_occlusions_or_unobserved_crop():
     assert info["reason"] == "ok"
     assert chosen[160:180, 145:175].all()
     assert not chosen[:128].any()
+
+
+def test_missing_centre_seed_is_a_heuristic_not_verified_region_membership():
+    labels = np.zeros((240, 320), np.int64)
+    labels[120:, 110:145] = 5
+    labels[120:, 180:260] = 5
+    observed = candidate(labels)
+    assert observed[180, 180:260].all()
+    assert not observed[:, 110:145].any()
+    assert not (labels[:, labels.shape[1] // 2] == 5).any()

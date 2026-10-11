@@ -7814,3 +7814,9 @@ osy-d395-s1d\`.
 - 변경: branch `feat/perception-fitness-pipeline`의 실행 계획에 도로 관측·현재 구역 추정·따라갈 구역 선택·운영 admission을 구별했다. 사용자 보완에 따라 새 segmentation 출력/manifest 계약은 책임 배치를 먼저 검토한 뒤 진행한다.
 - 증거: 착수 HEAD `8c10dd8a3`의 lane_mask, drivable_paint, World MapPose, 자문 Decision 및 Drive path_follow를 대조했다. drivable_paint의 우측 분기 선택은 인지 사실 정답과 별도 평가할 기존 주행 정책이다.
 - gate 변화: 없음. 목표/worktree/계획은 착수 근거이며 새 role, 구역 추정 구현, 모델 학습, 인지 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · c952f2a0a · 도로 구역 기준선과 추종 선택의 독립 시험
+
+- 변경: D-659 인지 평가에서 기존 연결 구역 후보와 D-597 추종 대상을 구별하는 시험을 추가했다. 연결 분기 보존, 분리 도로 제외, 가림/crop 제외와 추종용 hole filling의 차이를 검증했다. 중앙 시드 부재의 최대 영역 선택은 실제 구역 귀속 증거가 아닌 한계 사례로 추가했다.
+- 증거: 첫 시험의 부분집합 가정은 NEW 1로 실패했고 gap closing/hole filling 원인을 확인했다. 관측 화소와 채운 추종 화소를 구별한 `c952f2a0a` 원격 terminal exit 0, NEW 0. 추가 한계 사례와 최신 main 통합은 후속 검증으로 기록한다.
+- gate 변화: 없음. 합성 source 시험이며 독립 실물 정답·시뮬레이션 영상·구역 추정 승인·주행 활성화의 증거가 아니다.
