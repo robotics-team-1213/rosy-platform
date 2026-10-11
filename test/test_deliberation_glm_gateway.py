@@ -137,10 +137,16 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
         worker.start()
-        with closing(Connection(path)) as conn:
-            conn.request('POST', route, raw, {'Content-Type': 'application/json'})
-            result = conn.getresponse()
-            output = result.read()
+        result = None
+        try:
+            with closing(Connection(path)) as conn:
+                conn.request('POST', route, raw, {'Content-Type': 'application/json'})
+                result = conn.getresponse()
+                output = result.read()
+        except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+            if change not in {'route', 'oversize'}:
+                raise
+            # Header rejection may close before the refused body is transmitted.
         worker.join(4)
         assert not worker.is_alive()
         if change in {'valid', 'stream'}:
@@ -162,7 +168,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
             worker.join(4)
             assert not worker.is_alive() and len(seen) == server.calls == 1
         else:
-            assert result.status == 400 and seen == []
+            assert (result is None or result.status == 400) and seen == [] and server.calls == 0
 
 
 def test_upstream_fixed_tls_and_no_redirects(monkeypatch):
