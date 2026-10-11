@@ -16,9 +16,14 @@ def test_fixed_sandbox_has_no_host_home_network_or_environment(tmp_path):
     assert '--unshare-all' in command and '--new-session' in command
     assert '--clearenv' in command and '--cap-drop' in command
     assert 'MemoryMax=1G' in command and 'TasksMax=32' in command
+    assert 'RuntimeMaxSec=35s' in command
     assert '--share-net' not in command and '/home' not in command
     assert command[-4:] == ('--', '/provider', '--bare', '-p')
     executable.write_bytes(b'changed')
+    assert launcher.executable.read_bytes() == b'trusted executable fixture'
+    assert launcher.command(('claude', '-p'), 'rosy-deliberation-test.scope')[-2:] == ('/provider', '-p')
+    launcher.executable.chmod(0o700)
+    launcher.executable.write_bytes(b'changed snapshot')
     with pytest.raises(ValueError, match='digest'):
         launcher.command(('claude', '-p'), 'rosy-deliberation-test.scope')
 
@@ -45,6 +50,29 @@ def test_stdout_is_bounded_and_stderr_is_not_returned():
         assert code == 0 and raw == b'ok\n'
         with pytest.raises(ValueError, match='OUTPUT_LIMIT'):
             await bounded_process((sys.executable, '-c', 'print("x"*100000)'), b'', 2, 32)
+    asyncio.run(run())
+
+
+def test_repeated_cancel_during_delayed_spawn_still_reaps(tmp_path, monkeypatch):
+    from deploy.site import deliberation_sandbox as module
+    original = asyncio.create_subprocess_exec
+    processes = []
+    async def delayed(*args, **kwargs):
+        await asyncio.sleep(.1)
+        process = await original(*args, **kwargs)
+        processes.append(process)
+        return process
+    monkeypatch.setattr(module.asyncio, 'create_subprocess_exec', delayed)
+    async def run():
+        task = asyncio.create_task(bounded_process((sys.executable, '-c',
+            'import time;time.sleep(60)'), b'', 2, 32))
+        await asyncio.sleep(.01)
+        task.cancel()
+        await asyncio.sleep(.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert processes and all(p.returncode is not None for p in processes)
     asyncio.run(run())
 
 
