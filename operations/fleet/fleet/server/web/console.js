@@ -5,7 +5,7 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
-import { createLineStuckPanel } from "./line-stuck.js";
+import { CAUSE_LABEL, createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -752,7 +752,7 @@ pageScope.listen(document, "keydown", (event) => {
   const active = document.activeElement;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    selectContext("status");
+    inbox.select("status");
     const idx = cards.indexOf(active);
     const next = idx < 0
       ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
@@ -834,7 +834,7 @@ async function commitGoal(col, row) {
 }
 
 function focusGoalButton(robotId) {
-  selectContext("status");
+  inbox.select("status");
   [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
     .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
 }
@@ -1021,7 +1021,7 @@ const mapView = createMapView({ scope: pageScope,
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
-view.openLeaderTrip = (robotId) => { selectContext("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
+view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
