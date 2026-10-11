@@ -56,18 +56,15 @@ class MissionDispatcher:
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.grant_ttl_s = float(grant_ttl_s)
         self.on_action_terminal = on_action_terminal
+        self._cursor = ""
 
     def dispatch_next(self) -> dict[str, Any] | None:
-        running = self.mission_service.next_running()
-        if running is not None:
-            return self._reconcile(running)
-        pending = self.mission_service.next_reconciliation()
-        if pending is not None:
-            return self._reconcile(pending)
-
-        mission = self.mission_service.next_ready()
+        mission = self.mission_service.next_dispatch(self.omx_instances, after_id=self._cursor)
         if mission is None:
             return None
+        self._cursor = mission["mission_id"]
+        if mission["status"] == "RUNNING" or mission.get("reconciliation_pending"):
+            return self._reconcile(mission)
         if self.omx_instances.get(mission["workcell_id"]) != mission["instance_id"]:
             return {"mission_id": mission["mission_id"], "state": "NOT_CONFIGURED"}
         if (type(mission.get("authority_epoch")) is not int
