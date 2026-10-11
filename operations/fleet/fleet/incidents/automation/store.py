@@ -252,6 +252,17 @@ class IncidentCaseStore:
                 scope_json = conn.execute('SELECT scope_json FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?', key).fetchone()[0]
                 scope = CaseScope(**json.loads(scope_json))
                 if scope not in result: result.append(scope)
+            # A cancelled terminal commit may already be known. Keep its receipt and stop the unresolved case.
+            completed = conn.execute('''SELECT c.scope_json FROM fleet_incident_v2_cases c
+                WHERE c.state='ACTIVE' AND EXISTS (SELECT 1 FROM fleet_incident_v2_attempts a
+                    WHERE a.subject_id=c.subject_id AND a.case_id=c.case_id AND a.worker_id=?)
+                AND NOT EXISTS (SELECT 1 FROM fleet_incident_v2_attempts a
+                    WHERE a.subject_id=c.subject_id AND a.case_id=c.case_id AND a.worker_id!=?
+                    AND a.state IN ('RESERVED','SUBMITTING'))''', (worker_id, worker_id)).fetchall()
+            for row in completed:
+                scope = CaseScope(**json.loads(row[0]))
+                conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='WORKER_CANCELLED' WHERE subject_id=? AND case_id=?", self._key(scope))
+                if scope not in result: result.append(scope)
         return tuple(result)
 
     def close_case(self, scope, *, state, reason):
