@@ -35,6 +35,7 @@ class IncidentCaseWorker:
         self.profile_sha256 = hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest()
         self._snapshot, self._task, self._waiting = None, None, {}
         self._worker_id, self._closed = uuid.uuid4().hex, False
+        self._submitted, self._shutdown_task = set(), None
 
     @property
     def idle(self):
@@ -105,7 +106,12 @@ class IncidentCaseWorker:
         if self.idle: self._task = asyncio.create_task(self._drain())
 
     async def _db(self, method, *args, **kwargs):
-        return await asyncio.to_thread(getattr(self.store, method), *args, **kwargs)
+        task = asyncio.create_task(asyncio.to_thread(getattr(self.store, method), *args, **kwargs))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await asyncio.shield(task)
+            raise
 
     async def _drain(self):
         while self._snapshot is not None and not self._closed:
@@ -215,6 +221,7 @@ class IncidentCaseWorker:
         try:
             if remaining <= 0 or not self._fresh(problem): raise ValueError('INCIDENT_SCOPE_CHANGED')
             async with asyncio.timeout(remaining):
+                self._submitted.add(attempt)
                 result, cost = await provider(problem, bound, prior, remaining, budget_usd=profile.max_cost_usd)
             micros(cost)
             state = 'REJECTED'
@@ -240,7 +247,19 @@ class IncidentCaseWorker:
         return checked, bound
 
     async def aclose(self):
+        if self._shutdown_task is None:
+            self._shutdown_task = asyncio.create_task(self._shutdown())
+        cancelled = False
+        while not self._shutdown_task.done():
+            try: await asyncio.shield(self._shutdown_task)
+            except asyncio.CancelledError: cancelled = True
+        self._shutdown_task.result()
+        if cancelled: raise asyncio.CancelledError
+
+    async def _shutdown(self):
         self._closed, self._snapshot = True, None
         if self._task is not None and not self._task.done():
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
+        for scope in await self._db('cancel_owned', self._worker_id, submitted_attempt_ids=self._submitted):
+            await self._finish(scope, 'WORKER_CANCELLED')

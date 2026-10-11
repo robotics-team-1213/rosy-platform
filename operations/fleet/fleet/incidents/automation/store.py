@@ -63,7 +63,9 @@ class IncidentCaseStore:
 
     def begin_case(self, scope, budget, *, connection=None):
         if connection is not None:
-            if not connection.in_transaction:
+            if (type(connection) is not sqlite3.Connection or not connection.in_transaction
+                    or not any(row[1] == 'main' and Path(row[2]).resolve() == self.path.resolve()
+                               for row in connection.execute('PRAGMA database_list'))):
                 raise ValueError('CALLER_TRANSACTION_REQUIRED')
             return self._begin_case(connection, scope, budget)
         with self._transaction() as conn:
@@ -194,6 +196,25 @@ class IncidentCaseStore:
             if count:
                 conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='RESTART_OUTCOME_UNKNOWN' WHERE subject_id=? AND case_id=?", key)
             return count
+
+    def cancel_owned(self, worker_id, *, submitted_attempt_ids):
+        """Cancel only this worker after its DB tasks finish; submission proof is trusted runtime state."""
+        identifier(worker_id)
+        result = []
+        with self._transaction() as conn:
+            rows = conn.execute("SELECT * FROM fleet_incident_v2_attempts WHERE worker_id=? AND state IN ('RESERVED','SUBMITTING')", (worker_id,)).fetchall()
+            for row in rows:
+                key = row['subject_id'], row['case_id']
+                submitted = row['attempt_id'] in submitted_attempt_ids
+                conn.execute('UPDATE fleet_incident_v2_attempts SET state=?,actual_micros=?,summary_json=? WHERE subject_id=? AND case_id=? AND attempt_id=?',
+                    ('UNKNOWN' if submitted else 'REJECTED', None if submitted else 0,
+                     summary_json({'reason': 'WORKER_CANCELLED'}), *key, row['attempt_id']))
+                conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='WORKER_CANCELLED',reserved_micros=reserved_micros-? WHERE subject_id=? AND case_id=?",
+                             (0 if submitted else row['reserved_micros'], *key))
+                scope_json = conn.execute('SELECT scope_json FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?', key).fetchone()[0]
+                scope = CaseScope(**json.loads(scope_json))
+                if scope not in result: result.append(scope)
+        return tuple(result)
 
     def close_case(self, scope, *, state, reason):
         raw = summary_json({'reason': reason})
