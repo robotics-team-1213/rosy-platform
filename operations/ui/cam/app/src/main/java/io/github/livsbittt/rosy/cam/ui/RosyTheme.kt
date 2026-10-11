@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
@@ -112,9 +113,17 @@ private val RosyTypography = Typography(
     labelSmall = tokenText(RosyMetrics.TextMicro, RosyMetrics.WeightLabel, RosyMetrics.LeadingLabel),
 )
 
+private val RosyShapes = Shapes(
+    extraSmall = RoundedCornerShape(RosyMetrics.RadiusControl.dp),
+    small = RoundedCornerShape(RosyMetrics.RadiusButton.dp),
+    medium = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+    large = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+    extraLarge = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+)
+
 @Composable
 fun RosyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = RosyColorScheme, typography = RosyTypography) {
+    MaterialTheme(colorScheme = RosyColorScheme, typography = RosyTypography, shapes = RosyShapes) {
         // Screens draw on a plain Column, not a Surface, so set the ink here; otherwise Text
         // falls back to LocalContentColor's default (black) on the dark ground.
         CompositionLocalProvider(LocalContentColor provides RosyColorScheme.onBackground, content = content)
