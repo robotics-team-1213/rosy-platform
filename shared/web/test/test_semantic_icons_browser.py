@@ -128,6 +128,33 @@ def test_tooltip_closes_when_its_owner_leaves_the_visible_surface(page, mutation
     tooltip.wait_for(state="hidden")
 
 
+@pytest.mark.parametrize("activation", ["mouse", "Enter", "Space"])
+def test_activation_dismisses_description_until_focus_moves_and_next_control_is_reachable(page, activation):
+    page.goto(f"{HOST}/styleguide")
+    page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
+    owner = page.locator("#icon-focus-demo")
+    owner.focus()
+    tooltip = page.get_by_role("tooltip")
+    tooltip.wait_for(state="visible")
+    if activation == "mouse":
+        owner.click()
+    else:
+        page.keyboard.press(activation)
+    tooltip.wait_for(state="hidden")
+    assert owner.evaluate("node => node === document.activeElement")
+    assert owner.get_attribute("aria-describedby") is None
+    # 누른 조작에 포커스가 남아도 포인터 재진입으로 설명이 다시 떠서는 안 된다.
+    page.mouse.move(0, 0)
+    owner.hover()
+    assert not tooltip.is_visible()
+    next_control = page.locator(".icon-inventory [data-action-icon='connect']")
+    next_control.evaluate("node => node.addEventListener('click', () => node.dataset.clicked = 'true')")
+    next_control.click()
+    assert next_control.get_attribute("data-clicked") == "true"
+    owner.focus()
+    tooltip.wait_for(state="visible")
+
+
 def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descriptions(page):
     page.goto(f"{HOST}/styleguide")
     page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
