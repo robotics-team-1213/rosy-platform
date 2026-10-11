@@ -33,7 +33,7 @@ def test_training_walls_are_white_grounded_and_taller_than_pinky():
     world = ET.parse(path).getroot().find("world")
     walls = world.findall("./model[@name='track_v2_fleet']/link/collision")
     assert len(walls) == 4
-    geometry = yaml.safe_load((BUNDLE.parents[2] / "apps/device/pinky/profile/config/geometry.yaml").read_text())
+    geometry = yaml.safe_load((BUNDLE.parents[2] / "devices/pinky/profile/config/geometry.yaml").read_text())
     for wall in walls:
         size = [float(v) for v in wall.find("./geometry/box/size").text.split()]
         z = float(wall.find("pose").text.split()[2])
