@@ -157,6 +157,40 @@ def test_pytest_exit_without_failed_lines_stops(repos, target):
     assert git(main, "rev-parse", "HEAD") == before
 
 
+def test_signaled_remote_exit_one_without_failed_lines_stops_before_ff(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+
+    def interrupted_run(invocations, logs, *args, **kwargs):
+        for log in logs:
+            log.write_text("..... [ 42%]\nrunner terminated by SIGTERM\n", encoding="utf-8")
+        return [1] * len(invocations)  # The remote wrapper normalizes a signal to exit 1.
+
+    monkeypatch.setattr(land.remote_pytest, "run", interrupted_run)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert "not landing" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_remote_exit_one_with_only_known_failures_can_land(repos, monkeypatch):
+    main, wt = repos
+    nodeid = "pkg/test/test_a.py::test_a"
+    commit(wt, {"pkg/test/test_a.py": "def test_a():\n    assert False\n",
+                "test/known_failures.txt": nodeid + "  # pre-existing fixture failure\n"}, "known failure")
+    candidate = git(wt, "rev-parse", "HEAD")
+
+    def known_failure_run(invocations, logs, *args, **kwargs):
+        for log in logs:
+            log.write_text("F [100%]\nFAILED " + nodeid + " - AssertionError\n"
+                           "1 failed in 0.01s\n", encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", known_failure_run)
+    assert land.main(["--tests", "pkg/test"]) == 0
+    assert git(main, "rev-parse", "HEAD") == candidate
+
+
 def no_merge_left(wt: Path) -> bool:
     gitdir = Path(git(wt, "rev-parse", "--absolute-git-dir"))
     return not (gitdir / "MERGE_HEAD").exists() and git(wt, "status", "--porcelain") == ""
