@@ -865,6 +865,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     sightingsUnavailable = false;
     await refreshSiteMap();
     life.check();
+    // The activated site frame stays the coordinate basis when robots start or stop serving SLAM grids.
+    if (!auth.locked && view.siteMap?.maps?.some(map => map.map_id === view.activeSiteMap?.map?.map_id)) {
+      view.map = null;
+      showSiteMap();
+      return;
+    }
     if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {

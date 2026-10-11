@@ -19,7 +19,7 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     cssColor: () => '#000', canvasFont: () => '12px sans-serif',
   } };
   try {
-    const view = { robots: [], sightings: [], layers: {}, map: null };
+    const view = { robots: [], sightings: [], colors: ['#000'], layers: {}, map: null };
     const calls = [];
     const scope = { capture: () => ({ check() {}, current: () => true }), onDispose() {}, listen() {} };
     const map = createMapView({ scope, el, view, auth: { locked: false },
