@@ -814,10 +814,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     try {
       view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
       life.check();
+      view.guideUnavailable = false;
       guideGate.ok();
     } catch (err) {
       if (err.name === "AbortError") return;
-      if (guideGate.fail(err.status, err.code) === "absent") view.guide = null;
+      view.guide = null;
+      view.guideUnavailable = guideGate.fail(err.status, err.code) !== "absent";
     } finally {
       if (life.current()) guideInFlight = false;
     }

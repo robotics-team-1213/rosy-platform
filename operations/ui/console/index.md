@@ -29,6 +29,6 @@
 
 - 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
 - 2026-10-12 · 22b307c07 · fix(cell): 미구성 서비스의 다음 행동과 재접속 복구
+- 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 - 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
-- 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
