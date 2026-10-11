@@ -7994,3 +7994,9 @@ osy-d395-s1d\`.
 - 변경: D-691 4항에 발열 정지를 넣었다. API reference v1.210 문장에 같은 기준을 적었다. 와이어는 그대로다.
 - 증거: Cam JVM 421 passed, 0 failed. S21에서 Fleet lease JPEG 순번이 1285에서 1289로 늘었고, 화면을 끈 뒤 1434가 왔다. 발열 정지와 대기 전류, 첫 프레임 지연은 기기에서 재지 않았다.
 - gate 변화: 문서 SOURCE. 착지와 배포는 이 기록 뒤에 한다.
+
+## 2026-10-12 · 0bedd7809c · D-699 관측 원장 책임과 기록 창
+
+- 변경: 실제 CORE event/관측 원장을 fleet.observe로 분리하고 기존 identity aliases·배포를 유지했다. capture UUID/sequence/monotonic/전체 roster와 기존 curation의 읽기 전용 window·JSON CLI를 연결했다.
+- 증거: 관련 17파일 원격 318 passed/NEW 0/lint, 실제 wheel 설치·isolated import/DB capture, 독립 source/merge 검토. 부모 55460/55814, observe232/362로 기존 기준을 유지했다. source commit `0bedd7809c`로 로컬 착지했다.
+- gate: SOURCE 회귀와 local landing. 넓은 통합은 6337 passed/295 skipped와 API 버전 동기화 8실패를 확인했으며 수정본 전체 CI로 부르지 않는다. 실제 모델 품질·sdist·서비스 배포·현장 수용·push와 정상 명령/모델/재발 전체 범위는 미확인이다. 다음은 실제 규칙 기준 생산·사건 연결이다.
