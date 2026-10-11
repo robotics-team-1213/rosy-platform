@@ -6,8 +6,8 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 DOCS = {"index.html": "/console", "install.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console/cell"}
-ORDER = ["/console", "/console?view=work", "/console/install", "/console/site-map", "/console/cell"]
-ICONS = ["fleet", "history", "install", "map", "cell"]
+ORDER = ["/console", "/console/install", "/console/site-map", "/console?view=work", "/console/cell"]
+ICONS = ["fleet", "install", "map", "history", "cell"]
 
 
 def _page(name):
