@@ -24,8 +24,19 @@ class CliProvider:
     async def __call__(self, problem, prior, remaining, *, budget_usd):
         if (type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30
                 or type(budget_usd) not in (int, float) or not math.isfinite(budget_usd)
-                or not 0 < budget_usd <= 10 or len(prior) not in (0, 2)):
+                or not 0 < budget_usd <= 10 or type(prior) not in (tuple, list) or len(prior) not in (0, 1, 2)):
             raise ValueError('invalid CLI budget')
+        profiles = []
+        for item in prior:
+            if type(item) is not dict or 'profile_id' not in item:
+                raise ValueError('INVALID_REVIEW_PRIOR')
+            profiles.append(identifier(item['profile_id']))
+            opinion(problem, {key: value for key, value in item.items() if key != 'profile_id'})
+        if len(set(profiles)) != len(profiles):
+            raise ValueError('INVALID_REVIEW_PRIOR')
+        if len(prior) == 1 and (problem.fleet_choice is None
+                or prior[0]['choice'] == problem.fleet_choice or 'unsafe' in prior[0]['objections']):
+            raise ValueError('INVALID_REVIEW_PRIOR')
         body = canonical({'problem': {**asdict(problem), 'input_hash': problem.digest}, 'prior': prior,
                           'instruction': 'Return only an advisory choice, evidence IDs and unresolved objections. '
                                          'Never use tools or claim physical verification.'}).encode()
@@ -62,6 +73,7 @@ class CliProvider:
             if len(texts) != 1 or len(costs) != 1:
                 raise ValueError('CLI_RESULT_UNKNOWN')
             payload, cost = json.loads(texts[0]), costs[0]
-        if type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd:
+        if (getattr(self.launch, 'cost_verified', True) is not True
+                or type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd):
             raise ValueError('CLI_COST_UNKNOWN_OR_EXCEEDED')
         return opinion(problem, payload), cost
