@@ -126,3 +126,20 @@ def test_impossible_attempt_states_are_rejected_even_with_matching_totals(tmp_pa
             conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='RESOLVED_OBSERVED'")
     with pytest.raises(ValueError):
         exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+
+
+def test_real_export_links_to_recording_without_creating_model_truth(tmp_path):
+    store, scope, manifest = fixture(tmp_path)
+    store.complete(scope, 'attempt', worker_id='private-worker', state='UNKNOWN',
+                   actual_cost_usd=None, summary={'reason': 'PROVIDER_OUTCOME_UNKNOWN'})
+    exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+    spec = importlib.util.spec_from_file_location('learning_feedback', ROOT / 'learning/curation/perception/incident_feedback.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    report = dict(schema='rosy.incident.v1', id='line_stuck:pinky:case', classification='line_stuck',
+                  robot_ids=['pinky'], stuck_id='case', evidence={}, reviews=[])
+    markers = dict(schema='rosy.recording.stuck_markers/1', markers=[dict(stuck_id='case')])
+    result = module.attach_model_feedback(module.bind({'reports': [report]}, markers), exported)
+    row = result['matches'][0]
+    assert row['model_feedback']['digest'] == exported['digest']
+    assert row['model_feedback']['reserved_micros'] == 100000 and row['reviewed_root_cause'] is None

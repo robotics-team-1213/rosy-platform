@@ -106,3 +106,17 @@ def test_invalid_or_self_labeled_model_feedback_cannot_enter_recording(tamper):
         data = model_feedback(calls=True)
     with pytest.raises(ValueError):
         incident_feedback.attach_model_feedback(base, data)
+
+
+def test_cli_attaches_bounded_model_evidence_and_preserves_review_state(tmp_path, monkeypatch):
+    incidents, marks, feedback, output = (tmp_path / name for name in ('incidents.json', 'markers.json', 'model.json', 'out.json'))
+    incidents.write_text(json.dumps({'reports': [report()]}), encoding='utf-8')
+    marks.write_text(json.dumps(markers('stuck-a')), encoding='utf-8')
+    feedback.write_text(json.dumps(model_feedback()), encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['incident_feedback.py', str(incidents), str(marks),
+                                    '--model-feedback', str(feedback), '--out', str(output)])
+    incident_feedback.main()
+    linked = json.loads(output.read_text(encoding='utf-8'))
+    assert linked['schema'] == 'rosy.recording.incident_feedback/2'
+    assert linked['matches'][0]['model_feedback']['label_state'] == 'UNREVIEWED'
+    assert linked['matches'][0]['reviewed_root_cause'] is None
