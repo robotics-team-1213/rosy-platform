@@ -2676,6 +2676,12 @@
 - 증거: 사용자 AI PC 출력은 환경 검사 외 12개 경계 true, 최초 HOST 결과는 HOLD. 원격 RED에서 정상 PWD 오거절과 변경 PATH 오수용을 재현했다. 수정 후 시험·실제 재실행은 후속 증거로 기록한다.
 - gate 변화: HOST PASS 미확인 유지. 관리자 설치 완료 출력은 확인했으나 모델·장치 수용으로 승격하지 않는다.
 
+## 2026-10-12 · b78edf399 · D-675 Fleet-only Discord private config
+
+- 변경: 정식 Compose에 optional intake 경로와 Fleet-only 읽기 mount 추가; absent OFF, malformed fail closed.
+- 증거: RED3NEW 후 원격138 PASS/NEW0, 독립 source/Safety 검토 승인.
+- gate 변화: source만 수용. 기존 CI/signature/updater gate 유지, unsigned runtime 교체/push/장치 명령 없음.
+
 ## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
 
 - 변경: 실제 HOST 수용 결과와 수동 Qwen 스모크 증거를 기록하고 현재 수용 안내를 갱신했다.

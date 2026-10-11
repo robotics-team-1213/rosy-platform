@@ -5,6 +5,32 @@ console and display-only sightings ingestion, plus camera frame reception and
 ArUco projection. It does not replace the ROS 2 Jazzy/Pi product runtime. Fleet
 does not join DDS, and sightings do not issue robot motion or pick commands.
 
+### Discord named reception (D-671/D-675, source only)
+
+The signed stack mounts `/etc/rosy/fleet-discord` read-only in Fleet only.
+Its optional `/run/rosy-discord/intake.json` is absent by default: reception
+and its API remain OFF. Invalid or unreadable configuration refuses startup.
+Keep this directory outside the shared camera configuration and image sources.
+
+An administrator prepares the directory as root:10001 mode0750 and its files
+as root:10001 mode0440. The private JSON has `guild_id`, `channel_id`, `bot_id`,
+a separate random `transport_key`, `users` mapping immutable Discord IDs to
+existing named Fleet operator principals, and optional `bot_token_file` set to
+`/run/rosy-discord/bot.token`. The token file contains the Bot token; keep it out
+of shell arguments, logs, source, images and chat. No admin role is needed for
+the mapped Fleet user. The required `--discord-intake-config` and optional
+`--discord-intake-config-optional` CLI arguments are mutually exclusive.
+
+Deploy through the existing CI/signature/updater gates; local source acceptance
+does not authorize an unsigned production replacement. Under administrator
+maintenance hold, prepare the private files, validate the signed candidate and
+configuration, then verify an explicit Bot mention in the designated channel
+appears in that operator's Console `내 대화 요청`. `REQUESTED` proves reception,
+not task approval or execution. Restart applies account/mapping changes.
+Messages before startup or an unrecoverable session gap require manual readback
+and resubmission; an unresolved journal delivery stops reception on session loss.
+Resume the updater only after the configuration and running identities agree.
+
 ## Where the control console runs
 
 | Role | Installation and current responsibility |

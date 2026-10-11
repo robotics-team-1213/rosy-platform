@@ -45,7 +45,7 @@ FINAL만 재시도하고 모델 호출을 추가하지 않는다.
 4. 실제 outbox 연결: managed OPEN 억제, 첫 UNKNOWN 및 재관측 예산 소진 FINAL.
 5. 독립 source review 후 ledger 책임 추출과 구조 guard 재측정.
 
-commit `050ae33f979c8ebce4a58d049ade3e894fa81d1d` 기준 7-suite 원격 시험:
+commit `050ae33f97` 기준 7-suite 원격 시험:
 Model PC resource floor 충족(9.0 GB), **158 passed, NEW 0**.
 로그 `X:/DevTemp/projects/rosy-platform/2026-10-12--044435--incident-case-worker--8d6f18/logs/creator-green/run-1.txt`,
 SHA256 `55f3216c53e4f4c96019d0e32bd0c4411cf19eb04710e431af30f32d113de1c1`.
@@ -54,7 +54,7 @@ SHA256 `55f3216c53e4f4c96019d0e32bd0c4411cf19eb04710e431af30f32d113de1c1`.
 실제 outbox pending/retry, 기존 loop/handoff/notification 회귀를 포함한다.
 
 notification 정책 변경 수정과 실제 worker→outbox 회귀를 합친
-commit `1014551aa4d08b8f30b0a1907533ea407444efd6` 재시험은 AI PC
+commit `1014551aa4` 재시험은 AI PC
 resource floor 충족(9.0 GB), **161 passed, NEW 0**이다.
 로그 `X:/DevTemp/projects/rosy-platform/2026-10-12--044435--incident-case-worker--8d6f18/logs/policy-integration-floor-green/run-1.txt`,
 SHA256 `260720c09377fec2c2a268d0ebb705ab96121b2fdc8d08f5496393500a783b34`.
