@@ -83,7 +83,7 @@ def main():
             else:
                 configure_velocity_drive(drive)
         world = World(stage_units_in_meters=1., physics_dt=1 / 60., rendering_dt=1 / 60.)
-        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]))
+        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
         scene = track['scene']
         UsdGeom.Xform.Define(stage, '/World/Track')
         for i, wall in enumerate(scene.walls):
