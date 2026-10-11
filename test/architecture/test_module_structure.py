@@ -107,6 +107,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "web/ui.js": (
+        811,
+        "accept: independently reviewed 2026-10-11: the 11 lines above the existing "
+        "800-line web threshold belong to the shared tooltip state machine and coordinate "
+        "hit test. Browser checks cover hover retention over another described control, "
+        "normal clicks, keyboard focus and dismissal. Keep the threshold, growth allowance "
+        "and HARD_TIER=1000 unchanged; before another component family or tooltip expansion, "
+        "extract actionIcon and tooltip into a shared asset with installed asset parity.",
+    ),
     "deploy/site/rosy_model_code.py": (
         639,
         "accept: independently reviewed 2026-10-11 under D-637: one signed source-release, "

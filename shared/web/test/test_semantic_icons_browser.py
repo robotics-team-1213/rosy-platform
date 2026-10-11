@@ -124,15 +124,20 @@ def test_focused_description_does_not_block_another_control(page):
     tooltip = page.get_by_role("tooltip")
     tooltip.wait_for(state="visible")
     box = tooltip.bounding_box()
+    description = tooltip.text_content()
     page.evaluate("""box => {
       const button = document.createElement('button');
       button.id = 'under-description'; button.textContent = 'Read next item';
+      button.dataset.uiTooltip = 'A different underlying description';
       Object.assign(button.style, {position: 'fixed', left: `${box.x}px`, top: `${box.y}px`,
         width: `${box.width}px`, height: `${box.height}px`});
       button.addEventListener('click', () => button.dataset.clicked = 'yes');
       document.body.append(button);
     }""", box)
     control = page.locator("#under-description")
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    assert tooltip.is_visible()
+    assert tooltip.text_content() == description
     control.click()
     assert control.get_attribute("data-clicked") == "yes"
 

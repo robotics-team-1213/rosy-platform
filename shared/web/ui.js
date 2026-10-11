@@ -769,8 +769,8 @@ function showTooltip() {
   placeTooltip();
 }
 document.addEventListener("pointerover", event => {
+  if (overTooltip(event)) return;
   const owner = tooltipTarget(event.target);
-  if (!owner && overTooltip(event)) return;
   if (owner !== tooltipHover) {
     tooltipHover = owner;
     if (owner !== tooltipFocus) tooltipDismissed = null;
