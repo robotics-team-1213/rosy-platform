@@ -382,7 +382,8 @@ def main():
             if front_camera is not None:
                 ground = ground_plane(camera_profile['height_m'] + float(robot.get_world_pose()[0][2]),
                     pitch, float(intrinsics[0, 0]), 160., 120., .6)
-                lane = LearnedCameraLane(perception_model, ground, camera_x=camera_profile['x_offset_m'])
+                lane = LearnedCameraLane(perception_model, ground, camera_x=camera_profile['x_offset_m'],
+                                         body=scan_body)
                 position_front_camera()
                 for _ in range(20):
                     world.render()

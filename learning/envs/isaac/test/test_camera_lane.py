@@ -82,6 +82,41 @@ def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns,
         lane.close()
 
 
+@pytest.mark.parametrize('distance,moving', [(.5, True), (.075, False), (float('inf'), False)])
+def test_native_body_sweep_uses_the_actual_scan_and_holds_unknown(distance, moving):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda frame: (way, 'drivable', {}, 1.)),
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317,
+        clock=lambda: 10., body=NOMINAL_BODY)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    sample['ranges'] = [distance] * 640
+    try:
+        assert lane.manager.config.body_stop_known
+        assert lane.manager.config.obstacle_mode == 'path'
+        admitted = lane.observe_scan(sample, body=NOMINAL_BODY)
+        if admitted:
+            lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                         stamp=1., source_now=1., pose=(0., 0., 0.))
+        decision = lane.manager.tick_gain(10., gain=1.)
+        assert (decision.linear > 0.) is moving
+        if distance == float('inf'):
+            assert not admitted and lane.state() is None
+            assert lane.last['reason'] == 'native_scan_unknown'
+        else:
+            assert admitted and lane.manager._scan_points
+        with pytest.raises(ValueError, match='geometry differ'):
+            lane.observe_scan(sample, body=replace(NOMINAL_BODY, rotation_radius_m=.1))
+    finally:
+        lane.close()
+
+
 @pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
 def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     import math
