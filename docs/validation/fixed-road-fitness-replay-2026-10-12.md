@@ -69,7 +69,7 @@ D-670은 정답·목적지·통행 정책 없이 기존 모델 세션과 D-665/D
 
 ## 연결 복구 후 착지와 관측 파일 증거
 
-앞 연결 실패 이후 동일 원격 실행 결과를 회수했다. prelabel 통합 회귀는 1,897 passed / 228 skipped, NEW 0이며 local main commit `abcab27ebf`에 착지했다. 앞 미확인 기록은 당시 상태이며 이 후속 결과와 구별한다.
+연결 복구 후 보존된 원격 통합 회귀 결과를 확인했다. prelabel 통합 회귀는 1,897 passed / 228 skipped, NEW 0이며 local main commit `abcab27ebf`에 착지했다. 앞 미확인 기록은 당시 상태이며 이 후속 결과와 구별한다. 연결이 끊긴 호출 자체의 결과를 확인했다는 뜻은 아니다.
 
 D-673은 정답 없는 `rosy_ml observe`의 입력/model hash 결속, exclusive 파일 작성 및 hash·mask·중복 계보 readback을 연결한다. 링크 입력 거절, session 생성 전 예측 grid 제한, snapshot ID/hash 불일치와 입력 오류 시 구역 보류를 원격 RED/GREEN으로 확인했다. 실제 ONNX Runtime 합성 실행을 포함한 관련 시험 71건은 terminal exit 0이다. 독립 소스 검토에서 수정 후 merge blocker는 없었다.
 

@@ -59,3 +59,19 @@ v2 추가분은 이전 모델이 틀린 장면을 우선 포함하며 자동 초
 동일 dataset manifest SHA256을 다시 확인하고 추가 검수분 1,341장의 `review/saved` 마스크와 최종 dataset 마스크를 직접 읽었다. rows 110..239의 화소 불일치는 0, dataset rows 0..109에서 255가 아닌 화소도 0이다. 최종 mask 파일 hash 1,341개 모두 manifest와 일치했고 저장 검수 누락·크기 오류는 없었다. split은 train 1,092 / val 168 / test 81이다. 따라서 앞 기록에서 미확인이었던 saved mask→최종 mask 보존은 이 추가분에 한해 확인됐다. 기존 1,428장의 저장 검수 대조나 검수 독립성을 확대한 결론은 아니다.
 
 readback 로그는 위 비공개 세션의 `evidence/desktop-20261010-saved-mask-readback-20261012.json`이며 SHA256은 `316647b1aa78512d47fe0b132f2b3dfeb55503fbe719b4fb65a5b38f1043422b`이다. 이 로그는 UTF-16로 저장된 원격 JSON 출력의 byte hash다. 기존 mask·classes·manifest를 수정하지 않았다. 현재 구역 기준선이라는 의미와 새 도로면 적합성 HOLD를 유지한다.
+
+## upstream 원본 영상별 split 대조 (2026-10-12)
+
+AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선언된 source_video_sha256을 읽고, 위 검수 데이터의 image SHA256에 정확히 연결했다. upstream manifest SHA256은 `846ab9310f43b2f75edd9d38cd2c6f5dd62a4e0771a72931ee5a20143741c04b`이다. 2,769장 중 2,519장이 단일 원본 영상 hash에 연결됐고, 250장은 연결되지 않았다. 둘 이상의 원본 영상 hash가 겹치는 모호한 image 연결은 0이었다.
+
+| 선언된 원본 영상 그룹 | train | val | test |
+|---|---:|---:|---:|
+| 첫 그룹 | 674 | 234 | 166 |
+| 둘째 그룹 | 220 | 0 | 45 |
+| 셋째 그룹 | 503 | 31 | 0 |
+| 넷째 그룹 | 112 | 47 | 0 |
+| 다섯째 그룹 | 268 | 14 | 0 |
+
+위 다섯 그룹은 같은 upstream 원본 영상 hash가 두 개 이상의 split에 존재한다. 나머지 두 연결 그룹은 train에만 194장과 11장이 있다. 따라서 앞 확인의 동일 이미지 split 중복 0은 원본 영상 단위 분리를 증명하지 않는다. 이 세트는 기준선/개발 자료로 보존하며 독립 최종 시험으로 승격하지 않는다. 새 최종 시험은 학습에서 제외하도록 사전 예약한 출처와 독립 검수 정답이 필요하다.
+
+이 대조는 upstream 선언에 대한 연결이며 원본 영상 파일을 다시 hash한 물리 출처 검증은 아니다. 연결되지 않은 250장의 출처도 임의로 부여하지 않았다. 원본 group hash별 전체 표와 readback은 위 비공개 세션의 `evidence/desktop-20261010-upstream-source-splits-20261012.json`에 보존한다. 원본 데이터·split·학습 모델은 수정하지 않았다.
