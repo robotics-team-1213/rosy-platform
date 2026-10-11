@@ -3347,3 +3347,9 @@
 - 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
 - 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
 - gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · c7afe628ca · D-681 모델 실패 피드백 export
+
+- 변경: 고정 프로파일 SHA와 subject/case를 대조한 단일 SQLite 읽기 snapshot에서 시도·비용·종결 근거를 export한다. 결과 불명·진행 중·미개입을 구분하며 비밀/원문/worker ID는 export하지 않는다. 기존 녹화 feedback 경로에 미검수 근거로 연결했다.
+- 증거: 관련 5개 원격 파일 87 passed, exit 0, known-failures NEW 0. 모델/장치/알림 호출 없이 실제 SQLite와 CLI 연결을 합성 검증했다. 기존 부모 크기 기준은 유지한다.
+- gate 변화: SOURCE/원격 관련 회귀만 확인했다. 최신 worker schema 통합과 로컬 착지를 이어서 확인한다. 실제 제공자·현장 recording export·독립 품질·학습·후보 승격은 미확인이다.
