@@ -732,4 +732,9 @@
 - 상태: Accepted (source only, 2026-10-12).
 - 결정: 기존 Fleet lifespan의 선택적 수신; receipt commit 후 resume, 미해결 session 공백은 정지.
 - 계약: [ADR](../adr/D-675-discord-gateway-fleet-lifecycle.md). source 설치 검증 완료, 실제 이미지/수신은 별도이며 실행 권한 없음.
-| D-680 | Discord ??? Fleet ?? ??? ?? ?? | Accepted (source design only) | 2026-10-12 | [ADR](../adr/D-680-discord-request-workflow-and-reply-boundary.md) |
+
+## D-680 — Discord 요청의 Fleet 작업 연결과 결과 회신
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기명 접수와 기존 작업의 관계, Console 확인, 고정 목적지의 durable 결과 회신을 연결한다. 기존 승인과 장치 권한을 유지한다.
+- 계약: [ADR](../adr/D-680-discord-request-workflow-and-reply-boundary.md). 실제 수신·승인·결과 회신과 FIELD는 별도 증거로 검증한다.
