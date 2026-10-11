@@ -161,7 +161,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
         for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1100)
-            status = page.get_by_role("tab", name="로봇 상태")
+            status = page.get_by_role("tab", name="로봇·작업")
             status.click()
             map_before = page.locator("#map-stage").bounding_box()
             expect(page.locator("#context-status")).to_be_visible()
@@ -266,7 +266,7 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages.locator("pre")).not_to_be_visible()
         messages.locator("details details > summary").click()
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         page.clock.run_for(6000)
         expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
         stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
@@ -342,9 +342,9 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
     return browser, page, errors
 
 
-def _shot(page, name):
+def _shot(page, name, *, full_page=False):
     if out := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(out) / name))
+        page.screenshot(path=str(Path(out) / name), full_page=full_page)
 
 
 def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scroll(site):
