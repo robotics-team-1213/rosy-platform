@@ -6,8 +6,39 @@ import os
 import re
 import signal
 import sys
+import tempfile
 import uuid
 from pathlib import Path
+
+
+_CLEANUPS = set()
+
+
+def kill_group(process):
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+async def protect_cleanup(cleanup):
+    task = asyncio.create_task(asyncio.wait_for(cleanup, 2))
+    _CLEANUPS.add(task)
+    task.add_done_callback(_CLEANUPS.discard)
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        # Consume cleanup errors while preserving the caller's cancellation.
+        try:
+            task.result()
+        except Exception:
+            pass
+        raise asyncio.CancelledError
+    return task.result()
 
 
 async def bounded_process(argv, body, remaining, output_limit):
@@ -37,17 +68,20 @@ async def bounded_process(argv, body, remaining, output_limit):
                     raise ValueError('PROVIDER_OUTPUT_LIMIT')
             return await process.wait(), bytes(raw)
     finally:
-        if process is None:
+        async def cleanup():
+            nonlocal process
             try:
-                process = await asyncio.shield(spawn)
-            except Exception:
-                pass
-        if process is not None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            await process.wait()
+                if process is None:
+                    process = await asyncio.shield(spawn)
+                kill_group(process)
+                await process.wait()
+            finally:
+                if not spawn.done():
+                    def late_spawn(done):
+                        if not done.cancelled() and done.exception() is None:
+                            kill_group(done.result())
+                    spawn.add_done_callback(late_spawn)
+        await protect_cleanup(cleanup())
 
 
 class SandboxLauncher:
@@ -55,10 +89,30 @@ class SandboxLauncher:
         if kind not in {'claude', 'opencode'}:
             raise ValueError('unsupported provider kind')
         self.kind = kind
-        self.executable = Path(executable).resolve(strict=True)
-        if not self.executable.is_file() or type(executable_sha256) is not str or len(executable_sha256) != 64:
+        source = Path(executable).resolve(strict=True)
+        if not source.is_file() or type(executable_sha256) is not str or re.fullmatch('[0-9a-f]{64}', executable_sha256) is None:
             raise ValueError('invalid pinned executable')
+        self._snapshot = tempfile.TemporaryDirectory(prefix='rosy-deliberation-')
+        self.executable = Path(self._snapshot.name) / 'provider'
+        digest, size = hashlib.sha256(), 0
+        try:
+            with source.open('rb') as src, self.executable.open('xb') as dest:
+                while block := src.read(65536):
+                    size += len(block)
+                    if size > 512 * 1024 * 1024:
+                        raise ValueError('provider executable exceeds snapshot budget')
+                    digest.update(block)
+                    dest.write(block)
+            if digest.hexdigest() != executable_sha256:
+                raise ValueError('provider executable digest changed')
+            self.executable.chmod(0o500)
+        except BaseException:
+            self._snapshot.cleanup()
+            raise
         self.digest = executable_sha256
+
+    def close(self):
+        self._snapshot.cleanup()
 
     def command(self, argv, unit):
         if (type(argv) is not tuple or not argv or argv[0] != self.kind
@@ -69,7 +123,8 @@ class SandboxLauncher:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != self.digest:
                 raise ValueError('provider executable digest changed')
         return ('/usr/bin/systemd-run', '--user', '--quiet', '--scope', '--collect', f'--unit={unit}',
-            '-p', 'MemoryMax=1G', '-p', 'CPUQuota=100%', '-p', 'TasksMax=32', '--',
+            '-p', 'MemoryMax=1G', '-p', 'CPUQuota=100%', '-p', 'TasksMax=32',
+            '-p', 'RuntimeMaxSec=35s', '--',
             '/usr/bin/bwrap', '--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL',
             '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin',
             '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
@@ -89,6 +144,6 @@ class SandboxLauncher:
                 remaining - (asyncio.get_running_loop().time() - started), output_limit)
         finally:
             # Stop only this generated scope, including children that changed their process group.
-            code, _ = await bounded_process(('/usr/bin/systemctl', '--user', 'stop', unit), b'', 2, 256)
+            code, _ = await protect_cleanup(bounded_process(('/usr/bin/systemctl', '--user', 'stop', unit), b'', 1, 256))
             if code not in (0, 5):
                 raise RuntimeError('SANDBOX_CLEANUP_UNCONFIRMED')
