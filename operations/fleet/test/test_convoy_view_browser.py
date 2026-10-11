@@ -36,7 +36,7 @@ def test_console_draws_the_convoy_line_and_card(site, convoy_api):  # noqa: F811
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console", posts)
         try:
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)
             page.wait_for_function("() => window.__trafficLayer?.convoys === 1", timeout=15000)
             page.clock.run_for(5000)  # the roster redraws on its state poll with the traffic it holds

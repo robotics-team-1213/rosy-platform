@@ -16,9 +16,10 @@
   <script type="module" src="/console/assets/site-map.js"></script>
 </head>
 <body>
-<ui-shell grammar="procedure">
+<ui-shell grammar="procedure" class="fleet-shell">
   <a class="skip-link" href="#site-map-main">본문으로 건너뛰기</a>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
+  <header class="fleet-header">
   <ui-topbar>
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
@@ -42,18 +43,20 @@
       </div>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
+    <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
-    <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  </header>
   <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console">관제</a>
-    <a href="/console/install">설치·보정</a>
-    <a href="/console/site-map" aria-current="page">현장 지도</a>
-    <a href="/console/cell">Cell</a>
+    <a href="/console" data-action-icon="fleet">관제</a>
+    <a href="/console/install" data-action-icon="install">설치·보정</a>
+    <a href="/console/site-map" data-action-icon="map" aria-current="page">현장 지도</a>
+    <a href="/console/cell" data-action-icon="cell">Cell</a>
   </nav>
+  <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
   <main id="site-map-main" tabindex="-1">
     <nav class="task-nav" aria-label="현장 지도 작업">
@@ -205,6 +208,9 @@
       </div>
     </ui-section>
   </main>
+  </div>
+  </div>
+  <footer class="fleet-footer" aria-label="운영 정보"><span>현재 시각</span><ui-text id="clock" scale="value">--:--:--</ui-text><a href="/console?inbox=1" data-action-icon="notification">관제 알림</a></footer>
 </ui-shell>
 </body>
 </html>
