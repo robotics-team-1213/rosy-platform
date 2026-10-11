@@ -147,10 +147,11 @@ def fit_lenses(training, validation, size, *, source_id, capture_signature, mode
                     [o.astype(np.float32) for o, _ in views[:n]],
                     [i.astype(np.float32) for _, i in views[:n]], tuple(size), None, None)
             else:
+                flags = cv2.fisheye if hasattr(cv2.fisheye, "CALIB_RECOMPUTE_EXTRINSIC") else cv2
                 rms, k, d, rvs, _ = cv2.fisheye.calibrate(
                     [o.reshape(-1, 1, 3) for o, _ in views[:n]],
                     [i.reshape(-1, 1, 2) for _, i in views[:n]], tuple(size), None, None,
-                    flags=cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC | cv2.fisheye.CALIB_FIX_SKEW,
+                    flags=flags.CALIB_RECOMPUTE_EXTRINSIC | flags.CALIB_FIX_SKEW,
                     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-8))
             if not np.isfinite(k).all() or not np.isfinite(d).all() or k[0, 0] <= 0 or k[1, 1] <= 0:
                 raise ValueError("invalid fitted intrinsics")

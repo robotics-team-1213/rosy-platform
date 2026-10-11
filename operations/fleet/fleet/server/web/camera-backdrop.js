@@ -133,7 +133,9 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     if (status) status.textContent = view.displayMode === "camera"
       ? cameraFrame ? "교정 전 · 카메라 원본" : "원본 영상 대기 · 신선한 프레임 없음"
       : view.displayMode === "overlay" && !calibration()
-        ? "교정 영상 없음 · 2D 좌표 표시" : "공유 map 좌표 · m";
+        ? "교정 영상 없음 · 2D 좌표 표시" : view.displayMode === "overlay"
+          ? `공유 map 좌표 · m · 영상 유효 영역 ${usesPlane() && Number.isFinite(planeFrame()?.observedFraction)
+            ? `${Math.round(planeFrame().observedFraction * 100)}%` : "미확인"}` : "공유 map 좌표 · m";
   }
 
   function setCameraFrame(frame) {
