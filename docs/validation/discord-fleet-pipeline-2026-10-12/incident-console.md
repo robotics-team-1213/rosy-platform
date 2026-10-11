@@ -42,3 +42,7 @@ source164fb34c2의 harness/affected 원격 회귀는 terminal exit0/NEW0이고 l
 현장 기명 로그인livsbittt는 operator-livsbittt/operator로 직접 readback했다. 실제 mounted config의 autonomous_robots는 빈 목록이고 Discord config는 없다. 비공개 접수·회신 활성화 초안을 X의 기존 private session에 준비했으나 현장 설치·활성화는 하지 않았다. 관리자 비대화형 접근은 불가능해 실제 설정 적용에는 사용자 sudo 입력이 필요하다. 로봇 명령·push·배포·추가 Discord 전송은 없다.
 
 최신 main `be457256e5`와 합친 소스의 독립 검토에서 blocker는 없었다. Fleet parent 54,996은 기존 54,852+150 안에 있고 기준·제외 단위를 늘리지 않았다. 기존 claim/pending fence, 빈 autonomous 기본값, 별도 선택형 model/Discord lifespan과 종료 처리를 보존했다. app915는 main의 검토된909+150을 적용한다. 병합 커밋의 원격 시험과 local FF는 다음 검증이며 CI·서명 배포·실제 대화 왕복은 별도 미완료다.
+
+main `1eab62769c`의 D-694/D-695도 통합했다. 독립 재실측은 parent54,996, incidents505/510, automation472/472, ledger472/520이며 기존 단위와 수치 기준을 보존했다. automation은 다음 생산 코드 증가 전에 실제 책임 분리 또는 독립 재판정이 필요하다.
+
+통합 소스 `c63551034f`의 실제 Chromium·설치·구조·신규 사건 소비 시험은 199 passed/1 NEW였다. `95e17e4ab5` 영향군은 9,262 passed/493 skipped와 4,719 passed/349 skipped/1 NEW까지 종료했다. NEW는 두 통합 문서의 실제 38자리 Git commit 표기가 비밀값 검사에 걸린 경우이며 각각 실제 커밋을 확인하고 10자리로 줄였다. 검사 규칙과 known-failure 목록은 바꾸지 않았다. 수정 소스 `89531ac5e8`의 릴리스 경계 검사 80 passed/NEW0를 확인했다. 전체 재착지 검사와 마지막 Fleet 시험군 결과는 아직 남아 있다. 로그는 기존 X 세션의 `logs/workflow-combined-final`, `logs/workflow-public-reference-fixed`, `logs/landing-combined-retry/feat-discord-workflow`다.
