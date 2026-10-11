@@ -131,6 +131,34 @@ def _raw_words(page):
     return sorted(set(RAW.findall(page.locator("main").inner_text())))
 
 
+def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_site):
+    """Coordinate lifetime changes content, never the table's visibility or map location."""
+    from playwright.sync_api import expect, sync_playwright
+
+    origin, _ = fleet_site
+    body = {"lease_s": 1, "sources": [{"source_id": "north", "status": "OK", "age_ms": 0}],
+            "robots": [{"robot_id": "rosy_01", "status": "MARKER", "camera": {"x": 1.25, "y": 2.5}}]}
+    with sync_playwright() as playwright:
+        browser, page, errors, _ = _login(playwright, origin)
+        try:
+            page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
+            table = page.locator("#tracking-positions")
+            expect(table).to_be_visible()
+            expect(table).to_contain_text("1.25")
+            map_box = page.locator("#map-stage").bounding_box()
+            body.update(lease_s=0, robots=[])
+            expect(table).to_contain_text("현재 유효한 좌표 없음")
+            expect(table).not_to_contain_text("1.25")
+            expect(table).to_be_visible()
+            assert page.locator("#map-stage").bounding_box() == map_box
+            body.update(lease_s=1, robots=[{"robot_id": "rosy_01", "status": "MARKER",
+                                          "camera": {"x": 1.3, "y": 2.6}}])
+            expect(table).to_contain_text("1.30")
+            assert not errors
+        finally:
+            browser.close()
+
+
 def test_formation_appoints_a_leader_and_its_followers(fleet_site):
     """대형: the follower boxes leave the leader out; unticking one sends only the ticked followers; the
     cards then say 대형 리더 / 대형 팔로워; buttons say what they are, and a held-off button says 위 사유."""
