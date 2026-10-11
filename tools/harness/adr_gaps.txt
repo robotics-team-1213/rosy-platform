@@ -34,7 +34,6 @@ D-622 reserved by another active session; ADR not yet landed in this branch
 
 
 D-675 reserved by another active session; ADR not yet landed in this branch
-D-676 reserved by another active session; ADR not yet landed in this branch
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
 D-678 reserved by another active session; ADR not yet landed in this branch
 

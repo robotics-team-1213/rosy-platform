@@ -305,7 +305,7 @@
 - 증거: AI PC 원격 world_profiles 11개 PASS, known_failures0NEW. 함께 요청한 gz_multi Core/run-spec 모듈은 ROS launch import 조건이 있어 이 결과로 검증됐다고 주장하지 않는다. 두 로봇 native 실행·카메라·Fleet·완주·신호 수용은 아직 미확인이다.
 - gate 변화: 없음. 이전 단일 로봇 ROS-SIM 결과를 새 curved 두 대 수용으로 승격하지 않는다.
 
-## 2026-10-12 · D-676 camera 두 대 전용 launch
+## 2026-10-12 · 3c50387944 · feat(sim): D-676 camera 두 대 전용 launch
 
 - 요청: 모델 PC Isaac 한 대 camera/RL, 다른 PC Gazebo 두 대 actual CORE/Fleet를 같은 curved 맵으로 검증한다.
 - 변경: gz_multi는 image transport 없이 nominal camera geometry와 headless rendering만 선택한다. map_v2_fleet_multi_real 전용 launch가 runner-owned run_spec·모델 pointer를 받고 두 namespaced local image bridge·기존 line_observer·JPEG relay를 구성한다. camera Fleet은 fleet_sim_camera_site.yaml의 preview admission을 유지한다.
