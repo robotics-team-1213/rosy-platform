@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
 - 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
 - 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
 - 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
-- 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
