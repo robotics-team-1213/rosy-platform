@@ -163,9 +163,8 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
                 more = page.locator("#fleet-theme")
                 if more.is_visible():
-                    assert more.locator(".ui-icon-label").evaluate(
-                        "node => getComputedStyle(node).display === 'none' || node.getBoundingClientRect().width <= 1"
-                    )
+                    assert more.locator(".ui-icon-label").count() == 0
+                    expect(more).to_have_attribute("data-ui-tooltip", re.compile("테마:"))
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
                 expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
