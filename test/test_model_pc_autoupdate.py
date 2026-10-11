@@ -107,22 +107,19 @@ def test_split_perception_archive_requires_its_declared_drive_closure(tmp_path, 
         assert (tmp_path / "complete" / name).read_bytes() == b"source\n"
 
 
-def test_road_fitness_archive_requires_signed_world_observation_sources(tmp_path, keys):
+def test_road_fitness_archive_requires_signed_observation_contract(tmp_path, keys):
     m = module()
     helper = {"learning/evaluation/perception/road_fitness_replay.py": b"pass\n"}
     folder = candidate(m, tmp_path, keys, extra_files=helper)
     with pytest.raises(ValueError, match="road-fitness observation dependency"):
         m.unpack(folder / "code.tar", tmp_path / "incomplete")
-    names = ("operations/world/src/rosy/world/api/__init__.py",
-             "operations/world/src/rosy/world/api/observation.py",
-             "operations/world/src/rosy/world/state/projections/road_region.py")
+    names = ("contracts/foundation/core_common/observation.py",)
     helper.update({name: (SCRIPT.parents[2] / name).read_bytes() for name in names})
     folder = candidate(m, tmp_path, keys, seq=2, extra_files=helper)
     release = tmp_path / "complete"
     m.unpack(folder / "code.tar", release)
     probe = release / m.PREFIX / "probe.py"
-    probe.write_text("from rosy.world.api import ObservationSnapshot; "
-                     "from rosy.world.state.projections.road_region import road_region_input_errors\n")
+    probe.write_text("from core_common.observation import ObservationSnapshot, road_region_input_errors\n")
     subprocess.run(m.bootstrap_command(sys.executable, release, probe, []), check=True)
 
 
