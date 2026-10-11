@@ -30,9 +30,11 @@
 | 독립 평가 | 고정 cohort·원장 소비자, 팀 검수 정답 | 규칙/Qwen/조건부 검토를 같은 평가 자료로 비교한다. 확률 JSON은 독립 보정 전에는 자동 처리 확신의 증거가 아니다. |
 | 제한 모델 토론·개선 | 공통 역할 프로파일로 Jev·Laya 등 교체 | 횟수·시간·비용·도구 한도 내 검토 후 실패 자료를 검수한다. 분리된 평가와 회귀 통과 뒤 고정 revision으로 승격·복귀한다. |
 
-최종 완료는 첫 Pinky 차선 정지·재관측 사례에서 관측→판정→제한 처리→물리 결과 확인→피드백을 추적하고, 정상 미개입과 최종 미해결 인수를 함께 입증했을 때다. 수용 세트의 관측 부족 처리 오류·위험 누락·다른 사건 조치·정상 불필요 명령은 0건이어야 한다. 나머지 정확도·보정·지연·비용 한계는 팀의 정답 검수 후 확정한다. 모델 합의나 높은 자체 확률만으로 수용하지 않는다. 관측 누락 때문에 0건을 주장할 수 없으면 HOLD다.
+첫 현장 수용은 Pinky 차선 정지·재관측 사례에서 관측→판정→제한 처리→물리 결과 확인→피드백을 추적하고, 정상 미개입과 최종 미해결 인수를 함께 입증해야 한다. 수용 세트의 관측 부족 처리 오류·위험 누락·다른 사건 조치·정상 불필요 명령은 0건이어야 한다. 나머지 정확도·보정·지연·비용 한계는 팀의 정답 검수 후 확정한다. 모델 합의나 높은 자체 확률만으로 수용하지 않는다. 관측 누락 때문에 0건을 주장할 수 없으면 HOLD다. 전체 목표 완료에는 위 7단계의 운영 연결·범용 domain 계약·교체 가능한 역할 프로파일·독립 평가·제한 토론과 개선 승격·복귀의 실제 검증도 필요하다. 첫 사례나 source 회귀 통과만으로 목표를 완료하지 않는다.
 
-현재 착수 작업은 [D-699 관측 기록 창 계획](2026-10-12-observation-journal-owner.md)이다. `8dfb4be989`의 실제 wheel build→별도 target 설치→`python -I -S` import·별칭 identity·SQLite capture 시험과 capture 회귀는 적격 Model PC에서 6 passed, terminal exit 0, known-failures NEW 0이다. 기존 source 통합 79 passed와 구분한다. 이 후보는 아직 로컬 main 착지 전이며 read-only window, sdist closure, 실제 서비스 배포와 현장 수용은 미완료다. 이 목표 전체는 ACTIVE다.
+최신 D-699 source checkpoint는 commit `0bedd7809c719edb9bdf2e78759bf529b1257e08`로 로컬 main에 착지했다. 관측 원장 실제 `fleet.observe` 분리·기존 identity aliases·capture metadata·기존 curation exporter의 읽기 전용 window와 단독 JSON CLI를 연결했다. API v1.217과 동료 Cam·Discord·프로필 계약을 함께 보존했다. 적격 AI PC 9GB의 관련 17개 파일 원격 시험 318 passed, terminal exit 0, known-failures NEW 0과 lint를 확인했다. 이전 넓은 통합의 6,337 passed/295 skipped와 API 버전 동기화 실패 8건은 별도 RED 증거이며 수정본 전체 CI 통과로 바꾸지 않는다.
+
+고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/observation-land-0bedd7809c/run-1.txt`, SHA256 `32d5747a5b201315adec93a665de5ad2e27b5790dbb0109f5e1ae8fbfeca7e9d`다. wheel→별도 target 설치→`python -I -S` import·identity·SQLite capture가 최종 회귀에 포함된다. sdist·실제 모델 품질·서비스 배포·현장 수용·push는 미확인이다. 다음은 실제 규칙 기준 생산과 사건 원장 연결이며, 정상 명령·모델 호출·재발은 별도 완전한 기록 확보 전 0건으로 주장하지 않는다. 이 목표 전체는 ACTIVE다.
 
 D-698 source checkpoint: 단독 primary worker와 receipt/export /3, 녹화·실패 분석·독립 소비자의 역할 결속은 commit `1b434c6aed7af3888adeab3e61590999efdd87fb`로 로컬 main에 착지했다. 적격 Model PC 9GB의 관련 13개 파일 원격 통합 시험 236개, known-failures 신규 실패 0건과 lint를 통과했다. 독립 검토의 역할 결속 지적을 공통 JSON 계약으로 수정하고 재현 RED와 최종 GREEN을 확인했다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/primary-land-1b434c6aed/run-1.txt`이며 SHA256은 `1fa746fd7f105c3d6471bb1078a77c62466e32ba6e7184f12f88f34bdcc7a352`다.
 

@@ -12,6 +12,8 @@ D-699를 구현한다. 변경 전 Fleet 부모는 54,211줄이며 기존 54,074+
 
 ## 기록 창 구현과 검사
 
+최신 통합은 commit `0bedd7809c719edb9bdf2e78759bf529b1257e08`로 로컬 main에 착지했다. source·실제 wheel 설치·CLI·기존 caller/API·parent/child 크기·API version alignment와 문서 계약을 포함한 17개 파일은 적격 AI PC 9GB에서 318 passed, terminal exit 0, known-failures NEW 0과 lint를 통과했다. 고정 로그는 세션 `logs/observation-land-0bedd7809c/run-1.txt`다. 아래 착지 전 checkpoint는 당시 상태다. 최종 source 검토는 window/payload/CLI 책임과 privacy 경계에서 중요 blocker가 없었다. 실제 운영 배포·센서 최신성·명령/모델/재발 전체 범위와 현장 수용은 여전히 미확인이다.
+
 기존 `learning/curation/pinky/fleet_observations.py`의 `capture_window`와 `--window` CLI를 재사용 경로로 구현했다. 새로운 operations 역방향 import·서비스·모델 호출은 없다. read-only WAL transaction, 전체 boundary roster, capture run/sequence·clock/cadence, strict canonical finite JSON·privacy·64KiB 입력, 24시간·4,096행 한도를 검증한다. 결과는 ID/hash와 미검수 coverage이며 command/model/recurrence 수치는 null이다. source clock의 오래된 값·offline null은 capture 시계로 취급하지 않는다.
 
 원격 RED는 미구현 함수의 18개 실패와 미연결 CLI의 1개 실패를 각각 확인했다. `07419256c`의 window·기존 관측/export·capture·holder/size 5개 파일은 적격 AI PC에서 87 passed, terminal exit 0, known-failures NEW 0이다. 단독 CLI는 `python -I -S`로 실행하고 출력 재사용을 거절했다. 로그는 세션 `logs/observation-window-cli-green/run-1.txt`다. 독립 검토와 최신 main 통합·local landing은 다음 gate이며 실제 서비스 배포·현장 수용·정상 무명령·재발 0건을 입증하지 않는다.
