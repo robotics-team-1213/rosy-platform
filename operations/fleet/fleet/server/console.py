@@ -479,64 +479,64 @@ class FleetConsole(TripAware):
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
         self._queued.pop(robot_id, None)
 
-        route = await self._route_of(robot_id)
-        self.goal_leases.check_stop(robot_id, stop)
-        blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
-        if blocker is not None:
-            stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
-            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+        try:
+            route = await self._route_of(robot_id)
             self.goal_leases.check_stop(robot_id, stop)
-            if not self._cancel_confirmed(cancel_receipt):
-                raise RuntimeError("navigation goal cancellation was not confirmed")
-            self._goals.pop(robot_id, None)
-            self._claims.pop(robot_id, None)
-            self._queued[robot_id] = self._task_mission(
-                                      x, y, yaw, task_id=task_id, attempt_id=attempt_id,
-                                      attempt_seq=attempt_seq, blocked_by=blocker,
-                                      waiting_on=[blocker], reason="ROUTE_CONFLICT",
-                                      # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는
-                                      # 이 경로 위의 남은 거리로 재 단다. 취소하면 로봇이
-                                      # 경로를 잃으므로 여기에 묻어 둔다.
-                                      route=list(route),
-            )
-            return {"accepted": False, "queued": True, "dispatch_attempted": True,
-                    "cancel_confirmed": True, "blocked_by": blocker,
-                    "waiting_on": [blocker], "reason": "ROUTE_CONFLICT"}
+            blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
+            if blocker is not None:
+                stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
+                cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                self.goal_leases.check_stop(robot_id, stop)
+                if not self._cancel_confirmed(cancel_receipt):
+                    raise RuntimeError("navigation goal cancellation was not confirmed")
+                self._goals.pop(robot_id, None)
+                self._claims.pop(robot_id, None)
+                self._queued[robot_id] = self._task_mission(
+                                          x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                                          attempt_seq=attempt_seq, blocked_by=blocker,
+                                          waiting_on=[blocker], reason="ROUTE_CONFLICT",
+                                          # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는
+                                          # 이 경로 위의 남은 거리로 재 단다. 취소하면 로봇이
+                                          # 경로를 잃으므로 여기에 묻어 둔다.
+                                          route=list(route),
+                )
+                return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                        "cancel_confirmed": True, "blocked_by": blocker,
+                        "waiting_on": [blocker], "reason": "ROUTE_CONFLICT"}
 
-        await self._observe()
-        self.goal_leases.check_stop(robot_id, stop)
-        intended = self._intended_route(robot_id, route, x, y)
-        untrusted = next((rid for rid in self._order
-                          if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
-        if untrusted is not None:
-            # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
-            stop = (stop[0], stop[1] + 1)
-            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+            await self._observe()
             self.goal_leases.check_stop(robot_id, stop)
-            if not self._cancel_confirmed(cancel_receipt):
-                raise RuntimeError("navigation goal cancellation was not confirmed")
-            self._goals.pop(robot_id, None)
-            self._claims.pop(robot_id, None)
-            self._queued[robot_id] = self._task_mission(
-                x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-                blocked_by=untrusted, waiting_on=[untrusted], reason="LOCALIZATION_UNTRUSTED",
-                route=list(intended))
-            return {"accepted": False, "queued": True, "dispatch_attempted": True,
-                    "cancel_confirmed": True, "blocked_by": untrusted,
-                    "waiting_on": [untrusted], "reason": "LOCALIZATION_UNTRUSTED"}
-        grid = bays.Grid.from_payload(await self.map())
-        self.goal_leases.check_stop(robot_id, stop)
-        standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
-        if standing:
-            try:
+            intended = self._intended_route(robot_id, route, x, y)
+            untrusted = next((rid for rid in self._order
+                              if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
+            if untrusted is not None:
+                # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
+                stop = (stop[0], stop[1] + 1)
+                cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                self.goal_leases.check_stop(robot_id, stop)
+                if not self._cancel_confirmed(cancel_receipt):
+                    raise RuntimeError("navigation goal cancellation was not confirmed")
+                self._goals.pop(robot_id, None)
+                self._claims.pop(robot_id, None)
+                self._queued[robot_id] = self._task_mission(
+                    x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                    blocked_by=untrusted, waiting_on=[untrusted], reason="LOCALIZATION_UNTRUSTED",
+                    route=list(intended))
+                return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                        "cancel_confirmed": True, "blocked_by": untrusted,
+                        "waiting_on": [untrusted], "reason": "LOCALIZATION_UNTRUSTED"}
+            grid = bays.Grid.from_payload(await self.map())
+            self.goal_leases.check_stop(robot_id, stop)
+            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
+            if standing:
                 return await self._make_room(
                     robot_id, x, y, yaw, intended, standing,
                     task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
                 )
-            except (HubError, RobotApiError) as exc:
-                raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
-        self._claims[robot_id] = route
-        return result
+            self._claims[robot_id] = route
+            return result
+        except (HubError, RobotApiError) as exc:
+            raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
 
     @staticmethod
     def _cancel_confirmed(receipt: Any) -> bool:
