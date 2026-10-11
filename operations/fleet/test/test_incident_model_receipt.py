@@ -104,10 +104,10 @@ def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failu
     async def run():
         _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05)
         worker.feed(poll()); await settled(worker)
+        scope = store.active_scopes()[0]
         with store._transaction() as conn:
             attempt = dict(conn.execute('SELECT * FROM fleet_incident_v2_attempts').fetchone())
             rows = conn.execute('SELECT receipt_json FROM fleet_incident_v2_model_receipts').fetchall()
-            scope = store.active_scopes()[0]
             assert attempt['actual_micros'] == 50000
             assert len(rows) == (0 if builder_rejected else 1)
             if rows:
