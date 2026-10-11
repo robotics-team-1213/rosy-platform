@@ -218,3 +218,36 @@ def test_artifact_cannot_be_reused_by_changed_model_profile_with_same_revision(c
     fit, evaluation = rows('fit'), rows('evaluation')
     artifact = evaluate(fit, evaluation, profile(fit, evaluation, limits()))
     assert selection(artifact, model_changes=change)['eligible'] is False
+
+
+@pytest.mark.parametrize('split', ['fit', 'evaluation'])
+def test_total_support_cannot_hide_under_supported_probability_bin(split):
+    fit, evaluation = rows('fit'), rows('evaluation')
+    target = fit if split == 'fit' else evaluation
+    for row in (target[1:] if split == 'fit' else target[:1]):
+        row['alternatives'] = [dict(choice='reobserve', probability=.89), dict(choice='human', probability=.11)]
+    report = evaluate(fit, evaluation, profile(fit, evaluation, limits())).report
+    assert report['state'] == 'HOLD'
+    assert min(report['metrics']['count'], report['fit_metrics']['count']) == 60
+
+
+def test_exact_bin_minimum_and_absent_bins_keep_offline_pass():
+    fit, evaluation = rows('fit'), rows('evaluation')
+    reviewed = limits()
+    reviewed['minimum_bin_cases'] = 60
+    assert evaluate(fit, evaluation, profile(fit, evaluation, reviewed)).report['state'] == 'PASS_OFFLINE_ONLY'
+    reviewed['minimum_bin_cases'] = 61
+    assert evaluate(fit, evaluation, profile(fit, evaluation, reviewed)).report['state'] == 'HOLD'
+
+
+@pytest.mark.parametrize('split', ['fit', 'evaluation'])
+def test_error_categories_preserve_overlapping_errors_and_case_denominator(split):
+    fit, evaluation = rows('fit'), rows('evaluation')
+    target = fit if split == 'fit' else evaluation
+    target[0].update(unsafe_error=True, binding_error=True, unnecessary_effect=True, required_abstain_error=True)
+    target[1]['unsafe_error'] = True
+    report = evaluate(fit, evaluation, profile(fit, evaluation, limits())).report
+    metrics = report['fit_metrics'] if split == 'fit' else report['metrics']
+    assert report['state'] == 'FAIL' and metrics['count'] == 60 and metrics['forbidden'] == 2
+    assert metrics['error_counts'] == dict(unsafe_error=2, binding_error=1,
+                                         unnecessary_effect=1, required_abstain_error=1)
