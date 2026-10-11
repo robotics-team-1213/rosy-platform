@@ -18,6 +18,7 @@ export function createTeachPanel(host) {
   let basisKey = '';
   const requestedRobot = new URLSearchParams(location.search).get('robot');
   let robotsFilled = false;
+  let roster = [];
   for (const kind of PLACE_KINDS) $('teach-place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
   function gate(id, reason) {
@@ -31,6 +32,8 @@ export function createTeachPanel(host) {
     const base = role === 'operator' ? '' : role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
     const robot = base || ($('teach-robot').value ? '' : '로봇을 고르세요');
     const recording = view?.recording;
+    if (recording) $('teach-robot').value = roster.some(row => row.robot_id === recording.robot_id) ? recording.robot_id : '';
+    const target = roster.find(row => row.robot_id === $('teach-robot').value);
     const pending = newestPending(view);
     const draftReason = host.dirty() ? '고친 초안을 먼저 저장하세요' : '';
     const draft = host.draft(), reference = draft?.map?.survey;
@@ -41,8 +44,8 @@ export function createTeachPanel(host) {
     $('teach-frame').disabled = Boolean(recording);
     $('teach-robot').disabled = Boolean(recording);
     $('teach-target').textContent = recording ? `기록 중인 로봇 ${recording.robot_id}`
-      : $('teach-robot').value ? `기록 대상 ${$('teach-robot').value} · 시작 전 실제 로봇을 확인하세요`
-        : requestedRobot ? `요청한 로봇 ${requestedRobot}이 등록 목록에 없습니다 · 기록할 로봇을 직접 선택하세요`
+      : target ? `기록 대상 ${target.robot_id} · ${target.online === false ? '연결 끊김 · ' : ''}시작 전 실제 로봇을 확인하세요`
+        : requestedRobot && !roster.some(row => row.robot_id === requestedRobot) ? `요청한 로봇 ${requestedRobot}이 등록 목록에 없습니다 · 기록할 로봇을 직접 선택하세요`
           : '기록할 로봇을 선택하세요';
     $('teach-reference').textContent = reference
       ? `조사 기준 ${reference.revision} · 시작 ${reference.origin.map(v => v.toFixed(2)).join(', ')} m · 방향 ${Math.round(reference.heading_rad * 180 / Math.PI)}° · ${reference.description}`
@@ -168,7 +171,8 @@ export function createTeachPanel(host) {
   return {
     sync,
     robots(robots) {
-      const selected = robotsFilled ? $('teach-robot').value : requestedRobot ?? robots[0]?.robot_id;
+      roster = robots;
+      const selected = view?.recording?.robot_id ?? (robotsFilled ? $('teach-robot').value : requestedRobot ?? robots[0]?.robot_id);
       $('teach-robot').replaceChildren(new Option('기록할 로봇 선택', ''),
         ...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
       $('teach-robot').value = robots.some(robot => robot.robot_id === selected) ? selected : '';
