@@ -82,6 +82,28 @@ def test_review_reply_intent_failure_rolls_back_review(tmp_path, monkeypatch):
     assert workflow.read(receipt["request_id"], "op")["state"] == "REQUESTED"
 
 
+@pytest.mark.parametrize("change", ["owner", "removed", "channel"])
+def test_restarted_result_observation_does_not_reply_to_revoked_receipt(tmp_path, change):
+    import asyncio
+    from fleet.server.channel_replies import ChannelReplyOutbox, ChannelReplyWorker
+    workflow, journal, tasks, _, receipt = fixture(tmp_path)
+    ready = review(workflow, receipt)
+    created = task(tasks, receipt)
+    workflow.link_task(receipt["request_id"], "op", task_id=created["task_id"],
+                       expected_hash=receipt["content_hash"], expected_revision=ready["revision"])
+    tasks.transition(created["task_id"], "FAILED", actor_id="system", source="system", reason="expired")
+    updated = dict(users={USER: "other"}) if change == "owner" else (
+        dict(users={str(int(USER) + 10): "op"}) if change == "removed" else dict(channel_id=str(int(CHANNEL) + 10)))
+    journal.config = journal.config.model_copy(update=updated)
+    outbox = ChannelReplyOutbox(journal, clock=lambda: 1000)
+
+    class Sender:
+        async def send(self, **kwargs):
+            raise AssertionError("revoked original request caused external reply")
+    asyncio.run(ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000).run_once())
+    assert outbox.rows("op") == []
+
+
 def test_review_is_durable_owner_scoped_revision_checked_and_not_execution(tmp_path):
     workflow, journal, tasks, _, receipt = fixture(tmp_path)
     assert workflow.read(receipt["request_id"], "op")["revision"] == 0
