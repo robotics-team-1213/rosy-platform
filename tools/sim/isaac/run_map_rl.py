@@ -538,7 +538,6 @@ def main():
                     sha256=hashlib.sha256(recorder.path.read_bytes()).hexdigest())
                 recorder = None
             summary['episodes'].append(episode)
-            print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'baseline' and seed == 101 and saved is None:
                 baseline = result
             if frozen is not None and policy.export() != frozen:
@@ -553,6 +552,7 @@ def main():
             if (phase == 'eval' and perception is not None and not episode.get('admission_error')
                     and not summary['episodes'][-2].get('admission_error')):
                 summary['camera_comparisons'].append(camera_comparison(summary['episodes'][-2], episode))
+            print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates
