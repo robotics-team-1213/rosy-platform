@@ -39,6 +39,8 @@ import pathlib, sys
 sys.path.insert(0, sys.argv[1])
 from rosy.world.api import ObservationSnapshot
 from rosy.world.state.projections import map_pose
+from rosy.world.state.projections.road_region import road_region_input_errors
+assert callable(road_region_input_errors)
 assert pathlib.Path(map_pose.__file__).is_relative_to(pathlib.Path(sys.argv[1]))
 assert map_pose.MapPoseTracker('robot').pose(1800000000.0).state == map_pose.UNKNOWN
 assert not any(name == 'fleet' or name.startswith('fleet.') for name in sys.modules)
