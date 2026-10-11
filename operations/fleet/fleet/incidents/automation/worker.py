@@ -263,11 +263,14 @@ class IncidentCaseWorker:
             try: trace = model_receipt(scope, problem, bound, checked, profiles=self.profiles)
             except (ValueError, TypeError):
                 state, summary = 'REJECTED', {'reason': 'MODEL_TRACE_REJECTED'}
-        await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
-                       actual_cost_usd=cost, summary=summary, model_receipt=trace)
+        completed = await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
+                                  actual_cost_usd=cost, summary=summary, model_receipt=trace)
         updated = await self._db('case', scope)
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
+        if completed['state'] != 'COMPLETED' and checked is not None:
+            if self._fresh(problem): await self._finish(scope, 'MODEL_TRACE_REJECTED')
+            return None
         if self.human_owned(scope.subject_id, scope.case_id) is not False:
             await self._db('close_case', scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED'); return None
         if not self._fresh(problem): return None
