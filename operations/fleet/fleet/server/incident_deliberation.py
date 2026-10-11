@@ -1,4 +1,4 @@
-"""D-672 trusted Pinky judgment to advisory-only Decision input."""
+"""D-672 trusted line judgment to advisory-only Decision input."""
 from rosy.decision.deliberation import Problem
 from rosy_situation.assessment import Assessment
 from rosy_situation.snapshot_assessment import POLICY
