@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import closing
 from dataclasses import replace
@@ -7,6 +8,7 @@ import pytest
 
 from fleet.incidents.automation.contract import CaseBudget, CaseScope
 from fleet.incidents.automation.store import IncidentCaseStore
+from fleet.incidents.notifications import NotificationWorker
 from test_notifications import _setup, observe, run
 
 
@@ -182,6 +184,9 @@ def test_stale_after_dequeue_defers_without_consuming_http_attempt(tmp_path):
         now[0] = 104
         return result
     log.notifications.claim_due = claim
-    run(log, board, channels, 100, lambda _: pytest.fail('stale final reached HTTP'))
+    async def deliver():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: pytest.fail('stale final reached HTTP'))) as http:
+            await NotificationWorker(log.notifications, channels, http, board=board, clock=lambda: now[0]).run_once()
+    asyncio.run(deliver())
     final = next(row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW')
     assert final['state'] == 'PENDING' and final['attempts'] == 0
