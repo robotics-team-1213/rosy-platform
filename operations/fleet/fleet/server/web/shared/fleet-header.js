@@ -9,6 +9,12 @@ const $ = id => document.getElementById(id);
 
 // Every Fleet document has one inbox entry; only the console owns its local unread state.
 function inboxButton() {
+  if (!document.querySelector(".fleet-link-status")) {
+    const status = document.createElement("div");
+    status.className = "fleet-link-status";
+    $("online-pill").before(status);
+    status.append($("online-pill"), $("development-badge"));
+  }
   if ($("fleet-inbox")) return $("fleet-inbox");
   const inbox = document.createElement("ui-button");
   inbox.id = "fleet-inbox";
@@ -54,12 +60,6 @@ export function setTopbarOpen(open) {
   $("topbar-extra").dataset.open = String(open);
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
-  if (!document.querySelector(".fleet-link-status")) {
-    const status = document.createElement("div");
-    status.className = "fleet-link-status";
-    $("online-pill").before(status);
-    status.append($("online-pill"), $("development-badge"));
-  }
   inboxButton();
   listen($("topbar-more"), "click", () => {
     openedForLock = false;
