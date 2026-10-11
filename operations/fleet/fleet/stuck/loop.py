@@ -57,6 +57,11 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
+        if self._board._log is not None:
+            for claim in await asyncio.to_thread(self._board._log.handoff.active):
+                rid, sid = claim['robot_id'], claim['stuck_id']
+                if self._board.is_open(rid, sid) and not self._resolver.is_claimed(rid, sid):
+                    self.claim(rid, sid)
         self._review_headings(robots)
         await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
@@ -151,6 +156,8 @@ class StuckResolverLoop:
                            tier="human", escalated=action.reason)
 
     async def _answer(self, answer: Answer, now: float) -> None:
+        if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
+            return
         client = self._clients().get(answer.robot_id)
         if client is None:
             self._resolver.claim(answer.robot_id, answer.stuck_id)   # never retry without a token

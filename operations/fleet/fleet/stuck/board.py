@@ -181,8 +181,8 @@ class LineStuckBoard:
     def episodes(self, limit: int = 100) -> list[dict]:
         return self._log.episodes(limit) if self._log is not None else []
 
-    def reports(self, limit: int = 100) -> list[dict]:
-        return self._log.reports(limit) if self._log is not None else []
+    def reports(self, limit: int = 100, **filters) -> list[dict]:
+        return self._log.reports(limit, **filters) if self._log is not None else []
 
     def traffic_reports(self, limit: int = 100) -> list[dict]:
         return self._log.traffic_reports(limit) if self._log is not None else []

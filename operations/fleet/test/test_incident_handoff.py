@@ -2,7 +2,6 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 
 import pytest
 
@@ -76,6 +75,25 @@ def test_api_claim_has_named_readback_and_no_device_command(tmp_path):
     assert not [call for call in robot.calls if call[0] == 'line_stuck_decision']
     bad = {**body, 'judgment_revision': '0' * 64}
     assert client.post(path, json=bad, headers=_auth(OPERATOR)).status_code == 409
+    assert client.get('/api/fleet/incidents?robot_id=rosy_01', headers=_auth(VIEWER)).status_code == 422
+    reports = client.get('/api/fleet/incidents?robot_id=rosy_01&stuck_id=stuck-abc',
+                         headers=_auth(VIEWER)).json()['reports']
+    assert len(reports) == 1 and reports[0]['handoff']['principal_id'] == 'op-7'
+
+
+def test_durable_claim_is_restored_only_for_the_current_case(tmp_path):
+    from fakes import FakeRobot
+    from test_stuck_resolver_loop import _app, _state
+    robot = FakeRobot('rosy_01', state=_state())
+    app = _app(tmp_path, robot)
+    asyncio.run(app.state.fleet_gather())
+    board = app.state.line_stuck
+    receipt = board.judgment_view('rosy_01')
+    board._log.handoff.claim('rosy_01', 'stuck-abc', receipt, 'alice', now=receipt['evaluated_at'])
+    restarted = _app(tmp_path, robot)
+    asyncio.run(restarted.state.stuck_resolver.run_once())
+    assert restarted.state.stuck_resolver._resolver.is_claimed('rosy_01', 'stuck-abc')
+    assert not [call for call in robot.calls if call[0] == 'line_stuck_decision']
 
 
 def test_a_queued_resolver_answer_is_rechecked_after_human_claim(tmp_path):
