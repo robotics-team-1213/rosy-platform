@@ -183,7 +183,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         why.dataset.addressReason = view.addresses[robot.robot_id].status;
         node.append(why);
       }
-      evidence.push(...attentionItems(robot).map(item => item.text.replace(/^\w+:\s*/, "")));
+      evidence.push(...attentionItems(robot).map(item => item.text.replace(/^:\s*/, "")));
     }
     if (evidence.length) node.append(nodeWithText("p", "robot-summary-evidence", [...new Set(evidence)].join(" · ")));
     return node;
