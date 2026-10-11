@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
 
 ## 계획·결과 문서
 
