@@ -406,7 +406,7 @@ $('token-save').addEventListener('click', async () => {
       state.role = null;
       showSignedOut();
     }
-    if (error.status === 401) loginForm.refresh(true);
+    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') loginForm.refresh(true);
     render();
     if (localEdit) select(state.selected);
     syncButtons();

@@ -125,10 +125,12 @@ async function action(fn) {
     if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
     if (error.status === 401 || error.status === 403) clearSession();
     // A 403 here is one Cell action refused, not a lost session: the words change, the E-stop stays live.
-    if (error.status === 403) showSignedOut({fold: false, refused: false});
-    if (error.status === 401) { showSignedOut(); loginForm.refresh(true); }
+    if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({fold: false, refused: false});
+    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
-    $('notice').textContent = error.status === 403
+    $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED'
+      ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
+      : error.status === 403
       ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
       : error.code === 'CELL_APP_UNCONFIGURED'
         ? 'Cell 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 Cell 서비스 구성을 확인해 달라고 요청하세요.'
