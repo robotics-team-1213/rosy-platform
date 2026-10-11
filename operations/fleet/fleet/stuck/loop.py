@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Mapping, Optional
 import httpx
 
 from fleet.server.console_routes import transport_failure
-from fleet.stuck import closed_loop
+from fleet.stuck import closed_loop, pipeline
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.resolver import Answer, Escalate, StuckResolver
@@ -66,6 +66,7 @@ class StuckResolverLoop:
         await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         actions = self._resolver.step(now, robots)
+        selected = self._rows.copy()
         verdicts, self._resolver.ai_verdicts[:] = list(self._resolver.ai_verdicts), []
         if verdicts and self.ai_board is not None:
             for verdict in verdicts:
@@ -78,7 +79,7 @@ class StuckResolverLoop:
             if isinstance(action, Escalate):
                 self._escalated(action)
             else:
-                await self._answer(action, now)
+                await self._answer(action, now, selected=selected.get(action.robot_id))
         if self.problems is not None:              # D-610 4: stalled and pose_lost
             await self.problems.run(self, now, robots)
 
@@ -155,14 +156,29 @@ class StuckResolverLoop:
                            decision="ESCALATE", principal_id=PRINCIPAL_ID, accepted=None,
                            tier="human", escalated=action.reason)
 
-    async def _answer(self, answer: Answer, now: float) -> None:
+    async def _admission_row(self, robot_id: str) -> Optional[dict]:
+        rows = (await self._snapshot())["robots"]
+        self._rows = {str(row["robot_id"]): self._row(row) for row in rows}
+        return self._rows.get(robot_id)
+
+    async def _answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> None:
+        row = await self._admission_row(answer.robot_id)
         if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
+            return
+        hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
+            or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
+        if hold is not None:
+            self._resolver.claim(answer.robot_id, answer.stuck_id)
+            self._escalated(Escalate(answer.robot_id, answer.stuck_id, hold),
+                            rule=answer.rule, decision=answer.decision)
             return
         client = self._clients().get(answer.robot_id)
         if client is None:
             self._resolver.claim(answer.robot_id, answer.stuck_id)   # never retry without a token
             self._escalated(Escalate(answer.robot_id, answer.stuck_id, "no_resolver_token"))
             return
+        now = self._clock()
+        self._rows[answer.robot_id] = row
         self._resolver.sent(answer, now)
         record = dict(robot_id=answer.robot_id, stuck_id=answer.stuck_id,
                       decision=answer.decision, principal_id=PRINCIPAL_ID,
