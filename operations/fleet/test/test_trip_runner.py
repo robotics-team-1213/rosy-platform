@@ -1249,6 +1249,39 @@ def test_bay_rechecks_trip_owner_after_capability_await():
     assert not [call for call in robot.calls if call[0] == "navigation_goal"]
 
 
+def test_trip_rechecks_existing_motion_after_start_pose_await():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    engaged = [None]
+    runner._engaged = lambda robot_id: engaged[0]
+    start_pose = runner._start_pose
+
+    async def changed_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        engaged[0] = "goal"
+        return result
+
+    runner._start_pose = changed_pose
+    assert _code(runner.start("p1", "bob")) == "TRIP_ROBOT_BUSY"
+    assert runner.view("p1") is None
+
+
+def test_goal_in_flight_counts_as_engaged_until_its_receipt_arrives():
+    from fleet.server.trip_guard import engaged
+
+    console, _, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    observations = []
+
+    async def accept(*args, **kwargs):
+        observations.append(engaged(console, "a"))
+        return {"accepted": True}
+
+    robot.navigation_goal = accept
+    run(console.goal("a", 1.0, 0.0))
+    assert observations == ["goal_pending"]
+
+
 def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
     import fleet.server.console as console_module
 
