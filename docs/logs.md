@@ -7815,3 +7815,9 @@ osy-d395-s1d\`.
 - 변경: 장치·작업 공간·공정·작업을 구별하고 공통 읽기 화면→운반/고정 팔 인계→실물/복합 장치 수용의 단계와 반례를 Proposed ADR 및 설계에 기록했다.
 - 증거: 주행 Task와 고정 PICK_PLACE Mission의 분리, Cell의 pallet.transfer 제한을 현행 소스로 확인했다.
 - gate 변화: 없음. 런타임/API/권한/최종 writer는 변경하지 않았다. 문서 검증과 실제 협업 실행은 별도 증거다.
+
+## 2026-10-11 · 1cbe8fa67 · D-664 공통 작업 읽기 첫 구현
+
+- 변경: bounded 작업 목록 API·typed schema·SRS와 공통 Task/Mission 화면을 추가했다. principal 소유 범위, 출처별 identity/state, 목록 갱신 및 세션 상실 시 무효화, 장치·공간·업무·실행 owner 상세를 유지한다.
+- 증거: 첫 API/헤더/팔레트/기능 잠금 원격 28 passed 및 순수 JS 2 passed. 원격 브라우저와 설치 회귀에서 드러난 캡처 파일 확장자 및 추가 자산 수 fixture를 수정했다. 최종 검증 결과는 별도 receipt로 기록한다.
+- gate 변화: SOURCE 구현. 배포/현장 및 다장치 실행 수용은 아직 증명하지 않았다.
