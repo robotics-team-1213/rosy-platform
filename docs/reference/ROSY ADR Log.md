@@ -635,6 +635,7 @@
 | D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 | Proposed (2026-10-11) |
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 | Proposed (2026-10-11) |
 | D-647 | 공통 판단 0단계 World·Work Orchestration·Fleet 책임과 배포 경계 | Proposed (2026-10-11) |
+| D-648 | 공통 상황평가·Decision·작업 실행·Fleet 목표 소스 구조 | Proposed (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

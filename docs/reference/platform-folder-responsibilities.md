@@ -8,6 +8,8 @@
 
 ## 현재 의미 구조와 깊이
 
+**후속 구조 제안:** 현재 배치는 아래 표 그대로이며, 공통 상황평가·작업 규칙·Fleet 어댑터의 추가 책임 분리는 [D-648](../adr/D-648-shared-judgment-target-structure.md)의 [목표 설계](../plans/2026-10-11-shared-judgment-structure-design.md)와 [단계별 계획](../plans/2026-10-11-shared-judgment-structure.md)을 검토한다. Proposed 목표를 이미 이동·설치된 현재 상태로 집계하지 않는다.
+
 의미 폴더 깊이는 저장소 아래 책임 분류를 최대 5단계로 세는 기준이다. `middleware/control/drive/planning/nav2`는 5단계이다. `src/rosy/world`, `core_features`, `rosy_situation` 같은 언어 namespace와 ament의 `test/resource/config`는 패키지 내부 배치다. 이를 책임 분류 단계로 합산하여 기존 import를 억지로 바꾸지 않는다. 아래는 현재 존재하는 폴더만 보여 주며, 패키지 내부 경로는 괄호로 표시한다.
 
 ```text

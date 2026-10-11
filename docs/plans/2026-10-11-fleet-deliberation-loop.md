@@ -14,6 +14,8 @@
 
 ## 1. 내부 런 계약과 의미 검증
 
+**구조 관문:** [D-648 분리 계획](2026-10-11-shared-judgment-structure.md)의 수용 결과를 먼저 반영한다. Situation 필요성 평가와 기존 도메인 owner의 빠른 규칙/사례를 재구현하지 않는다. 아래 Decision supervisor는 미해결/불확실 문제의 모델 선택·유한 토론을 맡으며 원장 도구 중재는 Fleet site 어댑터다.
+
 Create: `operations/decision/src/rosy/decision/deliberation.py`.
 Test: `operations/fleet/test/test_deliberation.py`.
 Reuse: `candidate.py`, `decision_pipeline.py`, `model_tool_contract.py`, D-619 `core_common.protocol.situation` validator.
