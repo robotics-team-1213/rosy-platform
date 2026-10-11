@@ -7826,3 +7826,11 @@ osy-d395-s1d\`.
 - 변경: 사용자의 도로 자체는 drivable, 현재/따라갈 구역은 로직 판단 지침을 실행 계획과 새 road_surface_v1 검수 classes에 반영했다. 선택 semantic은 classes→dataset→export→eval에 보존되고 의미 불일치·구형 strict 평가·champion 혼용과 기존 조향 슬롯의 도로면/궤적 모델 전달을 거절한다. v13의 원래 구역 의미는 별도 유지한다.
 - 증거: 최초 의미 보존/비교/전달 시험은 NEW 16으로 RED를 확인했다. 추가 template RED 후 `6353771b7` 관련 원격 builder/export/notebook/intake/delivery/manifest 회귀 terminal exit 0, NEW 0. notebook은 generator에서 재생성했다. 독립 데이터 계보의 strict 검증과 별도 도메인/구역 평가, 관측 전용 전달은 후속이다.
 - gate 변화: 없음. 새 클래스별 도로면 학습 정답 검수, 학습된 모델의 적합성·장치 관측·주행 활성화·배포는 미완료다.
+
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
