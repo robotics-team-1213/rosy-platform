@@ -78,7 +78,12 @@ def receipt(body, response, *, credential_sha256):
 
 @dataclass(frozen=True)
 class TrustedIncludedPlanPolicy:
-    """Composition supplies verified exact OpenCode/key/plan evidence, never SDK cost."""
+    """Host composition supplies verified active-plan/account/key evidence.
+
+    Evidence must cover pinned OpenCode, this coding endpoint and no PAYG fallback.
+    The credential fingerprint binds the actual gateway key. This input establishes
+    included-plan marginal-cash policy, never observed charges or host isolation.
+    """
     policy_revision: str
     evidence_sha256: str
     account_ref: str
