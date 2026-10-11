@@ -59,3 +59,59 @@ def test_primary_needing_review_hands_off_without_unconfigured_second_call(tmp_p
         assert exported['case']['calls'] == 1 and exported['field_accepted'] is False
         await worker.aclose()
     asyncio.run(run())
+
+
+def test_actual_primary_export_reaches_recording_failure_and_independent_comparison(tmp_path):
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    def load(name, path):
+        spec = importlib.util.spec_from_file_location(name, root / path)
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        return module
+    binder = load('primary_feedback', 'learning/curation/perception/incident_feedback.py')
+    compare = load('primary_compare', 'learning/evaluation/decision/operational_comparison.py').compare
+    async def run():
+        worker, _, seen, handoffs, store, poll, profiles = await primary_setup(tmp_path, 'conflict')
+        worker.feed(poll()); await settled(worker)
+        scope = handoffs[0][0]
+        exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id,
+                                       [asdict(profiles[0])], include_handoff=True)
+        recording = dict(schema=binder.SCHEMA, matches=[dict(robot_id=scope.subject_id, stuck_id=scope.case_id)], missing_incidents=[])
+        analysis = dict(schema='rosy.incident.failure_analysis/1', subject_id=scope.subject_id,
+            case_id=scope.case_id, model_feedback_digest=exported['digest'], reviews=[dict(
+                category='judgment', source='model', author_id='private-reviewer', at='2026-10-12T00:00:00Z')])
+        bound = binder.attach_failure_analysis(recording, exported, analysis)['matches'][0]
+        assert bound['model_feedback']['label_state'] == bound['failure_analysis']['label_state'] == 'UNREVIEWED'
+        cohort = dict(schema='rosy.incident.operational_cohort/1', domain='line_stuck', training=[], fit=[],
+            evaluation=[dict(subject_id=scope.subject_id, case_id=scope.case_id,
+                session_id='eval', recording_id='recording', source_sha256='a' * 64)],
+            candidates=[dict(strategy='primary', strategy_sha256='b' * 64, profile_sha256=scope.profile_sha256,
+                policy_revision=scope.policy_revision, exports=[dict(subject_id=scope.subject_id,
+                    case_id=scope.case_id, digest=exported['digest'])])])
+        report = compare(cohort, [exported])
+        assert report['promotion_state'] == 'HOLD' and 'rule_baseline' in report['missing']
+        assert 'primary_baseline' not in report['missing']
+        cohort['candidates'][0]['strategy'] = 'primary_reviewer'
+        with pytest.raises(ValueError): compare(cohort, [exported])
+        downgraded = dict(exported, schema='rosy.incident.model_feedback/1')
+        with pytest.raises(ValueError): binder.attach_model_feedback(recording, downgraded)
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_single_role_cost_evidence_uses_v3_and_rejects_legacy_downgrade():
+    from dataclasses import replace
+    from fleet.incidents.automation.ledger.receipt import ModelReceipt, model_receipt, checked_receipt
+    from rosy.decision.deliberation import canonical
+    from test_incident_model_receipt import fixture
+    from test_incident_cost_receipt import evidence
+    scope, problem, profiles, bound, checked, attempt = fixture()
+    profiles = profiles[:1]
+    scope = replace(scope, profile_sha256=hashlib.sha256(canonical([asdict(profiles[0])]).encode()).hexdigest())
+    receipt = model_receipt(scope, problem, bound, checked, profiles=profiles, cost_evidence=evidence(problem, bound, checked))
+    raw = checked_receipt(scope, attempt, receipt)
+    assert raw['schema'] == 'rosy.incident.model_receipt/3'
+    assert raw['cost_evidence']['observed_usd_charge'] is None
+    with pytest.raises(ValueError):
+        checked_receipt(scope, attempt, ModelReceipt(canonical(dict(raw, schema='rosy.incident.model_receipt/2'))))
