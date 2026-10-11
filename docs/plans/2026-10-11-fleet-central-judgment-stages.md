@@ -12,6 +12,8 @@
 
 ## 우선순위와 단계
 
+**0단계 구체화:** [D-648 목표 책임 구조](../adr/D-648-shared-judgment-target-structure.md)의 [설계](2026-10-11-shared-judgment-structure-design.md)와 [분리 계획](2026-10-11-shared-judgment-structure.md)을 먼저 검토한다. 공통 assessment는 Situation, 대안은 Decision, 순수 작업 규칙은 기존 execution/site, 원장/승인/transport는 현재 어댑터로 두는 Proposed 구조다. 중앙 판단의 구현 위치는 이 구조의 수용과 설치 closure 확인 뒤 확정한다.
+
 | 순서 | ADR | 산출물 | 다음 단계 조건 |
 |---|---|---|---|
 | 0 | [D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md) | 단일 셀/로봇/다중 로봇 책임·의존 표와 holder/port·초기 배포 결정 | 사실/권고/승인 분리, 기존 transaction·권한 보존, 배포 대안과 선택 근거 검토 |

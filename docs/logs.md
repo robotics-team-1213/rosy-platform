@@ -7746,3 +7746,9 @@ osy-d395-s1d\`.
 - 범위: 문서만. 같은 프로세스에서 논리 경계를 먼저 정하는 B안은 잠정 추천이며 실제 서비스 분리·실행 권한 변경·외부 발송은 없다.
 - 증거: 기존 World/Decision/Fleet 소스와 D-429·D-630 및 Proposed D-435를 확인했다. 4개 역할의 read-only 문서 검토에 actionable finding은 없고 holder/배포와 장애 격리는 미결정 관문으로 유지했다. 독립 외부 모델 검토는 jq 미설치로 시작 전 생략했다. 문서 계약 원격 검증은 커밋 뒤 별도 기록한다.
 - gate 변화: 기존 Accepted 계약과 실행 gate는 유지한다. 0단계 검토 완료 전 공통 로직 위치 확정은 HOLD이며 main 착지·push·배포는 하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
+
+- 변경: docs/fleet-judgment-stages에서 D-648 Proposed, 목표 트리·의존·단일 셀/로봇/다중 로봇·비개입 사례와 파일별 분리 계획을 작성했다. 중앙 판단 0단계 및 현재 폴더 책임 안내에 목표 문서를 연결했다.
+- 증거: 현재 World 관측 참조, Situation 사실/제안 분리, Fleet store를 쓰는 Decision tool dispatcher와 Mission/Job/claim·execution/site 소비자를 읽었다. 문서 자체의 lint와 committed-HEAD 원격 계약 결과는 별도 검증한다.
+- gate 변화: 없음. 현재 Accepted 폴더/원장·설치·writer를 유지한다. 실제 코드 이전·새 판단·모델 호출·알림·배포·main 착지·push는 미실행이다.
