@@ -23,6 +23,11 @@ CLI와 로컬 제공자는 같은 v2 요청 생성기를 사용한다. 기존 GL
 
 위 suite는 범위가 겹치므로 합산하지 않는다. 통합 HEAD 시험과 독립 검토 결과는 확인 후 추가한다.
 
+- 통합 `0d006d3122`: 원격 239 passed / exit 0 / NEW 0, `logs/phase3-integrated/run-1.txt`. 자원 하한 미달 fallback이므로 용량·지연 수용은 미확인이다.
+- 로컬 어댑터 `eac5ad9ba8`: 여유 확인된 Site PC의 관련 82 passed / exit 0 / NEW 0. 소스의 격리 승인 상수 문제를 RED로 재현하고 기본 수용을 차단했다. 실제 호스트가 검증한 capability를 명시해야 호출할 수 있다.
+- 배포 패키지 `79febfdbe2`: v2 모듈의 wheel/sdist 설치·namespace import 및 로컬 제공자 회귀 34 passed / exit 0 / NEW 0, `logs/phase3-delivery/run-1.txt`. 자원 하한 미달 fallback이며 실제 호스트 활성화는 아니다.
+- 독립 검토: 프로파일·판정·CLI는 advisory-only 경계에서 중요한 blocker 없음. 로컬 어댑터의 정적 격리 표식은 blocker로 기록하고 수정했다. 최종 수정 및 main 통합은 다시 검토한다.
+
 ## 남은 수용
 
 실제 격리 OpenCode SDK/relay와 GLM 1회 시험, Qwen 직접 v2 호출, 사람이 검수한 독립 현장 데이터와 품질·지연 한계, 실제 Fleet 기준 선택 생산자, 제한된 재관측·결과 readback·최종 사람 인수 연결, Jev/Laya 실제 어댑터, 개선 후보 승격 및 Pinky 현장 수용은 별도로 확인해야 한다. Discord 설정은 담당 세션의 작업이다.
