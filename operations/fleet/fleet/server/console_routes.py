@@ -144,7 +144,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         now = console._clock()
         rows = []
         for row in snapshot["robots"]:
-            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            row = {**row, "line_stuck": board.view(row["robot_id"]),
+                   "judgment": board.judgment_view(row["robot_id"])}
             if lane is not None:   # D-511 M0: the monitor's latest result, read only
                 row["lane_compliance"] = lane.view(row["robot_id"])
             observed = row.pop("_state_mono", None)
@@ -283,6 +284,10 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
     def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
         return {"reports": board.reports(limit), "traffic_reports": board.traffic_reports(limit)}
+
+    @app.get("/api/fleet/judgments", dependencies=read_guard, tags=["line-stuck"])
+    def judgment_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {"records": board.judgments(limit)}
 
     @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
               tags=["line-stuck"])

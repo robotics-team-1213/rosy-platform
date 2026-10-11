@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from fleet.server.sqlite_policy import configure_connection
+from core_common.protocol.schemas import FleetJudgmentReceipt, FleetObservedClosure
 
 
 def _resolution(answers) -> tuple:
@@ -81,6 +82,34 @@ class LineStuckAnswerLog:
                        principal_id TEXT NOT NULL, root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS fleet_ai_fact_reviews_fact ON fleet_ai_fact_reviews(fact_row)")
+            connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_records (
+                judgment_id INTEGER PRIMARY KEY AUTOINCREMENT, robot_id TEXT NOT NULL,
+                recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
+            connection.execute("CREATE INDEX IF NOT EXISTS fleet_judgment_robot ON fleet_judgment_records(robot_id, judgment_id)")
+            connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_current (
+                robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
+
+    def record_judgment(self, receipt: dict) -> None:
+        receipt = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode="json")
+        robot_id, now = receipt['request']['subject_id'], receipt['evaluated_at']
+        body = json.dumps(receipt, allow_nan=False, sort_keys=True)
+        def signature(value):
+            return (value['necessity'], value['reason'], value['policy_revision'],
+                    value['request'].get('case_id'), value['request'].get('owner'))
+        with closing(self._connect()) as connection, connection:
+            previous = connection.execute("SELECT recorded_at, assessment FROM fleet_judgment_records WHERE robot_id=? ORDER BY judgment_id DESC LIMIT 1", (robot_id,)).fetchone()
+            if previous is None or signature(json.loads(previous['assessment'])) != signature(receipt) or now - previous['recorded_at'] >= 60:
+                connection.execute("INSERT INTO fleet_judgment_records(robot_id, recorded_at, assessment) VALUES (?, ?, ?)", (robot_id, now, body))
+            connection.execute("INSERT INTO fleet_judgment_current VALUES (?, ?, ?) ON CONFLICT(robot_id) DO UPDATE SET recorded_at=excluded.recorded_at, assessment=excluded.assessment", (robot_id, now, body))
+            connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
+            connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
+
+    def judgments(self, limit: int = 100) -> list[dict]:
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError('judgment limit must be between 1 and 1000')
+        with closing(self._connect()) as connection:
+            rows = connection.execute("SELECT * FROM fleet_judgment_records ORDER BY judgment_id DESC LIMIT ?", (limit,)).fetchall()
+        return [{**dict(row), 'assessment': json.loads(row['assessment'])} for row in rows]
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -198,7 +227,18 @@ class LineStuckAnswerLog:
                             ai.append(item)
                             if len(ai) == 3:
                                 break
+                has_answer = any(a['decision'] != 'ESCALATE' and a['accepted'] != 0 for a in answers)
+                status = 'OPEN'
+                if row['closed_at'] is not None:
+                    status = 'OBSERVATION_ENDED'
+                    if row['close_reason'] == 'cleared':
+                        status = 'CLEARANCE_OBSERVED' if has_answer else 'NATURAL_CLEARANCE'
+                closure = FleetObservedClosure(
+                    status=status, action_credit='UNVERIFIED' if has_answer else 'NONE',
+                    reason=row['close_reason'], observed_at=row['closed_at'],
+                ).model_dump(mode='json')
                 reports.append({"schema": "rosy.incident.v1", "id": f"line_stuck:{robot_id}:{stuck_id}",
+                                "closure": closure,
                                 "stuck_id": stuck_id,
                                 "classification": "line_stuck", "robot_ids": [robot_id],
                                 "opened_at": row["opened_at"], "closed_at": row["closed_at"],

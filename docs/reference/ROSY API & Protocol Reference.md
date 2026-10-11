@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.205
+**Version:** v1.206
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3149,3 +3149,14 @@ POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 
 See [D-631](../adr/D-631-map-profiles-and-views.md) for the profile API contract. GET `/api/fleet/site-map/profiles` requires read permission and returns `{profiles: [...]}`. PUT `/api/fleet/site-map/profiles/{profile_id}` requires a named operator, accepts `{name,map,expected_revision}` and returns the saved row. Each row contains `profile_id`, `name`, `map`, `revision`, `saved_by`, `saved_at`. Maps use `rosy.site_map/1` validation and the 2 MiB body limit. Profile IDs match `[A-Za-z0-9_.-]{1,64}`; names have 1-64 characters with non-whitespace content. Updates compare revisions; new profiles use null. Errors: 409 `SITE_MAP_PROFILE_CHANGED`, 409 `SITE_MAP_PROFILE_LIMIT` (100 profiles), 422 `SITE_MAP_INVALID`, 413 `SITE_MAP_TOO_LARGE`. Saves emit `profile_saved` and do not change the active map or draft. Loading into draft and activation use the existing APIs.
 
 D-635 adds profile kind (lane_course, soccer, general, default lane_course), description (up to 1000 characters, default empty), and soccer_field (default null). Soccer requires positive finite length_m, width_m, goal_width_m with goal_width_m <= width_m; other kinds require null. These fields are returned with each saved profile. Metadata updates use the same revision and permissions; they do not activate a map or start Games. Updates omitting all three metadata fields preserve existing metadata (older clients); new rows default to lane_course.
+
+
+## v1.206 Fleet 현재 판단 참고와 관측 종료 (D-660)
+
+`GET /api/fleet/state`(viewer+)의 로봇 행 `judgment`는 null 또는 `FleetJudgmentReceipt`다. `necessity`는 `INTERVENE | DO_NOT_INTERVENE | ABSTAIN`, `reason`, `policy_revision`, epoch-second `evaluated_at`/`valid_until`, `request`는 원본 subject/case/revision/owner/condition/evidence/since/until/conflicted 참고 metadata다. 잘못된 값·누락도 보류 근거이므로 request를 실행 인자로 사용하지 않는다. `shadow=true`, `action_admissible=false`는 고정이며 필요성은 장치 발행 허가가 아니다. 현재 시각에 신선도를 다시 검사하고 과거 증거 시각을 갱신하지 않는다.
+
+`GET /api/fleet/judgments?limit=100`(viewer+)는 `{records:[{judgment_id,robot_id,recorded_at,assessment}]}`다. limit은 정수 1..1000(기본100), 미인증401, 범위 밖422다. assessment는 같은 receipt 형식의 당시 기록이며 7일 보존한다. 필요성/사유/case/owner/정책 변화와 같은 분류의 60초 표본을 기록한다. 조회·정상 표본은 장치 요청·새 사건·외부 발송을 만들지 않는다. 당시 receipt의 TTL은 현재 조치 허가가 아니다.
+
+`GET /api/fleet/incidents`의 line_stuck report에 `closure: FleetObservedClosure`를 추가한다. status는 `OPEN | NATURAL_CLEARANCE | CLEARANCE_OBSERVED | OBSERVATION_ENDED`, action_credit은 `NONE | UNVERIFIED`, reason은 기존 close_reason 또는 null, observed_at은 closed_at 또는 null이다. 수락/응답불명 답 뒤 cleared는 관측상 해소이며 조치 성공 증명이 아니다. restart/replaced/left_roster는 관측 종료다. 기존 evidence.fleet.resolved_by는 마지막 수락 답의 주체이며 인과적 성공으로 해석하지 않는다. 과거 원인 초안 점수는 보정된 정확도·확률이 아니다.
+
+추가 형식의 기계 계약은 `core_common.protocol.schemas.FleetJudgmentReceipt`와 `FleetObservedClosure`, producer는 `fleet.stuck.board/reports`, consumer는 Fleet Console이다. 로봇 WS envelope protocol_version(1.0)과 기존 명령/사람 인수/stop-generation 계약은 변경하지 않는다.
