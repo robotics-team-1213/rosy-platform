@@ -32,6 +32,7 @@ def test_header_ids_and_one_sheet():
         for retired in ('id="session"', 'id="credential"', 'id="connect"', "site-access", "cell-access"):
             assert retired not in page, (name, retired)
         assert page.count('id="estop"') == 1, name
+        assert 'class="fleet-shell"' in page and 'class="fleet-workspace"' in page, name
         assert re.search(r'<footer[^>]*class="fleet-footer".*?id="clock"', page, re.S), name
         assert 'id="clock"' not in header, name
         assert '/console/assets/fleet-header.css' in page, name
