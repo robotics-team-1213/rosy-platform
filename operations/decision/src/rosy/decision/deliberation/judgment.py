@@ -23,7 +23,8 @@ def step(problem, value, *, read_only):
     if type(value) is not dict or set(value) != {'tool_name', 'arguments', 'evidence_ids'}:
         raise ValueError('INVALID_JUDGMENT_STEP')
     definition = MODEL_TOOL_CATALOG.get(value['tool_name']) if type(value['tool_name']) is str else None
-    if (definition is None or not definition.feedback_enabled or definition.device_action_api
+    scope = 'incident' if problem.domain in {'line_follow', 'door'} else 'mission'
+    if (definition is None or definition.scope != scope or not definition.feedback_enabled or definition.device_action_api
             or read_only and definition.effect_class != ToolEffectClass.READ_ONLY):
         raise ValueError('STEP_NOT_ADMITTED')
     refs(value['evidence_ids'], problem.evidence_ids, required=True)
@@ -114,8 +115,9 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                                                   'probability': {'type': 'number', 'minimum': 0, 'maximum': 1}}}})
     for field in ('next_step', 'success_check'):
         entries = []
+        scope = 'incident' if problem.domain in {'line_follow', 'door'} else 'mission'
         for definition in MODEL_TOOL_CATALOG.values():
-            if not definition.feedback_enabled or (field == 'success_check'
+            if definition.scope != scope or not definition.feedback_enabled or (field == 'success_check'
                     and definition.effect_class != ToolEffectClass.READ_ONLY):
                 continue
             entries.append({'type': 'object', 'additionalProperties': False,
