@@ -108,7 +108,7 @@ D-659의 물체 정밀도·재현율 공백에 `object_fitness.py`를 추가했�
 
 `240c63c9e3` 관련 원격 시험은 terminal exit 0, 65 passed / 1 skipped, known-failures NEW0다. skip은 시험 runner의 `mcap_ros2` 미설치에 따른 실제 MCAP 시험이다. 모델 PC의 기존 ML 환경에서 별도로 실행한 합성 MCAP 출판/재생은 실제 encoder/decoder와 ONNX Runtime을 사용했다. 출판한 원본 이미지로 CLI를 실행해 person TP 1, 가림 recall 1을 확인했고, 기존 out 거절(exit 2), 입력 파일 변조 거절(exit 2, 보고서 없음), 원본 bag 변경 시 재출판 proof 거절을 확인했다. 독립 리뷰에서 찾은 클래스 index·후보 학습 클래스 순서·backend 오류 반환 누락은 실패 시험으로 재현 후 수정했다.
 
-합성 실행 source archive SHA는 `a50465a87da3cd9fff8c91b783eb545995293a60631610a116ea4ab739c7eada`, 내려받아 다시 해시 확인한 보고서는 `a6f389d4551fdf474916b2054788ef687b7b9f6e531293ff77549114c72b1943`이다. 세션 evidence의 `synthetic-object-replay-proof-20261012.json` / `synthetic-object-replay-report-20261012.json`과 로그 `object-replay-lineage-green/run-1.txt`에 보존했다. 합성 label·상수 ONNX는 파일/실행 경로 증거이며 사람이 독립 검수한 정답이나 실제 정확도 수치가 아니다.
+합성 실행 source archive SHA256은 `a50465a87da3cd9fff8c91b783eb545995293a60631610a116ea4ab739c7eada`, 내려받아 다시 해시 확인한 보고서 SHA256은 `a6f389d4551fdf474916b2054788ef687b7b9f6e531293ff77549114c72b1943`이다. 세션 evidence의 `synthetic-object-replay-proof-20261012.json` / `synthetic-object-replay-report-20261012.json`과 로그 `object-replay-lineage-green/run-1.txt`에 보존했다. 합성 label·상수 ONNX는 파일/실행 경로 증거이며 사람이 독립 검수한 정답이나 실제 정확도 수치가 아니다.
 
 기존 자료 추가 검색에서는 20261010 drivable 2,769장의 manifest와 human_edit/done 기록을 다시 확인했다. 구형 v11/SAM 결과 830개의 저장 mask 해시가 일치했지만 drivable 클래스와 사람 최종 승인 기록은 없었다. dataset-review-937의 검수 JSON은 비어 있었다. 전체 보이는 도로면의 독립 검수 정답은 추가로 확보하지 못했다. 검색은 bounded inventory이며 모든 외부/미연결 보관소를 확인했다는 뜻이 아니다.
 
