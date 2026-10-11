@@ -334,8 +334,16 @@ def test_surface_buttons_use_shared_height_roles():
     bad = []
     for path in _surface_texts():
         if path.suffix == ".css":
-            bad.extend(f"{path.relative_to(ROOT)}: {row}"
-                       for row in local_button_height_problems(path.read_text(encoding="utf-8")))
+            css = path.read_text(encoding="utf-8")
+        elif path.suffix == ".html":
+            markup = path.read_text(encoding="utf-8")
+            blocks = re.findall(r"<style\b[^>]*>(.*?)</style>", markup, re.S)
+            blocks.extend(f"button {{ {style} }}" for style in re.findall(
+                r'<(?:ui-button|button|summary)\b[^>]*\bstyle="([^"]*)"', markup))
+            css = "\n".join(blocks)
+        else:
+            continue
+        bad.extend(f"{path.relative_to(ROOT)}: {row}" for row in local_button_height_problems(css))
     assert bad == [], "\n".join(bad)
 
 
