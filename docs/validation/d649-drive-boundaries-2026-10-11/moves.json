@@ -1,0 +1,402 @@
+[
+  {
+    "source": "middleware/core/services/core_features/line_follow/AGENTS.md",
+    "target": "middleware/control/drive/behaviors/line_follow/AGENTS.md",
+    "git_blob_sha256": "b83f22cb0452db7828f6c2b3a1b2b5790f0dfb5e88835a1d1c4b180b92fc37d3"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/__init__.py",
+    "git_blob_sha256": "f7ea9c14169caab0ccfecbbbc7de7bed6a61f3b4948cd411683c9c33be64df06"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/arc/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/arc/__init__.py",
+    "git_blob_sha256": "d3ccd4c7b41adbfbda54b4eaaf3a3d612072c1da409a6b97d3a04aa43b0fae32"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/arc/lane_arc.py",
+    "target": "middleware/control/drive/behaviors/line_follow/arc/lane_arc.py",
+    "git_blob_sha256": "143fa20c74ae1921fef6f6a1961f035da2dab0b16bd97a134db2cc3e8e749734"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/arc/lane_arc_fit.py",
+    "target": "middleware/control/drive/behaviors/line_follow/arc/lane_arc_fit.py",
+    "git_blob_sha256": "42dbaa403ba14ca6a8790c50156acd9ebd53d3bef5901ab58ea0d2049014f5a9"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/authority.py",
+    "target": "middleware/control/drive/behaviors/line_follow/authority.py",
+    "git_blob_sha256": "12217740ebb4eae4d16ac6a5dc7e6b6cc8e20a507a06634911452e89d1f829c2"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/body_stop.py",
+    "target": "middleware/control/drive/behaviors/line_follow/body_stop.py",
+    "git_blob_sha256": "91dd4df310c513e134db0b12bb6f831b7c74fed00aa7627037a7ed6212c28a9a"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/clearance.py",
+    "target": "middleware/control/drive/behaviors/line_follow/clearance.py",
+    "git_blob_sha256": "ffe70ce2762e93bbb1a65c40c77aa8f7e6964bdcf51f483abfe206f494ede3a3"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/crosswalk_gate.py",
+    "target": "middleware/control/drive/behaviors/line_follow/crosswalk_gate.py",
+    "git_blob_sha256": "6233bcdadb66bd59362f7c44f23a5f772ec5c012df226245d9713468b193af7c"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/crosswalk_report.py",
+    "target": "middleware/control/drive/behaviors/line_follow/crosswalk_report.py",
+    "git_blob_sha256": "31e32cfae2a41a45bcf5e1b167b7df443539d50b331fb5123b4df30b9e898283"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/crosswalk_zone.py",
+    "target": "middleware/control/drive/behaviors/line_follow/crosswalk_zone.py",
+    "git_blob_sha256": "16f10b3cb73c3bcb2e20065244e2aadf6bd04195f0d0fb576b445be0aff70e46"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/cue/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/cue/__init__.py",
+    "git_blob_sha256": "d65d9b3eb6f2c42255ed911aedd54a8bdf777028ce0236d9fd825f5c7900d06c"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/cue/lane_cue.py",
+    "target": "middleware/control/drive/behaviors/line_follow/cue/lane_cue.py",
+    "git_blob_sha256": "42139d107f883e871f6776437f65ed037ee4a42191076f015b4e4e2d25593a80"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/cue/odom_pivot.py",
+    "target": "middleware/control/drive/behaviors/line_follow/cue/odom_pivot.py",
+    "git_blob_sha256": "931f42b934f5696658958a86635e905f164db2e0afd5e9f824d971a573a0d600"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/manager.py",
+    "target": "middleware/control/drive/behaviors/line_follow/manager.py",
+    "git_blob_sha256": "189b98f18c5fded239be9b0c5a52992d123c599d722b2e2958259daf39aa1966"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/model.py",
+    "target": "middleware/control/drive/behaviors/line_follow/model.py",
+    "git_blob_sha256": "fcbfd072a82c63eebd671338ce3ac4a5a72f9a504919054d5fdf36094b2f6a7a"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/__init__.py",
+    "git_blob_sha256": "6f699bc084e9721ebf84b97f5f1bb71e2c2d208ac7c42de146f3817bca309ec2"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/junction/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/junction/__init__.py",
+    "git_blob_sha256": "a63f086a8b657fe111c3b620d028b60997747d30ccde4795103dac772c5fcdf0"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/junction/approach.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/junction/approach.py",
+    "git_blob_sha256": "3448fdee950df2877a297495de95b22129f54c53ca876894fbb458ed9ff366ab"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/junction/bend.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/junction/bend.py",
+    "git_blob_sha256": "287ab288c063acf59bbc91a39128cb7f51539725c1f92114a16125aaf3e8eb3c"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/junction/gate.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/junction/gate.py",
+    "git_blob_sha256": "64aa9241bb805302843d5726c11ea884907c853540f0d106044822c2432ff27e"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/junction/signal.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/junction/signal.py",
+    "git_blob_sha256": "231de7f7169ed64669acbb76b9dd2154a8bca0d53c6db788124715060a4bb4d5"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_bridge.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_bridge.py",
+    "git_blob_sha256": "546d15a72246df5187d1922657fdc582014ae137fed5723d3876ae72ed518a7e"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return.py",
+    "git_blob_sha256": "0e492f09921d6f4734afb59ec034572e4deebf714a81d1bad4199bce6c86bd0c"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return_approach.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return_approach.py",
+    "git_blob_sha256": "d7d5061c780860c5df94cc7e6417453e29df3723b46e171721df2c600c1c3467"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return_decision.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return_decision.py",
+    "git_blob_sha256": "2792ebf43ff25aee13ecafbc881bc0fc1a4c6c2c3dedef7e7c18e055988559f9"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return_evidence.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return_evidence.py",
+    "git_blob_sha256": "b9fa3e7c4f69c7cda51f138ad4eccb79712f6a1e6d14d00ceff9e96b75eb17dd"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return_pose_request.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return_pose_request.py",
+    "git_blob_sha256": "1ae825803282b9b41287da9f3fb83b865005e80326e723756a98e56d0d438b6e"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/lane_return_wiring.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/lane_return_wiring.py",
+    "git_blob_sha256": "ff26ff496e155ac55edd62e01c75ed818f226560f82c1c624b8b79835b89bafb"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/motion_admit.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/motion_admit.py",
+    "git_blob_sha256": "76a128c40bed8eabaf1b87785781b11cbec578c919e9a5f6ee9d6b4314fc68bf"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/__init__.py",
+    "git_blob_sha256": "e4e52417898b20856b1bff3c540b2729e1f9ef99eed954324d6e31325f7b7dad"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/progress_watch.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/progress_watch.py",
+    "git_blob_sha256": "1dbdeb917d92d912c8d83c07f18ff337d8226db7587bf19b2fad9a2c21b416e7"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/realign/__init__.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/realign/__init__.py",
+    "git_blob_sha256": "e34c685e7222300dad6b4fbe0ca767a108e6c67830dd4b9cf79dd21becdbf876"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/realign/manoeuvre.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/realign/manoeuvre.py",
+    "git_blob_sha256": "abc70e93edde86569edae40185612b0d0ab4bff0468678567fe485b682dc8fe3"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/realign/mixin.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/realign/mixin.py",
+    "git_blob_sha256": "a8a1c982b6f9658c6161e71732df7f5b93a2b0a492f9903904ee4a5e558a675b"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/realign/recovery.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/realign/recovery.py",
+    "git_blob_sha256": "ce2badc1b02ffc9cb77e1c359aaeead0f0ec87b29eeeaf1bdc202b4954fdd487"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/realign/request.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/realign/request.py",
+    "git_blob_sha256": "8035b701d92d1affc977ea1e74ebc3dff27ab0fe9e134720a326d2419b305281"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/stuck_recovery.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/stuck_recovery.py",
+    "git_blob_sha256": "05724c81d290345ee2b592d9d053d49ec5524f0d7cef9b2403d9d5a0f6a592d8"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/stuck_wiring.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/stuck_wiring.py",
+    "git_blob_sha256": "d684676b63bfd5d38f628618c62dbd301240d387d795504d611932c1a269c47e"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/recovery/stuck/trail.py",
+    "target": "middleware/control/drive/behaviors/line_follow/recovery/stuck/trail.py",
+    "git_blob_sha256": "65b0d5dd444516acdd68631108b96756a9d3e7f579fec593c442b0f2e94f5c96"
+  },
+  {
+    "source": "middleware/core/services/core_features/line_follow/route_context.py",
+    "target": "middleware/control/drive/behaviors/line_follow/route_context.py",
+    "git_blob_sha256": "bed14f876b438534d25513c1c9b2b2ce9069f9706f29dc9c9dbfc4310ae6393b"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/AGENTS.md",
+    "target": "middleware/control/drive/behaviors/docking/AGENTS.md",
+    "git_blob_sha256": "23744fc3216c84f5ee8600603a01807a1131c8acada0d2dd16ba9244beb62007"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/__init__.py",
+    "target": "middleware/control/drive/behaviors/docking/__init__.py",
+    "git_blob_sha256": "db168bcadf4040beb9159b250c317a348fe7759e9df1255685db0dfa6d3f9164"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/agent.py",
+    "target": "middleware/control/drive/behaviors/docking/agent.py",
+    "git_blob_sha256": "1bfcea94f0fbad86784d8fb2698ff98e03a2d0271ec5fe96d301f0be55ff3356"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/charging.py",
+    "target": "middleware/control/drive/behaviors/docking/charging.py",
+    "git_blob_sha256": "2cbbb68e9a0cc070cb85a8bc9d5818353af326d93cd85f75b5c7a6e748cb3593"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/database.py",
+    "target": "middleware/control/drive/behaviors/docking/database.py",
+    "git_blob_sha256": "623b6617a754bc5e49f3e346eb2f0c1fef0c3b0698bef7c63e2df2dfdc9ff810"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/detector.py",
+    "target": "middleware/control/drive/behaviors/docking/detector.py",
+    "git_blob_sha256": "be8d81a1e831a929d29f5ebb07a5e8ecfb6c3152de674db430e1a91c33d4659b"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/feed.py",
+    "target": "middleware/control/drive/behaviors/docking/feed.py",
+    "git_blob_sha256": "b814092f76cbc4380800b239fc7b080282d9a44ddc8b425c8014e4e810479699"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/manager.py",
+    "target": "middleware/control/drive/behaviors/docking/manager.py",
+    "git_blob_sha256": "873ca30228b962c1345d09b7c84e98b17949a72b6ee76fcade0c8d286dafa6cd"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/model.py",
+    "target": "middleware/control/drive/behaviors/docking/model.py",
+    "git_blob_sha256": "3efcc9cc0ab4ae34d08d8ce428d323721f46ec84ba8db209658d9772360f9b13"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/parking.py",
+    "target": "middleware/control/drive/behaviors/docking/parking.py",
+    "git_blob_sha256": "113bb3afb96821c62f8ab7058be16b4d4cfae2c14744f4ff06b199d219ca40a1"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/parking_phases.py",
+    "target": "middleware/control/drive/behaviors/docking/parking_phases.py",
+    "git_blob_sha256": "a918d8e1e2a90b51c32dc1a96712e8c03635448652613525d76d5e6d59b52f17"
+  },
+  {
+    "source": "middleware/core/services/core_features/docking/strategies.py",
+    "target": "middleware/control/drive/behaviors/docking/strategies.py",
+    "git_blob_sha256": "c3310e5604b4419e651a7b8a247b80c725df40a17e6a7b77965a8d9973df0efb"
+  },
+  {
+    "source": "middleware/core/services/core_features/navigation/AGENTS.md",
+    "target": "middleware/control/drive/behaviors/navigation/AGENTS.md",
+    "git_blob_sha256": "523b20fc529e1b638dfba1d2df94c2eceb1971e10360d3616ea6fc36c02e2c10"
+  },
+  {
+    "source": "middleware/core/services/core_features/navigation/__init__.py",
+    "target": "middleware/control/drive/behaviors/navigation/__init__.py",
+    "git_blob_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "middleware/core/services/core_features/navigation/initial_pose.py",
+    "target": "middleware/control/drive/behaviors/navigation/initial_pose.py",
+    "git_blob_sha256": "3327c2c867e329415192bfc9e90eb3b002b43dbc78813050694e201356f2504c"
+  },
+  {
+    "source": "middleware/core/services/core_features/navigation/manager.py",
+    "target": "middleware/control/drive/behaviors/navigation/manager.py",
+    "git_blob_sha256": "32eeca780a68b1f617fc818be0ea1ec701127e60fb274de9119774e8d9eb4827"
+  },
+  {
+    "source": "middleware/core/services/core_features/navigation/readiness.py",
+    "target": "middleware/control/drive/behaviors/navigation/readiness.py",
+    "git_blob_sha256": "5bd33066a038f631f1931fc6959d074aea908864b8729d329b61d85d09c4e4c4"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/__init__.py",
+    "target": "middleware/control/drive/behaviors/localization/__init__.py",
+    "git_blob_sha256": "7c4024ca6b1bf60f1502b174919cc31ee9385c658e04da459670d34d846bac3c"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/assist.py",
+    "target": "middleware/control/drive/behaviors/localization/assist.py",
+    "git_blob_sha256": "0c58bb58dc7d36ddf92917d3381fc19eea87d37c1e0382a3fdaf54959ecad475"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/halt.py",
+    "target": "middleware/control/drive/behaviors/localization/halt.py",
+    "git_blob_sha256": "277e2e3feccaeb4ee052826a64faa87a74466d5262e19d31c7a0363296ec12ba"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/mission.py",
+    "target": "middleware/control/drive/behaviors/localization/mission.py",
+    "git_blob_sha256": "cc965de5960fe888e25b5d444d7934bd57c9613da3e275ceffae0a0da5018e1f"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/pose_request.py",
+    "target": "middleware/control/drive/behaviors/localization/pose_request.py",
+    "git_blob_sha256": "831d87ca1e42350985b1e6a570a245bc9625387549434fe12f04da1611bfdef2"
+  },
+  {
+    "source": "middleware/core/services/core_features/localization/rotate_to.py",
+    "target": "middleware/control/drive/behaviors/localization/rotate_to.py",
+    "git_blob_sha256": "62ec85fa427d5cdf50a04870d290baa4edbda862b6f99fb848ee6d8644c54039"
+  },
+  {
+    "source": "middleware/core/services/core_features/swarm/AGENTS.md",
+    "target": "middleware/control/drive/behaviors/swarm/AGENTS.md",
+    "git_blob_sha256": "0b35812f041f1125408448d1c20f5eb2565f22315a0ce6cf783540e451e7475b"
+  },
+  {
+    "source": "middleware/core/services/core_features/swarm/__init__.py",
+    "target": "middleware/control/drive/behaviors/swarm/__init__.py",
+    "git_blob_sha256": "d6463355ff997316d14894262330d7d56d31803f94ad3be4b452659b512126db"
+  },
+  {
+    "source": "middleware/core/services/core_features/swarm/manager.py",
+    "target": "middleware/control/drive/behaviors/swarm/manager.py",
+    "git_blob_sha256": "e949158c5a4ce6cfc41006e4e30651f45a25facd30e7e59af1598540efe24aab"
+  },
+  {
+    "source": "middleware/core/services/core_features/swarm/poses.py",
+    "target": "middleware/control/drive/behaviors/swarm/poses.py",
+    "git_blob_sha256": "4f9b0d7c5a165d1c5bfd41758b24e137eb628240be5a0049c003bed50a0ad631"
+  },
+  {
+    "source": "middleware/core/services/core_features/swarm/trail.py",
+    "target": "middleware/control/drive/behaviors/swarm/trail.py",
+    "git_blob_sha256": "d94bdd5789f7dcbb510fccb87687dcbb90fb3977c2ef5cf23db756a2ff48b3cc"
+  },
+  {
+    "source": "middleware/core/services/core_features/road_behaviour/__init__.py",
+    "target": "middleware/control/drive/behaviors/road_behaviour/__init__.py",
+    "git_blob_sha256": "c9ffb3333f6064259b4c654d638c3d664d021b9c11c3e7be9f0ecbe6671e3e6d"
+  },
+  {
+    "source": "middleware/core/services/core_features/road_behaviour/machine.py",
+    "target": "middleware/control/drive/behaviors/road_behaviour/machine.py",
+    "git_blob_sha256": "90c38752ae00e03a454ea7ffbc0e7dc26fe1d9e1d56ef7d55791747be4712725"
+  },
+  {
+    "source": "middleware/core/services/core_features/road_behaviour/model.py",
+    "target": "middleware/control/drive/behaviors/road_behaviour/model.py",
+    "git_blob_sha256": "7126e1a11b1e8537319eaef8f751450b16bcd43bcbd9ccc7adf40c3b470609aa"
+  },
+  {
+    "source": "middleware/core/services/core_features/road_behaviour/table.py",
+    "target": "middleware/control/drive/behaviors/road_behaviour/table.py",
+    "git_blob_sha256": "ca542999fb853c6ca52a85e05887003dd4ee5cecc245863201ee6347e3e02cc8"
+  },
+  {
+    "source": "middleware/core/services/core_features/traffic_policy/__init__.py",
+    "target": "middleware/control/drive/behaviors/traffic_policy/__init__.py",
+    "git_blob_sha256": "e2015ecea6d8be0ab603ad629c9a885ce1e099b2ce49bb2bc081b4056a5cfa61"
+  },
+  {
+    "source": "middleware/core/services/core_features/traffic_policy/manager.py",
+    "target": "middleware/control/drive/behaviors/traffic_policy/manager.py",
+    "git_blob_sha256": "a247237e852ca37dee5c2947a8cc6cbe33295a38688e2e8d6270a64d558c123c"
+  },
+  {
+    "source": "middleware/core/services/core_features/traffic_policy/observer_source.py",
+    "target": "middleware/control/drive/behaviors/traffic_policy/observer_source.py",
+    "git_blob_sha256": "9a8dd76f20d991dc395be55ad341cc73aa5eefec032128f18dd604c7f22f82e6"
+  },
+  {
+    "source": "middleware/perception/control/control_node.py",
+    "target": "middleware/control/drive/runtime/control_node.py",
+    "git_blob_sha256": "fbd1bfba6cc431f3f07bcf227a6d1be93d2872ed887a424c6afb486bec49afb1"
+  },
+  {
+    "source": "middleware/perception/control/goal_node.py",
+    "target": "middleware/control/drive/runtime/goal_node.py",
+    "git_blob_sha256": "dc7765384e2e5fe7426cbf1800eeca011218d9da05e04f06998649ae61e9dc07"
+  },
+  {
+    "source": "middleware/perception/control/wander_node.py",
+    "target": "middleware/control/drive/runtime/wander_node.py",
+    "git_blob_sha256": "33df645ad63cf038554e42a2036744d4327e8c78e3c50675760c3f70509b3ad7"
+  },
+  {
+    "source": "middleware/perception/control/safety_node.py",
+    "target": "middleware/control/drive/runtime/safety_node.py",
+    "git_blob_sha256": "7021a9e5ee1b23f9477e8233c92797f571f8692cf9835367340c34ec49afcd9f"
+  }
+]

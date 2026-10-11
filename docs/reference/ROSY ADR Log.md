@@ -641,6 +641,8 @@
 | D-648 | 공통 상황평가·Decision·작업 실행·Fleet 목표 소스 구조 | Proposed (2026-10-11) |
 | D-651 | 작업 중심 Fleet 지도와 선택 로봇 작업면 | Accepted (2026-10-11) |
 
+| D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
