@@ -61,8 +61,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     page.locator('#element-direction').select_option('two_way')
     page.locator('#element-endpoints').click()
     page.locator('#element-save').click()
-    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(0)
-    assert next(row['map'] for row in store.profiles() if row['profile_id'] == 'training')['places'] == []
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
     page.locator('#element-id').fill('sig')
     page.locator('#element-name').fill('Junction signal')
     page.locator('#element-kind').select_option('traffic_signal')
@@ -152,7 +151,8 @@ def test_profiles_rules_import_preview_and_draft_stay_separate(page_site, width)
     page.locator('#profile-save').click()
     expect(page.locator('#profile-status')).to_contain_text('지도 설정을 저장했습니다')
     expect(page.locator('#map-status')).to_contain_text('연습장')
-    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(0)
+    assert next(row['map'] for row in store.profiles() if row['profile_id'] == 'training')['places'] == []
     expect(page.locator('#site-map-svg #robot-layer')).to_have_count(0)
     assert store.active_view() == before and store.draft_view()['map'] is None
     body = {'schema': 'rosy.site_map/1', 'map_id': 'imported', **_line()}
