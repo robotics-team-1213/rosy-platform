@@ -256,7 +256,8 @@ class NotificationWorker:
                 text += (f"\n자동 처리: 호출 {facts['calls']} · 관측 {facts['observations']}"
                          f" · 비용 상태 {facts['cost_status']} · 기록/예약 microUSD "
                          f"{facts['spent_micros']}/{facts['reserved_micros']}"
-                         f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}")
+                         f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}"
+                         f"\n정책 원래 {facts['original_policy_revision']} · 현재 {facts['current_policy_revision']}")
             payload = {'content': text, 'allowed_mentions': {'parse': []}, 'flags': 4}
             params = {'wait': 'true'} if channel.kind == 'discord' else None
             if channel.kind == 'slack':
