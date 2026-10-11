@@ -324,3 +324,40 @@ def test_login_invalid_or_duplicate_credentials_leave_registry_unchanged(tmp_pat
                   "--login", login, "--password-hash-stdin"])
         assert path.read_bytes() == original
     _no_temp_files_left(tmp_path)
+
+
+def test_root_publication_is_fleet_readable_before_replace(tmp_path, monkeypatch):
+    if os.name != "posix":
+        pytest.skip("Fleet ownership applies on the Linux site host")
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    changed = set()
+    monkeypatch.setattr(os, "fchown", lambda fd, uid, gid: changed.add((fd, uid, gid)))
+    replace = os.replace
+
+    def check_publish(source, destination):
+        assert any(uid == 0 and gid == site_users.FLEET_GID for _, uid, gid in changed)
+        assert Path(source).stat().st_mode & 0o777 == 0o440
+        replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", check_publish)
+    add_user(path, "human-2", "operator", "new-token")
+    assert path.read_bytes() != original
+
+
+def test_ownership_failure_preserves_original_registry(tmp_path, monkeypatch):
+    if os.name != "posix":
+        pytest.skip("Fleet ownership applies on the Linux site host")
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+
+    def refuse_ownership(*args):
+        raise PermissionError("ownership refused")
+
+    monkeypatch.setattr(os, "fchown", refuse_ownership)
+    with pytest.raises(OSError):
+        add_user(path, "human-2", "operator", "new-token")
+    assert path.read_bytes() == original
+    _no_temp_files_left(tmp_path)
