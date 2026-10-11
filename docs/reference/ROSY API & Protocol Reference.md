@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.216
+**Version:** v1.217
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.217 Fleet 관측 capture 기록 범위 (D-699)
+
+`GET /api/fleet/observations`의 기존 응답과 cursor를 유지한다. 새 source에서 저장한 `observation.capture`는 선택 `{run_id: UUID hex, sequence: positive integer, monotonic_at: finite number, robot_ids: sorted unique IDs}`다. 이전 행은 이 필드가 없다. 같은 append snapshot은 동일 capture를 가지며 실패·빈 roster 다음 성공의 sequence gap과 저장소 인스턴스 재시작을 구분한다. roster는 최대 1,024행이고 기존 64KiB payload·retention 한도를 유지한다. 저장 시도 metadata이므로 console snapshot 이전 실패·CORE 명령·모델 호출·재발 없음·독립 정답을 입증하지 않는다. 운영 활성화·현장 수용은 별도다.
 
 ### v1.215 병렬 계약 통합
 
@@ -2855,6 +2859,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
 | v1.212 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
