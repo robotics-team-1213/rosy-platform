@@ -2485,7 +2485,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
-    assert layout["headerRows"] <= 4, layout
+    assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
         # D-641: compact header keeps status/inbox; the visible clock belongs to the flow footer.
