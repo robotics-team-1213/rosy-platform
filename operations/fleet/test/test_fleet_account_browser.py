@@ -58,6 +58,97 @@ def _credentials(page):
     page.locator('[data-login=password]').fill('pw-1234')
 
 
+@pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
+def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=' + path)
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#fleet-account')).to_be_visible()
+    page.locator('#fleet-account > summary').click()
+    expect(page.locator('#fleet-profile')).to_be_visible()
+    writes = []
+    page.context.on('request', lambda req: writes.append(req.url) if req.method in ('POST', 'PATCH') else None)
+    if path in ('/console/site-map', '/console/cell'):
+        with page.expect_popup() as popup:
+            page.locator('#fleet-profile').click()
+        profile = popup.value
+        expect(page).to_have_url(origin + path)
+    else:
+        page.locator('#fleet-profile').click()
+        profile = page
+    expect(profile.locator('#profile-id')).to_have_text('alice')
+    expect(profile.locator('#profile-role')).to_have_text('운영자')
+    assert profile.locator('#profile-id input, #profile-email input, #profile-role input').count() == 0
+    assert profile.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    name = '<b>현장 운영자</b>'
+    profile.locator('#profile-name').fill(name)
+    profile.locator('#profile-name').press('Enter')
+    expect(profile.locator('#profile-status')).to_contain_text('저장하고 다시 확인')
+    expect(profile.locator('#profile-name')).to_have_value(name)
+    assert profile.locator('#profile-content b').count() == 0
+    profile.reload()
+    expect(profile.locator('#profile-name')).to_have_value(name)
+    assert writes == [origin + '/api/fleet/auth/profile']
+    assert profile.locator('#profile-back').get_attribute('href') == path
+
+
+def test_profile_password_checks_current_clears_secrets_and_revokes_old_sessions(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fprofile')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#profile-id')).to_have_text('alice')
+    old_context = page.context.browser.new_context(storage_state=page.context.storage_state())
+    try:
+        page.locator('#profile-current').fill('wrong-current')
+        page.locator('#profile-new').fill('new-credential-123')
+        page.locator('#profile-confirm').fill('new-credential-123')
+        page.locator('#profile-confirm').press('Enter')
+        expect(page.locator('#profile-status')).to_contain_text('현재 비밀번호가 맞지 않습니다')
+        for field in ('current', 'new', 'confirm'):
+            expect(page.locator('#profile-' + field)).to_have_value('')
+        assert old_context.request.get(origin + '/api/fleet/auth/profile').status == 200
+        page.locator('#profile-current').fill('pw-1234')
+        page.locator('#profile-new').fill('new-credential-123')
+        page.locator('#profile-confirm').fill('new-credential-123')
+        writes = []
+        page.on('request', lambda req: writes.append(req.url) if req.method == 'POST' else None)
+        page.evaluate("""() => {
+          document.getElementById('profile-password-save').click();
+          document.getElementById('profile-password-form').requestSubmit();
+        }""")
+        expect(page.locator('#profile-status')).to_contain_text('새 로그인 상태를 확인했습니다')
+        assert writes == [origin + '/api/fleet/auth/change-password']
+        assert old_context.request.get(origin + '/api/fleet/auth/profile').status == 401
+        for field in ('current', 'new', 'confirm'):
+            expect(page.locator('#profile-' + field)).to_have_value('')
+        page.reload()
+        expect(page.locator('#profile-id')).to_have_text('alice')
+    finally:
+        old_context.close()
+
+
+def test_profile_save_failure_preserves_name_and_does_not_claim_success(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fprofile')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#profile-id')).to_have_text('alice')
+    page.locator('#profile-name').fill('저장 확인 필요')
+    page.route('**/api/fleet/auth/profile', lambda route: route.fulfill(status=503, body='{}')
+               if route.request.method == 'PATCH' else route.continue_())
+    page.locator('#profile-name-save').click()
+    expect(page.locator('#profile-status')).to_contain_text('처리 결과를 확인할 수 없습니다')
+    expect(page.locator('#profile-name')).to_have_value('저장 확인 필요')
+    page.unroute('**/api/fleet/auth/profile')
+    page.locator('#profile-reload').click()
+    expect(page.locator('#profile-name')).to_have_value('alice')
+
+
 @pytest.mark.parametrize('account_page', ['alice'], indirect=True)
 def test_first_login_changes_password_before_return_and_does_not_replay_commands(account_page):
     from playwright.sync_api import expect
