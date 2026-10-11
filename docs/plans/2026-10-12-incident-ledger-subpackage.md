@@ -82,6 +82,14 @@ feedback 검사에는 실패가 없었다. 원래 generator가 해당 최근 기
 갱신했으며, 이를 커밋한 뒤 같은 15파일을 다시 검증한다. 기존 실패 목록은
 바꾸지 않는다.
 
+생성 기록을 고친 `cc19ce9ef`의 동일 15파일 원격 GREEN2는 Model PC 9 GB
+자원 기준을 충족하여 390 passed, terminal exit 0, known-failures NEW 0을
+확인했다. lint는 errors 0과 기존 last_verified warnings 28건이었다.
+root의 독립 통합 착지 검사는 AI PC 9 GB에서 실제 설치·기존 resolver loop를
+포함한 15파일 375 passed, NEW 0으로 종료하여 `819a6e3140`으로 로컬 main에
+착지했다. 서로 다른 영향군과 반복 시험의 수를 합산하지 않는다.
+통합 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/worker-ledger-land/feat-conditional-model-review/run-1-1.txt`다.
+
 이 변경은 소스·설치 책임 분리다. 운영 활성화·provider 실제 호출·배포·push·
 독립 보정 품질·물리 장치 수용은 입증하지 않는다. CORE 최종 명령, 사람 인수,
 모델 실행 admission과 새로운 평가 데이터 승격은 기존 관문에 남는다.
