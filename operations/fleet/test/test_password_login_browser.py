@@ -84,7 +84,14 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                             assert account["x"] > width / 2
                         assert max(account["y"], brand["y"]) < min(
                             account["y"] + account["height"], brand["y"] + brand["height"])
-                        assert tab.locator("ui-topbar").bounding_box()["height"] < 100
+                        assert tab.evaluate("""() => {
+                            const bar = document.querySelector('ui-topbar'), who = bar.querySelector('[data-login=who]');
+                            const height = bar.getBoundingClientRect().height;
+                            who.hidden = true;
+                            const withoutAccount = bar.getBoundingClientRect().height;
+                            who.hidden = false;
+                            return height === withoutAccount;
+                        }""")
                     tab.close()
 
                 logout = page.locator(".fleet-link-status [data-login=logout]")

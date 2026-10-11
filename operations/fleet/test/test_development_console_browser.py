@@ -98,7 +98,14 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     if width >= 1024:
                         assert role["x"] > width / 2
                     assert badge["x"] + badge["width"] <= stop["x"]
-                    assert page.locator("ui-topbar").bounding_box()["height"] < 100
+                    assert page.evaluate("""() => {
+                        const bar = document.querySelector('ui-topbar'), badge = document.getElementById('development-badge');
+                        const height = bar.getBoundingClientRect().height;
+                        badge.hidden = true;
+                        const withoutBadge = bar.getBoundingClientRect().height;
+                        badge.hidden = false;
+                        return height === withoutBadge;
+                    }""")
                 page.set_viewport_size({"width": 390, "height": 844})
                 if path == "/console":
                     expect(page.locator("#topbar-more")).to_have_attribute("aria-expanded", "false")
