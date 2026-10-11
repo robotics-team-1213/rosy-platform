@@ -113,7 +113,7 @@ print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
-               'rosy.decision.tool_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
+               'fleet.server.model_feedback_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
 

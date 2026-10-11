@@ -18,7 +18,6 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 | `er2_standard.py` | Gemini Robotics ER 2 standard-endpoint adapter (httpx); proposal-only |
 | `model_tool_catalog.py` | Closed Fleet tool catalog and provider-schema projection |
 | `model_tool_contract.py` | Provider-neutral `ModelToolCall` / `ModelToolResult` (pydantic) |
-| `tool_dispatch.py` | Fleet-owned allowlist dispatch for non-executable feedback tools |
 | `selector_bridge.py` | Resolves ER 2 image selectors against candidates from the same camera frame |
 | `vision_observation_source.py` | Trusted, bounded reads of the source-scoped Vision preview API |
 | `decision_pipeline.py` | D-523 parsers: identity fact or allowlisted choice. No stuck answer and no network |
