@@ -17,6 +17,8 @@
 
 ### Consequences
 
+독립 SVG 이미지에서는 외부 SVG 참조가 제한될 수 있어 플랫폼 타일은 정본 기하를 포함하는 파생 자산이다. 시험이 두 path의 동일성과 기존 토큰 색을 확인한다. 화면은 정본 mask만 참조한다.
+
 Fleet·Robot·Pilot 웹 표면과 공용 template은 한 `ui-brand` 규칙으로 같은 플랫폼 심볼을 사용한다. 이 변경은 명령 API나 CORE의 최종 제어 권한을 바꾸지 않는다. native 앱의 실제 설치나 실물 주행을 웹 브랜드 검증으로 주장하지 않는다.
 
 계획: [ROSY 브랜드 구현](../plans/2026-10-11-rosy-brand.md). 견본과 프롬프트: [기록](../validation/rosy-brand-2026-10-11/prompt.md).

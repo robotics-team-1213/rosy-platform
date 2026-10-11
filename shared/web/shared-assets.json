@@ -20,6 +20,8 @@
     "icons/pilot.svg": "image/svg+xml",
     "icons/console.svg": "image/svg+xml",
     "icons/robot.svg": "image/svg+xml",
+    "brand/mark.svg": "image/svg+xml",
+    "brand/platform.svg": "image/svg+xml",
     "task-chooser.js": "text/javascript",
     "task-chooser.css": "text/css"
   }

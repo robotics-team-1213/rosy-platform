@@ -717,3 +717,8 @@
 - 변경: tooltip은 pointer 입력을 가로채지 않고 좌표로 hover 유지·이탈을 판단한다. 키보드 설명·Escape·기존 aria-describedby를 유지하며, 설명 아래 다른 버튼도 정상 클릭할 수 있다.
 - 증거: source 5da31e05cb의 CI 38126423478에서 Fleet 헤더 시험이 설명의 클릭 가로채기로 실패했다. 수정된 커밋 2a848f3c3의 원격 Chromium 검증은 15 passed(43.26s), known_failures 0 NEW다. 네 Fleet 문서와 공용 의미 아이콘의 hover·키보드·가림 회귀를 포함한다. 로그는 배포 세션의 tooltip-browser/run-1.txt에 보관했다.
 - gate 변화: 새 커밋의 통합·CI·실제 설치 수용은 별도 검증한다. 명령·권한·토큰·조작 크기와 팔레트는 변경하지 않았다.
+
+## 2026-10-11 · uiux/rosy-brand · D-654 경로 R 플랫폼 심볼
+
+- 변경: 평면 SVG 정본과 플랫폼 타일을 공용 allowlist·CMake에 등록하고 ui-brand 워드마크에 같은 mask를 사용한다. 기존 장미색·글자 토큰, 역할별 앱 아이콘, 접근성 이름과 목적지를 유지한다.
+- 검증: 작은 silhouette·파생 기하·토큰·설치 목록 및 두 테마의 실제 브라우저 검사를 추가했다. 실행 결과·CI·설치 수용은 검증 뒤 기록하며 현재 이 행은 통과를 주장하지 않는다.

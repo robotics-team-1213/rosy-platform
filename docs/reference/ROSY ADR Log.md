@@ -644,6 +644,7 @@
 | D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+| D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
