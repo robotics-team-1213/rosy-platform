@@ -136,7 +136,7 @@ def test_orphan_compact_goes_when_its_video_checks_out(tmp_path):
 
 def test_compact_without_a_video_stays(tmp_path):
     compact = tmp_path / "raw" / f"{STAMP}_{DEVICE}.compact"
-    compact.mkdir()
+    compact.mkdir(parents=True)
     (compact / "session.json").write_text(json.dumps({"device": DEVICE}), encoding="utf-8")
     video = tmp_path / "video"
     video.mkdir()
