@@ -708,7 +708,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
       const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
       markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
-      labels.push([cx, cy + size * 2.2, robot.robot_id]);
+      // Keep the screen-sized chip below its marker even when the grid raster is scaled down.
+      const chipHalfHeight = window.RosyPalette.canvasTextSize("micro") * 0.9 * Math.max(1, canvas.width / canvas.getBoundingClientRect().width);
+      labels.push([cx, cy + Math.max(size * 2.2, size + (chipHalfHeight + CHIP_GAP) / ctx.getTransform().d), robot.robot_id]);
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
