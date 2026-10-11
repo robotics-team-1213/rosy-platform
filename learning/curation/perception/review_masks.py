@@ -151,7 +151,7 @@ def draft_image(store, index, digest):
 
 def lane_boundary_classes(binding):
     """Whole-road labels include other lanes; legacy/current-region labels stay bounded."""
-    if any(c.get('role') == 'drivable' and c.get('semantic') == 'road_surface/1'
+    if any(c['name'] == 'drivable' and c.get('role') == 'drivable' and c.get('semantic') == 'road_surface/1'
            for c in binding['classes']):
         return {}
     return {entry['name']: entry['index'] for entry in binding['classes']}
