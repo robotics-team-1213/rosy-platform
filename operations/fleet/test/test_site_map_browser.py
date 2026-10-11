@@ -18,6 +18,42 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 ROOT = Path(__file__).resolve().parents[3]
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_profiles_rules_import_preview_and_draft_stay_separate(page_site, width):
+    from playwright.sync_api import expect
+    from test_site_map_trip import _line
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도')
+    before = store.active_view()
+    page.locator('#profile-new').click()
+    page.locator('#profile-id').fill('training')
+    page.locator('#profile-name').fill('연습장')
+    page.locator('#profile-save').click()
+    expect(page.locator('#profile-status')).to_contain_text('프로필을 저장했습니다')
+    expect(page.locator('#map-status')).to_contain_text('연습장')
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    expect(page.locator('#site-map-svg #robot-layer')).to_have_count(0)
+    assert store.active_view() == before and store.draft_view()['map'] is None
+    body = {'schema': 'rosy.site_map/1', 'map_id': 'imported', **_line()}
+    page.locator('#profile-file').set_input_files({'name': 'imported.json',
+      'mimeType': 'application/json', 'buffer': json.dumps(body).encode()})
+    page.locator('#profile-save').click()
+    expect(page.locator('#map-status')).to_contain_text('imported.json')
+    expect(page.locator('#map-profile option')).to_have_count(3)
+    page.locator('#map-profile').select_option('training')
+    expect(page.locator('#map-status')).to_contain_text('연습장')
+    page.locator('#profile-draft').click()
+    expect(page.locator('#map-source')).to_have_value('draft')
+    assert store.draft_view()['map']['map_id'] == next(row['map']['map_id'] for row in store.profiles() if row['profile_id'] == 'training')
+    assert store.active_view() == before
+    assert not [call for call in robot.calls if call[0] == 'navigation_goal']
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
 def test_rectangular_camera_coordinates_are_display_only(page_site):
     import cv2
     import numpy as np

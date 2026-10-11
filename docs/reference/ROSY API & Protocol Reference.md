@@ -1,4 +1,4 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
@@ -3136,6 +3136,6 @@ POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 
 `{host, action, unit, requested_by, code:"ACCEPTED", output}`이다. 이 API는 로봇을 재부팅하지 않는다.
 
 
-### D-631 ?? ?? ???
+### D-631 Site map profiles
 
-`GET /api/fleet/site-map/profiles`? ?? ?? ???? `{profiles: [...]}`? ????. ? ??? `profile_id`, `name`, `revision`, `saved_by`, `saved_at`, `map`??. `PUT /api/fleet/site-map/profiles/{profile_id}`? ?? ?? ???? ???? `{name,map,expected_revision}`? ???. `map`? `rosy.site_map/1`, ?? 2 MiB?? ?? ????? ??? ???. ID 1?64? `[A-Za-z0-9_.-]`, ?? 1?64?, ??? revision ??(?? null)? `profile_saved` ??? ???. ??? 409 `SITE_MAP_PROFILE_CHANGED`, ?? 100? ??? 409 `SITE_MAP_PROFILE_LIMIT`. ??? ??? ?? ??? ??? ???? ???. ?? ??????? ?? draft/activate API? ????.
+See [D-631](../adr/D-631-map-profiles-and-views.md) for the profile API contract. GET `/api/fleet/site-map/profiles` requires read permission and returns `{profiles: [...]}`. PUT `/api/fleet/site-map/profiles/{profile_id}` requires a named operator, accepts `{name,map,expected_revision}` and returns the saved row. Each row contains `profile_id`, `name`, `map`, `revision`, `saved_by`, `saved_at`. Maps use `rosy.site_map/1` validation and the 2 MiB body limit. Profile IDs match `[A-Za-z0-9_.-]{1,64}`; names have 1-64 characters with non-whitespace content. Updates compare revisions; new profiles use null. Errors: 409 `SITE_MAP_PROFILE_CHANGED`, 409 `SITE_MAP_PROFILE_LIMIT` (100 profiles), 422 `SITE_MAP_INVALID`, 413 `SITE_MAP_TOO_LARGE`. Saves emit `profile_saved` and do not change the active map or draft. Loading into draft and activation use the existing APIs.
