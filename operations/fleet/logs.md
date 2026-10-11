@@ -3250,3 +3250,54 @@
 - 변경: 먼저 실제404 응답을 기다리는 새로고침으로 실패 조건을 고정하고, 모의 응답 설치 뒤 화면을 새로 초기화한다. 좌표 만료·복귀·표 가시성·지도 크기·페이지 오류 검사는 유지한다. 제품 UI/API·관측 수명·CORE·Fleet 명령은 바꾸지 않는다.
 - 증거: 원격 실제 Chromium의 결정적 RED1 NEW 뒤 roles browser 전체6 pass·NEW0·exit0. 첫 원격 호출은 browser opt-in이 빠져 skip이었으며 실행 증거로 세지 않았다.
 - gate 변화: 시험 준비 순서와 원격 브라우저 회귀를 확인했다. main 통합·새 CI·사이트 배포·Isaac/Gazebo 주행과 두 대 Fleet 수용은 별도다.
+
+## 2026-10-11 · fb54c9f47f · fix(ci): 사건·알림 시험 helper의 xunit 충돌 제거
+
+- 문제: main 4bcfc55d88의 CI 38147167947에서 pytest 7.4가 두 시험 모듈의 setup(tmp_path)을 xunit hook으로 호출해 Path 대신 module을 전달했다. 30개 시험이 준비 단계에서 오류로 끝났으며 원격 시험 PC의 최신 pytest 통과는 이 버전 호환성을 증명하지 못했다.
+- 변경: helper를 make_board와 make_notifications로 바꾸고 전체 16개 정의·호출 위치를 함께 갱신한다. 시험 본문·검증과 제품의 사건 원장·알림·명령 권한은 유지한다.
+- 증거: 수정 SHA에서 두 시험 모듈과 공용 UI 계약 원격 61 PASS, NEW 0. 독립 리뷰가 전체 호출 위치와 본문 보존을 승인했다. 안전 경로 trailer 검사는 통과했다.
+- gate 변화: SOURCE/원격 관련 회귀 확인. pytest 7.4의 실제 새 CI 결과·main 통합·배포·두 대 주행 수용은 후속 확인이다.
+
+## 2026-10-11 · ea60284994 · D-655 조사용 상대 odom 읽기
+
+- 변경: World tracker의 최신 odom pose/stamp/epoch를 신선할 때만 읽는 survey_odom 포트를 Fleet 서비스로 전달한다. 지도 anchor 없이도 조사 근거를 읽지만 운행 MapPose·pin·명령은 생성하지 않는다. stale/future/unknown robot은 값 없음, 기존 gap/reset epoch를 유지한다.
+- 증거: 신규 3개 remote RED 뒤 map pose/service/pin 및 World wheel·compatibility remote GREEN 88 PASS, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/survey-odom-green-retry/run-1.txt. 현장 시험 PC의 5.0 cores/8.3 GB 기준 통과. 최초 shipping SSH timeout과 browser SSH reset은 PASS로 계산하지 않는다.
+- gate 변화: 읽기 포트 소스와 원격 회귀. 조사 기록 시작·초안 확정 API/UI는 다음 연결 단계이며, 배포·실물 좌표 정확도·주행 수용은 아직 확인하지 않았다.
+
+## 2026-10-11 · 7bf0f597dc · D-655 주행 기록 위치 단절 처리
+
+- 변경: 기존 teach의 map pose가 UNKNOWN/DEGRADED 또는 bridge 0.5 m 초과로 유효하지 않으면 기록을 끝낸다. reason pose_lost로 유효한 앞부분만 pending에 남기고 짧은 기록은 폐기한다. 좌표를 다시 얻어도 끊긴 구간을 하나의 도로로 자동 잇지 않으며 로봇 명령은 보내지 않는다. API reference와 기존 정상 기록 fixture 및 세 불연속 시험을 같이 갱신했다.
+- 증거: 세 시험 remote RED 이후 teach API/auth/audit·순수 계산·마커 장소 회귀 26 PASS, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/teach-gap-green-paths/run-1.txt. 잘못된 시험 파일명의 첫 GREEN은 exit 4/실행 없음으로 별도 기록했다. 실제 GREEN은 모델 PC 자원 기준 통과.
+- gate 변화: 기록 단절 source/remote 회귀. 지도 없는 상대 조사 API/UI와 카메라 누적은 계속 진행하며 통합·배포·실제 주행 수용은 미확인이다.
+
+## 2026-10-11 · 1a14e9705a · D-655 지도 없는 상대 주행 조사 API
+
+- 변경: 기존 teach/start의 선택 survey mode로 저장 초안 map_id/reference/revision과 신선한 odom을 확인한 뒤 상대 변환으로 선을 쌓는다. 기준 변경·odom gap/reset에서 유효 앞부분만 남기며 현재 초안 기준이 다른 confirm은 거절하고 기록을 유지한다. 확정은 기존 CAS 저장으로 odometry/observed 간선을 추가하고 조사 검토를 무효화한다. 공개 기준 snapshot은 표시 비교에 쓰며 내부 odom anchor/epoch는 내보내지 않는다. named operator·busy·감사·10분 pending 경로를 유지한다.
+- 증거: 8 remote RED, 첫 구현의 points tuple 회귀를 고친 뒤 1a14e9705a API/auth/audit·stale/reset/gap/frame/CAS/no-motion·기존 teach/순수/마커 장소 37 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/teach-survey-api-final/run-1.txt. 모델 PC 자원 기준 통과. UI 8596f7042b Chromium 6 PASS/NEW 0, 멈춘 선 표시 포함.
+- gate 변화: 상대 기록 API/UI source/remote. 카메라 누적·작업/대형·개입 연결은 진행 중이며 main 통합·CI·서명 배포·실제 현장 주행/측량 수용은 미확인이다.
+
+## 2026-10-11 · 7476837977 · D-655 조사 독립 검토 회귀 수정
+
+- 변경: 일반 teach/place/marker 저장을 활성 지도와 초안의 동일 좌표계로 제한하고 기록의 활성 버전 변경을 차단한다. 거절된 odom은 조사 연속성만 끊고 운행 앵커는 유지한다. 같은 조사 지도에서 정상 teach 편집도 review를 무효화하며 새/변경 간선 observed 근거를 보존한다. 공개 기록 프레임 snapshot으로 다른 지도 위 표시를 제한한다.
+- 증거: 독립 검토의 세 문제 remote RED 5 FAIL 뒤 API·마커·공통 계약 122 PASS/NEW 0, 추가 정상 조사 편집·활성 버전 변경·World 서비스 55 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/survey-frame-final/run-1.txt. AI PC 자원 기준 통과.
+- gate 변화: source/remote 회귀. 통합·CI·배포·실제 주행 정확도는 아직 확인하지 않았다.
+
+## 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토
+
+- 변경: survey가 없는 camera map에서도 marker로 이동한 장소의 연결 간선을 operator/observed로 바꿔 재검토를 요구한다. 기존 프레임/교정 note는 보존하고 활성 지도를 유지한다.
+- 증거: 새 단일 시험 remote RED 뒤 ebf05b9811 원격 카메라·marker·UI·구조 12 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-review-final-retry/run-1.txt. AI PC 자원 기준 통과. marker 편집 뒤 활성화는 ROAD_UNREVIEWED로 거절한다.
+- gate 변화: source/remote; endpoint 연결 검토·통합·CI·배포·실제 로봇/측정은 미완료다.
+
+## 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
+
+- 변경: 같은 전체 조사 기준에서 명시적으로 고른 0.05 m 이내 장소에 새 관측의 끝점만 접합한다. inferred 근거와 원본 frame/calibration note를 보존하며 검토 전 활성화를 거절한다. 같은 좌표의 다른 장소 ID와 robot_kinds를 중복 비교에 포함한다.
+- 증거: Node 29 PASS. AI PC 자원 기준 통과한 원격 Chromium 16 PASS/63 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-connect-race-green/run-1.txt`). 독립 검토 수용. 이전 구조 시험 1 NEW는 Fleet 52995 > 52840+150이며 기존 실패로 간주하지 않았다. 독립 재측정 53010으로 split 판정을 갱신하고 +150·파일 상한·기존 분리 의무를 유지한다.
+- gate 변화: source/remote 연결 검토 완료. main 통합·CI·배포·실제 사이트 및 실물 정확도는 아직 미확인이다.
+
+
+## 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
+
+- 변경: trip뿐 아니라 진행 중 대형과 지도 기록에서도 활성화를 거절한다. 일반 기록 시작·pose 장소 저장은 위치 조회 전후 map_id·전체 조사 기준·활성 버전을 비교해 이전 위치의 새 지도 저장을 막는다. 팔로워 목표와 참여자 개별 운행, 진행 중 trip의 개별 목표를 기존 admission에 맞춰 설명하며 확인 직전 재검사한다. 충돌 작업을 자동 해제하거나 이동 명령을 추가하지 않는다. 재개·후진 수락과 실제 로봇 진행을 구분한다.
+- 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
+- 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
+- gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.

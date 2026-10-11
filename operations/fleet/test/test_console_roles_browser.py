@@ -131,6 +131,38 @@ def _raw_words(page):
     return sorted(set(RAW.findall(page.locator("main").inner_text())))
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_site, width):
+    from playwright.sync_api import expect, sync_playwright
+
+    origin, _ = fleet_site
+    with sync_playwright() as playwright:
+        browser, page, errors, posts = _login(playwright, origin)
+        try:
+            page.set_viewport_size({'width': width, 'height': 1000})
+            before = list(posts)
+            card = _card(page, 'rosy_02')
+            expect(card.locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_02#teach-heading')
+            card.locator('[data-trip-open]').click()
+            expect(card.locator('.card-trip')).to_have_count(1)
+            leader = page.locator('#formation-leader').input_value()
+            card.locator('[data-open-formation]').click()
+            expect(page.locator('#context-tools')).to_be_visible()
+            expect(page.locator('#formation-form-summary')).to_be_visible()
+            assert page.locator('#formation-leader').input_value() == leader
+            assert page.locator('#formation-heading').evaluate('node => node === document.activeElement')
+            expect(_card(page, 'rosy_02').locator('.card-trip')).to_have_count(0)
+            expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
+            assert posts == before and errors == []
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#robot-workspace [data-map-recording]').click()
+            expect(page.locator('#teach-robot')).to_have_value('rosy_03')
+            expect(page.locator('#teach-target')).to_contain_text('rosy_03')
+            assert posts == before and errors == []
+        finally:
+            browser.close()
+
+
 def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_site):
     """Coordinate lifetime changes content, never the table's visibility or map location."""
     from playwright.sync_api import expect, sync_playwright
@@ -196,6 +228,11 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_02").locator('[data-formation-role="leader"]')).to_have_text("대형 리더")
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
+        follower = _card(page, "rosy_01")
+        expect(follower.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('팔로워.*리더'))
+        expect(follower.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
+        leader = _card(page, "rosy_02")
+        expect(leader.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
         page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
@@ -209,6 +246,8 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         page.locator("#formation-stop").click()
         expect(page.locator("#formation-state")).to_have_text("해제됨")
         assert page.locator("[data-formation-role]").count() == 0
+        expect(_card(page, "rosy_01").locator('ui-button[data-trip-open]')).to_be_enabled()
+        assert not [path for path, _body in posts if path.endswith('/goal') or path == '/api/fleet/trips']
         assert not errors
         browser.close()
 
@@ -231,6 +270,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
         lead.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("start_n")
         lead.locator('ui-button[data-trip-repeat="rosy_01"]').click()
         expect(lead.locator(".trip-line")).to_contain_text("반복 운행", timeout=10000)
+        expect(lead.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('운행.*취소'))
         page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#convoy-leader")).to_have_value("rosy_01", timeout=5000)
         assert page.locator("#convoy-follower option").all_inner_texts() == ["rosy_02", "rosy_03"]

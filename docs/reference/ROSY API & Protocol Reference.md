@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.207
+**Version:** v1.209
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,16 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
+
+`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다.
+
+`limit`은 정수 1–100, 기본 50이며 **원장별** 최근 행 수다. 응답은 `observed_at`(조회 UTC 시각), `tasks_available`, `missions_available`, `truncated_sources`(`task`/`mission`), `rows`(최대 200행)다. `observed_at`은 장치 센서의 관측 시각이 아니다. 원장 미설정은 available=false이며 빈 목록과 구별한다. 행은 `updated_at` 내림차순, source/source_id 내림차순으로 정렬한다. 전체 원장 스냅숏의 원자성 또는 두 원장 사이의 동일 시점은 보장하지 않는다.
+
+각 행: `source`(`task`/`mission`), `source_id`, `action_kind`(기존 navigate/PICK_PLACE), `status`(원장 상태 그대로), `device_id`(Task robot_id / Mission instance_id), `workcell_id`(Mission 공간; Task null), `reason`(없으면 null), `updated_at`(원장 UTC 갱신 시각). identity는 `(source, source_id)`이며 두 원장이 같은 ID를 가질 수 있다. plan/candidate/request/receipt/credential은 목록에 포함하지 않는다. 개별 상세는 기존 `/api/fleet/tasks/{id}` 또는 `/api/fleet/missions/{id}`로 조회한다.
+
+인증 없음 401, 권한 부족 403, 잘못된 limit 422. 이 경로는 read projection이며 dispatch/admission/claim/fence/state transition을 수행하지 않는다. 조회 실패·세션 변경·권한 상실 시 UI는 이전 목록·상세를 지우고 미확인으로 표시한다. `ACTION_SUCCEEDED`는 목표 확인 대기이며 `GOAL_CONFIRMED`와 구별한다. 이 추가는 다장치 Mission 실행이나 복합 Asset API를 제공하지 않는다.
 
 ### v1.205 Fleet 지도 프로필 (D-631)
 
@@ -24,6 +34,28 @@
 - CORE `line_follow.stuck.inquiry`는 선택 object/null이며 현재 `situation-inquiry-v1` 문맥을 담는다. `lane_boundary`는 `{state:unknown|baseline|confirming|confirmed, revision:integer>=0, epoch:integer, source_stamp_ns:integer|null, geometry_id?:string, reason?:string}`이다. 신선한 D-468 경계가 자세 정렬 후 기존 경계와 다르고 서로 다른 촬영 시각 세 개에서 일치할 때만 revision이 증가한다. 새 epoch/geometry는 baseline이며 변화로 세지 않는다. Fleet은 최신 상태 inquiry를 최초 사건 inquiry보다 우선한다. AI는 같은 stuck의 첫 문의 후에는 confirmed revision 변경에서만 재문의한다. 경계 상태가 없는 기존 장치도 첫 문의만 가능하며 자동 재문의는 하지 않는다. 이 상태는 기하 관측의 변화이고 명령·허가가 아니다.
 
 ---
+
+### v1.209 지도 없는 조사 좌표와 도로 시설 (D-655)
+
+- `POST /api/fleet/site-map/activate`는 진행 중 trip, 대형 ARMING/RUNNING/HOLDING, 진행 중 teach 기록에서 기존 409 `SITE_MAP_ROUTE_ACTIVE`를 반환한다. 초안·프로필 저장은 가능하고 멈춘 teach의 pending 검토만으로 활성화를 막지 않는다. busy 검사와 활성 버전 저장은 같은 이벤트 루프의 await 없는 구간이다. 거절은 지도·기록·대형·로봇을 변경하지 않으며 운용 종료 뒤에도 별도 활성화와 기존 draft revision 검사가 필요하다.
+- 카메라 차선 추출 결과의 간선은 camera/observed 근거를 가진다. calibration JSON의 선택 survey는 기존 SurveyReference와 같고, 생성 결과의 review는 false로 초기화한다. survey가 없으면 reference_revision은 calibration JSON의 SHA256 지문으로 생성한 식별자다. 간선 note는 교정 지문과 CLI 원본 프레임 SHA256을 보존한다. 검토 전 활성화는 기존 ROAD_UNREVIEWED/SURVEY_UNREVIEWED 가드로 거절한다.
+- 화면의 관측 누적은 기존 draft PUT/CAS/named operator만 사용한다. 대상과 입력의 map_id 및 reviewed/review_note를 제외한 전체 survey 기준이 같아야 한다. 기존 시설·규칙·간선을 유지하고 새 관측의 ID는 분류 안에서 재배정한다. 동일 기하·운행 속성의 기존 차로는 중복 추가하지 않는다. 신규 관측 장소가 기존 장소의 0.05 m 이내면 연결이 모호하므로 자동 접합하지 않고 검토를 요구한다. 입력 시설/횡단보도/회전 규칙은 이 차선 누적 경로에서 거절하며 기존 편집 경로를 사용한다.
+- 동일 차로의 다른 관측 note는 기존 근거에 덧붙이고 검토를 무효화한다. 같은 파일의 재누적은 idempotent이며 note 합계 1000자 초과는 거절한다. 검토와 도로/장소 교정은 원본 관측 지문을 유지한다. survey가 없는 카메라 초안도 도로 근거 검토가 가능하며 운행 속성·marker geometry 수정 뒤 operator/observed로 재검토한다.
+- 연결 후보는 같은 좌표계의 신규 관측 장소와 기존 장소가 0.05 m 이내인 경우만 제시한다. 후보의 이름·좌표·거리를 지도 밖에서 표시하고 관측 장소마다 운영자가 기존 장소를 선택해야 접합한다. 선택하지 않은 가까운 장소·다른 프레임·범위 밖 연결·존재하지 않는 ID는 거절한다. 접합 결과의 간선은 inferred이며 원본 지문과 관측 ID→기존 ID 연결 근거를 note에 남긴다. 기존 장소와 기존 간선은 움직이지 않는다. 실제 연결과 통행 의미를 검토해 reviewed로 저장하기 전에는 활성화할 수 없다. 이 후보는 명령·운행 pose·관측되지 않은 연결 자동 완성을 만들지 않는다.
+- 일반 teach의 시작·샘플·확정과 pose/마커 장소 추가는 활성 지도와 대상 초안의 map_id·전체 survey 기준을 비교한다. 다른 기준은 409 `TEACH_MAP_CHANGED`로 거절한다. 일반 기록 시작과 pose 장소 저장은 위치 조회 전 map_id·전체 survey 기준·활성 버전을 고정하고 조회 후 비교한다. 조회 중 활성화되면 같은 map_id여도 거절하며 이전 위치를 새 지도에 저장하지 않는다. 기록 시작의 활성 버전이 바뀌면 기록은 `map_changed`로 종료되고 이전 기록 확정은 거절된다. 기록 종료는 로봇 정지 명령이 아니다. 일반 recording/pending도 시작 시 고정한 `map_id`와, 조사 기준이 있으면 `survey_reference`를 반환하며 화면은 일치하는 좌표계에서만 선을 표시한다.
+- 거절된 odom(시각 역행·동일 시각의 다른 위치 포함)은 조사 기록의 연속성 토큰을 변경한다. 운행 pose의 기존 앵커와 odom epoch는 이를 이유로 초기화하지 않는다. 기존 정상 teach로 같은 조사 지도에 도로를 확정할 때도 odometry observed 근거를 추가하고 조사 검토를 무효화한다. pose/마커 장소 편집도 조사 검토를 무효화하며 마커로 바뀐 간선은 operator observed로 재검토한다.
+- 장소·간선·시설의 ID 유일성은 각 분류 안에서 적용한다. 기존 프로필의 분류 간 같은 ID를 허용하며 편집·삭제는 분류와 ID를 함께 식별한다. 기존 `schemas.HostStatusEvidence` 이름·본문은 유지하고 구현 소유만 기존 `protocol.evidence`로 이동한다.
+- 기존 `rosy.site_map/1`에 선택 `survey`와 `facilities`, edge의 선택 `evidence`를 추가한다. 기계 계약은 `core_common.protocol.site_survey`이며 `core_common.protocol.schemas`에서 재노출한다. 없는 필드는 기존 지도 body와 해시에 추가하지 않는다.
+- `survey`: `{revision, origin:[x,y], heading_rad, scale_source:odometry|measured, measured_distance_m?:number|null, description, reviewed:false, review_note:string}`. 좌표는 m, 방향은 rad이며 유한 값이다. 원점 좌표는 ±1000 m, 방향은 ±2π, revision은 영문·숫자·밑줄·점·하이픈 1–64자다. description은 비공백 1–1000자다. 실측 축척에는 양의 `measured_distance_m`(≤2000), reviewed=true에는 비공백 review_note(≤1000)가 필요하다. odometry 축척은 측량 정확도나 운행 위치 승인 증거가 아니다.
+- edge `evidence`: `{source:camera|odometry|operator,status:observed|inferred|reviewed,reference_revision,note}`. note 기본 빈 문자열, reviewed에는 비공백 note(≤1000) 필수. 조사 기준이 있으면 reference_revision이 일치해야 한다.
+- `facilities`는 최대 500개 `{id,name,kind:traffic_signal|stop_line|landmark|exclusion,geometry:[[x,y]],approaches:[{edge_id,forward,stop_s_m?}],signal_id?,signal_kind?:physical|virtual}`다. 신호등/landmark는 한 점, 정지선은 서로 다른 두 점, 금지 구역은 퇴화·자기 교차 없는 3–32점 다각형이다. geometry 좌표는 ±1000 m의 유한 값이다. id는 revision과 같은 형식, name은 비공백 최대 64자. approaches 최대 64개, 존재하는 차로와 허용 방향만 참조하고 동일 차로·방향 중복 불가, stop_s_m은 0 이상 차로 길이 이하. 신호등은 signal_id·signal_kind·제어 approaches 필수이고 나머지 시설에는 device 필드를 넣지 않는다. 시설 기하는 장치 등록·신호 제어 활성화가 아니다.
+- 기존 초안·프로필 요청의 크기·revision·named operator·감사 계약은 유지한다. 활성화 및 최초 import는 미검토 survey를 422 `SITE_MAP_SURVEY_UNREVIEWED`, observed/inferred road evidence를 422 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 메타데이터는 World의 운행 MapPose나 CORE 명령을 바꾸지 않는다.
+- 금지 구역에 닿거나 차로 반폭 이내로 접근하는 주행 간선이 있으면 활성화/최초 import는 422 `SITE_MAP_EXCLUSION_OVERLAP`이다. 금지 영역을 그림으로만 표시한 채 경로 계획이 통과하도록 두지 않는다. 간선 기하를 수정하거나 차로 초안에서 제거한 뒤 다시 검토한다.
+- 기존 teach의 map-pose 기록 중 UNKNOWN/DEGRADED 또는 dead_reckon_m >0.5로 유효 좌표가 끊기면 기록을 끝낸다. stop/result의 reason은 `pose_lost`이며, 직전까지 유효한 선만 pending에 남는다(최소 길이 미만은 폐기). 이후 재관측 좌표를 같은 선으로 자동 잇지 않는다. 이는 기록 중단이며 로봇 정지 명령이나 위치 승인으로 사용하지 않는다.
+- `POST /api/fleet/teach/start`에 선택 mode `map`(기본값)/`survey`를 추가한다. map은 기존 요청을 유지하며 조사 필드를 받지 않는다. survey는 저장된 초안의 `map_id`, `reference_revision`(조사 revision 형식), `expected_revision`과 신선한 상대 odom을 요구한다. 현재 로봇 위치를 survey.origin, 현재 방향을 survey.heading_rad에 놓는 상대 변환으로 선을 기록한다. 로봇을 설명에 명시한 실제 시작점·방향에 놓고 시작해야 한다. 운행 MapPose나 map pin은 생성하지 않는다.
+- survey 시작은 초안 없음/조사 없음 422 `TEACH_SURVEY_REQUIRED`, revision 불일치 409 `SITE_MAP_DRAFT_CHANGED`, map_id/조사 기준 불일치 409 `TEACH_SURVEY_CHANGED`, odom 없음·stale·읽기 실패 422 `TEACH_ODOM_UNAVAILABLE`을 반환한다. 유효하지 않은 mode/필드 조합은 422 `TEACH_MODE_INVALID`이다. 기존 named operator·roster·한 사이트 한 기록·busy·감사·pending 10분 계약을 유지한다.
+- survey recording/result에는 mode, map_id, reference_revision을 추가하며 recording의 draft_revision은 시작 시점의 저장 revision이다. 내부 odom anchor/epoch는 공개 응답에 넣지 않는다. 기록 중 초안 수정은 `survey_changed`, odom 단절은 `odom_lost`, odom epoch 변경은 `odom_reset`으로 유효 앞부분만 남기고 끝낸다. confirm은 시작 기준과 현재 초안의 동일성을 확인하고 기존 expected_revision CAS로 저장하며 새 간선을 source=odometry/status=observed로 기록하고 survey 검토를 무효화한다. 기준이 바뀌면 409 `TEACH_SURVEY_CHANGED`로 기록을 유지하고 저장을 거절한다.
+- survey recording/result의 `survey_reference`는 시작 기준 snapshot(reviewed/review_note 제외)이다. UI는 동일 map_id와 기준 snapshot에만 조사 선을 겹치고 현재 초안 기준이 다르면 confirm을 차단한다. 공개 응답의 points는 기존처럼 배열의 배열이다. 시작점 확인은 각 시작마다 필요하며 로봇·기록 방식·저장 revision 변경 시 UI 확인을 초기화한다.
 
 # 1. 버저닝 및 폐기 정책
 
@@ -2787,8 +2819,10 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
+| v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
+| v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
 
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |

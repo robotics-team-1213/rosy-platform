@@ -32,6 +32,7 @@ SHARED = {
 
 OWN = {
     "console.js": {
+        "work-view.js",  # D-664: common read view; execution stays with each owner
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
@@ -76,6 +77,9 @@ OWN = {
     },
     "site-map.js": {
         "site-map-teach.js",
+        "site-map-survey.js",
+        "site-map-camera.js",
+        "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
     },
 }
 

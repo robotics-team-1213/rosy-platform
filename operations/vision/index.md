@@ -19,6 +19,7 @@
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
 | D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 
 ## 계획·결과 문서
 
@@ -27,6 +28,7 @@
 - [2026-09-28-site-camera-preview-rectification.md](../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-30-app-identity-rename-plan.md](../../docs/plans/2026-09-30-app-identity-rename-plan.md)
 - [2026-10-11-compact-camera-calibration.md](../../docs/plans/2026-10-11-compact-camera-calibration.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 
 ## 교훈 (docs/solutions)
 
@@ -38,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
 - 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
 - 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
 - 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정
 - 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
-- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
