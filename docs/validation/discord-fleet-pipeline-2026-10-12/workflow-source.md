@@ -19,3 +19,11 @@ Source `3861935d44147866301c1db42448d26e52973418`의 관련 Gateway·workflow·r
 새 UI owner `channel-request-view.js`를 기존 Console allowlist와 wheel/sdist asset 목록에 등록했다. 패키지 시험의 70개 고정 수가 새 71개 실제 자산과 충돌한 RED를 수정하고 전체 해시 readback을 통과했다. 최신 main의 GLM 경로 변수명 오거절은 값이나 검사 정책을 바꾸지 않는 이름 정리로 해결하고 GLM/비밀 경계 시험도 통과했다.
 
 Mission/Cell Job 관계 어댑터, 위험 사건 경로, 실제 opt-in lifespan 전송 통합 시험, size/독립 검토, 최신 main 착지, CI·서명 배포와 실제 Discord 왕복은 미완료다. source HTTP·Chromium 시험은 실제 운영 수용을 대체하지 않는다. 운영 채널 전송·로봇 명령은 없다.
+
+## 독립 검토 후 보강
+
+독립 검토는 기존 두 단계 goal→link 흐름의 stale READY/HOLD 경쟁과 새 Task 결과 회신의 과거 owner mapping 누락을 발견해 승인을 보류했다. 위 192/6 PASS는 이 문제를 검증한 증거가 아니며 운영 허용에 사용하지 않는다. 당시 Fleet parent 실측54,137은 기존53,606 대비+531로 제한 재판정도 필요하다. +150와 파일 상한·기존 추출 의무는 완화하지 않는다.
+
+- Owner scope RED3 → source `99790900f8` 관련45 PASS/NEW0, AI PC floor 통과. 원래 receipt의 user/owner/guild/channel을 새 회신 생성·claim·발송 직전에 다시 검사한다. mapping 교체/삭제·channel 교체 후 재시작해도 폐기된 요청에는 새 결과 회신을 만들지 않는다.
+- Atomic admission RED3 → source `4919e4627b` 관련49 PASS/NEW0. 기존 TaskStore 생성 트랜잭션에 현재 owner/hash/revision/READY/candidate 검사와 LINKED 예약을 함께 둔다. 다른 탭에서 HOLD 또는 다른 goal로 바꾸면 Task 생성이0이며, 같은 확인 revision 재시도는 같은 기존 Task다. 이 실행의 원격 자원 fallback을 성능 수용으로 사용하지 않는다.
+- API v1.212 및 Console source `49490991a8`은 `/channel-requests/{id}/submit`에 expected_hash/revision만 보낸다. server의 기존 FleetTaskService가 기존 actor/key/queue/fence를 유지한다. 새로운 writer나 dispatch 활성화가 없다. 원격 영향군과 실제 Chromium의 새 SHA 최종 회귀는 진행 중이며 재검토도 요청했다.
