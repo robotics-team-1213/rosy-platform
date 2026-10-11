@@ -27,6 +27,7 @@ CLI와 로컬 제공자는 같은 v2 요청 생성기를 사용한다. 기존 GL
 - 로컬 어댑터 `eac5ad9ba8`: 여유 확인된 Site PC의 관련 82 passed / exit 0 / NEW 0. 소스의 격리 승인 상수 문제를 RED로 재현하고 기본 수용을 차단했다. 실제 호스트가 검증한 capability를 명시해야 호출할 수 있다.
 - 배포 패키지 `79febfdbe2`: v2 모듈의 wheel/sdist 설치·namespace import 및 로컬 제공자 회귀 34 passed / exit 0 / NEW 0, `logs/phase3-delivery/run-1.txt`. 자원 하한 미달 fallback이며 실제 호스트 활성화는 아니다.
 - 독립 검토: 프로파일·판정·CLI는 advisory-only 경계에서 중요한 blocker 없음. 로컬 어댑터의 정적 격리 표식은 blocker로 기록하고 수정했다. 최종 수정 및 main 통합은 다시 검토한다.
+- 오프라인 실행 `ab100f6b8d`: `tools/decision_calibration.py <frozen-input.json>`은 모델 호출 없이 검수 profile·fit·평가·학습 manifest를 받아 평가 receipt를 출력한다. HOLD/FAIL은 exit 1, PASS_OFFLINE_ONLY만 exit 0이다. 실행기 부재 RED 4개 이후 보정/CLI 34 passed / exit 0 / NEW 0 (`logs/calibration-cli-green/run-1.txt`). 자원 하한 fallback이며 실제 현장 정답은 사용하지 않았다.
 
 ## 남은 수용
 

@@ -126,8 +126,8 @@ class IncidentCaseStore:
             actual = micros(actual_cost_usd) if actual_cost_usd is not None else None
         except ValueError:
             actual = None
-        if state == 'UNKNOWN' or actual is None:
-            state, actual = 'UNKNOWN', None
+        if actual is None:
+            state = 'UNKNOWN'
         with self._transaction() as conn:
             self._case(conn, scope)
             key = self._key(scope)
@@ -136,8 +136,10 @@ class IncidentCaseStore:
                 raise ValueError('ATTEMPT_NOT_SUBMITTING_BY_WORKER')
             conn.execute('UPDATE fleet_incident_v2_attempts SET state=?,actual_micros=?,summary_json=? WHERE subject_id=? AND case_id=? AND attempt_id=?', (state, actual, raw, *key, attempt_id))
             if actual is not None:
-                conn.execute('UPDATE fleet_incident_v2_cases SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-? WHERE subject_id=? AND case_id=?', (actual, row['reserved_micros'], *key))
-            reason = 'PROVIDER_OUTCOME_UNKNOWN' if actual is None else 'COST_OVERRUN' if actual > row['reserved_micros'] else None
+                released = min(actual, row['reserved_micros']) if state == 'UNKNOWN' else row['reserved_micros']
+                conn.execute('UPDATE fleet_incident_v2_cases SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-? WHERE subject_id=? AND case_id=?', (actual, released, *key))
+            reason = ('COST_OVERRUN' if actual is not None and actual > row['reserved_micros'] else
+                      'PROVIDER_OUTCOME_UNKNOWN' if state == 'UNKNOWN' else None)
             if reason:
                 conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason=? WHERE subject_id=? AND case_id=?", (reason, *key))
             return {'attempt_id': attempt_id, 'state': state, 'actual_micros': actual, 'summary_json': raw}
