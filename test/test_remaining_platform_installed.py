@@ -75,7 +75,14 @@ sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
 assert not (installed / '_build').exists()
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
+from rosy.execution.site.goal_evidence import GoalEvidence
+from rosy.execution.site.workflow import mission_step_state
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+assert mission_step_state('ACTION_SUCCEEDED') == 'AWAITING_GOAL_EVIDENCE'
+import importlib.metadata
+fleet_files = importlib.metadata.distribution('fleet').files
+assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
+assert 'rosy-execution==0.1.0' in importlib.metadata.requires('fleet')
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
                           (EvidenceRef('robot', 'core', 'state-1', 99.0),))
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
@@ -84,7 +91,11 @@ for name in json.loads(sys.argv[2]):
     assert Path(module.__file__).resolve().is_relative_to(installed), name
 from rosy.decision.model_tool_contract import ModelToolCall
 from fleet.server import proposal_store
+from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall
+assert mission_store.GoalEvidence is mission_service.GoalEvidence is goal_evidence_service.GoalEvidence is GoalEvidence
+assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 assert importlib.util.find_spec('fleet.ai') is None
 assert importlib.util.find_spec('rosy_situation.service') is None
 assert importlib.util.find_spec('rosy_situation.analyzers') is None
@@ -111,7 +122,8 @@ print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
-               'rosy.decision.tool_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
+               'fleet.server.model_feedback_dispatch', 'rosy.execution.site.goal_evidence',
+               'rosy.execution.site.workflow', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
 
@@ -140,6 +152,10 @@ import json
 import sys
 sys.path[:0] = json.loads(sys.argv[1])
 from fleet.stuck.board import LineStuckBoard
+from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
+from fleet.server import mission_service
+from rosy.execution.site.goal_evidence import GoalEvidence
+assert mission_service.GoalEvidence is GoalEvidence
 from rosy_situation.assessment import Assessment
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)

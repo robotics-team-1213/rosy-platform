@@ -13,6 +13,8 @@ Wheel `rosy-execution` 0.1.0. ROS-free PlanBundle and existing authority project
 |------|-------------|
 | `pyproject.toml` | Wheel name and the skill-contract pin |
 | `src/` | `rosy.execution.api` and `rosy.execution.site` |
+| `src/rosy/execution/site/goal_evidence.py` | D-657 pure bounded goal predicate/evidence types and verification; producer authentication and post-action admission remain Fleet-owned |
+| `src/rosy/execution/site/workflow.py` | D-657 pure progress timestamp/freshness and Mission-to-step projection; never writes a transition, claim, fence or device command |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories
@@ -28,7 +30,7 @@ None beyond `src/`.
 
 ### Testing Requirements
 
-Gateway and palletizing consumer tests. This folder has no `package.xml`.
+Gateway and palletizing consumer tests, Fleet goal/progress/provenance tests, `test/test_judgment_extraction.py` and checkout-independent wheel/sdist/source-image probes. Fleet depends on the existing `rosy-execution==0.1.0` wheel without packaging its files twice. This folder has no `package.xml`. Run committed HEAD remotely via `tools/remote/remote_pytest.py` (D-584).
 
 ### Common Patterns
 

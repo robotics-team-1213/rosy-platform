@@ -20,7 +20,7 @@ from core_common.protocol.schemas import (
 
 from .dispatch_admission import release as release_dispatch_claims
 from .dispatch_admission import reserve as reserve_dispatch_claims
-from .goal_evidence import GoalEvidence, GoalPredicate
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalPredicate
 from .sqlite_policy import configure_connection, enable_wal
 
 
