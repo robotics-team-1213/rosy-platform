@@ -7808,3 +7808,10 @@ osy-d395-s1d\`.
 - 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
 - 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
 - gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
+
+
+## 2026-10-11 · D-664 혼합 장치 작업 개념과 책임 검토
+
+- 주행 Task와 고정 PICK_PLACE Mission의 분리, Cell의 pallet.transfer 제한을 현행 소스로 확인했다.
+- 장치·작업 공간·공정·작업을 구별하고 공통 읽기 화면→운반/고정 팔 인계→실물/복합 장치 수용의 단계와 반례를 Proposed ADR 및 설계에 기록했다.
+- 런타임/API/권한/최종 writer는 변경하지 않았다. 문서 검증과 실제 협업 실행은 별도 증거다.
