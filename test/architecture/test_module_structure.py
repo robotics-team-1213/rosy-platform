@@ -270,11 +270,18 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_019,
-        "split: re-judged on 2026-10-12: Decision deliberation (231 lines) has its own reviewed "
+        52_236,
+        "split: re-judged on 2026-10-12 with D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
         "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
-        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 52019; "
+        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 52236; "
         "package +150 and observe/server/UI obligations remain. Previous verdict: "
+        "independently re-judged on 2026-10-11 by mixed_work_size_review at 52150: D-664 adds "
+        "bounded work_routes/work_read and work-view using existing store, call, pageScope and shared "
+        "controls. Mission owner scope and both execution owners remain unchanged; no runner, writer, "
+        "transport or SIZE_UNITS added. console.js 1014 stays below 1175. Keep +150 and existing "
+        "observe/server/UI, camera/auth/trip seams. Any admitted/cancel/retry/handoff growth requires "
+        "the D-664 execution contract and owning Task/Mission services, not this read projection; "
+        "schema changes must verify both store owners and summary SQL. Previous verdict: "
         "independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
         "named human handoff move unchanged into fleet/incidents (360 lines), counted independently under "
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md. Parent measured at 51933; existing "
