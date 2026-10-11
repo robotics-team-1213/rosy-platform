@@ -76,6 +76,8 @@ def test_catalog_names_geometry_states_and_keyboard_tooltip(page, theme, width, 
     assert not tooltip.is_visible()
     assert link.get_attribute("aria-describedby") is None
     assert link.get_attribute("aria-current") == "page"
+    page.mouse.move(0, 0)
+    assert not tooltip.is_visible()
     page.keyboard.press("Tab")
     assert page.get_by_role("tab", name="기록", exact=True).evaluate("node => node === document.activeElement")
     assert tooltip.inner_text() == "기록"
@@ -105,3 +107,15 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
       try { actionIcon(button, 'refresh'); return false; } catch (error) { return error instanceof TypeError; }
     }""")
     assert rejected
+
+
+@pytest.mark.parametrize("mutation", ["node.hidden = true", "node.remove()"])
+def test_tooltip_closes_when_its_owner_leaves_the_visible_surface(page, mutation):
+    page.goto(f"{HOST}/styleguide")
+    page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
+    owner = page.locator(".icon-inventory [data-action-icon='connect']")
+    owner.hover()
+    tooltip = page.get_by_role("tooltip")
+    tooltip.wait_for(state="visible")
+    owner.evaluate(f"node => {{ {mutation}; }}")
+    tooltip.wait_for(state="hidden")

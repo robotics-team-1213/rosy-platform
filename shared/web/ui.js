@@ -719,17 +719,25 @@ function hideTooltip() {
 function tooltipTarget(node) {
   return node instanceof Element ? node.closest("[data-ui-tooltip]") : null;
 }
+function tooltipOwnerVisible(owner) {
+  return owner?.isConnected && owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
+}
 function placeTooltip() {
-  if (!tooltip || tooltip.hidden || !tooltipOwner?.isConnected) return;
+  if (!tooltip || tooltip.hidden) return;
+  if (!tooltipOwnerVisible(tooltipOwner)) { hideTooltip(); return; }
   const rect = tooltipOwner.getBoundingClientRect(), box = tooltip.getBoundingClientRect();
   const inset = parseFloat(getComputedStyle(tooltip).paddingTop);
-  tooltip.style.left = `${Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2))}px`;
+  const x = Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2));
   const below = rect.bottom + inset;
-  tooltip.style.top = `${Math.max(inset, below + box.height <= innerHeight - inset ? below : rect.top - box.height - inset)}px`;
+  const y = Math.max(inset, below + box.height <= innerHeight - inset ? below : rect.top - box.height - inset);
+  for (const [axis, value] of [["x", x], ["y", y]]) {
+    const key = `data-ui-tip-${axis}`, next = value.toFixed(2);
+    if (tooltip.getAttribute(key) !== next) tooltip.setAttribute(key, next);
+  }
 }
 function showTooltip() {
   const owner = tooltipHover || tooltipFocus;
-  if (!owner || !owner.isConnected || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) {
+  if (!tooltipOwnerVisible(owner) || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) {
     hideTooltip();
     return;
   }
@@ -757,12 +765,12 @@ document.addEventListener("pointerover", event => {
 });
 document.addEventListener("pointerout", event => {
   if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || tooltip?.contains(event.relatedTarget)) return;
-  tooltipHover = null; tooltipDismissed = null; showTooltip();
+  tooltipHover = null; showTooltip();
 });
 document.addEventListener("focusin", event => {
   tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
 });
-document.addEventListener("focusout", () => { tooltipFocus = null; showTooltip(); });
+document.addEventListener("focusout", () => { tooltipFocus = null; tooltipDismissed = null; showTooltip(); });
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && tooltip && !tooltip.hidden) {
     tooltipDismissed = tooltipOwner; hideTooltip();
@@ -770,6 +778,9 @@ document.addEventListener("keydown", event => {
 });
 window.addEventListener("resize", placeTooltip);
 document.addEventListener("scroll", placeTooltip, true);
+new MutationObserver(placeTooltip).observe(document.documentElement, {
+  subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "class", "aria-hidden"],
+});
 
 for (const button of document.querySelectorAll("[data-action-icon]")) {
   if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));

@@ -79,6 +79,8 @@
 }
 .ui-tooltip {
   position: fixed;
+  left: attr(data-ui-tip-x px, 0px);
+  top: attr(data-ui-tip-y px, 0px);
   z-index: 2002;
   max-width: min(32ch, calc(100vw - var(--space-4)));
   padding: var(--space-2) var(--inset-button);
