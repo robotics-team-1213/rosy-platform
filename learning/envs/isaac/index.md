@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · cb0ee3cd51 · fix(isaac): native scan을 CORE 몸체 경로 판정에 연결
 - 2026-10-12 · 005a247b94 · fix(isaac): 첫 camera 학습 실패 뒤 다른 seed도 시험
 - 2026-10-11 · c229738784 · fix(isaac): 명시적 렌더에서 카메라 receipt 갱신
 - 2026-10-11 · e2a94abaa3 · fix(isaac): 현재 경로 접선과 전방 안내각 분리
 - 2026-10-11 · 152cb908fe · feat(isaac): 동일 조건 카메라 기준선과 고정 정책 비교
-- 2026-10-11 · fb355522f5 · fix(isaac): 유효 카메라 관측만 Q-learning에 반영

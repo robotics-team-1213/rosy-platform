@@ -117,3 +117,10 @@
 - 변경: 훈련 실패는 camera_usable=false로 남기고 다음 seed를 실행한다. 무효 observation은 Q 갱신에서 제외하고 episode reset/실제 정지·baseline/eval 유효카메라·updates>0·learned state 방문·heldout 전체완주 조건은 유지한다. seed 하나의 실패를 성공으로 바꾸거나 map-only 명령으로 대체하지 않는다.
 - 증거: committed source 모델 PC 원격 camera_lane/map_task93passed·known_failures0NEW. 실패 episode의 무효 transition은 updates0, 이후 유효 transition만 update하며 baseline/eval 무효 관측은 여전히 거절하는 회귀를 포함한다.
 - gate 변화: 없음. 실제 여러 seed native camera 학습·RL 성능 개선·전체 완주·교통/Fleet 수용은 미검증이다.
+
+## 2026-10-12 · cb0ee3cd51 · fix(isaac): native scan을 CORE 몸체 경로 판정에 연결
+
+- 문제: native scan은 drivable wall 요약·return evidence에만 전달돼 CORE 기존 body_stop/path 장애물 경로가 같은 센서 표본을 받지 못했다. R14 frozen-model replay에서 train0은 drivable영역을 인식하지만 guided drivable_pivot_right 선택 뒤 strict camera target 거절임을 확인했고, 높이5mm 차이로 해결되지 않았다.
+- 변경: actual native 생성자는 scan과 같은 URDF nominal body·simulation collision box 회전반경을 받아 path/body 형상을 설정한다. 기존 gateway front_clearance를 호출해 동일 검증·body/scan points를 전달하고 return evidence를 중복 전달하지 않는다. native body 불일치와 no-return UNKNOWN은 관측/학습 admission에서 거절한다. guided pivot·map-only motion을 유효 camera state로 바꾸지 않는다.
+- 증거: AI PC committed-source camera_lane/native_scan62passed·known_failures0NEW. 실제 표본에서 먼 벽은 주행, 정지 간격 내 가까운 벽은0, UNKNOWN은유효state없음, body불일치는거절을 검증했다. replay는 recorded pixels·CPU 추론이며 native 주행/학습/완주 증거가 아니다.
+- gate 변화: 없음. actual native 재실행·유효RL·전체완주·교통/Fleet·실물 수용은 미검증이다.
