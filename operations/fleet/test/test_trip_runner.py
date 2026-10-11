@@ -1282,6 +1282,26 @@ def test_goal_in_flight_counts_as_engaged_until_its_receipt_arrives():
     assert observations == ["goal_pending"]
 
 
+@pytest.mark.parametrize("stop", ["estop", "cancel"])
+def test_stop_during_trip_start_prevents_opening_a_late_trip(stop):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    start_pose = runner._start_pose
+
+    async def stopped_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        if stop == "estop":
+            runner.close_all("operator_estop")
+        else:
+            await runner.cancel_robot("rosy_60", "operator_cancel")
+        return result
+
+    runner._start_pose = stopped_pose
+    with pytest.raises(TripError):
+        run(runner.start("p1", "bob"))
+    assert runner.view("p1") is None
+
+
 def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
     import fleet.server.console as console_module
 
