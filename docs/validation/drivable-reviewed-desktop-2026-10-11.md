@@ -111,6 +111,6 @@ AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선�
 
 동시에 로컬 전달 영상·JSON·JSONL·scan 4개를 receipt의 hash·크기와 대조해 모두 일치를 확인했다. 해당 MP4 SHA256은 `a5dd55eb10d2514e405ecf9547b2e181c9da1cc713ee124943a7657ae2d499b9`이다. AI PC upstream `data-v13`의 이 영상 hash와 기존 20261010 dataset-v2의 image SHA256을 다시 연결하면 194개가 모두 `train`에 있다. 이 연결은 upstream의 영상 출처 선언과 검증한 전달 receipt의 원본 bag 계보를 사용하며 날짜 문자열·장치 별명만으로 추정한 결과가 아니다. 전달 receipt의 `source_capture_group`과 `operator_collection_group`은 여전히 UNKNOWN이며, 검수자 권한이나 물리 보정 유효성을 새로 인정하지 않는다.
 
-따라서 해당 99프레임의 촬영 원본은 이 194개 학습 자료와 출처를 공유한다. 서로 다른 파일 인코딩 때문에 평가 PNG image SHA와 세 기존 dataset의 image SHA 직접 대조는 모두 0이었지만 출처 독립성은 성립하지 않는다. 이 99프레임을 20261010 학습 자료에 대한 독립 최종 평가 정답으로 사용하지 않는다. 나머지 126프레임이나 별도 8프레임의 독립성을 이 결과로 증명하지 않는다. 기존 검수 상태·예약·raw·dataset split·모델을 바꾸거나 삭제하지 않고 연구 기준선으로 보존한다.
+따라서 해당 99프레임의 촬영 원본은 이 194개 학습 자료와 출처를 공유한다. 평가 PNG image SHA와 세 기존 dataset의 image SHA 직접 대조는 모두 0이었지만 출처 독립성은 성립하지 않는다. 이 99프레임을 20261010 학습 자료에 대한 독립 최종 평가 정답으로 사용하지 않는다. 나머지 126프레임이나 별도 8프레임의 독립성을 이 결과로 증명하지 않는다. 기존 검수 상태·예약·raw·dataset split·모델을 바꾸거나 삭제하지 않고 연구 기준선으로 보존한다.
 
 증거는 같은 X 드라이브 세션의 `evidence/existing-eval-review-source-audit-20261012.json`, `existing-eval-review-training-image-overlap-20261012.json`, `20261005-derived-video-bag-closure-20261012.json`, `20261005-existing-eval-original-bag-join-20261012.json`, `20261005-source-video-train-membership-20261012.json`이다. 실제 학습 실행 전체의 재현, 검수 독립성, 전체 upstream 출처 closure, paired 도로면/구역 정답 및 실물·시뮬레이션 적합성은 여전히 HOLD다.
