@@ -1,6 +1,8 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 val pageProbe = (findProperty("rosy.pilot.page.probe") as? String) ?: "0"
 val pageDir = (findProperty("rosy.pilot.page.dir") as? String) ?: ""
+extra["rosyTokenSource"] = "../../../../../shared/web/tokens.css"
+extra["rosyTokenPackage"] = "io.github.livsbittt.rosy.pilot"
 val nativePalette = tasks.register("generateNativePalette") {
     val canonical = file("../../../../../shared/web/tokens.css")
     val generated = layout.buildDirectory.dir("generated/pilot-palette")
@@ -78,6 +80,7 @@ android {
         }
     }
 }
+apply(from = "../../../../../shared/web/native-tokens.gradle")
 tasks.named("preBuild") { dependsOn(shared, screens, sharedScreenResources, nativePalette) }
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

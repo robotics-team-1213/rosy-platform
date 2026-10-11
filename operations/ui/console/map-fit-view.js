@@ -235,7 +235,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     }
     ctx.setLineDash([]);
     ctx.fillStyle = tone("--ink");
-    ctx.font = window.RosyPalette.canvasFont(12, "mono");
+    ctx.font = window.RosyPalette.canvasFont("micro", "mono");
     ctx.textBaseline = "top";
     ctx.fillText("북 +y ↑   동 +x →", 6, 6);
     ctx.restore();

@@ -83,35 +83,35 @@ class MainActivity : Activity() {
         val compact = resources.configuration.screenWidthDp < 720
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(columns, LinearLayout.LayoutParams(-1, -1))
-        healthText = views.label("태블릿 상태 확인 중", 14f, true)
+        healthText = views.label("태블릿 상태 확인 중", RosyMetrics.TextLabel, true)
         lastHealth?.let { renderHealth(it) }
         val deviceButton = button("기기·연결") { deviceDetails() }
         if (!compact) {
-            val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
+            val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(RosyMetrics.Space6.toInt()), views.dp(RosyMetrics.Space6.toInt()), views.dp(RosyMetrics.Space6.toInt()), views.dp(RosyMetrics.Space5.toInt())) }
             columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
-            identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
-            identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
-            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
+            identity.addView(label("ROSY", RosyMetrics.TextTitle).apply { setTextColor(PilotColors.rose) })
+            identity.addView(label("Pilot", RosyMetrics.TextDisplay).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space5.toInt()), 0, 0) })
             identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
             identity.addView(healthText)
-            identity.addView(deviceButton, LinearLayout.LayoutParams(-2, -2).apply { gravity = android.view.Gravity.START; topMargin = views.dp(8) })
+            identity.addView(deviceButton, LinearLayout.LayoutParams(-2, -2).apply { gravity = android.view.Gravity.START; topMargin = views.dp(RosyMetrics.Space2.toInt()) })
         }
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(
-                views.dp(if (compact) 16 else 24), views.dp(if (compact) 16 else 40),
-                views.dp(if (compact) 16 else 40), views.dp(if (compact) 16 else 24),
+                views.dp((if (compact) RosyMetrics.Space4 else RosyMetrics.Space5).toInt()), views.dp((if (compact) RosyMetrics.Space4 else RosyMetrics.Space6).toInt()),
+                views.dp((if (compact) RosyMetrics.Space4 else RosyMetrics.Space6).toInt()), views.dp((if (compact) RosyMetrics.Space4 else RosyMetrics.Space5).toInt()),
             )
         }
         columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-        header.addView(label("로봇 선택", 28f).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(label("로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
-        status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
+        status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
         groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
-        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(16) })
-        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", 14f, true))
+        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space4.toInt()) })
+        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", RosyMetrics.TextLabel, true))
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         if (compact) {
@@ -143,11 +143,11 @@ class MainActivity : Activity() {
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
         shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
-        if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 없나요? Wi-Fi와 전원을 확인하세요.", 16f)); return }
+        if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 없나요? Wi-Fi와 전원을 확인하세요.", RosyMetrics.TextBody)); return }
         records.forEach { candidate ->
             val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
             robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
-                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(12) })
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space3.toInt()) })
         }
     }
     private fun chooseGroupRobots() {
@@ -197,7 +197,7 @@ class MainActivity : Activity() {
     private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long, savedStatus: SavedLoginStatus) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val input = EditText(this).apply {
-            hint = "8자리 로그인 코드"; textSize = 28f; setSingleLine(); setTextColor(PilotColors.foreground)
+            hint = "8자리 로그인 코드"; textSize = RosyMetrics.TextValue; setSingleLine(); setTextColor(PilotColors.foreground)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             filters = arrayOf(android.text.InputFilter.LengthFilter(9))
         }
@@ -233,14 +233,14 @@ class MainActivity : Activity() {
                     if (version != attempt || !foreground || web != null) { io.execute { ready.stop() }; return@post }
                     opening = false; session = approved; proxy = ready
                     root.removeAllViews()
-                    val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(views.dp(12), views.dp(4), views.dp(12), views.dp(4)) }
+                    val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(views.dp(RosyMetrics.Space3.toInt()), views.dp(RosyMetrics.Space1.toInt()), views.dp(RosyMetrics.Space3.toInt()), views.dp(RosyMetrics.Space1.toInt())) }
                     bar.addView(button("로봇 목록") { returnToLobby() })
-                    status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
+                    status = label("${candidate.name} · ${approved.target.id}", RosyMetrics.TextValue).apply { setPadding(views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space4.toInt()), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
                     if (!groupRequested) bar.addView(button("두 번째 로봇") { chooseSecondaryRobot(candidate) })
                     bar.addView(button("기기·연결") { deviceDetails(candidate) })
                     root.addView(bar)
-                    healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
+                    healthText = label("태블릿 상태 확인 중", RosyMetrics.TextLabel); lastHealth?.let { renderHealth(it) }
                     val view = WebView(this); web = view
                     // Private debug-device visual evidence is allowed after pairing; code dialogs
                     // remain protected and release sessions always block captures.
@@ -345,7 +345,7 @@ class MainActivity : Activity() {
                     }
                     val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                     val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-                    heading.addView(label("${candidate.name} · ${approved.target.id}", 16f), LinearLayout.LayoutParams(0, -2, 1f))
+                    heading.addView(label("${candidate.name} · ${approved.target.id}", RosyMetrics.TextBody), LinearLayout.LayoutParams(0, -2, 1f))
                     heading.addView(button("두 번째 로봇 닫기") { closeSecondaryRobot() })
                     panel.addView(heading)
                     val view = WebView(this); secondaryWeb = view
