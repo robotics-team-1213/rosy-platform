@@ -6,6 +6,7 @@ import socket
 import threading
 import time
 from dataclasses import asdict
+from contextlib import closing
 
 import pytest
 
@@ -93,12 +94,13 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     if change == 'route': route = '/arbitrary'
     raw = json.dumps(incoming).encode() if change != 'oversize' else b'x' * 16385
     with gate.Gateway(path, gate.Handler) as server:
+        server.timeout = 2
         server.problem, server.body, server.token = problem(), 'trusted canonical job', 'fake-unit-token'
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
-        worker = threading.Thread(target=server.handle_request)
+        worker = threading.Thread(target=server.handle_request, daemon=True)
         worker.start()
-        with Connection(path) as conn:
+        with closing(Connection(path)) as conn:
             conn.request('POST', route, raw, {'Content-Type': 'application/json'})
             result = conn.getresponse()
             output = result.read()
@@ -110,9 +112,9 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
             assert seen[0]['max_tokens'] == 1024 and seen[0]['stream'] is False
             assert 'tools' not in seen[0]
             assert b'[DONE]' in output if change == 'stream' else json.loads(output)['usage']
-            worker = threading.Thread(target=server.handle_request)
+            worker = threading.Thread(target=server.handle_request, daemon=True)
             worker.start()
-            with Connection(path) as conn:
+            with closing(Connection(path)) as conn:
                 conn.request('POST', '/v1/chat/completions', json.dumps(incoming))
                 denied = conn.getresponse()
                 denied.read()
