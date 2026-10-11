@@ -27,6 +27,7 @@ def test_header_keeps_one_recipe_of_named_areas():
     shell = SHELL.read_text(encoding="utf-8")
     fleet = FLEET_HEADER.read_text(encoding="utf-8")
     assert '"brand role estop" "nav nav estop"' in shell
-    # D-493: the document links (설치·보정, 현장 지도, Cell) fold behind settings; no cell area.
-    assert '"brand pill clock more estop"' in fleet
-    assert '"brand more estop" "pill clock estop"' in fleet
+    # D-501/D-632: document links own their tab row; inbox and stop stay outside connection settings.
+    assert '"brand pill inbox more estop"' in fleet
+    assert '"brand more estop" "pill inbox estop"' in fleet
+    assert "#fleet-inbox { grid-area: inbox; }" in fleet

@@ -313,9 +313,10 @@ def test_field_view_review_fixes_are_served():
     assert '.map-stage[data-site-map="none"][data-map-state="unavailable"]' in styles
     assert ".map-stage:has(> .field-mismatch:not([hidden])) > .map-empty" not in styles
     # Tablet header (D-359 §6.4 supersedes the 40–70rem three-row grid): below the
-    # registered 90rem breakpoint the token, role and theme fold behind the 설정 toggle,
-    # so the token input never covers the wordmark and the stop keeps its own column.
-    assert "@media (width < 90rem)" in styles and '"brand pill clock more estop"' in styles
+    # registered 90rem breakpoint token, role and theme fold behind the connection toggle.
+    # The inbox remains outside the fold and the shared 48px stop keeps its own column.
+    assert "@media (width < 90rem)" in styles and '"brand pill inbox more estop"' in styles
+    assert "#fleet-inbox { grid-area: inbox; }" in styles
     # D-501: the Cell link sits once in the shared document tab row.
     assert '<a href="/console/cell">Cell</a>' in page
     assert "#estop { grid-area: estop; }" in styles
