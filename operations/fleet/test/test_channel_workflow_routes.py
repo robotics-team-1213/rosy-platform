@@ -64,4 +64,7 @@ def test_submit_route_reuses_task_owner_and_rejects_stale_review(tmp_path):
     first = client.post(path + "/submit", json=submission)
     assert first.status_code == 200 and first.json()["work_status"] == "QUEUED"
     assert client.post(path + "/submit", json=submission).json()["work_id"] == first.json()["work_id"]
-    assert tasks.get_task(first.json()["work_id"])["request_key"] == "discord-" + receipt["request_id"]
+    from contextlib import closing
+    with closing(tasks._connect()) as conn:
+        assert conn.execute("SELECT request_key FROM fleet_tasks WHERE task_id=?",
+                            (first.json()["work_id"],)).fetchone()[0] == "discord-" + receipt["request_id"]
