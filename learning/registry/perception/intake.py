@@ -300,13 +300,32 @@ def _read_eval_set(path: Path) -> dict:
     return manifest
 
 
+def _verified_manifest(path: Path) -> dict:
+    """Bind the manifest being read to the store's immutable content version."""
+    import store
+    try:
+        raw = (path / "manifest.json").read_bytes()
+        if store.content_sha(path) != path.name or (path / "manifest.json").read_bytes() != raw:
+            raise EvalSetError(f"dataset {path}: content hash differs from fixed version")
+        doc = json.loads(raw)
+        if not isinstance(doc, dict) or not isinstance(doc.get("classes"), list):
+            raise ValueError("no classes list")
+        for c in doc["classes"]:
+            if not isinstance(c, dict):
+                raise ValueError("invalid class entry")
+            validate_label_semantic(c)
+        return doc
+    except (OSError, ValueError) as exc:
+        raise EvalSetError(f"dataset {path}: {exc}") from exc
+
+
 def _sessions(manifest: dict) -> set[str]:
     """Sessions of a dataset/eval set manifest: frames[].session and labels[].session."""
     return ({f["session"] for f in manifest.get("frames") or [] if isinstance(f, dict) and "session" in f}
             | {v["session"] for v in manifest.get("labels") or [] if isinstance(v, dict) and "session" in v})
 
 
-def training_sessions(store, revision) -> tuple[str, set[str], set[str], set[str]] | None:
+def training_sessions(store, revision, *, verify_content=False) -> tuple[str, set[str], set[str], set[str], dict] | None:
     """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
     found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
     (no store, a revision that is not a 64-hex content sha, no such folder)."""
@@ -314,7 +333,8 @@ def training_sessions(store, revision) -> tuple[str, set[str], set[str], set[str
         return None
     for mf in sorted(Path(store).glob(f"datasets/*/{revision}/manifest.json")):
         try:
-            doc = json.loads(mf.read_text(encoding="utf-8"))
+            doc = (_verified_manifest(mf.parent) if verify_content else
+                   json.loads(mf.read_text(encoding="utf-8")))
             groups = {row.get("capture_group") for row in doc["frames"] if row.get("capture_group")}
             grouped_sessions = {row["session"] for row in doc["frames"] if row.get("capture_group")}
             for row in doc.get("sources", []):
@@ -322,13 +342,15 @@ def training_sessions(store, revision) -> tuple[str, set[str], set[str], set[str
                     groups.add(row["capture_group"])
                     grouped_sessions.add(row.get("session"))
             return (f"{mf.parent.parent.name}@{revision}", _sessions(doc), groups,
-                    grouped_sessions)
+                    grouped_sessions, doc)
         except (OSError, ValueError):
+            if verify_content:
+                raise
             continue
     return None
 
 
-def evaluate(model, eval_dir, max_frames: int) -> dict:
+def evaluate(model, eval_dir, max_frames: int, *, verify_content=False) -> dict:
     """Per-class IoU of the model on a fixed eval set (D-379 d3).
 
     The prediction is argmax of the logits at the model input size; the label mask
@@ -342,7 +364,9 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     the gate score. Frames with non-finite logits are skipped and counted (the replay gate already fails NaN
     models). An eval set without frames is a setup error (EvalSetError)."""
     eval_dir = Path(eval_dir)
-    manifest = _read_eval_set(eval_dir)
+    manifest = _verified_manifest(eval_dir) if verify_content else _read_eval_set(eval_dir)
+    if manifest.get("purpose") != "eval":
+        raise EvalSetError(f"eval set {eval_dir}: manifest purpose is not 'eval'")
     try:
         for c in manifest.get("classes", []):
             validate_label_semantic(c)
@@ -424,6 +448,9 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
         result["miou"] = float(np.mean([result["iou"][n] for n in result["miou_classes"]]))
     result["lane_marking_iou"] = {c.name: result["iou"].get(c.name) for c in model_classes
                                   if c.role == "lane_marking" and c.name in set_classes}
+    if verify_content:
+        _verified_manifest(eval_dir)
+        result["content_verified"] = True
     return result
 
 
@@ -528,8 +555,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                 eval_dir = Path(root) / gate["eval_set"]
                 if not eval_dir.is_dir():
                     raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
-                ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
-                trained = training_sessions(store, getattr(manifest, "dataset_revision", None))
+                strict = gate.get("require_label_semantics", False)
+                ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400, verify_content=strict)
+                trained = training_sessions(store, getattr(manifest, "dataset_revision", None),
+                                            verify_content=strict)
                 reservations = {}
                 if store:
                     import store as store_module
@@ -539,6 +568,13 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                     report.setdefault("warnings", []).append(
                         "disjoint: unverified (dataset.revision is not a dataset version in the store)")
                 else:
+                    if strict:
+                        classes = ((getattr(manifest, "raw", None) or {}).get("output") or {}).get("classes", [])
+                        train_classes = trained[4]["classes"]
+                        matched = sorted({c["name"] for c in classes} & {c["name"] for c in train_classes})
+                        binding = evaluation_semantics(classes, train_classes, matched)
+                        ev.update({f"training_{key}": value for key, value in binding.items()})
+                        ev["training_content_verified"] = True
                     shared = sorted(trained[1] & set(ev["sessions"]))
                     ev["training_dataset"], ev["disjoint"] = trained[0], not shared
                     if shared:

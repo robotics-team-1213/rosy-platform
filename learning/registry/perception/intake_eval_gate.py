@@ -77,6 +77,12 @@ def judge_eval(ev: dict, gate: dict) -> list[str]:
         return [f"eval: label semantic differs between model and evaluation: {ev['semantic_mismatches']}"]
     if gate.get("require_label_semantics") and ev.get("unverified_semantics"):
         return [f"eval: unverified drivable label semantics: {ev['unverified_semantics']}"]
+    if gate.get("require_label_semantics"):
+        if ev.get("training_content_verified") is not True:
+            return ["eval: training label semantics require a content-verified dataset"]
+        if ev.get("training_semantic_mismatches") or ev.get("training_unverified_semantics"):
+            return ["eval: training label semantic differs from model or is unverified: "
+                    f"{ev.get('training_semantic_mismatches')} {ev.get('training_unverified_semantics')}"]
     if gate.get("require_eval"):
         if ev.get("disjoint") is not True:
             return ["eval: deployment requires a verified training dataset disjoint from evaluation"]
