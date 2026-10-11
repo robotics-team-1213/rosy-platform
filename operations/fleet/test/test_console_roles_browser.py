@@ -145,6 +145,8 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
                     urlparse(response.url).path == "/api/fleet/tracking" and response.status == 404):
                 page.reload()
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
+            # Recreate the view after installing the route; an earlier 404 stays unavailable.
+            page.reload()
             page.locator("#map-readouts > summary").click()
             table = page.locator("#tracking-positions")
             expect(table).to_be_visible()
