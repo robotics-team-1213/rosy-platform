@@ -34,6 +34,18 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, co
       }
     }
   }
+  async function refresh() {
+    if (!receipt || !review || busy) return;
+    if (review.state !== "LINKED") { paint(); return; }
+    const current = version, snapshot = review, life = scope.capture();
+    try {
+      const result = await call(path() + "/review");
+      life.check();
+      if (current === version && review === snapshot && !busy) { review = result; paint(); }
+    } catch (error) {
+      if (life.current() && current === version) reset();
+    }
+  }
   async function save(next) {
     if (!receipt || !review || busy || review.state === "LINKED") return;
     const reason = el("channel-review-reason").value.trim();
@@ -86,5 +98,5 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, co
   scope.listen(el("channel-review-hold"), "click", () => save("HOLD"));
   scope.listen(el("channel-review-reject"), "click", () => save("REJECTED"));
   scope.listen(el("channel-review-submit"), "click", submit);
-  return {select, reset};
+  return {select, refresh, reset};
 }
