@@ -33,7 +33,7 @@ def snapshot(database, *, subject_id, case_id, owner_id, config_sha256, policy_r
             or not 0 < end-start <= 86400):
         raise ValueError('INVALID_RULE_EXPORT_SCOPE')
     scope = dict(subject_id=subject_id, case_id=case_id, owner_id=owner_id,
-                 config_sha256=config_sha256, policy_revision=policy_revision, start=start, end=end)
+                 config_sha256=config_sha256, policy_revision=policy_revision, start=float(start), end=float(end))
     with closing(sqlite3.connect(Path(database).resolve().as_uri() + '?mode=ro', uri=True)) as db:
         db.execute('PRAGMA query_only=ON')
         db.execute('BEGIN')
