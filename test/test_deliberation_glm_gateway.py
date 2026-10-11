@@ -114,6 +114,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         p, bound, body = fixture(prior=True)
         body = body.decode()
         answer['choices'][0]['message']['content'] = json.dumps(opinion(p, bound))
+        answer.update(id='response-1', request_id='request-1')
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
