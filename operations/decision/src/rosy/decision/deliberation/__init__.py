@@ -75,7 +75,10 @@ class Problem:
 
     @property
     def digest(self):
-        return hashlib.sha256(canonical(asdict(self)).encode()).hexdigest()
+        fields = asdict(self)
+        if self.fleet_choice is None:
+            fields.pop('fleet_choice')
+        return hashlib.sha256(canonical(fields).encode()).hexdigest()
 
 
 def opinion(problem, payload):

@@ -203,3 +203,13 @@ def test_fleet_baseline_is_allowlisted_and_changes_problem_hash():
     for choice in ('RESUME', 'map_correction', '', True, ['human']):
         with pytest.raises(ValueError):
             problem(fleet_choice=choice)
+
+
+def test_optional_baseline_preserves_existing_problem_digest():
+    import hashlib
+    from dataclasses import asdict
+    from rosy.decision.deliberation import canonical
+    request = problem()
+    legacy = asdict(request)
+    legacy.pop('fleet_choice')
+    assert request.digest == hashlib.sha256(canonical(legacy).encode()).hexdigest()
