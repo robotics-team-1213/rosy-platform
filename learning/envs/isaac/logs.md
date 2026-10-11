@@ -186,3 +186,9 @@
 - 변경: run_map_rl.py의 카메라 tick·episode admission·sampling 네 검증 함수를 camera_checks.py로 옮기고 기존 이름을 동일 함수로 재노출한다. native 실행 조립은 600줄, 검증은 31줄이며 새 SDK 의존성이 없다.
 - 증거: 착지 통합 회귀에서 628줄 초과 NEW를 확인했다. 이동 전후 함수 AST 일치를 확인했고 기존 기능 회귀와 네 export identity 시험을 유지한다. 독립 검토·원격 수정 후 시험은 진행 중이다. 기록된 정책 digest는 보관된 policy.json과 직접 대조해 기존 exact public provenance에 등록했으며 원본 일지는 보존했다.
 - gate 변화: 없음. 안전 정지·무효 관측 학습 제외·샘플 주기·동일 조건 평가 거절을 변경하지 않았다. 실제 SDK 재실행·완주·병렬 RL 수용은 남았다.
+
+## 2026-10-12 · 7f8182d71 · 공유 맵 바닥 시각 자산
+
+- 변경: 실제 training-curved world의 카펫 18개·기준 사각형 4개·도킹 표식 1개를 native scene에 연결한다. 기존 PNG·pose·크기·색상 modulation을 유지하며 맵 밖·누락 텍스처와 비정상 pose를 거절한다. 벽·페인트·주의 표식 조립은 같은 코드로 이동했고 runner는 584줄이다.
+- 증거: source f6057b410의 맵·카메라·구조 원격 152 PASS·NEW 0. 독립 검토에서 텍스처 tint 누락과 다른 missing asset에 의해 우연히 통과할 수 있는 escape 회귀를 지적해 수정했다. committed source 7f8182d71의 보강 원격 5 PASS·NEW 0·독립 SOURCE APPROVE WITH NOTES다.
+- gate 변화: 없음. SDK shader 렌더·UV 방향·실제 영상 밝기·카메라 인식 개선·주행 정지·전체 완주·병렬 RL과 교통/Fleet 수용은 아직 미확인이다. 기존 ground 배경·road_lines model Z offset까지 전체 시각 일치는 추가 확인한다.

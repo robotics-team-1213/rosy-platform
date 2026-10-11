@@ -93,6 +93,7 @@ def add_track_visuals(stage, track, visuals):
         cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
         cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
         UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+    # shortcut: native paint retains its Z until paired SDK images verify the shared world offset.
     for part in [dict(name='paint', triangles=scene.lines, colour=[1., 1., 1.]),
                  *track['caution_meshes']]:
         paint = UsdGeom.Mesh.Define(stage, '/World/Track/' + part['name'])
