@@ -7,12 +7,13 @@ from test_judgment_profiles import adapter, bind_profile, problem, profile
 
 
 def payload(p, **changes):
+    tool = 'get_incident_status' if p.domain in {'line_follow', 'door'} else 'get_mission_status'
     return dict(schema_version=2, profile_revision='p1', subject_id=p.subject_id, case_id=p.case_id,
                 generation=p.generation, input_hash=p.digest, verdict='reobserve',
                 alternatives=[{'choice': 'human', 'probability': .1}, {'choice': 'reobserve', 'probability': .9}],
                 evidence_ids=['e1'], missing_evidence=[], objections=[],
-                next_step={'tool_name': 'get_mission_status', 'arguments': {}, 'evidence_ids': ['e1']},
-                success_check={'tool_name': 'get_mission_status', 'arguments': {}, 'evidence_ids': ['e1'],
+                next_step={'tool_name': tool, 'arguments': {}, 'evidence_ids': ['e1']},
+                success_check={'tool_name': tool, 'arguments': {}, 'evidence_ids': ['e1'],
                                'expected_facts': {'state': 'unknown'}},
                 **changes)
 
@@ -89,7 +90,7 @@ def test_normal_and_abstention_never_declare_treatment_and_output_limit_is_bindi
 
 
 def test_candidate_is_non_executable_and_success_is_only_declared():
-    p = problem()
+    p = problem('arm_target')
     raw = payload(p)
     raw.update(verdict='candidate', next_step={'tool_name': 'propose_replan',
                'arguments': {'based_on_event_id': 1, 'rationale': 'inspect'}, 'evidence_ids': ['e1']})
