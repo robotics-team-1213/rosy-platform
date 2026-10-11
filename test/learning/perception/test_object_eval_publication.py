@@ -13,6 +13,7 @@ from store import Store, read_fixed_manifest
 
 
 def fixture(tmp_path, monkeypatch, *, complete=True, boxes=None):
+    (tmp_path / 'scratch').mkdir()
     images = tmp_path / 'images'
     images.mkdir()
     raw = cv2.imencode('.png', np.zeros((24, 32, 3), np.uint8))[1].tobytes()
