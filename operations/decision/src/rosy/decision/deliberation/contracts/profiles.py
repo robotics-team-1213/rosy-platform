@@ -83,6 +83,15 @@ class BoundProfile:
             raise ValueError('CASE_OR_PROFILE_CHANGED')
 
 
+def incident_profiles(value):
+    if (type(value) is not tuple or len(value) not in (1, 2)
+            or any(type(p) is not ModelProfile for p in value)
+            or tuple(p.role for p in value) != ('primary', 'reviewer')[:len(value)]
+            or len({p.profile_id for p in value}) != len(value)):
+        raise ValueError('INVALID_INCIDENT_PROFILE_MANIFEST')
+    return value
+
+
 def bind_profile(problem, profile, adapter, *, required_modalities):
     needed = capabilities(required_modalities, {'text', 'image'})
     if (type(profile) is not ModelProfile or type(adapter) is not AdapterCapabilities
