@@ -96,3 +96,12 @@ def test_required_abstain_cannot_pass_as_a_definite_judgment(necessity):
     result = checker.evaluate(profile, labels, observations, training)
     assert result['status'] == 'FAIL'
     assert result['metrics']['abstain_required_error_rate'] == {'numerator': 2, 'denominator': 2, 'value': 1}
+
+
+def test_duplicate_physical_interval_cannot_inflate_independent_samples():
+    profile, labels, observations, training = fixture()
+    labels.append({**labels[0], 'id': 'duplicate'})
+    observations.append({**observations[0], 'id': 'duplicate'})
+    profile['label_sha256'] = checker.digest(labels)
+    with pytest.raises(ValueError, match='duplicate physical'):
+        checker.evaluate(profile, labels, observations, training)
