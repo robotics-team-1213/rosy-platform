@@ -210,6 +210,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
                 break
             page.wait_for_timeout(100)
         assert body == {"to": "start_n", "via": ["start_s"], "repeat": True, "convoy": {"leader": "rosy_01"}}
+        page.get_by_role("tab", name="로봇 상태").click()
         expect(_card(page, "rosy_02").locator(".trip-line")).to_contain_text("대열 · rosy_01", timeout=10000)
         expect(_card(page, "rosy_01").locator(".trip-line")).to_contain_text("대열 리더 · rosy_02 따라옴")
         assert _raw_words(page) == []
