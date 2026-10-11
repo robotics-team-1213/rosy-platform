@@ -1,41 +1,74 @@
-# CORE와 Drive의 현재 책임 구조
+# CORE·Drive·Arm의 현재 책임 구조
 
-2026-10-11, D-625/D-626/D-627. 작업 브랜치의 실제 구조다. 공유 main이나 설치된 로봇에 반영됐다는 뜻은 아니다.
+2026-10-11 후보 소스 배치. Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. [전체 폴더 안내](platform-folder-responsibilities.md)는 현재 manifest의 모든 root를 기록한다. 아래 구현 설명은 source 판정이며 새 후보의 전체 시험·착지·배포·장치 수용 판정은 검증 기록 확정 전까지 대기한다.
 
 ```text
 middleware/
 ├─ core/
-│  ├─ api/                           외부 API, 기존 core_api_web 패키지
+│  ├─ api/ (core_api_web: 기존 HTTP/WebSocket/UI)
 │  ├─ gateway/core/
-│  │  ├─ services.py                 전체 조립, 공통 운용과 listener 순서
-│  │  ├─ drive/
-│  │  │  ├─ line_follow.py           설정·센서·기하 envelope·복구 배선
-│  │  │  └─ docking.py               도킹·군집 조립, Nav2/모드 소유권 연결
-│  │  ├─ bridge/                    ROS 입출력과 최종 cmd_vel 발행
-│  │  └─ system/                    host/runtime 관측
-│  ├─ services/core_features/       기존 알고리즘과 정책; 추가 추출은 후속
-│  └─ events/                       사건 계약과 감사
-├─ control/drive/planning/nav2/     기존 navigation 패키지와 launch/config
-├─ devices/
-│  ├─ pinky/                        bringup·description·profile
-│  └─ omx/                          adapter·profile·agent; Arm owner 유지
-└─ perception/                     센서 근거, 역사적 ROS 패키지명 control
+│  │  ├─ services.py (공통 조립·service attribute·listener 연결)
+│  │  ├─ drive/{line_follow,docking,traffic}.py (기존 Drive 조립)
+│  │  ├─ system/power.py (공통 power/battery parser·생성)
+│  │  └─ bridge/ (ROS 입출력·최종 Base cmd_vel 발행)
+│  ├─ services/core_features/
+│  │  ├─ command/ (mode·candidate admission·최종 선택)
+│  │  ├─ safety/ (공통 보호·policy·velocity 검증)
+│  │  ├─ line_follow/ (차선·body·recovery 알고리즘)
+│  │  └─ navigation, localization, docking, swarm, power 등
+│  └─ events/ (core_events)
+├─ control/drive/
+│  ├─ planning/{nav2,grid}
+│  ├─ tracking/wander
+│  ├─ recovery/
+│  ├─ calibration/
+│  └─ safety/adapter
+├─ perception/
+│  ├─ sensors/sensing (control.sensing)
+│  ├─ vision/perception (control.sensing.perception)
+│  └─ control/ (기존 node 조립·compatibility)
+└─ devices/
+   ├─ pinky/{bringup,profile,description}
+   └─ omx/{adapter,profile,agent}
 ```
 
-| 책임 | 현재 실제 소유자 | 이번 작업 |
+## 조립과 구현 owner
+
+| 책임 | 현재 실제 owner | 보존하는 경계 |
 |---|---|---|
-| 공통 운용·조립 | `core/gateway/core/services.py`, `system/`, `events/` | Drive 도킹/군집 조립을 별도 함수로 분리. 공개 service attribute와 callback 순서 유지 |
-| Drive 조립 | `core/gateway/core/drive/{line_follow,docking}.py` | 실제 코드 분리. legacy parser/import facade 유지 |
-| 길찾기 | `core_features/navigation`, gateway goal tracker/action transport, `control/drive/planning/nav2` | Nav2 holder 이전. goal facade와 세대/취소 동작 유지 |
-| 조향·추종 | `core_features/line_follow`, `swarm`, `localization` | 기존 알고리즘 유지. 별도 control library 추출은 아직 수행하지 않음 |
-| 문제·탈출·복구 | `line_follow/recovery`, `localization/mission`, `docking` | 기존 budget, 부모 목표, 취소·실패 출구 유지. 원인별 수명 통일은 CORE 계획 P3 |
-| 곡률·몸체 여유 | `command/manager`, `line_follow/{clearance,body_stop}`, `core_common/robot_body`, Drive envelope 배선 | 기존 검사를 유지. cap 후 후보의 기하 동등성 개선은 P2 |
-| Base Safety·최종 출력 | `core_features/{command,safety}`, gateway `bridge/{cmd_vel,ros_bridge}` | CORE 단일 최종 writer와 기존 E-stop/readiness/deadman 경계 유지 |
-| Arm 제어·Safety | `devices/omx/adapter/omx_adapter` | 경로만 이전. joint/action owner와 stop/rearm/HOLD는 별도 도메인 |
-| 장치 조립·기구 모델 | `devices/pinky`, `devices/omx`, `drivers/` | 장치별 holder 분리; package/share/entrypoint identity 유지 |
+| CORE 공통 조립 | `middleware/core/gateway/core/services.py` | 공통 state·identity·Command/Safety 객체와 service attribute. subsystem parser는 명시적 legacy reexport |
+| Drive 조립 | `core/drive/line_follow.py`, `docking.py`, `traffic.py` | 기존 line manager와 live angular provider, docking/swarm, policy/observer 생성. 새로운 framework/process/container 없음 |
+| 공통 power/battery | `core/system/power.py`, `core_features.power` | 기존 parser fallback·validation·data path와 power→battery 생성 순서. shutdown sentinel은 요청이며 host unit이 halt 소유 |
+| Drive planning backend | `middleware/control/drive/planning/nav2`, `planning/grid` | ROS `navigation`과 기존 `control.planning` identity. CORE goal facade·취소 generation·backend 입출력 구분 |
+| 차선·군집·localization 실행 | `core_features.line_follow`, `swarm`, `localization` | 기존 feature owner. 모든 알고리즘을 새로운 control library로 이전한 상태는 아님 |
+| 기존 Control Drive 알고리즘 | `middleware/control/drive/{tracking,recovery,calibration,safety}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
+| 공통 Base 명령/Safety | `core_features.command`, `core_features.safety`, `core.bridge` | CORE 최종 command 선택과 ROS publisher. E-stop/readiness/deadman·policy·세대 검증 |
+| Drive 기하·운동 proof | `line_follow/{clearance,body_stop}`, recovery sweep, Drive envelope·floor/body 검사 | 현재 후보의 곡률·전진·후진·pivot 근거. CORE 공통 Safety를 대체하지 않음 |
+| Arm 실행/Safety | `middleware/devices/omx/adapter/omx_adapter` | joint/action owner, limits·fresh feedback·stop/rearm/HOLD. Base cmd_vel slot에 합치지 않음 |
+| 센서·vision evidence | `middleware/perception/{sensors/sensing,vision/perception}` | 기존 provider/import·model/resource identity. operational final writer 추가 없음 |
 
-Drive 조립은 CORE 실행 권한을 연결하는 코드이고 Control backend는 실행할 주행 후보를 만드는 코드다. 이 둘을 같은 폴더명으로 합치지 않는다. CORE의 Base command 모듈을 Arm까지 포괄하는 완성된 공통 제어 계층으로 선언하지 않는다.
+US005 조립 추출은 기존 네 parser의 본문과 constructor 인자를 유지한다. `core.services`의 `_battery_config`, `_power_config`, `_traffic_policy_config`, `_signal_observer_binding`, `SHUTDOWN_SENTINEL_NAME` import는 계속 제공한다. signal observer는 명시적 binding과 policy map/scene 검증 뒤에 기존 위치에서 start한다. line recovery/envelope provider 연결은 기존 순서에 남는다.
 
-곡률 검토는 `v`와 `w`를 독립적으로 제한한 뒤 검사했던 궤적이 달라질 수 있다는 점에서 시작한다. 이동 중에는 부호를 포함한 `w/v`, 제자리 회전에서는 차체 회전 sweep, 후진에서는 뒤쪽 sweep을 각각 검토한다. line-follow envelope가 제공하는 근거를 모든 모드의 검사 완료로 확대하지 않는다. 새 상한이나 자동 탈출 동작은 이번 구조 변경에서 추가하지 않았다.
+D-628은 CommandManager의 stop/policy/mode invalidation callback을 기존 service listener 앞에 등록한다. 그 뒤 mode mirror→docking 해제→EMERGENCY release 처리와 E-stop의 state→docking→swarm→nav cancel→line stop→traffic reset 순서는 유지한다. 이 의도적인 invalidation prefix와 US005의 기존 service listener 상대 순서 보존을 구분한다.
 
-후속 구현은 [CORE 전체 계획](../plans/2026-10-11-core-responsibility-and-driving.md)의 P1–P3, [이번 Drive 조립 계획](../plans/2026-10-11-core-drive-composition-first.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)에 따라 진행한다. 세계 상태와 행동 예측은 별도 계약이며 실행 허가나 Safety 통과를 대신하지 않는다.
+## D-628 현재 주행 경계
+
+ModeMachine은 mode 전환/release마다 epoch를 갱신한다. NAVIGATION·DOCKING 후보는 검증한 mode/epoch 아래 원자적으로 저장되는 불변 candidate이며 다른 mode에서 들어온 후보는 admission되지 않는다. 모드 이탈은 기존 slot을 무효화하므로 재진입으로 오래된 후보가 복원되지 않는다. CommandManager는 mode epoch·input epoch와 선택한 candidate의 객체 동일성을 Safety/policy 평가 전후에 다시 확인한다. 평가 중 mode·candidate 교체나 E-stop이 발생하면 출력은 zero다. 미래 timestamp·nonfinite 입력/상한도 정상 후보로 사용하지 않는다.
+
+이것은 같은 NAVIGATION mode 안에서 모든 외부 ROS Twist의 Nav2 goal identity를 검증하는 완성된 producer 계약이 아니다. 기존 Nav2 goal generation과 lease/MANUAL fencing은 유지하지만 전 producer의 MotionIntent admission과 goal-bound 외부 입력은 **D-442 후속 단계**다. 외부 ROS Twist에 identity를 추정하여 붙이지 않는다.
+
+차선 후보는 정적 profile nav 상한을 먼저 적용한 뒤 traffic gate에 들어간다. traffic은 기존 linear scale 의미를 유지하며 body/envelope가 검토하는 arc family에 포함된다. 이후 session/person/policy 상한은 line 후보의 `v`, `w`를 같은 비율로 줄인다. 내부 `preserve_curvature` 표식은 line 경로에만 적용되고 MANUAL/Nav2/docking의 기존 axis clip과 Arm은 유지한다. 보정 출력이 검토한 line 곡선을 바꾸거나 부호·pivot·finite·freshness 검증에 실패하면 거절한다. 움직이는 곡선은 부호를 포함한 `w/v`, pivot은 회전 sweep, 후진은 후방 sweep으로 평가한다.
+
+## 복구의 현재 근거와 옵션
+
+`RESUME`, `BACK_AND_RETRY`, `YIELD`, `REALIGN`은 답변 시점의 scan·calibration·상한 근거를 현재 manager clock으로 다시 읽는다. 이 갱신은 recovery phase를 tick하거나 stuck ID·attempt budget을 초기화하지 않는다. standalone recovery는 저장 snapshot의 실제 경과 시간을 scan/trail age에 더하고 미래·역행·nonfinite clock과 잘못된 저장 age를 거절한다. `WAIT`, `MANUAL`, `ABORT` 정지 출구는 오래된 snapshot에서도 유지한다. 답변 후 기존 evidence revision을 갱신하여 답변 전에 계산한 motion candidate를 재사용하지 않는다.
+
+KTURN 후진 arc는 기존 rear strip·blind band·trail·freshness 거절 검사를 먼저 거친 뒤 차체의 회전 후진 궤적 `_rear_sweep_clear`를 확인한다. 직선 strip 밖의 측면 장애물도 sweep에서 거절한다. PIVOT의 sector/turn clearance와 전진 arc의 body/object 검사는 각 기존 owner에 남는다.
+
+`LineFollowConfig`의 `recovery_local_enabled`, `progress_watch_enabled`, `stuck_realign_enabled` 기본값은 모두 `False`다. REALIGN 활성 config는 기존 `obstacle_mode: path` 조건을 요구한다. 이번 소스 변경은 현장 overlay·모델·자동 복구를 활성화하지 않으며 동일 문제의 bounded attempt·취소·정지 경계를 유지한다.
+
+## World와 검증 상태
+
+현재 World의 pure MapPose 구현은 `operations/world/src/rosy/world/state/projections/map_pose.py`에 있다. Fleet의 기존 import는 identity alias이고 service·trip·claim·dispatch transaction은 Fleet가 소유한다. 관측/odom 기반 dead reckoning을 행동 조건부 미래 rollout으로 집계하지 않는다. action-conditioned World model, 대응 학습·독립 평가와 실제 decision 소비자는 D-625의 후속 계획이며 빈 prediction 폴더를 만들지 않았다.
+
+[기존 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 소스 범위 판정이다. 새 후보 전체의 remote 회귀·known_failures·harness/Safety·checkout 밖 설치 결과를 모은 검증 기록은 확정 대기이며, 부분 성공을 전체 GREEN으로 표기하지 않는다. CI·ROS 실행·ARM64 이미지·배포 readback·실물·현장 수용은 각각 별도 evidence다. 후속 작업은 [CORE 계획](../plans/2026-10-11-core-responsibility-and-driving.md), [D-628 실행 계획](../plans/2026-10-11-core-drive-remaining.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)을 따른다.

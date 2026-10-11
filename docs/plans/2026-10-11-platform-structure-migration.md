@@ -110,3 +110,23 @@ preview 전후 전체 tracked byte hash와 Git status/index가 같음을 확인�
 | main/원격/배포 | topic commit만 생성. 착지·push·운용 활성화 미실행 |
 
 CORE 전체 후보 `5faad3583`의 원격 2575 성공·10 skip, feature 1675 성공, architecture/harness/Safety 272 성공, OMX 532 성공·3 skip을 확인했다. 각 성공 실행의 known_failures는 0 NEW/0 known이며 중간 RED/경로 오류도 보존했다. [실제 책임 구조](../reference/core-drive-responsibilities.md), [세부 결과](../validation/d626-holder-migration-2026-10-11/result.md), [Drive 우선 계획](2026-10-11-core-drive-composition-first.md)을 참조한다.
+
+## 2026-10-11 추가 실행 — D-628·D-630 현재 후보
+
+위 상태와 시험 수치는 각 당시 SHA의 역사적 기록이다. 이후 사용자의 전체 나머지 폴더 실행 요청에 따라 아래 실제 소스 책임을 추가로 정리했다. 새 후보의 전체 회귀·착지 판정은 검증 기록 확정 대기이며 이전 후보의 GREEN을 승계하지 않는다.
+
+| 단계 | 현재 소스에서 수행한 범위 | 남는 경계 |
+|---|---|---|
+| M7 주행 경계 | D-628 mode/input epoch·불변 후보·정책 전후 동일성 검사, line profile→traffic→동적 곡률 제한, fresh 복구 답변, KTURN reverse sweep | 같은 NAV mode의 모든 외부 producer/goal identity admission은 D-442 후속 |
+| M7 추가 조립 | `core/drive/traffic.py`, line manager 생성 helper, `core/system/power.py`; 기존 parser export·data path·observer start·service callback 상대 순서 유지 | 새로운 runtime/container/registry 없음; D-628 invalidation listener prefix는 의도적 별도 변경 |
+| M8 sensing/vision | `middleware/perception/sensors/sensing`, `vision/perception`에 실제 구현 분리 | 기존 ROS `control`·`control.sensing*` provider/import/share identity 유지 |
+| M8 Control Drive | `middleware/control/drive/{safety,tracking,recovery,calibration,planning/grid}`에 기존 알고리즘 분리 | 동일 `control.control.*`, `control.planning/wander/safety` identity. CORE feature 알고리즘과 Arm owner를 통째 이전하지 않음 |
+| M9 현재 World | pure Fleet MapPose를 `operations/world/src/rosy/world/state/projections/map_pose.py`로 이전, Fleet identity alias와 실제 service/trip/swarm 소비 유지 | 관측/odom 현재 상태 projection이며 action-conditioned 미래 예측이 아님 |
+| M9 Situation | 기존 analyzers와 incident context/vision을 책임별 source holder로 분리 | fact-only shadow·기존 module/patch identity·service 소비자 유지 |
+| 전체 root 점검 | [85개 현재 manifest root의 실제 책임·패키지·유지/이전/분리/보류 판정](../reference/platform-folder-responsibilities.md)과 현재 module/root 안내 갱신 | contracts/learning/skills/execution/UI/support 및 Gazebo package ownership 유지 이유 기록 |
+
+source-mode facade와 실제 설치는 구분한다. `control` 배포는 정적 source holder mapping과 self-contained sdist snapshot을 사용하고, World wheel은 checkout 밖 독립 import 대상이다. Docker/context/workflow·source path·G2 origin/digest·영향 시험 소비자를 현재 holder에 맞춰 연결했다. 이 소스 연결이 ARM64 image나 현장 runtime readback을 대신하지 않는다.
+
+[기존 D-628 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 source 범위다. 전체 remote/known_failures·구조/harness/Safety·설치 결과와 main 착지 결과는 root가 확정할 검증 기록에서 확인한다. 이 추가 기록은 push·배포·live 활성화 결과를 선언하지 않는다.
+
+미래 `operations/prediction/world_model`과 대응 학습·독립 평가는 계획으로 남는다. state/action/horizon/model revision·uncertainty/만료·실제 decision 소비자가 연결되기 전에는 빈 holder를 만들지 않는다. ACT policy 연구를 World rollout으로 이름만 바꾸지 않는다. Fleet decision/Console과 장치 demonstration carve는 현재 transaction/package 소비자 결합을 유지하며 보류 이유를 전체 root 안내에 기록했다.

@@ -4,7 +4,7 @@
 # model
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-11
 
 ## Purpose
 
@@ -50,7 +50,7 @@ Needs `onnxruntime`, `torch` and `mcap`; tests skip cleanly where one is missing
 
 ### Internal
 
-- `../store.py`, `../operator_ssh.py`, `../rosy_ml.py` (operator CLI that wraps these), `middleware/perception/control/sensing/perception/learned/manifest.py`
+- `../store.py`, `../operator_ssh.py`, `../rosy_ml.py` (operator CLI that wraps these), `middleware/perception/vision/perception/learned/manifest.py`
 
 ### External
 
