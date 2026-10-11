@@ -79,7 +79,8 @@ class IncidentCaseWorker:
                                           (scope.subject_id, scope.case_id)).fetchone()
             budget = CaseBudget(**json.loads(existing[0])) if existing else self.budget(scope)
             self._check_budget(budget)
-            case = self.store.begin_case(scope, budget, connection=connection, initial_revision=problem.generation)
+            case = self.store.begin_case(scope, budget, connection=connection,
+                                         initial_revision=problem.generation, worker_id=self._worker_id)
             return case['state'] == 'ACTIVE' and self.clock() < case['deadline']
         except (ValueError, TypeError, KeyError):
             return False
@@ -137,7 +138,8 @@ class IncidentCaseWorker:
                     except ValueError:
                         selected = self.budget(scope)
                         self._check_budget(selected)
-                        case = await self._db('begin_case', scope, selected, initial_revision=problem.generation)
+                        case = await self._db('begin_case', scope, selected,
+                                              initial_revision=problem.generation, worker_id=self._worker_id)
                     if case['state'] != 'ACTIVE': continue
                     await self._process(scope, snapshot)
                 except (ValueError, TypeError, KeyError):
@@ -218,7 +220,10 @@ class IncidentCaseWorker:
                        observation_revision=problem.generation, kind=kind, max_cost_usd=cost, worker_id=self._worker_id,
                        role=next(p.role for p in self.profiles if p.profile_id == role) if kind == 'model' else None)
         if not self._fresh(problem):
-            await self._db('recover', scope); raise ValueError('INCIDENT_SCOPE_CHANGED')
+            await self._db('mark_submitting', scope, attempt, worker_id=self._worker_id)
+            await self._db('complete', scope, attempt, worker_id=self._worker_id,
+                           state='REJECTED', actual_cost_usd=0, summary={'reason': 'INCIDENT_SCOPE_CHANGED'})
+            raise ValueError('INCIDENT_SCOPE_CHANGED')
         await self._db('mark_submitting', scope, attempt, worker_id=self._worker_id)
         return attempt
 

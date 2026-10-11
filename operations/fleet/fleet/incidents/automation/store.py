@@ -39,6 +39,10 @@ class IncidentCaseStore:
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, observation_revision TEXT NOT NULL,
                 PRIMARY KEY(subject_id,case_id),
                 FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_creators (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_handoff_queues (
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, queued_at REAL NOT NULL,
                 PRIMARY KEY(subject_id,case_id),
@@ -69,18 +73,19 @@ class IncidentCaseStore:
                 raise ValueError('CASE_NOT_ACTIVE_OR_EXPIRED')
         return result
 
-    def begin_case(self, scope, budget, *, connection=None, initial_revision=None):
+    def begin_case(self, scope, budget, *, connection=None, initial_revision=None, worker_id=None):
         if initial_revision is not None: identifier(initial_revision)
+        if worker_id is not None: identifier(worker_id)
         if connection is not None:
             if (type(connection) is not sqlite3.Connection or not connection.in_transaction
                     or not any(row[1] == 'main' and Path(row[2]).resolve() == self.path.resolve()
                                for row in connection.execute('PRAGMA database_list'))):
                 raise ValueError('CALLER_TRANSACTION_REQUIRED')
-            return self._begin_case(connection, scope, budget, initial_revision)
+            return self._begin_case(connection, scope, budget, initial_revision, worker_id)
         with self._transaction() as conn:
-            return self._begin_case(conn, scope, budget, initial_revision)
+            return self._begin_case(conn, scope, budget, initial_revision, worker_id)
 
-    def _begin_case(self, conn, scope, budget, initial_revision):
+    def _begin_case(self, conn, scope, budget, initial_revision, worker_id):
         if type(budget) is not CaseBudget:
             raise ValueError('EXPLICIT_CASE_BUDGET_REQUIRED')
         key, scope_json, budget_json = self._key(scope), canonical(asdict(scope)), canonical(asdict(budget))
@@ -95,6 +100,8 @@ class IncidentCaseStore:
                          (*key, scope_json, budget_json, 'ACTIVE', 'OPEN', 0, 0, 0, 0))
             if initial_revision is not None:
                 conn.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)', (*key, initial_revision))
+            if worker_id is not None:
+                conn.execute('INSERT INTO fleet_incident_v2_creators VALUES (?,?,?)', (*key, worker_id))
         return self._case(conn, scope)
 
     def requires_resume_admission(self, scope, worker_id):
@@ -254,11 +261,13 @@ class IncidentCaseStore:
                 if scope not in result: result.append(scope)
             # A cancelled terminal commit may already be known. Keep its receipt and stop the unresolved case.
             completed = conn.execute('''SELECT c.scope_json FROM fleet_incident_v2_cases c
-                WHERE c.state='ACTIVE' AND EXISTS (SELECT 1 FROM fleet_incident_v2_attempts a
+                WHERE c.state='ACTIVE' AND (EXISTS (SELECT 1 FROM fleet_incident_v2_attempts a
                     WHERE a.subject_id=c.subject_id AND a.case_id=c.case_id AND a.worker_id=?)
+                    OR EXISTS (SELECT 1 FROM fleet_incident_v2_creators o
+                    WHERE o.subject_id=c.subject_id AND o.case_id=c.case_id AND o.worker_id=?))
                 AND NOT EXISTS (SELECT 1 FROM fleet_incident_v2_attempts a
                     WHERE a.subject_id=c.subject_id AND a.case_id=c.case_id AND a.worker_id!=?
-                    AND a.state IN ('RESERVED','SUBMITTING'))''', (worker_id, worker_id)).fetchall()
+                    AND a.state IN ('RESERVED','SUBMITTING'))''', (worker_id, worker_id, worker_id)).fetchall()
             for row in completed:
                 scope = CaseScope(**json.loads(row[0]))
                 conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='WORKER_CANCELLED' WHERE subject_id=? AND case_id=?", self._key(scope))
