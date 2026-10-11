@@ -8,6 +8,8 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, co
     el("channel-review-reason").value = "";
   }
   function paint() {
+    el("channel-review-cell-holder").hidden = review.state === "LINKED" && review.work_kind !== "cell_job";
+    el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
     state.textContent = `${review.state}${review.work_status ? " · " + review.work_status : ""} · ${review.reason || "검토 사유를 입력하세요."}`;
     for (const name of ["ready", "hold", "reject"])
       el(`channel-review-${name}`).disabled = busy || review.state === "LINKED";
