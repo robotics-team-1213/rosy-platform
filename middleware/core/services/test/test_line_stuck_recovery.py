@@ -71,7 +71,7 @@ def test_no_cause_passes_and_opens_nothing():
 def test_opens_once_per_stuck_with_unique_id_and_asks_console():
     machine, bus = _machine()
     assert machine.step(_inp(0.0, front_band_m=0.18, preview_seq=7)).kind == "hold"
-    assert machine.step(_inp(1.0)).kind == "hold"
+    assert machine.step(_inp(2.0)).kind == "hold"           # current evidence when RESUME arrives
     opened = bus.named("nav.line_stuck_opened")
     assert len(opened) == 1 and opened[0]["stuck_id"] == "stuck-1"
     assert opened[0]["cause"] == "obstacle_ahead" and opened[0]["preview_seq"] == 7
@@ -129,10 +129,11 @@ def test_wait_holds_and_never_falls_back_to_local():
 def test_resume_refused_with_an_object_inside_stop_distance():
     machine, bus = _machine()
     machine.step(_inp(0.0, front_band_m=0.15))
+    machine.step(_inp(1.0, front_band_m=0.15))              # fresh scan still sees the object
     with pytest.raises(AnswerRefused) as refused:
         machine.answer(1.0, "stuck-1", "RESUME", "operator")
     assert refused.value.code == "STUCK_DECISION_REFUSED" and machine.stuck_id == "stuck-1"
-    machine.step(_inp(2.0, front_band_m=0.22))               # between stop and resume: allowed
+    machine.step(_inp(3.0, front_band_m=0.22))               # fresh scan between stop and resume: allowed
     assert machine.answer(3.0, "stuck-1", "RESUME", "operator") == "resume"
     assert machine.stuck_id is None
     assert bus.named("nav.line_stuck_closed")[0]["reason"] == "console_resume"
@@ -141,6 +142,7 @@ def test_resume_refused_with_an_object_inside_stop_distance():
 def test_yield_turns_then_creeps_and_holds_when_the_cause_clears():
     machine, _bus = _machine()
     machine.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    machine.step(_inp(1.0, turn_m=0.10, front_band_m=0.10))
     assert machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                           yield_m=0.30, yield_turn_rad=0.6) == "yield"
     turning = machine.step(_inp(1.1, turn_m=0.10, front_band_m=0.10))
@@ -161,6 +163,7 @@ def test_yield_turns_then_creeps_and_holds_when_the_cause_clears():
 def test_active_yield_cannot_restart_or_extend_a_segment(turn_rad, replacement):
     machine, bus = _machine()
     machine.step(_inp(0.0, turn_m=0.10, front_band_m=0.40))
+    machine.step(_inp(1.0, turn_m=0.10, front_band_m=0.40))
     machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                    yield_m=0.30, yield_turn_rad=turn_rad)
     before = machine.step(_inp(1.1, turn_m=0.10, front_band_m=0.40))
@@ -184,11 +187,13 @@ def test_active_yield_cannot_restart_or_extend_a_segment(turn_rad, replacement):
 def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():
     blocked, _bus = _machine()
     blocked.step(_inp(0.0, turn_m=None, front_band_m=0.10))
+    blocked.step(_inp(1.0, turn_m=None, front_band_m=0.10))
     with pytest.raises(AnswerRefused) as refused:
         blocked.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.6)
     assert "turn_blocked" in str(refused.value)
     clear, _bus = _machine()
     clear.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    clear.step(_inp(1.0, turn_m=0.10, front_band_m=0.10))
     assert clear.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                         yield_m=0.30, yield_turn_rad=0.6) == "yield"
 
@@ -196,14 +201,17 @@ def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():
 def test_yield_crawl_stops_inside_the_stop_distance_and_the_next_segment_can_start():
     machine, _bus = _machine()
     machine.step(_inp(0.0, front_band_m=0.40))
+    machine.step(_inp(1.0, front_band_m=0.40))
     machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
     assert machine.step(_inp(1.1, front_band_m=0.05)).kind == "hold"
     assert machine.phase == "WAITING_CONSOLE"
     again, _bus = _machine()
     again.step(_inp(0.0, turn_m=0.10, front_band_m=0.40))
+    again.step(_inp(1.0, turn_m=0.10, front_band_m=0.40))
     again.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
     again.step(_inp(11.0, turn_m=0.10, front_band_m=0.40))
     assert again.phase == "YIELDED"
+    again.step(_inp(12.0, turn_m=0.10, front_band_m=0.40))    # a new scan, same finished segment
     assert again.answer(12.0, "stuck-1", "YIELD", "stuck_resolver",
                         yield_m=0.32, yield_turn_rad=0.4) == "yield"
     assert again.phase == "TURNING"
@@ -227,6 +235,7 @@ def test_manual_and_abort_close_the_stuck(decision, outcome):
 def test_back_and_retry_runs_the_back_off_now():
     machine, bus = _machine()
     machine.step(_inp(0.0))
+    machine.step(_inp(1.0))
     assert machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator") == "back"
     action = machine.step(_inp(1.05))
     assert action.kind == "back" and action.linear == pytest.approx(-0.03)
@@ -236,6 +245,7 @@ def test_back_and_retry_runs_the_back_off_now():
 def test_back_and_retry_refused_when_local_recovery_is_off():
     machine, _ = _machine(recovery_local_enabled=False)
     machine.step(_inp(0.0))
+    machine.step(_inp(1.0))
     with pytest.raises(AnswerRefused):
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
@@ -329,6 +339,7 @@ def test_max_attempts_then_console_only_without_another_timeout():
     assert machine.phase == WAITING_CONSOLE
     assert bus.named("nav.line_stuck_asked")[-1]["local_fallback_s"] is None
     assert machine.step(_inp(t + 60.0)).kind == "hold"
+    assert machine.step(_inp(t + 61.0)).kind == "hold"       # fresh scan cannot restore attempts
     with pytest.raises(AnswerRefused):
         machine.answer(t + 61.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
@@ -572,6 +583,9 @@ def test_opened_event_says_whether_the_rear_is_clear_or_unknown(state):
 def test_refused_back_and_retry_answer_carries_the_judged_scan():
     machine, bus = _machine()
     machine.step(_inp(0.0, rear_blind_m=0.09, trail_m=0.15, trail_yaw_deg=14.6,
+                      trail_age_s=20.1))
+    # The answer receives a new scan; its measured forward trail is still 20.1 seconds old.
+    machine.step(_inp(1.0, rear_blind_m=0.09, trail_m=0.15, trail_yaw_deg=14.6,
                       trail_age_s=20.1))
     with pytest.raises(AnswerRefused):
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator", "a1b2c3d4e5f6")

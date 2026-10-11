@@ -25,6 +25,15 @@ class Twist:
     angular: float = 0.0
 
 
+@dataclass(frozen=True)
+class _AutonomousInput:
+    linear: float
+    angular: float
+    stamp: float
+    mode_epoch: int
+    preserve_curvature: bool = False
+
+
 ZERO = Twist()
 
 
@@ -54,13 +63,11 @@ class CommandManager:
         self._announced_session = -1
         #: 알릴 것이 밀려 있는가. 알림은 정지가 바퀴에 닿은 뒤에 낸다.
         self._pending_watchdog: Optional[int] = None
-        self._nav_twist: Optional[Twist] = None
-        self._nav_updated_at: Optional[float] = None
+        self._nav_input: Optional[_AutonomousInput] = None
         self._nav_timeout_s = 0.5
         #: 도킹 전용 슬롯. DOCKING 에서만 바퀴에 닿는다 — nav 슬롯을 같이 쓰면
         #: DOCKING 을 떠난 뒤에도 도킹 틱이 쓴 값이 NAVIGATION 에서 나간다.
-        self._docking_twist: Optional[Twist] = None
-        self._docking_updated_at: Optional[float] = None
+        self._docking_input: Optional[_AutonomousInput] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
         #: D-400: one safety.policy_off per entry into an autonomous mode while the policy is off.
@@ -77,6 +84,7 @@ class CommandManager:
         self.intent_errors = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
+        self._modes.change_listeners.append(lambda old, new: self._clear_for_stop())
 
     def set_readiness_gate(self, readiness) -> None:
         self._readiness = readiness
@@ -151,32 +159,64 @@ class CommandManager:
         """
         return self._manual_twist is not None and not self.watchdog.expired()
 
-    def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None) -> None:
+    def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None,
+                      *, preserve_curvature: bool = False) -> None:
+        epoch = self._modes.epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
         if twist is not None and not finite_velocity(twist.linear, twist.angular):
             self._reject('navigation', 'invalid velocity')
             twist = None
-        self._nav_twist = twist
-        self._input_epoch += 1
-        self._nav_updated_at = (
-            (now if now is not None else time.monotonic()) if twist is not None else None
-        )
+        candidate = None if twist is None else _AutonomousInput(
+            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch, preserve_curvature)
+        def commit() -> None:
+            self._nav_input = candidate
+            self._input_epoch += 1
+        if twist is None:
+            commit()
+        else:
+            self._modes.commit_input(Mode.NAVIGATION, commit, epoch=epoch)
+
+    def clip_line_candidate(self, linear: float, angular: float) -> tuple[float, float]:
+        """The static profile caps used by D-422 before the traffic arc family."""
+        limits = self._safety.limits
+        if not finite_velocity(linear, angular):
+            return 0., 0.
+        if not finite_velocity(limits.max_linear, limits.max_angular) or min(
+                limits.max_linear, limits.max_angular) < 0:
+            return 0., 0.
+        return (max(-limits.max_linear, min(limits.max_linear, linear)),
+                max(-limits.max_angular, min(limits.max_angular, angular)))
+
+    @property
+    def _nav_twist(self) -> Optional[Twist]:
+        value = self._nav_input
+        return None if value is None else Twist(value.linear, value.angular)
+
+    @property
+    def _docking_twist(self) -> Optional[Twist]:
+        value = self._docking_input
+        return None if value is None else Twist(value.linear, value.angular)
 
     def clear_navigation(self) -> None:
         self.set_nav_twist(None)
 
     def set_docking_twist(self, twist: Optional[Twist], now: Optional[float] = None) -> None:
+        epoch = self._modes.epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
         if twist is not None and not finite_velocity(twist.linear, twist.angular):
             self._reject('docking', 'invalid velocity')
             twist = None
-        self._docking_twist = twist
-        self._input_epoch += 1
-        self._docking_updated_at = (
-            (now if now is not None else time.monotonic()) if twist is not None else None
-        )
+        candidate = None if twist is None else _AutonomousInput(
+            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch)
+        def commit() -> None:
+            self._docking_input = candidate
+            self._input_epoch += 1
+        if twist is None:
+            commit()
+        else:
+            self._modes.commit_input(Mode.DOCKING, commit, epoch=epoch)
 
     def clear_docking(self) -> None:
         self.set_docking_twist(None)
@@ -268,13 +308,20 @@ class CommandManager:
                 except Exception:  # noqa: BLE001
                     self.announce_errors += 1
 
-    def _policy_output(self, linear: float, angular: float, source: str, now: float) -> Twist:
+    def _policy_output(self, linear: float, angular: float, source: str, now: float,
+                       mode_epoch: int, input_epoch: int, *, candidate=None, preserve_curvature: bool = False) -> Twist:
         if linear == 0. and angular == 0.:
             return ZERO
-        epoch, mode, command_id = self._input_epoch, self._modes.mode, next(self._policy_ids)
+        if (input_epoch != self._input_epoch or mode_epoch != self._modes.epoch
+                or (candidate is not None and candidate is not self._autonomous_input(source))):
+            return ZERO
+        mode, command_id = self._modes.mode, next(self._policy_ids)
         output = self._safety.evaluate_candidate(command_id, source, linear, angular, now,
-                                                 scope='manual' if mode is Mode.MANUAL else 'nav')
-        if epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop:
+                                                 scope=('manual' if mode is Mode.MANUAL else
+                                                        'line' if preserve_curvature else 'nav'))
+        if (input_epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop
+                or mode_epoch != self._modes.epoch
+                or (candidate is not None and candidate is not self._autonomous_input(source))):
             return ZERO
         if output is None:
             # Latch first: whatever the mode change sets in motion, the e-stop
@@ -293,8 +340,12 @@ class CommandManager:
             self._pending_unguarded = source
         return result
 
+    def _autonomous_input(self, source: str):
+        return self._nav_input if source == 'navigation' else self._docking_input
+
     def select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
+        mode_epoch = self._modes.epoch
         if self._modes.mode is not self._unguarded_mode:
             self._unguarded_noted = False
             self._unguarded_mode = self._modes.mode
@@ -305,6 +356,7 @@ class CommandManager:
             self._drop_manual_session()
         if stopped or not ready:
             return ZERO
+        input_epoch = self._input_epoch
         if self._modes.mode is Mode.MANUAL:
             # 번호는 만료 판정 **전에** 읽는다 (`_note_watchdog_lapse`).
             session, held = self._session, self._manual_twist
@@ -316,18 +368,22 @@ class CommandManager:
                 if held is None:
                     return ZERO
                 l, a = self._safety.clip(held.linear, held.angular, "manual")
-                return self._policy_output(l, a, self._manual_source, current)
+                return self._policy_output(l, a, self._manual_source, current, mode_epoch, input_epoch)
             if held is not None:
                 self._note_watchdog_lapse(session)
             return ZERO
         if self._modes.mode is Mode.NAVIGATION:
-            held, stamp, source = self._nav_twist, self._nav_updated_at, 'navigation'
+            candidate, source = self._nav_input, 'navigation'
         elif self._modes.mode is Mode.DOCKING:
-            held, stamp, source = self._docking_twist, self._docking_updated_at, 'docking'
+            candidate, source = self._docking_input, 'docking'
         else:
             return ZERO
-        age = current - stamp if stamp is not None else None
-        if held is not None and age is not None and 0.0 <= age <= self._nav_timeout_s:
-            l, a = self._safety.clip(held.linear, held.angular, "nav")
-            return self._policy_output(l, a, source, current)
+        if candidate is None:
+            return ZERO
+        age = current - candidate.stamp
+        if 0.0 <= age <= self._nav_timeout_s and candidate.mode_epoch == mode_epoch:
+            preserve_curvature = candidate.preserve_curvature
+            l, a = self._safety.clip(candidate.linear, candidate.angular, "line" if preserve_curvature else "nav")
+            return self._policy_output(l, a, source, current, mode_epoch, input_epoch, candidate=candidate,
+                                       preserve_curvature=preserve_curvature)
         return ZERO

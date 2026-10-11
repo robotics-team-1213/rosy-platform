@@ -71,7 +71,8 @@ class Rig:
         self.y += linear * math.sin(self.yaw) * dt
         self.t += dt
         self.feed()
-        d = self.m.tick(self.t + 0.01)
+        # Evidence, the manager tick, and an immediate answer share the rig's monotonic clock.
+        d = self.m.tick(self.t)
         self.twist = (d.linear, d.angular)
         return d
 
