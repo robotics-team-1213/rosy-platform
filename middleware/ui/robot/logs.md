@@ -1258,7 +1258,7 @@
 - 증거: 통합 32860ffe1의 원격 토큰/규격/반응형 104 passed, X:/DevTemp/ui-role-static-final/run-1.txt. Robot 최종 browser는 통합 검증에 연결한다.
 - gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
 
-## 2026-10-12 · uiux/robot-pilot-workflow · 연결 정보와 재시도 동선
+## 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
 
 - 변경: 접속 권한의 주어를 명시하고 일시적인 화면 구성 읽기 실패에 키보드 재시도를 제공한다. 기존 패널과 비상 정지 권한을 유지한다.
 - 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
