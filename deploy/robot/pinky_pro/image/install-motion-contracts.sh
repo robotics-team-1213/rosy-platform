@@ -22,7 +22,7 @@ if [[ -f "$WORKSPACE/operations/fleet/package.xml" ]]; then
     cp "$WORKSPACE/operations/execution/pyproject.toml" "$CONTRACT_WORK/execution/"
     cp -a "$WORKSPACE/operations/execution/src" "$CONTRACT_WORK/execution/"
     WHEEL_SOURCES+=("$CONTRACT_WORK/execution")
-    WHEEL_NAMES+=(rosy-execution==0.1.0)
+    WHEEL_NAMES+=(rosy-execution==0.1.1)
 fi
 python3 -m pip wheel --no-deps --no-build-isolation --no-cache-dir \
     --wheel-dir "$CONTRACT_WORK/wheels" "${WHEEL_SOURCES[@]}"
