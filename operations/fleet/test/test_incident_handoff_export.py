@@ -79,3 +79,44 @@ def test_corrupt_final_source_facts_are_rejected_not_counted(tmp_path, fault):
         conn.execute('UPDATE fleet_notification_outbox SET payload=?', (json.dumps(raw),))
     with pytest.raises(ValueError):
         exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles, include_handoff=True)
+
+
+def test_actual_final_queue_provider_acceptance_and_claim_producers_bind_to_export(tmp_path):
+    import hashlib
+    import httpx
+    from fleet.incidents.automation.store import CaseBudget, CaseScope, IncidentCaseStore
+    from test_judgment_profiles import profile
+    from test_notifications import _setup, observe, run
+    now, log, board, channels = _setup(tmp_path)
+    observe(board, 100)
+    models = (profile(profile_id='primary'), profile(profile_id='reviewer', role='reviewer'))
+    profiles = [asdict(p) for p in models]
+    profile_hash = hashlib.sha256(json.dumps(profiles, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    scope = CaseScope('pinky', 'case-1', 'core', profile_hash, board.judgment_view('pinky')['policy_revision'])
+    store = IncidentCaseStore(log.path, clock=lambda: now[0])
+    revision = board.judgment_view('pinky')['request']['revision']
+    store.begin_case(scope, CaseBudget(100, 130, 0, 0, 0), initial_revision=revision)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    assert log.notifications.enqueue_final(scope, store.final_summary(scope), now=101)
+    store.handoff_queued(scope)
+    run(log, board, channels, 101, lambda request: httpx.Response(200, json={'id': 'private-provider-id'}))
+    log.handoff.claim(scope.subject_id, scope.case_id, board.judgment_view('pinky'), 'private-principal', now=102)
+    proof = exporter().snapshot(log.path, scope.subject_id, scope.case_id, profiles, include_handoff=True)['case']['handoff']
+    assert proof['queue']['queued_at'] == 100
+    assert proof['notifications'][0]['state'] == 'SENT' and proof['claim']['claimed_at'] == 102
+    assert 'private-' not in json.dumps(proof)
+
+
+def test_cli_handoff_switch_produces_new_schema_without_overwriting(tmp_path):
+    import subprocess
+    import sys
+    from test_incident_feedback_export import TOOL
+    store, scope, profiles = prepared(tmp_path)
+    path = tmp_path / 'profiles.json'; path.write_text(json.dumps(profiles))
+    output = tmp_path / 'handoff.json'
+    args = [sys.executable, str(TOOL), str(store.path), '--subject', scope.subject_id,
+            '--case', scope.case_id, '--profiles', str(path), '--out', str(output), '--include-handoff']
+    assert subprocess.run(args, capture_output=True).returncode == 0
+    assert json.loads(output.read_text())['schema'] == 'rosy.incident.model_feedback/2'
+    before = output.read_bytes()
+    assert subprocess.run(args, capture_output=True).returncode == 1 and output.read_bytes() == before

@@ -68,3 +68,21 @@ correlations만 허용한다. schema 구조가 맞더라도 임의 상관 키는
 raw camera/inference 확인이 없어 status incomplete/task unknown을 유지한다.
 기존 demonstration 계약을 바꾸지 않으며 DatasetStore/승격/학습에는 받지 않는다.
 body/file 검증은 인증·실행 권한·장치/과제/물리 수용을 부여하지 않는다.
+# Incident handoff evidence (D-696)
+
+`incident_handoff.validate_handoff(value, scope, started_at)` validates bounded JSON only.
+`tools/incident_model_feedback.py --include-handoff` adds optional
+`rosy.incident.model_feedback/2` evidence from one read-only Fleet snapshot;
+the default remains `/1`. The recording binder's existing `--model-feedback`
+and `--failure-analysis` accept either version and retain `UNREVIEWED`.
+
+`case.handoff` separates the persistent queue, final notification rows and named
+claim record. `tables` distinguishes missing storage from present empty storage.
+`SENT` means provider acceptance; `CASE_ONLY` claims are recorded names with no
+verified identity. Raw names, route/endpoint, provider IDs, links and payloads
+are omitted. Source digests and scope binding do not prove provenance by
+themselves: independent evaluation must approve the producer artifacts separately.
+This evidence does not establish recurrence absence, command absence, model
+contribution, independent quality or physical success. No notification or model
+is called by this validator or export.
+
