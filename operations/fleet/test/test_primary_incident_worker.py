@@ -63,6 +63,9 @@ def test_primary_needing_review_hands_off_without_unconfigured_second_call(tmp_p
 
 def test_actual_primary_export_reaches_recording_failure_and_independent_comparison(tmp_path):
     import importlib.util
+    import copy
+    import subprocess
+    import sys
     from pathlib import Path
     root = Path(__file__).resolve().parents[3]
     def load(name, path):
@@ -92,10 +95,28 @@ def test_actual_primary_export_reaches_recording_failure_and_independent_compari
         report = compare(cohort, [exported])
         assert report['promotion_state'] == 'HOLD' and 'rule_baseline' in report['missing']
         assert 'primary_baseline' not in report['missing']
+        profile_path = tmp_path / 'profiles.json'; profile_path.write_text(json.dumps([asdict(profiles[0])]))
+        export_path = tmp_path / 'export.json'
+        command = [sys.executable, str(root / 'tools/incident_model_feedback.py'), str(store.path),
+            '--subject', scope.subject_id, '--case', scope.case_id, '--profiles', str(profile_path),
+            '--include-handoff', '--out', str(export_path)]
+        result = subprocess.run(command, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(export_path.read_text())['digest'] == exported['digest']
+        cohort_path = tmp_path / 'cohort.json'; cohort_path.write_text(json.dumps(cohort))
+        report_path = tmp_path / 'comparison.json'
+        result = subprocess.run([sys.executable, '-S', str(root / 'learning/evaluation/decision/operational_comparison.py'),
+            str(cohort_path), str(export_path), '--out', str(report_path)], capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(report_path.read_text())['promotion_state'] == 'HOLD'
         cohort['candidates'][0]['strategy'] = 'primary_reviewer'
         with pytest.raises(ValueError): compare(cohort, [exported])
         downgraded = dict(exported, schema='rosy.incident.model_feedback/1')
         with pytest.raises(ValueError): binder.attach_model_feedback(recording, downgraded)
+        invalid_scope = copy.deepcopy(exported)
+        invalid_scope['case']['scope'] = ['invalid']
+        invalid_scope['digest'] = hashlib.sha256(json.dumps(invalid_scope['case'], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        with pytest.raises(ValueError): binder.attach_model_feedback(recording, invalid_scope)
         await worker.aclose()
     asyncio.run(run())
 
