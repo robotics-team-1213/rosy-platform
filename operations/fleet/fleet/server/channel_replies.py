@@ -36,8 +36,8 @@ class ChannelReplyOutbox:
         conn.execute('''INSERT OR IGNORE INTO fleet_channel_reply_outbox
             (request_id, kind, nonce, principal_id, message_id, route_hash, content,
              next_attempt_at, expires_at) VALUES (?, 'RECEIVED', ?, ?, ?, ?, ?, ?, ?)''',
-            (request_id, nonce, receipt['principal_id'], receipt['message_id'], self.route_hash(),
-             f'ROSY 요청 접수 · {request_id}\nFleet Console에서 확인합니다. 실행 승인 전입니다.', now, now + 600))
+                     (request_id, nonce, receipt['principal_id'], receipt['message_id'], self.route_hash(),
+                      f'ROSY 요청 접수 · {request_id}\nFleet Console에서 확인합니다. 실행 승인 전입니다.', now, now + 600))
 
     def claim(self, *, now):
         with closing(self.journal._connect()) as conn, conn:
@@ -78,7 +78,7 @@ class ChannelReplyOutbox:
             conn.execute('''UPDATE fleet_channel_reply_outbox
                 SET state=?, provider_id=?, next_attempt_at=?
                 WHERE request_id=? AND kind=? AND state='SENDING' AND attempt_id=?''',
-                (state, provider_id, now + 60, row['request_id'], row['kind'], row['attempt_id']))
+                         (state, provider_id, now + 60, row['request_id'], row['kind'], row['attempt_id']))
 
     def rows(self, principal):
         self.journal.operator(principal)
@@ -86,7 +86,7 @@ class ChannelReplyOutbox:
             conn.row_factory = sqlite3.Row
             rows = conn.execute('''SELECT request_id, kind, state, attempts, provider_id
                 FROM fleet_channel_reply_outbox WHERE principal_id=? ORDER BY rowid DESC LIMIT 50''',
-                (principal,)).fetchall()
+                                (principal,)).fetchall()
         return [dict(row) for row in rows]
 
 
