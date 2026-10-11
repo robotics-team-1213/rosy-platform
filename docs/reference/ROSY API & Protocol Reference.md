@@ -12,7 +12,7 @@
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
-### v1.211 ?? ?? ??? (D-689)
+### v1.211 본인 기본 프로필 (D-689)
 
 GET `/api/fleet/auth/profile` returns `login`, `principal_id`, `email` (null for non-email principals), `role`, `display_name` for a valid completed cookie login only. PATCH accepts exactly `display_name`: trim whitespace, 1..80 characters, reject control characters. ID, email and role are read-only. Success is 200 with the same profile shape and no-store. Profiles persist in existing SQLite bound to login+principal and survive password rotation and restart. Reassigned principals do not inherit names. Initial cookies remain 403 PASSWORD_CHANGE_REQUIRED; Bearer/development credentials are 403 COOKIE_SESSION_REQUIRED. No arbitrary account selection is accepted.
 
