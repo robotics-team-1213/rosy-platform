@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   capabilityReason, chooseConvoyLeader, chooseLeader, formationReason, leaderPathKind, noRobotServesGrid,
-} from '../../fleet/server/web/motion-readiness.js';
+} from '../../../ui/console/motion-readiness.js';
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
   const caps = {runtime: {mode: 'motor'}, navigation: {goal_navigation: false}};

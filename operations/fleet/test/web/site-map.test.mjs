@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
   addApproach, removeApproach, mergeCrosswalks,
-} from '../../fleet/server/web/shared/site-map-model.js';
+} from '../../../ui/console/shared/site-map-model.js';
 
 const MAP = {
   places: [{id: 'A', name: 'A', x: 0, y: 0, kind: 'junction'}, {id: 'B', name: 'B', x: 2, y: 0, kind: 'park'}],
@@ -65,7 +65,7 @@ test('trip errors read in Korean with the leg and the unblock hint', () => {
 });
 
 test('actions read the address names and stale plans are refused', async () => {
-  const {actionRows, planIsCurrent, siteMapErrorText} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {actionRows, planIsCurrent, siteMapErrorText} = await import('../../../ui/console/shared/site-map-model.js');
   const map = {places: [{id: 'B', name: '충전'}]};
   const plan = {map_version: 2, actions: [{place_id: 'B', action: 'left'}, {place_id: null, action: 'stop'}]};
   assert.deepEqual(actionRows(plan, map), ['충전 · 좌회전', '찍은 좌표 · 정지']);
@@ -78,14 +78,14 @@ test('actions read the address names and stale plans are refused', async () => {
 });
 
 test('invalid draft errors list the fields', async () => {
-  const {siteMapErrorText} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {siteMapErrorText} = await import('../../../ui/console/shared/site-map-model.js');
   const text = siteMapErrorText({code: 'SITE_MAP_INVALID',
     detail: {errors: [{loc: ['map', 'edges', '0', 'width_m'], msg: 'Input should be greater than 0'}]}});
   assert.match(text, /맞지 않는 값.*map\.edges\.0\.width_m: Input should be greater than 0/);
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStatusText, tripStartReason} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {tripStatusText, tripStartReason} = await import('../../../ui/console/shared/site-map-model.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
@@ -108,7 +108,7 @@ test('D-494 trip panel text and button reasons', async () => {
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {
-  const {tripStatusText, tripErrorText} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {tripStatusText, tripErrorText} = await import('../../../ui/console/shared/site-map-model.js');
   const trip = {state: 'running', robot_id: 'r1', reason: null, detail: {}, lease: {state: 'held'}};
   assert.match(tripStatusText(trip, MAP), /CORE 점유 중/);
   const lost = {...trip, state: 'stopped', reason: 'lease_lost', lease: {state: 'lost'},
@@ -120,7 +120,7 @@ test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who
 });
 
 test('D-494 trip stop reasons name the configured stall time and loop errors', async () => {
-  const {tripStatusText, PLACE_KIND_LABEL} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {tripStatusText, PLACE_KIND_LABEL} = await import('../../../ui/console/shared/site-map-model.js');
   const trip = {state: 'stopped', robot_id: 'r1', reason: 'stall', detail: {stall_s: 35}};
   assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);
   assert.match(tripStatusText({...trip, reason: 'TRIP_LOOP_ERROR', detail: {}}, MAP), /관제 운행 처리에 오류/);
@@ -146,7 +146,7 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
 });
 
 test('teach status reads the recording, then what waits for confirm', async () => {
-  const {teachStatusText} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {teachStatusText} = await import('../../../ui/console/shared/site-map-model.js');
   assert.equal(teachStatusText({recording: null, pending: []}), '기록 없음');
   assert.equal(teachStatusText({recording: {robot_id: 'r1', points: [[0, 0], [1, 0]], started_by: 'bob'}, pending: []}),
     '기록 중 · r1 · 2점 · bob');
@@ -154,7 +154,7 @@ test('teach status reads the recording, then what waits for confirm', async () =
 });
 
 test('teach confirm body: a place id, or a new address name; speed is bounded', async () => {
-  const {teachConfirmBody} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {teachConfirmBody} = await import('../../../ui/console/shared/site-map-model.js');
   const args = {teachId: 't1', from: 'A', fromName: '', to: '', toName: ' 새 곳 ', direction: 'two_way',
     driveMode: 'lane', speed: '0.2', revision: undefined};
   assert.deepEqual(teachConfirmBody(args), {teach_id: 't1', from: 'A', to: {name: '새 곳', kind: 'junction'},
@@ -165,7 +165,7 @@ test('teach confirm body: a place id, or a new address name; speed is bounded', 
 });
 
 test('the confirm form acts on the newest stopped recording, whatever the list order', async () => {
-  const {newestPending} = await import('../../fleet/server/web/shared/site-map-model.js');
+  const {newestPending} = await import('../../../ui/console/shared/site-map-model.js');
   const old = {teach_id: 'old', expires_at: 100}, fresh = {teach_id: 'new', expires_at: 200};
   assert.equal(newestPending({pending: [old, fresh]}).teach_id, 'new');
   assert.equal(newestPending({pending: [fresh, old]}).teach_id, 'new');

@@ -20,6 +20,7 @@ D-630의 실제 이동을 local main에 반영했지만 Fleet의 AI와 Console, 
 | perception `test`의 99파일 | `test/learning/perception`의 shared fixture와 기존 workflow 검증 suite |
 | `tools/review_app_smoke.py` | 데이터 검토 앱의 `learning/curation/perception/tools` |
 | `tools/sim_jpeg_relay.py` | `integrations/simulation/gazebo/scripts` |
+| 과거 WSL 복사·재시작 스크립트 6개 | `docs/reference/legacy-tools/wsl`의 고정 참조 자료 |
 
 관련 학습 시험은 실제 curation/registry/training/evaluation 소비자에 따라 lookup을 갱신한다. 기존 suite는 하나의 private-delivery autouse fixture와 브라우저 harness를 공유하므로 repository의 명시적인 learning workflow 시험 owner에 한 번만 배치한다. fixture를 네 번 복제하거나 시험 framework를 만들지 않으며 suite의 실제 모듈별 검증 범위를 안내에 기록한다. 새 학습·추론·예측 기능은 추가하지 않는다.
 
@@ -30,6 +31,14 @@ Console URL·allowlist·CSP·same-origin 세션과 설치된 `fleet/server/web` 
 학습의 store layout·고정 revision·READY·서명·intake·shadow/promotion guard는 유지한다. CLI wrapper·서명 source closure·model PC 서비스·Docker·workflow·harness·예제·현행 안내를 새 source와 함께 갱신한다. 기존 등록 checkout의 dirty-source 검사는 새 위치와 이전 위치를 모두 감시하여 이행 중 누락을 막는다. 실제 모델·데이터·설정·overlay·인증·운영 서비스는 이동하거나 활성화하지 않는다.
 
 D-427 `d427_target`은 frozen ownership identity로 유지하고 현재 root·layout·import mapping만 갱신한다. 실제 의미 깊이는 최대 5단계이며 namespace·resource·test 내부 경로는 별개다. AGENTS와 현재 계획은 이동한 실제 위치를 설명하며 Accepted ADR 본문·과거 evidence를 일괄 경로 치환하지 않는다.
+
+## 기존 계약과의 관계
+
+| ADR | 관계 |
+|---|---|
+| D-427 | 세 part와 frozen ownership identity를 유지하고 실제 source holder와 import mapping만 갱신한다. |
+| D-429 | §5의 rosy.decision 개명·shim 금지·같은 transaction 계약을 실행한다. Validation wave 3c의 별도 pyproject와 Fleet 의존성 계획만 기존 Fleet distribution의 명시적 package_dir 설치로 대체한다. 순환 의존 분리는 이번 범위 밖이다. |
+| D-430 | Safety namespace 검사 대상을 새 canonical Decision 위치로 옮겨 같은 금지 경계를 검사한다. writer와 Safety API를 확대하지 않는다. |
 
 ## Validation and rollback
 

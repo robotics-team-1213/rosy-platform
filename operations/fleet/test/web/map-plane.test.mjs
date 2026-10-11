@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createPlaneFeed, mapToPlane, parsePlaneHeader, planeCalibration, planeFitsImage, planeToMap,
-} from "../../fleet/server/web/shared/vision-view.js";
-import { planeAffine } from "../../fleet/server/web/camera-backdrop.js";
-import { fitTransform, project, quarterTurn } from "../../fleet/server/web/site-layer.js";
-import { planeView } from "../../fleet/server/web/shared/site-map-model.js";
+} from "../../../ui/console/shared/vision-view.js";
+import { planeAffine } from "../../../ui/console/camera-backdrop.js";
+import { fitTransform, project, quarterTurn } from "../../../ui/console/site-layer.js";
+import { planeView } from "../../../ui/console/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);

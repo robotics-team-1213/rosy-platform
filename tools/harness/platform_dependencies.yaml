@@ -14,6 +14,9 @@ components:
   - name: fleet_site
     path: operations/fleet/fleet
     import_prefix: fleet
+  - name: fleet_decision
+    path: operations/decision/src/rosy/decision
+    import_prefix: rosy.decision
   - name: omx_device_adapter
     path: middleware/devices/omx/adapter/omx_adapter
     import_prefix: omx_adapter
@@ -52,6 +55,8 @@ boundaries:
     forbidden_imports: [fleet, omx_adapter, rclpy]
   - importer_prefix: fleet
     forbidden_imports: [rosy_cell, omx_adapter, rclpy]
+  - importer_prefix: rosy.decision
+    forbidden_imports: [rosy_cell, omx_adapter, rclpy, rosy.integrations.robots]
   - importer_prefix: omx_adapter
     forbidden_imports: [fleet, rosy_cell]
   - importer_prefix: rosy.execution.api

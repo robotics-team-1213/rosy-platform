@@ -10,7 +10,7 @@ set -euo pipefail
 [ $# -ge 5 ] || { sed -n 2,8p "$0"; exit 2; }
 session=$1 ceiling=$2 out=$3 robot=$4 marker=$5; shift 5
 here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
-ds=$repo/learning/training/perception/dataset; py=${PYTHON:-python3}
+ds=$repo/learning/curation/perception; py=${PYTHON:-python3}
 commit=${TOOL_COMMIT:-$(git -C "$repo" rev-parse HEAD 2>/dev/null || cat "$repo/COMMIT")}
 run() { if command -v systemd-run >/dev/null; then systemd-run --user --scope -p MemoryMax=6G --quiet "$@"; else "$@"; fi; }
 if [ -n "${AVAIL_GB:-}" ]; then
