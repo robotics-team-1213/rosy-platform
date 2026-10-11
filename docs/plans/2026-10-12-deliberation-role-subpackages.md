@@ -87,6 +87,11 @@ known-failure NEW 0/known 0이다. actual wheel/sdist 설치, 기존 façade ide
 전체 관련 architecture를 포함한다. 이후 실제 관측 module을 installed probe에
 명시하는 설치 검증만 보강한다. 이 보강은 production source를 변경하지 않는다.
 
+최종 설치·크기 재검사 `af28364877`: 실제 observation module까지 포함해 원격
+41 passed, terminal exit 0, NEW 0/known 0을 확인했다. 이 41개는 앞선 348개와
+겹치는 재검사이며 합산해 별도 시험 개수로 보고하지 않는다. 이후 변경은
+이 결과 기록뿐이며 source와 test는 같은 상태다.
+
 GREEN은 installed wheel/sdist, architecture/holder/harness, 기존 숙고·조건부 검토,
 v2 profile/judgment/provider/request, calibration 및 실제 CLI subprocess,
 사건 원장·관측과 bridge를 원격에서 확인한다. 최종 terminal 결과와 NEW 비교를
