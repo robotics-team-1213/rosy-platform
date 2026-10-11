@@ -650,6 +650,7 @@
 | D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
 | D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 | Accepted (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

@@ -96,6 +96,56 @@ def test_evaluate_frame_cap(tmp_path):
     assert ev["frames"] == 2
 
 
+def _semantic_eval(tmp_path, model_semantic, eval_semantic):
+    folder = _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "lane_marking"),
+                                        ("extra", "drivable")))
+    doc = json.loads((folder / "manifest.json").read_text())
+    if eval_semantic is not None:
+        doc["classes"][-1]["semantic"] = eval_semantic
+    (folder / "manifest.json").write_text(json.dumps(doc))
+    model = _model(_pred())
+    model.manifest.raw["output"] = {"classes": [vars(c).copy() for c in MODEL_CLASSES]}
+    if model_semantic is not None:
+        model.manifest.raw["output"]["classes"][-1]["semantic"] = model_semantic
+    ev = intake.evaluate(model, folder, 400)
+    ev["disjoint"] = True
+    return ev
+
+
+@pytest.mark.parametrize("model_semantic,eval_semantic", [
+    ("current_road_region/1", "road_surface/1"), (None, "road_surface/1"),
+    ("road_surface/1", None)])
+def test_same_name_and_role_do_not_make_different_road_truth_comparable(tmp_path, model_semantic, eval_semantic):
+    ev = _semantic_eval(tmp_path, model_semantic, eval_semantic)
+    assert ev["semantic_mismatches"]["extra"] == {"model": model_semantic, "eval": eval_semantic}
+    assert any("semantic" in reason for reason in intake.judge_eval(ev, {}))
+
+
+def test_strict_road_evaluation_refuses_unknown_legacy_meaning(tmp_path):
+    ev = _semantic_eval(tmp_path, None, None)
+    assert ev["unverified_semantics"] == ["extra"]
+    assert intake.judge_eval(ev, {}) == []
+    assert intake.judge_eval(ev, {"require_label_semantics": True})
+
+
+def test_same_declared_road_meaning_is_comparable(tmp_path):
+    ev = _semantic_eval(tmp_path, "current_road_region/1", "current_road_region/1")
+    assert ev["semantic_mismatches"] == {} and ev["unverified_semantics"] == []
+    assert intake.judge_eval(ev, {"require_label_semantics": True}) == []
+
+
+def test_champion_requires_same_declared_road_meaning(tmp_path):
+    other = {"extra": {"model": "road_surface/1", "eval": "road_surface/1"}}
+    current = {"extra": {"model": "current_road_region/1", "eval": "current_road_region/1"}}
+    folder = tmp_path / "other"
+    folder.mkdir()
+    (folder / intake.REPORT_NAME).write_text(json.dumps({"verdict": "pass", "model_revision": "other",
+        "eval": {"set": {"content_sha": SHA}, "miou": 0.99, "iou": {"extra": 0.99},
+                 "label_semantics": other}}))
+    assert intake.find_champion(tmp_path, SHA, None, label_semantics=current) is None
+    assert intake.find_champion(tmp_path, SHA, None, label_semantics=other)["model_revision"] == "other"
+
+
 def test_evaluate_reports_label_support_by_frame_sources(tmp_path):
     folder = _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "lane_marking"),
                                          ("extra", "drivable")), n=2)

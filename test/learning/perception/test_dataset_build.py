@@ -16,6 +16,20 @@ CLASSES = [
 ]
 
 
+def test_road_meaning_survives_classes_and_dataset_build(tmp_path):
+    import yaml
+    classes_file = tmp_path / "classes.yaml"
+    entries = CLASSES + [{"index": 2, "name": "road", "role": "drivable",
+                          "color": [0, 255, 0], "semantic": "road_surface/1"}]
+    classes_file.write_text(yaml.safe_dump({"classes": entries}), encoding="utf-8")
+    classes = build.load_classes(classes_file)
+    assert classes[-1]["semantic"] == "road_surface/1"
+    dirs = [_frames_dir(tmp_path, s, [0]) for s in ("s1", "s2")]
+    result = build.build_dataset(_export(tmp_path, _names("s1", "s2", indexes=(0,))),
+                                 dirs, classes, tmp_path / "dataset")
+    assert result["classes"][-1]["semantic"] == "road_surface/1"
+
+
 def test_original_png_frames_preserve_bytes_and_extension(tmp_path):
     dirs = [_frames_dir(tmp_path, s, [0]) for s in ('s1', 's2')]
     for d in dirs:
