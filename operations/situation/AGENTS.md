@@ -14,6 +14,7 @@
 | File | Description |
 |------|-------------|
 | `rosy_situation/service.py` | The service loop, Fleet client, queue/backpressure, JSONL input/fact logs |
+| `rosy_situation/assessment.py`, `snapshot_assessment.py` | D-652 immutable necessity criteria and current CORE snapshot adapter; Fleet installs only these pure modules plus `__init__.py`, consumers remain shadow |
 | `rosy_situation/analyzers/stuck_scene.py` | `Analyzer`: stuck and traffic facts plus shadow `trip_route_check` from trip/map pose and planned segments; existing `rosy_situation.analyzers` exports remain |
 | `rosy_situation/analyzers/traffic_watch.py` | `TrafficWatch` (`analyzer:traffic_watch@1`, phase (d)): wait cycles cross-checked with Fleet's `wait_cycle`, stale-input false cycles, waiting-but-moving, livelock, stalled trips, long UNKNOWN units; existing `deadlock` module aliases this implementation |
 | `rosy_situation/incidents/context.py` | Source-aware incident context drafts; existing `incident_context` module identity remains |

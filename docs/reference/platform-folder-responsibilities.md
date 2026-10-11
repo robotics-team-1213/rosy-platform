@@ -39,7 +39,7 @@ rosy-platform/
 │  ├─ fleet/ (transaction·serving·기존 배포 owner)
 │  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
 │  ├─ world/ (src/rosy/world/api, state/projections)
-│  ├─ situation/ (rosy_situation/analyzers, incidents)
+│  ├─ situation/ (rosy_situation/assessment, snapshot_assessment, analyzers, incidents)
 │  ├─ execution/ (src/rosy/execution/api, site)
 │  ├─ processes/{cell,palletizing}
 │  ├─ vision/signal_observer
@@ -64,7 +64,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 
 ## 전체 manifest root 판정
 
-현재 manifest의 **89개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
+현재 manifest의 **90개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
 
 | 현재 manifest root | 실제 패키지·import 또는 형식 | 판정과 현재 책임·소비자 |
 |---|---|---|
@@ -119,7 +119,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
-| `operations/situation` | `rosy_situation` | 분리 완료 — `analyzers/{stuck_scene,traffic_watch}`와 `incidents/{context,vision}`. Fleet 사실 조회·fact-only shadow 게시, 기존 import/patch identity 유지 |
+| `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |
 | `operations/vision` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
 | `operations/ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
 | `operations/apps/games` | ROS `games`; `games` | 유지 — overhead camera를 쓰는 game host. 범용 process/control backend가 아님 |
@@ -140,6 +140,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `profiles` | installation/profile YAML | 유지 — site/device 조합·pin. 장치 capability profile과 구분 |
 | `deploy` | images·units·payload·operator 배포 코드 | 유지 — source holder/manifest를 소비하는 배포 조립. live 적용은 별도 readback 필요 |
 | `tools` | 최상위 loose 개발 CLI | 유지 — 하위 도구는 각 manifest root로 구분. product algorithm 공통함으로 사용하지 않음 |
+| `tools/packaging` | build-time source composition | 분리 완료 — D-652 Fleet 소스 구성·wheel/sdist 빌드. sdist는 자체 `_build` helper를 포함하며 설치 runtime에는 helper 없음 |
 | `tools/validation` | host Fleet/Gazebo conformance CLI | 유지 — preflight·run planning, 장치에 설치하지 않음 |
 | `tools/calibration` | offline per-robot fit/store CLI | 유지 — 측정 calibration 처리. runtime sensor/drive calibration 알고리즘과 구분 |
 | `tools/capture` | operator capture CLI | 유지 — CORE API를 통한 supervised capture. 자체 cmd_vel writer나 autonomous admission 없음 |
@@ -168,11 +169,13 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 ## 현재 상태와 미래 행동 예측
 
+D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`만 포함한다. 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
+
 현재 World 구현은 `ObservationSnapshot`과 관측/odom을 합성하는 `MapPoseTracker`다. `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 이를 소비한다. World 내부의 `predicted` 표기는 마지막 관측에서 odom으로 갱신하는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 
-이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 89개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
+이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 90개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
 
 D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1파일, 총 299파일을 처리했다. Console은 67개 source 파일 중 65개 설치 자산이며 AGENTS와 package.json은 개발 안내/도구 입력이다. `test/learning/perception`은 기존 99파일의 shared workflow 시험 위치다. 퇴역 WSL 도구 6개는 `docs/reference/legacy-tools/wsl`로 동결했고 현재 운영 경로에 재연결하지 않는다.
 
