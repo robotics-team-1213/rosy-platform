@@ -597,6 +597,39 @@ def test_old_password_check_cannot_issue_session_after_change(tmp_path):
         sessions.issue("alice", remember=False, verified=checked)
 
 
+def test_password_change_commit_failure_rolls_back_hash_and_sessions(tmp_path, monkeypatch):
+    app, client = _bootstrap(tmp_path)
+    sessions, old = app.state.password_sessions, client.cookies[COOKIE]
+    original = sessions._connect
+
+    class CommitFailure(sqlite3.Connection):
+        def __exit__(self, *_args):
+            self.rollback()
+            raise sqlite3.OperationalError("commit unavailable")
+
+    def failing_connection(**kwargs):
+        db = sqlite3.connect(sessions.path, factory=CommitFailure)
+        db.row_factory = sqlite3.Row
+        return db
+
+    monkeypatch.setattr(sessions, "_connect", failing_connection)
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": NEW_PASSWORD}).status_code == 503
+    monkeypatch.setattr(sessions, "_connect", original)
+    assert sessions.principal(old)[0].password_change_required is True
+    restarted = PasswordSessions(sessions.path, _accounts(password_scrypt=BOOTSTRAP_HASH))
+    assert restarted.check("after-failure", "alice", "alice") is not None
+    assert restarted.check("after-failure", "alice", NEW_PASSWORD) is None
+
+
+def test_password_change_stores_only_hash_and_preserves_remember(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    assert _login(client, password="alice", remember=True).status_code == 204
+    changed = client.post(CHANGE, headers=ORIGIN, json={"password": NEW_PASSWORD})
+    assert changed.status_code == 204
+    assert f"max-age={int(password_session_module.REMEMBER_S)}" in changed.headers["set-cookie"].lower()
+    assert NEW_PASSWORD.encode() not in app.state.password_sessions.path.read_bytes()
+
+
 def test_concurrent_password_changes_have_exactly_one_winner(tmp_path):
     app, client = _bootstrap(tmp_path)
     sessions, cookie = app.state.password_sessions, client.cookies[COOKIE]
