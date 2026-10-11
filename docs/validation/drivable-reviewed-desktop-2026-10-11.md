@@ -102,3 +102,23 @@ AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선�
 작업 공간 재개와 loopback 임시 서버에서 `/pixels`, `/api/workspace`, 24개 `/api/mask-images/<index>`의 HTTP 200 및 빈 마스크를 확인했다. 서버는 확인 후 종료했다. 브라우저 렌더·사람 검수·검수자 신원·독립 평가·물리 캘리브레이션 수용은 확인하지 않았다. contact sheet는 실제 실내 도로 촬영 화면이며 정답 mask가 아니다.
 
 검수 코드·동결 원본·SQLite·클래스·실행 안내를 포함한 `evidence/road-surface-review-24.zip`의 SHA256은 `2f003b3d606c52895b5d8f760d711855c135cf6318db6e10bbb440b339285d54`이다. 증거는 같은 X 드라이브 세션의 `evidence/blank-road-review-preparation-20261012.json`, `candidate-known-manifest-overlap-20261012.json`, `blank-road-review-http-readback-20261012.json`에 보존했다. 모델 PC 작업 공간은 `/home/rosy/rosy-ml/scratch/road-surface-review-20261012-024175/review-state`다. 기존 운영 앱·자료·원본 영상·모델을 수정하지 않았고 HOLD를 유지한다.
+
+## 기존 평가 원본과 학습 영상의 출처 중복 (2026-10-12)
+
+기존 MCAP 평가 검수 작업 공간 두 개를 읽기 전용으로 확인했다. `human-eval-review-20261006`의 225개 마스크와 `review-v13-drivable/eval-20261008T163945Z`의 8개 마스크는 파일 hash가 모두 일치하지만 픽셀 승인은 0이고 모두 pending이다. 승인되지 않은 상태를 정답으로 승격하지 않는다. D-475는 가림 255를 사람이 확인한 평가 전용 MCAP 승인에서 보존하며 D-464 학습용 승인은 계속 255를 거절한다. 앞 절의 영상 후보 제한은 이 기존 계약의 의도된 경계이며 자동 배경 채우기로 우회할 코드 오류가 아니다.
+
+225개 가운데 99개의 `source_session`은 `20261005T134540Z_rosy_26`, `capture_group`은 `heldout-20261005T134540Z_rosy_26`이다. 로컬 `pilot_saved_20261005T134540Z.manifest.json`의 전달 계보는 실제 장치 hostname `rosy-pinky-9dfk`와 보존된 원래 namespace `rosy_26`를 구별하고 같은 원본 세션을 선언한다. 이 receipt의 원본 bag 16개를 X 드라이브의 보존 원본에서 실제 hash했고, 모델 PC 평가 입력의 bag 16개와 metadata도 실제 hash했다. 양쪽 bag inventory의 16/16 SHA256 및 metadata SHA256이 모두 일치하며, 99개 평가 frame의 동결 MCAP inventory도 같은 값이다.
+
+동시에 로컬 전달 영상·JSON·JSONL·scan 4개를 receipt의 hash·크기와 대조해 모두 일치를 확인했다. 해당 MP4 SHA256은 `a5dd55eb10d2514e405ecf9547b2e181c9da1cc713ee124943a7657ae2d499b9`이다. AI PC upstream `data-v13`의 이 영상 hash와 기존 20261010 dataset-v2의 image SHA256을 다시 연결하면 194개가 모두 `train`에 있다. 이 연결은 upstream의 영상 출처 선언과 검증한 전달 receipt의 원본 bag 계보를 사용하며 날짜 문자열·장치 별명만으로 추정한 결과가 아니다. 전달 receipt의 `source_capture_group`과 `operator_collection_group`은 여전히 UNKNOWN이며, 검수자 권한이나 물리 보정 유효성을 새로 인정하지 않는다.
+
+따라서 해당 99프레임의 촬영 원본은 이 194개 학습 자료와 출처를 공유한다. 평가 PNG image SHA와 세 기존 dataset의 image SHA 직접 대조는 모두 0이었지만 출처 독립성은 성립하지 않는다. 이 99프레임을 20261010 학습 자료에 대한 독립 최종 평가 정답으로 사용하지 않는다. 나머지 126프레임이나 별도 8프레임의 독립성을 이 결과로 증명하지 않는다. 기존 검수 상태·예약·raw·dataset split·모델을 바꾸거나 삭제하지 않고 연구 기준선으로 보존한다.
+
+증거는 같은 X 드라이브 세션의 `evidence/existing-eval-review-source-audit-20261012.json`, `existing-eval-review-training-image-overlap-20261012.json`, `20261005-derived-video-bag-closure-20261012.json`, `20261005-existing-eval-original-bag-join-20261012.json`, `20261005-source-video-train-membership-20261012.json`이다. 실제 학습 실행 전체의 재현, 검수 독립성, 전체 upstream 출처 closure, paired 도로면/구역 정답 및 실물·시뮬레이션 적합성은 여전히 HOLD다.
+
+## 이전 사용자 검수 ZIP의 실제 마스크 대조 (2026-10-12)
+
+AI PC의 `pinky-v13-pidnet-unet-20261008/review-before-user-confirmation.zip`과 `review-user-completed-snapshot.zip`을 추출·수정 없이 읽었다. 각 묶음의 242개 마스크는 선언된 SHA256, 크기, 허용 픽셀 값 대조를 모두 통과했다. 두 묶음 사이 이미지·원본 영상·프레임·세션 식별자는 동일하고 마스크 해시 변경은 0개다. 상태는 approved 101 / needs_fix 140 / excluded 1에서 approved 241 / excluded 1로 바뀌었지만, 두 묶음 모두 `human_mask_review_completed=false` 242개, `visual_bump_presence_reviewed=true` 242개다. 파일명과 approved 상태만으로 전체 픽셀 검수 완료를 인정하지 않는다.
+
+클래스는 background, lane_left, lane_right, crosswalk, speed_bump이며 drivable/도로 전체 정답이 없다. 두 원본 영상의 선언된 SHA256별 항목은 215개와 27개이고 intended_split은 모두 train이다. 완료 묶음 이미지 SHA256을 현재 20261010 dataset-v2와 대조하면 205개가 일치하며 모두 train에 있다. 기존 차선·과속방지턱 개발 자료로 보존하고 독립 도로면 평가 정답으로 승격하지 않는다. 검수자 인증이나 나머지 37개의 학습 이력 독립성을 이 결과로 증명하지 않는다.
+
+증거는 같은 X 드라이브 세션의 `evidence/older-user-review-zip-metadata-20261012.json` 및 `older-review-zip-mask-readback-20261012.json`이다. 기존 파일·라벨·검수 상태·split은 변경하지 않았으며 도로면 적합성은 HOLD다.
