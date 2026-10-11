@@ -237,6 +237,10 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         api["/api/fleet/state"] = snapshot
         page.clock.run_for(4000)
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        stuck["fleet_answer"] = None
+        stuck["ai_proposal"] = {"decision": "RESUME", "class": "held", "verdict": "crosswalk_unknown"}
+        page.clock.run_for(4000)
+        expect(messages.locator("dd").nth(3)).to_have_text("CORE 전달·응답 기록 없음 · 실행 완료 미확인")
         assert not posts and not errors
         _shot(page, "context-inbox-message-stages.png")
         browser.close()
