@@ -3212,6 +3212,8 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 
 ### v1.213 Mission·Cell Job owner adapter (D-687)
 
+`kind=mission`에는 `candidate` 객체 대신 `source_proposal_id`를 사용할 수 있다. 둘 중 정확히 하나가 필요하다. 기존 source proposal은 현재 사용자 소유이며 kind가 일반 Mission이고 workcell/instance가 본문과 일치해야 한다. 서버가 기존 관측·selector metadata를 복사하고 기존 resolver에서 다시 검증한다. 없는/다른 owner source404, scope/type 충돌409, 양쪽 동시 입력 또는 모두 누락422다. Console는 현재 자신의 실행 전 Mission 후보를 선택하는 방식으로 이 경로를 사용한다.
+
 `POST /api/fleet/channel-requests/{request_id}/prepare`는 현재 mapping의 기명 operator owner가 확인한 실행 전 proposal을 기존 소유자로 준비한다. strict 본문 공통 필드는 `kind`, `expected_hash`, `expected_revision`, `reason`(비어 있지 않은1..256자), `workcell_id`, `instance_id`다. `kind=mission`은 기존 Mission의 `candidate` 객체를 사용하며 원문을 observation으로 만들지 않는다. `kind=cell_job`은 기존 Cell app의 `recipe_id/recipe_digest/cell_id/cell_digest`를 사용한다. `principal_id`, `request_key`, 임의 work ID는 받지 않는다. Fleet가 `discord-{request_id}` key와 기존 author를 주입한다.
 
 기존 proposal 생성·resolve 검증 뒤 현재 owner/hash/revision을 DB 트랜잭션에서 다시 확인하여 LINKED로 연결한다. 관계 연결 전 검토 변경409는 실행 전 proposal만 남기며 admission하지 않는다. 같은 본문/원문/원래 revision 재시도는 같은 관계를 반환하고 다른 본문409다. 기존 proposal key의 다른 candidate는 기존 conflict 계약을 따른다. 미설정503, invalid body422, 다른 owner404/403이다. `ChannelWorkflowView.work_kind`는 task/mission/cell_job/null이며 candidate가 null인 연결된 Mission/Cell은 별도 실행 전 제안이다.
