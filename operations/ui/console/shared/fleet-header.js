@@ -21,7 +21,8 @@ function inboxButton() {
   inbox.id = "fleet-inbox";
   inbox.setAttribute("kind", "quiet");
   inbox.setAttribute("type", "button");
-  inbox.textContent = "알림";
+  inbox.setAttribute("aria-label", "알림 창");
+  inbox.setAttribute("data-ui-tooltip", "알림 창");
   inbox.setAttribute("data-action-icon", "notification");
   actionIcon(inbox, "notification");
   $("estop").before(inbox);
@@ -33,8 +34,9 @@ function inboxButton() {
 }
 export function showInboxCount(count) {
   const inbox = inboxButton();
-  inbox.textContent = count ? `알림 ${count}` : "알림";
+  inbox.textContent = count ? String(count) : "";
   inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
+  inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
   actionIcon(inbox, "notification");
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
