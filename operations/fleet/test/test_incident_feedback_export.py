@@ -155,3 +155,64 @@ def test_zero_call_not_needed_is_exported_as_nonintervention(tmp_path):
     result = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
     assert result['case']['outcome'] == 'DO_NOT_INTERVENE'
     assert result['case']['calls'] == 0 and result['case']['attempts'] == []
+
+
+def traced_case(tmp_path, count=1):
+    from test_incident_model_receipt import fixture as receipt_fixture
+    from fleet.incidents.automation.ledger.receipt import model_receipt
+    scope, p, models, bound, checked, _ = receipt_fixture()
+    store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
+    store.begin_case(scope, CaseBudget(100, 200, count, 0, .8))
+    trace = model_receipt(scope, p, bound, checked, profiles=models)
+    for index in range(count):
+        aid = f'model-{index}-0123456789abcdef0123456789abcdef'
+        store.reserve(scope, attempt_id=aid, input_hash=p.digest, observation_revision=p.generation,
+                      kind='model', max_cost_usd=.1, worker_id='worker', role='primary')
+        store.mark_submitting(scope, aid, worker_id='worker')
+        store.complete(scope, aid, worker_id='worker', state='COMPLETED', actual_cost_usd=.05,
+                       summary={'reason': 'MODEL_CHECKED'}, model_receipt=trace)
+    return store, scope, [asdict(p) for p in models], trace
+
+
+def test_model_trace_is_joined_with_its_actual_cost_and_remains_unreviewed(tmp_path):
+    store, scope, manifest, trace = traced_case(tmp_path)
+    result = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+    attempt = result['case']['attempts'][0]
+    assert attempt['model_receipt'] == json.loads(trace.payload_json)
+    assert attempt['actual_micros'] == result['case']['spent_micros'] == 50000
+    assert result['label_state'] == 'UNREVIEWED' and result['field_accepted'] is False
+    assert 'worker' not in canonical(attempt)
+
+
+@pytest.mark.parametrize('fault', ['foreign_input', 'raw_response', 'orphan'])
+def test_corrupted_or_orphan_model_trace_cannot_be_exported(tmp_path, fault):
+    store, scope, manifest, trace = traced_case(tmp_path)
+    with sqlite3.connect(store.path) as conn:
+        if fault == 'foreign_input':
+            conn.execute("UPDATE fleet_incident_v2_attempts SET input_hash=?", ('b' * 64,))
+        elif fault == 'raw_response':
+            conn.execute("UPDATE fleet_incident_v2_model_receipts SET receipt_json=?",
+                         ('{"raw_response":"private"}',))
+        else:
+            conn.execute("INSERT INTO fleet_incident_v2_model_receipts VALUES (?,?,?,?)",
+                         (scope.subject_id, scope.case_id, 'missing', trace.payload_json))
+    with pytest.raises(ValueError):
+        exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+
+
+def test_old_database_without_model_receipt_table_has_explicitly_missing_trace(tmp_path):
+    store, scope, manifest = fixture(tmp_path)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute('DROP TABLE fleet_incident_v2_model_receipts')
+    result = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+    assert result['case']['attempts'][0]['model_receipt'] is None
+
+
+def test_multiple_model_traces_can_exceed_one_invocation_budget_without_losing_evidence(tmp_path):
+    store, scope, manifest, _ = traced_case(tmp_path, count=8)
+    result = exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+    encoded = json.dumps(result['case'], sort_keys=True, separators=(',', ':'), allow_nan=False)
+    assert len(encoded.encode()) > 16384
+    assert len(encoded.encode()) <= 1024 * 1024
+    assert result['digest'] == hashlib.sha256(encoded.encode()).hexdigest()
+    assert all(a['model_receipt'] is not None for a in result['case']['attempts'])
