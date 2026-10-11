@@ -5,6 +5,9 @@ import { resolve as resolvePath } from "node:path";
 const SHARED = fileURLToPath(new URL("../../../../shared/web", import.meta.url));
 
 export async function resolve(specifier, context, next) {
+  if (specifier === "/console/assets/authorization.js") {
+    return next(new URL("../../../ui/console/shared/authorization.js", import.meta.url).href, context);
+  }
   // ui.js registers custom elements at import; the queue logic only needs a name from it.
   if (specifier === "/common/ui.js") {
     return { url: "data:text/javascript,export const actionIcon = () => null;", shortCircuit: true };

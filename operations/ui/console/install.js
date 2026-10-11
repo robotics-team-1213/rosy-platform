@@ -53,7 +53,7 @@ function authHeaders() {
 function operatorControls() {
   // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return [...document.querySelectorAll(
-    "ui-button:not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
+    "ui-button:not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]):not([data-theme-cycle]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));

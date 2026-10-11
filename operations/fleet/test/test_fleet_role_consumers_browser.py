@@ -54,7 +54,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
-                _assert_control(page.locator("#fleet-inbox"))
+                _assert_control(page.locator("#topbar-more"))
                 if path == "/console":
                     _assert_control(page.locator(".queue-row").first)
                     # Current roster opens one selected robot's controls in its workspace.

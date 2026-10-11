@@ -654,6 +654,7 @@
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
 | D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
+| D-668 | Fleet 단일 테마 버튼과 접속·알림 진입점 | Accepted (2026-10-12) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -697,3 +698,8 @@
 
 - 상태: Accepted (2026-10-11).
 - Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
+
+## D-668 Fleet theme and status entry
+
+- Status: Accepted (2026-10-12).
+- Contract: [ADR](../adr/D-668-fleet-theme-and-status-entry.md).
