@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · f3ba7590c · 병렬 Fleet 계약 v1.215 통합
 - 2026-10-12 · d002c579d · D-689 계약 버전 설명 정렬
+- 2026-10-12 · 193d54401 · D-693 계약 설명 재검증
 - 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
 - 2026-10-11 · c9480b464 · docs: 지도 설정 계약 버전 정렬
-- 2026-10-11 · 5faad3583 · refactor: API holder 이전 검증
-- 2026-10-10 · d7f032f513 · test: D-620 API contracts verified

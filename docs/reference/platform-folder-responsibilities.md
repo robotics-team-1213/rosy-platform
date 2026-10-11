@@ -196,3 +196,5 @@ D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1�
 반복 이름은 세 종류다: 설치 패키지 이름(`core`, `control`, `fleet`, `rosy` namespace), 서로 다른 권한(장치-local execution/현장 execution, 관측 safety adapter/CORE Safety), 실제 혼재했던 행동 구현(이번 Drive 이동). 호환 initializer에는 알고리즘을 추가하지 않는다. 일반 캘리브레이션 lease와 카메라 장애 복구 자격 판정은 CORE 공통 admission이며 Drive 탈출 운동 구현과 다르다. Perception localization 노드는 상태/관측 근거를 소유한다.
 
 현재 물리 이동과 설치 매핑, 원격 시험, 배포/장치 수용은 별도 기록이다. [D-649](../adr/D-649-drive-behavior-source-ownership.md), [실행 계획](../plans/2026-10-11-role-folder-boundaries.md)을 따른다.
+
+D-671의 현재 Discord source는 `integrations/messaging/discord/rosy_discord/intake.py`의 순수 envelope/signature adapter다. 기존 Fleet 배포물에 설치하며 source image는 같은 코드를 포함한다. 기명 계정 연결·인증·접수 원장은 `operations/fleet/fleet/server/channel_requests.py`, 조회 표면은 기존 Console 작업 화면이 소유한다. 별도 실행 서비스·wheel·Mission DB는 없다. Gateway 실행기와 실제 수신, 후보·승인·위험 조치/reply는 미구현이며 D-669 후속이다.

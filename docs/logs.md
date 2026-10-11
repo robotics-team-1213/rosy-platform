@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7906,6 +7906,12 @@ osy-d395-s1d\`.
 - 변경: 최신 통합 CI의 World wheel 시험에서 D-667 의존성 raw 문자열 비교가 실패했다. 기존 설치 시험과 같은 Requirement/canonicalize_name으로 이름·공백 표기만 정규화하고 최소 >=0.0.1, 설치 버전0.0.1, 무조건부/no-extras, import identity와 Fleet 비의존 검사를 유지했다. 패키지 의존성·관측 동작은 바꾸지 않았다.
 - 증거: 8eab47497의 site-vision-cell job 실패 subprocess line6을 확보했다. 첫 수정291c77151 원격2 PASS/NEW0 후 독립 검토가 marker/extras 엄격성을 지적해 c175120a7에 보강했다. 최종 엄격성은 착지 원격 시험과 후속 CI로 다시 확인하며 실패를 기존 실패 목록에 추가하지 않는다.
 - gate 변화: 배포5f4040f306의 사이트 수용 근거는 유지한다. 후속 main 통합 CI 실패와 시험 수정은 별도이고 실물/장치/AI 권한을 승격하지 않는다. 원본 로그는 지도 조사 X 세션의 logs/ci-8eab-site-vision-job.txt 및 logs/world-metadata-fix/에 보존한다.
+## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
+
+- 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
+- 증거: 원격 RED 모듈 없음1 NEW, manifest 누락1 NEW 및 구조 증가1 NEW를 각각 수정했다. 최신 focused44 PASS/NEW0; 실제 Chromium4 PASS/NEW0(처음4 skipped는 pass 제외). 독립 source/Safety 검토 수용, Fleet53396/app906 재측정, +150/파일 상한/기존 추출 의무 유지. 실제 기명 HTTPS cookie 로그인은 별도 후속 증거에 기록했다.
+- gate 변화: source 접수와 named Console 로그인 확인. Gateway/token/운영 identity mapping/실제 대화 수신 및 후보/승인/reply는 후속이다. Task/Mission/Job/claim/모델/장치 명령·push·image deploy는 없다. 근거: docs/validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md.
+
 
 ## 2026-10-12 · addd5a982 · 플랫폼 계정·연결·작업 UI 관례 재정리
 
@@ -7977,6 +7983,17 @@ osy-d395-s1d\`.
 - 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
 - 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
 - gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.
+
+## 2026-10-12 · d780942b9 · D-691 Rosy Cam은 요청 뒤 30초를 유지하고 대기한다
+
+- 변경: API reference v1.210. 하향 demand.wanted와 공유 벡터 stream_hold_s 30. 인증된 Rosy 미리보기 읽기가 천장 영상을 요청하고, 마지막 읽기 뒤 30초 뒤에 센서와 JPEG를 멈춘다.
+- 증거: 원격 AI PC에서 d780942b9 관련 294 passed, exit 0, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt). Cam JVM 418 passed. rosy_harness lint 0 errors. 실기 전류와 첫 프레임 지연은 측정하지 않았다.
+- gate 변화: 문서·계약 SOURCE. 착지·push·APK 설치·DEVICE/FIELD는 하지 않았다.
+## 2026-10-12 · uncommitted · D-691 심한 발열이면 천장 송출을 멈춘다
+
+- 변경: D-691 4항에 발열 정지를 넣었다. API reference v1.210 문장에 같은 기준을 적었다. 와이어는 그대로다.
+- 증거: Cam JVM 421 passed, 0 failed. S21에서 Fleet lease JPEG 순번이 1285에서 1289로 늘었고, 화면을 끈 뒤 1434가 왔다. 발열 정지와 대기 전류, 첫 프레임 지연은 기기에서 재지 않았다.
+- gate 변화: 문서 SOURCE. 착지와 배포는 이 기록 뒤에 한다.
 
 ## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
 

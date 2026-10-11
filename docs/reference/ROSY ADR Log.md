@@ -668,12 +668,18 @@
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
+| D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
+| D-680 | Discord 요청의 Fleet 작업 연결과 결과 회신 | Accepted (source design only, 2026-10-12) |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 | Accepted (source design only, 2026-10-12) |
+| D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
+| D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
 | D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
@@ -729,12 +735,28 @@
 - 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
 - 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.
 
+## D-671 — Discord 기명 요청 접수와 Fleet 소유 경계
+
+- 상태: Accepted (source only, 2026-10-12).
+- 결정: Fleet 소유 기명 접수 원장과 Console owner read; 실행·모델·장치 권한 없음.
+- 계약: [ADR](../adr/D-671-discord-named-request-intake.md). Gateway/token/runtime 수신은 후속 gate.
 ## D-672 — Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임
 
 - 상태: Accepted (2026-10-12).
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
 
+## D-675 — Discord Gateway 수신과 기존 Fleet lifecycle
+
+- 상태: Accepted (source only, 2026-10-12).
+- 결정: 기존 Fleet lifespan의 선택적 수신; receipt commit 후 resume, 미해결 session 공백은 정지.
+- 계약: [ADR](../adr/D-675-discord-gateway-fleet-lifecycle.md). source 설치 검증 완료, 실제 이미지/수신은 별도이며 실행 권한 없음.
+
+## D-680 — Discord 요청의 Fleet 작업 연결과 결과 회신
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기명 접수와 기존 작업의 관계, Console 확인, 고정 목적지의 durable 결과 회신을 연결한다. 기존 승인과 장치 권한을 유지한다.
+- 계약: [ADR](../adr/D-680-discord-request-workflow-and-reply-boundary.md). 실제 수신·승인·결과 회신과 FIELD는 별도 증거로 검증한다.
 ## D-682 — 예약된 물체 정답과 고정 detector의 인지 적합성 재생
 
 - 상태: Accepted (2026-10-12).
@@ -752,6 +774,17 @@
 - 결정: 같은 판정 계약으로 Qwen·GLM·Jev·Laya를 교체하고 독립 보정·안전·결과 확인으로 자동 처리한다. 사람은 최종 미해결 사건을 인수한다.
 - 계약: [ADR](../adr/D-681-model-led-incident-closure.md). 모델 보고 확률과 실측 신뢰도를 구분하며 첫 연결 시험 한도와 HOLD는 유지한다.
 
+## D-687 — Discord Mission·Cell Job의 기존 소유자 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 proposal/resolve/admit과 service author·독립 승인 규칙을 보존한다. 원문 owner/hash/revision을 확인하고 실행 전 관계부터 연결한다.
+- 계약: [ADR](../adr/D-687-discord-mission-cell-owner-adapters.md). source/size 검토·CI·서명 배포·실제 왕복과 FIELD는 별도 gate다.
+
+## D-693 — Discord 요청과 현재 사건의 기명 인수 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 current case/revision/freshness와 기명 claim 소유자를 유지하고 같은 트랜잭션으로 원문 관계·회신을 예약한다.
+- 계약: [ADR](../adr/D-693-discord-current-incident-handoff.md). 정지·취소/CORE 권한, source·크기·배포·실제 왕복은 별도 gate다.
 ## D-684 — Pinky 사건 재관측과 지속 예산 원장
 
 - 상태: Accepted (2026-10-12, 계약).
@@ -775,6 +808,11 @@
 
 검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
 
+## D-691 — Rosy Cam은 요청이 있는 동안만 보낸다
+
+- 상태: Accepted (2026-10-12, 사용자 결정).
+- 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다. 심한 발열(화면 끄기와 같은 기준)이면 요청보다 먼저 멈춘다.
+- 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 2026-10-12 S21에서 Fleet lease JPEG 순번이 늘었다. 현장 Vision은 demand를 보내지 않아 2초 유예 송출이었다. 발열 정지는 배터리 36.2°C라 기기에서 확인하지 않았다. 대기 전류와 첫 프레임 지연은 측정하지 않았다.
 ## D-694 — 모델 비용 근거와 사건 receipt v2
 
 **Status:** Accepted (2026-10-12, 소스 계약)

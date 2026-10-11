@@ -3,9 +3,8 @@
 경로는 로봇 계약(`/api/v1/...`)과 일부러 다르다. 관제 API 는 사이트 것이고, 로봇 것을
 흉내 내면 둘 중 어느 쪽에 말하고 있는지 화면에서도 코드에서도 흐려진다.
 
-인증: 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 즉 이 포트에 닿는 사람은 현장의
-모든 로봇을 움직일 수 있다. 그래서 기본은 루프백이고, 루프백 밖으로 열려면 콘솔 토큰을
-반드시 받는다(`serve()` 가 강제한다).
+인증: 기본 바인드는 루프백이며 외부 접속은 설정된 Fleet 자격과 역할 검사를 거친다.
+등록 자격·기명 운영자·장치 자격은 서로 다른 권한이다.
 
 구조 (D-362 P0-1): 이 파일은 구성 검증·lifespan·감사 미들웨어·비전 임대만 남고, 경로는
 소유자 모듈이 단다 — mission_routes, task_dispatch_routes, intent_routes, console_routes,
@@ -150,7 +149,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
-               notification_config=None, incident_model_config=None) -> FastAPI:
+               notification_config=None, incident_model_config=None, channel_config=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
@@ -463,10 +462,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
     password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
     app.state.password_sessions = password_sessions
+    other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
-        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
         if goal_evidence_service is not None:
             other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
         assert_cell_producer_credentials_isolated(
@@ -778,9 +777,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    zones=trip_runner.traffic.zone_edges)
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
-    proposal_create = proposal_resolve = None
+    proposal_create = proposal_resolve = mission_admit = None
     if mission_service is not None:
-        proposal_create, proposal_resolve = install_mission_routes(
+        proposal_create, proposal_resolve, mission_admit = install_mission_routes(
             app, mission_service=mission_service, proposal_store=proposal_store,
             cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
             goal_evidence_service=goal_evidence_service, mission_progress=mission_progress,
@@ -794,16 +793,20 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 operator_guard=operator_guard, read_guard=read_guard)
 
     from fleet.server.work_routes import install_work_routes
+    from fleet.server.channel_requests import install_channel_feature
     install_work_routes(app, task_service=task_service, mission_service=mission_service,
                         require_viewer=require_viewer, read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
-    install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
-                            service_id=cell_app_service_id, principals=principals,
-                            proposal_create=proposal_create, proposal_resolve=proposal_resolve,
-                            require_viewer=require_viewer, require_named_operator=require_named_operator)
-
-    install_intent_routes(app, console=console, task_service=task_service,
-                          require_operator=require_operator,
+    cell_prepare = install_cell_app_routes(
+        app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,
+        principals=principals, proposal_create=proposal_create, proposal_resolve=proposal_resolve,
+        require_viewer=require_viewer, require_named_operator=require_named_operator)
+    install_channel_feature(
+        app, config=channel_config, task_service=task_service, principals=principals, site_logins=site_logins,
+        require_operator=require_operator, read_guard=read_guard, console=console, existing_tokens=other_tokens,
+        secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
+        proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
+    install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
@@ -840,7 +843,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 else UnavailableHostHelper()))
 
     install_static_routes(app)
-
     return app
 
 
