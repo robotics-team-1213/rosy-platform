@@ -125,3 +125,21 @@ def test_invalid_launch_input_never_spawns():
         with pytest.raises(ValueError):
             await bounded_process((sys.executable,), b'x'*16385, 1, 32)
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('load_state,allowed', [(b'not-found\n', True), (b'loaded\n', False), (b'', False)])
+def test_collected_scope_requires_explicit_absence_readback(monkeypatch, load_state, allowed):
+    from deploy.site import deliberation_sandbox as module
+    calls = []
+    async def fake(argv, *args):
+        calls.append(argv)
+        return (1, b'') if len(calls) == 1 else (0, load_state)
+    monkeypatch.setattr(module, 'bounded_process', fake)
+    async def run():
+        if allowed:
+            await module.cleanup_scope('rosy-deliberation-test.scope')
+        else:
+            with pytest.raises(RuntimeError, match='CLEANUP_UNCONFIRMED'):
+                await module.cleanup_scope('rosy-deliberation-test.scope')
+    asyncio.run(run())
+    assert calls[1][-2:] == ('--value', 'rosy-deliberation-test.scope')
