@@ -12,6 +12,26 @@
 
 ## 통합 요구사항
 
+2026-10-12 사용자 재확인: 이 문서와 활성 목표는 지금까지의 요구사항을 하나로 묶는다. 최종 목표는 범용 사건의 **판단 → 조건부 재평가 → 제한된 처리 → 결과 확인 → 최종 미해결 인수 → 실패 피드백 → 독립 평가 → 승격·복귀**다. 사람이 매 단계 승인하는 흐름 대신 승인된 범위에서는 모델이 처리하고 사람은 최종 문제와 평가 정답·한계를 검수한다. 첫 현장 대상은 Pinky 차선 정지·재관측이며 이후 문제 유형은 각자의 근거·행동·성공 계약을 수용한 뒤 확대한다.
+
+### 현재 시작점과 다음 순서
+
+최신 source checkpoint: D-696 인수 export와 D-697 독립 원장 소비자는 `3a431bbc53e3caf15bbad68f0d64f4740bb1724e`로 로컬 main에 착지했다. 적격 AI PC 9GB의 관련 12개 파일 원격 통합 시험 219개, known-failures 신규 실패 0건과 lint를 통과했다. 인수 근거와 독립 소비자에 대한 독립 검토의 중요 지적은 수정했다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/operational-land-3a431bbc53/run-1.txt`다.
+
+소비자는 실제 paired export의 원장 상태 건수·한계 비용·UNKNOWN 예약 책임과 고정 cohort를 연결한다. 누락·변조·학습/보정/평가 ID와 원본 hash 중복, budget·종결 상태 모순을 거절한다. 기존 export /1과 선택 /2, 직접 producer 객체와 단독 JSON CLI를 유지한다. 단독 CLI는 설치된 contract wheel 없이 source checkout에서도 동작한다. 모든 출력은 HOLD이며 관측 종료를 인과적 성공률로 표시하지 않는다.
+
+아래 3의 근거 생산과 4의 첫 소비자는 구현됐지만 전체 운영 성과 비교는 미완료다. 규칙·Qwen 단독 생산 기준, 독립 정답·수용 한계, 정상 명령과 재발의 완전한 기록 범위, 실제 청구·런타임 수용이 여전히 필요하다. 실제 제공자·독립 품질·운영 활성화·현장 수용과 push는 이 checkpoint에 포함하지 않는다.
+
+| 순서 | 작업 | 완료 증거 |
+|---|---|---|
+| 1 | 소유자 확인·모델 원장 도구 분리·작업 규칙 추출 | 기존 책임·import·패키지 경계와 원격 회귀 유지 |
+| 2 | 중앙 판단·결과 연결 | Fleet/Qwen 불일치·응답 문제에서 제한된 GLM 재평가; 같은 사건·근거·예산 결속 |
+| 3 | 알림·최종 사람 인수의 실제 근거 export | D-696 동일 snapshot 검증; queue·전송 수용·claim 구분; Discord 설정은 담당 세션 |
+| 4 | 독립 운영 성과 비교 | D-697 규칙/기본 모델/조건부 검토의 같은 cohort 비교; 정상 명령·재발·비용 증거 누락은 HOLD |
+| 5 | 제한 모델 토론·개선과 승격·복귀 | 고정 프로파일과 보정 기준, 독립 회귀·운영 readback·새 사건 활성 revision |
+
+기존 1·2의 source 구현과 비용·실패 분류 연결은 로컬 main에 있으며 실제 제공자·운영 활성화·현장 수용은 완료하지 않았다. 3의 인수 근거 생산부터 이어서 구현한다. GLM은 기본 Qwen 호출 도구가 아니라 조건부 재평가 경로다. Jev·Laya 등은 동일 역할 계약의 프로파일로 교체하며 Fleet에 모델별 판단 분기를 추가하지 않는다. 독립 운영 평가의 책임·자료 생산·누락 기준은 [D-697](../adr/D-697-independent-operational-comparison.md)로 고정한다. 아래 과거 checkpoint는 당시 증거이며 최신 상태와 구분한다.
+
 | 요구 | 책임과 완료 증거 |
 |---|---|
 | 판단·현장 연결·설치 분리 | 모듈 import 경계·소유자·원격 회귀 |
@@ -74,7 +94,7 @@ Phase 6의 단일 사건 읽기 전용 export와 기존 녹화 feedback 연결�
 
 ## 완료 기준
 
-최신 checkpoint: 기존 사건 원장과 resolver loop에 선택적 모델 worker를 구성하는 factory, 최종 검토 outbox 연결, GLM v2 의존성/import closure는 `3e2f3b9fda`로 로컬 main에 착지했다. D-685 자율 복구 변경을 함께 보존한 13개 관련 파일 원격 통합 시험은 적격 Model PC 7.3GB에서 288 passed, exit 0, known-failures 신규 실패 0건이며 lint도 통과했다. 로그는 `X:/DevTemp/land/feat-conditional-model-review/run-1-1.txt`다. 기본 비활성·같은 DB·사람 점유 차단·UNKNOWN/재발행 거부 경계를 유지한다. 위의 과거 checkpoint에서 미구현으로 적었던 factory는 이제 source 구현되었으며, 실제 서비스 설정과 수용 프로파일 연결은 여전히 남아 있다.
+최신 checkpoint: 기존 사건 원장과 resolver loop에 선택적 모델 worker를 구성하는 factory, 최종 검토 outbox 연결, GLM v2 의존성/import closure는 commit `3e2f3b9fdab4bfabbdf28eb665a0cd184591446f`로 로컬 main에 착지했다. D-685 자율 복구 변경을 함께 보존한 13개 관련 파일 원격 통합 시험은 적격 Model PC 7.3GB에서 288 passed, exit 0, known-failures 신규 실패 0건이며 lint도 통과했다. 로그는 `X:/DevTemp/land/feat-conditional-model-review/run-1-1.txt`다. 기본 비활성·같은 DB·사람 점유 차단·UNKNOWN/재발행 거부 경계를 유지한다. 위의 과거 checkpoint에서 미구현으로 적었던 factory는 이제 source 구현되었으며, 실제 서비스 설정과 수용 프로파일 연결은 여전히 남아 있다.
 
 AI PC의 임시 비특권 환경에서 해시 고정 wheel의 오프라인 설치, pip 의존성 검사, v2 import/codec probe가 exit 0과 `PASS_V2_IMPORT_CODEC_ONLY`로 끝났다. 모델 호출은 0회이며 root 설치·서비스 계정 격리·실제 제공자·과금·독립 품질·현장 수용을 증명하지 않는다. 설치 묶음과 실제 확인 범위는 [import closure 기록](../validation/deliberation-host-admission-2026-10-12/versioned-import-closure.md)에 둔다. 다음 작업은 상세 비용 증거를 공통 사건 원장에 연결하고, 실제 Fleet 비교 기준과 수용된 제공자·보정 프로파일을 구성하는 것이다. Discord 설정은 담당 세션이 유지한다. 목표는 아직 진행 중이며 푸시·운영 활성화는 수행하지 않았다.
 
