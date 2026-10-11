@@ -555,6 +555,12 @@ roots:
     legacy: tools/perception/road_replay.py
     wave: "1"
     concern: learning
+  - path: learning/evaluation/decision
+    part: learning
+    d427_target: learning/evaluation/decision
+    wave: none
+    concern: learning
+    note: D-697 host-only independent operational evidence comparison; no runtime imports or admission.
   - path: tools/perception
     part: tools
     d427_target: tools/perception

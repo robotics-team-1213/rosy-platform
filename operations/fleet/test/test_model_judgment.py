@@ -22,6 +22,14 @@ def bound(p):
     return bind_profile(p, profile(), adapter(), required_modalities=('text',))
 
 
+def test_huge_integer_probability_is_a_validation_error():
+    p = problem()
+    raw = payload(p)
+    raw['alternatives'][0]['probability'] = 10**400
+    with pytest.raises(ValueError, match='INVALID_PROBABILITY'):
+        judgment(p, bound(p), raw)
+
+
 @pytest.mark.parametrize('domain', ['line_follow', 'door', 'arm_target'])
 def test_checked_json_keeps_probabilities_advisory_and_immutable(domain):
     p = problem(domain)

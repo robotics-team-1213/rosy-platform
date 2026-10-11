@@ -128,7 +128,7 @@ export const TRIP_REASON_LABEL = {
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
-  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
+  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 현재 변경 내용을 별도로 기록한 뒤 화면을 새로고침해 최신 초안을 확인하세요. 저장하지 않은 편집은 사라집니다.',
   SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
   SITE_MAP_PROFILE_LIMIT: '지도 프로필은 최대 100개입니다. 기존 프로필을 선택해 수정하세요.',
   SITE_MAP_ROUTE_ACTIVE: '운행·대형·지도 기록이 진행 중입니다 · 끝난 뒤 활성화하세요',
@@ -157,6 +157,7 @@ export const SITE_MAP_ERROR_LABEL = {
 };
 
 export function siteMapErrorText(error) {
+  if (error.code === 'PASSWORD_CHANGE_REQUIRED') return '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요';
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
   if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
@@ -718,7 +719,8 @@ export function trafficAttention(traffic, robotId, clock, now) {
   const mine = resolver.find((row) => row.robot_id === robotId);
   if (Array.isArray(cycle) && cycle.includes(robotId)) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
-    const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
+    const then = mine?.reason?.startsWith("auto_hold:") ? "해결기: 자동 대기 · 상태 관측 중"
+      : mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
     const confirmed = resolver.some((row) => row.trigger === "wait_cycle");
     items.push(confirmed

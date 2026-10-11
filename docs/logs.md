@@ -7907,6 +7907,17 @@ osy-d395-s1d\`.
 - 증거: 8eab47497의 site-vision-cell job 실패 subprocess line6을 확보했다. 첫 수정291c77151 원격2 PASS/NEW0 후 독립 검토가 marker/extras 엄격성을 지적해 c175120a7에 보강했다. 최종 엄격성은 착지 원격 시험과 후속 CI로 다시 확인하며 실패를 기존 실패 목록에 추가하지 않는다.
 - gate 변화: 배포5f4040f306의 사이트 수용 근거는 유지한다. 후속 main 통합 CI 실패와 시험 수정은 별도이고 실물/장치/AI 권한을 승격하지 않는다. 원본 로그는 지도 조사 X 세션의 logs/ci-8eab-site-vision-job.txt 및 logs/world-metadata-fix/에 보존한다.
 
+## 2026-10-12 · addd5a982 · 플랫폼 계정·연결·작업 UI 관례 재정리
+
+- 변경: 공식 Carbon·GOV.UK·WCAG 참고와 현재 Fleet/Robot/Pilot 소스를 대조해 계정 발견성, 우측 진입점·전용 로그인·업무 복귀, 연결/권한/장치 연결 분리, 전체 표면 적용 표와 검증 기준을 설계 제안에 정리했다. DESIGN.md에 현행 ADR과 구분된 후속 안내를 연결했다.
+- 증거: 문서/소스 조사다. 기존 관제 workflow 원격 8 PASS(addd5a982)는 보존하되 새 로그인 흐름 검증으로 사용하지 않는다. 생성 문서와 harness lint는 이번 문서 변경에 대해 확인한다.
+- gate 변화: 인증 구현·새 ADR·배포·실물 수용 없음. D-658/D-519/D-641 충돌 항목 정합화 뒤 구현한다. 현행 계약을 제안만으로 바꾸지 않는다.
+
+## 2026-10-12 · e775bdd6a · D-683 계정 발견성과 업무 복귀
+
+- 변경: 플랫폼 사용 관례 설계를 기존 인증/안전 계약과 대조해 D-683을 작성했다. 네 Fleet 문서 계정 진입점·전용 로그인·복귀·새 탭 편집 보존을 구현 후보로 기록한다.
+- 증거: Node39 PASS/독립 검토 지적 반영. 이 후보의 lint는 새 ADR 위로 번호가 올라가며 아직 이 브랜치에 없는 동료 main ADR D-674~682 공백을 보고했다. main 통합 뒤 다시 확인하며 동료 번호를 임의 gap으로 선언하지 않는다.
+- gate 변화: 구현 후보이며 새 로그인 원격 회귀·재검토·CI·서명·배포는 미확인이다.
 
 ## 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
 
@@ -7955,3 +7966,14 @@ osy-d395-s1d\`.
 - 증거: tools/land.py가 최신 main을 통합한 daccbd38be의 원격 24개 관련 파일 364 passed, exit 0, known-failures NEW 0을 확인하고 로컬 main에 착지했다. AI PC 9.0GB, Model PC 7.9GB 자원 하한을 충족했다. 설치 wheel/sdist, 크기 경계, 사건 예산/관측, v2 JSON/보정/CLI/로컬과 기존 GLM 격리 경로를 포함한다.
 - 검토: responsibility_review의 독립 책임 분리 검토 및 root diff 검토를 완료했다. cancellation 시 사라진 프로세스의 ProcessLookupError 처리만 sandbox 시험에 보강했으며 production cleanup은 바꾸지 않았다.
 - gate 변화: SOURCE·원격 관련 회귀·설치 패키지·로컬 착지 완료. worker와 최종 사람 인수는 별도 구현 중이며 피드백 export·후보 승격은 실행 계획 단계다. 실제 제공자 호출·독립 품질·CI·push·배포·현장 수용은 미확인이다.
+
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
+## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
+
+- 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
+- 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
+- gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.

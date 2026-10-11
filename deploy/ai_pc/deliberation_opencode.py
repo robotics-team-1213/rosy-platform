@@ -4,6 +4,7 @@ import json
 import math
 import tempfile
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 
 from deploy.site.deliberation_sandbox import SandboxLauncher, bounded_process, cleanup_scope, protect_cleanup
@@ -43,11 +44,36 @@ def isolated_command(sandbox, argv, unit, directory):
 
 class GlmOpenCodeLauncher:
     cost_verified = False
+    schema_versions = (1, 2)
 
-    def __init__(self):
+    def __init__(self, *, admission=None, billing_policy=None, profile=None):
+        if billing_policy is not None:
+            from .deliberation_glm_receipt import TrustedIncludedPlanPolicy
+            if type(billing_policy) is not TrustedIncludedPlanPolicy:
+                raise ValueError('BILLING_POLICY_UNKNOWN')
+        if admission is not None:
+            from .deliberation_glm_receipt import admission as validate
+            validate(admission)
+        if profile is not None or admission is not None or billing_policy is not None:
+            from . import deliberation_glm_receipt as bridge
+            from rosy.decision.deliberation.profiles import ModelProfile
+            if type(profile) is not ModelProfile or profile != bridge.codec.model_profile(profile.profile_revision):
+                raise ValueError('EXACT_GLM_PROFILE_REQUIRED')
+            if billing_policy is not None:
+                billing_policy.validate(bridge.digest(asdict(profile)))
+        self.profile = profile
+        self._admission, self.billing_policy = admission, billing_policy
+        self.cost_verified = (admission is not None and admission.ready and admission.isolated
+                              and admission.cost_verified and billing_policy is not None)
         self.sandbox = SandboxLauncher('opencode', EXECUTABLE, EXECUTABLE_SHA256)
         self.used = False
         self.gateway_receipt = None
+        self.billing_receipt = None
+
+    @property
+    def adapter_capabilities(self):
+        from .deliberation_glm_receipt import CAPABILITIES
+        return CAPABILITIES if self._admission is None else self._admission
 
     def __enter__(self):
         return self
@@ -62,7 +88,20 @@ class GlmOpenCodeLauncher:
         if (type(argv) is not tuple or argv != ARGV or type(body) is not bytes or len(body) > 16384
                 or type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30
                 or type(output_limit) is not int or not 1 <= output_limit <= 16384
-                or type(budget_usd) not in (int, float) or not math.isfinite(budget_usd) or not 0 < budget_usd <= 10):
+                or type(budget_usd) not in (int, float) or not math.isfinite(budget_usd) or not 0 <= budget_usd <= 10):
+            raise ValueError('INVALID_ONE_SHOT_INPUT')
+        versioned = 'schema' in json.loads(body) or 'profile_revision' in json.loads(body)
+        if versioned:
+            from . import deliberation_glm_receipt as bridge
+            if not self.cost_verified:
+                raise ValueError('GLM_RUNTIME_OR_BILLING_NOT_ADMITTED')
+            _, bound, _, _ = bridge.codec.request(json.loads(body))
+            if bound.profile != self.profile:
+                raise ValueError('CASE_OR_PROFILE_CHANGED')
+            if type(self.billing_policy) is not bridge.TrustedIncludedPlanPolicy:
+                raise ValueError('BILLING_POLICY_UNKNOWN')
+            self.billing_policy.validate(bridge.digest(asdict(bound.profile)))
+        elif budget_usd <= 0:
             raise ValueError('INVALID_ONE_SHOT_INPUT')
         if self.used:
             raise ValueError('ONE_SHOT_ALREADY_USED')
@@ -76,12 +115,19 @@ class GlmOpenCodeLauncher:
                 source = Path(__file__).parent
                 directory.joinpath('relay.py').write_bytes(source.joinpath('deliberation_relay.py').read_bytes())
                 directory.joinpath('runner.py').write_bytes(source.joinpath('deliberation_opencode_runner.py').read_bytes())
-                async with gateway_session(body, remaining - (asyncio.get_running_loop().time() - started), directory) as gateway:
+                options = {'credential_sha256': self.billing_policy.credential_sha256} if versioned else {}
+                async with gateway_session(body, remaining - (asyncio.get_running_loop().time() - started), directory, **options) as gateway:
                     try:
                         command = await asyncio.to_thread(isolated_command, self.sandbox, argv, unit, directory)
                         result = await bounded_process(command, body,
                             remaining - (asyncio.get_running_loop().time() - started), output_limit)
                         self.gateway_receipt = await finish_gateway(gateway)
+                        if versioned:
+                            if result[0] != 0:
+                                raise ValueError('CLI_RESULT_UNKNOWN')
+                            raw, self.billing_receipt = bridge.normalize(body, result[1],
+                                self.gateway_receipt, self.billing_policy, output_limit, budget_usd)
+                            return 0, raw
                         return result
                     finally:
                         await protect_cleanup(cleanup_scope(unit))
