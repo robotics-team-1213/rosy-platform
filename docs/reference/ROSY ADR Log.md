@@ -618,3 +618,4 @@
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 | Accepted (2026-10-11, 사용자 후속 실행 요청; M3–M6 source 이전, 설치·장치·현장 수용은 별도) |
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
 | D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |
+| D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
