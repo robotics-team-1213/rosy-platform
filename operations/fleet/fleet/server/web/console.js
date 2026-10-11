@@ -111,7 +111,8 @@ function paintInboxMessages() {
     const values = [inquiry ? `${CAUSE_LABEL[inquiry.observations?.cause] || "원인 미확인"} · 문의 수신` : "기록 없음",
       proposal ? `AI 제안 ${DECISION_LABEL[proposal.decision] || proposal.decision} · ${proposal.reason || "판단 근거 기록 없음"}` : facts.length ? facts.map(fact => `${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}%`).join(" · ") : "기록 없음",
       answer ? `전송 ${DECISION_LABEL[answer.decision] || answer.decision}` : proposal ? proposal.verdict === "forwarded" ? "CORE로 전달" : aiProposalText(proposal) : "기록 없음",
-      fleetAnswerText(answer) || (proposal ? `${aiProposalText(proposal)} · 실행 완료는 별도 확인` : "처리 응답 기록 없음 · 실행 완료 미확인")];
+      fleetAnswerText(answer) || (proposal && ["accepted", "refused", "pending"].includes(proposal.class)
+        ? `${aiProposalText(proposal)} · 실행 완료는 별도 확인` : "CORE 전달·응답 기록 없음 · 실행 완료 미확인")];
     item.querySelectorAll("dd").forEach((node, index) => { node.textContent = values[index]; });
     // Show only known message fields; never dump a state row or credentials.
     const message = JSON.stringify({
