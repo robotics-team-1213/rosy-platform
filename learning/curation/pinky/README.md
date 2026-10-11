@@ -48,6 +48,16 @@ python -B -m pytest learning/curation/pinky/test -q -p no:cacheprovider --basete
 
 ## Fleet 관측 이력의 학습 준비 원본
 
+D-699의 기록 창 검증은 전체 원본 export와 별도로 수행한다:
+
+```powershell
+python learning/curation/pinky/fleet_observations.py <fleet-journal.sqlite3> <new-window-json-on-X> --window --robot-id <robot-id> --start <epoch-start> --end <epoch-end> --max-gap-s <accepted-capture-gap>
+```
+
+최대 24시간·4,096행 범위에서 양끝 capture 전체 roster와 같은 producer run의 sequence·수신 시계·capture monotonic 간격을 확인한다. 기존 DB를 생성하거나 수정하지 않고 WAL을 포함한 동일 SQLite 읽기 snapshot을 사용한다. 누락·재시작·legacy·불완전 roster·subject 부재·한도 초과는 HOLD다. 수신 시계 역행이 보존 이력 어느 곳에라도 있으면 epoch 선택이 모호하므로 보수적으로 HOLD한다. 원문 state·좌표·다른 로봇 ID는 결과에 복사하지 않고 행 ID와 내용 해시만 남긴다. 출력 파일은 새로 생성하며 덮어쓰지 않는다.
+
+`capture_complete:true`는 보존된 append 기록의 범위 검증이며 센서 최신성·append 전 poll 성공·CORE 명령·모델 호출·재발의 완전한 기록을 뜻하지 않는다. 정상 명령·모델 호출·재발 건수는 확인 전 `null`, 정답·훈련·현장 수용은 미승인이다. `max-gap-s`는 호출자가 수용한 관측 주기로 명시하며 도구가 임의 기준을 정하지 않는다.
+
 기존 CORE/Task journal의 Fleet 상태 관측을 검증 가능한 unlabeled 원본으로 내보낸다:
 
 ```powershell
