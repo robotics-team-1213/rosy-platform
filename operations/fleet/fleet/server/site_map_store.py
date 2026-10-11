@@ -26,7 +26,7 @@ from fleet.routing.graph import Graph, build_graph
 from fleet.routing.snap import PlanError, snap_start
 from fleet.routing.trip import prepare
 from fleet.server.sqlite_policy import configure_connection, enable_wal
-from fleet.site_map import MapProfileInfo, SiteMap
+from fleet.site_map import MapProfileInfo, SiteMap, _polyline_polygon_gap
 
 PLAN_KEEP = 1000
 PLAN_KEEP_S = 30 * 24 * 3600.0
@@ -115,6 +115,15 @@ class SiteMapStore:
                 "activated_at": row[4], "map": json.loads(row[1])}
 
     def _plannable(self, site_map: SiteMap) -> None:
+        if site_map.survey is not None and not site_map.survey.reviewed:
+            raise SiteMapError(422, "SITE_MAP_SURVEY_UNREVIEWED", "review the survey reference before activating")
+        if any(edge.evidence is not None and edge.evidence.status != "reviewed" for edge in site_map.edges):
+            raise SiteMapError(422, "SITE_MAP_ROAD_UNREVIEWED", "review observed or inferred roads before activating")
+        for facility in site_map.facilities:
+            if facility.kind == "exclusion" and any(
+                    _polyline_polygon_gap(edge.polyline, list(facility.geometry)) <= edge.width_m / 2
+                    for edge in site_map.edges):
+                raise SiteMapError(422, "SITE_MAP_EXCLUSION_OVERLAP", "a drivable lane overlaps an exclusion area")
         try:
             graph = build_graph(site_map)
             prepare(graph, self.routing_config)
