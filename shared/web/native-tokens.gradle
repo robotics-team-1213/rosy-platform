@@ -26,7 +26,8 @@ def nativeTokens = tasks.register('generateNativeTokens') {
             return Double.parseDouble(value.group(1)) * (value.group(2) == 'rem' ? 16 : 1)
         }
         def metrics = declarations.keySet().findAll {
-            it ==~ /(?:text|space|radius|target|weight|leading)-[a-z0-9-]+/ ||
+            it ==~ /(?:space|radius|target|weight|leading)-[a-z0-9-]+/ ||
+                it ==~ /text-(?:micro|label|body|value|title|display)/ ||
                 it in ['inset-button', 'focus-ring-width', 'focus-ring-offset', 'disabled-opacity']
         }.collect { "    const val ${pascal(it)} = ${resolve(it)}f // --$it" }
         ['line-14', 'gauge-track'].each { name ->
@@ -40,7 +41,7 @@ def nativeTokens = tasks.register('generateNativeTokens') {
         def folder = generated.get().dir(packageName.replace('.', '/')).asFile
         folder.mkdirs()
         ['RosyMetrics': metrics, 'RosyTokenColors': colours].each { name, body ->
-            new File(folder, "$name.kt").setText("package $packageName\n\n// Generated from shared/web/tokens.css; do not edit.\nobject $name {\n${body.join('\n')}\n}\n", 'UTF-8')
+            new File(folder, "${name}.kt").setText("package $packageName\n\n// Generated from shared/web/tokens.css; do not edit.\nobject $name {\n${body.join('\n')}\n}\n", 'UTF-8')
         }
     }
 }
