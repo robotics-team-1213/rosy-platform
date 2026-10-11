@@ -231,7 +231,8 @@ class StuckResolverLoop:
                 row = await self._admission_row(answer.robot_id)
                 hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
                     or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
-                if hold or self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
+                if (hold or self._resolver.is_claimed(answer.robot_id, answer.stuck_id)
+                        or self._clients().get(answer.robot_id) is not client):
                     await self._reconcile(answer.robot_id, answer.stuck_id, "not_dispatched")
                     return
             except (OSError, sqlite3.Error):
@@ -244,6 +245,10 @@ class StuckResolverLoop:
             if answer.yield_m is not None and answer.yield_turn_rad is not None:
                 extra = {"yield_m": answer.yield_m, "yield_turn_rad": answer.yield_turn_rad}
             result = await client.line_stuck_decision(answer.stuck_id, answer.decision, **extra)
+            if pending and result.get("outcome") != {
+                    "BACK_AND_RETRY": "back", "RESUME": "resume", "YIELD": "yield", "ABORT": "idle",
+                    "REALIGN": "realign", "MANUAL": "manual"}.get(answer.decision):
+                raise RobotApiError(answer.robot_id, 200, "BAD_RESPONSE", "missing or mismatched stuck receipt")
         except asyncio.CancelledError:
             # Fleet is stopping mid-request: the robot may have applied the answer.
             self._board.record(**record, accepted=None, code="STUCK_DECISION_OUTCOME_UNKNOWN",
@@ -257,8 +262,10 @@ class StuckResolverLoop:
                                 rule=answer.rule, decision=answer.decision)
             raise
         except RobotApiError as exc:
-            code = exc.code
-            self._board.record(**record, accepted=False, code=exc.code, message=exc.message)
+            code = (exc.code if not pending or (400 <= exc.status < 500 and exc.code != "BAD_RESPONSE")
+                    else "STUCK_DECISION_OUTCOME_UNKNOWN")
+            self._board.record(**record, accepted=None if code == "STUCK_DECISION_OUTCOME_UNKNOWN" else False,
+                               code=code, message=exc.message)
         except (httpx.HTTPError, OSError) as exc:
             code, message = transport_failure(exc)
             self._board.record(**record, accepted=False if code == "ROBOT_UNREACHABLE" else None,
