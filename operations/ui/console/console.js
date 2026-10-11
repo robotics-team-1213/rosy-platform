@@ -41,6 +41,7 @@ const layoutPanels = [document.querySelector('.queues-panel'), document.querySel
 const MAP_PANEL = 1;
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
+  canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
   canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),

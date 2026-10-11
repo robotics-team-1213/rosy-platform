@@ -99,7 +99,14 @@ class ChannelWorkPrepareRequest(ChannelSubmitRequest):
 
 class ChannelMissionPrepareRequest(ChannelWorkPrepareRequest):
     kind: Literal["mission"]
-    candidate: dict[str, object]
+    candidate: dict[str, object] | None = None
+    source_proposal_id: str | None = Field(default=None, min_length=1, max_length=192)
+
+    @model_validator(mode="after")
+    def exclusive_candidate(self):
+        if (self.candidate is None) == (self.source_proposal_id is None):
+            raise ValueError("provide an existing source proposal or candidate, exclusively")
+        return self
 
 
 class ChannelCellPrepareRequest(CellAppCompileRequest, ChannelWorkPrepareRequest):

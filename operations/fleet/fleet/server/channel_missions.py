@@ -51,9 +51,18 @@ class ChannelMissions:
         self.workflow._check(value, body.expected_hash, body.expected_revision)
         owner = SitePrincipal(principal, 'operator')
         if body.kind == 'mission':
+            candidate = body.candidate
+            if body.source_proposal_id is not None:
+                source = self.proposals.get(body.source_proposal_id, principal_id=principal)
+                if source is None:
+                    raise HTTPException(404, detail='CHANNEL_SOURCE_PROPOSAL_NOT_FOUND')
+                if (source['candidate'].get('kind') == 'cell_job'
+                        or source['workcell_id'] != body.workcell_id or source['instance_id'] != body.instance_id):
+                    raise HTTPException(409, detail='CHANNEL_SOURCE_PROPOSAL_SCOPE_CHANGED')
+                candidate = source['candidate']
             created = self.create(MissionCandidateRequest(
                 request_key=value['request_key'], workcell_id=body.workcell_id,
-                instance_id=body.instance_id, candidate=body.candidate), principal=owner)
+                instance_id=body.instance_id, candidate=candidate), principal=owner)
             result = self.resolve(created['proposal']['proposal_id'], principal=owner)
         else:
             if self.cell_service_id is None or self.cell_prepare is None:

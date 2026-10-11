@@ -93,6 +93,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       const result = await call("/api/fleet/work"); life.check();
       const previous = rows.find(row => workKey(row) === selected);
       rows = result.rows;
+      channelRequestView.setSources(rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;

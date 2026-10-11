@@ -108,6 +108,14 @@
         <input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0">
         <label for="channel-review-reason">검토 사유</label>
         <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
+        <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
+        <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
+        <div class="actions">
+          <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
+          <span id="channel-review-mission-admit-holder" hidden>
+            <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
+          </span>
+        </div>
         <div class="actions">
           <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
           <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
