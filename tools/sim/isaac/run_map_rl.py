@@ -3,6 +3,7 @@
 Uses the CORE final port in process, never ROS, Fleet or a robot endpoint.
 """
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import math
@@ -30,6 +31,14 @@ def learn_transition(policy, previous, state, result):
     policy.update(*previous, result['reward'], state,
                   terminated=result['terminated'] or result['truncated'])
     return 'updated'
+
+
+def camera_tick(lane, now, *, gain):
+    decision = lane.manager.tick_gain(now, gain=gain)
+    state = lane.state()
+    if state is None:
+        decision = replace(decision, linear=0., angular=0.)
+    return decision, state
 
 
 def main():
@@ -376,14 +385,11 @@ def main():
                     if lane is None:
                         angular = max(-.8, min(.8, angular * policy.gains[action]))
                     else:
-                        decision = lane.manager.tick_gain(now, gain=policy.gains[action])
+                        decision, state = camera_tick(lane, now, gain=policy.gains[action])
                         speed, angular = decision.linear, decision.angular
                         if lane.manager.status().state == 'LOST' and not result['terminated']:
                             result = dict(result, terminated=True, truncated=False, complete=False,
                                           reason='camera_lane_lost', reward=result['reward'] - 10.)
-                        state = lane.state()
-                        if state is None:
-                            speed, angular = 0., 0.
                     if phase == 'train' and lane is not None:
                         learning_step = learn_transition(policy, previous, state, result)
                     if phase == 'train':
