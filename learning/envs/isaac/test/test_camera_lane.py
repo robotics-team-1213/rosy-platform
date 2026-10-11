@@ -377,6 +377,7 @@ def test_camera_comparison_preserves_a_failed_baseline_and_successful_fixed_poli
     {'seed': 303}, {'phase': 'train'}, {'time_limit_s': 200.}, {'policy_sha256': 'b' * 64},
     {'initial_target_pose': [0., 0., .2]}, {'initial_heading_offset_rad': 1.},
     {'initial_pose': [.016, 0., .1, 0., 0.]}, {'initial_pose': [0., 0., .126, 0., 0.]},
+    {'initial_pose': [float('nan'), 0., .1, 0., 0.]}, {'epoch': 10},
 ])
 def test_camera_comparison_rejects_different_conditions_or_physical_start(change):
     from run_map_rl import camera_comparison
