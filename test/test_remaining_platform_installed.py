@@ -41,8 +41,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 69  # D-655 survey/camera controllers and shared edits join the installed assets.
-    assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js'} <= expected.keys()
+    assert len(expected) == 70  # D-655 survey assets and D-664 work view join the installed assets.
+    assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js', 'work-view.js'} <= expected.keys()
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')

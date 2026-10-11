@@ -261,12 +261,21 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_790,
-        "split: independently re-judged on 2026-10-11 by survey_feature_review at 52790 after "
-        "merging D-655 recording/UI owners and D-661 incidents split; incidents counts separately "
-        "at 360 under its existing plan. Keep +150, every file ceiling and observe/server/UI split "
-        "obligations. Previous D-661 verdict: "
-        "split: independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
+        53_012,
+        "split: independently re-judged on 2026-10-11 by survey_feature_review at 53012 after "
+        "merging D-655 survey/recording/UI and D-664 source-scoped work read; incidents remains "
+        "a separate 360-line unit. Keep +150, every file ceiling and both existing split obligations. "
+        "Work reading adds no execution authority; dispatch remains with owning Task/Mission services. "
+        "Previous D-655 verdict: independently re-judged at 52790 after the D-661 incidents split, "
+        "preserving observe/server/UI boundaries. Previous D-664 verdict: "
+        "split: independently re-judged on 2026-10-11 by mixed_work_size_review at 52150: D-664 adds "
+        "bounded work_routes/work_read and work-view using existing store, call, pageScope and shared "
+        "controls. Mission owner scope and both execution owners remain unchanged; no runner, writer, "
+        "transport or SIZE_UNITS added. console.js 1014 stays below 1175. Keep +150 and existing "
+        "observe/server/UI, camera/auth/trip seams. Any admitted/cancel/retry/handoff growth requires "
+        "the D-664 execution contract and owning Task/Mission services, not this read projection; "
+        "schema changes must verify both store owners and summary SQL. Previous verdict: "
+        "independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
         "named human handoff move unchanged into fleet/incidents (360 lines), counted independently under "
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md. Parent measured at 51933; existing "
         "observe/server/UI split obligations and +150 remain. Previous verdict: "
