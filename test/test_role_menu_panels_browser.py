@@ -860,7 +860,7 @@ def test_console_map_actions_require_hardware_runtime():
         page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=map_source))
         page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
-        disabled = page.evaluate("""async () => {
+        page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/map.js');
           const root = document.createElement('main'); document.body.append(root);
           const callbacks = {};
@@ -873,12 +873,14 @@ def test_console_map_actions_require_hardware_runtime():
             localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
           callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
-          const button = root.querySelector('[data-map-click="goal"]');
-          const motor = button.disabled;
-          callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'});
-          return [motor, button.disabled];
+          window.__callbacks = callbacks;
         }""")
-        assert disabled == [True, False]
+        # Map fetch completes asynchronously; runtime authority is checked with a usable map.
+        page.locator('.surface-map-readout').wait_for(state='visible')
+        goal = page.locator('[data-map-click="goal"]')
+        assert goal.is_disabled()
+        page.evaluate("window.__callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'})")
+        assert goal.is_enabled()
         _unmount_panel(page)
         assert errors == []
         browser.close()
