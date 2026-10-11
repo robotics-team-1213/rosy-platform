@@ -10,4 +10,6 @@
 
 비공개 수용 기록에 서버·채널 관리자와 실제 담당자, 실행 SHA/설정 식별, 시각·전송→수신→로그인→인수→현장 결과→종료 readback을 남긴다. 공개 기록에는 secret이나 설치 주소를 제외한 receipt 식별/hash와 각 확인 상태만 둔다. 판단 정확도/지연 한계 및 독립 정답은 팀 검수 뒤 확정한다. 채팅 문장·이모지로 장치 명령이나 E-stop 해제를 받지 않는다.
 
+인수 전에는 기존 `--users-file`의 기명 operator 인증과 `--tasks-db` 감사 원장을 준비한다. 비밀번호 로그인 계정은 [기존 API 인증 계약](ROSY%20API%20%26%20Protocol%20Reference.md)을 따른다. 공용 `site-console` 인증은 이름 있는 사건 인수로 기록할 수 없다. `/api/fleet/session`의 principal/role과 실제 인수 원장의 principal이 일치하는지 확인한다.
+
 Discord는 [execute webhook](https://docs.discord.com/developers/resources/webhook#execute-webhook)의 `wait=true` 응답과 메시지 ID를 확인한다. Slack/Telegram adapter의 소스·가짜 전송 계약도 함께 제공하되 이번 실제 수신 채널은 Discord다. 공식 규약 조회: 2026-10-11.
