@@ -6,7 +6,7 @@ import pytest
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.reports import LineStuckAnswerLog
-from fleet.stuck.resolver import StuckResolver, Answer
+from fleet.stuck.resolver import StuckResolver, ResolverConfig, Answer
 from fleet.stuck import pipeline
 from test_judgment_receipts import row
 
@@ -18,12 +18,13 @@ def make_loop(tmp_path, *, normal=False, autonomous=False):
         source['state']['line_follow'] = {'mode': 'OFF', 'stuck': None}
     else:
         source['state']['line_follow']['stuck']['cause'] = 'unsupported-cause'
-    board = LineStuckBoard(clock=lambda: 10, wall_clock=lambda: 100,
+    board = LineStuckBoard(clock=lambda: 10, wall=lambda: 100,
                            log=LineStuckAnswerLog(tmp_path / 'fleet.db'))
     async def snapshot():
         board.observe([source])
         return {'robots': [source]}
-    resolver = StuckResolver(autonomous_robots={'pinky'} if autonomous else ())
+    resolver = StuckResolver(ResolverConfig())
+    resolver.autonomous_robots = frozenset({'pinky'} if autonomous else ())
     loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: {}, clock=lambda: 10)
     assert isinstance(loop.rule_selections, RuleSelectionStore)
     return loop, source
