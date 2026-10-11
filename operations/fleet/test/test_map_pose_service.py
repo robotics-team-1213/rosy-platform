@@ -39,6 +39,19 @@ class Wall:
         return self.now
 
 
+def test_survey_odom_service_is_read_only_and_roster_and_freshness_bound():
+    wall = Wall()
+    service = MapPoseService(lambda: ['r1'], wall=wall)
+    assert service.survey_odom('r1') is None
+    service.observe_state('r1', state(T0, x=2, y=3, yaw=0.4))
+    assert service.survey_odom('r1') == ((2, 3, 0.4), T0, 0)
+    assert service.survey_odom('r2') is None
+    assert service.arbitrated_pose('r1').state == UNKNOWN
+    assert service.odom_to_map('r1') is None
+    wall.now += 3.01
+    assert service.survey_odom('r1') is None
+
+
 def test_service_anchors_on_sightings_and_bridges_on_snapshot_odom():
     wall = Wall()
     service = MapPoseService(lambda: ["r1"], wall=wall)

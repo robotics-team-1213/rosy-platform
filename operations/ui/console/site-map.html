@@ -68,6 +68,7 @@
   <main id="site-map-main" tabindex="-1">
     <nav class="task-nav" aria-label="현장 지도 작업">
       <a href="#map-heading">지도 보기</a>
+      <a href="#survey-heading">지도 만들기</a>
       <a href="#trip-heading">경로 미리보기</a>
       <a href="#run-heading">운행 확인</a>
       <a href="#edit-heading">지도 편집</a>
@@ -104,6 +105,61 @@
           <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
         </div>
       </details>
+    </ui-section>
+    <ui-section aria-labelledby="survey-heading">
+      <ui-head><h2 class="ui-section-heading" id="survey-heading">지도 없이 시작</h2></ui-head>
+      <ui-text id="survey-reference" role="status">조사 기준 없음</ui-text>
+      <details id="survey-setup">
+        <summary class="ui-disclosure-row">시작점·방향·축척 설정</summary>
+        <div class="form survey-form">
+          <label>원점 x (m)<input class="ui-field" id="survey-x" type="number" min="-1000" max="1000" step="any" value="0"></label>
+          <label>원점 y (m)<input class="ui-field" id="survey-y" type="number" min="-1000" max="1000" step="any" value="0"></label>
+          <label>시작 방향 (°)<input class="ui-field" id="survey-yaw" type="number" min="-360" max="360" step="any" value="0"></label>
+          <label>축척 근거<select class="ui-field" id="survey-scale"><option value="odometry">로봇 odom · m</option><option value="measured">실측 거리</option></select></label>
+          <label>확인한 실측 거리 (m)<input class="ui-field" id="survey-distance" type="number" min="0.001" max="2000" step="any"></label>
+          <label>시작점·방향·축척 설명<input class="ui-field" id="survey-description" maxlength="1000" placeholder="예: 충전소 앞 표식에서 출발, 긴 벽 방향을 +x로 지정"></label>
+        </div>
+        <ui-text id="survey-odometry-note">odom은 장치의 거리 단위입니다. 외부 측량 정확도나 운행 위치 승인을 뜻하지 않습니다.</ui-text>
+        <ui-button id="survey-new" kind="primary" disabled>빈 조사 초안 만들기</ui-button>
+      </details>
+      <details id="survey-editor">
+        <summary class="ui-disclosure-row">장소·도로·시설 추가와 수정</summary>
+        <div class="form survey-form">
+          <label>기존 요소<select class="ui-field" id="element-existing"></select></label>
+          <div class="actions"><ui-button id="element-load" kind="quiet" disabled>수정할 요소 불러오기</ui-button><ui-button id="element-delete" kind="irreversible" disabled>초안 요소 삭제</ui-button></div>
+          <label>요소 ID<input class="ui-field" id="element-id" maxlength="32" pattern="[A-Za-z0-9_.-]{1,32}"></label>
+          <label>이름<input class="ui-field" id="element-name" maxlength="64"></label>
+          <label>종류<select class="ui-field" id="element-kind"><option value="junction">교차로</option><option value="park">목적지·주차</option><option value="charge">충전소</option><option value="stop">정차 장소</option><option value="turnaround">회차 장소</option><option value="start">출발 장소</option><option value="road">도로</option><option value="traffic_signal">신호등</option><option value="stop_line">정지선</option><option value="landmark">기준 표식</option><option value="exclusion">금지 구역</option></select></label>
+          <label id="element-heading" hidden>확인한 출발 방향 (°)<input class="ui-field" id="element-yaw" type="number" min="-360" max="360" step="any" value="0"></label>
+        </div>
+        <fieldset id="element-road" class="form" hidden><legend>도로 연결</legend>
+          <label>시작 장소<select class="ui-field" id="element-from"></select></label><label>끝 장소<select class="ui-field" id="element-to"></select></label>
+          <label>차로 폭 (m)<input class="ui-field" id="element-width" type="number" min="0.001" max="10" step="any" value="0.2"></label>
+          <label>통행 방향<select class="ui-field" id="element-direction"><option value="one_way">일방통행</option><option value="two_way">양방향</option></select></label>
+          <ui-button id="element-endpoints" kind="quiet" disabled>두 장소 사이 직선 지정</ui-button>
+        </fieldset>
+        <fieldset id="element-signal" class="form" hidden><legend>신호등 연결</legend>
+          <label>신호등 ID<input class="ui-field" id="element-signal-id" maxlength="64" pattern="[A-Za-z0-9_.-]{1,64}"></label>
+          <label>종류<select class="ui-field" id="element-signal-kind"><option value="virtual">가상 신호</option><option value="physical">물리 신호등</option></select></label>
+          <ui-text>시설을 그리는 것과 장치 등록·신호 제어 활성화는 별도입니다.</ui-text>
+        </fieldset>
+        <fieldset id="element-approach" class="form" hidden><legend>제어할 진입 차로</legend>
+          <label>연결 차로<select class="ui-field" id="element-lanes" multiple size="3"></select></label>
+          <label>선택 차로에 적용할 방향<select class="ui-field" id="element-forward"><option value="forward">시작 → 끝</option><option value="reverse">끝 → 시작</option></select></label>
+          <label>진입 시작부터 정지 거리 (m)<input class="ui-field" id="element-stop" type="number" min="0" step="any"></label>
+        </fieldset>
+        <div class="actions"><ui-button id="element-pick" kind="quiet" aria-pressed="false" disabled>지도에서 점 찍기</ui-button><ui-button id="element-clear" kind="quiet" disabled>새 요소·좌표 초기화</ui-button></div>
+        <div class="form"><label>점 x (m)<input class="ui-field" id="element-x" type="number" min="-1000" max="1000" step="any" value="0"></label><label>점 y (m)<input class="ui-field" id="element-y" type="number" min="-1000" max="1000" step="any" value="0"></label><ui-button id="element-point" kind="quiet" disabled>좌표로 점 추가</ui-button></div>
+        <ui-text id="element-points" role="status">찍은 좌표 없음</ui-text>
+        <ui-text>장소·신호등·표식은 한 점, 정지선은 두 점, 금지 구역은 세 점 이상입니다. 도로는 시작 장소부터 끝 장소까지 실제 모양대로 찍습니다.</ui-text>
+        <ui-button id="element-save" kind="primary" disabled>초안에 요소 추가</ui-button>
+      </details>
+      <details><summary class="ui-disclosure-row">지도 요소·도로 근거</summary><ol id="survey-elements" class="survey-elements"></ol></details>
+      <details><summary class="ui-disclosure-row">운행 전 좌표·도로 검토</summary>
+        <label>확인한 기준과 도로의 검토 근거<textarea class="ui-field" id="survey-review-note" rows="3" maxlength="1000"></textarea></label>
+        <ui-button id="survey-review" kind="quiet" disabled>검토 근거를 초안에 반영</ui-button>
+      </details>
+      <ui-text id="survey-status" role="status" aria-live="polite">새 지도는 초안으로 쌓습니다. 저장·검토·활성화 전까지 운행에 사용하지 않습니다.</ui-text>
     </ui-section>
     <ui-section aria-labelledby="profile-heading">
       <ui-head><h2 class="ui-section-heading" id="profile-heading">지도 설정</h2></ui-head>
@@ -153,6 +209,10 @@
         <ui-head><h2 class="ui-section-heading" id="edit-heading">초안 편집</h2></ui-head>
         <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
         <ui-button id="import-camera-map" kind="quiet" disabled>카메라 지도 초안 가져오기</ui-button>
+        <ui-button id="preview-camera-connections" kind="quiet" disabled>연결 후보 보기</ui-button>
+        <div id="camera-connections" class="form" aria-live="polite"></div>
+        <label id="camera-connect-check" class="ui-check" hidden><input class="ui-field" id="camera-connect-confirm" type="checkbox">후보 장소와 실제 도로 연결을 확인했습니다</label>
+        <ui-button id="merge-camera-map" kind="quiet" disabled>현재 초안에 관측 누적</ui-button>
         <ui-text>가져온 차로의 연결·통행 방향을 검토하세요. 활성 지도는 초안 활성화 전까지 바뀌지 않습니다.</ui-text>
         <ui-text id="selection">선택 없음</ui-text>
         <div id="place-form" class="form" hidden>
@@ -188,7 +248,11 @@
     <ui-section aria-labelledby="teach-heading">
       <ui-head><h2 class="ui-section-heading" id="teach-heading">지도 가르치기</h2></ui-head>
       <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>
-      <label>로봇<select class="ui-field" id="teach-robot"></select></label>
+      <label>로봇<select class="ui-field" id="teach-robot" aria-describedby="teach-target"></select></label>
+      <ui-text id="teach-target" role="status">기록할 로봇을 선택하세요</ui-text>
+        <label>기록 좌표<select class="ui-field" id="teach-frame" aria-describedby="teach-target"><option value="map">확인된 지도 위치</option><option value="survey">지도 없이 상대 주행 조사</option></select></label>
+        <ui-text id="teach-reference" role="status">조사 기준 없음</ui-text>
+        <label class="ui-check" id="teach-origin-check" hidden><input class="ui-field" id="teach-origin-confirm" type="checkbox">로봇을 위 조사 시작점·방향에 놓았습니다</label>
       <div class="actions">
         <ui-button id="teach-start" kind="primary" disabled reason="관제 접속이 필요합니다">기록 시작</ui-button>
         <ui-button id="teach-stop" kind="quiet" disabled reason="관제 접속이 필요합니다">기록 멈춤</ui-button>

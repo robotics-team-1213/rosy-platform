@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
-from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
@@ -39,20 +39,11 @@ from core_common.protocol.trip_lease import TripLeaseFields  # D-541 1: trip_lea
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
+from core_common.protocol.site_survey import SurveyReference, RoadEvidence, FacilityApproach, SiteFacility  # noqa: F401
 # PowerHealthResponse lives in protocol.power_health and references these shared types.
 # Import that response from its module to avoid a schema import cycle.
 
 PROTOCOL_VERSION = "1.0"
-
-
-class HostStatusEvidence(BaseModel):
-    """CORE judgment of one Host Agent network or release status sample."""
-
-    evidence: EvidenceState = EvidenceState.UNAVAILABLE
-    observed_at: str | None = None
-    age_s: float | None = None
-    stale_after_s: float = 15.0
-    reason: str = ""
 
 
 def utc_now_iso() -> str:
