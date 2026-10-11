@@ -19,7 +19,8 @@ setup(
     packages=(find_packages(exclude=['test']) + list(package_dirs)
               + ['fleet.server.web.' + name for name in find_packages(where=str(roots['console']))]),
     package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
-    cmdclass={'sdist': packaging['HolderSource'], 'build_py': packaging['PureAssessment']},
+    cmdclass={'sdist': packaging['HolderSource'], 'build_py': packaging['PureAssessment'],
+              'develop': packaging['HolderDevelop']},
     package_data={'fleet.server.web': [
         '*.html', '*.css', '*.js',
         'shared/*.css', 'shared/*.js',

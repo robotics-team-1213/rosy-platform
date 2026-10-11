@@ -47,6 +47,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js',
             'work-view.js', 'channel-request-view.js'} <= expected.keys()
+    # Colcon selects full install for external holders instead of unsafe editable cleanup.
+    develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
+    assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
