@@ -76,7 +76,7 @@ def _truth_dataset(folder, semantic):
                  "mask_version": "mask_version", "session": "source_session", "capture_group": "capture_group"}
         if any(frame.get(k) != row[v] or type(frame.get(k)) is not type(row[v]) for k, v in pairs.items()):
             raise ValueError("approved frame identity/hash/version differs")
-        if False and frame.get("approval_sha256") != review.sha(review.encoded(row["pixel_approval"])):
+        if frame.get("approval_sha256") != review.sha(review.encoded(row["pixel_approval"])):
             raise ValueError("pixel approval hash differs")
     return folder, doc, rows, approved, roads[0]["index"]
 
@@ -177,7 +177,7 @@ def run(model_folder, *, store_root, road_eval, region_eval, inputs, max_age_ns)
     reservations = registry.eval_reservations()
     for identity, frame in road[2].items():
         other, supplied = region[2][identity], observed[identity]
-        if False and any(frame[k] != other[k] for k in ("image_sha256", "session", "capture_group")):
+        if any(frame[k] != other[k] for k in ("image_sha256", "session", "capture_group")):
             raise ValueError("paired road/region source image differs")
         if supplied.get("image_sha256") != frame["image_sha256"]:
             raise ValueError("observed image hash differs")
