@@ -49,11 +49,11 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         page.wait_for_function("document.querySelector('#user-role').textContent === '인증 필요'")
         page.fill("#console-token", accepted_token)
         page.locator("#token-save").click()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('local-operator')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
         page.goto(f"{base}/{second}", wait_until="domcontentloaded")
         asset = second.replace(".html", ".js").replace("index.js", "console.js")
         assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('local-operator')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
         assert page.input_value("#console-token") == accepted_token
         assert page.evaluate("localStorage.getItem('rosy-console-token')") is None
 
@@ -69,7 +69,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         open_token_access(page)
         page.fill("#console-token", accepted_token)
         page.locator("#token-save").click()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('local-operator')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
         assert page.locator("#console-token").get_attribute("aria-invalid") is None
         # Reauthentication does not replay the command that received 401.
         assert len([row for row in requests if row[1] == "POST" and row[0] == "/api/fleet/estop"]) == 1
@@ -104,7 +104,7 @@ def test_console_session_does_not_follow_the_document_to_another_origin(console_
         page.goto(console_url, wait_until="domcontentloaded")
         page.fill("#console-token", "origin-scoped-fleet")
         page.locator("#token-save").click()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('origin-operator')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'origin-operator · operator'")
         other_origin = console_url.replace("127.0.0.1", "localhost")
         page.goto(other_origin, wait_until="domcontentloaded")
         page.wait_for_function("document.querySelector('#user-role').textContent === '인증 필요'")
@@ -113,7 +113,7 @@ def test_console_session_does_not_follow_the_document_to_another_origin(console_
         assert all(auth is None for host, auth in seen if host == "localhost")
         assert any(host == "localhost" for host, _auth in seen)
         page.goto(console_url, wait_until="domcontentloaded")
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('origin-operator')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'origin-operator · operator'")
         assert page.input_value("#console-token") == "origin-scoped-fleet"
         assert not errors
         browser.close()
