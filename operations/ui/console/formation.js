@@ -314,6 +314,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       const robot = view.robots.find((row) => row.robot_id === leader);
       const kind = leaderPathKind(robot, pathContext());
       if (kind.kind === "goal") {
+        view.focusRobotWorkspace?.(leader);
         view.selected = leader;
         view.pinning = null;
         view.cursor = view.map

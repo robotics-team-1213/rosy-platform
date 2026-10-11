@@ -161,7 +161,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
         for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1100)
-            status = page.get_by_role("tab", name="로봇 상태")
+            status = page.get_by_role("tab", name="로봇·작업")
             status.click()
             map_before = page.locator("#map-stage").bounding_box()
             expect(page.locator("#context-status")).to_be_visible()
@@ -266,7 +266,7 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages.locator("pre")).not_to_be_visible()
         messages.locator("details details > summary").click()
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         page.clock.run_for(6000)
         expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
         stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
@@ -342,9 +342,14 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
     return browser, page, errors
 
 
-def _shot(page, name):
+def _shot(page, name, *, full_page=False):
     if out := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(out) / name))
+        if full_page:
+            page.evaluate("document.activeElement?.blur(); window.scrollTo(0, 0)")
+            page.evaluate("document.fonts.ready")
+            page.clock.run_for(100)
+            assert page.evaluate("window.scrollY") == 0
+        page.screenshot(path=str(Path(out) / name), full_page=full_page)
 
 
 def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scroll(site):
@@ -418,10 +423,9 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         browser.close()
 
 
-def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site):
-    """D-540 3: a nominal card is one line (name, trip line, battery) and opens on click; offline, latched
-    E-stop, safety not nominal and calibration in progress stay open with no fold control."""
-    from playwright.sync_api import sync_playwright
+def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_workspace(site):
+    """D-651: selecting another robot never hides offline, E-stop, unknown safety or calibration evidence."""
+    from playwright.sync_api import expect, sync_playwright
 
     api = {**API, "/api/fleet/trips": {"running": None, "trips": [], "open": []},
            "/api/fleet/state": {"fleet": {"name": "site", "online": 4, "total": 5}, "ts": 0.0, "robots": [
@@ -430,17 +434,16 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
         card = page.locator('#roster article[data-robot-id="nominal"]')
-        assert card.get_attribute("data-collapsed") == ""
         assert "80%" in card.inner_text()
-        for robot_id in ("rosy_04", "latched", "unknown", "calib"):
+        for robot_id, evidence in (("rosy_04", "접속 실패"), ("latched", "비상 정지"),
+                                   ("unknown", "안전 확인 불가"), ("calib", "보정 진행 중 · 카메라 보정 · kim")):
             must = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
-            assert must.get_attribute("data-collapsed") is None, robot_id
+            expect(must).to_contain_text(evidence)
             assert must.locator(".robot-fold").count() == 0, robot_id
-        card.locator(".robot-line").click()
+        card.locator("[data-select-robot-id]").click()
         page.clock.run_for(1500)
-        assert card.get_attribute("data-collapsed") is None
-        card.locator(".robot-fold").click()
-        assert card.get_attribute("data-collapsed") == ""
+        expect(page.locator('#robot-workspace article[data-robot-id="nominal"]')).to_have_count(1)
+        expect(page.locator('#roster article[data-robot-id="calib"]')).to_contain_text("kim")
         _shot(page, "console-cards-1440x900.png")
         assert not errors
         browser.close()
@@ -528,9 +531,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
                 break
         assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
 
-        card = page.locator('#roster article[data-robot-id="rosy_03"]')
-        card.locator(".robot-fold").click()
-        assert card.get_attribute("data-collapsed") == ""
+        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 0
         slot = slot_of("rosy_03")
         assert slot.locator('ui-button[data-replan="confirm"]').get_attribute("reason") == "확인할 바뀐 경로가 없습니다"
         slot.locator('ui-button[data-replan="cancel"]').click()
@@ -542,7 +543,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
         before = list(posts)
         page.locator('[data-decision-slot="rosy_03|deadlock"] ui-button[data-replan="card"]').click()
         page.clock.run_for(300)
-        assert card.get_attribute("data-collapsed") is None
+        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 1
         assert posts == before
         assert {path for path, _ in posts} <= {"/api/fleet/trips/t-rosy_02/confirm-replan",
                                                 "/api/fleet/trips/t-rosy_03/cancel"}

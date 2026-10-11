@@ -4,6 +4,8 @@
 
 ## 표적과 촬영
 
+사이트 Vision 컨테이너에서는 패키지 실행 파일을 PATH에 설치하지 않으므로 아래 명령의 `rosy-camera-calibrate`를 `python3 -m rosy_vision.camera_calibration`로 바꿔 실행한다. ROS 패키지 설치본에서는 기존 실행 파일을 사용한다.
+
 `rosy-camera-calibrate target --output <new-output-dir>`는 AprilTag 36h11의 3×3 판을 생성한다. 기본 태그의 검은 테두리 포함 한 변은 30 mm, 간격은 태그 크기의 0.3배, 흰 여백은 grid pitch 하나이다. 전체 SVG는 186×186 mm다. PNG는 미리보기이며, SVG를 100%로 인쇄하고 태그 한 변과 가로·세로 전체 길이를 다시 실측한다. 평평하고 단단한 판을 사용한다. 프린터의 자동 맞춤으로 크기가 바뀌면 manifest의 실측값을 고쳐 새 후보를 구한다.
 
 더 작은 공간에서는 입력 JSON `{"rows":2,"cols":2,"tag_size_m":0.03,"spacing_ratio":0.3,"first_id":0}`을 `target --input <grid.json>`에 준다. 이 판은 147×147 mm다. 최소 세 개의 완전한 태그가 보여야 하므로 잘린 태그나 두 태그만 보이는 영상은 사용하지 않는다. 판 일부만 보이는 관측은 완전히 보이는 태그의 ID로 대응한다. [Kalibr 공식 표적 안내](https://github.com/ethz-asl/kalibr/wiki/calibration-targets).
