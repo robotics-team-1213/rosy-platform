@@ -12,8 +12,9 @@ METRICS = ('iou', 'outside_false_positive_rate', 'missed_fraction',
 
 
 def _source_summary(rows):
+    rows = sorted(rows, key=lambda r: r['identity'])
     groups = defaultdict(list)
-    for row in sorted(rows, key=lambda r: r['identity']):
+    for row in rows:
         groups[row['capture_group']].append(row)
     sources = {key: _summarize(groups[key]) for key in sorted(groups)}
     intervals = {}
