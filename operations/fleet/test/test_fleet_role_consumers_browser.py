@@ -81,7 +81,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     if chooser.is_visible():
                         chooser.select_option("calibration")
                     else:
-                        page.get_by_role("tab", name="??? ?????", exact=True).click()
+                        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
                     page.locator("#field-options").evaluate("node => node.open = true")
                     for field_id in ["#field-width", "#field-height"]:
                         field = page.locator(field_id)
@@ -93,6 +93,9 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     assert page.get_by_role("heading", level=1).evaluate("node => getComputedStyle(node).fontSize") == "20px"
                     assert page.locator("h2.ui-section-heading").evaluate_all(
                         "nodes => nodes.length > 0 && nodes.every(node => getComputedStyle(node).fontSize === '16px')")
+                    if path == "/console/site-map":
+                        expect(page.get_by_role("heading", name="지도 설정", exact=True)).to_have_count(1)
+                        _assert_control(page.locator("#profile-file").locator("xpath=ancestor::details/summary"))
                     summary = page.locator("main summary.ui-disclosure-row").first
                     for opened in [False, True]:
                         summary.evaluate("(node, open) => node.parentElement.open = open", opened)
