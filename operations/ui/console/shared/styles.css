@@ -766,15 +766,24 @@ main {
 
 
 /* D-457 관제 카메라 추적 — 상태줄과 범례. 색은 토큰만(CSP style-src 'self'). */
+.map-board { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .map-readouts { flex: 0 1 auto; min-height: 0; block-size: auto; max-block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
-/* 펼친 좌표의 수명 만료가 지도 크기를 바꾸지 않게 한다. 기본 접힘은 내용 높이만 쓴다. */
-.map-readouts:has(#tracking-coordinate-details[open]) { flex: 0 0 auto; block-size: 11rem; }
+.map-context { min-width: 0; }
+.map-context > h3 { margin-block: var(--space-3) var(--space-2); }
+.map-place-list { margin: 0; padding-inline-start: var(--space-5); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.map-place-list li { padding-block: var(--space-1); }
 .map-traffic-status { list-style: none; padding: 0; margin: 0; font-size: var(--text-body); overflow-wrap: anywhere; }
 .map-traffic-status li { padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
 .tracking-bar table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .tracking-bar th, .tracking-bar td { overflow-wrap: anywhere; }
+@media (width >= 64rem) and (height >= 40rem) {
+  .map-board { display: grid; grid-template-columns: minmax(0, 1fr) 14rem; grid-template-rows: minmax(0, 1fr); gap: var(--space-3); }
+  .map-readouts { max-block-size: none; margin-top: 0; grid-template-columns: minmax(0, 1fr); align-content: start; }
+}
 @media (width < 64rem), (height < 40rem) {
+  /* 펼친 좌표의 수명 만료가 지도 크기를 바꾸지 않게 한다. 기본 접힘은 내용 높이만 쓴다. */
+  .map-readouts:has(#tracking-coordinate-details[open]) { flex: 0 0 auto; block-size: 11rem; }
   #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
 }
 #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }

@@ -133,6 +133,29 @@ roots:
     wave: "4d"
     import_prefix: [core]
     concern: control
+  - path: middleware/control/drive/behaviors
+    part: middleware
+    d427_target: middleware/control/drive/behaviors
+    wave: none
+    concern: control
+    import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
+    source_packages:
+      line_follow: core_features.line_follow
+      docking: core_features.docking
+      navigation: core_features.navigation
+      localization: core_features.localization
+      swarm: core_features.swarm
+      road_behaviour: core_features.road_behaviour
+      traffic_policy: core_features.traffic_policy
+    note: D-649 Base behavior implementation installed by core_features; no final writer.
+  - path: middleware/control/drive/runtime
+    part: middleware
+    d427_target: middleware/control/drive/runtime
+    wave: none
+    concern: control
+    import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
+    source_packages: {"": control}
+    note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
   - path: middleware/core/services
     part: middleware
     d427_target: middleware/core/services
@@ -735,10 +758,10 @@ safety_modules:
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
   - middleware/core/services/core_features/command/arbitration.py
-  - middleware/core/services/core_features/docking/charging.py
-  - middleware/core/services/core_features/line_follow/body_stop.py
-  - middleware/core/services/core_features/line_follow/clearance.py
-  - middleware/core/services/core_features/localization/rotate_to.py  # D-603 bounded in-place turn
+  - middleware/control/drive/behaviors/docking/charging.py
+  - middleware/control/drive/behaviors/line_follow/body_stop.py
+  - middleware/control/drive/behaviors/line_follow/clearance.py
+  - middleware/control/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
