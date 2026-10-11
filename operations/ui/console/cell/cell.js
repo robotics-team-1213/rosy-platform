@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -102,7 +103,7 @@ function refreshControls() {
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
         ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
-      if (role !== 'operator') reason = '운영자 접속 필요';
+      if (role !== 'operator') reason = OPERATOR_REASON;
       if (busy) reason = '요청 처리 중';
     }
     $(id).disabled = !allowed;

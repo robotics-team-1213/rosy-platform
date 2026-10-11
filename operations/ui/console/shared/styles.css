@@ -7,7 +7,7 @@
 .connection-guide p { margin: 0; color: var(--text-secondary); }
 .connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-button); color: var(--text-primary); }
 .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-#estop-feedback { margin: var(--space-2) var(--space-5) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); background: var(--surface-flat); }
+#estop-feedback { margin: var(--space-2) var(--space-5) 0; }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
@@ -57,7 +57,7 @@
 .context-panel .ops-block { grid-template-columns: minmax(0, 1fr); }
 #context-tools .ops-block > * { grid-column: 1; grid-row: auto; }
 #inbox-messages pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-micro); }
-#inbox-messages summary { min-height: var(--target-secondary); cursor: pointer; }
+
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
@@ -104,7 +104,7 @@ body {
 .vision-corner-modes { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 var(--space-2); }
 .vision-frame p { margin: var(--space-3); color: var(--text-secondary); text-align: center; }
 .vision-adjustments { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
-.vision-adjustments summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; color: var(--text-primary); }
+.vision-adjustments summary { display: list-item; }
 .vision-adjustments summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .adjustment-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .adjustment-columns fieldset { min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); }
@@ -135,13 +135,13 @@ body {
 .map-fit-state[data-tone="warn"], .map-fit-guidance { color: var(--status-warn); }
 .map-fit-guidance { margin: var(--space-1) 0 0; font-size: var(--text-label); }
 .field-options { margin-top: var(--space-2); }
-.field-options summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; }
+.field-options summary { display: list-item; }
 .field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .field-options legend { padding-inline: var(--space-1); font-size: var(--text-label); }
 .field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--text-secondary); font-size: var(--text-micro); }
-.field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-flag); }
-.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
+.field-size input { width: 6rem; }
+.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--flag-caution); border-radius: var(--radius-button); font-size: var(--text-micro); }
 .field-mismatch[hidden] { display: none; }
 /* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
 .map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
@@ -235,7 +235,7 @@ main {
 @media (width >= 64rem) and (height >= 40rem) {
   ui-shell:has(> #fleet-main) { height: 100dvh; }
   #fleet-main > .console-primary > .panel { flex: 1 1 auto; }
-  #fleet-main .map-stage { flex: 1; min-height: 0; }
+  #fleet-main .map-stage { flex: 1; min-height: 12.5rem; }
 }
 .panel {
   background: var(--panel-fill);
@@ -258,7 +258,7 @@ main {
 .map-head .spacer { flex: 1; }
 /* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
 .trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
-.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--text-secondary); }
+.trail-control > summary { display: list-item; }
 .trail-control > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-raised); }
 .trail-robots { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); } .trail-panel .hint { margin: 0; font-size: var(--text-micro); }
@@ -402,13 +402,10 @@ main {
 .robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
 /* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
 .robot[data-collapsed] { padding: 0; }
-.robot-line { all: unset; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
-  width: 100%; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); cursor: pointer; }
-.robot-line b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
+.robot-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); width: 100%; }
+.robot-line b { font-family: var(--mono); letter-spacing: var(--track-wide); }
 .robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
 .robot-line-battery strong { font-family: var(--mono); font-size: var(--text-label); }
-.robot-fold { all: unset; box-sizing: border-box; min-height: var(--target-secondary); padding: 0 var(--space-2);
-  border-radius: var(--radius-control); color: var(--text-secondary); font-size: var(--text-label); cursor: pointer; }
 
 .facts {
   display: grid;
@@ -437,7 +434,7 @@ main {
 .card-trip label { display: grid; gap: var(--space-1); font-size: var(--text-label); color: var(--text-secondary); }
 .card-trip select { width: 100%; min-width: 0; }
 .card-trip p { margin: 0; }
-.convoy-form-wrap > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; padding-block: var(--space-2); }
+.convoy-form-wrap > summary { display: list-item; }
 /* 버튼 글자는 낱자로 끊지 않는다. 좁으면 버튼째 다음 줄로 내린다. */
 .robot-actions ui-button { flex: 1 1 0; white-space: nowrap; word-break: keep-all; }
 /* 대형 행동은 넓은 화면에서 접고, 좁은 칸에서는 두 열의 같은 폭으로 읽는다. */
@@ -474,7 +471,7 @@ main {
 
 /* D-415 — 로그 뷰어: 펼침 패널, 기본 8줄, 지우기 버튼. */
 .log-panel { margin-top: var(--space-3); }
-.log-panel > summary { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--text-secondary); cursor: pointer; margin-bottom: var(--space-2); }
+.log-panel > summary { margin-bottom: var(--space-2); }
 /* D-493 — 지우기는 기록 머리 줄 오른쪽에 선다(따로 한 줄을 쓰지 않는다). */
 .log-panel { position: relative; }
 .log-toolbar { position: absolute; top: 0; right: 0; display: flex; }
@@ -525,7 +522,7 @@ main {
 
 /* D-415 — 진단 패널 */
 .console-diagnostics { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
-.console-diagnostics > summary { font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); cursor: pointer; margin-bottom: var(--space-2); }
+.console-diagnostics > summary { margin-bottom: var(--space-2); }
 .diag-readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); font-size: var(--text-micro); }
 .diag-readout dt { font-family: var(--mono); color: var(--text-secondary); letter-spacing: var(--track-label); }
 .diag-readout dd { margin: 0; font-family: var(--mono); color: var(--text-primary); overflow-wrap: break-word; }
@@ -538,7 +535,7 @@ main {
   font-size: var(--text-micro);
   line-height: var(--leading-copy);
 }
-.note summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; padding-block: var(--space-2); }
+.note summary { display: list-item; }
 .note summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .note p { margin: var(--space-2) 0 0; }
 
@@ -618,7 +615,7 @@ main {
 .formation-form .member-list input { width: auto; flex: none; }
 .member-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-list input:disabled + * { opacity: var(--disabled-opacity); }
-.queue-group > summary { cursor: pointer; } .queue-group > p { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
+.queue-group > p { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 /* Many robots (10, 100): the follower boxes are a bounded list like a multi-select; 로봇 찾기 narrows it. */
 .member-list { max-height: 12rem; overflow-y: auto; } .member-list label[hidden] { display: none; }
 .robot-filter { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); align-items: center;
@@ -661,8 +658,7 @@ main {
 }
 .issue-list li[data-decision]:not([data-decision=""]) { padding: 0; }
 /* D-540 3 — 결정이 있는 행은 펼침 단추다. 펼친 자리에 그 결정이 열린다(한 번에 하나). */
-.queue-row { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: var(--target-secondary);
-  padding: var(--space-2); border-radius: var(--radius-control); cursor: pointer; overflow-wrap: anywhere; }
+.queue-row { width: 100%; overflow-wrap: anywhere; }
 .queue-row::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--text-secondary); }
 .queue-row[aria-expanded="true"]::before { content: "▾"; }
 .queue-row:focus-visible, .robot-line:focus-visible, .robot-fold:focus-visible {
@@ -702,7 +698,7 @@ main {
 .incident-body { margin-top: var(--space-3); }
 .incident-body .robot-head { justify-content: flex-end; }
 .incident-panel .issue-list li { background: transparent; border-radius: 0; border-bottom: 1px solid var(--border-subtle); padding: var(--space-2) 0; }
-.incident-row summary { cursor: pointer; min-height: var(--target-secondary); font-size: var(--text-label); font-weight: var(--weight-medium); }
+
 .incident-row summary > span { display: block; }
 .incident-row time { display: block; margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--text-micro); font-weight: var(--weight-regular); }
 .incident-row summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -722,7 +718,6 @@ main {
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
 .site-path { margin: var(--space-2) 0; }
-.site-path > summary { cursor: pointer; min-height: var(--target-secondary); padding-block: var(--space-2); font-weight: var(--weight-label); }
 .site-path > summary span { color: var(--text-secondary); }
 .site-path > summary span[data-kind="warn"] { color: var(--status-warn); }
 .site-path > summary span[data-kind="crit"] { color: var(--status-crit); }
@@ -744,7 +739,6 @@ main {
 .address-movable li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .address-movable li span { font-family: var(--mono); font-size: var(--text-label); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }
 .enroll-result[data-kind="bad"] { color: var(--status-crit); }
 .enrolled-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
@@ -772,13 +766,15 @@ main {
 
 
 /* D-457 관제 카메라 추적 — 상태줄과 범례. 색은 토큰만(CSP style-src 'self'). */
-.map-readouts { flex: none; block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
+.map-readouts { flex: 0 1 11rem; min-height: 0; block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
 .map-traffic-status { list-style: none; padding: 0; margin: 0; font-size: var(--text-body); overflow-wrap: anywhere; }
 .map-traffic-status li { padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
 .tracking-bar table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .tracking-bar th, .tracking-bar td { overflow-wrap: anywhere; }
-#fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
+@media (width < 64rem), (height < 40rem) {
+  #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
+}
 #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
 #map-tag, #map-display-status { flex: 1 1 100%; }
 @media (width < 64rem) {
@@ -819,7 +815,7 @@ main {
   .ops-block > .log-panel { grid-column: 2; grid-row: 4; margin: 0; }
 }
 
-.log-panel[open] > summary { display: flex; align-items: center; min-height: var(--target-secondary); margin-bottom: 0; }
+.log-panel[open] > summary { display: flex; align-items: center; margin-bottom: 0; }
 /* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소 한 줄이다(제목이 글자 단위로 접히지 않게). */
 @media (width < 64rem) {
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }

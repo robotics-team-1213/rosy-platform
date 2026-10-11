@@ -1251,3 +1251,9 @@
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
 - Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
 - Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+
+- 변경: 공용 버튼 inset 소비와 갤러리 제목/접힘 행을 연결하고 의미 기반 readout·현재 절차 fixture를 정리했다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 통합 32860ffe1의 원격 토큰/규격/반응형 104 passed, X:/DevTemp/ui-role-static-final/run-1.txt. Robot 최종 browser는 통합 검증에 연결한다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.

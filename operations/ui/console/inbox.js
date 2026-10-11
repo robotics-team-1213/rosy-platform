@@ -75,6 +75,7 @@ export function createInboxPanel({scope, el, readView}) {
           stages.append(term, document.createElement("dd"));
         }
         const raw = document.createElement("details"), summary = document.createElement("summary");
+        summary.className = "ui-disclosure-row";
         summary.textContent = "전달 필드 보기";
         raw.append(summary, document.createElement("pre"));
         item.append(heading, stages, raw);

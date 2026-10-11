@@ -249,11 +249,11 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   ui-topbar { padding: var(--space-2); }
   ui-brand small { display: none; }
   /* 320px에서 화면 전환 세 링크와 비상 정지가 한 줄에 선다 — 안쪽 여백만 줄인다. */
-  .surface-switch a { padding-inline: var(--space-1); }
+  .surface-switch a { padding-inline: var(--inset-button); }
   #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); padding: var(--space-3); }
   .surface-actions:is(.map-click-actions, .map-layer-actions) { flex-direction: row; width: 100%; }
-  .surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--space-1); }
+  .surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
 }
 
 @media (width < 23rem) {

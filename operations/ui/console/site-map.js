@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
 import {createFleetClient} from '/common/fleet-client.js';
@@ -48,7 +49,7 @@ function shown() {
   if ($('map-source').value === 'profile') return selectedProfile()?.map;
   return $('map-source').value === 'draft' ? state.working : state.active?.map;
 }
-function operatorReason() { return state.role === 'operator' ? '' : state.role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다'; }
+function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
 
 function el(name, attrs, parent) {
   const node = document.createElementNS(SVG, name);
@@ -462,7 +463,7 @@ $('profile-save').addEventListener('click', () => guarded(async () => {
 $('profile-draft').addEventListener('click', () => guarded(async () => {
   if (operatorReason() || !selectedProfile() || selectedProfile().kind === 'soccer') return;
   if (state.dirty || state.draft?.revision) {
-    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 지도 설정로 바꿀까요?',
+    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 설정으로 바꿀까요?',
       action: '지도 설정을 초안으로', opener: $('profile-draft')});
     if (!allowed) return;
   }

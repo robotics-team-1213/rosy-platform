@@ -515,13 +515,40 @@ export function cssColor(name) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-/** `--body`·`--mono` 글꼴로 된 캔버스 font. 글자는 12px 아래로 내려가지 않는다. */
-export function canvasFont(size, family = "body") {
+/** Canvas typography reads the same role and family as DOM text; scale is raster geometry. */
+export function canvasTextSize(role = "micro") {
+  if (!["micro", "label", "body", "value", "title", "display"].includes(role)) {
+    throw new TypeError(`Unknown canvas text role: ${role}`);
+  }
+  if (fontCache.has(`size:${role}`)) return fontCache.get(`size:${role}`);
+  if (!getComputedStyle(document.documentElement).getPropertyValue(`--text-${role}`).trim()) {
+    throw new Error(`Missing canvas text token: --text-${role}`);
+  }
+  const probe = document.createElement("span");
+  probe.hidden = true;
+  probe.dataset.rosyFontProbe = "";
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`[data-rosy-font-probe] { font-size: var(--text-${role}); }`);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  document.documentElement.append(probe);
+  const size = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((entry) => entry !== sheet);
+  if (!Number.isFinite(size) || size <= 0) throw new Error(`Missing canvas text token: --text-${role}`);
+  fontCache.set(`size:${role}`, size);
+  return size;
+}
+
+export function canvasFont(role = "micro", family = "body", displayScale = 1) {
+  const size = canvasTextSize(role);
+  if (!["body", "mono"].includes(family)) throw new TypeError(`Unknown canvas font family: ${family}`);
+  const scale = Number(displayScale);
+  if (!Number.isFinite(scale) || scale <= 0) throw new RangeError("Canvas display scale must be positive");
   if (!fontCache.has(family)) {
     const stack = getComputedStyle(document.documentElement).getPropertyValue(`--${family}`).trim();
     fontCache.set(family, stack || (family === "mono" ? "monospace" : "sans-serif"));
   }
-  return `${Math.max(12, Math.round(Number(size) || 12))}px ${fontCache.get(family)}`;
+  return `${Math.max(1, Math.round(size * scale))}px ${fontCache.get(family)}`;
 }
 
 export function clearPalette() {
@@ -530,7 +557,7 @@ export function clearPalette() {
 }
 
 document.addEventListener("rosy:theme", clearPalette);
-window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, clear: clearPalette };
+window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, canvasTextSize, clear: clearPalette };
 
 // D-359 US-008 — 자간 토큰은 라틴 대문자 라벨용이다. 한글은 음절 하나가 이미 한
 // 글자 칸이라 0.06–0.12em을 더하면 "점유  지도"처럼 띄어 읽힌다. 페이지가 모두
