@@ -19,6 +19,30 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+@pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
+def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
+    import math
+    from run_map_rl import camera_route_guide
+    task = SimpleNamespace(points=((0., 0.), (.1, 0.), (.1, -.3)), distance=(0., .1, .4), index=0)
+    result = dict(deviation_m=.012, progress_m=.03)
+    guide = camera_route_guide(task, (0., 0., yaw), result, 17.)
+    wrap = lambda angle: math.degrees(math.atan2(math.sin(angle), math.cos(angle)))
+    assert guide[0] == pytest.approx(wrap(math.atan2(-.3, .1) - yaw))
+    assert guide[3] == pytest.approx(wrap(-yaw))
+    assert guide[1:3] == (17., True)
+    assert guide[4:] == (.012, .03)
+
+
+@pytest.mark.parametrize('index', [0, 2, 3])
+def test_camera_route_guide_uses_nonzero_tangent_at_duplicates_and_route_end(index):
+    from run_map_rl import camera_route_guide
+    task = SimpleNamespace(points=((0., 0.), (0., 0.), (0., .3), (0., .3)),
+                           distance=(0., 0., .3, .3), index=index)
+    guide = camera_route_guide(task, (*task.points[index], 0.),
+                               dict(deviation_m=0., progress_m=task.distance[index]), 1.)
+    assert guide[3] == pytest.approx(90.)
+
+
 def test_missing_camera_observation_is_not_a_learning_state():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
