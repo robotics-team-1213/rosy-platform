@@ -15,6 +15,7 @@ from rosy_situation.snapshot_assessment import POLICY
 from fleet.server.incident_deliberation import FleetBaseline
 from .closure import observe_closure
 from .contract import CaseBudget, CaseScope, micros
+from .ledger.receipt import model_receipt
 
 
 class IncidentCaseWorker:
@@ -257,11 +258,19 @@ class IncidentCaseWorker:
         if state == 'COMPLETED' and checked is not None:
             summary.update(verdict=checked.payload['verdict'], choice=checked.choice,
                            receipt_sha256=hashlib.sha256(checked.payload_json.encode()).hexdigest())
-        await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
-                       actual_cost_usd=cost, summary=summary)
+        trace = None
+        if checked is not None and state != 'UNKNOWN':
+            try: trace = model_receipt(scope, problem, bound, checked, profiles=self.profiles)
+            except (ValueError, TypeError):
+                state, summary = 'REJECTED', {'reason': 'MODEL_TRACE_REJECTED'}
+        completed = await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
+                                  actual_cost_usd=cost, summary=summary, model_receipt=trace)
         updated = await self._db('case', scope)
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
+        if completed['state'] != 'COMPLETED' and checked is not None:
+            if self._fresh(problem): await self._finish(scope, 'MODEL_TRACE_REJECTED')
+            return None
         if self.human_owned(scope.subject_id, scope.case_id) is not False:
             await self._db('close_case', scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED'); return None
         if not self._fresh(problem): return None
