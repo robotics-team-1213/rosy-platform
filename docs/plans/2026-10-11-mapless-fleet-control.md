@@ -137,7 +137,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | 격리 작업 위치 | 완료 | `.worktrees/wt-mapless-control-384416`, `feat/mapless-fleet-control`; X: session과 연결 |
 | 현재 기능·공백 조사 | 진행 | camera lane CLI, LOCALIZED-only teach, profile example roads, tools-tab formation 확인 |
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
-| Task 2 순수 편집 계산 | 진행 | 빈 초안·요소 추가·명시적 검토 및 빈 지도 fitView 구현, Node 20 PASS; 입력 화면·브라우저 연결은 다음 단계 |
+| Task 2 빈 지도 입력·편집 | 검증 중 | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결, 저장·재조회 Chromium 4 PASS; Node 22 PASS. 전체 지도 브라우저 61개 최종 회귀 실행 중 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
@@ -152,3 +152,12 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - 구현 fb3c1a8c8: 모델 PC 원격 88 PASS, NEW 0 (`logs/survey-green-model/run-1.txt`). AI PC SSH banner timeout은 시험 실패와 별도로 기록하고, 종결된 실패 runner 대신 연결 가능한 모델 PC에서 실행했다. GREEN 실행은 23.6 free cores/8.6 GB 기준 통과.
 - 공유 ADR D-654가 다른 active branch에 있어 현재 snapshot에 없음을 gap으로 기록했다. D-655 index row는 기존 table 안에 둔다. 다음 main 동기화에서 실제 ADR 도착 여부를 확인하고 해당 gap을 제거한다.
 - 순수 UI helper Node 20 PASS; 아직 실제 입력 화면이나 새 기능 배포 수용은 아니다.
+- 입력 화면 48a2fbfc1: 원격 Chromium 4 PASS, NEW 0. 빈 지도 생성·도로와 신호등 추가·수정·저장·재조회 및 기존 축구장 프로필을 1440/390 px에서 검증했다. 전체 회귀에서 예전 임의 예제 도로·관리자 안내 기대값을 발견해 빈 지도 시작 계약에 맞춰 수정했다. 시험 수정의 잘못된 동일 문자열 매칭은 9e68d078b에서 바로잡았다. 실패는 기존 실패로 분류하지 않는다.
+- 935306768: 기존 장소·차로 편집기에서도 조사 검토를 무효화한다. 통행 방향·주행 방식·속도 변경 뒤 재검토를 거치며, 원본 입력과 과거 지도 본문을 보존한다. Node 22 PASS, harness 0 errors/23 기존 검증 시점 경고.
+
+### Task 3 구현 전 확인한 연결 범위
+
+- World `MapPoseTracker`가 odom freshness·속도/회전 불연속과 epoch를 이미 소유한다. 최신 odom과 epoch의 읽기 전용 조사 포트를 추가해 재사용하며, map pin이나 operational MapPose를 만들지 않는다. CORE OdomPose에는 reset ID가 없으므로 관측 가능한 불연속 감지의 한계를 현장 검증과 구분한다.
+- Fleet `MapPoseService` → `TeachService` → `teach_routes.StartRequest` → `site-map-teach.js` 및 API reference를 함께 연결한다. 조사 시작은 저장된 draft revision/map_id/reference revision과 명시적 기준을 요구한다. 상대 odom을 기준에 투영한 선은 observed evidence이며, 검토 전 활성화할 수 없다.
+- 기록 중 odom gap/reset·지도 기준 변경이면 유효한 앞부분만 남기고 기록을 중단한다. 기존 trusted-map 기록의 untrusted pose 건너뛰기 역시 불연속을 자동 잇지 않도록 수정하고 관련 시험을 갱신한다. 기록 중단은 로봇 정지 명령이 아니다.
+- 확정은 현재 초안 기준의 동일성을 확인한 뒤 기존 expected_revision CAS로 저장한다. 주행·카메라 기록의 원본 근거와 연결 후보를 유지하고, 관측되지 않은 연결은 자동 도로로 승격하지 않는다.
