@@ -12,6 +12,7 @@ from test_judgment_receipts import row
 
 
 def make_loop(tmp_path, *, normal=False, autonomous=False):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     from fleet.observe.rules import RuleSelectionStore
     source = row(100, stuck_id='case-1')
     if normal:
