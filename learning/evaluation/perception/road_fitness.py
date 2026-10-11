@@ -1,10 +1,45 @@
 """D-665 paired offline diagnostics; truth is never an input to region estimation."""
 from __future__ import annotations
 
+from collections import Counter
+
+import cv2
 import numpy as np
 
 from control.sensing.perception.learned.road_region import observed_road_region, road_masks
 from rosy.world.state.projections.road_region import road_region_input_errors
+
+
+def _boundary_metrics(pred, target, valid) -> dict:
+    cross = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)
+    known = cv2.erode(valid.astype(np.uint8), cross, borderType=cv2.BORDER_CONSTANT,
+                      borderValue=0).astype(bool)
+    def boundary(mask):
+        return mask & ~cv2.erode(mask.astype(np.uint8), cross, borderType=cv2.BORDER_CONSTANT,
+                                borderValue=0).astype(bool)
+    raw_truth = boundary(target)
+    expected = raw_truth & known
+    actual = boundary(pred) & known if pred is not None else np.zeros_like(target)
+    nt, npred = int(expected.sum()), int(actual.sum())
+    result = {"boundary_truth_pixels": nt, "boundary_predicted_pixels": npred,
+              "boundary_excluded_truth_pixels": int((raw_truth & ~known).sum()),
+              "boundary_distance_sum_px": None, "boundary_mean_error_px": None}
+    if pred is None:
+        status = "abstained"
+    elif not nt and not npred:
+        status = "no_known_boundary"
+    elif not npred:
+        status = "missing_predicted_boundary"
+    elif not nt:
+        status = "missing_truth_boundary"
+    else:
+        to_actual = cv2.distanceTransform((~actual).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        to_expected = cv2.distanceTransform((~expected).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        distance = float(to_actual[expected].sum(dtype=np.float64) +
+                         to_expected[actual].sum(dtype=np.float64))
+        result.update(boundary_distance_sum_px=distance, boundary_mean_error_px=distance / (nt + npred))
+        status = "ok"
+    return {**result, "boundary_status": status}
 
 
 def _metrics(pred, truth: np.ndarray, shape) -> dict:
@@ -13,16 +48,22 @@ def _metrics(pred, truth: np.ndarray, shape) -> dict:
     valid = truth != 255
     target = truth == 1
     result = {"valid_truth_pixels": int(valid.sum()), "unknown_truth_pixels": int((~valid).sum()),
-              "truth_pixels": int(target.sum()), "scored_pixels": 0, "iou": None,
+              "truth_pixels": int(target.sum()), "outside_truth_pixels": int((valid & ~target).sum()),
+              "prediction_available": pred is not None, "scored_pixels": 0,
+              "scored_truth_pixels": 0, "scored_outside_truth_pixels": 0,
+              "true_positive_pixels": None, "iou": None,
               "false_positive_pixels": None, "false_negative_pixels": None,
-              "outside_false_positive_rate": None, "missed_fraction": None}
+              "outside_false_positive_rate": None, "missed_fraction": None,
+              **_boundary_metrics(pred, target, valid)}
     if pred is None:
         return result
     hit = int((pred & target).sum())
     fp = int((pred & valid & ~target).sum())
     fn = int((~pred & target).sum())
     outside = int((valid & ~target).sum())
-    result.update(scored_pixels=int(valid.sum()), false_positive_pixels=fp, false_negative_pixels=fn,
+    result.update(scored_pixels=int(valid.sum()), scored_truth_pixels=int(target.sum()),
+                  scored_outside_truth_pixels=outside, true_positive_pixels=hit,
+                  false_positive_pixels=fp, false_negative_pixels=fn,
                   iou=hit / (hit + fp + fn) if hit + fp + fn else None,
                   outside_false_positive_rate=fp / outside if outside else None,
                   missed_fraction=fn / result["truth_pixels"] if result["truth_pixels"] else None)
@@ -51,3 +92,46 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
             "image_snapshot_id": image.snapshot_id, "anchor_snapshot_id": anchor.snapshot_id,
             "road_surface": surface_metrics, "current_region": region_metrics,
             "region_reason": reason, "input_errors": list(errors), "fitness_verdict": "HOLD"}
+
+
+def _summarize(rows) -> dict:
+    result = {"frames": len(rows), "region_reasons": dict(Counter(r["region_reason"] for r in rows))}
+    for target in ("road_surface", "current_region"):
+        metrics = [r[target] for r in rows]
+        counts = {k: sum(m[k] or 0 for m in metrics) for k in (
+            "valid_truth_pixels", "unknown_truth_pixels", "truth_pixels", "outside_truth_pixels",
+            "scored_pixels", "scored_truth_pixels", "scored_outside_truth_pixels",
+            "true_positive_pixels", "false_positive_pixels", "false_negative_pixels",
+            "boundary_truth_pixels", "boundary_predicted_pixels", "boundary_excluded_truth_pixels")}
+        tp, fp, fn = (counts[k] for k in ("true_positive_pixels", "false_positive_pixels", "false_negative_pixels"))
+        scored = sum(m["prediction_available"] for m in metrics)
+        paired = [m for m in metrics if m["boundary_status"] == "ok"]
+        boundary_pixels = sum(m["boundary_truth_pixels"] + m["boundary_predicted_pixels"] for m in paired)
+        counts.update(scored_frames=scored, abstained_frames=len(rows) - scored,
+                      frame_coverage=scored / len(rows) if rows else None,
+                      pixel_coverage=counts["scored_pixels"] / counts["valid_truth_pixels"]
+                      if counts["valid_truth_pixels"] else None,
+                      iou=tp / (tp + fp + fn) if tp + fp + fn else None,
+                      outside_false_positive_rate=fp / counts["scored_outside_truth_pixels"]
+                      if counts["scored_outside_truth_pixels"] else None,
+                      missed_fraction=fn / counts["scored_truth_pixels"] if counts["scored_truth_pixels"] else None,
+                      boundary_scored_frames=len(paired),
+                      boundary_statuses=dict(Counter(m["boundary_status"] for m in metrics)),
+                      boundary_mean_error_px=sum(m["boundary_distance_sum_px"] for m in paired) / boundary_pixels
+                      if boundary_pixels else None)
+        result[target] = counts
+    return result
+
+
+def summarize_frames(reports) -> dict:
+    """Aggregate evaluate_frame results without pooling real and simulation evidence."""
+    rows = list(reports)
+    if any(r["domain"] not in ("real", "simulation") for r in rows):
+        raise ValueError("domain must be real or simulation")
+    domains, conditions = {}, {}
+    for domain in ("real", "simulation"):
+        selected = [r for r in rows if r["domain"] == domain]
+        domains[domain] = _summarize(selected)
+        conditions[domain] = {c: _summarize([r for r in selected if c in r["conditions"]])
+                              for c in sorted({c for r in selected for c in r["conditions"]})}
+    return {"domains": domains, "conditions": conditions, "fitness_verdict": "HOLD"}
