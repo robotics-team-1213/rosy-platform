@@ -8,12 +8,12 @@ import pytest
 
 from fleet.incidents.automation.contract import CaseBudget
 from fleet.incidents.automation.worker import IncidentCaseWorker
-from test_incident_case_worker import setup, settled
+from test_incident_case_worker import make_incident_worker, settled
 from test_incident_feedback_export import exporter
 
 
 async def primary_setup(tmp_path, change=None):
-    now, seen, handoffs, log, board, store, old, poll, current = setup(tmp_path, change=change)
+    now, seen, handoffs, log, board, store, old, poll, current = make_incident_worker(tmp_path, change=change)
     await old.aclose()
     profiles = old.profiles[:1]
     current[0] = profiles
