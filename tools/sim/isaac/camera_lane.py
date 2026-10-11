@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from control.sensing.perception.camera_visibility import visibility_reason
-from control.sensing.perception.drivable.drivable_keep import keep_step
+from control.sensing.perception.drivable.drivable_keep import keep_step, scan_summary
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer
 from control.sensing.perception.lane import LaneObservation
 from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
@@ -17,6 +17,7 @@ from control.sensing.perception.learned.paint_motion import OdomHistory
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from core_events.events.bus import EventBus
 from core_features.line_follow import LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation
+from core_features.line_follow.clearance import return_scan_view
 from map_task import QPolicy, SIM_DEVICE_IDS
 
 
@@ -90,7 +91,27 @@ class LearnedCameraLane:
         self.steer, self.history = DrivableSteer(), OdomHistory()
         self.frame, self.stamp, self.received_at = 0, None, None
         self.observation = None
+        self.wall, self.scan_stamp_ns = None, None
         self.last = {'model_used': False, 'reason': 'no_camera_frame'}
+
+    def observe_scan(self, sample, *, body):
+        received_at = self.clock()
+        evidence = return_scan_view(sample, body=body,
+            source_now_ns=sample.get('source_now_ns'), clearance_horizon_m=.35)
+        if (evidence is None or (self.scan_stamp_ns is not None
+                                and evidence[2] <= self.scan_stamp_ns)):
+            self.wall = None
+            self.manager.observe_return_scan(None, source_age_s=None, source_stamp_ns=None,
+                                             received_at=received_at)
+            self.invalidate('native_scan_unavailable')
+            return False
+        view, age, stamp_ns = evidence
+        ahead, sides = scan_summary(sample['ranges'], sample['angle_min'], sample['angle_increment'],
+                                    sample['range_min'], sample['range_max'], body=body)
+        self.wall, self.scan_stamp_ns = (ahead, stamp_ns / 1e9, sides), stamp_ns
+        self.manager.observe_return_scan(view, source_age_s=age, source_stamp_ns=stamp_ns,
+                                         received_at=received_at)
+        return True
 
     def invalidate(self, reason):
         self.manager.invalidate(self.clock())
@@ -122,6 +143,12 @@ class LearnedCameraLane:
             self.invalidate('invalid_camera_odometry')
             return
         self.history.add(stamp, *pose)
+        self.manager.observe_return_pose(stamp_ns=round(stamp * 1e9),
+            source_now_ns=round(source_now * 1e9), frame='odom',
+            x=pose[0], y=pose[1], yaw=pose[2], received_at=captured_at)
+        if self.wall is not None and not 0 <= source_now - self.wall[1] <= .25:
+            self.invalidate('native_scan_stale')
+            return
         self.worker.submit(bgr, tag=self.frame, stamp=stamp)
         self.worker.step()
         mask = self.worker.mask_for(bgr, every_n=1, stamp=stamp,
@@ -138,7 +165,7 @@ class LearnedCameraLane:
         observation = self.keeper.update(bgr, self.ground, paint_mask=mask,
             crosswalk_mask=self.worker.used_crosswalk, lane_half_width_m=.0925)
         step, decided = keep_step(self.steer, self.worker, self.keeper.last, self.ground,
-            self.camera_x, .0925, self.history.pose_at, stamp, None, guide)
+            self.camera_x, .0925, self.history.pose_at, stamp, self.wall, guide)
         provenance = 'model_lane_mask'
         if decided:
             info = self.keeper.last.get('drivable_steer', {})
