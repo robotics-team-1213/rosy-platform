@@ -56,17 +56,17 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 expect(page.locator("#password-login [data-login=error]")).to_contain_text("맞지 않습니다")
                 page.locator("#password-login [data-login=password]").fill("pw-1234")
                 page.locator("#password-login [data-login=password]").press("Enter")
-                expect(page.locator("#user-role")).to_contain_text("alice", timeout=15000)
+                expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                 expect(page.locator("#password-login [data-login=principal]")).to_have_text("alice")
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')") is None
 
                 page.reload()
-                expect(page.locator("#user-role")).to_contain_text("alice", timeout=15000)
+                expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                 # D-540 2: every document reads the same login in the same header (#user-role, Korean role).
                 for path in ("/console/install", "/console/site-map", "/console/cell"):
                     tab = context.new_page()
                     tab.goto(origin + path)
-                    expect(tab.locator("#user-role")).to_contain_text("alice", timeout=15000)
+                    expect(tab.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
                     expect(tab.locator("#user-role")).to_contain_text("운영자")
                     expect(tab.locator("#estop")).to_be_enabled()
                     tab.close()

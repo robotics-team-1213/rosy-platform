@@ -109,12 +109,15 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         page.get_by_role("tab", name="기록·근거").click()
         expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 1건")
         expect(records).to_be_visible()
-        expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
-        expect(item.locator("summary")).to_contain_text("앞 물체로 멈춤")
+        expect(item.locator(":scope > details > summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
+        expect(item.locator(":scope > details > summary")).to_contain_text("앞 물체로 멈춤")
         expect(item.locator("time")).to_have_attribute("datetime", "2026-10-10T05:00:00.000Z")
         assert item.evaluate("node => getComputedStyle(node).borderLeftWidth") == "0px"
         assert records.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
-        item.locator("summary").click()
+        item.locator(":scope > details > summary").click()
+        assert "interpreted_front_image" not in item.inner_text()
+        expect(item.locator("details details")).not_to_have_attribute("open", "")
+        item.locator("details details > summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
         expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
         expect(item).to_contain_text("interpreted_front_image")
@@ -127,7 +130,8 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
         expect(page.locator("#incident-traffic-list li")).to_have_count(2)
         fact = page.locator("#incident-traffic-list li").first
-        fact.locator("summary").click()
+        fact.locator(":scope > details > summary").click()
+        assert "fleet_wait_cycle" not in fact.inner_text()
         expect(fact).to_contain_text("AI 단독 대기 순환 판단")
         fact.locator("select").select_option("traffic_wait")
         fact.locator("ui-button[type=submit]").click()
@@ -197,6 +201,44 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
         browser.close()
 
 
+@pytest.mark.parametrize("width", [320, 390, 1366])
+def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site, width):
+    from playwright.sync_api import expect, sync_playwright
+
+    stuck = {**STUCK, "ai": {"state": "present"}, "ai_facts": [{"kind": "new_fact_kind", "source": "analyzer:test", "confidence": 0.8,
+                                       "evidence": {"wire_marker": "source_preserved"}}]}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [_robot("rosy_01", line_stuck=stuck)]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        page.set_viewport_size({"width": width, "height": 844 if width < 1000 else 768})
+        item = page.locator('.stuck-item[data-robot-id="rosy_01"]')
+        expect(item).to_be_visible()
+        assert "wire_marker" not in item.inner_text()
+        expect(item.locator('ui-button[data-decision="RESUME"]')).to_be_visible()
+        title = item.locator('[data-focus-key="evidence-summary"]')
+        title.focus()
+        title.press("Enter")
+        expect(item.locator('[data-focus-key="evidence"]')).to_have_attribute("open", "")
+        assert "wire_marker" not in item.inner_text()
+        diagnostic = item.locator('[data-focus-key="diagnostics-summary"]')
+        diagnostic.focus()
+        diagnostic.press("Enter")
+        assert "wire_marker" in item.inner_text()
+        stuck["attempts"] = 1  # A changed state rebuilds the current row.
+        page.clock.run_for(3500)
+        expect(item.locator('[data-focus-key="evidence"]')).to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics"]')).to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics-summary"]')).to_be_focused()
+        stuck["stuck_id"] = "replacement-stuck"
+        page.clock.run_for(3500)
+        expect(item.locator('[data-focus-key="evidence"]')).not_to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics"]')).not_to_have_attribute("open", "")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert not posts and not errors
+        browser.close()
+
+
 def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
     from playwright.sync_api import expect, sync_playwright
 
@@ -215,10 +257,14 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(page.locator("#context-inbox")).to_be_visible()
         expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
         messages = page.locator("#inbox-messages")
-        expect(messages).to_contain_text("CORE 문의")
+        expect(messages).to_contain_text("로봇 문의 (CORE)")
         expect(messages).to_contain_text("AI 제안 대기")
         expect(messages).to_contain_text("CORE 수락 · 복구 완료는 별도 확인")
-        messages.locator("summary").click()
+        expect(messages.locator("pre")).not_to_be_visible()
+        assert "situation-inquiry-v1" not in messages.inner_text()
+        messages.locator("li > details > summary").click()
+        expect(messages.locator("pre")).not_to_be_visible()
+        messages.locator("details details > summary").click()
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
         page.get_by_role("tab", name="로봇 상태").click()
         page.clock.run_for(6000)
@@ -228,7 +274,8 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
         button.click()
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
-        assert messages.locator("details").get_attribute("open") is not None
+        assert messages.locator("li > details").get_attribute("open") is not None
+        assert messages.locator("details details").get_attribute("open") is not None
         assert page.locator("#critical-list").inner_text()
         snapshot = api.pop("/api/fleet/state")
         page.clock.run_for(4000)
@@ -400,7 +447,7 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
 
 
 def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
-    """D-623: a fresh decoded frame stays below the answers; historical/expired frames disappear."""
+    """D-623/D-641: fresh evidence opens below the answers; historical/expired frames disappear."""
     from playwright.sync_api import sync_playwright
 
     preview = {"robot_id": "rosy_01", "stuck_id": "stuck-abc", "sequence": 812, "source": "front",
@@ -421,6 +468,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
           const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
         }""")
         assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        slot.locator('[data-focus-key="evidence-summary"]').click()
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:
             box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
