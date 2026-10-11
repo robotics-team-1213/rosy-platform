@@ -369,6 +369,9 @@ def main():
                             lane.invalidate('camera_source_stale')
                         state = lane.state()
                         now = time.monotonic()
+                    learning_step = None
+                    if phase == 'train' and lane is None:
+                        learning_step = learn_transition(policy, previous, state, result)
                     action = 1 if phase == 'baseline' or state is None else policy.choose(state, explore=phase == 'train')
                     if lane is None:
                         angular = max(-.8, min(.8, angular * policy.gains[action]))
@@ -379,9 +382,9 @@ def main():
                             result = dict(result, terminated=True, truncated=False, complete=False,
                                           reason='camera_lane_lost', reward=result['reward'] - 10.)
                         state = lane.state()
-                    learning_step = None
-                    if phase == 'train':
+                    if phase == 'train' and lane is not None:
                         learning_step = learn_transition(policy, previous, state, result)
+                    if phase == 'train':
                         counts = summary['learning_steps']
                         counts[learning_step] = counts.get(learning_step, 0) + 1
                     if result['goal_reached'] or result['terminated'] or result['truncated']:
