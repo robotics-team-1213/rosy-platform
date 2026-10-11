@@ -15,13 +15,19 @@
 
 ## 실행 순서
 
-- **진행 중 — 기반 착지:** D-671/D-675 최신 main 통합 회귀를 완료한다. 현재 수신·원장·Console 원문 조회와 source image build가 구현됐다. 운영 수신은 아직 적용 전이다.
-- **다음 — 후보와 확인:** 관련 ADR/API/DTO를 먼저 확정한다. 기존 Task 제출과 Mission/Cell Job 승인 호출자를 재사용하고 요청→작업 관계를 기존 tasks DB에 저장한다. 동일 요청·내용으로 재승인이 실행을 중복하지 않는지, 다른 owner·수정된 원문·권한 철회·불명 제출을 검증한다.
-- **다음 — 결과 회신:** 기존 알림의 durable outbox와 전송 결과 의미를 검토해 재사용 가능한 경계를 선택한다. 고정 guild/channel과 원래 message reference만 사용하고 mentions를 차단한다. timeout/5xx와 재시작 후 SENDING은 UNKNOWN이며 맹목 재전송하지 않는다. Bot 자기 회신은 intake에서 제외한다.
-- **다음 — 위험 대응:** 현재 line incident owner의 사건 조회·인수·정지 계약부터 연결한다. 다른 종류의 위험은 해당 소유자가 있을 때만 연결한다. source/fake 시험과 실제 운영 검증을 분리한다.
-- **마지막 — 배포와 실제 경로:** 사용자 승인 범위와 저장소의 push·CI·signed candidate·updater 규칙을 확인한다. 검토 가능한 구현과 local FF를 먼저 끝내고 필요한 명시 승인은 마지막 단계에서 받는다. 비공개 token/config를 Fleet에만 주입한 뒤 실제 대화→Console 확인→원장→회신을 검증한다.
+- **Source 검증 완료 — 접수·후보·확인:** 기명 immutable 접수와 기존 Task/Mission/Cell owner adapter 및 Console를 구현했다. same-DB 관계·독립 승인·기존 evidence/fence를 유지하며 Mission feedback source 복사 우회를 거절한다. 운영 수신과 최신 통합 착지는 후속이다.
+- **Source 검증 완료 — 결과 회신:** 고정 guild/channel과 원래 message reference, mentions 차단, current mapping, durable opt-in worker와 기존 작업 결과 observer를 구현했다. timeout/5xx와 재시작 SENDING은 UNKNOWN이며 맹목 재전송하지 않는다. 실제 채널 왕복은 후속이다.
+- **Source 검증 완료 — 위험 대응:** 현재 line incident의 기명 인수와 원문 관계·회신을 기존 owner의 같은 transaction으로 연결했다. Console는 현재 사건·judgment를 별도 확인하며 기존 조치 화면으로 연결한다. 정지·취소/재개는 기존 소유자의 확인과 장치 admission을 유지한다. 서버90/Chromium10/설치3 증거는 운영 수용과 구분한다.
+- **진행 중 — 최종 구조·착지:** Fleet의 모든 owner adapter를 독립 제한 재판정했으며 파일 상한·+150·이전 추출 의무를 유지한다. 최초 core_common 부모10031 판정 누락 NEW1을 정리하고 전체 영향 검사와 최신 main local FF를 마친다. 실패를 기존 실패로 등록하지 않는다.
+- **다음 — 배포와 실제 경로:** 사용자 승인 범위와 저장소의 push·CI·signed candidate·updater 규칙을 적용한다. 검토 가능한 구현과 local FF를 먼저 끝내고 필요한 명시 승인은 마지막 단계에서 받는다. 비공개 token/config를 Fleet에만 주입한 뒤 실제 대화→Console 확인→원장→회신과 재시작 durable readback을 검증한다.
 
 ## 검증과 책임
+
+### 공통 계약의 다음 분리 의무
+
+core_common 부모10,031은 main4dc522986의9,888 대비 Discord canonical DTO136줄과 schema re-export7줄만 추가된 결과다. protocol5,298/domain1,203/기타3,504/root26이며 DB·transport·provider·ROS·process·actuation 권한을 추가하지 않았다. strict 계약은 이미 protocol/channel_requests.py에 분리되어 있다. safety_structure_review의 최초 제한 판정은 기존 package10,000/+150·모든 파일 상한/HARD_TIER·schemas1389 zero-growth 및 기존 protocol/schema 추출 의무를 유지한다. 새 SIZE_UNITS나 scan 제외를 만들지 않는다.
+
+다음 protocol family 확장 전에 실제 core_common/protocol 계약 subpackage 책임 분리를 독립 검토한다. 같은 변경에서 설치 패키지 closure와 기존 소비자·의존 방향·단일 canonical schema facade/re-export identity를 검증하고 부모와 새 unit의 전체 실측을 함께 기록한다. 현재 parent 판정만 늘려 계속 확장하거나 DTO를 runtime 소유자에 옮겨 leaf 계약을 약화시키지 않는다.
 
 ### 다음 어댑터의 기존 계약 확인
 
@@ -35,6 +41,8 @@
 모델 provider 수용과 실제 로봇 주행은 Discord 소스 검증으로 승격하지 않는다. 기명 사용자 요청을 Bot 공용 operator나 임의 principal로 대체하지 않는다. CORE와 OMX의 최종 장치 권한 및 기존 Fleet transaction/fence를 유지한다.
 
 ## 진행 기록
+
+- 사건 Console sourceed7eba9644 실제 Chromium10 PASS/NEW0. 기존 native claim의 잘못된 scope.listener 호출을 guard로 고쳐 현재 판단 사건 표시를 복구했다. wheel/sdist/source COPY closure3 PASS/NEW0, Fleet54,852 제한 독립 판정은 기록했다. 최종 크기/API군94 PASS/NEW1은 core_common10031 첫 부모 판정 누락이며 구조 전체 PASS로 표시하지 않는다. [증거](../validation/discord-fleet-pipeline-2026-10-12/incident-console.md). 동일 오류 독립 재확인과 공통 계약 책임 판정을 마치고 최종 착지·운영 왕복으로 진행한다.
 
 - D-693/API1.214 현재 사건 인수를 기존 named claim 소유자에 연결했다. 실제 기존 owner/SQLite 90 PASS/NEW0, source 독립 검토 승인. 같은 트랜잭션의 claim·원문 관계·회신 rollback과 stale/closed/다른 담당/권한 변경, 원래 사건 CLOSED intent를 확인했다. [증거](../validation/discord-fleet-pipeline-2026-10-12/incident-source.md). Console 사건 선택·명시 확인 UI와 Chromium을 이어서 구현한다. 구조 parent NOTPASS/최종 재판정, 설치·최신 main 착지·배포·실제 왕복은 남아 있다.
 
