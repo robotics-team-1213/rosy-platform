@@ -26,11 +26,15 @@ gates:
     state: HOLD
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 adrs:
+- D-666
+- D-667
 - D-665
 - D-637
 - D-662
 ---
 
 Existing implementation holder; shared regression suite as registered in harness.yaml.
+
+D-666/D-667 paired replay and shared observation contracts: offline CLI emits diagnostic HOLD, never model admission. Immutable approvals, paired source images, declared training source/image disjointness and pre/post content checks are implemented. Real independent truth, physical calibration, upstream closure, acceptance profile and device evidence remain HOLD.
 
 D-662 Pinky judgment checker: remote 8 synthetic cases plus 3 installed-delivery checks passed, NEW0. Required abstention and duplicate physical windows independently reviewed. Team labels/profile limits, actual notifications and FIELD receipts remain HOLD; PASS_OFFLINE_ONLY never activates a model.
