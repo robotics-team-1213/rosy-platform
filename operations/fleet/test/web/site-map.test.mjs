@@ -376,6 +376,20 @@ test('camera observations accumulate in the same survey without invented joins o
   const reviewed = reviewSurveyDraft(merged, 'Measured lanes');
   assert.ok(reviewed.edges[1].evidence.note.includes('Frame abc'));
   assert.ok(reviewed.edges[1].evidence.note.includes('Measured lanes'));
+  const repeated = {...observation, edges: observation.edges.map(e => ({...e, evidence: {...e.evidence, note: 'Frame xyz'}}))};
+  const accumulated = mergeCameraMap(reviewed, repeated);
+  assert.equal(accumulated.edges.length, 2);
+  assert.ok(accumulated.edges[1].evidence.note.includes('Frame abc'));
+  assert.ok(accumulated.edges[1].evidence.note.includes('Frame xyz'));
+  assert.equal(accumulated.edges[1].evidence.status, 'observed');
+  assert.equal(accumulated.survey.reviewed, false);
+  assert.deepEqual(mergeCameraMap(accumulated, repeated), accumulated);
+  const corrected = editSurveyElement(reviewed, {id: reviewed.edges[1].id, kind: 'road', name: 'Observed road',
+    from: reviewed.edges[1].from, to: reviewed.edges[1].to, geometry: [[3, 0], [3.5, .1], [4, 0]], width_m: .2, direction: 'one_way'});
+  assert.ok(corrected.edges[1].evidence.note.includes('Frame abc'));
+  const place = reviewed.places[2];
+  assert.ok(editSurveyElement(reviewed, {id: place.id, name: place.name, kind: place.kind,
+    geometry: [[3, .1]]}).edges[1].evidence.note.includes('Frame abc'));
 });
 
 test('camera maps without a survey can be reviewed and edits require re-review', () => {

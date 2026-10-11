@@ -985,3 +985,39 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(page_site, width):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    from fleet.server.site_map_store import SiteMapError
+    page, store, robot = page_site
+    body = store.active_view()['map']
+    for edge in body['edges']:
+        edge['evidence'] = {'source': 'camera', 'status': 'observed', 'reference_revision': 'cal_fixture',
+            'note': 'calibration sha256 abc; frame sha256 def'}
+    draft = store.save_draft(SiteMap.model_validate(body), expected_revision=None, principal_id='bob')
+    active = store.active_view()
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=draft['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#survey-review')).to_be_enabled()
+    page.locator('#survey-review-note').fill('Measured calibration and road directions checked')
+    page.locator('#survey-review').click()
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    reviewed = store.draft_view()
+    assert 'survey' not in reviewed['map']
+    assert all(e['evidence']['status'] == 'reviewed' for e in reviewed['map']['edges'])
+    assert all('frame sha256 def' in e['evidence']['note'] for e in reviewed['map']['edges'])
+    assert all('Measured calibration' in e['evidence']['note'] for e in reviewed['map']['edges'])
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

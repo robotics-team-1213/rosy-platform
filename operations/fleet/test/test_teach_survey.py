@@ -306,3 +306,25 @@ def test_new_active_version_cannot_extend_or_confirm_old_recording(phase):
             assert error.value.code == 'TEACH_MAP_CHANGED'
             assert service.view()['pending']
     asyncio.run(run())
+
+
+def test_marker_move_invalidates_camera_road_review_without_a_survey():
+    from copy import deepcopy
+    from test_teach import MAP, Poses
+    body = deepcopy(MAP)
+    body['edges'][0]['evidence'] = {'source': 'camera', 'status': 'reviewed',
+        'reference_revision': 'cal_123', 'note': 'frame sha256 abc; checked'}
+    store = SiteMapStore()
+    store.import_if_empty(SiteMap.model_validate(body), source='test')
+    active = store.active_view()
+    service = TeachService(poses=Poses(), site_maps=store, roster=lambda: ['r1'],
+        place_markers=lambda _: {'map_id': 'site', 'source_id': 'floor', 'x': .1, 'y': 0, 'yaw': 0})
+    saved = service.place_from_marker(34, name=None, kind=None, place_id='A', expected_revision=None,
+        principal_id='bob')['draft']
+    assert saved['map']['edges'][0]['evidence']['status'] == 'observed'
+    assert saved['map']['edges'][0]['evidence']['source'] == 'operator'
+    assert 'frame sha256 abc' in saved['map']['edges'][0]['evidence']['note']
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=saved['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
+    assert store.active_view() == active
