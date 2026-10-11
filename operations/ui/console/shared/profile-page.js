@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
 const back = loginReturn(new URLSearchParams(location.search).get('return'), location.origin);
 $('profile-back').href = back.startsWith('/console/profile') ? '/console' : back;
 $('profile-login').href = loginHref(location);
-let busy = false;
+let busy = false, owner = null;
 
 function status(message, state) {
   $('profile-status').textContent = message;
@@ -21,11 +21,19 @@ function lock(value) {
   }
   for (const id of ['profile-name', 'profile-current', 'profile-new', 'profile-confirm']) $(id).readOnly = value;
 }
-async function load() {
+async function readProfile(expected = null) {
   const profile = await request('/api/fleet/auth/profile');
   if (!profile.login || !profile.principal_id || !profile.role || typeof profile.display_name !== 'string') {
     throw new Error('Profile not verified');
   }
+  if (expected && profile.principal_id !== expected) {
+    const error = new Error('Profile account changed'); error.code = 'PROFILE_ACCOUNT_CHANGED'; throw error;
+  }
+  return profile;
+}
+async function load(expected = null) {
+  const profile = await readProfile(expected);
+  owner = profile.principal_id;
   $('profile-id').textContent = profile.login;
   $('profile-email').textContent = profile.email || '등록된 이메일 없음';
   $('profile-role').textContent = roleLabel(profile.role);
@@ -35,7 +43,11 @@ async function load() {
   return profile;
 }
 function failure(error) {
-  if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') {
+  if (error.code === 'PROFILE_ACCOUNT_CHANGED') {
+    for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
+    $('profile-content').hidden = true;
+    status('로그인 계정이 바뀌었습니다. 계정 상태 다시 확인을 눌러 현재 계정을 확인한 뒤 편집하세요.', 'warning');
+  } else if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') {
     for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;
     $('profile-login').hidden = false;
@@ -66,9 +78,10 @@ async function saveName(event) {
   const name = $('profile-name').value.trim();
   lock(true); status('표시 이름 저장 결과를 확인하고 있습니다.', 'pending');
   try {
+    await readProfile(owner);
     await request('/api/fleet/auth/profile', {method: 'PATCH', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({display_name: name})});
-    const profile = await load();
+    const profile = await load(owner);
     if (profile.display_name !== name) throw new Error('Name not verified');
     status('표시 이름을 저장하고 다시 확인했습니다.', 'ready');
   } catch (error) { failure(error); }
@@ -83,11 +96,12 @@ async function changePassword(event) {
       status('새 비밀번호와 확인 입력이 일치하지 않습니다.', 'warning'); return;
     }
     lock(true); status('비밀번호 변경과 새 로그인 상태를 확인하고 있습니다.', 'pending');
+    await readProfile(owner);
     await request('/api/fleet/auth/change-password', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({current_password: fields[0].value, password: fields[1].value})});
     const session = await request('/api/fleet/auth/session');
     if (session.via !== 'cookie' || session.password_change_required !== false) throw new Error('Change not verified');
-    await load();
+    await load(owner);
     status('비밀번호를 변경하고 새 로그인 상태를 확인했습니다. 이전 로그인 세션은 종료됐습니다.', 'ready');
   } catch (error) { failure(error); }
   finally { for (const field of fields) field.value = ''; lock(false); }
@@ -101,4 +115,11 @@ for (const id of ['profile-current', 'profile-new', 'profile-confirm']) {
   $(id).addEventListener('keydown', event => { if (event.key === 'Enter') changePassword(event); });
 }
 $('profile-reload').addEventListener('click', reload);
+window.addEventListener('focus', async () => {
+  if (busy || !owner || $('profile-content').hidden) return;
+  lock(true);
+  try { await readProfile(owner); }
+  catch (error) { failure(error); }
+  finally { lock(false); }
+});
 reload();

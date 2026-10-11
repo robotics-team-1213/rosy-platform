@@ -26,8 +26,12 @@ def account_page(tmp_path, request):
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://127.0.0.1:8080', 'robot-only')],
                            [FakeRobot('rosy_01')])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
-    app = create_app(console, task_service=tasks, site_users={}, site_logins={'alice': {
-        'principal_id': 'alice', 'role': 'operator', 'password_scrypt': hash_password(getattr(request, 'param', 'pw-1234'))}},
+    initial = getattr(request, 'param', 'pw-1234')
+    logins = {'alice': {'principal_id': 'alice', 'role': 'operator',
+                       'password_scrypt': hash_password('pw-1234' if initial == 'multi' else initial)}}
+    if initial == 'multi':
+        logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': hash_password('pw-1234')}
+    app = create_app(console, task_service=tasks, site_users={}, site_logins=logins,
         web_common=ROOT / 'shared' / 'web', start_task_dispatcher=False)
     listener = safe_listener()
     origin = f'http://localhost:{listener.getsockname()[1]}'
@@ -147,6 +151,51 @@ def test_profile_save_failure_preserves_name_and_does_not_claim_success(account_
     page.unroute('**/api/fleet/auth/profile')
     page.locator('#profile-reload').click()
     expect(page.locator('#profile-name')).to_have_value('alice')
+
+
+@pytest.mark.parametrize('account_page', ['multi'], indirect=True)
+@pytest.mark.parametrize('action', ['focus', 'save'])
+def test_profile_changed_cookie_account_stops_stale_edits(account_page, action):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fprofile')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#profile-id')).to_have_text('alice')
+    page.locator('#profile-name').fill('다른 계정에 저장 금지')
+    page.locator('#profile-current').fill('pw-1234')
+    assert page.request.post(origin + '/api/fleet/auth/logout', headers={'Origin': origin}).status == 204
+    assert page.request.post(origin + '/api/fleet/auth/login', headers={'Origin': origin},
+                             data={'login': 'bob', 'password': 'pw-1234'}).status == 204
+    writes = []
+    page.on('request', lambda req: writes.append(req.url) if req.method in ('PATCH', 'POST') else None)
+    if action == 'focus':
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+    else:
+        page.locator('#profile-name-save').click()
+    expect(page.locator('#profile-status')).to_contain_text('로그인 계정이 바뀌었습니다')
+    expect(page.locator('#profile-content')).to_be_hidden()
+    assert page.locator('#profile-current').input_value() == ''
+    assert writes == []
+    page.locator('#profile-reload').click()
+    expect(page.locator('#profile-id')).to_have_text('bob')
+    expect(page.locator('#profile-name')).to_have_value('bob')
+
+
+def test_profile_expired_reload_clears_hidden_password_fields(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fprofile')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#profile-id')).to_have_text('alice')
+    for field in ('current', 'new', 'confirm'):
+        page.locator('#profile-' + field).fill('new-credential-123')
+    assert page.request.post(origin + '/api/fleet/auth/logout', headers={'Origin': origin}).status == 204
+    page.locator('#profile-reload').click()
+    expect(page.locator('#profile-login')).to_be_visible()
+    for field in ('current', 'new', 'confirm'):
+        assert page.locator('#profile-' + field).input_value() == ''
 
 
 @pytest.mark.parametrize('account_page', ['alice'], indirect=True)
