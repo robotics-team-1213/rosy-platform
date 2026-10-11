@@ -8,6 +8,8 @@ Independent read-only review approved product source `a4a3ad4a0` (HEAD `30e9fe85
 
 `586c99927` Chromium RED: two viewport cases retained QUEUED after the existing work refresh even when the ledger response became COMPLETED. Classified 2 NEW; no known-failure allowlist change. `bd6bd4730` fixes this through the current request view: only LINKED reviews reload, current selection/lifetime are checked, pending operator drafts are preserved. Remote AI PC Chromium 6 PASS / NEW 0 at 320/1366 widths; no device or external message was sent. Logs: `logs/workflow-live-result-red/run-1.txt` and `logs/workflow-live-result-green/run-1.txt`. New UI source is undergoing independent review; signed deployment and real user-request/result readback remain unfinished.
 
+Independent read-only follow-up approved `bd6bd4730` source/Safety without important blockers. Measured parent 54,227 = Fleet 35,511 + Decision 1,658 + Console 16,813 + Discord 245, +13 within the unchanged 54,214 verdict allowance. app906/TaskStore1035/Console1031 ceilings remain; channel view102/work view142. The reviewer confirmed LINKED-only reads, stale-response protection and preserved READY drafts; the supplied terminal Chromium GREEN above closes the previously pending browser check. No Mission/Cell/incident or production acceptance is included. Harness lint: 0 errors / 28 existing last_verified warnings; no baselines were promoted using partial tests.
+
 Branch: `feat/discord-workflow`. Tested source: `f26b367324`. 후속 `8b5d5058e0`은 AST가 같은 공백 정리다.
 
 원격 AI PC의 관련 시험 67건 PASS, exit 0, known_failures NEW 0. 로그는 X의 기존 discord-fleet-pipeline 세션 `logs/workflow-routes-green/run-1.txt`다. 해당 실행은 자원 floor를 통과했다. 첫 workflow 시험은 필수 evidence 인수를 빠뜨린 fixture 오류 5건을 발견했고 None을 명시해 수정했다. 기존 실패 목록은 변경하지 않았다.
