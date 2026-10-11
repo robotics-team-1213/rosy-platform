@@ -12,10 +12,12 @@ from control.sensing.perception.drivable.drivable_keep import keep_step, scan_su
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer
 from control.sensing.perception.lane import LaneObservation
 from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
+from control.sensing.perception.lane_containment import containment_payload
 from control.sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from control.sensing.perception.learned.paint_motion import OdomHistory
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from core_events.events.bus import EventBus
+from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core.bridge.observation import front_clearance
 from core_features.line_follow import LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation
 from core_features.line_follow.clearance import return_scan_view
@@ -205,12 +207,18 @@ class LearnedCameraLane:
         if not 0 <= source_now - stamp + now - captured_at <= self.manager.config.stale_after_s:
             self.invalidate('camera_processing_stale')
             return
+        containment = containment_payload(self.keeper.last, self.ground, stamp=stamp,
+            source='ISAAC', camera_x=self.camera_x,
+            crosswalk_uncertainty=self.worker.used_crosswalk is not None)
         accepted = self.manager.observe(LineObservation(LineFollowMode.CAMERA_LINE, stamp,
             observation is not None, None if observation is None else observation.error,
-            0. if observation is None else observation.confidence), received_at=captured_at, source_now=source_now)
+            0. if observation is None else observation.confidence,
+            containment=LaneContainmentEvidence.model_validate(containment)),
+            received_at=captured_at, source_now=source_now)
         self.observation = observation if accepted else None
         self.received_at = captured_at if accepted else None
         self.last = {'model_used': True, 'model_revision': self.worker.used_model_revision,
+                     'containment': containment,
                      'camera_provenance': provenance,
                      'paint_kind': self.worker.used_paint_kind, 'inference_error': None,
                      'speed_bump_pixels': (None if self.worker.used_speed_bump is None

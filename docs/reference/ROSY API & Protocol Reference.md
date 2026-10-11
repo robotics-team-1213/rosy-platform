@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.209
+**Version:** v1.210
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -92,7 +92,7 @@ ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 �
 
 내부 `line/observation`의 CAMERA_LINE 증거는 optional `containment`를 포함할 수 있다.
 원본 영상 `stamp`와 1us 이내로 일치하는 `stamp`, `geometry_id`,
-`ground_source`(NOMINAL/CALIBRATED/GAZEBO), optional `uncertainty_m`와
+`ground_source`(NOMINAL/CALIBRATED/GAZEBO/ISAAC), optional `uncertainty_m`와
 `boundaries`(0~2개)를 보낸다. 각 경계는 `side`(left/right), `slope`,
 `intercept_m`, 실제 관측 구간 `observed_x_min_m`/`observed_x_max_m`를 갖는다.
 좌표는 base footprint 기준 x 전방/y 좌측, 직선 y=slope*x+intercept_m이다.
@@ -103,6 +103,11 @@ null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경�
 증명할 수 없고 관측 구간 밖으로 무제한 외삽하지 않는다. 명령 필드는 없다.
 기존 관측 메시지와 공개 mode/route는 보존한다. 이 계약의 추가는 자동 복구 활성화나
 장치/현장 수용을 뜻하지 않는다.
+
+v1.210(D-692): ISAAC은 native Isaac 영상의 시뮬레이션 출처이며 NOMINAL 실물 관측이나
+GAZEBO 검출기 오차를 대신하지 않는다. 검증된 projection/detection 오차 범위가 없으면
+`uncertainty_m`와 `crosswalk_uncertainty_m`는 null을 유지한다. 해당 관측은 안전한 경계나
+횡단보도 통과를 증명하지 않는다. envelope `protocol_version`은 1.0을 유지한다.
 
 D-491(v1.115): `containment`는 optional `crosswalk`(`near_m`, `far_m`)를 더 가질 수 있다. D-573 6 개정(v1.194): optional `crosswalk_uncertainty_m`(m, 0–1) — 횡단보도 가까운·먼 끝의 앞뒤 최악 한도(영상 시각 몸 좌표). 검출기가 돈 모든 프레임에 둔다(찾았든 못 찾았든). 없으면 검출기가 돌지 않은 것이고 CORE 횡단보도 보고는 `unknown` 이다.
 같은 영상 시각에 카메라가 본 차로와 나란한 줄무늬 횡단보도의 가까운 끝과 먼 끝이며,
