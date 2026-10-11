@@ -1,0 +1,38 @@
+## D-676 Fleet 신호·CORE 교통 gate·차선 RL의 두 Pinky 완주 파이프라인
+
+**Status:** Accepted (2026-10-12, 사용자 설계·구현 요청; 구현·native 실행·운영 수용은 미완료)
+
+### Context
+
+사용자는 기존 카메라 segmentation·line_follow·Drive 코드로 학습하고, 실제 맵의 네 신호 표시·횡단보도·사선 주의 표시·장애물·Fleet 순서를 지켜 두 Pinky가 완주하도록 요청했다. 기존 카메라 R12는 첫 training에서 유효 관측 0/22·updates 0이었다. 이전 네 방향 odom/path 완주를 카메라 정책 완주로 재분류하지 않는다.
+
+D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분리 준비다. 둘만으로 실제 Fleet와 두 articulation 연결은 구현되지 않았다. D-606의 Isaac Lab 자원·물리·ROS-SIM·실물 수용은 유지한다. 현재 기본 action은 조향 gain 네 값이며 속도·교통 규칙 학습이 아니다.
+
+맵은 map_v2_fleet / 260919 MAP FILE.STL의 기존 곡률·흰 0.30m 사각 벽 파생이다. 사선 표식 공유 자산 source 28f6f4969를 기준으로 두 renderer의 맵·표식 계보를 맞춘다. 사선 class4 speed_bump의 ignore 역할은 교통 규칙을 무시하라는 뜻이 아니며 RGB 페인트와 분리한다. D-525 rev 5의 NE·SW는 진입, NW·SE는 진출이다. 네 표시가 네 동시 진입을 뜻하지 않는다.
+
+### Decision
+
+**최종 주행의 입력은 실제 카메라 segmentation이다.** 이미 학습한 모델의 revision/hash를 고정해 native RGB에서 차선·주행 가능 영역·횡단보도·주의 표시의 기존 클래스 증거를 사용한다. 모델 재학습과 조향 정책 강화학습을 구분한다. 경로 지시는 분기 선택에만 사용하며 실제 카메라 target을 대신하는 정답 경로 조향으로 완주를 인정하지 않는다. 신호 인식은 기존 신호 관측 경로와 Fleet 상태를 함께 검증하며 segmentation에 없는 신호 클래스를 있다고 가정하지 않는다.
+
+**R12 회복 연결의 선행 조건.** 유효 target 상실 시 기존 zero 명령과 학습 업데이트 거부를 유지한다. 실제 native scan·pose를 기존 CORE 관측 접점에 연결하고 기존 회복 gate를 만족한 뒤 재관측한다. LiDAR mount를 두 번 적용하지 않고 physics 원본 시간·monotonic 수신 시간·Fleet pose authority 시간을 각 계약대로 유지한다. 무응답 scan은 UNKNOWN이며 최대 거리의 가상 hit로 바꾸지 않는다. 회전 여유는 prepared simulation collision 형상으로 검사하고, 회복 중 map-only 조향을 유효 camera 학습 state로 바꾸지 않는다.
+
+**목표 판정은 셋으로 분리한다.** 기존 frozen 모델·CORE/Fleet 안전 규칙을 지키는 두 Pinky 전체 완주, 교통·장애물 실패 주입의 안전 정지/회복, fixed baseline 대비 RL 차선 오차·조향 흔들림 개선을 각각 입증한다. 단순 완주로 RL 추가 효과를 주장하지 않고 짧은 10초 실행을 full lap으로 세지 않는다. 유효 transition·updates>0과 독립 frozen-policy 짝 비교가 없으면 RL 성과는 미확인이다. 서버 신호 규칙을 학습하는 과제가 아니다.
+
+**사용자 추가 요구: 실제 병렬 학습.** 동시에 실행되는 독립 simulation 환경을 최소 2개 둔다. 가능한 실행 설계는 한 Isaac SDK의 batched physics와 동일 frozen 모델 재사용으로 메모리 비용을 줄이는 것이다. 각 env_id는 독립 seed·episode epoch·local odom·두 로봇 CORE 상태·Fleet grant/lease/occupancy를 갖는다. 환경 간 후보·reset·관측·통행권이 섞이지 않아야 한다. env_id와 실제 timestamp의 겹침, 환경별 유효 transition·updates>0, 고정 정책·독립 heldout 짝 비교로 병렬 학습을 입증한다. 한 프로세스의 순차 episode, 병렬 pytest 또는 agent 작업을 병렬 simulation 학습으로 세지 않는다. 이 설계는 아직 구현되지 않았고 현재 camera R12는 한 환경·updates 0이며 병렬 실행 증거가 없다. 자원 배치 실패를 학습 통과로 바꾸지 않는다.
+
+1. **파이프라인과 소유권.** 실제 native 센서→기존 frozen 모델/관측→기존 line_follow/Drive 조향 후보→각 CORE의 교통·장애물·권한 검사→각 native 몸체 순서다. Fleet의 기존 TripRunner·TrafficService·AuthoritySender가 경로·순서·grant/lease·공유 점유를 관리한다. 각 장치의 CORE만 최종 명령을 결정한다. 별도 예약 서버·최종 명령 publisher·운영 POLICY 우회 경로를 만들지 않는다.
+2. **네 신호 표시와 첫 구역 용량.** 네 연결부에 방향·signal ID·지도 구역이 결속된 표시를 두며 구역 용량은 1이다. Fleet가 진입 순서를 정하고 표시 상태·카메라 관측·전달 권한의 revision/신선함을 함께 검증한다. NE/SW의 새 진입은 자기 방향의 유효 신호·신선한 grant/lease·상충 점유 없음·진출 여유·로봇 안전 관측을 모두 만족해야 한다. 다른 방향 초록이나 표시만으로 진행하지 않는다. NW/SE의 진출을 새 진입용 적색 gate로 막지 않는다. 통신/신호/권한이 낡으면 새 진입을 거절하고 이미 진입한 로봇은 기존 CORE 안전 조건 안에서 구역을 비우며 실제 관측으로 점유를 해제한다. 실제 장애물이 있으면 진출 보장 명목으로 강제 전진하지 않는다.
+3. **횡단보도와 주의 표시 분리.** 이 맵 진단에서 D-573의 일괄 선행 정지 설계를 부분 구체화한다. 별도 정지 표시가 없는 일반 횡단보도는 서행하며 신선한 시야·횡단/진입 보행자 없음·장애물 없음·몸체 통과 공간을 확인하고 통과한다. 모름·가림·사람/진로 장애물은 진입 전 정지이며 시간 경과만으로 출발하지 않는다. 주황/검정 사선 주의 표시에서는 몸체가 경계를 넘기 전 완전 정지→주변/진로 판단→안전·유효 권한 확인 후 출발한다. 감속·정지 여유는 CORE 형상·지연·제동 측정에 결속한다. 기존 D-573 코드가 이 구분을 구현했다고 주장하지 않는다. 구현 시 기존 API/reference/schema에 변화가 있으면 같은 변경에서 계약·회귀시험을 함께 고친다. 본 설계는 기존 운영 기본값을 자동 변경하지 않는다.
+4. **장애물과 정지.** 벽·정적 물체·동적 장애물·UNKNOWN 센서 영역은 기존 body sweep·정지 간격·IR·freshness·E-Stop 검사를 유지한다. 학습 또는 Fleet grant가 장애물 정지를 덮어쓰지 않는다. 재개는 실제 위험 해소와 관측 회복 후 기존 gate가 결정하며 무한 대기의 원인을 지우거나 임의 RESUME으로 완주를 만들지 않는다.
+5. **native 연결과 신원.** D-653의 isaac-pinky-a/b를 서로 다른 CORE/CommandManager/LineFollowManager/epoch·관측 상태와 두 native articulation에 일대일 결속한다. 한 owner만 각 몸체에 명령을 적용하며 공통 simulation clock·단위·좌표·모델 identity를 기록한다. 상대 후보·이전 epoch·TTL/관측 만료는 해당 owner가 거절한다. reset은 실제 두 몸체 정지 확인 뒤 진행하며 격리 simulation만 연결한다. 실제 Fleet 서버 연결과 native bridge를 검증하지 않은 local 객체 시험은 Fleet 실행 수용이 아니다.
+6. **학습 대상.** 기존 조향 gain .75/1.0/1.35/1.7만 학습한다. gain은 기존 조향 계산에 적용하며 안전 gate 이후 최종 명령에 덧곱하지 않는다. 모델·지도·신호 규칙은 정책이 바꾸지 않는다. 유효하고 신선한 카메라 target과 측정 transition만 갱신하며 camera loss·map-only 복귀·권한 실패는 유효 학습 성과가 아니다. 필수 신호/주의 정지를 지연 보상으로 벌하지 않도록 reward와 진행 측정을 검증한다. 기존 R12의 updates 0을 먼저 해결하고 정책 hash·유효 업데이트·고정 평가를 남긴다.
+7. **구현 순서.** (a) 지도 표식/방향·센서·기존 모델 target 일치와 한 대 기준선, (b) CORE 횡단 서행/주의 정지 및 정상·실패 gate, (c) 실제 Fleet 순서·신선 권한·점유·진출, (d) 두 native 몸체·독립 owner 폐루프, (e) 유효 RL와 동일 조건 baseline/고정 정책 비교, (f) 독립 평가와 영상/trace 보관 순서로 진행한다. 각 단계는 실패 재현→최소 구현→원격 회귀·known_failures→bounded native 실행·실제 정지·cleanup을 통과해야 다음 단계 수용으로 올린다.
+8. **완료 기준.** 최소 독립 평가 seed 3개, 0/+90/180/-90 네 시작 방향과 두 출발 순서를 포함한다. 같은 source/map/model/초기 조건/seed의 baseline과 frozen RL을 짝지어 두 로봇 각각 전체 ordered 경로와 목표 정지를 완료한다. 정상·적색·불명·stale 신호, 보행자 점유, 정적/동적 장애물, grant 상충/만료·통신 단절의 실제 안전 정지와 회복을 확인한다. 신호 위반·위험 진입·상충 grant·충돌/벽 침범·진출 차단 교착은 0이어야 한다. 오차 RMS/p95/max·조향 변동·유효 update·성공/실패·실제 속도·grant/lease/occupancy trace를 공개한다. 실제 headless Isaac 원본 영상과 모델/정책/맵/source SHA 및 독립 검증을 private 일지에 보관한다. Gazebo·ROS-SIM·실물 수용을 구분하며 timeout·teleport·camera loss·stub/mock 통과를 완주로 세지 않는다.
+
+### Consequences
+
+최종 완료에는 병렬 환경의 실제 시간 겹침·환경별 유효 업데이트와 heldout 개선, 두 로봇 Fleet 전체 완주 및 교통 실패 조건 0위반이 모두 필요하다. 원격 시험 PC 확보나 설계 확정만으로 실행 증거를 대신하지 않는다.
+
+이 ADR은 사용자가 승인한 구현 목표·권한·수용 순서다. 네 신호 표시, 실제 Fleet/native 연결, 유효 카메라 RL 정책·두 대 완주 영상은 아직 구현/수용 완료가 아니다. D-606 일반 Isaac Lab readiness나 운영/실물 승격은 열지 않는다. 현재 실패를 그대로 기록하고 실제 증거가 모든 요구를 충족하기 전 완료를 선언하지 않는다.
+
+**Related:** D-2, D-18, D-517, D-525, D-541, D-573, D-606, D-638, D-650, D-653.
