@@ -23,7 +23,7 @@ def setup(tmp_path, kinds=('discord',)):
     log = LineStuckAnswerLog(tmp_path / 'fleet.sqlite3')
     urls = {'discord': DISCORD, 'slack': SLACK, 'telegram': TELEGRAM}
     config = NotificationConfig('https://fleet.example/console',
-                                tuple(Channel(kind, urls[kind], 'team' if kind == 'telegram' else None)
+                                tuple(Channel(kind, urls[kind], '-123' if kind == 'telegram' else None)
                                       for kind in kinds))
     log.notifications.config = config
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])

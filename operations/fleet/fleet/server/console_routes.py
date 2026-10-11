@@ -296,6 +296,10 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     def judgment_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
         return {"records": board.judgments(limit)}
 
+    @app.get('/api/fleet/notifications', dependencies=read_guard, tags=['line-stuck'])
+    def notification_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {'records': board._log.notifications.rows(limit) if board._log is not None else []}
+
     @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
               tags=["line-stuck"])
     def review_traffic_fact(body: IncidentReviewRequest,
