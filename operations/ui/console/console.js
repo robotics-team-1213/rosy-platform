@@ -343,7 +343,7 @@ async function refreshIncidents() {
           || "상황 분류 미확인";
       incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`);
       detail.append(summary);
-      incidentLine(detail, `영상 분석 참고 · 신뢰도 ${Math.round(ai.confidence * 100)}% · 조치 명령과 별도입니다.`);
+      incidentLine(detail, `AI 분석 참고 · 신뢰도 ${Math.round(ai.confidence * 100)}% · 조치 명령과 별도입니다.`);
       const raw = document.createElement("details"), rawTitle = document.createElement("summary");
       rawTitle.className = "ui-disclosure-row";
       rawTitle.textContent = "개발 진단";
