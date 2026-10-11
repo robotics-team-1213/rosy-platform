@@ -23,7 +23,7 @@ async def gateway_session(body, remaining, directory):
         'deploy.ai_pc.deliberation_glm_gateway', stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         start_new_session=True, cwd=str(ROOT), limit=4097,
-        env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': os.pathsep.join(
+        env={**os.environ, 'PATH': '/usr/bin:/bin', 'PYTHONPATH': os.pathsep.join(
             (str(ROOT), str(ROOT / 'operations/decision/src')))}))
     try:
         process = await asyncio.shield(spawn)

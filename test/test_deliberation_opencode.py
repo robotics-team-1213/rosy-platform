@@ -1,5 +1,8 @@
 import asyncio
 import importlib
+import json
+import os
+import signal
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -92,3 +95,62 @@ def test_invalid_inputs_refuse_before_gateway(argv, body, remaining, limit, budg
     with module.GlmOpenCodeLauncher() as launcher:
         with pytest.raises(ValueError):
             asyncio.run(launcher(argv, body, remaining, limit, budget))
+
+
+@pytest.mark.parametrize('state,calls,code', [('HOLD', 1, 0), ('PASS_GLM_PROVIDER_ONLY', 0, 0),
+                                          ('PASS_GLM_PROVIDER_ONLY', 1, 1)])
+def test_unknown_gateway_receipt_refuses(state, calls, code):
+    from deploy.ai_pc.deliberation_opencode_process import finish_gateway
+    async def run():
+        reader = asyncio.StreamReader()
+        reader.feed_data(json.dumps({'state': state, 'calls': calls}).encode())
+        reader.feed_eof()
+        class Process:
+            stdout = reader
+            async def wait(self):
+                return code
+        with pytest.raises(ValueError, match='GATEWAY_RESULT_UNKNOWN'):
+            await finish_gateway(Process())
+    asyncio.run(run())
+
+
+def test_actual_gateway_child_ready_has_no_inherited_secret(tmp_path, monkeypatch):
+    from deploy.ai_pc import deliberation_opencode_process as module
+    real_spawn = asyncio.create_subprocess_exec
+    monkeypatch.setenv('HOST_PRIVATE_TOKEN', 'fixture-no-inheritance')
+    script = "import json,os,sys; job=json.loads(sys.stdin.readline()); assert set(os.environ)<= {'PATH','PYTHONPATH','LC_CTYPE'}; assert job['secret_path']=='/var/lib/rosy-deliberation/glm-coding-plan.json'; print('READY',flush=True); print(json.dumps({'state':'PASS_GLM_PROVIDER_ONLY','calls':1}),flush=True)"
+    async def spawn(*argv, **kwargs):
+        assert argv == ('/usr/bin/python3', '-m', 'deploy.ai_pc.deliberation_glm_gateway')
+        return await real_spawn('/usr/bin/python3', '-c', script, **kwargs)
+    monkeypatch.setattr(module.asyncio, 'create_subprocess_exec', spawn)
+    async def run():
+        async with module.gateway_session(b'{}', 1, tmp_path) as process:
+            return await module.finish_gateway(process)
+    assert asyncio.run(run())['calls'] == 1
+
+
+def test_actual_gateway_child_cancel_reaps_process(tmp_path, monkeypatch):
+    from deploy.ai_pc import deliberation_opencode_process as module
+    real_spawn = asyncio.create_subprocess_exec
+    seen = []
+    async def spawn(*argv, **kwargs):
+        process = await real_spawn('/usr/bin/python3', '-c',
+            "import sys,time;sys.stdin.readline();print('READY',flush=True);time.sleep(60)", **kwargs)
+        seen.append(process)
+        return process
+    monkeypatch.setattr(module.asyncio, 'create_subprocess_exec', spawn)
+    async def run():
+        ready = asyncio.Event()
+        async def child():
+            async with module.gateway_session(b'{}', 1, tmp_path):
+                ready.set()
+                await asyncio.Future()
+        task = asyncio.create_task(child())
+        await asyncio.wait_for(ready.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asyncio.run(run())
+    assert len(seen) == 1 and seen[0].returncode == -signal.SIGKILL
+    with pytest.raises(ProcessLookupError):
+        os.kill(seen[0].pid, 0)
