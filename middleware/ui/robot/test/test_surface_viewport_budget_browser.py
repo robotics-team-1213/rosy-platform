@@ -37,6 +37,7 @@ MEASURE = """() => {
       .filter(node => node.getBoundingClientRect().right > innerWidth + 1)
       .slice(0, 6).map(node => `${node.tagName}#${node.id}.${node.className}`),
     topbar: box('ui-topbar'),
+    roleClipped: document.querySelector('#shell-role').scrollWidth > document.querySelector('#shell-role').clientWidth + 1,
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
     slots: ['observe', 'act', 'sense'].map(name => document.querySelector(`[data-slot="${name}"]`))
@@ -142,6 +143,7 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
         first, scrolled = record["first"], record["scrolled"]
         assert record["errors"] == [], (surface, record)
         assert first["overflow"] <= 0, (surface, first["outside"])
+        assert first["roleClipped"] is False, (surface, first)
         assert first["topbar"]["height"] <= 0.2 * height, (
             f"{surface} {width}×{height}: 머리 {first['topbar']['height']}px > 창 높이의 20%")
         assert _inside(first["estop"], width, height), (surface, first["estop"])
