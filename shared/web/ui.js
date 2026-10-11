@@ -696,10 +696,14 @@ export function actionIcon(button, name) {
     children.push(label);
   }
   button.replaceChildren(...children, ...quiet, ...details);
+  const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
   if (button.hasAttribute("data-icon-only")) {
-    const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
     if (!label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
-    if (!button.hasAttribute("data-ui-tooltip")) button.setAttribute("data-ui-tooltip", label);
+  }
+  // 기존 title 설명도 키보드에서 제공한다. 명시 설명과 원래 이름·라벨은 보존한다.
+  if (!button.hasAttribute("data-ui-tooltip")) {
+    const explanation = button.getAttribute("title") || ((button.hasAttribute("data-icon-only") || !visible) ? label : "");
+    if (explanation) button.setAttribute("data-ui-tooltip", explanation);
   }
   return button;
 }
