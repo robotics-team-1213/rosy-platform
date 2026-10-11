@@ -77,6 +77,19 @@ def test_measured_floor_and_plane_are_separate_from_raw_homography():
     assert image.shape == (500, 500, 3) and 0 < mask.mean() < 1
     with pytest.raises(ValueError, match="undistorted"):
         fit_floor(c, pixels, metres, checks, checks / 200 - 1, map_id="m", pixel_space="raw")
+    with pytest.raises(ValueError, match="independent"):
+        fit_floor(c, pixels, metres, checks, metres[:3], map_id="m", pixel_space="undistorted")
+    with pytest.raises(ValueError):
+        fit_floor({"revision": "r", "source_id": "s"}, pixels, metres, checks, checks / 200 - 1,
+                  map_id="m", pixel_space="undistorted")
+    with pytest.raises(ValueError, match="outside"):
+        fit_floor(c, pixels + 1000, metres, checks, checks / 200 - 1, map_id="m", pixel_space="undistorted")
+    outlier_pixels = np.vstack((pixels, [[620., 460.]]))
+    outlier_metres = np.vstack((metres, [[100., 100.]]))
+    robust = fit_floor(c, outlier_pixels, outlier_metres, checks, checks / 200 - 1,
+                       map_id="m", pixel_space="undistorted")
+    assert robust["inliers"] == len(pixels)
+    assert robust["reference_pixel"] == pytest.approx(pixels.mean(axis=0))
     with pytest.raises(ValueError, match="revision"):
         plane_image(np.zeros((480, 640, 3), np.uint8), c,
                     {**floor, "lens_revision": "other"}, (-1., -1., 1., 1.),
