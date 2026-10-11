@@ -15,7 +15,7 @@ for directory in ("middleware/perception", "contracts/foundation", "operations/w
 from control.sensing.perception.learned.road_region import observed_road_region  # noqa: E402
 from rosy.world.api import ObservationSnapshot, SnapshotValidity  # noqa: E402
 from rosy.world.state.projections.road_region import road_region_input_errors  # noqa: E402
-from road_fitness import evaluate_frame  # noqa: E402
+from road_fitness import _metrics, evaluate_frame, summarize_frames  # noqa: E402
 
 CLASSES = [{"index": 0, "name": "floor", "role": "background"},
            {"index": 1, "name": "lane", "role": "lane_marking"},
@@ -159,3 +159,71 @@ def test_wrong_region_is_measured_separately_from_correct_whole_road():
     assert report["current_region"]["other_region_included_pixels"] == 60
     assert report["current_region"]["self_region_missed_pixels"] == 60
     assert report["fitness_verdict"] == "HOLD"
+
+
+def test_boundary_error_measures_known_contours_in_pixels():
+    truth = np.zeros((10, 10), np.uint8)
+    truth[3:7, 3:7] = 1
+    pred = np.zeros_like(truth, dtype=bool)
+    pred[3:7, 4:8] = True
+    metrics = _metrics(pred, truth, truth.shape)
+    assert metrics["true_positive_pixels"] == 12
+    assert metrics["outside_truth_pixels"] == 84
+    assert metrics["boundary_status"] == "ok"
+    assert metrics["boundary_truth_pixels"] == metrics["boundary_predicted_pixels"] == 12
+    assert metrics["boundary_mean_error_px"] == pytest.approx(0.5)
+
+
+def test_unknown_neighbours_are_not_a_scored_boundary():
+    truth = np.full((8, 8), 255, np.uint8)
+    truth[3:5, 3:5] = 1
+    metrics = _metrics(truth == 1, truth, truth.shape)
+    assert metrics["boundary_status"] == "no_known_boundary"
+    assert metrics["boundary_truth_pixels"] == 0
+    assert metrics["boundary_mean_error_px"] is None
+
+
+def test_missing_prediction_does_not_report_zero_boundary_error():
+    truth = np.zeros((10, 10), np.uint8)
+    truth[3:7, 3:7] = 1
+    metrics = _metrics(np.zeros_like(truth, dtype=bool), truth, truth.shape)
+    assert metrics["boundary_status"] == "missing_predicted_boundary"
+    assert metrics["boundary_truth_pixels"] == 12
+    assert metrics["boundary_mean_error_px"] is None
+
+
+def test_summary_keeps_abstained_denominators_and_separates_domains():
+    image, anchor = _snapshots()
+    labels = _labels()
+    truth = (labels == 2).astype(np.uint8)
+    def frame(domain, seeds):
+        return evaluate_frame(labels, CLASSES, image, anchor, seeds, truth, truth,
+                              domain=domain, conditions=("junction",), now_ns=1050, max_age_ns=100)
+    result = summarize_frames([frame("real", ((10, 2),)), frame("real", ()),
+                               frame("simulation", ((10, 9),))])
+    real = result["domains"]["real"]["current_region"]
+    sim = result["domains"]["simulation"]["current_region"]
+    assert real["valid_truth_pixels"] == 288 and real["truth_pixels"] == 240
+    assert real["scored_pixels"] == 144 and real["scored_truth_pixels"] == 120
+    assert real["scored_frames"] == 1 and real["abstained_frames"] == 1
+    assert real["pixel_coverage"] == real["frame_coverage"] == 0.5
+    assert real["iou"] == 0.5 and sim["scored_frames"] == 1
+    assert result["conditions"]["real"]["junction"]["frames"] == 2
+    assert result["domains"]["real"]["region_reasons"] == {"ok": 1, "no_anchor": 1}
+    assert result["fitness_verdict"] == "HOLD"
+
+
+def test_summary_empty_domain_is_visible_and_iou_uses_pixel_counts():
+    image, anchor = _snapshots()
+    labels = _labels()
+    truth = (labels == 2).astype(np.uint8)
+    reports = []
+    for target in (truth, np.where(truth, 255, 0).astype(np.uint8)):
+        reports.append(evaluate_frame(labels, CLASSES, image, anchor, (), target,
+                                      np.full_like(target, 255), domain="real", conditions=(),
+                                      now_ns=1050, max_age_ns=100))
+    result = summarize_frames(reports)
+    assert result["domains"]["real"]["road_surface"]["iou"] == 1
+    assert result["domains"]["simulation"]["frames"] == 0
+    assert result["domains"]["simulation"]["road_surface"]["iou"] is None
+    assert summarize_frames([])["domains"]["real"]["road_surface"]["pixel_coverage"] is None
