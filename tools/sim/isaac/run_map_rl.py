@@ -52,7 +52,8 @@ def main():
     if args.camera_model:
         from camera_lane import CameraQPolicy, LearnedCameraLane, camera_model_identity
         from control.sensing.perception.learned.runner import LaneSegModel
-        perception_model = LaneSegModel.open(args.camera_model, threads=1, allow_spinning=False, floor_gate=True)
+        # The frozen v2 has no wall class; its lane-mask fallback cannot use the wall floor gate.
+        perception_model = LaneSegModel.open(args.camera_model, threads=1, allow_spinning=False, floor_gate=False)
         perception = camera_model_identity(perception_model, revision=args.camera_model_revision,
                                             sha256=args.camera_model_sha256)
     saved = None
@@ -152,6 +153,11 @@ def main():
             from isaacsim.core.utils.rotations import quat_to_rot_matrix, rot_matrix_to_quat
             camera_profile = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/camera_nominal.yaml').read_text())
             front_camera = Camera(prim_path='/World/FrontCamera', resolution=(320, 240))
+            default_clip = front_camera.get_clipping_range()
+            # USD's 1 m near plane hides the Pinky's entire 0.6 m ground view.
+            front_camera.set_clipping_range(.01, 10.)
+            if not np.allclose(front_camera.get_clipping_range(), [.01, 10.]):
+                raise RuntimeError('native front camera clipping differs')
             front_camera.set_focal_length(20.)
             front_camera.set_horizontal_aperture(320. * 20. / camera_profile['fx'])
             front_camera.set_vertical_aperture(240. * 20. / camera_profile['fx'])
@@ -176,6 +182,8 @@ def main():
                                            [0., camera_profile['fx'], 120.], [0., 0., 1.]], atol=.001):
                 raise RuntimeError('native camera intrinsics differ from configured geometry')
             summary['front_camera'] = dict(resolution=[320, 240], intrinsics=intrinsics.tolist(),
+                default_clipping=list(default_clip), clipping=list(front_camera.get_clipping_range()),
+                model_floor_gate=False,
                 mount_position=mount_position.tolist(), pitch_rad=pitch,
                 geometry='configured URDF nominal mount; native simulation, not physical calibration', sample_sim_s=.1)
         if camera is not None:
