@@ -628,6 +628,7 @@
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
 
 | D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Proposed (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
