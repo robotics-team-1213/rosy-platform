@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 25add33f95 · fix(isaac): 실패 픽셀 보존과 네 방향 진단 계속
 - 2026-10-12 · eae0f59da0 · test(isaac): 카메라 RL 업데이트와 진단 실패 기록
 - 2026-10-12 · cb0ee3cd51 · fix(isaac): native scan을 CORE 몸체 경로 판정에 연결
 - 2026-10-12 · 005a247b94 · fix(isaac): 첫 camera 학습 실패 뒤 다른 seed도 시험
 - 2026-10-11 · c229738784 · fix(isaac): 명시적 렌더에서 카메라 receipt 갱신
-- 2026-10-11 · e2a94abaa3 · fix(isaac): 현재 경로 접선과 전방 안내각 분리
