@@ -76,8 +76,7 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
                    domain: str, conditions, now_ns: int, max_age_ns: int) -> dict:
     if domain not in ("real", "simulation"):
         raise ValueError("domain must be real or simulation")
-    if not isinstance(conditions, (list, tuple)) or any(
-            not isinstance(c, str) or not c.strip() for c in conditions):
+    if any(not isinstance(c, str) or not c.strip() for c in conditions):
         raise ValueError("conditions must be named strings")
     road, _ = road_masks(labels, classes)
     errors = road_region_input_errors(image, anchor, now_ns=now_ns, max_age_ns=max_age_ns)
