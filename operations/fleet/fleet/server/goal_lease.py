@@ -62,6 +62,10 @@ class GoalLeases(dict):
     def stop_token(self, robot_id: str) -> tuple[int, int]:
         return self._stop_epoch, self._stop_generation.get(robot_id, 0)
 
+    def check_stop(self, robot_id: str, token: tuple[int, int]) -> None:
+        if token != self.stop_token(robot_id):
+            raise RuntimeError("navigation pipeline overlapped a stop; result remains unknown")
+
     def view(self, robot_id: str, goal: Optional[dict]) -> Optional[dict]:
         """The console goal record with today's lease state (``goal_lease``); as is when none."""
         lease = self.get(robot_id)
