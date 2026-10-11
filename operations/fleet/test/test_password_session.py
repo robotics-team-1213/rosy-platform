@@ -558,7 +558,7 @@ def test_password_change_requires_same_origin_initial_cookie_not_bearer(tmp_path
         assert client.post(CHANGE, headers=headers, json={"password": TYPED}).status_code == 403
     normal = _client(_app(tmp_path / "normal")[0])
     assert _login(normal).status_code == 204
-    assert normal.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 403
+    assert normal.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 422
 
 
 @pytest.mark.parametrize("change", [{"principal_id": "replacement"}, {"role": "viewer"},

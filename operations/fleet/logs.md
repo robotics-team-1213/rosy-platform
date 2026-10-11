@@ -3347,3 +3347,9 @@
 - 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
 - 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
 - gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · 73b23b956c · D-689 본인 기본 프로필과 일반 비밀번호 변경
+
+- 변경: 기존 PasswordSessions/SQLite에 login+principal 결속 표시 이름과 GET/PATCH 본인 프로필을 추가했다. 일반 쿠키의 현재 비밀번호 검증과 원자적 세션 회전은 D-686 경로를 재사용한다. API reference v1.211과 정확한 버전 핀을 함께 갱신했다.
+- 증거: 125209aa2 TDD 원격 RED 15 NEW 확인 후 73b23b956c 원격 선택 회귀 exit 0, known_failures 0 NEW/0 known. AI PC 시작 자원 22 cores/9 GB로 최소 조건을 충족했다. 동시 변경 한 승자, 이전 검사 무효화, DB commit rollback, 계정 분리, 재시작/자격 원본 결속, 입력 거절을 포함한다.
+- gate 변화: 본인 프로필/일반 변경의 소스와 선택 원격 회귀 증거만 추가했다. 독립 검토, 최종 통합 CI, 설치 및 실제 팀원 사용은 아직 확인하지 않았다.
