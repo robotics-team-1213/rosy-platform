@@ -46,7 +46,7 @@ from fleet.swarm.session import (
     SessionState,
 )
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import RobotClient, require_capability
+from fleet.swarm.transport import RobotApiError, RobotClient, require_capability
 
 #: A robot whose read fails within this many seconds of its last answer is shown as
 #: `degraded` (responding late), not `unreachable`; decisions still see online=False.
