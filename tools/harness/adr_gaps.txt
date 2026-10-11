@@ -27,3 +27,4 @@ D-655 reserved by another active branch; its ADR is not in this snapshot
 D-660 reserved by another active session; ADR not yet in this branch snapshot
 D-661 reserved by another active session; ADR not yet in this branch snapshot
 D-662 reserved by another active session; ADR not yet in this branch snapshot
+D-664 다른 세션의 ADR 선점; 이 브랜치에는 본문이 아직 없음
