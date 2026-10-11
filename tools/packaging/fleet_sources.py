@@ -13,6 +13,9 @@ roots = runpy.run_path('fleet/_source_layout.py')['SOURCE_ROOTS']
 package_dirs = {
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
     'rosy.decision.deliberation': roots['decision'] / 'src/rosy/decision/deliberation',
+    'rosy.decision.deliberation.contracts': roots['decision'] / 'src/rosy/decision/deliberation/contracts',
+    'rosy.decision.deliberation.providers': roots['decision'] / 'src/rosy/decision/deliberation/providers',
+    'rosy.decision.deliberation.evaluation': roots['decision'] / 'src/rosy/decision/deliberation/evaluation',
     'fleet.server.web': roots['console'],
     'rosy_situation': roots['assessment'] / 'rosy_situation',
 }
