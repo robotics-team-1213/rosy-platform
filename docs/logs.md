@@ -8012,3 +8012,9 @@ osy-d395-s1d\`.
 - 변경: 최신 관측 기록·채널 작업 계약을 보존하며 통합했다. 새 채널 사건 시험의 setup 도우미와 세 호출만 이름을 바꿨다. 계정 규칙 문서에 확정된 첫 변경·기본 내 계정·현재 비밀번호 검증·결과 재조회를 반영했다.
 - 증거: 최신 도구 선택 회귀 101 passed/exit 0/NEW 0. canonical G1 두 회차는 6165+4371 및 6165+4396 passed, 각 NEW 0; Node 각 318 passed. commit 03378323e를 로컬 main에 착지했다. 새 도우미는 CI 도구 원격 RED 9 NEW 후 commit 1e29edaed의 pytest 7.4 및 최신 도구에서 각각 9 passed/exit 0/NEW 0. native_games_ui가 이름 변경 AST 동등성과 문서 범위를 독립 승인했다. 출하 범위 171개 커밋의 안전 검토 기록 검사도 통과했다.
 - gate 변화: 최신 소스 통합·원격 회귀·독립 검토를 확인했다. 이 후속 도우미 변경의 착지·푸시·전체 CI·서명·설치·계정 발급은 다음 gate다. 선택적 외부 채널 설정은 현장에 없으며 활성화하지 않았다.
+
+## 2026-10-12 · 8520b77d66 · D-700 실제 Fleet 규칙 선택 근거
+
+- 변경: 실제 resolver step 반환과 Assessment를 기존 DB의 fleet.observe 원장에 결속했다. 현재 fresh RULE_ONLY 선택의 HOLD/HANDOFF만 모델 baseline으로 연결하며 WAIT·물리 명령·MIXED·stale·claim·config 변경을 임의 변환하지 않는다. SDK 0.1.10 필수 설치와 CI/local 버전 동기화를 포함한다.
+- 증거: 최신 main 통합 12개 시험 그룹 원격 621 passed/1 skipped, exit 0/NEW 0/lint, 실제 wheel·sdist 설치·기본 resolver 생성·기존 policy loader 호환과 독립 검토. commit `8520b77d66`으로 local landing. 고정 로그는 세션 `logs/rule-land-8520b77d66/run-1.txt`다.
+- gate 변화: SOURCE·설치 회귀·로컬 착지. 실제 모델 품질·전체 CI·배포·현장 수용·명령/호출/재발 전체 coverage는 미확인이다. 다음은 원장 export·독립 cohort 연결이며 전체 목표는 진행 중이다.
