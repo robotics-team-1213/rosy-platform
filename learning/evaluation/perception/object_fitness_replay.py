@@ -18,7 +18,7 @@ from object_fitness import _fraction, evaluate_detections, evaluate_model_frame,
 def _truth(folder):
     store.refuse_publication_links(Path(folder))
     folder = Path(folder).resolve()
-    doc = intake._verified_manifest(folder)
+    doc = store.read_fixed_manifest(folder)
     if (doc.get('schema') != 'rosy.perception.dataset/1' or doc.get('purpose') != 'eval'
             or doc.get('task') != 'object_det'):
         raise ValueError('fixed object evaluation dataset required')
