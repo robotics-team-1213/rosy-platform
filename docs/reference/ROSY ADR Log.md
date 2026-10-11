@@ -616,3 +616,4 @@
 | D-624 | 색상 역할·공용 컴포넌트·디자인 법칙; 팔레트 값 보존, 전체 웹 CSS 역할 소비, 갤러리 통합, Fleet·로봇 레이아웃 개선 | Accepted (2026-10-11; SOURCE·원격 G1·G2·G3·장치 수용 별도) |
 | D-631 | Named map profiles and coordinate/overlay/raw views; activation and calibration remain explicit | Accepted (2026-10-11) |
 | D-633 | 심한 렌즈 왜곡과 부분 시야를 위한 측정 카메라 교정 | Proposed |
+| D-634 | 카메라 촬영·교정·관측·좌표 표시의 역할 분담과 표시 안정성 | Proposed |
