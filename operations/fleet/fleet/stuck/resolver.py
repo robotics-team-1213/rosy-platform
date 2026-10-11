@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Optional, Union
 
 from fleet.stuck.peer_pose import _map_pose
+from fleet.stuck import pipeline
 
 #: CORE codes that mean "this answer was judged and refused": try the next candidate.
 REFUSED = "STUCK_DECISION_REFUSED"
@@ -255,48 +256,19 @@ class StuckResolver:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
-        state = row.get("state") or {}
-        if (state.get("safety") or {}).get("estop"):
-            return self._escalate(chain, rid, sid, "estop")
-        if state.get("activity"):                  # attended calibration lease (D-321)
-            return self._escalate(chain, rid, sid, "calibration")
+        hold = pipeline.law_hold(row)
+        if hold is not None:
+            return self._escalate(chain, rid, sid, hold)
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
-        from fleet.stuck.lane_lost import ai_answer, ai_late
+        from fleet.stuck.lane_lost import ai_late
 
         if sid in chain.answered:
             ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
-        from fleet.stuck.ai_first import ai_answer    # D-610: AI-first robots, else the D-577 path
-        if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
-            # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
-            return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
-
-        proposed = ai_answer(self, now, row, stuck, rows, chain)
-        if proposed is not None:
-            return None if proposed == "wait" else proposed
-        rule = self._rule(row, stuck, rows, chain)
-        ai = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
-        if ai is not None and rule is not None and rule[1] == "BACK_AND_RETRY":
-            rule = ("R5", "WAIT", f"ai:{ai}")         # D-577 7 (2): an acting AI fact only stops a back-off
-        if rule is not None and rule[1] == "ESCALATE":
-            return self._escalate(chain, rid, sid, "meet")
-        if rule is not None and rule[1] == "RESUME":
-            rule = ("meet", "WAIT")                   # resume only after a finished segment
-        if rule is None:
-            return self._escalate(chain, rid, sid, "no_rule")
-        if rule[0] == "R5":                           # result() raises the human row after the send
-            return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
-        # §5: the one transport resend repeats an answer already counted; never block it.
-        if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
-            return self._escalate(chain, rid, sid, "rule_budget")
-        if stuck.get("cause") in LOST_LIKE and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
-            return self._escalate(chain, rid, sid, "no_rule")   # D-577 1: never RESUME/YIELD on lane_lost
-        if len(rule) == 4:
-            return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
-        return Answer(rid, sid, rule[1], rule[0])
+        return pipeline.candidate(self, now, row, stuck, rows, chain)
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
         chain.escalated.add(sid)
