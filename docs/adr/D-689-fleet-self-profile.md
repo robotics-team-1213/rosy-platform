@@ -8,7 +8,7 @@ D-683의 우상단 계정 메뉴와 D-686의 첫 로그인 변경을 잇는다. 
 
 ## Decision
 
-1. 우상단 사람 계정 메뉴의 `내 프로필`은 `/console/profile`로 연결한다. 로그인 ID·principal 이메일·권한은 읽기 전용, 표시 이름만 편집한다. Bearer·개발 접속에는 사람 프로필을 제공하지 않는다. Map/Cell에서는 새 탭으로 열어 기존 입력을 보존한다. 미로그인·첫 변경 미완료는 기존 전용 로그인으로 연결하고 검증된 업무 복귀 경로를 보존한다.
+1. 우상단 사람 계정 메뉴의 `내 계정`은 `/console/profile`로 연결한다. 로그인 ID·principal 이메일·권한은 읽기 전용, 표시 이름만 편집한다. Bearer·개발 접속에는 사람 프로필을 제공하지 않는다. Map/Cell에서는 새 탭으로 열어 기존 입력을 보존한다. 미로그인·첫 변경 미완료는 기존 전용 로그인으로 연결하고 검증된 업무 복귀 경로를 보존한다.
 2. GET `/api/fleet/auth/profile`은 유효한 변경 완료 쿠키의 `login`, `principal_id`, `email`, `role`, `display_name`을 제공한다. principal이 이메일인 팀 계정은 이를 email로 제공하고 다른 기존 principal은 email이 없다. PATCH 같은 경로는 JSON `display_name` 하나만 받으며 본인의 이름만 수정한다. 공백 제거 후 1~80자, 제어 문자는 거절한다. 역할·ID·principal·이메일 입력은 거절한다. unsafe 요청은 기존 same-origin/CSRF 검사를 따른다.
 3. 표시 이름은 기존 Fleet SQLite의 작은 프로필 행에 login+principal로 결속한다. 비밀번호 회전·서버 재시작 후 유지하고 다른 principal에 재할당된 login에는 이전 이름을 적용하지 않는다. YAML은 계정 존재·역할·principal의 원본으로 남고 새 서비스·의존성·자격 필드는 만들지 않는다. UI는 사용자 문자열을 textContent/value로 출력한다.
 4. D-686 POST `/api/fleet/auth/change-password`를 변경 완료 쿠키에도 확장한다. 초기 쿠키는 기존 `password` 하나, 일반 쿠키는 `current_password`와 `password` 두 필드만 받는다. 현재 비밀번호를 확인해야 하고 새 비밀번호는 8~1024자이며 ID·현재 비밀번호와 달라야 한다. 대상 ID/권한은 쿠키에서만 결정한다. 초기 강제 변경은 계속 운영 권한 없이 기존 로그인 화면에서 완료한다.
