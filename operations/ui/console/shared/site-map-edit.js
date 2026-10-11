@@ -224,7 +224,8 @@ export function mergeCameraMap(base, observation, connections = {}) {
   const joins = new Map(Object.entries(connections));
   for (const [id, target] of joins) {
     const point = observation.places.find(p => p.id === id), old = base.places.find(p => p.id === target);
-    if (!point || !old || Math.hypot(point.x - old.x, point.y - old.y) > .05)
+    if (!point || !old || !Number.isFinite(point.x) || !Number.isFinite(point.y)
+        || Math.hypot(point.x - old.x, point.y - old.y) > .05)
       throw new Error('연결 후보의 장소와 0.05 m 이내 거리를 확인하세요');
     point.x = old.x; point.y = old.y;
     for (const edge of observation.edges.filter(e => e.from === id || e.to === id)) {
@@ -244,7 +245,7 @@ export function mergeCameraMap(base, observation, connections = {}) {
     if (note && !old.evidence?.note?.includes(note)) {
       const combined = [old.evidence?.note, note].filter(Boolean).join('\n');
       if (combined.length > 1000) throw new Error('관측 근거가 1000자를 넘습니다 · 초안을 분리하거나 근거를 검토하세요');
-      old.evidence = {...(old.evidence || e.evidence), status: 'observed', note: combined};
+      old.evidence = {...(old.evidence || e.evidence), status: e.evidence.status, note: combined};
       addedEvidence = true;
     }
     return false;
