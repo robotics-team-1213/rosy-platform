@@ -31,7 +31,7 @@ export function createPasswordLogin(host, {onChange = () => {}} = {}) {
   host.innerHTML = TEMPLATE;
   const parts = Object.fromEntries([...host.querySelectorAll("[data-login]")].map(node => [node.dataset.login, node]));
   const part = name => parts[name];
-  document.getElementById("user-role").before(part("who"));
+  document.getElementById("topbar-extra").prepend(part("who"));
   let locked = true, firstRefresh = true;
 
   async function refresh(nowLocked = locked) {
