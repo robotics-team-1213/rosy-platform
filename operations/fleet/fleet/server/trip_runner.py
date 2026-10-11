@@ -353,6 +353,7 @@ class TripRunner(TripAdmission, TripProgress):
             await self._pose_checks(robot_id, graph, segments)
             if current():
                 self._apply_replan(live, hold, principal_id)
+                return True
         except TripError as exc:
             live.view["detail"]["ai_replan_refused"] = exc.code
 
@@ -491,14 +492,18 @@ class TripRunner(TripAdmission, TripProgress):
                     and remaining <= self.config.arm_distance_m and not self._core_busy(live)
                     and (live.sent is None or live.sent["index"] != index)):
                 self._replan(live, index, frozenset(resolver["blocked_edges"]))
-                if resolver.get("ai") or robot_id in self.autonomous_robots:
-                    await self._ai_confirm(live, "fleet-ai" if resolver.get("ai") else "fleet-rule")
+                if resolver.get("ai") and await self._ai_confirm(live):
+                    self._save(live)
+                    return
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last
                     and remaining <= self.config.arm_distance_m):
                 self._replan(live, index)
                 self._describe(live)
+            if robot_id in self.autonomous_robots and await self._ai_confirm(live, "fleet-rule"):
+                self._save(live)
+                return  # The next period locates the robot against the new plan.
             if live.repeat and live.view["hold"] is None and lap_due(live, index, remaining, self.config):
                 await self._next_lap(live, index)
                 index = live.view["segment_index"]  # finished laps may have been dropped

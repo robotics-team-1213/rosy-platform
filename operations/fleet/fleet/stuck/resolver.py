@@ -87,6 +87,7 @@ class _Chain:
     ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
     held: dict = field(default_factory=dict)         # stuck id -> R5 escalation sent (D-577 남은 항목 2)
     observing: Optional[str] = None
+    unresolved: set = field(default_factory=set)
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -152,6 +153,7 @@ class StuckResolver:
         self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
         self.ai_first = None                          # D-610 3: `ai_first.AiFirst` (app.py), None = D-577 only
         self.autonomous_robots: frozenset[str] = frozenset()
+        self._uncertain: set[tuple[str, str]] = set()
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -189,6 +191,7 @@ class StuckResolver:
             return self._escalate(chain, answer.robot_id, answer.stuck_id, answer.escalate or "waiting")
         if (answer.robot_id in self.autonomous_robots and code == "STUCK_DECISION_OUTCOME_UNKNOWN"
                 and answer.decision != "WAIT"):
+            self._uncertain.add((answer.robot_id, answer.stuck_id))
             return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
         if code is None and answer.escalate is None:
             if answer.decision == "RESUME" and answer.rule == "meet":
@@ -269,6 +272,12 @@ class StuckResolver:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
+        if rid in self.autonomous_robots and any(robot == rid for robot, _case in self._uncertain):
+            return self._escalate(chain, rid, sid, "core:STUCK_DECISION_OUTCOME_UNKNOWN")
+        if rid in self.autonomous_robots and chain.observing is not None and (
+                chain.observing.startswith("core:") or chain.observing in (
+                    "rule_budget", "deadline", "ai_exhausted", "ai_oscillation")):
+            return None  # Preserve uncertainty and exhausted budgets even across another hold.
         hold = pipeline.law_hold(row)
         if hold is not None:
             return self._escalate(chain, rid, sid, hold)
@@ -276,8 +285,7 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if rid in self.autonomous_robots and chain.observing is not None:
             # A changed clock is not recovery evidence; only a newly admissible candidate reopens WAIT.
-            if chain.observing.startswith("core:") or chain.observing in (
-                    "rule_budget", "deadline", "ai_exhausted", "ai_oscillation"):
+            if stuck.get("phase") != "ASKING":
                 return None
             action = pipeline.candidate(self, now, row, stuck, rows, chain)
             if not isinstance(action, Answer) or action.decision == "WAIT":

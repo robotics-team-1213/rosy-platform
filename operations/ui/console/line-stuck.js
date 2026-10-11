@@ -178,7 +178,8 @@ export function chainRows(body, nowMs = Date.now()) {
   for (const robot of chain.robots || []) {
     const last = robot.last_answer;
     const answer = !last ? "답 없음"
-      : last.decision === "ESCALATE" ? `사람에게 (${escalationText(last.escalated)})`
+      : last.decision === "ESCALATE" ? (last.escalated?.startsWith("auto_hold:")
+        ? `자동 대기 (${escalationText(last.escalated.slice(10))})` : `사람에게 (${escalationText(last.escalated)})`)
         : `${last.rule || last.tier} ${DECISION_LABEL[last.decision] || last.decision}`;
     rows.push([robot.robot_id, [CREDENTIAL_TEXT[robot.credential] || robot.credential,
       robot.ai_acting ? "AI 제안 실행" : "AI 사실만", `마지막 ${answer}`,

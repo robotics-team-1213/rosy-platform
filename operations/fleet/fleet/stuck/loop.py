@@ -41,10 +41,13 @@ class StuckResolverLoop:
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
         #: D-577 개정 2026-10-10: the AI PC proposal board (`AiFactsBoard`; app.py sets it). None = no AI.
         self.ai_board = None
+        self.events_since = lambda _robot_id, _seq: ()
         #: D-610 2·9: the closed loop and the problem record (app.py sets ``episodes``; None = not kept).
         self.outcomes, self.episodes, self.problems = Outcomes(), None, None
         self._rows: dict[str, dict] = {}
         self.wake = asyncio.Event()
+        if board._log is not None:
+            resolver._uncertain.update(board._log.uncertain_motion())
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
         self._resolver.claim(robot_id, stuck_id)
@@ -57,6 +60,16 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
+        for rid, sid in tuple(self._resolver._uncertain):
+            events = self.events_since(rid, 0)
+            if any(event.type == "nav.line_stuck_closed" and event.data.get("stuck_id") == sid for event in events):
+                self._board.record(robot_id=rid, stuck_id=sid, decision="ESCALATE", principal_id=PRINCIPAL_ID,
+                                   accepted=None, tier="rule", code="STUCK_DECISION_RECONCILED",
+                                   escalated="auto_reconciled:owner_case_closed")
+                self._resolver._uncertain.discard((rid, sid))
+                chain = self._resolver._chains.get(rid)
+                if chain and chain.observing == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
+                    chain.observing = None
         if self._board is not None and self._board._log is not None:
             for claim in await asyncio.to_thread(self._board._log.handoff.active):
                 rid, sid = claim['robot_id'], claim['stuck_id']
@@ -152,7 +165,7 @@ class StuckResolverLoop:
             self._board.note_resolver(action.robot_id, action.stuck_id, tier="rule", rule=rule or "R5",
                                       decision="WAIT", escalated=reason)
             self._board.record(robot_id=action.robot_id, stuck_id=action.stuck_id,
-                               decision="WAIT", principal_id=PRINCIPAL_ID, accepted=None,
+                               decision="ESCALATE", principal_id=PRINCIPAL_ID, accepted=None,
                                tier="rule", rule=rule or "R5", escalated=reason)
             return
         log.warning("stuck %s on %s escalated to a human: %s",
