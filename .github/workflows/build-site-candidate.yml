@@ -26,6 +26,7 @@ on:
     paths:
       - deploy/site/**
       - operations/fleet/**
+      - integrations/messaging/discord/**
       - operations/decision/**
       - operations/ui/console/**
       - operations/world/src/**
