@@ -302,8 +302,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
 - 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
 - 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
 - 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
-- 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
