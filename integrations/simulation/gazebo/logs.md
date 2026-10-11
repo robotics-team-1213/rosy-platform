@@ -317,3 +317,10 @@
 - 변경: 제품 런타임 변경 없이 AI PC 신규 A16 환경의17개 colcon package를 빌드하고 전용camera launch로 두 로봇을 실제 headless 생성했다. 독립API·HOME·namespace·loopback DDS·run_spec를 사용하고 Fleet/주행 요청은 하지 않았다.
 - 증거: rosy_01 image310/scan387/odom1137/line310/cmd1933, rosy_02도 센서/미리보기 수신, 각 LiDAR finite640·320x240 camera·CORE publisher1개·cmd 최대0·실제 odom속도0. 원본result/사진/log/cleanup은 private/isaac/results/gazebo-a16-stationary-two-camera에 보관했다. partition에 남은 own process13개를 종료하고 residual_after0을 확인했다.
 - gate 변화: 없음. CORE runtime의 DOMAIN_ID_INVALID와 FOREIGN_NAMESPACE를 확인했다. runner run_spec120..199와 CORE Linux-safe0..101 계약이 모순이며 domain172는 ERROR다. 연결 증거일 뿐 Fleet runtime 준비/카메라 주행/교통/완주/RL 수용이 아니다. 서로다른 로봇namespace 진단과 domain allocator/validator를 계약·시험과 함께 바로잡아야 한다.
+
+
+## 2026-10-12 ? eae0f59da0 ? fix(sim): CORE ??? Gazebo ?? ??? ??
+
+- ??: ?? allocator?run_spec?sim-only watchdog80..99, ?? sim20..79. CORE0..101/localhost/partition/namespace/??context/monotonic expiry ??. ??120..199catalog?failclosed???output_root??.
+- ??: ????87PASS1SKIP?known_failures0NEW?????????????. ??17packages?????headlessGazebo?COREdomain80,?320x240camera311?finite640LiDAR389?odom1143?solecmdpublisher1?????0??. ROS ERROR????FOREIGN_NAMESPACE?????. ownpartition?????0.
+- gate ??: ??runtime???????. Fleetserver??????????cameraRL??????. ??PC??sourceIsaac??????7.6GB?8GBfloor????SDK???????.
