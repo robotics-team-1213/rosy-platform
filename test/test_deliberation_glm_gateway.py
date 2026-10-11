@@ -85,13 +85,23 @@ class Connection(http.client.HTTPConnection):
 
 
 @pytest.mark.parametrize('change', ['valid', 'stream', 'model', 'tool', 'history', 'route', 'oversize'])
-def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize('schema_version', [1, 2])
+def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatch, change, schema_version):
     seen = []
     monkeypatch.setattr(gate, 'claim', lambda body: None)
+    answer = response()
+    p = problem()
+    body = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
+                       'prior': [], 'instruction': 'test'})
+    if schema_version == 2:
+        from test_deliberation_glm_judgment import fixture, opinion
+        p, bound, body = fixture(prior=True)
+        body = body.decode()
+        answer['choices'][0]['message']['content'] = json.dumps(opinion(p, bound))
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
-        return response()
+        return answer
     monkeypatch.setattr(gate, 'upstream', upstream)
     path = str(tmp_path / 'gateway.sock')
     incoming = {'model': gate.MODEL, 'messages': [{'role': 'user', 'content': 'untrusted injected text'}]}
@@ -104,9 +114,6 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     raw = json.dumps(incoming).encode() if change != 'oversize' else b'x' * 16385
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
-        p = problem()
-        body = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
-                           'prior': [], 'instruction': 'test'})
         server.problem, server.body, server.token = p, body, 'fake-unit-token'
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
