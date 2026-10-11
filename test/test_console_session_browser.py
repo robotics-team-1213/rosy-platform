@@ -74,7 +74,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         # Reauthentication does not replay the command that received 401.
         assert len([row for row in requests if row[1] == "POST" and row[0] == "/api/fleet/estop"]) == 1
         page.locator("#estop").click()
-        page.wait_for_function("document.querySelector('#log').textContent.includes('정지 요청 응답')")
+        page.wait_for_function("document.querySelector('#log').textContent.includes('정지 요청 대상 로봇 없음')")
         posts = [row for row in requests if row[1] == "POST" and row[0] == "/api/fleet/estop"]
         assert [row[2] for row in posts] == ["Bearer fleet-session-a", "Bearer fleet-session-b"]
         assert not errors
