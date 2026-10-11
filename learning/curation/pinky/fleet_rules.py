@@ -80,7 +80,7 @@ def main():
     output, database = args.pop('output'), args.pop('database')
     if output.resolve().drive.upper() == 'F:': raise ValueError('export output belongs on X:')
     exported = snapshot(database, **args)
-    with output.open('x', encoding='utf-8') as stream:
+    with output.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(exported, sort_keys=True, separators=(',', ':'), allow_nan=False)+'\n')
     return 0
 
