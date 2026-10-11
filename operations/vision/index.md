@@ -18,6 +18,7 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 |
 
 ## 계획·결과 문서
 
@@ -25,6 +26,7 @@
 - [2026-09-26-overhead-camera-android-app-design.md](../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
 - [2026-09-28-site-camera-preview-rectification.md](../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-30-app-identity-rename-plan.md](../../docs/plans/2026-09-30-app-identity-rename-plan.md)
+- [2026-10-11-compact-camera-calibration.md](../../docs/plans/2026-10-11-compact-camera-calibration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -36,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
 - 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
 - 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정
 - 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
 - 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
-- 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
