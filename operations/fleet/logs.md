@@ -3212,3 +3212,15 @@
 - 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 · ea60284994 · D-655 조사용 상대 odom 읽기
+
+- 변경: World tracker의 최신 odom pose/stamp/epoch를 신선할 때만 읽는 survey_odom 포트를 Fleet 서비스로 전달한다. 지도 anchor 없이도 조사 근거를 읽지만 운행 MapPose·pin·명령은 생성하지 않는다. stale/future/unknown robot은 값 없음, 기존 gap/reset epoch를 유지한다.
+- 증거: 신규 3개 remote RED 뒤 map pose/service/pin 및 World wheel·compatibility remote GREEN 88 PASS, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/survey-odom-green-retry/run-1.txt. 현장 시험 PC의 5.0 cores/8.3 GB 기준 통과. 최초 shipping SSH timeout과 browser SSH reset은 PASS로 계산하지 않는다.
+- gate 변화: 읽기 포트 소스와 원격 회귀. 조사 기록 시작·초안 확정 API/UI는 다음 연결 단계이며, 배포·실물 좌표 정확도·주행 수용은 아직 확인하지 않았다.
+
+## 2026-10-11 · 7bf0f597dc · D-655 주행 기록 위치 단절 처리
+
+- 변경: 기존 teach의 map pose가 UNKNOWN/DEGRADED 또는 bridge 0.5 m 초과로 유효하지 않으면 기록을 끝낸다. reason pose_lost로 유효한 앞부분만 pending에 남기고 짧은 기록은 폐기한다. 좌표를 다시 얻어도 끊긴 구간을 하나의 도로로 자동 잇지 않으며 로봇 명령은 보내지 않는다. API reference와 기존 정상 기록 fixture 및 세 불연속 시험을 같이 갱신했다.
+- 증거: 세 시험 remote RED 이후 teach API/auth/audit·순수 계산·마커 장소 회귀 26 PASS, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/teach-gap-green-paths/run-1.txt. 잘못된 시험 파일명의 첫 GREEN은 exit 4/실행 없음으로 별도 기록했다. 실제 GREEN은 모델 PC 자원 기준 통과.
+- gate 변화: 기록 단절 source/remote 회귀. 지도 없는 상대 조사 API/UI와 카메라 누적은 계속 진행하며 통합·배포·실제 주행 수용은 미확인이다.
