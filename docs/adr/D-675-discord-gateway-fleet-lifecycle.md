@@ -1,7 +1,7 @@
 # D-675 — Discord Gateway 수신과 기존 Fleet lifecycle
 
 **Date:** 2026-10-12
-**Status:** Proposed
+**Status:** Accepted (source only)
 
 ## Context
 
@@ -20,3 +20,5 @@ private intake 설정의 `bot_token_file`이 없으면 수신은 OFF다. 토큰 
 실제 원격 RED는 gateway 모듈 누락을 확인했다. handshake/identity/scope, 저장 실패 sequence, heartbeat ACK, lifespan 종료와 기본 OFF, wheel/sdist/source image closure 및 영향 회귀 시험 후 source 인수를 판단한다. 실제 이미지·현장 READY·사용자 메시지→원장→Console readback은 별도 증거다.
 
 Protocol reference: [Discord Gateway](https://docs.discord.com/developers/events/gateway).
+
+Source 인수: 독립 검토2241b7b6b 승인, 최신27fc0de96 원격83 PASS/NEW0(수신·자격·구조·wheel/sdist 설치). 전체 main 착지와 실제 이미지/현장 수용은 별도다.
