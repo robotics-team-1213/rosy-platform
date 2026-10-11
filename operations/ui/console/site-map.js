@@ -10,11 +10,10 @@ import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView,
   soccerProfileMap,
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
-  planTrip, tripRefusalText, planSummaryText, tripPoseReason, planeView, addApproach, removeApproach, mergeCrosswalks,
+  planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
-import {robotMapPose} from '/console/assets/localization-badge.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';

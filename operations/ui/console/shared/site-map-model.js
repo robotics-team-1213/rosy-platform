@@ -394,6 +394,15 @@ export function oneLapReason({active, running, start, via}) {
 // D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
 // the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
 const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
+/** Explicit CORE map localization only; an odom pose or map_id alone is insufficient. */
+export function robotMapPose(robot) {
+  const state = robot?.state, pose = state?.pose;
+  if (!pose || ![pose.x, pose.y, pose.yaw].every(Number.isFinite)) return null;
+  const frame = robot.localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? 'map' : 'odom');
+  if (frame !== 'map') return null;
+  const loc = state.localization;
+  return loc?.state === 'LOCALIZED' && loc.pose_frame === 'map' ? pose : null;
+}
 /** The guide is read-only evidence; the server still checks freshness and admission. */
 export function tripPoseReason(guide, robotId, active, corePose = null) {
   if (!guide) return ''; // Older Fleet has no guide; server admission remains authoritative.
