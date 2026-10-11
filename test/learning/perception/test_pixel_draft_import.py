@@ -16,6 +16,59 @@ import review_masks
 V13_CLASSES = (Path(__file__).resolve().parents[3] / 'learning/curation/perception/classes/lane_lr6_drivable.yaml').read_bytes()
 
 
+@pytest.mark.parametrize('semantic', [None, 'current_road_region/1', 'road_surface/1'])
+def test_draft_merge_respects_declared_road_semantic(semantic):
+    road = {'name': 'drivable', 'index': 5, 'role': 'drivable'}
+    if semantic is not None:
+        road['semantic'] = semantic
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2}, road]}
+    human = np.array([[255, 1, 5, 2, 255]], np.uint8)
+    proposal = np.full(human.shape, 5, np.uint8)
+    merged = review_masks.merge_unknown(human, proposal, binding)
+    whole = semantic == 'road_surface/1'
+    assert merged.tolist() == ([[5, 1, 5, 2, 5]] if whole else human.tolist())
+    empty = np.full(human.shape, 255, np.uint8)
+    assert review_masks.merge_unknown(empty, np.array([[5, 1, 5, 2, 5]], np.uint8), binding).tolist() == (
+        [[5, 1, 5, 2, 5]] if whole else [[255, 1, 5, 2, 255]])
+    if whole:
+        assert review_masks.lane_boundary_violations(merged, binding) == {'left': 0, 'right': 0}
+        review_masks.require_inside_lane_boundaries(merged, binding)
+    else:
+        with pytest.raises(ValueError, match='outside visible lane'):
+            review_masks.require_inside_lane_boundaries(np.array([[5, 1, 5, 2, 5]], np.uint8), binding)
+
+
+def test_whole_road_import_apply_and_approve_keep_other_road_regions(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    class_raw = V13_CLASSES.replace(b'role: drivable,', b'role: drivable, semantic: road_surface/1,')
+    classes.write_bytes(class_raw)
+    pixels = np.full((24, 32), 5, np.uint8)
+    pixels[:, 8], pixels[:, 24] = 1, 2
+    draft = folder / 'draft.png'
+    draft.write_bytes(review_masks.encode(pixels))
+    rows[0]['mask'] = {'indexed_png': draft.name, 'sha256': hashlib.sha256(draft.read_bytes()).hexdigest(),
+                       'classes_sha256': hashlib.sha256(class_raw).hexdigest()}
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[0]) + '\n')
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 1
+    review = review_masks.get(store, 2)
+    assert review['status'] == 'pending' and review['approval'] is None
+    assert np.array_equal(review_masks.pixels(store, review), pixels)
+    path, digest = review_masks.freeze(store, review_masks.encode(pixels))
+    with store.connect() as db:
+        db.execute('INSERT INTO pixel_drafts(frame,sha256,path,catalog_sha256) VALUES (?,?,?,?)',
+                   (2, digest, path, '0' * 64))
+    applied = review_masks.update(store, 2, {'version': review['version'], 'action': 'apply_draft',
+                                           'draft_sha256': digest}, ValueError)
+    assert applied['status'] == 'pending' and applied['approval'] is None
+    approved = review_masks.update(store, 2, {'version': applied['version'], 'action': 'approve',
+                                            'complete_frame_review': True, 'background_reviewed': True}, ValueError)
+    assert approved['status'] == 'approved'
+    assert approved['approval']['classes_sha256'] == hashlib.sha256(class_raw).hexdigest()
+    assert np.array_equal(review_masks.pixels(store, approved), pixels)
+
+
 def test_merge_unknown_clips_new_drivable_to_human_lane_edges():
     current = np.array([[5, 1, 255, 255, 2, 255]], dtype=np.uint8)
     proposal = np.full(current.shape, 5, np.uint8)
