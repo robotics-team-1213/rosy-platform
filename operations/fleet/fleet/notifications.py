@@ -77,6 +77,9 @@ class NotificationConfig:
         if not self.channels or len({channel.kind for channel in self.channels}) != len(self.channels):
             raise ValueError('configure one destination per notification channel')
 
+    def route_revision(self, channel):
+        return hashlib.sha256((self.console_url + '\0' + channel.fingerprint).encode()).hexdigest()
+
     @classmethod
     def load(cls, path: Path):
         data = yaml.safe_load(path.read_text(encoding='utf-8'))
@@ -111,6 +114,8 @@ class NotificationOutbox:
             connection.execute('CREATE INDEX IF NOT EXISTS fleet_notification_due ON fleet_notification_outbox(state, next_attempt_at)')
 
     def enqueue(self, connection, receipt):
+        now = receipt['evaluated_at']
+        connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
         if self.config is None or receipt['necessity'] == 'DO_NOT_INTERVENE':
             return
         request = receipt['request']
@@ -140,7 +145,7 @@ class NotificationOutbox:
             connection.execute('''INSERT OR IGNORE INTO fleet_notification_outbox (
                 robot_id, stuck_id, judgment_revision, kind, channel, route_hash, payload,
                 created_at, expires_at, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (rid, sid, revision, kind, channel.kind, channel.fingerprint, payload, now, now + 600, now))
+                (rid, sid, revision, kind, channel.kind, self.config.route_revision(channel), payload, now, now + 600, now))
         connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
 
     def rows(self, limit=100, *, robot_id=None, stuck_id=None):
@@ -154,7 +159,7 @@ class NotificationOutbox:
         return [dict(row) for row in rows]
 
     def claim_due(self, now, config):
-        routes = {channel.kind: channel.fingerprint for channel in config.channels}
+        routes = {channel.kind: config.route_revision(channel) for channel in config.channels}
         with closing(self._log._connect()) as connection, connection:
             connection.execute('BEGIN IMMEDIATE')
             connection.execute("UPDATE fleet_notification_outbox SET state='UNKNOWN', last_code='WORKER_OUTCOME_UNKNOWN' WHERE state='SENDING' AND last_attempt_at <= ?", (now - 30,))
@@ -195,8 +200,9 @@ class NotificationOutbox:
 
 
 class NotificationWorker:
-    def __init__(self, outbox, config, http, *, snapshot=None, clock=time.time):
+    def __init__(self, outbox, config, http, *, board, snapshot=None, clock=time.time):
         self.outbox, self.config, self.http = outbox, config, http
+        self.board = board
         self.snapshot, self.clock = snapshot, clock
 
     async def run_once(self):
@@ -220,6 +226,14 @@ class NotificationWorker:
             elif channel.kind == 'telegram':
                 payload = {'chat_id': channel.chat_id, 'text': text, 'link_preview_options': {'is_disabled': True}}
             state, code, provider_id, retry_after = 'UNKNOWN', 'PROVIDER_OUTCOME_UNKNOWN', None, 60
+            # Event-loop state is checked after dequeue; no await separates this check and HTTP entry.
+            if row['kind'] == 'OPEN':
+                receipt = self.board.judgment_view(row['robot_id'])
+                if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
+                        or judgment_revision(receipt) != row['judgment_revision']
+                        or (row['robot_id'], row['stuck_id']) in self.board._handoff_pending):
+                    await asyncio.to_thread(self.outbox.finish, row, 'SUPERSEDED', 'INCIDENT_CHANGED_BEFORE_HTTP', now=self.clock())
+                    continue
             try:
                 response = await self.http.post(channel.endpoint, json=payload, params=params,
                                                 timeout=5, follow_redirects=False)
