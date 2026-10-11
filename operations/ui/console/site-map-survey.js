@@ -7,10 +7,10 @@ const KINDS = {...PLACE_KIND_LABEL, road: '도로', traffic_signal: '신호등',
 
 export function createSurveyPanel(host) {
   const $ = id => document.getElementById(id);
-  let points = [], picking = false, editing = false, mapId = null, loadedApproaches = [], approachEdited = false, lastMapId = null;
-  const rows = () => [...(host.map()?.places || []).map(p => ({...p, geometry: [[p.x, p.y]]})),
-    ...(host.map()?.edges || []).map(e => ({...e, name: e.id, kind: 'road', geometry: e.polyline})),
-    ...(host.map()?.facilities || [])];
+  let points = [], picking = false, editing = false, editingKind = null, mapId = null, loadedApproaches = [], approachEdited = false, lastMapId = null;
+  const rows = () => [...(host.map()?.places || []).map(p => ({...p, category: 'places', geometry: [[p.x, p.y]]})),
+    ...(host.map()?.edges || []).map(e => ({...e, category: 'edges', name: e.id, kind: 'road', geometry: e.polyline})),
+    ...(host.map()?.facilities || []).map(f => ({...f, category: 'facilities'}))];
   const message = text => { $('survey-status').textContent = text; };
   const number = id => {
     if (!$(id).value.trim()) throw new Error('좌표·방향·폭의 숫자를 입력하세요');
@@ -64,7 +64,7 @@ export function createSurveyPanel(host) {
     options('element-from', [['', '시작 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-to', [['', '끝 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-lanes', (map?.edges || []).map(e => [e.id, `${e.id} · ${e.from} → ${e.to}`]));
-    options('element-existing', [['', '기존 요소 선택'], ...rows().map((row, i) => [row.id, `${i + 1} · ${row.name} · ${KINDS[row.kind] || row.kind}`])]);
+    options('element-existing', [['', '기존 요소 선택'], ...rows().map((row, i) => [`${row.category}:${row.id}`, `${i + 1} · ${row.name} · ${KINDS[row.kind] || row.kind}`])]);
     const selected = $('element-existing').value;
     for (const id of ['element-load', 'element-delete']) gate(id, draftReason || (!selected ? '기존 요소를 고르세요' : ''));
     gate('element-endpoints', draftReason || (!$('element-from').value || !$('element-to').value ? '시작·끝 장소를 고르세요' : ''));
@@ -113,9 +113,9 @@ export function createSurveyPanel(host) {
     points = [[a.x, a.y], [b.x, b.y]]; geometry(); message('선택한 두 장소 사이의 직선입니다. 실제 도로 모양을 확인하고 추가하세요.');
   }));
   $('element-load').addEventListener('click', () => act(() => {
-    const row = rows().find(r => r.id === $('element-existing').value);
+    const row = rows().find(r => `${r.category}:${r.id}` === $('element-existing').value);
     if (!row) return;
-    editing = true; picking = false; points = row.geometry.map(p => [...p]);
+    editing = true; editingKind = row.kind; picking = false; points = row.geometry.map(p => [...p]);
     $('element-id').value = row.id; $('element-id').disabled = true;
     $('element-name').value = row.name; $('element-kind').value = row.kind;
     $('element-from').value = row.from || ''; $('element-to').value = row.to || '';
@@ -131,12 +131,13 @@ export function createSurveyPanel(host) {
   }));
   $('element-delete').addEventListener('click', async () => {
     if (host.reason() || host.source() !== 'draft') return;
-    const id = $('element-existing').value;
+    const selected = $('element-existing').value, [category, id] = selected.split(':');
     if (!id || !await confirmIrreversible({message: '선택한 요소를 초안에서 삭제할까요? 연결된 도로·시설이 있으면 거절합니다.', action: '초안 요소 삭제', opener: $('element-delete')})) return;
-    act(() => { host.changed(removeSurveyElement(host.map(), id)); clear(); message('초안 요소를 삭제했습니다. 변경 내용을 저장하세요.'); });
+    act(() => { host.changed(removeSurveyElement(host.map(), id, category)); clear(); message('초안 요소를 삭제했습니다. 변경 내용을 저장하세요.'); });
   });
   $('element-save').addEventListener('click', () => act(() => {
     if (host.source() !== 'draft') return;
+    if (editing && $('element-kind').value !== editingKind) throw new Error('Keep the existing element kind');
     const stop = $('element-stop').value;
     const item = {id: $('element-id').value, name: $('element-name').value, kind: $('element-kind').value, geometry: points,
       from: $('element-from').value, to: $('element-to').value, width_m: number('element-width'), direction: $('element-direction').value,

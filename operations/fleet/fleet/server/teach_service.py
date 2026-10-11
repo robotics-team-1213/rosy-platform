@@ -60,6 +60,7 @@ class Session:
     reference: Optional[dict] = None
     odom_anchor: Optional[tuple] = None
     odom_epoch: int = 0
+    map_frame: Optional[tuple] = None
 
 
 def survey_reference(body: dict) -> Optional[dict]:
@@ -151,6 +152,12 @@ class TeachService:
         if teach.keep([], pose) is None:  # a later valid pose must not bridge an unobserved road
             await self._end_record("pose_lost")
             return
+        try:
+            if self._map_frame(pose) != session.map_frame:
+                raise TeachError(409, "TEACH_MAP_CHANGED")
+        except TeachError:
+            await self._end_record("map_changed")
+            return
         point = teach.keep(session.points, pose)
         if point is not None and session is self._recording:
             session.points.append(point)
@@ -188,7 +195,7 @@ class TeachService:
                                                  "robot_id": self._recording.robot_id})
         if mode not in {"map", "survey"}:
             raise TeachError(422, "TEACH_MODE_INVALID")
-        reference, anchor, epoch = None, None, 0
+        reference, anchor, epoch, map_frame = None, None, 0, None
         if mode == "survey":
             if robot_id not in set(self._roster()):
                 raise TeachError(404, "UNKNOWN_ROBOT")
@@ -210,13 +217,14 @@ class TeachService:
         else:
             if any(value is not None for value in (map_id, reference_revision, expected_revision)):
                 raise TeachError(422, "TEACH_MODE_INVALID")
-            await self._localized(robot_id)
+            map_frame = self._map_frame(await self._localized(robot_id))
+            map_id = map_frame[0]
         if self._recording is not None:  # another start won while we read the pose
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
                                                  "robot_id": self._recording.robot_id})
         session = self._recording = Session(uuid.uuid4().hex, robot_id, principal_id, self._clock(),
             mode=mode, map_id=map_id, draft_revision=expected_revision, reference=reference,
-            odom_anchor=anchor, odom_epoch=epoch)
+            odom_anchor=anchor, odom_epoch=epoch, map_frame=map_frame)
         session.last_kept_at = session.started_at
         self._store.record_event("teach_started", principal_id, {"teach_id": session.teach_id, "robot_id": robot_id})
         if mode == "survey":
@@ -248,7 +256,8 @@ class TeachService:
         if len(line) < 2 or polyline_length(line) <= MIN_EDGE_M:
             raise TeachError(422, "TEACH_TOO_SHORT", {**detail, "min_m": MIN_EDGE_M})
         places = self._base()["places"]
-        if session.mode == "survey" and survey_reference(self._base()) != session.reference:
+        if (self._base().get("map_id", "site") != session.map_id
+                or (session.mode == "survey" and survey_reference(self._base()) != session.reference)):
             places = []
         session.result = {**detail, "polyline": [list(p) for p in line],
                           "from_candidates": teach.candidates(places, line[0]),
@@ -281,6 +290,17 @@ class TeachService:
             raise TeachError(413, "SITE_MAP_TOO_LARGE", {"limit_bytes": MAX_DRAFT_BYTES})
         return self._store.save_draft(site_map, expected_revision=expected_revision, principal_id=principal_id)
 
+    def _map_frame(self, pose=None) -> tuple:
+        """Operational geometry belongs to the active frame, never an unrelated draft."""
+        base, active = self._base(), self._store.active_view()
+        map_id, reference = base.get("map_id", "site"), survey_reference(base)
+        if ((active is None and reference is not None)
+                or (active is not None and (active["map"].get("map_id", "site") != map_id
+                    or survey_reference(active["map"]) != reference))
+                or (pose is not None and getattr(pose, "map_id", None) not in {None, map_id})):
+            raise TeachError(409, "TEACH_MAP_CHANGED")
+        return map_id, reference, active["version"] if active else None
+
     def confirm(self, teach_id: str, *, start, end, direction: str, drive_mode: str, speed_cap_mps: float,
                 width_m: Optional[float], expected_revision: Optional[str], principal_id: str) -> dict:
         self._prune()
@@ -291,6 +311,8 @@ class TeachService:
         if session.mode == "survey" and (base.get("map_id") != session.map_id
                                          or survey_reference(base) != session.reference):
             raise TeachError(409, "TEACH_SURVEY_CHANGED")
+        if session.mode == "map" and self._map_frame() != session.map_frame:
+            raise TeachError(409, "TEACH_MAP_CHANGED")
         try:
             body, edge_id = teach.append_edge(
                 base, [tuple(p) for p in session.result["polyline"]], start=start, end=end,
@@ -312,6 +334,7 @@ class TeachService:
     async def place(self, robot_id: str, *, name: str, kind: str, expected_revision: Optional[str],
                     principal_id: str) -> dict:
         pose = await self._localized(robot_id)
+        self._map_frame(pose)
         body = self._base()
         place_id = teach.add_place(body, name, kind, pose.x, pose.y, pose.yaw)
         draft = self._save(body, expected_revision, principal_id)
@@ -332,6 +355,7 @@ class TeachService:
             raise TeachError(409, "PLACE_MARKER_MAP_MISMATCH",
                              {"marker_map_id": row["map_id"], "active_map_id": active[1].map_id})
         body = self._base()
+        self._map_frame()
         if body.get("map_id", "site") != row["map_id"]:  # the draft (or empty base) is another map frame
             raise TeachError(409, "PLACE_MARKER_MAP_MISMATCH",
                              {"marker_map_id": row["map_id"], "draft_map_id": body.get("map_id", "site")})
@@ -370,7 +394,7 @@ class TeachService:
         self._prune()
         live = self._recording
         recording = None if live is None else {k: v for k, v in asdict(live).items()
-            if k not in {"reference", "odom_anchor", "odom_epoch"}}
+            if k not in {"reference", "odom_anchor", "odom_epoch", "map_frame"}}
         if recording is not None:
             recording["points"] = [list(point) for point in live.points]
         if recording is not None and live.reference is not None:
