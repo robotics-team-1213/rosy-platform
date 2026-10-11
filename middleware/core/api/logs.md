@@ -862,3 +862,7 @@
 - 변경: FastAPI 계약 설명 두 곳과 Fleet/차선 계약 핀을 API Reference v1.205에 정렬했습니다. 요청·응답 동작은 그대로입니다.
 - 증거: 배포 통합 원격 검사에서 버전 핀 불일치를 재현했습니다. 재검증 대기입니다.
 - gate 변화: 없음.
+
+## 2026-10-11 - D-660/D-661 API reference alignment
+
+FastAPI description follows v1.207; documented additive versions recorded in API changelog. Failed version-alignment guards reproduced during responsibility integration; remote revalidation pending. No runtime activation.

@@ -34,6 +34,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/hub/registry.py` | Online snapshot and event seq |
 | `fleet/hub/hub.py` | Envelope handle + scatter_estop |
 | `fleet/cli.py` | `fleet relay ...` / `formation ...` / `console ...` |
+| `fleet/incident_handoff.py`, `notifications.py` | D-661 named human ownership and team notification journal/worker; separate from stuck resolver and final device authority |
 | `fleet/server/console.py` | `FleetConsole`: N대 상태 gather + goal/cancel/e-stop scatter. 하달한 목표를 기억하는 곳(D-12) |
 | `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
 | `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |

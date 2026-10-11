@@ -24,6 +24,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
 from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
@@ -1387,24 +1388,3 @@ class SshPasswordStatus(BaseModel):
     expires_at: Optional[str] = Field(default=None, pattern=SSH_TIME_PATTERN)
     #: usermod could not lock the password; sshd refuses it by a drop-in until the retry locks it.
     lock_pending: bool = False
-
-
-class FleetJudgmentReceipt(BaseModel):
-    """Read-only Fleet assessment, including untrusted/missing source metadata."""
-    model_config = ConfigDict(extra="forbid")
-    necessity: Literal["INTERVENE", "DO_NOT_INTERVENE", "ABSTAIN"]
-    reason: str
-    request: dict[str, Any]
-    policy_revision: str
-    evaluated_at: float
-    valid_until: float
-    shadow: Literal[True] = True
-    action_admissible: Literal[False] = False
-
-
-class FleetObservedClosure(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    status: Literal["OPEN", "NATURAL_CLEARANCE", "CLEARANCE_OBSERVED", "OBSERVATION_ENDED"]
-    action_credit: Literal["NONE", "UNVERIFIED"]
-    reason: Optional[str]
-    observed_at: Optional[str]

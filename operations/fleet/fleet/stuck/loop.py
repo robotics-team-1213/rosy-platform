@@ -57,7 +57,7 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
-        if self._board._log is not None:
+        if self._board is not None and self._board._log is not None:
             for claim in await asyncio.to_thread(self._board._log.handoff.active):
                 rid, sid = claim['robot_id'], claim['stuck_id']
                 if self._board.is_open(rid, sid) and not self._resolver.is_claimed(rid, sid):

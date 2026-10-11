@@ -1,6 +1,6 @@
 # 책임 분리 구현과 팀 인수 기록
 
-브랜치: `refactor/responsibility-execution`. 착수 소스 `51ad9b355f72d39354a430392ccdf9f75c0b3cf5`; [착수 소유 목록](result.md)은 당시 소스를 보존한다. 아래는 후속 구현 증거이며 실제 현장 수용 기록이 아니다.
+브랜치: `refactor/responsibility-execution`. 착수 소스 `51ad9b355f`; [착수 소유 목록](result.md)은 당시 소스를 보존한다. 아래는 후속 구현 증거이며 실제 현장 수용 기록이 아니다.
 
 | 단계 | 실제 소유 경로·변경 | 원격 terminal 증거 |
 |---|---|---|
