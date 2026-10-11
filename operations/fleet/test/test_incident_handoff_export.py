@@ -30,6 +30,7 @@ def source_tables(store, scope, *, claim=True, sent=True):
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (scope.subject_id,scope.case_id,__import__('hashlib').sha256(facts['scope_json'].encode()).hexdigest(),
              'FINAL_REVIEW','discord','PRIVATE_ROUTE',json.dumps(facts),101,701,101,'SENT',1,102,'PRIVATE_PROVIDER'))
+        if sent: conn.execute("UPDATE fleet_notification_outbox SET last_code='PROVIDER_ACCEPTED',last_attempt_at=101")
 
 
 def prepared(tmp_path):
@@ -120,3 +121,12 @@ def test_cli_handoff_switch_produces_new_schema_without_overwriting(tmp_path):
     assert json.loads(output.read_text())['schema'] == 'rosy.incident.model_feedback/2'
     before = output.read_bytes()
     assert subprocess.run(args, capture_output=True).returncode == 1 and output.read_bytes() == before
+
+
+@pytest.mark.parametrize('field,value', [('last_code', 'PROVIDER_REFUSED'), ('last_attempt_at', None), ('last_attempt_at', 103)])
+def test_sent_state_alone_cannot_fabricate_provider_acceptance(tmp_path, field, value):
+    store, scope, profiles = prepared(tmp_path); source_tables(store, scope)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute(f'UPDATE fleet_notification_outbox SET {field}=?', (value,))
+    with pytest.raises(ValueError):
+        exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles, include_handoff=True)
