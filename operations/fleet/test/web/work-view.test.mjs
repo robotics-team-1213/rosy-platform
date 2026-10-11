@@ -9,4 +9,6 @@ test("action success is distinct from goal confirmation and unknown states", () 
   assert.match(workStatus("ACTION_SUCCEEDED"), /목표 확인 대기/);
   assert.equal(workStatus("GOAL_CONFIRMED"), "목표 확인 완료");
   assert.equal(workStatus("new-state"), "상태 확인 필요");
+  assert.equal(workStatus("REQUESTED"), "요청 접수");
+  assert.equal(workStatus("UNKNOWN"), "실행 결과 미확인");
 });

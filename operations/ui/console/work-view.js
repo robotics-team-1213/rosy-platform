@@ -1,5 +1,5 @@
 // Source identity and status stay separate; this view never admits or dispatches work.
-const states = {PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
+const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
   CANCELED: "취소", EXPIRED: "만료"};
@@ -59,6 +59,11 @@ export function createWorkView({scope, call, el}) {
   }
   function paint() {
     const filter = el("work-filter").value;
+    const selection = rows.find(row => workKey(row) === selected);
+    if (selection && filter !== "all" && selection.source !== filter) {
+      selected = null; detailVersion++; detail.replaceChildren();
+      el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
+    }
     const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
     list.replaceChildren();
     for (const row of rows.filter(row => filter === "all" || row.source === filter)) {

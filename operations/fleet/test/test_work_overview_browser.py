@@ -40,6 +40,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             page.locator("#work-list ui-button").click()
             assert "CORE" in page.locator("#work-detail").inner_text()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator("#work-filter").select_option("all")
             _shot(page, f"mixed-work-{role}-{size[0]}.png", full_page=True)
             page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
             page.locator("#work-refresh").click()
