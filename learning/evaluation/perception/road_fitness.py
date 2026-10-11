@@ -124,6 +124,7 @@ def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, reg
         outside[lo:hi] = False
         excluded[name] = int((outside & (resized != 255)).sum())
         excluded_targets[name] = int((outside & (resized == 1)).sum())
+        resized[outside] = 255
         truth_masks.append(resized)
     logits = model._session.run(preprocess(bgr, spec))
     classes = model.manifest.raw["output"]["classes"]
