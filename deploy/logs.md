@@ -2669,3 +2669,9 @@
 - 변경: root 소유 전용 bwrap/AppArmor 설치, 단독 system 계정의 설치·preflight 공통 검증, 실제 자식 종료·cgroup readback, 수집된 scope 정리 확인.
 - 증거: 원격 회귀·구조 검사 66 passed, NEW 0. `docs/validation/deliberation-host-admission-2026-10-12/result.md`.
 - gate 변화: SOURCE 검증. 양쪽 SSH 계정 sudo가 암호를 요구하여 관리자 설치·HOST PASS는 미확인. 운영 제공자·장치·Discord 활성화는 수행하지 않았다.
+
+## 2026-10-12 · uncommitted · fix: sandbox PWD preflight
+
+- 변경: 실제 관리자 설치 후 PWD 때문에 실패한 환경 검사에서 PWD=/tmp만 허용하고 PATH도 고정값으로 검증한다. 다른 변수·HOME/PATH/PWD 경로 변경은 거절한다.
+- 증거: 사용자 AI PC 출력은 환경 검사 외 12개 경계 true, 최초 HOST 결과는 HOLD. 원격 RED에서 정상 PWD 오거절과 변경 PATH 오수용을 재현했다. 수정 후 시험·실제 재실행은 후속 증거로 기록한다.
+- gate 변화: HOST PASS 미확인 유지. 관리자 설치 완료 출력은 확인했으나 모델·장치 수용으로 승격하지 않는다.
