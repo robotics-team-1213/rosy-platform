@@ -355,6 +355,28 @@ def test_other_problem_rechecks_ai_permission_after_await(change, reason):
     assert loop.ai_board.verdicts[-1]["verdict"] == reason
 
 
+@pytest.mark.parametrize("replace", [False, True])
+def test_other_problem_binds_original_proposal_after_await(replace):
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+
+    async def refresh(rid):
+        if replace:
+            loop.ai_board.proposals[proposal["stuck_id"]] = {**proposal, "reason": "replacement"}
+        else:
+            loop.ai_board.proposals.clear()
+        return row
+
+    loop._admission_row = refresh
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == "ai_proposal_changed"
+
+
 @pytest.mark.parametrize("change,reason", [
     ("disabled", "ai_disabled"), ("human", "human_class:stuck:obstacle_ahead:lane"),
     ("expired", "evidence_stale:rosy_cam"), ("replaced", "ai_proposal_changed"),

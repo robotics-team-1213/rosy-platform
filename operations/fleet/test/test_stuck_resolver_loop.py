@@ -127,6 +127,34 @@ def test_pipeline_human_claim_during_admission_silences_candidate():
     assert board.view("rosy_01")["resolver"]["tier"] == "human"
 
 
+def test_pipeline_keeps_each_robots_original_candidate_across_sequential_admission():
+    from copy import deepcopy
+    from test_ai_first import _first, _vlm
+    from test_stuck_resolver import _row, _stuck
+
+    rows = [_row(rid, _stuck()) for rid in ("rosy_01", "rosy_02")]
+    for row in rows:
+        row["ai_proposal"] = {**_vlm(), "robot_id": row["robot_id"]}
+    latest = deepcopy(rows)
+    latest[1]["ai_proposal"]["reason"] = "different-candidate"
+    calls = 0
+
+    async def snapshot():
+        nonlocal calls
+        calls += 1
+        return {"robots": rows if calls == 1 else latest}
+
+    robots = {rid: FakeRobot(rid) for rid in ("rosy_01", "rosy_02")}
+    resolver = StuckResolver(ResolverConfig(), painted=painted_track)
+    resolver.ai_first = _first(tuple(robots))
+    board = LineStuckBoard(clock=FakeClock())
+    loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: robots, clock=FakeClock())
+    asyncio.run(loop.run_once())
+    assert any(c[0] == "line_stuck_decision" for c in robots["rosy_01"].calls)
+    assert not [c for c in robots["rosy_02"].calls if c[0] == "line_stuck_decision"]
+    assert board.answers()[-1]["escalated"] == "ai_proposal_changed"
+
+
 def test_durable_rows_carry_the_tier_rule_and_every_escalation(tmp_path):
     log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
     robot = _failing(RobotApiError("rosy_01", 409, "CALIBRATION_ACTIVE", "calibrating"))
