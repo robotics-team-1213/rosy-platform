@@ -372,4 +372,8 @@ test('camera observations accumulate in the same survey without invented joins o
   assert.throws(() => mergeCameraMap(base, {...observation, survey: {...reference, origin: [1, 0]}}));
   assert.throws(() => mergeCameraMap(base, {...observation, places: observation.places.map(p => ({...p, x: p.x - 3}))}));
   assert.throws(() => mergeCameraMap(base, {...observation, edges: observation.edges.map(e => ({...e, evidence: undefined}))}));
+  assert.throws(() => mergeCameraMap(base, {...observation, survey: {}}));
+  const reviewed = reviewSurveyDraft(merged, 'Measured lanes');
+  assert.ok(reviewed.edges[1].evidence.note.includes('Frame abc'));
+  assert.ok(reviewed.edges[1].evidence.note.includes('Measured lanes'));
 });
