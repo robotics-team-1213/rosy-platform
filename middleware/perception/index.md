@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
 - 2026-10-11 · 9fc0a88c9 · source test import precedence
 - 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
 - 2026-10-11 · 177e7faff · refactor: legacy Drive entry source ownership (D-649)
 - 2026-10-11 · 92b5cff5e · fix(control): preserve the ROS-free paint map boundary after holder moves
-- 2026-10-11 · fbf513a4d · refactor(perception): 센서·vision과 Drive의 의미 holder 분리 (D-630)

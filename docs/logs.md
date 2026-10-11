@@ -8000,3 +8000,9 @@ osy-d395-s1d\`.
 - 변경: 실제 CORE event/관측 원장을 fleet.observe로 분리하고 기존 identity aliases·배포를 유지했다. capture UUID/sequence/monotonic/전체 roster와 기존 curation의 읽기 전용 window·JSON CLI를 연결했다.
 - 증거: 관련 17파일 원격 318 passed/NEW 0/lint, 실제 wheel 설치·isolated import/DB capture, 독립 source/merge 검토. 부모 55460/55814, observe232/362로 기존 기준을 유지했다. source commit `0bedd7809c`로 로컬 착지했다.
 - gate: SOURCE 회귀와 local landing. 넓은 통합은 6337 passed/295 skipped와 API 버전 동기화 8실패를 확인했으며 수정본 전체 CI로 부르지 않는다. 실제 모델 품질·sdist·서비스 배포·현장 수용·push와 정상 명령/모델/재발 전체 범위는 미확인이다. 다음은 실제 규칙 기준 생산·사건 연결이다.
+
+## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
+
+- 변경: pytest 7.4의 module setup hook과 충돌하던 Fleet 시험 도우미 이름 및 모든 호출자를 바꿨다. Cell 401 검사는 실제 로그인·고급 접속 안내를 기대하며 세션 초기화와 조작 잠금 단언을 유지한다. 고립 설치 의존성 검사는 PEP 508 이름·공백만 정규화하고 정확한 버전 조건·무조건 의존성을 유지한다.
+- 증거: commit 40e7287971의 G1 307 passed와 pre-push 7828 passed 이후 전체 CI 38180852375는 Fleet hook·Cell 구문·sdist Requires-Dist 문자열 차이로 실패했다. CI 도구 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0의 원격 RED 1 NEW로 실제 core-common >=0.0.1 표기를 재현했다. 수정 후 동일 도구 원격 95 passed 및 Cell 실제 Chromium 6 passed, 각 terminal exit 0/known-failures NEW 0. 로그는 X: 검증 폴더 ci-compatible-diagnostic/ci-compatible-green/ci-compatible-cell에 보존한다.
+- gate 변화: 시험 호환성 수정과 선택 원격 회귀만 확인했다. 최신 통합·전체 CI·서명·새 설치본·사람 계정 발급은 별도 확인 중이다. production 권한·기계 토큰·비밀 검사·기존 실패 목록은 변경하지 않았다.
