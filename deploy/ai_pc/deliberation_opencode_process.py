@@ -12,9 +12,11 @@ SECRET = '/var/lib/rosy-deliberation/glm-coding-plan.json'
 
 
 @asynccontextmanager
-async def gateway_session(body, remaining, directory):
+async def gateway_session(body, remaining, directory, *, credential_sha256=None):
     job = {'body': body.decode('utf-8'), 'deadline_s': remaining,
            'socket_path': str(directory / 'gateway.sock'), 'secret_path': SECRET}
+    if credential_sha256 is not None:
+        job['credential_sha256'] = credential_sha256
     data = (json.dumps(job, ensure_ascii=True, separators=(',', ':')) + '\n').encode()
     if len(data) > 16384 + 1024:
         raise ValueError('GATEWAY_JOB_LIMIT')
