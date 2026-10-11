@@ -36,3 +36,12 @@ D-638 reserved in another active branch; not yet integrated into the UI role tok
 
 
 
+D-640 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-641 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-642 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-643 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-644 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-645 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-646 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-647 reserved by another active session; absent from D-649 candidate, remove when integrated
+D-648 reserved by another active session; absent from D-649 candidate, remove when integrated

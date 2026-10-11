@@ -630,6 +630,8 @@
 
 | D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
 
+| D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
@@ -655,4 +657,3 @@
 - Status: Accepted (2026-10-11).
 - Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
 - Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.
-| D-649 | Drive behavior source ownership and compatibility identities | Accepted |

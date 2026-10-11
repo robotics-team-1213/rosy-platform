@@ -72,3 +72,11 @@ KTURN 후진 arc는 기존 rear strip·blind band·trail·freshness 거절 검�
 현재 World의 pure MapPose 구현은 `operations/world/src/rosy/world/state/projections/map_pose.py`에 있다. Fleet의 기존 import는 identity alias이고 service·trip·claim·dispatch transaction은 Fleet가 소유한다. 관측/odom 기반 dead reckoning을 행동 조건부 미래 rollout으로 집계하지 않는다. action-conditioned World model, 대응 학습·독립 평가와 실제 decision 소비자는 D-625의 후속 계획이며 빈 prediction 폴더를 만들지 않았다.
 
 [독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 소스 범위 판정이다. remote 회귀·known_failures·harness/Safety·checkout 밖 설치 결과와 local main 착지는 [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 있다. 옛 경로 때문에 실패한 시험과 수정 후 재검사를 각각 기록했다. CI·ROS 실행·ARM64 이미지·배포 readback·실물·현장 수용은 확인하지 않았다. 후속 작업은 [CORE 계획](../plans/2026-10-11-core-responsibility-and-driving.md), [D-628 실행 계획](../plans/2026-10-11-core-drive-remaining.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)을 따른다.
+
+## D-649 책임 이동 보완
+
+`middleware/control/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/control/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
+
+반복 이름은 세 종류다: 설치 패키지 이름(`core`, `control`, `fleet`, `rosy` namespace), 서로 다른 권한(장치-local execution/현장 execution, 관측 safety adapter/CORE Safety), 실제 혼재했던 행동 구현(이번 Drive 이동). 호환 initializer에는 알고리즘을 추가하지 않는다. 일반 캘리브레이션 lease와 카메라 장애 복구 자격 판정은 CORE 공통 admission이며 Drive 탈출 운동 구현과 다르다. Perception localization 노드는 상태/관측 근거를 소유한다.
+
+현재 물리 이동과 설치 매핑, 원격 시험, 배포/장치 수용은 별도 기록이다. [D-649](../adr/D-649-drive-behavior-source-ownership.md), [실행 계획](../plans/2026-10-11-role-folder-boundaries.md)을 따른다.

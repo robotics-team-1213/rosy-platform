@@ -211,9 +211,11 @@ class Repo:
 
     def module_for(self, path: str) -> dict | None:
         best = None
+        best_length = -1
         for module in self.modules:
-            if _under(path, module["path"]) and (best is None or len(module["path"]) > len(best["path"])):
-                best = module
+            for source in (module['path'], *module.get('source_paths', ())):
+                if _under(path, source) and len(source) > best_length:
+                    best, best_length = module, len(source)
         return best
 
     def prefixes_under(self, path: str) -> tuple[str, ...]:

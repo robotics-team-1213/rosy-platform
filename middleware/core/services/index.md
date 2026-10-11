@@ -30,12 +30,8 @@
 
 ## 시험
 
-- `middleware/core/gateway/test/test_core_logic.py`
-- `middleware/core/services/test/test_docking.py`
-- `middleware/core/services/test/test_swarm.py`
-- `middleware/core/gateway/test/test_power.py`
-- `middleware/core/gateway/test/test_traffic_policy.py`
-- `middleware/core/services/test/test_teleop_intent.py`
+- `middleware/core/gateway/test`
+- `middleware/core/services/test`
 
 ## 최근 기록
 

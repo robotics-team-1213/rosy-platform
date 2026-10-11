@@ -34,6 +34,7 @@ PACKAGES = (
     SRC.parent / "middleware" / "core" / "events" / "core_events",
     SRC.parent / "middleware" / "core" / "services" / "core_features",
     SRC.parent / "middleware" / "core" / "api" / "core_api_web",
+    ROOT / 'middleware/control/drive/behaviors',
 )
 
 
@@ -43,6 +44,9 @@ def _sources() -> list[Path]:
 
 def _origin(path: Path) -> str:
     """`services/core_features/docking/manager.py` 처럼 도메인 기준 경로."""
+    behavior_root = ROOT / 'middleware/control/drive/behaviors'
+    if path.is_relative_to(behavior_root):
+        return 'services/core_features/' + path.relative_to(behavior_root).as_posix()
     for package in PACKAGES:
         if path.is_relative_to(package):
             return path.relative_to(package.parent.parent).as_posix()
