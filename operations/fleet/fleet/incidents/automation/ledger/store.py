@@ -9,6 +9,7 @@ import time
 
 from rosy.decision.deliberation import canonical, identifier
 from .contract import CaseBudget, CaseScope, micros, sha256, summary_json
+from .receipt import checked_receipt
 from fleet.server.sqlite_policy import configure_connection
 
 
@@ -47,6 +48,11 @@ class IncidentCaseStore:
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, queued_at REAL NOT NULL,
                 PRIMARY KEY(subject_id,case_id),
                 FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_model_receipts (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, attempt_id TEXT NOT NULL, receipt_json TEXT NOT NULL,
+                PRIMARY KEY(subject_id,case_id,attempt_id),
+                FOREIGN KEY(subject_id,case_id,attempt_id)
+                REFERENCES fleet_incident_v2_attempts(subject_id,case_id,attempt_id))''')
 
     @contextmanager
     def _transaction(self):
@@ -205,7 +211,7 @@ class IncidentCaseStore:
                 raise ValueError('ATTEMPT_NOT_RESERVED_BY_WORKER')
             return {'attempt_id': attempt_id, 'state': 'SUBMITTING'}
 
-    def complete(self, scope, attempt_id, *, worker_id, state, actual_cost_usd, summary):
+    def complete(self, scope, attempt_id, *, worker_id, state, actual_cost_usd, summary, model_receipt=None):
         identifier(attempt_id), identifier(worker_id)
         if state not in ('COMPLETED', 'REJECTED', 'UNKNOWN'):
             raise ValueError('INVALID_ATTEMPT_TERMINAL')
@@ -222,7 +228,16 @@ class IncidentCaseStore:
             row = conn.execute('SELECT * FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND attempt_id=?', (*key, attempt_id)).fetchone()
             if row is None or row['state'] != 'SUBMITTING' or row['worker_id'] != worker_id:
                 raise ValueError('ATTEMPT_NOT_SUBMITTING_BY_WORKER')
+            trace = None
+            if model_receipt is not None and state != 'UNKNOWN':
+                try:
+                    checked_receipt(scope, {**dict(row), 'state': state, 'actual_micros': actual}, model_receipt)
+                    trace = model_receipt.payload_json
+                except ValueError:
+                    state, raw = 'REJECTED', summary_json({'reason': 'MODEL_TRACE_REJECTED'})
             conn.execute('UPDATE fleet_incident_v2_attempts SET state=?,actual_micros=?,summary_json=? WHERE subject_id=? AND case_id=? AND attempt_id=?', (state, actual, raw, *key, attempt_id))
+            if trace is not None:
+                conn.execute('INSERT INTO fleet_incident_v2_model_receipts VALUES (?,?,?,?)', (*key, attempt_id, trace))
             if actual is not None:
                 released = min(actual, row['reserved_micros']) if state == 'UNKNOWN' else row['reserved_micros']
                 conn.execute('UPDATE fleet_incident_v2_cases SET spent_micros=spent_micros+?,reserved_micros=reserved_micros-? WHERE subject_id=? AND case_id=?', (actual, released, *key))
