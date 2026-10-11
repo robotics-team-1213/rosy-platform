@@ -7,7 +7,8 @@ from road_fitness_replay import _snapshot
 import cv2
 import numpy as np
 import store
-from control.sensing.perception.learned.manifest import verify_files
+from review_evidence import safe_file
+from control.sensing.perception.learned.manifest import load_manifest, verify_files
 from control.sensing.perception.learned.runner import LaneSegModel
 from control.sensing.perception.learned.road_observation import observe_model_frame
 from control.sensing.perception.learned.road_region import road_masks
@@ -36,22 +37,22 @@ def run(model_folder, *, inputs, max_age_ns):
     model_raw = manifest_path.read_bytes()
     if doc['model_manifest_sha256'] != _sha(model_raw):
         raise ValueError('model manifest hash differs')
-    relative = Path(doc['image'])
-    if relative.is_absolute() or '..' in relative.parts or not relative.parts:
-        raise ValueError('image must be inside fixed inputs')
-    image_raw = (inputs / relative).read_bytes()
+    image_raw = safe_file(inputs, doc['image']).read_bytes()
     if len(image_raw) > BYTE_LIMIT or _sha(image_raw) != doc['image_sha256']:
         raise ValueError('image hash or size differs')
     bgr = cv2.imdecode(np.frombuffer(image_raw, np.uint8), cv2.IMREAD_COLOR)
     if bgr is None or bgr.shape[0] * bgr.shape[1] > PIXEL_LIMIT:
         raise ValueError('invalid or oversized input image')
-    model = LaneSegModel.open(model_folder)
-    if model.manifest.raw != json.loads(model_raw):
+    manifest = load_manifest(manifest_path)
+    if manifest.raw != json.loads(model_raw):
         raise ValueError('model manifest changed while loading')
-    spec = model.manifest.input
+    spec = manifest.input
     height = spec.crop[0] if spec.crop is not None else spec.height
     if height * spec.width > PIXEL_LIMIT:
         raise ValueError('oversized prediction grid')
+    model = LaneSegModel.open(model_folder)
+    if model.manifest.raw != manifest.raw:
+        raise ValueError('model manifest changed while opening session')
     observed = observe_model_frame(model, bgr, _snapshot(doc['image_snapshot']),
         _snapshot(doc['anchor_snapshot']), doc['seed_pixels'], now_ns=doc['now_ns'], max_age_ns=max_age_ns)
     store.read_fixed_manifest(inputs)
@@ -69,6 +70,16 @@ def _decode(raw):
     if not isinstance(doc, dict) or set(doc) != {'schema', 'inputs', 'bindings', 'observation'} or doc['schema'] != SCHEMA:
         raise ValueError('observation artifact schema differs')
     observed = doc['observation']
+    inputs, bindings = doc['inputs'], doc['bindings']
+    if inputs.get('schema') != INPUT_SCHEMA or set(inputs) != INPUT_FIELDS:
+        raise ValueError('observation input schema/fields differ')
+    if any(bindings[key] != inputs[key] for key in ('model_manifest_sha256', 'image_sha256')):
+        raise ValueError('observation binding hashes differ')
+    if any(observed[key + '_snapshot_id'] != inputs[key + '_snapshot']['snapshot_id']
+           for key in ('image', 'anchor')):
+        raise ValueError('observation snapshot identity differs')
+    if observed['input_errors'] and observed['current_region'] is not None:
+        raise ValueError('invalid region inputs cannot carry a region')
     if observed['fitness_verdict'] != 'HOLD':
         raise ValueError('observation artifact must remain HOLD')
     classes = doc['bindings']['classes']
