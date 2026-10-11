@@ -677,3 +677,4 @@
 - Status: Accepted (2026-10-11).
 - Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
 - Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 | Accepted |
