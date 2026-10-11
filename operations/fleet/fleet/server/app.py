@@ -787,23 +787,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_work_routes(app, task_service=task_service, mission_service=mission_service,
                         require_viewer=require_viewer, read_guard=read_guard)
     if channel_config is not None:
-        if task_service is None:
-            raise ValueError("Discord intake requires the existing tasks DB")
-        from fleet.server.channel_requests import ChannelRequests, install_channel_routes
-        key = channel_config.transport_key
-        key_digest = sha256(key.encode()).hexdigest()
-        if (key_digest in principals or key in (console_token, discovery_token, vision_lease_secret,
-                                               robot_credential_key, pairing_sync_token)
-                or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)):
-            raise ValueError("Discord transport credential must be isolated")
-        if ((sightings is not None and sightings.uses_token(key))
-                or (policy_evidence is not None and policy_evidence.uses_token(key))):
-            raise ValueError("Discord transport credential must be isolated")
-        accounts = {p.principal_id: p.role for p in principals.values()}
-        accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
-        app.state.channel_requests = ChannelRequests(task_service.store.path, channel_config, accounts)
-        install_channel_routes(app, app.state.channel_requests,
-                               require_operator=require_operator, read_guard=read_guard)
+        from fleet.server.channel_requests import install_channel_feature
+        install_channel_feature(app, config=channel_config, task_service=task_service, principals=principals,
+                                site_logins=site_logins, require_operator=require_operator, read_guard=read_guard,
+                                console=console, secrets=(console_token, discovery_token, vision_lease_secret,
+                                                         robot_credential_key, pairing_sync_token),
+                                secret_owners=(sightings, policy_evidence))
     from fleet.server.cell_app_routes import install_cell_app_routes
     install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
                             service_id=cell_app_service_id, principals=principals,
