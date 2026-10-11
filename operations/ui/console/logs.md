@@ -174,3 +174,9 @@
 - 변경: 같은 operator 역할의 principal이 바뀌어도 기존 확인과 대화 요청 선택을 초기화한다. 기존 확인 owner는 token·role·locked에 더해 principal도 확인한다. 초기 비밀번호·본인 프로필과 Cell 서비스 부재 계약을 함께 보존했다.
 - 증거: 원격 실제 Chromium의 기존 사건 확인 시험 두 화면에서 같은 역할의 bob→alice 전환 후 확인창이 남는 NEW2를 재현했다. 수정 버전의 GREEN·설치76개·구조 검증은 후속이다.
 - gate 변화: 실행 권한 확대 없음. CI·서명 배포·실제 Discord 왕복은 미확인이다.
+
+## 2026-10-12 · 438e6256a · 계정 전환 시험의 수명 조건 정정
+
+- 변경: Chromium 계정 전환 시험에 실제 pagehide→pageshow 순서를 적용했다. 이전 pageshow 단독 시험은 인증 재조회가 발생하지 않아 제품 결함 재현 증거로 사용할 수 없다. 기존 scope가 이전 응답을 차단하므로 추가 공통 호출 guard는 만들지 않았다.
+- 증거: 독립 검토가 실제 모든 refreshAuthorization 호출 경로의 기존 scope 무효화를 확인하고 앞선 blocker를 철회했다. 두 줄 principal 방어 보강은 source/Safety 승인했다. 기존 확인 owner의 pending principal 교체는 별도 Node 회귀로 검증한다.
+- gate 변화: 앞선 NEW2는 잘못된 lifecycle fixture의 실패로 정정한다. 원격 GREEN·설치·착지·운영 검증은 후속이다.
