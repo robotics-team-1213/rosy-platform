@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sqlite3
 from collections.abc import Mapping
 from contextlib import closing
@@ -16,12 +15,8 @@ from fleet.server.cancel_all_store import ensure_schema as ensure_cancel_all_sch
 from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
+from fleet.server.task_payloads import safe_json as _safe_json
 
-_SENSITIVE_FIELD = re.compile(
-    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
-    r"api[_-]?key|private[_-]?key|bearer)",
-    re.IGNORECASE,
-)
 _TASK_TRANSITIONS = {
     "REQUESTED": {"QUEUED", "ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
     "QUEUED": {"ACCEPTED", "FAILED", "UNKNOWN", "HOLD", "CANCELED", "EXPIRED"},
@@ -44,29 +39,6 @@ class IdempotencyConflict(ValueError):
 
 class InvalidTaskTransition(ValueError):
     """A task status transition is outside the declared state machine."""
-
-
-def _safe_json(value: object) -> str:
-    def inspect(child: object) -> None:
-        if isinstance(child, Mapping):
-            for key, nested in child.items():
-                if _SENSITIVE_FIELD.search(str(key)):
-                    raise ValueError("task records cannot contain credential fields")
-                inspect(nested)
-        elif isinstance(child, (list, tuple)):
-            for nested in child:
-                inspect(nested)
-
-    inspect(value)
-    try:
-        text = json.dumps(
-            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False, sort_keys=True
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError("task data must be finite JSON") from exc
-    if len(text.encode("utf-8")) > 64 * 1024:
-        raise ValueError("task data exceeds the 64 KiB limit")
-    return text
 
 
 def _now() -> str:
@@ -440,7 +412,7 @@ class FleetTaskStore:
 
     def create_task(self, *, task_id: str, robot_id: str, task_type: str,
                     source: str, actor_id: str, request_key: str,
-                    request: Mapping, evidence: Mapping | None) -> dict:
+                    request: Mapping, evidence: Mapping | None, admission=None) -> dict:
         request_json = _safe_json(dict(request))
         evidence_json = None if evidence is None else _safe_json(dict(evidence))
         now = _now()
@@ -456,9 +428,13 @@ class FleetTaskStore:
                         or existing["request_json"] != request_json
                         or existing["evidence_json"] != evidence_json):
                     raise IdempotencyConflict("idempotency key already belongs to another request")
+                if admission is not None:
+                    admission(connection, existing['task_id'])
                 connection.commit()
                 return {"created": False, "task": self._task_dict(existing)}
 
+            if admission is not None:
+                admission(connection, task_id)
             connection.execute(
                 """INSERT INTO fleet_tasks
                    (task_id, robot_id, task_type, source, actor_id, request_key,
@@ -534,7 +510,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
                 self._append_history(connection, row["task_id"], "EXPIRED", "scheduler",
                                      "site-scheduler", now, "TASK_EXPIRED")
             stale_claims = connection.execute(
@@ -550,7 +526,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
             selected = None
             control = connection.execute(
                 "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
@@ -780,7 +756,7 @@ class FleetTaskStore:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
-                                         owner_id=row["task_id"])
+                                        owner_id=row["task_id"])
             connection.commit()
         return recovered
 

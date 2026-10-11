@@ -53,6 +53,12 @@ sealed interface ServerMessage {
 
     /** A `camera` message that failed strict parsing; logged and ignored, never a link error. */
     data class BadCamera(val reason: String) : ServerMessage
+
+    /** D-691: Vision says whether any Rosy product is still asking for frames. */
+    data class Demand(val wanted: Boolean) : ServerMessage
+
+    /** A `demand` message that failed strict parsing; logged and ignored, never a link error. */
+    data class BadDemand(val reason: String) : ServerMessage
     data class Unknown(val type: String) : ServerMessage
     data class Invalid(val reason: String) : ServerMessage
 }
@@ -153,6 +159,7 @@ object Protocol {
             "config" -> parseConfig(obj)
             "status" -> parseStatus(obj)
             "camera" -> parseCamera(obj)
+            "demand" -> parseDemand(obj)
             else -> ServerMessage.Unknown(type)
         }
     }
@@ -179,6 +186,13 @@ object Protocol {
         )
     } catch (e: JSONException) {
         ServerMessage.Invalid("status")
+    }
+
+    /** D-691, strict: `wanted` is a JSON boolean. Extra keys are ignored. */
+    private fun parseDemand(obj: JSONObject): ServerMessage {
+        val wanted = obj.opt("wanted")
+        if (wanted !is Boolean) return ServerMessage.BadDemand("wanted")
+        return ServerMessage.Demand(wanted)
     }
 
     /**
