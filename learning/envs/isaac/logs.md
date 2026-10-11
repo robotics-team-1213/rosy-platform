@@ -132,3 +132,9 @@
 - 증거: SDK exit 1, held-out full-map completion failed. baseline 진행 0.190~0.200m·eval 0.180~0.200m, 평가 완주 0/3·모두 timeout으로 개선 미입증. 정책 hash 2492e21e54187bd0369009339c4b65be43583cb3b91ec6b3d020f721dc84b3c5. 실제 영상 7개 hash/ffprobe 960x540 프레임/렌더 순서·episode 정지·cleanup 정지·SDK 잔여 0 확인 후 private 51개 artifact hash 검증 보관. 훈련 영상은 없고 trace·전방 이미지는 보존한다.
 - 자원: 사용자가 runtime ZFS ARC 상한 4GiB→2GiB를 적용하고 readback했다. 다른 세션 시험·서비스는 유지했으며 영구 설정 변경은 없다. 최신 main c90833b2a를 통합한 e4bf2710cf에서 Isaac/body 원격 264PASS1SKIP·Gazebo/domain 87PASS1SKIP·각 known_failures 0NEW.
 - gate 변화: native 카메라 RL 유효 학습 생성 확인. 완주·정책 개선·네 방향·병렬 RL·교통/Fleet·Gazebo 두 대 주행·실물 수용은 HOLD 유지. 영상은 진단 부분 주행이며 full-lap이 아니다. 다음 실행은 최신 통합 소스의 긴 진단과 카메라 손실 원인 검증이 필요하다.
+
+## 2026-10-12 · 25add33f95 · fix(isaac): 실패 픽셀 보존과 네 방향 진단 계속
+
+- 변경: 0cb3c199b에서 무효 카메라 타깃의 여섯 진단 필드와 원인별 실제 PNG를 최대 8개로 제한해 기록했다. 25add33f95에서 camera admission 실패를 episode에 남기고 실제 정지 검증 후 다음 방향을 측정한다. 실패 pair의 비교를 제외하고 admission 오류 하나라도 있으면 full_map_complete=false·종료 실패를 유지한다. 무효 관측의 명령 0·학습 제외·고정 정책 검사는 유지한다.
+- 증거: 원격 관련 시험 111 PASS 후 최종 117 PASS·각 known_failures NEW 0, 독립 소스 리뷰 차단 결함 없음. R18 실제 SDK는 600초 제한에서도 seed707 baseline/RL 약 0.220m에서 13.7/13.8초 차선 상실, +90도 seed808 유효 관측 0/18로 실패했다. 종료 1, 정책 SHA-256 불변. 실제 영상 3개 및 원본 19개 artifact hash·프레임·시각 순서·실제 정지·SDK 잔여 0 확인 후 private 보관했다. R19는 준비 소스 25add33f95의 7313개 파일을 검증하고 자원 예약 해제 뒤 22 cores·9GB와 빈 GPU에서 시작했다. 실행 시작은 결과 수용 증거가 아니다.
+- gate 변화: 없음. 네 방향 native 최종 결과·완주·정책 개선·교통/Fleet·Gazebo 두 대 주행·병렬 RL·실물 수용은 HOLD다. 카메라 containment/crosswalk evidence의 native CORE 연결과 주의 표시 판정은 아직 미구현이다.
