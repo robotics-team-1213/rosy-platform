@@ -5,6 +5,9 @@ const INCIDENT_CAUSES = {
   line_marking: "차선·바닥 표식", obstacle: "장애물", robot_fault: "로봇·센서 오류",
   localization: "위치 추정", traffic_wait: "교통 대기", unknown: "미확인",
 };
+const DELIVERY_LABEL = {PENDING: '전송 대기', SENDING: '전송 중 · 결과 미확인', SENT: '제공자 수락 · 수신 확인은 별도',
+  RETRY: '제한 재시도 대기', UNKNOWN: '전송 여부 불명 · 재전송하지 않음', FAILED: '전송 실패',
+  EXPIRED: '통지 기한 종료', SUPERSEDED: '현재 사건·담당·목적지 변경으로 취소'};
 
 export function createIncidentView({scope, el, view, call, log, auth}) {
 let incidentReports = [], incidentTrafficReports = [];
@@ -137,6 +140,9 @@ async function refreshIncidents() {
       incidentLine(detail, report.handoff
         ? `담당 인수: ${report.handoff.principal_id} · 조치 수락·해소는 별도 확인`
         : '담당 인수: 아직 없음 · 자동 해결기 중지 요청과 구별');
+      incidentLine(detail, report.notifications?.length
+        ? `외부 알림: ${report.notifications.map(item => `${item.channel} ${item.kind === 'CLOSED' ? '종료 관측' : '검토 요청'} · ${DELIVERY_LABEL[item.state] || '전송 기록 미확인'}`).join(' / ')}`
+        : '외부 알림: 전송 기록 없음');
       incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);

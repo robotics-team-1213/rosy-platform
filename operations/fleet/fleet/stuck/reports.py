@@ -12,6 +12,7 @@ from typing import Optional
 from fleet.server.sqlite_policy import configure_connection
 from core_common.protocol.schemas import FleetJudgmentReceipt, FleetObservedClosure
 from .handoff import IncidentHandoff, judgment_revision
+from fleet.notifications import NotificationOutbox
 
 
 def _resolution(answers) -> tuple:
@@ -90,6 +91,7 @@ class LineStuckAnswerLog:
             connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_current (
                 robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
         self.handoff = IncidentHandoff(self)
+        self.notifications = NotificationOutbox(self)
 
     def record_judgment(self, receipt: dict) -> None:
         receipt = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode="json")
@@ -103,6 +105,7 @@ class LineStuckAnswerLog:
             if previous is None or signature(json.loads(previous['assessment'])) != signature(receipt) or now - previous['recorded_at'] >= 60:
                 connection.execute("INSERT INTO fleet_judgment_records(robot_id, recorded_at, assessment) VALUES (?, ?, ?)", (robot_id, now, body))
             connection.execute("INSERT INTO fleet_judgment_current VALUES (?, ?, ?) ON CONFLICT(robot_id) DO UPDATE SET recorded_at=excluded.recorded_at, assessment=excluded.assessment", (robot_id, now, body))
+            self.notifications.enqueue(connection, receipt)
             connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
             connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
 
@@ -156,6 +159,8 @@ class LineStuckAnswerLog:
                    WHERE robot_id = ? AND stuck_id = ?""",
                 (closed_at, close_reason, held_s_max, attempts_max, *_resolution(answers),
                  robot_id, stuck_id))
+            self.notifications.closed(connection, robot_id, stuck_id,
+                                      now=datetime.fromisoformat(closed_at).timestamp(), reason=close_reason)
 
     def close_orphans(self, closed_at: str) -> None:
         """Start-up: an episode still open was left by the previous Fleet process."""
@@ -250,6 +255,7 @@ class LineStuckAnswerLog:
                                 "closure": closure,
                                 "handoff": self.handoff.get(robot_id, stuck_id),
                                 "judgment_revision": revision,
+                                "notifications": self.notifications.rows(20, robot_id=robot_id, stuck_id=stuck_id),
                                 "stuck_id": stuck_id,
                                 "classification": "line_stuck", "robot_ids": [robot_id],
                                 "opened_at": row["opened_at"], "closed_at": row["closed_at"],
