@@ -9,12 +9,15 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     if (!elements.has(id)) elements.set(id, {
       dataset: {}, classList: { add() {}, remove() {} }, querySelectorAll: () => [],
       setAttribute() {}, removeAttribute() {}, getContext: () => ctx,
+      replaceChildren() {},
       getBoundingClientRect: () => ({ width: 800, height: 600 }),
       clientWidth: 800, clientHeight: 600,
     });
     return elements.get(id);
   };
   const previous = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.document = {createElement: () => ({}), getElementById: () => null};
   globalThis.window = { devicePixelRatio: 1, RosyPalette: {
     cssColor: () => '#000', canvasFont: () => '12px sans-serif',
   } };
@@ -42,5 +45,5 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     assert.equal(el('map-stage').dataset.mapState, 'site');
     assert.equal(view.map, null);
     assert.ok(!calls.includes('/api/fleet/map'));
-  } finally { globalThis.window = previous; }
+  } finally { globalThis.window = previous; globalThis.document = previousDocument; }
 });
