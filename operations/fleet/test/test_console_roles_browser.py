@@ -108,6 +108,7 @@ def _login(playwright, origin):
     page.on("request", lambda req: posts.append((urlparse(req.url).path, req.post_data))
             if req.method == "POST" and "/api/" in req.url else None)
     page.goto(origin + "/console")
+    page.locator("#password-login").wait_for(state="visible")
     more = page.locator("#topbar-more")
     if more.is_visible() and more.get_attribute("aria-expanded") != "true":
         more.click()
