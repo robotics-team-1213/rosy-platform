@@ -426,6 +426,7 @@ export function editPlace(map, id, {name, kind}) {
     if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
     place.kind = kind;
   }
+  if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }
 
@@ -454,6 +455,10 @@ export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_m
     const value = Number(speed);
     if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');
     edge.speed_cap_mps = value;
+  }
+  if (next.survey) {
+    next.survey = {...next.survey, reviewed: false, review_note: ''};
+    edge.evidence = {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''};
   }
   return next;
 }

@@ -253,6 +253,20 @@ test('D-513 7: the map keeps one view turn and refuses other angles', () => {
   assert.throws(() => editViewTurn(MAP, 45), /0·90·180·270/);
 });
 
+test('the existing place and lane editors invalidate survey review after a change', () => {
+  const map = {...MAP, survey: {revision: 'survey-1', reviewed: true, review_note: 'measured'},
+    edges: MAP.edges.map(edge => ({...edge, evidence: {source: 'odometry', status: 'reviewed',
+      reference_revision: 'survey-1', note: 'measured'}}))};
+  const lane = editEdge(map, 'ab', {direction: 'two_way'});
+  assert.equal(lane.survey.reviewed, false);
+  assert.equal(lane.survey.review_note, '');
+  assert.equal(lane.edges[0].evidence.source, 'operator');
+  assert.equal(lane.edges[0].evidence.status, 'observed');
+  assert.equal(editPlace(map, 'B', {kind: 'charge'}).survey.reviewed, false);
+  assert.equal(map.survey.reviewed, true);
+  assert.equal(map.edges[0].evidence.status, 'reviewed');
+});
+
 test('D-573 waiting bands are added mm-rounded, capped at four, removed by index and kept across a lane_graph merge', () => {
   const map = {...MAP, crosswalks: [{id: 'cw1', polygon: [[0.9, -0.1], [1.1, -0.1], [1.1, 0.1]], approach: [], lanes: ['ab'], revision: 'r1'}]};
   const band = [[0.9, 0.1], [1.1, 0.1], [1.10049, 0.3]];
