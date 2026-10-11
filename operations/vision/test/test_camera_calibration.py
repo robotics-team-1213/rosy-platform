@@ -2,10 +2,12 @@
 import cv2
 import numpy as np
 import pytest
+import json
 
 from rosy_vision.camera_calibration import (
     AprilGrid, detect_grid, fit_lenses, corrected_image, fit_floor,
     plane_image, advice_request, validate_advice,
+    main,
 )
 
 
@@ -92,3 +94,44 @@ def test_ai_is_advisory_and_cannot_supply_geometry():
         validate_advice({"recommendations": [], "K": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]})
     with pytest.raises(ValueError):
         validate_advice({"recommendations": ["move_robot"], "explanation": ""})
+
+
+def test_cli_print_target_and_never_overwrite_output(tmp_path):
+    output = tmp_path / "target"
+    assert main(["target", "--output", str(output)]) == 0
+    assert json.loads((output / "target.json").read_text())["tag_size_m"] == .03
+    assert cv2.imread(str(output / "target.png")) is not None
+    with pytest.raises(SystemExit) as error:
+        main(["target", "--output", str(output)])
+    assert error.value.code == 2
+    assert (output / "target.svg").read_text().startswith('<svg')
+
+
+def test_bad_or_insufficient_measurements_do_not_make_a_candidate():
+    samples = views()
+    with pytest.raises(ValueError, match="eight"):
+        fit_lenses(samples[:2], samples[12:], (640, 480), source_id="s", capture_signature="g")
+    samples[0]["image_points"][0, 0] = float("nan")
+    with pytest.raises(ValueError, match="points"):
+        fit_lenses(samples[:12], samples[12:], (640, 480), source_id="s", capture_signature="g")
+
+
+def test_fit_partial_target_points_in_varied_views():
+    samples = views()
+    for i, view in enumerate(samples):
+        count = 12 + (i % 3)*4
+        view["object_points"] = view["object_points"][:count]
+        view["image_points"] = view["image_points"][:count]
+    report = fit_lenses(samples[:12], samples[12:], (640, 480), source_id="s",
+                        capture_signature="g", models=("pinhole",))
+    assert report["candidates"][0]["validation"]["max_px"] < .01
+
+
+def test_detector_refuses_duplicate_board_tag_ids():
+    grid = AprilGrid()
+    image = grid.image(120)
+    # Add a fourth complete tag with the same ID to an otherwise visible target.
+    marker = cv2.aruco.generateImageMarker(grid.dictionary, 0, 120)
+    image[10:130, 10:130] = marker
+    with pytest.raises(ValueError, match="duplicate"):
+        detect_grid(image, grid)
