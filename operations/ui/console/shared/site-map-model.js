@@ -306,134 +306,6 @@ export function planPolylines(map, plan) {
 
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
 
-export function createSurveyDraft(mapId, reference) {
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(mapId) || !/^[A-Za-z0-9_.-]{1,64}$/.test(reference.revision || ''))
-    throw new Error('지도 ID와 기준 버전을 확인하세요');
-  if (!Array.isArray(reference.origin) || reference.origin.length !== 2
-      || !reference.origin.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)
-      || !Number.isFinite(reference.heading_rad) || Math.abs(reference.heading_rad) > 2 * Math.PI)
-    throw new Error('기준점 좌표와 방향을 확인하세요');
-  if (!['odometry', 'measured'].includes(reference.scale_source)
-      || (reference.scale_source === 'measured' && !(Number.isFinite(reference.measured_distance_m)
-        && reference.measured_distance_m > 0 && reference.measured_distance_m <= 2000)))
-    throw new Error('실측 축척에는 확인한 거리가 필요합니다');
-  if (!reference.description?.trim() || reference.description.length > 1000)
-    throw new Error('시작점·방향·축척 근거를 적으세요');
-  return {schema: 'rosy.site_map/1', map_id: mapId, places: [], edges: [],
-    survey: {...copy(reference), reviewed: false, review_note: ''}};
-}
-
-export function appendSurveyElement(map, item) {
-  if (!map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
-  const {id, name, kind, geometry} = item;
-  if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || !name?.trim() || name.length > 64)
-    throw new Error('요소 ID와 이름을 확인하세요');
-  if (!Array.isArray(geometry) || !geometry.length || geometry.length > 32
-      || !geometry.every(p => Array.isArray(p) && p.length === 2
-        && p.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)))
-    throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
-  const next = copy(map);
-  next.survey = {...next.survey, reviewed: false, review_note: ''};
-  if ([...next.places, ...next.edges, ...(next.facilities || [])].some(row => row.id === id))
-    throw new Error('이미 쓰는 요소 ID입니다');
-  if (PLACE_KINDS.includes(kind)) {
-    if (geometry.length !== 1 || (kind === 'start' && !Number.isFinite(item.yaw)))
-      throw new Error('장소는 한 점이며 출발 장소는 확인한 방향이 필요합니다');
-    const [x, y] = geometry[0];
-    next.places.push({id, name: name.trim(), kind, x, y, ...(Number.isFinite(item.yaw) ? {yaw: item.yaw} : {})});
-  } else if (kind === 'road') {
-    const start = next.places.find(p => p.id === item.from), end = next.places.find(p => p.id === item.to);
-    if (!start || !end || start.id === end.id || geometry.length < 2)
-      throw new Error('서로 다른 시작·끝 장소와 도로 선을 지정하세요');
-    if (!(item.width_m > 0 && item.width_m <= 10) || !Number.isFinite(item.width_m)
-        || !['one_way', 'two_way'].includes(item.direction)) throw new Error('차로 폭과 통행 방향을 확인하세요');
-    if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
-        || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
-      throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
-    next.edges.push({id, from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
-      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
-      evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
-  } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
-    const required = {traffic_signal: 1, stop_line: 2, landmark: 1}[kind];
-    if (required ? geometry.length !== required : geometry.length < 3) throw new Error('요소 종류에 맞게 점을 찍으세요');
-    const approaches = item.approaches || [];
-    if (approaches.some(a => !next.edges.some(e => e.id === a.edge_id))) throw new Error('연결할 도로가 없습니다');
-    if (kind === 'traffic_signal' && (!item.signal_id || !['physical', 'virtual'].includes(item.signal_kind) || !approaches.length))
-      throw new Error('신호등 ID·종류와 제어 진입 차로를 지정하세요');
-    next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copy(geometry), approaches: copy(approaches),
-      ...(kind === 'traffic_signal' ? {signal_id: item.signal_id, signal_kind: item.signal_kind} : {})}];
-  } else throw new Error('알 수 없는 지도 요소입니다');
-  return next;
-}
-
-export function reviewSurveyDraft(map, note) {
-  if (!map?.survey || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
-  const next = copy(map);
-  next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
-  for (const edge of next.edges) edge.evidence = {...(edge.evidence || {source: 'operator'}),
-    status: 'reviewed', reference_revision: next.survey.revision, note: note.trim()};
-  return next;
-}
-
-export function editSurveyElement(map, item) {
-  const group = [map.places, map.edges, map.facilities || []].find(rows => rows.some(row => row.id === item.id));
-  if (!group) throw new Error('수정할 요소가 없습니다');
-  const old = group.find(row => row.id === item.id);
-  if ((group === map.places && !PLACE_KINDS.includes(item.kind))
-      || (group === map.edges && item.kind !== 'road')
-      || (group === map.facilities && item.kind !== old.kind)) throw new Error('기존 요소의 분류를 유지하세요');
-  const base = copy(map);
-  for (const key of ['places', 'edges', 'facilities']) if (base[key]) base[key] = base[key].filter(row => row.id !== item.id);
-  const next = appendSurveyElement(base, item);
-  if (group === map.edges) {
-    const edge = next.edges.find(row => row.id === item.id);
-    edge.drive_mode = old.drive_mode;
-    edge.speed_cap_mps = old.speed_cap_mps;
-    if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
-  }
-  if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
-    next.places.find(row => row.id === item.id).yaw = old.yaw;
-  if (group === map.places) {
-    const [x, y] = item.geometry[0];
-    for (const edge of next.edges) {
-      if (edge.from === item.id) edge.polyline[0] = [x, y];
-      if (edge.to === item.id) edge.polyline[edge.polyline.length - 1] = [x, y];
-      if (edge.from === item.id || edge.to === item.id) edge.evidence = {source: 'operator',
-        status: 'observed', reference_revision: next.survey.revision, note: ''};
-    }
-  }
-  return next;
-}
-
-export function removeSurveyElement(map, id) {
-  if (map.edges.some(edge => edge.from === id || edge.to === id)
-      || (map.facilities || []).some(f => f.approaches?.some(a => a.edge_id === id))
-      || (map.turn_bans || []).some(b => b.at === id || b.from_edge === id || b.to_edge === id))
-    throw new Error('연결된 차로·시설·통행 규칙을 먼저 수정하거나 삭제하세요');
-  const next = copy(map);
-  for (const key of ['places', 'edges', 'facilities']) if (next[key]) next[key] = next[key].filter(row => row.id !== id);
-  if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
-  return next;
-}
-
-export function editPlace(map, id, {name, kind}) {
-  const next = copy(map);
-  const place = next.places.find(item => item.id === id);
-  if (!place) throw new Error(`없는 장소 ${id}`);
-  if (name !== undefined) {
-    if (!String(name).trim() || String(name).length > 64) throw new Error('주소 이름은 1–64자입니다');
-    place.name = String(name).trim();
-  }
-  if (kind !== undefined) {
-    if (!PLACE_KINDS.includes(kind)) throw new Error('알 수 없는 장소 종류');
-    // D-513: the heading comes from a robot set down on the spot (teach "place"), never a guess
-    if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
-    place.kind = kind;
-  }
-  if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
-  return next;
-}
-
 /** D-513 7: the one screen orientation of this map (clockwise turn of the plain +y-up view). */
 export const VIEW_TURNS = [0, 90, 180, 270];
 export function viewTurnOf(map) { return VIEW_TURNS.includes(map?.view_turn_deg) ? map.view_turn_deg : 0; }
@@ -441,30 +313,6 @@ export function editViewTurn(map, turn) {
   const value = Number(turn);
   if (!VIEW_TURNS.includes(value)) throw new Error('화면 방향은 0·90·180·270° 중 하나입니다');
   return {...copy(map), view_turn_deg: value};
-}
-
-export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_mps: speed}) {
-  const next = copy(map);
-  const edge = next.edges.find(item => item.id === id);
-  if (!edge) throw new Error(`없는 차로 ${id}`);
-  if (direction !== undefined) {
-    if (!['one_way', 'two_way'].includes(direction)) throw new Error('통행 방향은 일방/양방입니다');
-    edge.direction = direction;
-  }
-  if (driveMode !== undefined) {
-    if (!['lane', 'free'].includes(driveMode)) throw new Error('주행 방식은 차선/좌표입니다');
-    edge.drive_mode = driveMode;
-  }
-  if (speed !== undefined) {
-    const value = Number(speed);
-    if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');
-    edge.speed_cap_mps = value;
-  }
-  if (next.survey) {
-    next.survey = {...next.survey, reviewed: false, review_note: ''};
-    edge.evidence = {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''};
-  }
-  return next;
 }
 
 /** D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)". */
@@ -595,21 +443,6 @@ export function teachStatusText(view) {
   if (reason) return `기록 중단 · ${reason} · 유효한 앞부분만 확정 대기 · 로봇 정지는 별도로 확인하세요`;
   if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
   return '기록 없음';
-}
-
-export function teachStartBody({robotId, mode, draft, confirmed}) {
-  if (!robotId) throw new Error('로봇을 고르세요');
-  if (mode === 'map') return {robot_id: robotId};
-  if (mode !== 'survey') throw new Error('기록 좌표 방식을 고르세요');
-  if (!draft?.revision || !draft.map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 저장하세요');
-  if (!confirmed) throw new Error('로봇이 조사 시작점과 방향에 놓였는지 확인하세요');
-  return {robot_id: robotId, mode: 'survey', map_id: draft.map.map_id,
-    reference_revision: draft.map.survey.revision, expected_revision: draft.revision};
-}
-
-export function surveyTeachMatches(record, map) {
-  return Boolean(record?.survey_reference && record.map_id === map?.map_id && map?.survey
-    && Object.entries(record.survey_reference).every(([key, value]) => JSON.stringify(map.survey[key]) === JSON.stringify(value)));
 }
 
 /** `POST /api/fleet/teach/confirm` body; an empty place id means a new address named `name`. */

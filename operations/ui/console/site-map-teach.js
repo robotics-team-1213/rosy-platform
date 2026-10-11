@@ -4,8 +4,8 @@
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
-  teachStartBody, surveyTeachMatches,
 } from '/console/assets/site-map-model.js';
+import {teachStartBody, surveyTeachMatches} from '/console/assets/site-map-edit.js';
 
 const POLL_MS = 1000;
 
