@@ -173,8 +173,9 @@ def test_concurrent_goal_is_refused_until_the_first_goal_pipeline_finishes():
         original = robot.navigation_goal
 
         async def blocked(*args, **kwargs):
-            entered.set()
-            await release.wait()
+            if args[0] == 1.0:
+                entered.set()
+                await release.wait()
             return await original(*args, **kwargs)
 
         robot.navigation_goal = blocked
