@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from fleet.server.goal_evidence import GoalEvidenceError
+from rosy.execution.site.goal_evidence import GoalEvidenceError
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
 from fleet.server.mission_progress import MissionProgressService

@@ -13,8 +13,9 @@ SOURCE_ROOTS = {
 }
 
 
-def bootstrap_decision():
-    for folder in (SOURCE_ROOTS['decision'] / 'src', SOURCE_ROOTS['assessment']):
+def bootstrap_sources():
+    for folder in (SOURCE_ROOTS['decision'] / 'src', SOURCE_ROOTS['assessment'],
+                   PACKAGE_ROOT.parent / 'execution/src'):
         root = str(folder)
         if root not in sys.path:
             sys.path.insert(0, root)
