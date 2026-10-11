@@ -82,3 +82,18 @@ def metrics(rows, choices):
     return dict(count=len(rows), correct=correct, accuracy=correct/len(rows),
                 accuracy_lower=wilson_lower(correct, len(rows)), brier=brier/len(rows), ece=ece,
                 forbidden=forbidden, p95_latency_ms=latencies[math.ceil(.95*len(rows))-1]), bins
+
+
+def calibrated_metrics(bins, count):
+    """Evaluate fixed fit-bin point estimates on test labels; uncovered cases stay in coverage."""
+    covered, brier, ece = 0, 0.0, 0.0
+    for bucket in bins:
+        n, point = bucket['count'], bucket['fit_accuracy']
+        if n and point is not None:
+            accuracy = bucket['empirical_accuracy']
+            covered += n
+            brier += n * (point*point - 2*point*accuracy + accuracy)
+            ece += n * abs(point - accuracy)
+    return dict(calibrated_coverage=covered/count,
+                calibrated_top_brier=max(0.0, brier/count) if covered == count else None,
+                calibrated_ece=ece/count if covered == count else None)
