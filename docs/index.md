@@ -320,6 +320,6 @@
 
 - 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
 - 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
+- 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
 - 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
 - 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
-- 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)

@@ -7766,6 +7766,12 @@ osy-d395-s1d\`.
 - 증거: 원격 camera/map-task/SDK-entrypoint60 passed/NEW0. main 098a0c0c0의 D-649 기존 Drive 소스 이동을 병합한 뒤 Isaac 전체 및 기존 drivable/model 회귀 227 passed/2 skipped/NEW0. Native 카메라 R1은 no-wall 모델의 floor_gate 설정 오류, R2는 strict 관측이 카메라 기반 off-line 복귀도 막아 종료됐다. 설정과 provenance/freshness를 수정하고 독립 소스 재검토를 받았으며 실제 완주 재시험은 별도 기록한다.
 - gate 변화: 없음. 두 대 Fleet/신호/횡단보도·실물 수용은 미확인이고 카메라 학습 정책은 HOLD다.
 
+## 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
+
+- 변경: 기존 단일 simulation identity를 유지하면서 두 대용 명령·카메라 이벤트·epoch·정지 격리 계약과 RED 시험을 추가했다.
+- 증거: 구현 전 AI PC 원격 시험은 기존 44 passed, 신원 인자 미지원으로 새 12 failed다. known_failures 비교에서 NEW 여부를 확인하고 구현 후 회귀를 기록한다.
+- gate 변화: 없음. 실제 두 대 Isaac 연결·camera 강화학습·Fleet/신호/횡단보도·ROS-SIM/실물은 미확인이다.
+
 ## 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
 
 - 변경: immutable evidence, current owner/case/revision and bounded necessity output; Fleet and Situation share the pure adapter without new commands or wire fields.
