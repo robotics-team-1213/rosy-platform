@@ -28,7 +28,7 @@ gaps:
     evidence:
       - docs/solutions/workflow-issues/measure-the-real-camera-from-recorded-video-before-tuning-sim-perception-2026-09-24.md
       - middleware/perception/vision/perception/camera_visibility.py:15-25
-      - learning/training/perception/road_replay.py
+      - learning/evaluation/perception/road_replay.py
       - D-378
     tier: [R, M]
     owner: perception / learning
@@ -142,7 +142,7 @@ gaps:
     gap: paint gaps, unknown junctions, road ends
     evidence:
       - D-476
-      - learning/training/perception/road_replay.py
+      - learning/evaluation/perception/road_replay.py
     tier: [R, M]
     owner: perception / core line_follow
     status: IN-PROGRESS

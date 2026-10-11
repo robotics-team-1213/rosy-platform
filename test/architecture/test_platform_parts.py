@@ -50,7 +50,6 @@ PACKAGE_DIR_ROOTS = {
     "operations/execution/src/rosy/execution/site",
     "middleware/core/services/core_features/safety",  # D-430 §1 sub-root inside the services package
     "middleware/core/services/core_features/decision",  # D-429 §1 device local rules sub-root
-    "operations/decision",  # D-429 §5 fleet.ai until the carve
 }
 
 #: Frozen §2 violations as (importer target, imported target or "external:<name>") -> reason.
@@ -64,7 +63,7 @@ KNOWN_VIOLATIONS = {
     ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("learning/training/perception", "middleware/perception"): (
+    ("learning/curation/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
     ),
 }
@@ -302,7 +301,9 @@ def test_deferred_roots_ride_inside_their_parent_package():
     path is always inside the parent's path (old location before, parent target after)."""
     roots = _manifest()["roots"]
     deferred = [root for root in roots if "deferred" in root]
-    assert len(deferred) >= 3, "Q2 starts with fleet web and gz_sim launch/scripts deferred"
+    assert {root['d427_target'] for root in deferred} == {
+        'middleware/apps/device/sim', 'tools/sim',
+    }, "D-637 closes Decision/Console; Gazebo remains one installed resource owner"
     for root in deferred:
         assert isinstance(root["deferred"], str) and root["deferred"].strip(), root
         assert root["path"] != root["d427_target"], f"{root['path']}: moved roots drop deferred"

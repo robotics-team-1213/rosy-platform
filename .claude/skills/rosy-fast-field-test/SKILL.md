@@ -109,9 +109,9 @@ Only changes what the installed runtime already consumes (paint reads the `lane_
 role only). Run `deliver.py` from the model PC repo, which owns model work:
 
 ```bash
-python learning/training/perception/model/deliver.py status <robot-host> --slot paint
-python learning/training/perception/model/deliver.py push <robot-host> <revision> --slot paint
-python learning/training/perception/model/deliver.py rollback <robot-host> --slot paint
+python learning/registry/perception/deliver.py status <robot-host> --slot paint
+python learning/registry/perception/deliver.py push <robot-host> <revision> --slot paint
+python learning/registry/perception/deliver.py rollback <robot-host> --slot paint
 ```
 
 `push` needs a passing `intake_report.json`. Nothing reads `paint` unless the overlay sets

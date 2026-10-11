@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 DOCS = {"index.html": "/console", "install.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console/cell"}
 ORDER = ["/console", "/console/install", "/console/site-map", "/console/cell"]

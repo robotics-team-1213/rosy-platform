@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
-} from "../../fleet/server/web/localization-badge.js";
+} from "../../../ui/console/localization-badge.js";
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
   needs_human: false, label: "위치 확정", ...over });
@@ -100,7 +100,7 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
 });
 
 test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {
-  const { pinPrefill } = await import("../../fleet/server/web/localization-badge.js");
+  const { pinPrefill } = await import("../../../ui/console/localization-badge.js");
   const identity = { robots: [{ robot_id: "rosy_41", state: "CONFIRMED", x: 0.398, y: -0.499 },
     { robot_id: "rosy_40", state: "UNKNOWN", x: null, y: null }] };
   const degraded = { pose: { x: 0.962, y: -0.011, state: "DEGRADED" } };

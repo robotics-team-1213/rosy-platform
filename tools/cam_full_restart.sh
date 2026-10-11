@@ -18,7 +18,7 @@ sleep 3
 echo "  raw bridge PID: $RAW_PID"
 
 echo "== 2. JPEG 릴레이 (image_raw → preview/compressed) =="
-nohup python3 /rosy/tools/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
+nohup python3 /rosy/integrations/simulation/gazebo/scripts/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
   > /tmp/rosy_relay.log 2>&1 &
 RELAY_PID=$!
 sleep 5

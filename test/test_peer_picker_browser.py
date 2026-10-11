@@ -8,7 +8,7 @@ from browser_harness import browser_tests_enabled, open_page
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RUN_BROWSER_TESTS=1 for Chromium')
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / 'operations/fleet/fleet/server/web'
+WEB = ROOT / 'operations/ui/console'
 
 
 @pytest.mark.parametrize('width', [390, 800, 1200])
