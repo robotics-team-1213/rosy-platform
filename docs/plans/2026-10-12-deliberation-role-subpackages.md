@@ -80,6 +80,13 @@ export 누락은 기존 imported public names 전체를 재export해 수정했�
 프로세스 소멸로 처리하도록 고쳤고 production cleanup은 변경하지 않았다.
 두 실패를 기존 known failure로 분류하거나 숨기지 않는다.
 
+GREEN-3 source `72050909bd`: 관련 22개 시험 파일의 348개가 같은 HEAD에서
+원격 AI PC(MemAvailable 9.0 GB)로 모두 통과했다. runner terminal exit 0,
+known-failure NEW 0/known 0이다. actual wheel/sdist 설치, 기존 façade identity,
+공통 판단·provider·calibration·CLI subprocess·원장·관측·사건 bridge·기존 replay와
+전체 관련 architecture를 포함한다. 이후 실제 관측 module을 installed probe에
+명시하는 설치 검증만 보강한다. 이 보강은 production source를 변경하지 않는다.
+
 GREEN은 installed wheel/sdist, architecture/holder/harness, 기존 숙고·조건부 검토,
 v2 profile/judgment/provider/request, calibration 및 실제 CLI subprocess,
 사건 원장·관측과 bridge를 원격에서 확인한다. 최종 terminal 결과와 NEW 비교를
