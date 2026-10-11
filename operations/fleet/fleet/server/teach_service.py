@@ -90,7 +90,17 @@ class TeachService:
         session = self._recording
         if session is None or len(session.points) >= MAX_POINTS:
             return
-        point = teach.keep(session.points, await self._pose(session.robot_id))
+        pose = await self._pose(session.robot_id)
+        if session is not self._recording:
+            return
+        if teach.keep([], pose) is None:  # a later valid pose must not bridge an unobserved road
+            try:
+                await self.stop(IDLE_PRINCIPAL, reason="pose_lost")
+            except TeachError as exc:
+                if exc.code != "TEACH_TOO_SHORT":
+                    raise
+            return
+        point = teach.keep(session.points, pose)
         if point is not None and session is self._recording:
             session.points.append(point)
             session.last_kept_at = self._clock()

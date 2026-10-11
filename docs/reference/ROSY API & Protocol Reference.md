@@ -33,6 +33,7 @@
 - `facilities`는 최대 500개 `{id,name,kind:traffic_signal|stop_line|landmark|exclusion,geometry:[[x,y]],approaches:[{edge_id,forward,stop_s_m?}],signal_id?,signal_kind?:physical|virtual}`다. 신호등/landmark는 한 점, 정지선은 서로 다른 두 점, 금지 구역은 퇴화·자기 교차 없는 3–32점 다각형이다. geometry 좌표는 ±1000 m의 유한 값이다. id는 revision과 같은 형식, name은 비공백 최대 64자. approaches 최대 64개, 존재하는 차로와 허용 방향만 참조하고 동일 차로·방향 중복 불가, stop_s_m은 0 이상 차로 길이 이하. 신호등은 signal_id·signal_kind·제어 approaches 필수이고 나머지 시설에는 device 필드를 넣지 않는다. 시설 기하는 장치 등록·신호 제어 활성화가 아니다.
 - 기존 초안·프로필 요청의 크기·revision·named operator·감사 계약은 유지한다. 활성화 및 최초 import는 미검토 survey를 422 `SITE_MAP_SURVEY_UNREVIEWED`, observed/inferred road evidence를 422 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 메타데이터는 World의 운행 MapPose나 CORE 명령을 바꾸지 않는다.
 - 금지 구역에 닿거나 차로 반폭 이내로 접근하는 주행 간선이 있으면 활성화/최초 import는 422 `SITE_MAP_EXCLUSION_OVERLAP`이다. 금지 영역을 그림으로만 표시한 채 경로 계획이 통과하도록 두지 않는다. 간선 기하를 수정하거나 차로 초안에서 제거한 뒤 다시 검토한다.
+- 기존 teach의 map-pose 기록 중 UNKNOWN/DEGRADED 또는 dead_reckon_m >0.5로 유효 좌표가 끊기면 기록을 끝낸다. stop/result의 reason은 `pose_lost`이며, 직전까지 유효한 선만 pending에 남는다(최소 길이 미만은 폐기). 이후 재관측 좌표를 같은 선으로 자동 잇지 않는다. 이는 기록 중단이며 로봇 정지 명령이나 위치 승인으로 사용하지 않는다.
 
 # 1. 버저닝 및 폐기 정책
 
