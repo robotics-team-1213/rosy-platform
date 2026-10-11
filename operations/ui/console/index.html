@@ -111,7 +111,9 @@
           <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
           <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
           <ui-button id="channel-review-ready" kind="quiet" type="button">이동 후보 저장</ui-button>
-          <ui-button id="channel-review-submit" type="button" hidden>확인 후 Fleet에 요청</ui-button>
+          <span id="channel-review-submit-holder" hidden>
+            <ui-button id="channel-review-submit" kind="irreversible" type="button">확인 후 Fleet에 요청</ui-button>
+          </span>
         </div>
       </section>
     </section>

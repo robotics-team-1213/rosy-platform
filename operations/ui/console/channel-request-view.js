@@ -11,7 +11,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, co
     state.textContent = `${review.state}${review.work_status ? " · " + review.work_status : ""} · ${review.reason || "검토 사유를 입력하세요."}`;
     for (const name of ["ready", "hold", "reject"])
       el(`channel-review-${name}`).disabled = busy || review.state === "LINKED";
-    el("channel-review-submit").hidden = review.state !== "READY";
+    el("channel-review-submit-holder").hidden = review.state !== "READY";
     el("channel-review-submit").disabled = busy || !canSubmit(review.candidate?.robot_id);
   }
   async function select(row) {
