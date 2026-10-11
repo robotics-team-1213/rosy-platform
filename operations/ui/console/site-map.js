@@ -12,7 +12,7 @@ import {
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
   planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
-import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
+import {editEdge, editPlace, mergeCameraMap} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
@@ -248,6 +248,7 @@ function syncButtons() {
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
   gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
+  gate('merge-camera-map', reason || (state.dirty ? '수정한 초안을 먼저 저장하세요' : '') || (!state.draft?.map?.survey ? '조사 기준이 있는 초안을 먼저 저장하세요' : '') || (!$('camera-map-file').files.length ? '카메라 관측 JSON 파일을 고르세요' : ''));
   gate('map-view-turn', reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   const crosswalk = state.selected?.crosswalk;
@@ -653,15 +654,19 @@ $('trip-place').addEventListener('change', clearPlan);
 $('trip-robot').addEventListener('change', clearPlan);
 
 $('camera-map-file').addEventListener('change', syncButtons);
-$('import-camera-map').addEventListener('click', () => guarded(async () => {
+for (const button of ['import-camera-map', 'merge-camera-map']) $(button).addEventListener('click', () => guarded(async () => {
   if (operatorReason()) return;
+  const accumulate = button === 'merge-camera-map', revision = state.draft?.revision || null, base = state.draft?.map;
+  if (accumulate && (state.dirty || !base?.survey)) throw new Error('조사 기준이 있는 초안을 먼저 저장하세요');
   const file = $('camera-map-file').files[0];
   if (!file) return;
   if (file.size > 2 * 1024 * 1024 - 1024) throw new Error('지도 초안 파일은 2 MiB보다 작아야 합니다.');
-  const map = JSON.parse(await file.text());
+  let map = JSON.parse(await file.text());
   if (map?.schema !== 'rosy.site_map/1') throw new Error('rosy.site_map/1 지도 초안 파일이 필요합니다.');
-  const revision = state.draft?.revision || null;
-  if (state.dirty || revision) {
+  if (accumulate) {
+    if (state.dirty || revision !== state.draft?.revision) throw new Error('초안이 바뀌었습니다 · 저장 상태를 확인하세요');
+    map = mergeCameraMap(base, map);
+  } else if (state.dirty || revision) {
     const allowed = await confirmIrreversible({message: '기존 초안을 카메라 지도 초안으로 바꿀까요? 활성 지도는 바뀌지 않습니다.',
       action: '카메라 초안 가져오기', opener: $('import-camera-map')});
     if (!allowed) return;
@@ -672,7 +677,7 @@ $('import-camera-map').addEventListener('click', () => guarded(async () => {
   await load();
   $('map-source').value = 'draft';
   clearPlan();
-  notice('카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
+  notice(accumulate ? '카메라 관측을 초안에 누적했습니다. 연결·통행 방향을 검토하세요.' : '카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
 }));
 
 // D-513 7: one orientation for every Fleet map and camera view; saved and activated like any edit.
