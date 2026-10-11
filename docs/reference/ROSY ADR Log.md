@@ -748,3 +748,9 @@
 - 상태: Accepted (2026-10-12, 계약).
 - 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
 - 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
+
+## D-692 · Native Isaac 카메라 경계 관측 출처
+
+- 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
+- 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
+- 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.

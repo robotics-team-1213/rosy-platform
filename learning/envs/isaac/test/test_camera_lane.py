@@ -19,6 +19,32 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
+    import camera_lane
+    from control.sensing.perception.camera_ground import ground_plane
+    from control.sensing.perception.lane import LaneObservation
+    model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda frame:
+        (np.ones((240, 320), np.uint8), 'drivable', {'crosswalk_mask': np.zeros((240, 320), np.uint8)}, 1.))
+    lane = camera_lane.LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                                         camera_x=.03317, clock=lambda: 10.)
+    def observed(*args, **kwargs):
+        lane.keeper.last = {'boundaries': [], 'crosswalk': (.1, .2)}
+        return LaneObservation(.1, .9)
+    monkeypatch.setattr(lane.keeper, 'update', observed)
+    monkeypatch.setattr(camera_lane, 'keep_step', lambda *args: (None, False))
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+        evidence = lane.manager._observation.containment
+        assert evidence.ground_source == 'ISAAC' and evidence.stamp == 1.
+        assert evidence.crosswalk.near_m == .1
+        assert evidence.uncertainty_m is None and evidence.crosswalk_uncertainty_m is None
+        assert lane.last['containment'] == evidence.model_dump()
+        lane.invalidate('camera_target_unavailable')
+        assert lane.state() is None and lane.last['model_used'] is False
+    finally:
+        lane.close()
+
+
 def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
     import camera_lane
     from core_common.robot_body import NOMINAL_BODY
