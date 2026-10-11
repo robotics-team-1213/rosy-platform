@@ -34,15 +34,18 @@ class ChannelReplyOutbox:
 
     def enqueue(self, conn, receipt, kind, content):
         self.journal.current_receipt(receipt)
+        self._insert(conn, receipt, kind, content, 'PENDING')
+
+    def _insert(self, conn, receipt, kind, content, state):
         request_id = receipt['request_id']
         nonce = hashlib.sha256(f'{request_id}:{kind}'.encode()).hexdigest()[:24]
         now = self.clock()
         # Same connection makes receipt and its reply intent one durable commit.
         conn.execute('''INSERT OR IGNORE INTO fleet_channel_reply_outbox
             (request_id, kind, nonce, principal_id, message_id, route_hash, content,
-             next_attempt_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+             state, next_attempt_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                      (request_id, kind, nonce, receipt['principal_id'], receipt['message_id'], self.route_hash(),
-                      content, now, now + 600))
+                      content, state, now, now + 600))
 
     def observe_results(self):
         with closing(self.journal._connect()) as conn, conn:
@@ -63,6 +66,7 @@ class ChannelReplyOutbox:
                 try:
                     self.journal.current_receipt(receipt)
                 except HTTPException:
+                    self._insert(conn, receipt, 'TASK:' + status, '', 'SUPERSEDED')
                     continue
                 self.enqueue(conn, receipt, 'TASK:' + status,
                              f"ROSY 작업 원장 · {receipt['request_id']}\nTask {task_id} · {status}"
