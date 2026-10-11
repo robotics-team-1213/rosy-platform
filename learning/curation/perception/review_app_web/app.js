@@ -2,7 +2,7 @@ import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
-const font = (size, family) => canvasFont(size, family);
+const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
 const modeBadge=document.createElement('ui-status');
@@ -12,6 +12,7 @@ $('frame-progress').after(modeBadge);
 const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 · 학습 제외':'학습 후보 · 승인 후 수용 확인';
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
+document.querySelector('.review-editor-tools').append($('reload'));
 const objectCanvasColumn=document.querySelector('.review-editor-canvas');
 objectCanvasColumn.querySelector('.image-stage').after($('candidate-details'));
 document.querySelector('.review-stage').append(document.querySelector('.review-editor-tools'));
@@ -171,7 +172,7 @@ function paint() {
   if (!ready) return;
   ctx.drawImage(image,0,0);
   ctx.fillStyle = cssColor('--ink');
-  ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = font(14,'mono');
+  ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = font('label','mono');
   const boxes = coordinatePreview || frame.review.boxes;
   const marker = 8 * canvas.width / Math.max(1,canvas.getBoundingClientRect().width);
   boxes.forEach((box,i) => {

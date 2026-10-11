@@ -21,7 +21,9 @@ pixelContent.insertBefore($('pixel-frames'),pixelPreparation);
 const pixelResult=document.createElement('p');pixelResult.id='pixel-result';pixelResult.className='review-result';pixelResult.setAttribute('role','status');
 const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-result-note';pixelResultNote.className='review-result-note';pixelResultNote.setAttribute('role','status');
 $('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
-pixelResultNote.after(document.querySelector('.pixel-layout .review-view-bar'),$('pixel-reload'));
+pixelResultNote.after(document.querySelector('.pixel-layout .review-view-bar'));
+// Retry must remain reachable when unavailable/empty state hides the editing content.
+pixelContent.after($('pixel-reload'));
 document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pixel-ribbon-nav'));
 $('pixel-view-status').before($('pixel-coverage'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));

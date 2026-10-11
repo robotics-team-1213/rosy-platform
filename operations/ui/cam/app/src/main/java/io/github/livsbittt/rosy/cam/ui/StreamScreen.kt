@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -81,8 +82,8 @@ fun StreamScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .safeDrawingPadding()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(RosyMetrics.Space4.dp),
+        verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp),
     ) {
         Box(
             modifier = Modifier
@@ -104,7 +105,7 @@ fun StreamScreen(
 
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
         ) {
             StatusPanel(state, siteLink, rejectedHost, droppedTlsHost, lan, localError, onStop, onOpenSettings)
 
@@ -142,15 +143,15 @@ fun StreamScreen(
                         else -> R.string.exposure_ok
                     }) + if (exposure.enabled && exposure.index != 0) " · EV ${exposure.index}" else "",
                         style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = { StreamService.setExposureAssist(!exposure.enabled) }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { StreamService.setExposureAssist(!exposure.enabled) }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
                         Text(stringResource(if (exposure.enabled) R.string.exposure_disable else R.string.exposure_enable))
                     }
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
                         Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))
                     }
-                    Button(onClick = { StreamService.savePhoto() }, modifier = Modifier.fillMaxWidth(),
+                    Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { StreamService.savePhoto() }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth(),
                         enabled = !state.previewOnly && !state.photoSaving) {
                         Text(stringResource(if (state.photoSaving) R.string.photo_saving else R.string.photo_save))
                     }
@@ -159,7 +160,7 @@ fun StreamScreen(
             if (state.photoFailed) Text(stringResource(R.string.photo_failed), color = RosyColors.StatusWarn)
             state.photoName?.let { name ->
                 val context = LocalContext.current
-                OutlinedButton(onClick = {
+                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = {
                     try {
                         val file = File(context.filesDir, "photos/$name")
                         require(File(name).name == name && file.isFile)
@@ -174,36 +175,36 @@ fun StreamScreen(
                     } catch (_: Exception) {
                         Toast.makeText(context, R.string.photo_share_failed, Toast.LENGTH_LONG).show()
                     }
-                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.photo_share)) }
+                }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.photo_share)) }
             }
 
         }
 
-        if (state.running) OutlinedButton(onClick = onScreenOff, modifier = Modifier.fillMaxWidth()) { Text("화면 끄기 · 촬영 유지") }
+        if (state.running) OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onScreenOff, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text("화면 끄기 · 촬영 유지") }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
-            OutlinedButton(
+            OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
                 onClick = onOpenSettings,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
+                modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
             ) {
                 Text(stringResource(R.string.button_settings))
             }
             if (state.running) {
-                Button(
+                Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
                     // Stopping is routine and reversible: neutral primary, not the crit fill (D-277 3).
                     onClick = onStop,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
                 ) {
-                    Text(stringResource(R.string.button_stop), fontSize = 22.sp)
+                    Text(stringResource(R.string.button_stop), fontSize = RosyMetrics.TextLabel.sp)
                 }
             } else {
-                Button(
+                Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
                     onClick = onStart,
                     enabled = CameraSessionPlan.from(pairing).startCamera,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth().height(RosyMetrics.TargetPrimary.dp),
                 ) {
-                    Text(stringResource(R.string.button_start), fontSize = 22.sp)
+                    Text(stringResource(R.string.button_start), fontSize = RosyMetrics.TextLabel.sp)
                 }
             }
         }
@@ -224,7 +225,7 @@ private fun StatusPanel(
     val pairing = siteLink?.toPairing()
     val link = state.link
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space1.dp)) {
         val stateText = when {
             !state.running -> R.string.state_stopped
             state.previewOnly -> R.string.state_preview_only
@@ -292,7 +293,7 @@ private fun StatusPanel(
         }
         if (!state.previewOnly) {
             Text(stringResource(R.string.stat_fps, link.sentFps), style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
+            TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = { showDiagnostics = !showDiagnostics }) {
                 Text(if (showDiagnostics) "연결·송출 정보 접기" else "연결·송출 정보 보기")
             }
             if (showDiagnostics) {
@@ -313,7 +314,7 @@ private fun StatusPanel(
                         Text(it, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space4.dp)) {
                     Text(stringResource(R.string.stat_kbps, link.kbps))
                     Text(stringResource(R.string.stat_skipped, link.dropped))
                 }
@@ -360,8 +361,8 @@ private fun HealthPanel(health: DeviceHealth) {
 /** Corner markers as dots: filled = seen, ring = not seen. Shape carries the meaning, not colour (D-82). */
 @Composable
 private fun InstallGuide(guide: CornerGuide) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space1.dp)) {
             guide.dots.forEach { seen ->
                 val dot = Modifier.size(12.dp).clip(CircleShape)
                 Box(
@@ -440,18 +441,18 @@ private fun ProblemMessage(
     }
     val retrying = if (guidance.retrying) "\n" + stringResource(R.string.problem_retrying) else ""
     CritMessage(text + manualLine + retrying)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp), verticalAlignment = Alignment.CenterVertically) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
             if (ProblemGuide.stopsCameraFirst(guidance.problem, running)) {
-                OutlinedButton(onClick = { onStop(); onOpenSettings() }) {
+                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = { onStop(); onOpenSettings() }) {
                     Text(stringResource(R.string.button_stop_and_open_settings))
                 }
             } else {
-                OutlinedButton(onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
+                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
             }
         }
         if (guidance.detail != null) {
-            TextButton(onClick = { showDetail = !showDetail }) {
+            TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = { showDetail = !showDetail }) {
                 Text(stringResource(if (showDetail) R.string.button_details_hide else R.string.button_details))
             }
         }

@@ -219,8 +219,9 @@ def test_current_role_console_names_each_nonfresh_readout_state(tmp_path, eviden
         page.wait_for_timeout(700)
         capture_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(capture_dir / f"console-{evidence}-{width}x{height}.png"))
-        pose = readout.nth(2)
-        battery = readout.nth(3)
+        summary = page.locator('[data-panel="console.overview"] .ui-readout')
+        pose = summary.locator('dt', has_text='현재 위치').locator('+ dd')
+        battery = summary.locator('dt', has_text='배터리').locator('+ dd')
         assert label in pose.inner_text()
         assert label in battery.inner_text()
         assert pose.get_attribute("data-evidence") == evidence
@@ -257,6 +258,11 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
         page.goto(f"http://rosy.test/{surface}")
         page.wait_for_function("() => document.querySelectorAll('ui-section[data-panel]').length > 0")
         if surface == "setup":
+            if width < 480:
+                page.get_by_role("combobox", name="작업 선택", exact=True).select_option("setup.traffic_policy")
+            else:
+                page.get_by_role("tab", name="교통 정책 준비", exact=True).click()
+            page.locator('[data-panel="setup.traffic_policy"]').wait_for(state="visible")
             page.wait_for_function("""() => {
               const panel = document.querySelector('[data-panel="setup.traffic_policy"]');
               const facts = panel?.querySelector('.traffic-policy-facts');
@@ -283,10 +289,10 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
               const panel = document.querySelector('[data-panel="setup.traffic_policy"]');
               if (!panel) return null;
               const card = panel.parentElement.getBoundingClientRect();
-              const slot = panel.closest('[data-slot="main"]').getBoundingClientRect();
+              const content = panel.closest('.procedure-content').getBoundingClientRect();
               const facts = panel.querySelector('.traffic-policy-facts').getBoundingClientRect();
               const form = panel.querySelector('form').getBoundingClientRect();
-              return {cardWidth:card.width, slotWidth:slot.width,
+              return {cardWidth:card.width, contentWidth:content.width,
                 factColumns:getComputedStyle(panel.querySelector('.traffic-policy-facts')).gridTemplateColumns.split(' ').length,
                 factsRight:facts.right, formLeft:form.left, formTop:form.top, factsTop:facts.top};
             })(),
@@ -299,7 +305,7 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
     assert layout["overlaps"] == [], layout
     assert layout["procedureCards"] == layout["sectionCount"], layout
     if surface == "setup" and width == 1366:
-        assert layout["traffic"]["cardWidth"] >= layout["traffic"]["slotWidth"] - 2, layout
+        assert layout["traffic"]["cardWidth"] >= layout["traffic"]["contentWidth"] - 2, layout
         assert layout["traffic"]["factsRight"] <= layout["traffic"]["formLeft"], layout
     if surface == "setup" and width == 390:
         assert layout["traffic"]["formTop"] >= layout["traffic"]["factsTop"], layout

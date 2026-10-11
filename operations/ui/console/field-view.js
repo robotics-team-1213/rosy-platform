@@ -226,7 +226,7 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
       }
     }
     ctx.fillStyle = tone("--ink");
-    ctx.font = window.RosyPalette.canvasFont(12, "mono");
+    ctx.font = window.RosyPalette.canvasFont("micro", "mono");
     ctx.textBaseline = "bottom";
     ctx.fillText(label, field.x + field.width / 2 - 16, field.y - 2);
     ctx.fillText(`격자 ${step} m`, field.x + 4, field.y + field.height - 4);
