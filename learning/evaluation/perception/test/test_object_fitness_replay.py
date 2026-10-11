@@ -209,3 +209,16 @@ def test_reservation_change_during_inference_refuses_report(tmp_path, monkeypatc
     monkeypatch.setattr(data[4], 'infer', mutate)
     with pytest.raises(ValueError, match='reservation'):
         run(data)
+
+
+def test_cli_backend_failure_is_exit_two_without_report(tmp_path, monkeypatch):
+    import rosy_ml
+    data = bundle(tmp_path, monkeypatch)
+    def fail(bgr):
+        raise RuntimeError('backend execution failed')
+    monkeypatch.setattr(data[4], 'infer', fail)
+    output = tmp_path / 'report.json'
+    args = ['object-fitness', str(data[0]), '--store', str(data[1].root), '--eval', str(data[2]),
+            '--inputs', str(data[3]), '--max-age-ns', '100', '--out', str(output)]
+    assert rosy_ml.main(args) == 2
+    assert not output.exists()
