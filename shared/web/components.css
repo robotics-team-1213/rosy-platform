@@ -83,7 +83,7 @@
   top: attr(data-ui-tip-y px, 0px);
   z-index: 2002;
   max-width: min(32ch, calc(100vw - var(--space-4)));
-  padding: var(--space-2) var(--inset-button);
+  padding: var(--inset-tooltip);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
