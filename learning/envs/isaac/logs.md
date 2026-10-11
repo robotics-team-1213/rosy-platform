@@ -58,7 +58,7 @@
 - gate 변화: SOURCE/LOCAL GO, ROS-SIM HOLD 유지. 회전 목표 0.3 rad/s 대비 실제 0.19396으로 observer/scenario exit 1이다. 실제 맵·센서·두 대 Fleet·RL은 미검증이다. [최신 검증 기록](../../../docs/validation/isaac-latest-core-main-2026-10-11/result.md).
 - 교훈: 최신 main에서 만든 archive라도 실행 스크립트가 옛 소스를 덧씌울 수 있다. 실제 runtime 파일 hash를 실행 전과 정리 후 확인한다.
 
-## 2026-10-11 · dc25401e61 / e0e5b38d78 · feat(isaac): 실제 맵 한 대 CPU RL 진단
+## 2026-10-11 · dc25401e61 · feat(isaac): 실제 맵 한 대 CPU RL 진단
 
 - 변경: D-638에 따라 기존 STL generator·curved graph·Drive PathFollower·CORE CommandManager/최종 port를 재사용하는 simulation-only CPU Q-learning을 추가했다. 경로 창은 기존 alignment 이력을 유지하고 POLICY freshness·epoch·제한을 최종 출력까지 검증한다. 운영 CORE/Fleet API는 추가하지 않았다.
 - 증거: R6 baseline/학습 6회/고정 eval 202·303 complete, 37,591 Q updates, 9.342m ordered 경로와 실제 stop dwell 확인, SDK exit 0. R6 GUI close traceback 1건은 R7의 공유 headless-close 수리로 별도 재시험했고 SDK exit 0/error 0/잔여 PID 없음. source 전후 7,014파일 확인, policy SHA와 원시 evidence는 [결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 관련 원격 회귀/known_failures NEW 0과 독립 소스 검토를 거쳤다.
