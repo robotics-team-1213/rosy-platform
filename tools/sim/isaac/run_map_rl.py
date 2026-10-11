@@ -21,7 +21,7 @@ from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
 from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
-from floor_visuals import floor_visuals, add_track_visuals
+from floor_visuals import map_visual_profile, add_track_visuals
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
 
 
@@ -188,9 +188,11 @@ def main():
             else:
                 configure_velocity_drive(drive)
         world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
-        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
+        profile = map_visual_profile(MAP)
+        world.scene.add_ground_plane(size=profile['ground_size'],
+            color=np.array(profile['ground_colour']), restitution=0.)
         scene = track['scene']
-        add_track_visuals(stage, track, floor_visuals(MAP))
+        add_track_visuals(stage, track, profile)
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
         if args.record_video or perception is not None:

@@ -7,9 +7,17 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / 'tools/sim/isaac'))
-from floor_visuals import floor_visuals
+from floor_visuals import floor_visuals, map_visual_profile
 
 MAP = ROOT / 'middleware/perception/map/map_v2_fleet'
+
+
+def test_native_ground_and_paint_use_shared_world_values():
+    profile = map_visual_profile(MAP)
+    assert profile['ground_colour'] == (.13, .14, .13)
+    assert profile['ground_size'] == 100.
+    assert profile['paint_pose'] == (0., 0., .001, 0., 0., 0.)
+    assert profile['planes'] == floor_visuals(MAP)
 
 
 def test_shared_floor_assets_have_metric_scale_and_source_poses():

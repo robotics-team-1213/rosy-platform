@@ -81,7 +81,21 @@ def add_floor_visuals(stage, visuals):
         UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(material)
 
 
-def add_track_visuals(stage, track, visuals):
+def map_visual_profile(map_root):
+    world = ET.parse(map_root / 'training-curved/worlds/map_v2_fleet_real.world')
+    ground = world.find('./world/model[@name="ground_plane"]/link/visual')
+    colour = tuple(map(float, ground.findtext('material/diffuse').split()))
+    size = tuple(map(float, ground.findtext('geometry/plane/size').split()))
+    pose = tuple(map(float, world.findtext('./world/model[@name="road_lines"]/pose').split()))
+    if (len(colour) != 4 or not all(0 <= v <= 1 for v in colour) or colour[3] != 1
+            or len(size) != 2 or not all(math.isfinite(v) and v > 0 for v in size)
+            or size[0] != size[1] or len(pose) != 6 or not all(math.isfinite(v) for v in pose)):
+        raise ValueError('invalid shared ground or paint profile')
+    return dict(ground_colour=colour[:3], ground_size=size[0], paint_pose=pose,
+                planes=floor_visuals(map_root))
+
+
+def add_track_visuals(stage, track, profile):
     from pxr import Gf, UsdGeom, UsdPhysics
 
     scene = track['scene']
@@ -93,7 +107,6 @@ def add_track_visuals(stage, track, visuals):
         cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
         cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
         UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-    # shortcut: native paint retains its Z until paired SDK images verify the shared world offset.
     for part in [dict(name='paint', triangles=scene.lines, colour=[1., 1., 1.]),
                  *track['caution_meshes']]:
         paint = UsdGeom.Mesh.Define(stage, '/World/Track/' + part['name'])
@@ -104,4 +117,8 @@ def add_track_visuals(stage, track, visuals):
         paint.CreateSubdivisionSchemeAttr('none')
         paint.CreateDoubleSidedAttr(True)
         paint.CreateDisplayColorAttr([Gf.Vec3f(*part['colour'])])
-    add_floor_visuals(stage, visuals)
+        if part['name'] == 'paint':
+            pose = profile['paint_pose']
+            paint.AddTranslateOp().Set(Gf.Vec3d(*pose[:3]))
+            paint.AddRotateXYZOp().Set(Gf.Vec3f(*(math.degrees(v) for v in pose[3:])))
+    add_floor_visuals(stage, profile['planes'])
