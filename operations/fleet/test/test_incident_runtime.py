@@ -8,7 +8,7 @@ from test_stuck_resolver_loop import FleetConsole, RobotEndpoint, FakeRobot, Fle
 from test_incident_case_worker import settled
 from test_judgment_profiles import profile, adapter
 from test_judgment_receipts import row
-from test_notifications import _setup
+from fleet.incidents.notifications import NotificationConfig, Channel
 
 
 def settings(*, enabled=False):
@@ -88,8 +88,8 @@ def test_unknown_model_result_queues_final_review_in_same_journal_without_claim(
         config, calls = settings(enabled=True)
         application = app(tmp_path, config)
         board = application.state.line_stuck
-        _, _, _, channels = _setup(tmp_path / 'notification-fixture')
-        board._log.notifications.config = channels
+        board._log.notifications.config = NotificationConfig('https://fleet.example/console',
+            (Channel('discord', 'https://discord.com/api/webhooks/123/fake-unit-token'),))
         worker = application.state.stuck_resolver.incident_worker
         worker.feed(poll(application)); await settled(worker)
         assert calls == ['case-1']
