@@ -1,15 +1,5 @@
 # fleet logs
 
-## 2026-10-12 · aa10b5080 · D-687 Discord Mission·Cell owner adapter
-
-- 변경: 원문 기명 owner/hash/revision과 고정 key로 기존 proposal/resolve/Cell document prepare를 사용하고 실행 전 관계를 연결한다. 별도 admit은 기존 Mission owner의 evidence/generation/fence/claims/독립 approver 규약을 유지한다. 결과는 기존 원장에서 읽어 ACTION_SUCCEEDED와 GOAL_CONFIRMED를 구분한다.
-- 증거: 원격 Model PC101 PASS/NEW0. 초기 self-lock과 view projection 신규 실패를 수정했고 기존 실패 목록은 변경하지 않았다. docs/validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md 참조.
-- gate 변화: backend/source fixture만 확인했다. Console UI·위험 adapter·최종 독립 검토·최신 main 착지·CI·서명 배포·실제 Discord 왕복·FIELD는 미완료다. 운영 메시지·provider·장치 명령 없음.
-
-추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
-
-2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
-
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
 - 변경: `progress.md`, `logs.md` 추가
 - 증거: `python -m pytest src/fleet/test -q` 216 passed, 5 skipped (2026-09-15 Windows, 미커밋 WIP 포함 작업 트리); `python -m pytest src/fleet/test/test_boundaries.py -q` 6 passed
@@ -3359,3 +3349,14 @@
 - 변경: 같은 tasks DB의 named 원문/hash/revision 검토 원장과 기존 operator/actor/key/goal Task 연결을 추가했다. 검토/접수와 회신 intent는 atomic이며 기존 Task 결과를 읽어 상태별 intent를 예약한다. UNKNOWN과 재시작 SENDING은 완료로 승격하거나 맹목 재전송하지 않는다. reply opt-in은 기본 false이며 초기화 실패 시 Gateway를 취소한다.
 - 증거: 원격 영향군192 PASS/NEW0, 실제 Chromium6 PASS/NEW0. wheel/sdist·비밀 경계·권한/중복/회신 fence/lifespan 실패 회귀를 포함한다. 일부 원격 실행의 자원 fallback은 성능 수용 증거가 아니다. docs/validation/discord-fleet-pipeline-2026-10-12/workflow-source.md 참조.
 - gate 변화: source/fake API 경로만 확인했다. Mission/Cell Job과 위험 사건 adapter·독립 크기/권한 검토·최신 main 착지·CI·서명 배포·운영 왕복·실제 로봇 수용은 남았다. provider/장치 명령·채널 전송 없음.
+
+## 2026-10-12 · aa10b5080 · D-687 Discord Mission·Cell owner adapter
+
+- 변경: 원문 기명 owner/hash/revision과 고정 key로 기존 proposal/resolve/Cell document prepare를 사용하고 실행 전 관계를 연결한다. 별도 admit은 기존 Mission owner의 evidence/generation/fence/claims/독립 approver 규약을 유지한다. 결과는 기존 원장에서 읽어 ACTION_SUCCEEDED와 GOAL_CONFIRMED를 구분한다.
+- 증거: 원격 Model PC101 PASS/NEW0. 초기 self-lock과 view projection 신규 실패를 수정했고 기존 실패 목록은 변경하지 않았다. docs/validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md 참조.
+- gate 변화: backend/source fixture만 확인했다. Console UI·위험 adapter·최종 독립 검토·최신 main 착지·CI·서명 배포·실제 Discord 왕복·FIELD는 미완료다. 운영 메시지·provider·장치 명령 없음.
+
+추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+
+2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
+
