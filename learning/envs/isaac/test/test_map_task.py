@@ -150,3 +150,40 @@ def test_final_output_invalid_clock_clears_previous_intent(now):
     owner.submit(intent(), observed_at=10., now=10.01)
     assert owner.select_output(now=now).linear == 0
     assert owner.halted
+
+
+def test_two_simulation_owners_reject_cross_device_commands_and_reset_independently():
+    a = SimulationOwner(device_id='isaac-pinky-a')
+    b = SimulationOwner(device_id='isaac-pinky-b')
+    a.begin(1); b.begin(1)
+    ia = intent(device_id='isaac-pinky-a')
+    ib = intent(device_id='isaac-pinky-b')
+    assert a.submit(ia, observed_at=10., now=10.01).linear == .03
+    assert b.submit(ib, observed_at=10., now=10.01).linear == .03
+    assert b.submit(ia, observed_at=10., now=10.02).linear == 0
+    assert b.halted and a.select_output(now=10.02).linear == .03
+    b.begin(2)
+    assert b.submit(intent(2, device_id='isaac-pinky-b'), observed_at=10., now=10.03).linear == .03
+    a.stop()
+    assert a.select_output(now=10.04).linear == 0
+    assert b.select_output(now=10.04).linear == .03
+    a.begin(2)
+    assert a.submit(ia, observed_at=10., now=10.05).linear == 0
+    assert a.halted and b.select_output(now=10.05).linear == .03
+
+
+def test_one_simulation_owner_expiry_does_not_expire_another_owner():
+    a = SimulationOwner(device_id='isaac-pinky-a')
+    b = SimulationOwner(device_id='isaac-pinky-b')
+    a.begin(1); b.begin(1)
+    a.submit(intent(device_id='isaac-pinky-a'), observed_at=10., now=10.01)
+    b.submit(intent(device_id='isaac-pinky-b', issued_at=10.05), observed_at=10.05, now=10.06)
+    assert a.select_output(now=10.11).linear == 0
+    assert a.halted and b.select_output(now=10.11).linear == .03
+    assert not b.halted
+
+
+@pytest.mark.parametrize('device_id', ['real-pinky', 'isaac-pinky-c', '', None, True])
+def test_simulation_owner_refuses_non_simulation_identity(device_id):
+    with pytest.raises(ValueError, match='simulation device'):
+        SimulationOwner(device_id=device_id)
