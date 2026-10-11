@@ -233,7 +233,7 @@ def test_map_context_keeps_place_names_off_the_floor(site):
             expect(page.locator("#map-places")).to_be_hidden()
             assert page.locator("#map-readouts").get_attribute("open") is None
             if out := os.environ.get("ROSY_SHOT_DIR"):
-                for width, height in [(1440, 1000), (390, 844)]:
+                for width, height in [(1440, 1000), (1200, 800), (390, 844)]:
                     page.set_viewport_size({"width": width, "height": height})
                     page.clock.run_for(1500)
                     page.screenshot(path=str(Path(out) / f"console-map-closed-{width}.png"), full_page=True)
@@ -242,7 +242,7 @@ def test_map_context_keeps_place_names_off_the_floor(site):
             expect(page.locator("#map-places")).to_be_visible()
             expect(page.locator("#map-places li").first).to_have_text("남서 · 0.00, 0.00 m")
             if out := os.environ.get("ROSY_SHOT_DIR"):
-                for width, height in [(1440, 1000), (390, 844)]:
+                for width, height in [(1440, 1000), (1200, 800), (390, 844)]:
                     page.set_viewport_size({"width": width, "height": height})
                     page.clock.run_for(1500)
                     page.screenshot(path=str(Path(out) / f"console-map-open-{width}.png"), full_page=True)
