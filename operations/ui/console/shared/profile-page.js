@@ -36,15 +36,18 @@ async function load() {
 }
 function failure(error) {
   if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') {
+    for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;
     $('profile-login').hidden = false;
     $('profile-login').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경' : '로그인';
     status('로그인과 첫 비밀번호 변경을 완료한 뒤 내 프로필을 사용할 수 있습니다.', 'warning');
+    $('profile-login').focus();
   } else if (error.code === 'CURRENT_PASSWORD_INCORRECT') {
     status('현재 비밀번호가 맞지 않습니다. 다시 확인하세요.', 'warning');
   } else if (error.status === 422 || error.status === 400) {
     status('입력 조건을 확인하세요. 표시 이름은 1~80자, 새 비밀번호는 8자 이상이며 ID·현재 비밀번호와 달라야 합니다.', 'warning');
   } else if (error.status === 403) {
+    for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;
     $('profile-login').hidden = false;
     status('내 프로필은 사람 계정 로그인으로 사용할 수 있습니다.', 'warning');
