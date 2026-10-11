@@ -6,7 +6,7 @@ import json
 import pytest
 
 from rosy.decision.deliberation import canonical
-from rosy.decision.deliberation.contracts.billing import CostEvidence, CallResult
+from rosy.decision.deliberation.contracts.billing import CostEvidence, CallResult, usd
 from rosy.decision.deliberation.providers.versioned_request import prepare_request
 from test_versioned_cli import setup
 
@@ -57,3 +57,13 @@ def test_legacy_cli_call_still_returns_tuple_two_without_cost_metadata():
     p, bound, _, provider = setup()
     result = asyncio.run(provider(p, bound, (), 2, budget_usd=.05))
     assert type(result) is tuple and len(result) == 2
+
+
+@pytest.mark.parametrize('amount', [10 ** 1000, True, float('nan'), float('inf'), -1])
+def test_invalid_amounts_fail_with_value_error_including_huge_integer(amount):
+    with pytest.raises(ValueError): usd(amount)
+
+
+@pytest.mark.parametrize('raw', ['{', 'null', '[]', '{"schema":true}'])
+def test_malformed_cost_json_fails_with_value_error(raw):
+    with pytest.raises(ValueError): CostEvidence(raw)
