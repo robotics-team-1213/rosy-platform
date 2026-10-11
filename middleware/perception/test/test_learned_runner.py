@@ -54,6 +54,40 @@ def test_open_and_infer(tmp_path):
     assert r.latency_ms >= 0
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
+@pytest.mark.parametrize("method", ["infer", "infer_mask", "infer_drivable", "infer_with_mask"])
+def test_legacy_inference_refuses_other_road_semantics_before_session(tmp_path, semantic, method):
+    folder = _model_dir(tmp_path)
+    path = folder / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": semantic})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    model = LaneSegModel.open(folder, session_factory=_factory(n_classes=3))
+
+    def refuse_session(_):
+        pytest.fail("incompatible semantics reached inference")
+
+    model._session.run = refuse_session
+    with pytest.raises(ManifestError, match="drivable semantic"):
+        getattr(model, method)(np.zeros((240, 320, 3), np.uint8))
+
+
+@pytest.mark.parametrize("semantic", [None, "current_road_region/1"])
+@pytest.mark.parametrize("method", ["infer", "infer_mask", "infer_drivable", "infer_with_mask"])
+def test_legacy_inference_keeps_existing_road_semantics(tmp_path, semantic, method):
+    folder = _model_dir(tmp_path)
+    path = folder / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    road = {"index": 2, "name": "drivable", "role": "drivable"}
+    if semantic is not None:
+        road["semantic"] = semantic
+    doc["output"]["classes"].append(road)
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    model = LaneSegModel.open(folder, session_factory=_factory(n_classes=3))
+    assert getattr(model, method)(np.zeros((240, 320, 3), np.uint8)) is not None
+
+
 def test_open_refuses_tampered_file(tmp_path):
     d = _model_dir(tmp_path)
     (d / "model.onnx").write_bytes(b"other")
