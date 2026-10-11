@@ -3212,3 +3212,10 @@
 - 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 · 583db17a3 · fix: 네 문서의 공통 헤더 box model 통일
+
+- 변경: 공통 Fleet 헤더의 ui-topbar에 border-box를 명시했다. styles.css 유무에 따라 site-map/cell의 E-Stop 세로 위치가 console/install보다 8px 내려가는 원인을 공통 CSS 한 줄에서 고쳤다. 버튼 크기·접근성·권한·명령 동작과 strict 시험은 유지한다.
+- 증거: main 063676cbcb의 CI 실패를 같은 immutable SHA의 원격 Chromium에서 재현했다(1 failed, 1 passed, NEW 1). 수정 583db17a3의 기존 browser/header/palette/shared controls 시험은 원격 54 passed, NEW 0. 독립 안전 소스 검토 승인. 최종 main 통합/CI는 별도 확인한다.
+- gate 변화: 공통 헤더 소스 및 원격 브라우저 계약 확인. 사이트 배포·현장 E-Stop 수용·Isaac/Fleet 주행 수용은 승격하지 않는다.
+- 교훈: 공통 헤더의 높이 계산을 각 문서의 전역 스타일에 의존하면 같은 컴포넌트도 배치가 달라진다.
