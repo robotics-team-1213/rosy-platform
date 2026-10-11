@@ -48,7 +48,8 @@ def test_durable_dedup_owner_read_and_edit_rejection(tmp_path):
     restarted = ChannelRequests(journal.path, journal.config, accounts)
     assert restarted.read("op")[0] == first.json()
     assert restarted.read("other") == []
-    body = envelope(); body["content"] += " edited"
+    body = envelope()
+    body["content"] += " edited"
     assert post(client, body).status_code == 409
     assert client.get("/api/fleet/channel-requests").json()["rows"] == [first.json()]
     import sqlite3
@@ -64,7 +65,8 @@ def test_durable_dedup_owner_read_and_edit_rejection(tmp_path):
 ])
 def test_forbidden_transport_input(tmp_path, changes):
     client, journal, _ = fixture(tmp_path)
-    body = envelope(); body.update(changes)
+    body = envelope()
+    body.update(changes)
     assert post(client, body).status_code in (403, 422)
     assert journal.read("op") == []
 
@@ -76,7 +78,8 @@ def test_transport_auth_freshness_revocation_and_capacity(tmp_path):
     assert client.post("/api/fleet/channel-requests/discord", json=envelope(),
                        headers={"Authorization": "Bearer operator-token"}).status_code == 401
     assert post(client, envelope()).status_code == 200
-    body = envelope(); body["message_id"] = USER
+    body = envelope()
+    body["message_id"] = USER
     assert post(client, body).status_code == 503
     accounts["op"] = "viewer"
     assert post(client, envelope()).status_code == 403
@@ -126,7 +129,8 @@ def test_create_app_wiring_requires_accounts_and_isolated_key(tmp_path):
                      start_task_dispatcher=False)
     client = TestClient(app)
     assert client.get("/api/fleet/channel-requests").status_code == 401
-    assert client.get("/api/fleet/channel-requests", headers={"Authorization": "Bearer operator-secret"}).json() == {"rows": []}
+    response = client.get("/api/fleet/channel-requests", headers={"Authorization": "Bearer operator-secret"})
+    assert response.json() == {"rows": []}
 
 
 def test_transport_rejects_oversize_and_malformed_signature(tmp_path):
@@ -148,7 +152,8 @@ def test_evidence_producer_credential_cannot_be_transport_key(tmp_path, service_
     config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
                            transport_key=KEY, users={USER: "operator-1"})
     with pytest.raises(ValueError, match="isolated"):
-        install_channel_feature(client.app, config=config, task_service=tasks,
+        install_channel_feature(
+            client.app, config=config, task_service=tasks,
             principals={}, site_logins={}, require_operator=None, read_guard=[],
             console=client.app.state.console, existing_tokens=(), secret_owners=())
     assert not hasattr(client.app.state, "channel_requests")
@@ -170,7 +175,8 @@ def test_bot_token_file_is_optional_private_and_isolated(tmp_path, kind):
     config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
                            transport_key=KEY, users={USER: "operator-1"}, bot_token_file=str(path))
     with pytest.raises(ValueError) as error:
-        install_channel_feature(client.app, config=config, task_service=tasks, principals={}, site_logins={},
+        install_channel_feature(
+            client.app, config=config, task_service=tasks, principals={}, site_logins={},
             require_operator=None, read_guard=[], console=client.app.state.console,
             existing_tokens=(), secret_owners=())
     assert token not in str(error.value) and KEY not in str(error.value)

@@ -56,7 +56,8 @@ class DiscordGateway:
                 raise GatewayStop("Discord Bot identity mismatch")
             resume = data.get("resume_gateway_url", self.url)
             parsed = urlsplit(resume)
-            if (parsed.scheme != "wss" or not re.fullmatch(r"gateway(?:-[a-z0-9-]+)?\.discord\.gg", parsed.hostname or "")
+            if (parsed.scheme != "wss"
+                    or not re.fullmatch(r"gateway(?:-[a-z0-9-]+)?\.discord\.gg", parsed.hostname or "")
                     or parsed.port is not None or parsed.username is not None or parsed.password is not None
                     or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
                 raise GatewayStop("Discord resume endpoint refused")
