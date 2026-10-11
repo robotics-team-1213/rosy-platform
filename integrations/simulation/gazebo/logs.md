@@ -298,3 +298,9 @@
 - 변경: map_v2_fleet_real.launch.py의 map_variant:=training-curved가 world와 lane_graph를 같은 파생 번들에서 선택한다. 기본 실행은 기존 실물 기준 맵이다.
 - 증거: bb6347eba의 맵·그래프·런치 관련 모델 PC 원격 pytest 57 passed, known_failures 0 new/0 known. 시뮬레이터 실행·신호 준수·두 로봇 Fleet 수용은 아직 확인하지 않았다.
 - gate 변화: 없음. 파생 맵의 ROS-SIM 수용은 별도다.
+
+## 2026-10-12 · 785b46314 · feat(sim): 두 대 Gazebo의 공통 curved 맵 선택
+
+- 변경: D-676 사용자 분담에 따라 Isaac은 한 대 학습·완주, 다른 PC의 Gazebo는 두 대 Fleet 검증으로 구분한다. gz_multi의 world_name:=map_v2_fleet_curved.world가 Isaac과 같은 training-curved/worlds/map_v2_fleet_real.world를 선택한다. 시각 차선 곡률만 바뀌므로 외곽 충돌 벽의 기존 occupancy map을 공유한다. 두 대는 분리된 spawn_poses를 명시한다.
+- 증거: AI PC 원격 world_profiles 11개 PASS, known_failures0NEW. 함께 요청한 gz_multi Core/run-spec 모듈은 ROS launch import 조건이 있어 이 결과로 검증됐다고 주장하지 않는다. 두 로봇 native 실행·카메라·Fleet·완주·신호 수용은 아직 미확인이다.
+- gate 변화: 없음. 이전 단일 로봇 ROS-SIM 결과를 새 curved 두 대 수용으로 승격하지 않는다.

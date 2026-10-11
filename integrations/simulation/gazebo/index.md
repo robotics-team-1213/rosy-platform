@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 785b46314 · feat(sim): 두 대 Gazebo의 공통 curved 맵 선택
 - 2026-10-10 · bb6347eba · feat(sim): 곡률 학습 맵 선택
 - 2026-10-10 · 5aa301e83 · feat(sim): 카메라 SIM 런치가 앞 미리보기를 낸다 (D-605, D-601 B)
 - 2026-10-10 · uncommitted · fix(sim): SIM Fleet 공용 사이트 설정 (D-601 B)
 - 2026-10-07 · uncommitted · test(sim): D-495/D-498 교차로 회전 SIM 수용 (모델 PC)
-- 2026-10-06 · uncommitted · fix(sim): sim IR 값을 worker 유효 범위에 맞춤 (리뷰)
