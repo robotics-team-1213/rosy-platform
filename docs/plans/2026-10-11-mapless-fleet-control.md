@@ -136,8 +136,19 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | 목표 등록 | 완료 | 현재 대화의 active goal; 예산 제한 없음 |
 | 격리 작업 위치 | 완료 | `.worktrees/wt-mapless-control-384416`, `feat/mapless-fleet-control`; X: session과 연결 |
 | 현재 기능·공백 조사 | 진행 | camera lane CLI, LOCALIZED-only teach, profile example roads, tools-tab formation 확인 |
+| Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
+| Task 2 순수 편집 계산 | 진행 | 빈 초안·요소 추가·명시적 검토 및 빈 지도 fitView 구현, Node 20 PASS; 입력 화면·브라우저 연결은 다음 단계 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
 
 이 계획 작성은 구현·배포 완료가 아니다. 기존 배포 `367f6a90f41e`는 이전 지도 안정화와 작업 영역 변경의 증거이며 이번 지도 없는 조사 기능의 배포 증거로 쓰지 않는다.
+
+### 2026-10-11 실행 근거
+
+- 이전 goal turn: 계획 작성·격리 worktree·baseline 실행으로 progress.
+- baseline aa1e1ad9c: 원격 51 PASS, NEW 0; 초기 harness 0 errors/23 stale verification warnings.
+- RED cdd8a77c2: 새 요구의 세 시험이 survey/facilities 미지원으로 실패했다. 첫 RED의 lane 필수 필드 누락은 fixture에서 고쳤으며 검증된 RED는 별도 `logs/survey-red-retry/run-1.txt`다.
+- 구현 fb3c1a8c8: 모델 PC 원격 88 PASS, NEW 0 (`logs/survey-green-model/run-1.txt`). AI PC SSH banner timeout은 시험 실패와 별도로 기록하고, 종결된 실패 runner 대신 연결 가능한 모델 PC에서 실행했다. GREEN 실행은 23.6 free cores/8.6 GB 기준 통과.
+- 공유 ADR D-654가 다른 active branch에 있어 현재 snapshot에 없음을 gap으로 기록했다. D-655 index row는 기존 table 안에 둔다. 다음 main 동기화에서 실제 ADR 도착 여부를 확인하고 해당 gap을 제거한다.
+- 순수 UI helper Node 20 PASS; 아직 실제 입력 화면이나 새 기능 배포 수용은 아니다.

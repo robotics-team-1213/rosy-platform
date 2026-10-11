@@ -643,6 +643,7 @@
 | D-651 | 작업 중심 Fleet 지도와 선택 로봇 작업면 | Accepted (2026-10-11) |
 | D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers | Accepted (2026-10-11; internal shadow only, no command or wire changes) |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 | Accepted |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
 
@@ -677,4 +678,3 @@
 - Status: Accepted (2026-10-11).
 - Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
 - Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.
-| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 | Accepted |
