@@ -94,6 +94,11 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
     assert profile.locator('#profile-content b').count() == 0
     profile.reload()
     expect(profile.locator('#profile-name')).to_have_value(name)
+    if output := os.environ.get('ROSY_SHOT_DIR'):
+        for width in (320, 1366):
+            profile.set_viewport_size({'width': width, 'height': 900})
+            assert profile.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            profile.screenshot(path=str(Path(output) / f'profile-{path.rsplit("/", 1)[-1]}-{width}.png'), full_page=True)
     assert writes == [origin + '/api/fleet/auth/profile']
     assert profile.locator('#profile-back').get_attribute('href') == path
 
@@ -210,6 +215,8 @@ def test_first_login_changes_password_before_return_and_does_not_replay_commands
     page.locator('[data-login=password]').press('Enter')
     expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
     expect(page.locator('[data-login=password]')).to_be_focused()
+    if output := os.environ.get('ROSY_SHOT_DIR'):
+        page.screenshot(path=str(Path(output) / 'first-password-change-320.png'), full_page=True)
     expect(page).to_have_url(origin + '/console/login?return=%2Fconsole%3Fview%3Dwork')
     assert page.request.get(origin + '/api/fleet/session').status == 403
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
