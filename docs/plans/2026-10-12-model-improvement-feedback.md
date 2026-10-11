@@ -4,7 +4,7 @@
 
 D-681의 Phase 6을 수행한다. 자동 처리의 성공·실패·결과 불명을 원래 사건에 연결하고, 모델·관측·지도·현장 연결·장치 오류를 구분하여 개선 후보를 독립 평가한다. 사람은 최종 미해결 사건과 평가 정답을 검토한다. 운영 중 학습 결과를 곧바로 활성화하지 않는다.
 
-이 문서는 실행 계획과 source 실행 기록이다. 현재 worker·최종 알림 연결은 구현과 원격 검증 중이다. 사건 1건의 읽기 전용 피드백 export와 기존 녹화 사건 연결을 구현했으며 아래 실행 기록에 근거를 둔다. 후보 비교·승격·운영 활성화는 아직 수행하지 않았다. 실제 데이터 없이 합성 사례를 현장 정답으로 기록하지 않는다.
+이 문서는 실행 계획과 source 실행 기록이다. worker·최종 알림 연결과 사건 1건의 읽기 전용 피드백 export·녹화 사건 연결은 로컬 main에 착지했다. 서비스 활성화·후보 비교·승격은 아직 수행하지 않았다. 실제 데이터 없이 합성 사례를 현장 정답으로 기록하지 않는다.
 
 ## 기존 경로와 책임
 
@@ -42,6 +42,10 @@ RED: 미검수/의견 충돌을 정답으로 변환, 사건 ID 추정, recording
 
 RED: 서로 다른 evaluation 세트 비교, 현재 후보만 분모에서 UNKNOWN 제외, 금지 오류를 평균 점수로 상쇄, 보정 artifact/profile 불일치, 비용 불명 상태에서 비용 개선 승인. GREEN: 같은 manifest의 비교와 회귀 시 거절.
 
+독립 보정 비교의 실행 경로는 `python tools/decision_calibration.py --compare <bundles.json>`이다. Model PC의 고정 입력 파일은 기존 `fit/evaluation/training/reviewed_profile` bundle 2~4개의 배열이며 첫 bundle이 현재 기준이다. 같은 held-out 사건 ID·session/recording ID와 hash·정답·검수자·domain·선택지·평가 한계를 요구하고, 각 후보의 기존 데이터 hash·훈련/보정/평가 분리를 다시 검증한다. 전체 프로파일 SHA 중복과 서로 다른 정답 세트는 거절한다.
+
+출력 `rosy.calibration.comparison/1`은 공통 정답 manifest hash, 기준 프로파일 SHA, 후보별 보정 artifact SHA·상태·측정값·회귀 항목을 고정한다. 정확도 하한·보정 coverage 감소, Brier/ECE·보정 오차·p95 지연 증가를 거절하고 금지 오류는 FAIL, 미검수 한계는 HOLD다. 모두 통과해도 상태는 `PASS_COMPARISON_OFFLINE_ONLY`, 운영 승격은 항상 `HOLD`, 현장 수용은 false다. 이 출력은 실제 종결·결과 불명·재발·인수·비용을 missing evidence로 명시한다. 따라서 Task 3의 전체 운영 성과 비교나 Task 4 승격 완료를 뜻하지 않는다.
+
 ## Task 4: 제한된 후보 승격과 복귀
 
 독립 평가와 기존 실행 admission을 통과한 후보만 새 profile revision으로 다음 사건부터 적용한다. 진행 중 사건은 원래 profile·예산·원장·정책을 유지한다. 승격 전 현재 revision과 artifact hash를 복귀 대상으로 기록하고 후보의 수용 근거를 재검증한다.
@@ -62,3 +66,11 @@ RED: 평가 통과만으로 운영 활성화, 진행 중 사건 profile 교체, 
 - 최초 RED 7 NEW 뒤 기본 export/store 23 GREEN, 독립 검토의 원장 무결성 RED 3 NEW 뒤 26 GREEN을 확인했다. 녹화 연결 RED 5 NEW 뒤 실제 export→binder·CLI를 포함한 37 GREEN을 확인했다. 이어 한글 프로파일 해시와 미개입 의미 RED 2 NEW를 고쳐 `c7afe628ca`의 관련 5개 파일 87 passed, exit 0, known-failures NEW 0을 확인했다. 모두 여유 호스트의 source/합성 검증이며 같은 시험의 반복·중복 수를 합산하지 않는다.
 - 로그: `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/feedback-*`. 최종 87개는 `feedback-final-green/run-1.txt`, 현장 PC의 8.9GB 자원 하한을 충족했다.
 - 독립 review의 비용·종결 상태·Unicode 직렬화 지적을 반영했다. 실제 현장 export·팀 검수 정답·품질 개선·최신 worker schema 통합·로컬 착지는 별도 검증하며 이 기록에 포함하지 않는다. Task 3·4와 범용 오류 소유자 분류는 미완료다.
+
+## 판정 근거 연결 checkpoint
+
+후속 source는 검증된 판정 JSON·원래 문제·고정된 두 역할의 전체 프로파일을 시도별 receipt로 보존한다. 사건·입력 hash·관측 revision·역할·종결 상태를 원장의 실제 비용과 같은 transaction에서 검증한다. receipt 변조나 깊은 JSON·범위 밖 숫자는 판정을 거절하되 이미 알려진 호출 비용은 기록한다. worker는 원장 기록이 거절된 판정을 후속 관측 선택에 사용하지 않는다.
+
+export는 같은 읽기 전용 snapshot에서 시도와 receipt를 결합하고 각각 재검증한다. 고아 receipt·다른 입력·원문 필드는 거절한다. 과거 DB의 receipt 누락은 null로 표시한다. 개별 요청의 16KiB 한도를 사건 전체에 적용하지 않으며 전체 export는 1MiB 미만으로 제한한다. 이 자료는 계속 `UNREVIEWED`이고 검수 정답을 만들지 않는다.
+
+이전 export 구현에 새 시험을 실행하여 예상한 6 NEW를 실제로 확인했다. 관련 로그는 `logs/trace-export-valid-red/run-1.txt`이며 적격 AI PC 9GB에서 실행했다. GLM v2 bridge를 포함한 `e0666b3e3f`의 9개 파일 통합 시험은 적격 Model PC 9GB에서 204 passed, exit 0이다. 로그는 `logs/trace-glm-integrated-green/run-1.txt`다. 두 경로의 기준 폴더는 위 source 실행 기록과 같다. 독립 source 검토의 중요 지적은 반영했다. 실제 provider 호출·런타임 admission·팀 검수·훈련·후보 비교·승격은 아직 미완료다.
