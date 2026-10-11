@@ -4,7 +4,7 @@
 
 D-681의 Phase 6을 수행한다. 자동 처리의 성공·실패·결과 불명을 원래 사건에 연결하고, 모델·관측·지도·현장 연결·장치 오류를 구분하여 개선 후보를 독립 평가한다. 사람은 최종 미해결 사건과 평가 정답을 검토한다. 운영 중 학습 결과를 곧바로 활성화하지 않는다.
 
-이 문서는 실행 계획이다. 현재 worker·최종 알림 연결은 구현과 원격 검증 중이며, 이 계획의 피드백 export·후보 비교·승격은 아직 구현하거나 활성화하지 않았다. 실제 데이터 없이 합성 사례를 현장 정답으로 기록하지 않는다.
+이 문서는 실행 계획과 source 실행 기록이다. 현재 worker·최종 알림 연결은 구현과 원격 검증 중이다. 사건 1건의 읽기 전용 피드백 export와 기존 녹화 사건 연결을 구현했으며 아래 실행 기록에 근거를 둔다. 후보 비교·승격·운영 활성화는 아직 수행하지 않았다. 실제 데이터 없이 합성 사례를 현장 정답으로 기록하지 않는다.
 
 ## 기존 경로와 책임
 
@@ -53,3 +53,12 @@ RED: 평가 통과만으로 운영 활성화, 진행 중 사건 profile 교체, 
 ## 검증과 완료
 
 각 Task는 필요한 계약을 읽고 작은 RED/GREEN 시험을 먼저 만든다. 커밋 HEAD를 시험 PC에 전달하여 원격 pytest를 실행하고 `test/known_failures.py`로 비교한다. 원격 source 시험, 실제 제공자, 독립 품질, 설치·활성화 readback, 현장 수용을 각각 기록한다. Discord 서버·웹훅 설정은 담당 세션의 범위로 유지한다.
+
+## 2026-10-12 source 실행 기록
+
+- `tools/incident_model_feedback.py`는 정확한 subject/case와 고정된 primary/reviewer 프로파일 파일을 받아 SQLite `mode=ro`·query-only 단일 snapshot에서 원장과 시도를 읽는다. 프로파일 전체 SHA, 합계 비용·시도 수, 불가능한 시도 비용, scope/time에 맞는 종결 receipt를 검증하고 새 출력 파일만 만든다. 원문·worker ID·개인 검수 문구를 export하지 않는다.
+- 기존 `learning/curation/perception/incident_feedback.py`의 기본 `bind`와 schema `/1`은 유지한다. 선택적 `--model-feedback`은 content hash와 정확한 robot/case를 대조해 schema `/2`로 제한된 모델 근거를 붙인다. 검수 상태와 사람의 정답은 유지하며 모델 자료는 `UNREVIEWED`다. content hash 자체는 정답이나 승인 증거가 아니다.
+- 모델 연결·실제 호출·녹화 수집·훈련·후보 승격 없이 기존 사건 결과와 녹화 표식만 처리한다. 결과 불명 비용은 null과 남은 예약 비용으로 보존한다. 미개입은 `DO_NOT_INTERVENE`, 진행 중은 `IN_PROGRESS`, 결과 미확인은 `UNRESOLVED`로 구분한다.
+- 최초 RED 7 NEW 뒤 기본 export/store 23 GREEN, 독립 검토의 원장 무결성 RED 3 NEW 뒤 26 GREEN을 확인했다. 녹화 연결 RED 5 NEW 뒤 실제 export→binder·CLI를 포함한 37 GREEN을 확인했다. 이어 한글 프로파일 해시와 미개입 의미 RED 2 NEW를 고쳐 `c7afe628ca`의 관련 5개 파일 87 passed, exit 0, known-failures NEW 0을 확인했다. 모두 여유 호스트의 source/합성 검증이며 같은 시험의 반복·중복 수를 합산하지 않는다.
+- 로그: `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/feedback-*`. 최종 87개는 `feedback-final-green/run-1.txt`, 현장 PC의 8.9GB 자원 하한을 충족했다.
+- 독립 review의 비용·종결 상태·Unicode 직렬화 지적을 반영했다. 실제 현장 export·팀 검수 정답·품질 개선·최신 worker schema 통합·로컬 착지는 별도 검증하며 이 기록에 포함하지 않는다. Task 3·4와 범용 오류 소유자 분류는 미완료다.
