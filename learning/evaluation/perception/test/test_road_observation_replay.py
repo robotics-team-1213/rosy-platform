@@ -61,7 +61,7 @@ def test_artifact_roundtrip_binds_model_image_and_snapshot_without_truth(tmp_pat
     assert np.all(np.asarray(observed['labels'])[:2] == 255)
     assert observed['preprocessing']['seed_pixels'] == [[5, 1]]
     assert observed['region_reason'] == 'ok'
-    assert decoded['inputs'] == doc
+    assert decoded['inputs'] == json.loads(json.dumps(doc))
     with pytest.raises(ValueError, match='hash'):
         replay.read_artifact(out, '0' * 64)
     before = out.read_bytes()
@@ -100,12 +100,12 @@ def test_invalid_snapshot_preserves_abstention_in_artifact(tmp_path, monkeypatch
 @pytest.mark.parametrize('target', ['model', 'inputs'])
 def test_files_changed_during_inference_do_not_publish(tmp_path, monkeypatch, target):
     replay, model, inputs, _ = bundle(tmp_path, monkeypatch)
-    original = model.session.run
+    original = model._session.run
     def run(image):
         path = model.manifest.folder / 'model.onnx' if target == 'model' else inputs / 'frame.png'
         path.write_bytes(b'changed')
         return original(image)
-    model.session.run = run
+    model._session.run = run
     out = tmp_path / 'out.json'
     assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=inputs,
                                           max_age_ns=100, out=out)) == 2
@@ -122,3 +122,13 @@ def test_readback_refuses_mask_shape_even_with_matching_file_hash(tmp_path, monk
     out.write_text(json.dumps(doc))
     with pytest.raises(ValueError, match='mask'):
         replay.read_artifact(out, sha(out.read_bytes()))
+
+
+def test_input_directory_symlink_does_not_bypass_fixed_input_gate(tmp_path, monkeypatch):
+    replay, model, inputs, _ = bundle(tmp_path, monkeypatch)
+    alias = tmp_path / 'alias'
+    alias.symlink_to(inputs, target_is_directory=True)
+    out = tmp_path / 'out.json'
+    assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=alias,
+                                          max_age_ns=100, out=out)) == 2
+    assert not out.exists()
