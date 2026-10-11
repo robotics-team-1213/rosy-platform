@@ -375,6 +375,8 @@ def test_cell_save_unavailable_does_not_claim_success(browser_site):
     revision = page.locator("#recipe-revision")
     expect(revision).to_contain_text("저장 결과 확인 불가")
     expect(revision).to_contain_text("최신 버전")
+    expect(page.locator("#notice")).to_contain_text("현재 상태를 다시 조회하세요")
+    expect(page.locator("#notice")).not_to_contain_text("HTTP 503")
     assert page.locator("#propose").is_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):

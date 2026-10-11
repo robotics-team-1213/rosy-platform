@@ -30,8 +30,8 @@ test('401 retains the login message and exposes status for the document lock', a
 for (const [body, message, code] of [
   [{detail: {message: 'operator required', code: 'OPERATOR_REQUIRED'}}, 'operator required', 'OPERATOR_REQUIRED'],
   [{detail: {code: 'NOT_FOUND'}}, 'NOT_FOUND', 'NOT_FOUND'],
-  [{detail: 'unavailable'}, 'HTTP 503', undefined],
-  [null, 'HTTP 503', undefined],
+  [{detail: 'unavailable'}, '관제 서버 응답을 확인하지 못했습니다. 연결을 확인한 뒤 현재 상태를 다시 조회하세요.', undefined],
+  [null, '관제 서버 응답을 확인하지 못했습니다. 연결을 확인한 뒤 현재 상태를 다시 조회하세요.', undefined],
 ]) {
   test(`Fleet detail interpretation: ${message}`, async () => {
     const {client, calls} = clientFor(503, body);
@@ -75,4 +75,15 @@ test('abort propagates without being converted to an authentication failure', as
   await assert.rejects(client('/api/fleet/estop', {method: 'POST', signal: controller.signal}),
     {name: 'AbortError'});
   assert.equal(sent, 0);
+});
+
+test('lost network explains readback and never replays a command', async () => {
+  let sent = 0;
+  const failure = new TypeError('Failed to fetch');
+  const client = createFleetClient({origin: 'https://fleet.test',
+    fetchImpl: async () => { sent += 1; throw failure; }});
+  await assert.rejects(client('/api/fleet/estop', {method: 'POST'}), error =>
+    error === failure && /관제 연결을 확인하지 못했습니다/.test(error.message)
+      && /현재 상태를 다시 조회/.test(error.message) && error.status === undefined);
+  assert.equal(sent, 1);
 });
