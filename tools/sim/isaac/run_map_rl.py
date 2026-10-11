@@ -254,6 +254,11 @@ def main():
 
         world.reset()
         if front_camera is not None:
+            from native_scan import NativeScan
+            from core_common.robot_body import NOMINAL_BODY
+            geometry = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/geometry.yaml').read_text())
+            scan_body = replace(NOMINAL_BODY, rotation_radius_m=geometry['footprint']['rotation_radius_sim_box_m'])
+            native_scan = NativeScan(stage)
             front_camera.initialize()
             position_front_camera()
             intrinsics = front_camera.get_intrinsics_matrix()
@@ -423,9 +428,10 @@ def main():
                                 lane.invalidate('invalid_native_camera')
                             else:
                                 guide = camera_route_guide(task, pose, result, world.current_time)
-                                lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
-                                    stamp=float(image['rendering_time']), source_now=world.current_time,
-                                    pose=pose[:3], guide=guide)
+                                if lane.observe_scan(native_scan.capture(world.current_time), body=scan_body):
+                                    lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
+                                        stamp=float(image['rendering_time']), source_now=world.current_time,
+                                        pose=pose[:3], guide=guide)
                                 if camera_frames == 0:
                                     import cv2
                                     cv2.imwrite(str(output / f'front-camera-{epoch}-{phase}-{seed}.png'), rgba[:, :, 2::-1])
