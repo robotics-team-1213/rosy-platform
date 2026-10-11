@@ -254,8 +254,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_840,
-        "split: independently re-judged on 2026-10-11 by survey_feature_review at 52840 under D-655 "
+        53_010,
+        "split: independently re-judged on 2026-10-11 by survey_feature_review at 53010 under D-655 "
+        "after reviewed camera endpoint connections joined a focused camera-import controller. "
+        "Topology dedup preserves explicit place IDs and robot-kind restrictions; pending writes "
+        "are bound to file, choices, draft edits and session context. Node 29 and remote Chromium "
+        "16 pass, including desktop/mobile asynchronous races. Retain +150 and every file ceiling. "
         "(docs/plans/2026-10-11-mapless-fleet-control.md): protocol owns survey validation, World owns "
         "freshness/recording continuity, Fleet teach owns recording/CAS and the existing UI owner "
         "owns its focused survey controller and pure draft edits. The model seam is 770 lines. "

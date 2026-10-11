@@ -79,6 +79,8 @@
 
 ## Task 4: 선택 로봇 작업 영역에 지도 기록·대형 연결
 
+현재 착수 순서: 선택 로봇에서 기존 지도 기록 화면으로 ID를 전달하고, 기존 대형 패널을 작업 맥락에서 연다. 선택은 명령을 발행하지 않는다. 대형의 실제 리더·팔로워 및 목적지를 받을 리더를 표시하며 기존 권한·준비 조건·확인·상태 조회를 재사용한다. 이 연결 뒤 Task 5 개입/충돌 회귀, Task 6 통합·배포·실제 사이트 확인으로 진행한다.
+
 **Files:**
 - Modify: `operations/ui/console/index.html`, `console.js`, `roster.js`, `formation.js`, `shared/styles.css`.
 - Reuse: existing teach routes, formation routes and trip/goal handlers.
@@ -139,7 +141,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
 | Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
-| Task 3 카메라 관측 누적 | 진행 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어, 최종 원격 12 PASS/NEW 0. endpoint 연결 후보 표시·검토가 남음 |
+| Task 3 카메라 관측 누적 | 완료 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어 및 명시적 endpoint 연결 구현. 연결·비동기 경합 원격 16 PASS/NEW 0, Node 29 PASS. main 통합·배포·실물 정확도는 Task 6 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
