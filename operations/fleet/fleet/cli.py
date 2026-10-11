@@ -683,6 +683,7 @@ def run_console(args: argparse.Namespace) -> None:
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
+                     autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
