@@ -17,12 +17,14 @@ CORE common Safety/Command, calibration-session lease and camera-fault action el
 - Release/model/harness/mover selection: 264 passed with one move-registry fixture failure. After listing the seven new independently reviewed move units, mover suite on `affac5740`: 23 passed, zero NEW.
 - Local lint: zero errors; staleness/history warnings retain existing gate states. Pytest ran only through the committed-HEAD remote runner. One initial invocation named a nonexistent test path and collected nothing; it provides no acceptance evidence and was replaced by the actual model release tests.
 
-## Remaining acceptance
+## Integration and deployment acceptance
 
 Latest-main merge and affected-test recheck completed through `tools/land.py --tests auto`, three rounds, final source `5da31e05cb8965ad40a7c44b4094470d4f138461`. Final round: 8,342 passed / 263 skipped / 30 subtests and Perception 3,028 passed / 112 skipped / 62 subtests; zero NEW in both logs. Image context and exact closure fixes on `33125bf1c` separately passed 45 checks and received independent source approval. Main fast-forward integration and publication completed; pre-push reused the landing records and passed the additional 208 checks.
 
-Exact remote CI and signed Site/AI/Model-PC deployment remain an active separate acceptance goal. CI run `38126423478` failed only the Fleet header browser group: a shared tooltip intercepted a normal inbox click (1 failed / 1,566 passed in that group). The other 13 groups, including ROS colcon/build/node boot, passed. Unsigned site build `38126423462` succeeded but was not signed/applied; staged model sequence 21 has no READY marker. The previous `53c557136957` candidate failed map-label browser CI and was likewise not applied.
+The first exact CI run `38126423478` failed only the Fleet header browser group: a shared tooltip intercepted a normal inbox click (1 failed / 1,566 passed in that group). The other 13 groups, including ROS colcon/build/node boot, passed. Unsigned site build `38126423462` succeeded but was not signed/applied; staged model sequence 21 has no READY marker. The previous `53c557136957` candidate failed map-label browser CI and was likewise not applied.
 
 Shared tooltip repair `edd25738b1` preserves coordinate-based hover, normal underlying clicks, keyboard focus and peer activation dismissal. Independent source and narrow 811-line size review approved it after the overlapping-described-control regression was strengthened. Exact committed-source remote browser and architecture checks: 56 passed, zero NEW. This evidence does not elevate the pending full CI or runtime gates.
+
+Final source `2891e10061233b1067fd315cdcbad78bdb1b5d46` passed full CI `38128614393` (all 14 test groups and ci-result), unsigned Site build and Android. Signed Site, model sequence 22 and AI deployment completed with exact installed source/process/API readback and map/model/Review data continuity; see [deployment.md](deployment.md). Later documentation commits record that accepted runtime source rather than asserting that those commits are installed.
 
 Offline Pinky robots remain intentionally offline on their existing automatic-update path; no robot motion, E-stop reset or field/ARM64 installation is claimed.
