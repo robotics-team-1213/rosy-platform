@@ -9,6 +9,7 @@
 | 3 | D-660 현재 판단/만료/종료 근거와 읽기 API; 당시 상태·자연 해소·조치 미확인 표시 | `b196ab2aa`, judgment-green: 99 passed, NEW0; Node 22 passed |
 | 3/4 | D-661 이름 있는 owner claim, case/revision/freshness 경쟁 검사, resolver·명령과 직렬화, 재시작 인수 복원 | `30d994bdb`, handoff-green-2: 127 passed, NEW0 |
 | 4 | 기존 Fleet DB에 알림 outbox; Discord/Slack/Telegram fixed destination; 기본 OFF; 종료/인수/만료 직전 guard·부분 실패·UNKNOWN·secret 비노출 | `6458e94eb0`, notifications-green-3-retry: 149 passed, NEW0 |
+| 통합 | 팀 통지·사람 인수 `fleet/incidents` 분리, 최신 main 순수 진척·지연 schema import와 설치 보호 검사의 통합 | `7afb0e2c4f`, 최종 영향군493 passed/NEW0; 로컬 FF 완료, push 없음; [착지 증거](landing.md) |
 | 5 | D-662 기존 learning 평가 holder에 독립 offline checker; 검수/한계 미정 HOLD, 물리 split/hash, P/N/ABSTAIN/자연 해소/위험 평가 | `bf71282cc5`, acceptance-green: 12 passed, NEW0; 검토 보강 후 최종 결과는 착지 기록 |
 | 6 | 기존 D-640 모델 런 계획의 dispatcher 경로 갱신 | 0~5 실제 수용 대기 HOLD; 구현/실제 provider 호출 없음 |
 
