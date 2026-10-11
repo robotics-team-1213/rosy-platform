@@ -52,7 +52,7 @@ def test_actual_unknown_export_preserves_liability_and_missing_evidence(tmp_path
 
 
 @pytest.mark.parametrize('fault', ['session_leak', 'recording_leak', 'hash_leak', 'duplicate',
-                                  'digest', 'policy', 'profile', 'extra_export', 'rule_masquerade'])
+                                  'digest', 'policy', 'profile', 'extra_export', 'rule_masquerade', 'primary_masquerade'])
 def test_changed_scope_lineage_or_strategy_is_rejected(tmp_path, fault):
     cohort, exports = evidence(tmp_path)
     lineage = cohort['evaluation'][0]
@@ -65,6 +65,7 @@ def test_changed_scope_lineage_or_strategy_is_rejected(tmp_path, fault):
     elif fault == 'policy': cohort['candidates'][0]['policy_revision'] = 'changed'
     elif fault == 'profile': cohort['candidates'][0]['profile_sha256'] = 'f' * 64
     elif fault == 'extra_export': exports.append(copy.deepcopy(exports[0]))
+    elif fault == 'primary_masquerade': cohort['candidates'][0]['strategy'] = 'primary'
     else: cohort['candidates'][0]['strategy'] = 'rule'
     with pytest.raises(ValueError): compare(cohort, exports)
 

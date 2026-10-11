@@ -5,7 +5,7 @@ import json
 
 from rosy.decision.deliberation import Problem, canonical
 from rosy.decision.deliberation.judgment import Judgment, judgment
-from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile
+from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile, incident_profiles
 from rosy.decision.deliberation.contracts.billing import CostEvidence
 from .contract import CaseScope, micros
 
@@ -24,15 +24,14 @@ def _checked(scope, receipt):
         raise ValueError('TYPED_MODEL_RECEIPT_REQUIRED')
     raw = json.loads(receipt.payload_json)
     fields = {'schema', 'profiles', 'role', 'problem', 'judgment'}
-    versioned = type(raw) is dict and raw.get('schema') == 'rosy.incident.model_receipt/2'
+    single = type(raw) is dict and raw.get('schema') == 'rosy.incident.model_receipt/3'
+    versioned = type(raw) is dict and (raw.get('schema') == 'rosy.incident.model_receipt/2' or single and 'cost_evidence' in raw)
     if (type(raw) is not dict or set(raw) != fields | ({'cost_evidence'} if versioned else set())
-            or raw['schema'] not in {'rosy.incident.model_receipt/1', 'rosy.incident.model_receipt/2'} or canonical(raw) != receipt.payload_json
-            or type(raw['profiles']) is not list or len(raw['profiles']) != 2):
+            or raw['schema'] not in {'rosy.incident.model_receipt/1', 'rosy.incident.model_receipt/2', 'rosy.incident.model_receipt/3'} or canonical(raw) != receipt.payload_json
+            or type(raw['profiles']) is not list or len(raw['profiles']) != (1 if single else 2)):
         raise ValueError('INVALID_MODEL_RECEIPT_FIELDS')
-    profiles = tuple(ModelProfile(**value) for value in raw['profiles'])
-    if (tuple(p.role for p in profiles) != ('primary', 'reviewer')
-            or profiles[0].profile_id == profiles[1].profile_id
-            or hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest() != scope.profile_sha256):
+    profiles = incident_profiles(tuple(ModelProfile(**value) for value in raw['profiles']))
+    if hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest() != scope.profile_sha256:
         raise ValueError('MODEL_RECEIPT_MANIFEST_CHANGED')
     selected = next((p for p in profiles if p.role == raw['role']), None)
     p = Problem(**raw['problem'])
@@ -59,12 +58,12 @@ def model_receipt(scope, problem, bound, checked, *, profiles, cost_evidence=Non
     verified = judgment(problem, bound, checked.payload)
     if verified != checked:
         raise ValueError('FORGED_CHECKED_JUDGMENT')
-    raw = dict(schema='rosy.incident.model_receipt/1',
+    raw = dict(schema='rosy.incident.model_receipt/3' if len(profiles) == 1 else 'rosy.incident.model_receipt/1',
         profiles=[asdict(p) for p in profiles], role=bound.profile.role,
         problem=asdict(problem), judgment=verified.payload)
     if cost_evidence is not None:
         if type(cost_evidence) is not CostEvidence: raise ValueError('TYPED_COST_EVIDENCE_REQUIRED')
-        raw.update(schema='rosy.incident.model_receipt/2', cost_evidence=cost_evidence.payload)
+        raw.update(schema=raw['schema'] if len(profiles) == 1 else 'rosy.incident.model_receipt/2', cost_evidence=cost_evidence.payload)
     receipt = ModelReceipt(canonical(raw))
     _checked(scope, receipt)
     return receipt
