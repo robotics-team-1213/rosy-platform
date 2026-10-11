@@ -18,6 +18,7 @@ E-stop, or CORE's 409. Fleet stopping stops it all: CORE cancels each goal withi
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -49,6 +50,9 @@ class GoalLeases(dict):
         #: there is a task store; without one a dispatch lease is never renewed (it expires).
         self.attempt_open: Optional[Callable[[str, str], bool]] = None
         self._present_at: Optional[float] = None
+        self.pending: dict[str, int] = {}
+        self._stop_epoch = 0
+        self._stop_generation: dict[str, int] = {}
 
     def operator_present(self) -> None:
         """A named operator's console is open (``POST /api/fleet/goal-lease/presence``)."""
@@ -69,26 +73,49 @@ class GoalLeases(dict):
         if source not in SOURCES:
             raise ValueError(f"unknown goal lease source {source!r}")
         self.pop(robot_id, None)
+        options = {}
+        lease = {"state": "unbounded"}
         if self.ttl_s > 0 and goal_lease_supported(caps):
             correlation_id = correlation_id or f"fleet-lease-{uuid.uuid4().hex}"
-            result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id,
-                                                  lease_ttl_s=self.ttl_s)
+            options["lease_ttl_s"] = self.ttl_s
             lease = {"state": "leased", "correlation_id": correlation_id,
                      "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
-        elif correlation_id is None:
-            result = await client.navigation_goal(x, y, yaw)
-            lease = {"state": "unbounded"}
-        else:
-            result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id)
-            lease = {"state": "unbounded"}
+        if correlation_id is not None:
+            options["correlation_id"] = correlation_id
+        stop = (self._stop_epoch, self._stop_generation.get(robot_id, 0))
+        self.pending[robot_id] = self.pending.get(robot_id, 0) + 1
+        try:
+            try:
+                result = await client.navigation_goal(x, y, yaw, **options)
+            except (Exception, asyncio.CancelledError):
+                if stop != (self._stop_epoch, self._stop_generation.get(robot_id, 0)):
+                    try:
+                        await client.navigation_cancel()
+                    except Exception:
+                        logger.exception("late goal cancel for %s failed", robot_id)
+                raise
+            if (stop != (self._stop_epoch, self._stop_generation.get(robot_id, 0))
+                    and not (isinstance(result, dict) and result.get("accepted") is False)):
+                await client.navigation_cancel()
+                raise RuntimeError("navigation goal overlapped a stop; result remains unknown")
+        finally:
+            self.pending[robot_id] -= 1
+            if not self.pending[robot_id]:
+                del self.pending[robot_id]
         if not isinstance(result, dict) or type(result.get("accepted")) is not bool:
             raise RuntimeError("missing navigation goal acknowledgement")
         if result["accepted"] and self.ttl_s > 0:
             self[robot_id] = lease
         return result
 
+    def clear(self) -> None:
+        self._stop_epoch += 1
+        self._stop_generation.clear()
+        super().clear()
+
     async def cancel(self, robot_id: str, client) -> dict:
         """``navigation_cancel`` for the console: the lease stops first, whether the cancel lands or not."""
+        self._stop_generation[robot_id] = self._stop_generation.get(robot_id, 0) + 1
         self.pop(robot_id, None)
         return await client.navigation_cancel()
 
