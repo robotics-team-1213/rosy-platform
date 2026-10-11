@@ -5,6 +5,10 @@ recover — stuck/backup/escape policy, narrow-squeeze policy (backup limits,
           turn space, signs, narrow speed/gate curves).
 route   — longest free straight line from the live scan.
 """
+from control._source_layout import extend_policy_path
+
+extend_policy_path(__path__)
+
 from .modes import MODES, Subject, WANDER_TO_MODE, nose_on_wall, pick_mode
 from .recover import (ESCAPE_MIN_TURN, STUCK_CLEAR_M, ExitSteer,
                       backup_limit_m, escape_may_abort, escape_may_desense,

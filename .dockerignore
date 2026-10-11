@@ -52,6 +52,16 @@
 !middleware/control/drive/planning/
 !middleware/control/drive/planning/nav2/
 !middleware/control/drive/planning/nav2/**
+!middleware/control/drive/planning/grid/
+!middleware/control/drive/planning/grid/**
+!middleware/control/drive/safety/
+!middleware/control/drive/safety/**
+!middleware/control/drive/recovery/
+!middleware/control/drive/recovery/**
+!middleware/control/drive/tracking/
+!middleware/control/drive/tracking/**
+!middleware/control/drive/calibration/
+!middleware/control/drive/calibration/**
 !middleware/devices/pinky/description/
 !middleware/devices/pinky/description/**
 **/__pycache__/

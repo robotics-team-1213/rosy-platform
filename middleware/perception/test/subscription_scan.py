@@ -5,9 +5,7 @@ Resolves a literal topic, a topic built from a for-loop over literal tuples
 as ``qos_profile=``. Unresolvable topics are reported, never skipped.
 """
 import ast
-from pathlib import Path
-
-CONTROL = Path(__file__).resolve().parents[1]/'control'
+from control_sources import control_sources
 
 
 def _literal_rows(node, assignments):
@@ -57,7 +55,7 @@ def _topics(argument, loops):
 def subscriptions():
     """[(relative path, topic or None, qos node, callback source, line)] for the whole package."""
     found = []
-    for path in sorted(CONTROL.rglob('*.py')):
+    for relative, path in control_sources():
         tree = ast.parse(path.read_text(encoding='utf-8'))
         loops = _loop_values(tree)
         for node in ast.walk(tree):
@@ -68,7 +66,6 @@ def subscriptions():
             topic = node.args[1] if len(node.args) > 1 else keywords.get('topic')
             callback = node.args[2] if len(node.args) > 2 else keywords.get('callback')
             qos = node.args[3] if len(node.args) > 3 else keywords.get('qos_profile')
-            relative = path.relative_to(CONTROL).as_posix()
             for name in (_topics(topic, loops) if topic is not None else None) or [None]:
                 found.append((relative, name, qos, ast.unparse(callback) if callback is not None else '',
                               node.lineno))

@@ -15,3 +15,17 @@
 기준 `ca7335b07`의 원격 characterization 257 성공을 확보했고, `1691d395c`에서 Drive 조립을 추출했다. `5faad3583`의 전체 CORE와 실제 Python package 설치 시험은 2575 성공·10 skip, 새 실패 0이다. Feature 전체 1675 성공 및 architecture/harness/Safety 272 성공도 확인했다. 도킹 lock/callback·mode 선점·Nav2 취소·E-stop 순서와 line-follow 기하/복구 배선은 독립 source Safety 승인을 받았다.
 
 이 계획의 첫 조립 단위는 완료다. 기존 장치·ROS evidence를 새 후보의 수용으로 확대하지 않았다. [현재 구조](../reference/core-drive-responsibilities.md), [검증과 남은 항목](../validation/d626-holder-migration-2026-10-11/result.md)을 따른다.
+
+## 2026-10-11 후속 실행 — D-628 추가 조립과 경계
+
+위 결과는 첫 조립 SHA의 기록으로 보존한다. 이후 현재 후보에 다음 소스 단위를 수행했으며 [D-628 실행 계획](2026-10-11-core-drive-remaining.md)의 범위를 따른다.
+
+- 기존 `_battery_config`·`_power_config`와 power/battery 생성을 `core/system/power.py`로 추출했다. 기존 parser 본문·data path·power→battery 순서와 `core.services` 명시적 export를 유지한다.
+- `_traffic_policy_config`·`_signal_observer_binding`과 policy/observer 생성·map/scene 검증·start를 `core/drive/traffic.py`로 추출했다. line manager 생성은 기존 `core/drive/line_follow.py`의 helper가 담당하고 live manual angular provider를 유지한다.
+- US005 추출은 기존 service listener와 recovery/envelope binding의 상대 순서를 보존한다. D-628 CommandManager의 stop/policy/mode invalidation callback prefix는 주행 경계 보강으로 별도 기록한다.
+- D-628 mode epoch·input epoch·불변 candidate 동일성을 정책 전후에 확인한다. 차선은 profile 상한 이후 traffic 검사를 거치고 동적/정책 제한이 곡률을 보존한다. 복구 답변은 현재 근거로 갱신하고 KTURN 후진은 기존 rear 검사를 거친 뒤 reverse body sweep을 확인한다.
+- D-630 기존 Control의 sensing/vision과 Drive 알고리즘은 실제 책임 holder로 분리했다. 기존 ROS/import/resource identity와 CORE feature owner·OMX Arm writer는 유지한다.
+
+remote/known_failures·설치·harness/Safety와 local main `7f391fa2d` 착지는 [확정한 검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 있다. [기존 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md), [현재 CORE 구조](../reference/core-drive-responsibilities.md), [전체 root 판정](../reference/platform-folder-responsibilities.md)을 연결한다. 이전 실패와 수정 후 재검사를 구분하며 CI FULL·ROS/ARM64/장치/현장 수용으로 확대하지 않는다.
+
+같은 NAV mode의 외부 producer/goal identity를 완전히 검증하는 D-442 단계와 action-conditioned 미래 World 예측은 후속 계획이다. 기존 자동 복구·progress watch·REALIGN 기본값은 off이며 새 모델·현장 overlay를 활성화하지 않았다.

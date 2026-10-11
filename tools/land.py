@@ -371,6 +371,12 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         # print no FAILED lines, so known_failures would wave them through.
         if code not in (0, 1):
             raise Stop(f"pytest {' '.join(inv)} exited {code} (log {log}); not landing")
+        if code == 1:
+            report = log.read_text(encoding="utf-8-sig", errors="replace")
+            if ("[tailscale-ssh: process died: signal:" in report
+                    or not any(re.match(r"^FAILED \S", line.strip()) for line in report.splitlines())):
+                raise Stop(f"pytest {' '.join(inv)} exited 1 without usable failure evidence "
+                           f"(log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")

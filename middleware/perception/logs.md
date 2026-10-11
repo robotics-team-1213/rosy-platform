@@ -1422,3 +1422,9 @@
 - 변경: 사용자 요청으로 training-curved 맵을 생성한다. 동쪽 S자 도색과 그래프에 같은 변형을 적용하고 외곽 사각 벽은 시각·충돌 모두 흰색 0.30 m로 둔다. 원본 STL·실물 기준 맵은 유지한다. 벽/차선 접점에 검은 간격을 만들지 않는다.
 - 증거: 모델 PC에서 선행 시험 3건의 미구현 실패를 확인한 뒤 bb6347eba의 맵·그래프·런치 관련 원격 pytest 57 passed, known_failures 0 new/0 known. Isaac/Gazebo 실행·학습·실물 주행은 이 변경의 증거가 아니다.
 - gate 변화: 없음. 파생 맵 자산·호스트 계약만 검증했다.
+
+## 2026-10-11 · fbf513a4d · refactor(perception): 센서·vision과 Drive의 의미 holder 분리 (D-630)
+
+- 변경: 기존 control.control의 순수 계산 50개를 safety 15개, recovery 11개, tracking 6개, calibration 18개로 나눴다. sensing/vision, grid planning, sensor-only Safety adapter와 wander는 해당 인지/Drive holder로 옮겼다. provider·ROS 배포와 control.* import, console script, share/control을 유지한다. source facade는 선언한 package 경로만 연결하고 설치 wheel은 기존 namespace에 한 벌을 둔다. sdist는 선언한 Drive 원본만 포함한다. map_v2_fleet와 260919 MAP FILE.STL의 계보를 유지한다.
+- 증거: 선행 구조 RED eb4535786 이후 canonical 이전 172개 파일의 원본을 독립 대조했다. 170개는 동일하고 sensing 초기화의 source 검색과 paint_localizer 리소스 lookup만 변경했다. Safety/Drive 알고리즘과 활성 sensor-only 구성은 유지한다. 원격 전체 회귀·wheel/sdist 결과는 날짜별 검증 기록에서 구분한다.
+- gate 변화: 없음. 새 후보의 ROS 실행·ARM64 이미지·장치·현장 수용은 별도다.

@@ -30,7 +30,7 @@ if [[ -d /dev/serial/by-id ]] \
   exit 2
 fi
 
-export PYTHONPATH="/repo/contracts/foundation:/repo/operations/fleet:/repo/operations/fleet/test:/repo/middleware/devices/omx/adapter:${PYTHONPATH:-}"
+export PYTHONPATH="/repo/contracts/foundation:/repo/operations/fleet:/repo/operations/world/src:/repo/operations/fleet/test:/repo/middleware/devices/omx/adapter:${PYTHONPATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
 # This synchronous rclpy test owns its executor; launch_testing hooks are not
 # used. Their autoload collection can import unrelated sibling HTTP tests.

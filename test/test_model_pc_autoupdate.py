@@ -92,6 +92,29 @@ def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
         m.unpack(folder / "code.tar", tmp_path / "release")
 
 
+def test_split_perception_archive_requires_its_declared_drive_closure(tmp_path, keys):
+    m = module()
+    helper = {"middleware/perception/control/_source_layout.py": b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="source-holder dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    helper.update({name: b"source\n" for name in m.SPLIT_REQUIRED})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=helper)
+    m.unpack(folder / "code.tar", tmp_path / "complete")
+    for name in m.SPLIT_REQUIRED:
+        assert (tmp_path / "complete" / name).read_bytes() == b"source\n"
+
+
+@pytest.mark.parametrize("path", ["middleware/control/drive/planning/nav2/node.py",
+                                  "middleware/control/drive/unknown/code.py",
+                                  "middleware/control/arm/safety/code.py"])
+def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
+    m = module()
+    folder = candidate(m, tmp_path, keys, extra_files={path: b"pass\n"})
+    with pytest.raises(ValueError, match="approved model-code dependencies"):
+        m.unpack(folder / "code.tar", tmp_path / "release")
+
+
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
     m = module()
     source = tmp_path / "release"

@@ -103,6 +103,12 @@ def _is_test_file(path: str) -> bool:
 def _package_of(path: str, root: dict) -> str:
     """Dotted package of ``path``, used to resolve relative imports."""
     relative = PurePosixPath(path).relative_to(root["path"])
+    mounts = root.get("source_packages", {})
+    holders = [holder for holder in mounts if not holder or str(relative) == holder or str(relative).startswith(holder + "/")]
+    if holders:
+        holder = max(holders, key=len)
+        parent = relative.relative_to(holder).parent if holder else relative.parent
+        return ".".join([mounts[holder], *parent.parts])
     if root["d427_target"] in PACKAGE_DIR_ROOTS:
         (prefix,) = root["import_prefix"]
         return ".".join([prefix, *relative.parent.parts])

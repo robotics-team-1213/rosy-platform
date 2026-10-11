@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from core_features.line_follow import LineFollowConfig
+from core_features.line_follow import LineFollowConfig, LineFollowManager
 from core_features.line_follow.clearance import self_mask_from_config
 from core_features.traffic_policy import TrafficPolicyMode
 from core_features.traffic_policy.manager import APPROACH_MIN_SCALE
@@ -172,6 +172,13 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         lane_return_checkpoint_fraction=float(raw.get(
             "lane_return_checkpoint_fraction", defaults.lane_return_checkpoint_fraction)),
     )
+
+
+def build_line_follow(config: dict[str, Any], *, events, safety) -> LineFollowManager:
+    """Keep the manual angular ceiling live; later bindings remain in CoreServices."""
+    return LineFollowManager(
+        events, config=_line_follow_config(config.get("line_follow", {}) or {}),
+        angular_ceiling=lambda: safety.limits.manual_angular)
 
 
 def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:

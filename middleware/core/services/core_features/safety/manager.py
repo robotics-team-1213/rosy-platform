@@ -12,9 +12,7 @@ from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEviden
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 
-def finite_velocity(linear: float, angular: float) -> bool:
-    return all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-               for value in (linear, angular))
+from core_features.safety.velocity import finite_velocity, limit_velocity, same_curve
 
 
 class TeleopWatchdog:
@@ -445,8 +443,8 @@ class SafetyManager:
             self.policy_reason = why
             return None
         self.policy_reason = ''
-        limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
-                   max(-decision.angular_limit, min(decision.angular_limit, angular)))
+        limited = limit_velocity(linear, angular, decision.linear_limit, decision.angular_limit,
+                                 preserve_curvature=scope == 'line')
         if not self._actuation_required or limited == (0., 0.):
             return limited
         self.policy_reason = 'actuation_unavailable'
@@ -454,14 +452,16 @@ class SafetyManager:
         try:
             if calibration is None or calibration.revision != revision or not self._simulation_actuation_enabled():
                 return None
-            caps = self.clip(self.limits.max_linear, self.limits.max_angular, scope)
+            caps_scope = 'nav' if scope == 'line' else scope
+            caps = self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope)
             self.policy_reason = 'actuation_invalid'
             prepared = calibration.prepare(*limited, angular, now, caps)
             if (not finite_velocity(prepared.motor_linear, prepared.angular) or
                     not finite_velocity(prepared.linear, prepared.angular) or
                     abs(prepared.motor_linear) != abs(prepared.linear) or
                     abs(prepared.linear) > min(.014, caps[0]) or abs(prepared.angular) > min(.1, caps[1]) or
-                    caps != self.clip(self.limits.max_linear, self.limits.max_angular, scope) or
+                    (scope == 'line' and not same_curve(limited, (prepared.motor_linear, prepared.angular))) or
+                    caps != self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope) or
                     not self._simulation_actuation_enabled()):
                 return None
             elapsed = self._policy_clock() - started
@@ -552,9 +552,7 @@ class SafetyManager:
                 # SAF-006: 사람이 있으면 기어가기. 못 보면 이 줄이 없고,
                 # 사라지면 자문이 떼어져서 프로필로 돌아간다.
                 max_l = min(max_l, self.person_linear_cap)
-        l = max(-max_l, min(max_l, linear))
-        a = max(-max_a, min(max_a, angular))
-        return l, a
+        return limit_velocity(linear, angular, max_l, max_a, preserve_curvature=scope == 'line')
 
     def on_battery_percent(self, percent: float) -> Optional[str]:
         """SAF-005: 임계 통과 시 정책 반환. None|'warn'|'critical'."""

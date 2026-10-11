@@ -51,7 +51,10 @@ if not os.path.exists(os.path.join(ROSY, ".git")):
 if not os.environ.get("ROSY_REPO_DIR"):
     # control imports core_common (D-424), so the sparse set carries it too
     subprocess.run(["git", "-C", ROSY, "sparse-checkout", "set", "learning/training/perception/training",
-                    "middleware/perception/control", "contracts/foundation/core_common"], check=True)
+                    "middleware/perception", "middleware/control/drive/safety",
+                    "middleware/control/drive/recovery", "middleware/control/drive/tracking",
+                    "middleware/control/drive/calibration", "middleware/control/drive/planning/grid",
+                    "contracts/foundation/core_common"], check=True)
     subprocess.run(["git", "-C", ROSY, "pull", "--ff-only"], check=True)
 %pip install -q onnx onnxruntime
 for p in (os.path.join(ROSY, "learning", "training", "perception", "training"), os.path.join(ROSY, "learning", "training", "perception"),
