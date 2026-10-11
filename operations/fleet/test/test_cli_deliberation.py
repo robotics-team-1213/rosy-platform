@@ -46,3 +46,23 @@ def test_failure_partial_oversize_unknown_cost_refuses(stdout, code):
     with pytest.raises(ValueError):
         asyncio.run(provider(problem(), (), 1, budget_usd=0.1))
 
+
+def test_opencode_installed_version_uses_pure_without_tool_approval():
+    seen = []
+    async def launch(argv, *args):
+        seen.append(argv)
+        return 0, (json.dumps({'type': 'text', 'part': {'text': json.dumps(reply(problem()))}})
+                   + '\n' + json.dumps({'type': 'step_finish', 'part': {'cost': 0}})).encode()
+    provider = CliProvider(kind='opencode', model='ollama/qwen3-vl:8b-instruct',
+                           profile_id='local', launch=launch, cli_version='1.18.35')
+    assert asyncio.run(provider(problem(), (), 1, budget_usd=0.1))[1] == 0
+    assert seen[0] == ('opencode', 'run', '--pure', '--format', 'json',
+                       '--model', 'ollama/qwen3-vl:8b-instruct')
+
+
+@pytest.mark.parametrize('version', ['1.18.34', 'latest', '', None, ['1.18.35']])
+def test_opencode_unverified_version_refuses_before_launch(version):
+    with pytest.raises(ValueError, match='UNSUPPORTED_OPENCODE_VERSION'):
+        CliProvider(kind='opencode', model='ollama/pinned', profile_id='local',
+                    launch=lambda: None, cli_version=version)
+
