@@ -9,7 +9,7 @@ import uuid
 from core_common.protocol.schemas import FleetJudgmentReceipt
 from rosy.decision.deliberation import Problem, canonical
 from rosy.decision.deliberation.judgment import Judgment, judgment
-from rosy.decision.deliberation.profiles import ModelProfile, bind_profile
+from rosy.decision.deliberation.profiles import ModelProfile, bind_profile, incident_profiles
 from rosy_situation.assessment import Assessment, AssessmentInput, EvidenceRef
 from rosy_situation.snapshot_assessment import POLICY
 from fleet.server.incident_deliberation import FleetBaseline
@@ -23,10 +23,8 @@ class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
                  enabled=False, baseline=None):
-        if (type(enabled) is not bool or type(profiles) is not tuple or len(profiles) != 2
-                or any(type(p) is not ModelProfile for p in profiles)
-                or tuple(p.role for p in profiles) != ('primary', 'reviewer')
-                or len({p.profile_id for p in profiles}) != 2 or len(providers) != 2
+        profiles = incident_profiles(profiles)
+        if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
                 or any(getattr(provider, 'profile', None) != profile for provider, profile in zip(providers, profiles))):
             raise ValueError('EXPLICIT_INCIDENT_WORKER_CONTRACT_REQUIRED')
@@ -203,6 +201,7 @@ class IncidentCaseWorker:
                 (bool(data['objections']) or bool(data['missing_evidence'])
                  or problem.fleet_choice is not None and checked.choice != problem.fleet_choice))
             if review:
+                if len(self.profiles) == 1: await self._finish(scope, 'REVIEW_PROVIDER_NOT_CONFIGURED'); return
                 prior = ((bound, checked),) if checked is not None and problem.fleet_choice is not None else ()
                 secondary = await self._call(scope, problem, 1, prior)
                 if secondary is None: return
