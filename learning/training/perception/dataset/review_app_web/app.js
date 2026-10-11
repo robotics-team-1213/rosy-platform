@@ -2,7 +2,7 @@ import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
-const font = (size, family) => canvasFont(size, family);
+const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
 const modeBadge=document.createElement('ui-status');
@@ -171,7 +171,7 @@ function paint() {
   if (!ready) return;
   ctx.drawImage(image,0,0);
   ctx.fillStyle = cssColor('--ink');
-  ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = font(14,'mono');
+  ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = font('label','mono');
   const boxes = coordinatePreview || frame.review.boxes;
   const marker = 8 * canvas.width / Math.max(1,canvas.getBoundingClientRect().width);
   boxes.forEach((box,i) => {
