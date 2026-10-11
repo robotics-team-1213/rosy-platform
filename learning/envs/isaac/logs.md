@@ -57,3 +57,26 @@
 - 증거: 원격 전체 CORE/Isaac/설치 4361 passed, 11 skipped, 0 NEW. 최신 archive 6982파일 hash를 전후 확인한 R2에서 SDK 2400 frames/exit 0, CORE 단일 publisher와 실제 직진·만료/CORE-loss 정지를 관측했다. R1의 이전 archive 덧씌움은 SHA readback으로 적발해 수용 증거에서 제외했다.
 - gate 변화: SOURCE/LOCAL GO, ROS-SIM HOLD 유지. 회전 목표 0.3 rad/s 대비 실제 0.19396으로 observer/scenario exit 1이다. 실제 맵·센서·두 대 Fleet·RL은 미검증이다. [최신 검증 기록](../../../docs/validation/isaac-latest-core-main-2026-10-11/result.md).
 - 교훈: 최신 main에서 만든 archive라도 실행 스크립트가 옛 소스를 덧씌울 수 있다. 실제 runtime 파일 hash를 실행 전과 정리 후 확인한다.
+
+## 2026-10-11 · dc25401e61 · feat(isaac): 실제 맵 한 대 CPU RL 진단
+
+- 변경: D-638에 따라 기존 STL generator·curved graph·Drive PathFollower·CORE CommandManager/최종 port를 재사용하는 simulation-only CPU Q-learning을 추가했다. 경로 창은 기존 alignment 이력을 유지하고 POLICY freshness·epoch·제한을 최종 출력까지 검증한다. 운영 CORE/Fleet API는 추가하지 않았다.
+- 증거: R6 baseline/학습 6회/고정 eval 202·303 complete, 37,591 Q updates, 9.342m ordered 경로와 실제 stop dwell 확인, SDK exit 0. R6 GUI close traceback 1건은 R7의 공유 headless-close 수리로 별도 재시험했고 SDK exit 0/error 0/잔여 PID 없음. source 전후 7,014파일 확인, policy SHA와 원시 evidence는 [결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 관련 원격 회귀/known_failures NEW 0과 독립 소스 검토를 거쳤다.
+- gate: SOURCE/LOCAL GO 유지, 전체 ROS-SIM HOLD 유지. 단일 native CPU 진단은 D-606 Isaac Lab, ROS localization/sensors, 두 대 Fleet·신호 및 실물 수용을 대신하지 않는다. baseline도 완주했으므로 성능 향상은 주장하지 않는다.
+- 기록: 내부 날짜별 상세 일지는 `private/isaac/{plans,journal,results,templates}/`, 원시 로그는 관리된 X: session이다. 이번 RL topic은 main 착지·push 전 상태다.
+- 교훈: 작은 caster의 60Hz 접촉 진동은 zero target만으로 stop이 아니다. 240Hz 재시험도 raw body velocity와 dwell로 확인한다. importer가 시작 뒤 GUI 메뉴를 다시 켤 수 있으므로 headless stage-close 전에 실제 메뉴를 제거하고 종료 코드와 raw traceback을 따로 확인한다.
+
+## 2026-10-11 · b6a8d0d2e8 · feat(isaac): 고정 정책 네 시작 방향 실제 화면 녹화
+
+- 변경: 정책 JSON을 한 번만 제한 크기로 읽고 기존 QPolicy를 검증 복원한다. 평가 전용 0/+90/180/-90도 시작 방향, SDK Camera의 실제 RGBA→H.264·Fabric 시각/pose 기록, 실패 시에도 encoder close/wait/reap을 추가했다. 기존 CORE 최종 port·Drive·생산 API는 유지한다.
+- 증거: TDD RED 뒤 b6a8d0d2e8 원격 Isaac/Drive/CORE cycle/harness exit 0/NEW 0, 독립 Safety-Review APPROVE. R8 전체 baseline/6학습/2고정 eval 재시험은 SDK exit 0/error 0, source 7,050파일 일치. R9는 고정 정책 네 방향 모두 9.342m ordered 경로 complete·물리 stop, 실제 960×540 영상 4개, source 7,053파일 일치, SDK exit 0/error 0. 원시 trace/프레임/MP4 전체 디코딩과 해시를 독립 검증했다. 상세 수치·정확한 실행 source는 [결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다.
+- gate: SOURCE/LOCAL GO 유지, 전체 ROS-SIM HOLD. 네 시작 방향은 역순 경로·모든 방향·두 대 Fleet·신호·횡단보도 또는 센서/실물 수용이 아니다.
+- 기록: 사용자의 private 보관 요청에 따라 최종 영상·미리보기·열람 페이지를 `private/isaac/media/2026-10-11-directions/`에 보관한다. 원시 로그/전체 trace는 X: session에 유지한다. 한국 교통 규칙과 Fleet는 새 후속 목표다.
+- 교훈: Fabric의 referenceTimeNumerator/Denominator를 확인하고 프레임 시각 단조성과 실제 마지막 stop을 검사한다. pipe close 실패에도 child wait/kill을 수행해야 encoder가 남지 않는다.
+
+## 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
+
+- 변경: map_task/run_map_rl/native_recording을 기존 시뮬레이션 도구 소유인 tools/sim/isaac로 이동했다. SDK helper 위치·시험·CLI/계획 참조를 갱신했다. 기존 CORE/Drive 내부를 호출하는 도구를 learning package에 넣은 D-427 위반을 제거했다. 물리/학습/cleanup과 CORE 생산 코드 변경은 없다.
+- 증거: 착지 검사에서 발견한 architecture/legacy-path/release guard NEW 4건은 실패로 기록했다. 수정 HEAD 764b591ed6의 원격 Isaac/architecture/release/harness exit 0, NEW 0. 독립 소스 Safety-Review는 저장소 경로·SDK helper 연결·최종 권한·물리 정지·정책 고정·source lineage를 승인했다.
+- gate: SOURCE/LOCAL GO 유지. R8/R9 runtime 증거는 이전 SHA에 귀속하고 ROS-SIM/두 대 Fleet/실물 HOLD를 유지한다.
+- 교훈: CORE를 재사용하는 진단은 여러 package를 조합하는 tools/sim의 기존 소유를 따른다. 이동 전 성공 실행으로 import/소유 검사를 대신하거나 새 위반을 허용 목록에 넣지 않는다.
