@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
@@ -87,3 +88,13 @@ def test_offline_learning_export_preserves_hashes_and_has_no_automatic_labels(tm
     (tmp_path / "training-source/observations.jsonl").write_bytes(raw.replace(b"7.4", b"8.4"))
     with pytest.raises(ValueError, match="changed"):
         exporter.verify(tmp_path / "training-source")
+    for index, bad in enumerate(({"nested": [{"api_key": "hidden"}]},
+                                 {"private": "-----BEGIN PRIVATE KEY-----"})):
+        body = store.read_observations()[0]["observation"]
+        body["state"] = bad
+        with sqlite3.connect(store.path) as connection:
+            connection.execute("UPDATE fleet_observations SET payload_json=?",
+                               (json.dumps(body, ensure_ascii=False, separators=(",", ":")),))
+        with pytest.raises(ValueError, match="validation"):
+            exporter.export(store.path, tmp_path / f"unsafe-{index}")
+        assert not (tmp_path / f"unsafe-{index}/manifest.json").exists()

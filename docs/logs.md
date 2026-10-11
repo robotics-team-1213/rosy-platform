@@ -7955,3 +7955,9 @@ osy-d395-s1d\`.
 - 증거: tools/land.py가 최신 main을 통합한 daccbd38be의 원격 24개 관련 파일 364 passed, exit 0, known-failures NEW 0을 확인하고 로컬 main에 착지했다. AI PC 9.0GB, Model PC 7.9GB 자원 하한을 충족했다. 설치 wheel/sdist, 크기 경계, 사건 예산/관측, v2 JSON/보정/CLI/로컬과 기존 GLM 격리 경로를 포함한다.
 - 검토: responsibility_review의 독립 책임 분리 검토 및 root diff 검토를 완료했다. cancellation 시 사라진 프로세스의 ProcessLookupError 처리만 sandbox 시험에 보강했으며 production cleanup은 바꾸지 않았다.
 - gate 변화: SOURCE·원격 관련 회귀·설치 패키지·로컬 착지 완료. worker와 최종 사람 인수는 별도 구현 중이며 피드백 export·후보 승격은 실행 계획 단계다. 실제 제공자 호출·독립 품질·CI·push·배포·현장 수용은 미확인이다.
+
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
