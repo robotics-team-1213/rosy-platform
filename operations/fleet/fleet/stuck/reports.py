@@ -11,8 +11,8 @@ from typing import Optional
 
 from fleet.server.sqlite_policy import configure_connection
 from core_common.protocol.schemas import FleetJudgmentReceipt, FleetObservedClosure
-from fleet.incident_handoff import IncidentHandoff, judgment_revision
-from fleet.notifications import NotificationOutbox
+from fleet.incidents.handoff import IncidentHandoff, judgment_revision
+from fleet.incidents.notifications import NotificationOutbox
 
 
 def _resolution(answers) -> tuple:

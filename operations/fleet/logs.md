@@ -3231,3 +3231,9 @@
 - 변경: 모델 원장 dispatcher는 Fleet, 순수 목표/진행 규칙은 execution/site에 두었다. D-660 현재 읽기 판단과 자연 해소 근거, D-661 이름 있는 case/revision 인수 및 기본 OFF 알림 outbox를 기존 DB/auth/CORE 경계에 연결했다.
 - 증거: 원격 추출114/작업147/판단99/인수127/알림149 passed, 각각 NEW0. 최종 설치 및 독립 평가 보강 11 passed/NEW0; 독립 검토의 경쟁/만료/평가 결함 수정. 상세: docs/validation/responsibility-boundaries-2026-10-11/implementation.md.
 - gate 변화: SOURCE/원격 fake·설치 계약. 실제 Discord 준비·수신·현장 정답/한계는 팀 담당이며 운영 수용 HOLD. 실제 모델 토론·provider 호출·배포·motion 없음.
+
+## 2026-10-11 · 757226957d · 팀 사건 조정 책임 하위 패키지
+
+- 변경: D-661 알림·이름 있는 사람 인수를 `fleet/incidents`로 그대로 이동하고 직접 호출자·설치 검사·문서를 갱신했다. 판단·resolver·장치 admission은 기존 소유자에 유지한다.
+- 증거: 독립 responsibility_review 경계 확인. physical-line 실측 부모51933/incidents360, 예산·+150 유지. 최종 원격 terminal과 착지는 docs/validation/responsibility-boundaries-2026-10-11/landing.md에 후속 기록한다.
+- gate 변화: 경계 분리만. 실제 팀 채널·현장 수용·모델 토론 HOLD 유지.

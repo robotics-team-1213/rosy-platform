@@ -647,7 +647,7 @@ def run_console(args: argparse.Namespace) -> None:
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
     notification_config = None
     if getattr(args, 'notifications_config', None) is not None:
-        from fleet.notifications import NotificationConfig
+        from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,

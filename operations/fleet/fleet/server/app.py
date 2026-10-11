@@ -342,7 +342,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         notification_task = None
         if notification_config is not None:
             import httpx
-            from fleet.notifications import NotificationWorker
+            from fleet.incidents.notifications import NotificationWorker
             notification_http = httpx.AsyncClient(trust_env=False)
             notification_task = asyncio.create_task(NotificationWorker(
                 app.state.line_stuck._log.notifications, notification_config, notification_http,
