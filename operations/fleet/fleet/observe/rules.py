@@ -11,6 +11,10 @@ from .events import CoreEventStore, _contains_sensitive_field
 
 class RuleSelectionStore(CoreEventStore):
     def __init__(self, path, *, max_rows=100_000, retention_s=30 * 86400):
+        if (type(max_rows) is not int or not 1 <= max_rows <= 100_000
+                or type(retention_s) not in (int, float) or not math.isfinite(retention_s)
+                or not 0 < retention_s <= 30 * 86400):
+            raise ValueError('INVALID_RULE_RETENTION')
         super().__init__(path)
         self.max_rows, self.retention_s = max_rows, retention_s
         with closing(self._connect()) as db, db:
@@ -18,6 +22,7 @@ class RuleSelectionStore(CoreEventStore):
                 selection_id INTEGER PRIMARY KEY AUTOINCREMENT, robot_id TEXT NOT NULL,
                 received_at REAL NOT NULL, payload_json TEXT NOT NULL)''')
             db.execute('CREATE INDEX IF NOT EXISTS fleet_rule_selection_robot ON fleet_rule_selections(robot_id,selection_id)')
+            db.execute('CREATE INDEX IF NOT EXISTS fleet_rule_selection_time ON fleet_rule_selections(received_at)')
 
     def append_batch(self, receipts, *, now):
         if type(now) not in (int, float) or not math.isfinite(now):
