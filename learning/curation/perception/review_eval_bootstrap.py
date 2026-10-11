@@ -85,7 +85,9 @@ def ready(store_root, state_dir, scratch, *, target='pixels'):
         object_classes = class_sets.object_set(review)
         names = tuple(c['name'] for c in object_classes['classes'])
         if (names != class_sets.OBJECT_CLASSES or object_classes['task'] != 'detect'
-                or object_classes['sha256'] != class_sets._record(names, 'detect', object_classes['source'])['sha256']):
+                or object_classes['sha256'] != class_sets._record(names, 'detect', object_classes['source'])['sha256']
+                or any(type(c.get('index')) is not int or c['index'] != i
+                       for i, c in enumerate(object_classes['classes']))):
             raise ValueError('D-602 object classes required')
         object_class_hash = review_evidence.sha(review_evidence.encoded(object_classes))
     reservations = Store(store_root).eval_reservations()
@@ -142,6 +144,8 @@ def ready(store_root, state_dir, scratch, *, target='pixels'):
                or source['mcap']['bags'] != first['bags'] for source, _ in entries):
             raise ValueError('MCAP bag inventory differs within session')
         proof = prove_frames(session, [selector for _, selector in entries], scratch, expected=first)
+        if len(proof['frames']) != len(entries):
+            raise ValueError('MCAP source proof frame count differs')
         for (source, _), proven in zip(entries, proof['frames']):
             if proven != source['mcap']['frame'] or proof['decoder'] != source['mcap']['decoder']:
                 raise ValueError('MCAP source proof differs from review authority')
