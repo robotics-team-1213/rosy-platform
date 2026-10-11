@@ -755,3 +755,9 @@
 **Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
 
 검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
+
+## D-694 — 모델 비용 근거와 사건 receipt v2
+
+**Status:** Accepted (2026-10-12, 소스 계약)
+
+포함 요금제 marginal cash와 미관측 청구액을 분리하고 검증된 호출별 비용 근거를 숫자 원장과 원자적으로 결속한다. 과거 tuple2와 model receipt/1을 유지하며 계정·원문 키를 export하지 않는다. 실제 제공자 활성화는 별도 admission이다. 전문은 [D-694](../adr/D-694-model-cost-evidence.md).
