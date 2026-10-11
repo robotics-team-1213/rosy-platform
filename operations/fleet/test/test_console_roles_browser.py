@@ -121,10 +121,9 @@ def _login(playwright, origin):
 
 
 def _card(page, robot_id):
-    card = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
-    if card.get_attribute("data-collapsed") is not None:
-        card.locator(".robot-line").first.click()
-    return card
+    page.locator('[data-context-tab="status"]').click()
+    page.locator("#robot-choice").select_option(robot_id)
+    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
 
 
 def _raw_words(page):
@@ -142,9 +141,8 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
         browser, page, errors, _ = _login(playwright, origin)
         try:
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
+            page.locator("#map-readouts > summary").click()
             table = page.locator("#tracking-positions")
-            expect(table).not_to_be_visible()
-            page.locator("#tracking-coordinate-details > summary").click()
             expect(table).to_be_visible()
             expect(table).to_contain_text("1.25")
             map_box = page.locator("#map-stage").bounding_box()
@@ -193,6 +191,7 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
+        page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
         expect(page.locator("#formation-leader")).to_be_disabled()
         page.locator("#formation-shape").select_option("LINE")
@@ -219,10 +218,11 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
         page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         expect(page.locator("#convoy-go")).to_have_attribute("reason", re.compile("^반복 운행 중인 리더가 없습니다"))
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         lead = _card(page, "rosy_01")
         lead.locator('ui-button[data-trip-open="rosy_01"]').click()
-        lead.locator(".card-trip select").nth(1).select_option("start_n")
+        lead.get_by_role("combobox", name="작업 종류", exact=True).select_option("repeat")
+        lead.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("start_n")
         lead.locator('ui-button[data-trip-repeat="rosy_01"]').click()
         expect(lead.locator(".trip-line")).to_contain_text("반복 운행", timeout=10000)
         page.get_by_role("tab", name="운영 도구").click()
@@ -240,7 +240,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
                 break
             page.wait_for_timeout(100)
         assert body == {"to": "start_n", "via": ["start_s"], "repeat": True, "convoy": {"leader": "rosy_01"}}
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         expect(_card(page, "rosy_02").locator(".trip-line")).to_contain_text("대열 · rosy_01", timeout=10000)
         expect(_card(page, "rosy_01").locator(".trip-line")).to_contain_text("대열 리더 · rosy_02 따라옴")
         assert _raw_words(page) == []
@@ -280,7 +280,7 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
 
 def test_a_hundred_robots_stay_usable(tmp_path):
     """The robot count must not matter: 100 fake COREs (5 stuck, 10 offline). Exceptions lead the queue and the
-    cards, nominal cards fold to one line, no horizontal overflow at 1440x900 and 1024x768, no long main-thread
+    summaries, one selected workspace, no horizontal overflow at 1440x900 and 1024x768, no long main-thread
     task over 250 ms across polls, and the robot finder narrows the 99 follower boxes."""
     from playwright.sync_api import sync_playwright
     from test_server_gather_source import _health
@@ -320,8 +320,8 @@ def test_a_hundred_robots_stay_usable(tmp_path):
         assert server.started
         with sync_playwright() as playwright:
             browser, page, errors, _posts = _login(playwright, origin)
-            # The first gathers fill power evidence; nominal cards fold once it is fresh.
-            page.wait_for_function("() => document.querySelectorAll('#roster article[data-collapsed]').length >= 80",
+            # All robot summaries render; only the chosen robot gets command controls.
+            page.wait_for_function("() => document.querySelectorAll('#roster .robot-summary').length === 100",
                                    timeout=30000)
             page.evaluate("""() => { window.__lt = []; new PerformanceObserver((list) =>
               window.__lt.push(...list.getEntries().map((e) => e.duration))).observe({type: 'longtask'}); }""")
@@ -331,6 +331,9 @@ def test_a_hundred_robots_stay_usable(tmp_path):
             assert page.evaluate("document.getElementsByTagName('*').length") < 12000
             cards = page.locator("#roster article")
             assert cards.count() == 100
+            assert page.locator("#roster [data-goal-robot-id]").count() == 0
+            _card(page, "rosy_001")
+            assert page.locator("#robot-workspace article").count() == 1
             first = [cards.nth(i).get_attribute("data-robot-id") for i in range(15)]
             exceptions = {robot_id for i, robot_id in enumerate(ids) if i % 20 == 7 or i % 10 == 9}
             assert set(first) == exceptions, first  # the 15 exception cards come first, open

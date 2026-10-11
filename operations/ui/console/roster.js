@@ -12,7 +12,7 @@ import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from 
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
-import { createQueues, disclosure } from "./queues.js";
+import { createQueues } from "./queues.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
@@ -40,19 +40,21 @@ function tag(text, cls) {
   return node;
 }
 
-/** D-540 3: a card stays open whatever the operator chose while the robot is offline (no link or no
- * state), its E-stop is latched, its safety state is not nominal, or a calibration lease holds it. */
+/** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
 export function mustExpand(robot) {
   const estop = robot.state?.safety?.estop;
   return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
 }
 
-/** D-540 3: open on an exception or selection, one line when nominal; the operator's fold or unfold
- * holds until the robot's exceptions change. `attention` is the exception key ("" when nominal). */
-export function cardExpanded({ must, selected, attention, choice }) {
-  if (must || selected) return true;
-  if (choice && choice.attention === attention) return choice.open;
-  return attention !== "";
+/** Inspection is UI-only. Switching robots withdraws every pending map interaction. */
+export function selectRobot(view, robotId) {
+  if (robotId && !view.robots.some(robot => robot.robot_id === robotId)) return false;
+  if (view.focusRobot === robotId) return false;
+  view.focusRobot = robotId || null;
+  view.selected = null;
+  view.pinning = null;
+  view.cursor = null;
+  return true;
 }
 
 function blockWith(button, reason) {
@@ -74,15 +76,21 @@ const LAMP_REASON = {
 };
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
-  moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
-  const { attentionItems, attentionKey, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
+  moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
+  const { attentionItems, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
   const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
   function openCard(robotId) {
-    const robot = view.robots.find((row) => row.robot_id === robotId);
-    if (robot) view.cardChoice = { ...view.cardChoice, [robotId]: { open: true, attention: attentionKey(robot) } };
+    if (selectRobot(view, robotId)) {
+      confirmedAction?.cancel();
+      trip.close();
+      onSelectionChanged();
+      const canvas = el("map-canvas");
+      canvas.classList.add("idle");
+      canvas.tabIndex = -1;
+    }
   }
   function needsAttention(robot) {
-    return view.stateUnavailable || attentionItems(robot).length > 0;
+    return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;
   }
   function navTag(state) {
     const nav = state && state.navigation;
@@ -114,13 +122,99 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     return `${who} 경로와 겹쳐 대기 중 — 앞이 비면 자동 출발합니다`;
   }
 
+  function summary(robot, index) {
+    const node = nodeWithText("article", `robot-summary s${index % view.colors.length}`);
+    node.dataset.robotId = robot.robot_id;
+    node.tabIndex = -1;
+    if (view.focusRobot === robot.robot_id) node.classList.add("selected");
+    const name = view.robotNames?.[robot.robot_id] || robot.robot_id;
+    const line = nodeWithText("div", "robot-line");
+    line.append(nodeWithText("b", "ui-disclosure-name", name));
+    if (name !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
+    const choose = nodeWithText("ui-button", "", view.focusRobot === robot.robot_id ? "선택됨" : "선택");
+    choose.type = "button";
+    choose.setAttribute("kind", "toggle");
+    choose.setAttribute("aria-pressed", String(view.focusRobot === robot.robot_id));
+    choose.setAttribute("aria-label", `${name} 선택`);
+    choose.dataset.selectRobotId = robot.robot_id;
+    choose.addEventListener("click", scope.guard(() => { openCard(robot.robot_id); render(); }));
+    line.append(choose);
+    node.append(line);
+    const state = view.stateUnavailable ? {} : robot.state || {};
+    const link = linkTag(robot.link);
+    const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
+      : !robot.state ? "상태 확인 불가" : link?.word || "연결됨";
+    const estop = state.safety?.estop;
+    const safety = view.stateUnavailable || !robot.online || !robot.state ? "안전 확인 불가"
+      : staleAgeS(robot, view.receivedAtMs, Date.now()) !== null ? "안전 확인 불가"
+        : estop === true ? "비상 정지" : estop === false ? "안전 정상" : "안전 확인 불가";
+    const facts = nodeWithText("div", "robot-summary-status");
+    facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
+      tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
+    const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
+    battery.dataset.fact = "battery";
+    facts.append(battery);
+    const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
+    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
+    const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
+    position.dataset.localization = "";
+    if (loc) position.title = [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ");
+    facts.append(position);
+    const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
+    const role = formation?.leader === robot.robot_id ? "대형 리더"
+      : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
+    if (role) facts.append(tag(role, "nav"));
+    node.append(facts);
+    const lane = state.line_follow;
+    const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
+      ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state).text;
+    node.append(nodeWithText("p", "trip-line", view.stateUnavailable ? "운행 확인 불가"
+      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode)));
+    const evidence = [];
+    if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
+    else {
+      if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
+      else if (!robot.online && robot.error) evidence.push(robot.error.reachable
+        ? `로봇이 거절: ${robot.error.code}` : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`);
+      if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
+      const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
+      if (address) {
+        const why = nodeWithText("p", "robot-summary-evidence", address.text);
+        why.dataset.addressReason = view.addresses[robot.robot_id].status;
+        node.append(why);
+      }
+      evidence.push(...attentionItems(robot).map(item => item.text.replace(/^:\s*/, "")));
+    }
+    if (evidence.length) node.append(nodeWithText("p", "robot-summary-evidence", [...new Set(evidence)].join(" · ")));
+    return node;
+  }
+
+  function workspace() {
+    const box = el("robot-workspace"), choice = el("robot-choice"), empty = el("robot-workspace-empty");
+    if (!box) return;
+    if (view.focusRobot && !view.robots.some(robot => robot.robot_id === view.focusRobot)) openCard(null);
+    if (choice) {
+      const options = view.robots.map(robot => [robot.robot_id, view.robotNames?.[robot.robot_id] || robot.robot_id]);
+      const key = JSON.stringify(options);
+      if (choice.dataset.options !== key) {
+        const first = nodeWithText("option", "", "로봇을 선택하세요"); first.value = "";
+        choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
+        choice.dataset.options = key;
+      }
+      choice.value = view.focusRobot || "";
+    }
+    const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
+    if (empty) empty.hidden = index >= 0;
+    place(box, index >= 0 ? [card(view.robots[index], index)] : []);
+  }
+
   function card(robot, index) {
     const node = document.createElement("article");
     const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
     // D-82 로봇 사다리 — 지도 삼각형과 같은 색 순서(view.robots 인덱스)로 카드의
     // 정체 띠가 돈다. CSS 의 .s0/.s1/.s2 가 --robot-1..3 을 붙인다. 표시 순서가
     // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
-    node.className = `robot s${index % view.colors.length}`;
+    node.className = `robot robot-workspace-card s${index % view.colors.length}`;
     node.dataset.robotId = robot.robot_id;
     // A late answer (link "degraded", server grace) is not shown as offline; decisions still see online=false.
     const lagging = !robot.online && robot.link === "degraded";
@@ -134,29 +228,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const pose = state.pose;
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     const nav = navTag(state);
-    // D-540 3: one line when nominal; the four must-expand states keep the card open.
-    const attention = attentionKey(robot);
-    const must = view.stateUnavailable || mustExpand(robot);
-    const selected = view.selected === robot.robot_id;
-    const fold = (open) => scope.guard(() => {
-      view.cardChoice = { ...view.cardChoice, [robot.robot_id]: { open, attention } };
-      render();
-    });
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
-    if (!cardExpanded({ must, selected, attention, choice: view.cardChoice?.[robot.robot_id] })) {
-      node.dataset.collapsed = "";
-      const line = disclosure("robot-line", false, fold(true));
-      line.title = "카드 펼치기";
-      const battery = nodeWithText("span", "robot-line-battery");
-      battery.dataset.fact = "battery";
-      battery.append(nodeWithText("span", "sr-only", "배터리 "),
-        nodeWithText("strong", "", power.battery));  // the card reads the same value
-      line.append(nodeWithText("b", "ui-disclosure-name", displayName),
-        nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
-      if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
-      node.appendChild(line);
-      return node;
-    }
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
     const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
@@ -249,12 +321,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       locTag.title = loc.title;
       locTag.dataset.localization = "";
       head.appendChild(locTag);
-    }
-    if (!must && !selected) {
-      const shut = disclosure("robot-fold", true, fold(false));
-      shut.textContent = "접기";
-      shut.setAttribute("aria-label", `${robot.robot_id} 카드 접기`);
-      head.appendChild(shut);
     }
     node.appendChild(head);
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
@@ -419,7 +485,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       canvas.tabIndex = view.selected ? 0 : -1;
       render();
       if (view.selected) canvas.focus({preventScroll: true});
-      else [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
+      else [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     }));
     // D-593 운영자 핀: 지도에서 이 로봇의 위치(누른 점)와 방향(끈 방향)을 찍어 Fleet 지도 자세의 앵커로 둔다.
@@ -603,12 +669,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
   // D-540 (d): a card whose picker has focus stays where it is — a rebuilt <select> closes its list mid-pick.
   function place(box, cards) {
-    const keep = document.activeElement?.tagName === "SELECT" ? document.activeElement.closest("#roster article") : null;
+    const focused = document.activeElement?.tagName === "SELECT" ? document.activeElement.closest("#robot-workspace article") : null;
+    const keep = focused?.parentElement === box ? focused : null;
     const nodes = cards.map((node) => (keep && node.dataset.robotId === keep.dataset.robotId ? keep : node));
     if (!nodes.includes(keep)) { box.replaceChildren(...nodes); return; }
     for (const node of [...box.children]) if (node !== keep) node.remove();
     nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
   }
 
-  return { card, place, trip, fillQueues, queuedReason, needsAttention, attentionItems, openCard };
+  return { card, summary, workspace, place, trip, fillQueues, queuedReason, needsAttention, attentionItems, openCard };
 }
