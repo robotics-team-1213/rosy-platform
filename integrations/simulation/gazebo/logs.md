@@ -319,8 +319,8 @@
 - gate 변화: 없음. CORE runtime의 DOMAIN_ID_INVALID와 FOREIGN_NAMESPACE를 확인했다. runner run_spec120..199와 CORE Linux-safe0..101 계약이 모순이며 domain172는 ERROR다. 연결 증거일 뿐 Fleet runtime 준비/카메라 주행/교통/완주/RL 수용이 아니다. 서로다른 로봇namespace 진단과 domain allocator/validator를 계약·시험과 함께 바로잡아야 한다.
 
 
-## 2026-10-12 ? eae0f59da0 ? fix(sim): CORE ??? Gazebo ?? ??? ??
+## 2026-10-12 · eae0f59da0 · fix(sim): CORE 범위와 Gazebo 예약 도메인 일치
 
-- ??: ?? allocator?run_spec?sim-only watchdog80..99, ?? sim20..79. CORE0..101/localhost/partition/namespace/??context/monotonic expiry ??. ??120..199catalog?failclosed???output_root??.
-- ??: ????87PASS1SKIP?known_failures0NEW?????????????. ??17packages?????headlessGazebo?COREdomain80,?320x240camera311?finite640LiDAR389?odom1143?solecmdpublisher1?????0??. ROS ERROR????FOREIGN_NAMESPACE?????. ownpartition?????0.
-- gate ??: ??runtime???????. Fleetserver??????????cameraRL??????. ??PC??sourceIsaac??????7.6GB?8GBfloor????SDK???????.
+- 변경: 검증 allocator·run_spec·sim-only watchdog 80..99, 일반 sim 20..79. CORE 0..101/localhost/partition/namespace/실제 context/monotonic expiry 유지. 기존 120..199 catalog는 거절하며 새 output_root가 필요하다.
+- 증거: 관련 원격 87PASS1SKIP·known_failures 0NEW·독립 소스 안전 검토 차단 없음. 신규 17 packages 빌드 후 실제 headless Gazebo 두 CORE domain 80, 각 320x240 camera 311·finite640 LiDAR389·odom1143·최종 publisher 한 개·명령 0 확인. ROS ERROR가 사라지고 FOREIGN_NAMESPACE 경고는 유지. 자체 partition 종료 후 잔여 0.
+- gate 변화: 정지 runtime 도메인 결함 해결. Fleet 서버·교통·주행·완주·카메라 RL 수용은 미완료. 당시 모델 PC의 Isaac 한 대 재시험은 7.6GB로 8GB 기준을 넘지 못해 SDK 기동 전 거절됐다. 이후 실제 학습은 Isaac 일지에 별도 기록한다.
