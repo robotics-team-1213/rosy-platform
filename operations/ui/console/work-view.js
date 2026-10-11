@@ -52,7 +52,7 @@ export function createWorkView({scope, call, el}) {
       life.check();
       if (version !== detailVersion) return;
       const current = result.task || result.mission;
-      showDetail({...row, ...current, device_id: row.device_id});
+      showDetail({...row, ...current, source: row.source, source_id: row.source_id, device_id: row.device_id});
       const count = result.history?.length || 0;
       el("work-evidence").textContent = `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`;
     } catch (error) {

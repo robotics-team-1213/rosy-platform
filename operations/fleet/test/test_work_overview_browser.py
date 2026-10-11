@@ -22,7 +22,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
     api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": role},
            "/api/fleet/work": {"rows": rows, "observed_at": "2026-10-11T12:00:01+00:00",
                                "tasks_available": True, "missions_available": True, "truncated_sources": []},
-           "/api/fleet/tasks/same": {"task": rows[0], "history": []},
+           "/api/fleet/tasks/same": {"task": {**rows[0], "source": "console", "task_id": "same"}, "history": []},
            "/api/fleet/missions/same": {"mission": rows[1], "history": []}}
     with sync_playwright() as playwright:
         posts = []
