@@ -36,7 +36,7 @@ def fixture(tmp_path, monkeypatch, *, complete=True, boxes=None):
     human_path.write_bytes(evidence.encoded(human))
     review = ReviewStore(tmp_path / 'state', source_path, human_path, images)
     with review.connect() as db:
-        db.execute("UPDATE metadata SET value='evaluation' WHERE key='workspace_kind'")
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('workspace_kind','evaluation')")
     registry = Store(tmp_path / 'store')
     registry.reserve_eval_source(session.name, 'eval-group')
     calls = []
