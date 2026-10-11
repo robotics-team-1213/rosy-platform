@@ -856,3 +856,9 @@
 - 변경: D-626 api_web holder를 api로 옮기며 core_api_web identity·설치 경로·Safety 구현을 유지하고 소비자와 harness 현재 경로를 정렬했다. 로그는 최초 이동 커밋에서 R100으로 보존했다.
 - 증거: API 후보 원격 489 성공·13 browser skip, 실제 Linux wheel 설치/package/ament share 확인. 독립 Safety source 승인, known_failures 0 NEW/0 known.
 - gate 변화: 없음. 브라우저·새 이미지·장치/현장 수용은 별도.
+
+## 2026-10-11 · c9480b464 · docs: 지도 설정 계약 버전 정렬
+
+- 변경: FastAPI 계약 설명 두 곳과 Fleet/차선 계약 핀을 API Reference v1.205에 정렬했습니다. 요청·응답 동작은 그대로입니다.
+- 증거: 배포 통합 원격 검사에서 버전 핀 불일치를 재현했습니다. 재검증 대기입니다.
+- gate 변화: 없음.
