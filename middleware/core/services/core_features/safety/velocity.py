@@ -30,5 +30,3 @@ def same_curve(candidate: tuple[float, float], output: tuple[float, float]) -> b
                 return False
             scale = ratio
     return True
-
-
