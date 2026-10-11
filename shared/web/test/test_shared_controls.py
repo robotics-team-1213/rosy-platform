@@ -325,7 +325,7 @@ def local_button_height_problems(css):
         if not re.search(r"(?<![\w-])(?:ui-button|button|summary)\b|\.ui-disclosure-row\b", selector):
             continue
         for prop, value in re.findall(r"(?<![-\w])(min-height|height|max-height|block-size)\s*:\s*([^;}]+)", body):
-            if re.search(r"(?<![\w.-])[1-9][\d.]*(?:px|rem)\b", value):
+            if any(float(size) > 0 for size in re.findall(r"(?<![\w.-])(\d*\.?\d+)(?:px|rem)\b", value)):
                 problems.append(f"{selector.strip()} {prop}: {value.strip()}")
     return problems
 
