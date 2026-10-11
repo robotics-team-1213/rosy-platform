@@ -1212,6 +1212,43 @@ def test_formation_refuses_a_robot_on_a_trip():
     assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
+@pytest.mark.parametrize("owner", ["trip", "formation"])
+def test_goal_rechecks_owner_after_localization_await(owner):
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    state = robot.state
+
+    async def changed_state():
+        result = await state()
+        if owner == "trip":
+            runner.robot = "a"
+        else:
+            console._formation_members = lambda: {"a"}
+        return result
+
+    robot.state = changed_state
+    with pytest.raises(HubError) as error:
+        run(console.goal("a", 1.0, 0.0))
+    assert error.value.code == ("TRIP_ROBOT_BUSY" if owner == "trip" else "FORMATION_ACTIVE")
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_bay_rechecks_trip_owner_after_capability_await():
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    capabilities = robot.capabilities
+
+    async def changed_capabilities():
+        result = await capabilities()
+        runner.robot = "a"
+        return result
+
+    robot.capabilities = changed_capabilities
+    with pytest.raises(HubError, match="running trip"):
+        run(console._send_to_bay("a", (1.0, 1.0), "b"))
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
 def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
     import fleet.server.console as console_module
 

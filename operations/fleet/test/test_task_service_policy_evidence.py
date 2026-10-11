@@ -160,3 +160,31 @@ def test_operator_path_is_unchanged_by_the_binding_contract(tmp_path):
     ))
     assert task["status"] == "QUEUED"
     assert task["source"] == "operator"
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("stale", "EVIDENCE_STALE"), ("disabled", "POLICY_NOT_ACCEPTED"),
+])
+def test_policy_is_revalidated_when_queued_work_is_dispatched(tmp_path, change, reason):
+    store = _RegisteredStore([_source()], tmp_path / "pe.sqlite3", clock=lambda: _NOW)
+    store.submit(_evidence_payload(), token=_TOKEN, now=_NOW)
+    now = [_NOW]
+    service = _service(tmp_path, policy_evidence=store, max_evidence_age_s=30.0,
+                       clock=lambda: now[0])
+    service.POLICY_DISPATCH_ENABLED = True  # test-only admission; production stays disabled
+    task = _submit(service)
+    assert task["status"] == "QUEUED"
+    if change == "stale":
+        now[0] += 31.0
+    else:
+        service.POLICY_DISPATCH_ENABLED = False
+    sent = []
+
+    async def dispatch(attempt):
+        sent.append(attempt)
+        return {"accepted": True}
+
+    result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    assert result["status"] == "HOLD" and result["reason"] == reason
+    assert sent == []
+    assert service.store.reservations() == []

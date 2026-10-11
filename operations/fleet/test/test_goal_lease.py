@@ -79,6 +79,40 @@ def test_off_by_default_sends_no_lease_and_shows_nothing():
     assert robot.renewals == [] and _goal(console) == {"x": 1.0, "y": 0.0, "yaw": 0.0}
 
 
+@pytest.mark.parametrize("ttl,leased", [(0.0, False), (4.0, False), (4.0, True)])
+@pytest.mark.parametrize("receipt", [{"accepted": False}, {}, {"accepted": "true"}])
+def test_only_an_explicit_acceptance_records_goal_or_lease(ttl, leased, receipt):
+    robot = LeaseRobot("rosy_01", lease=leased)
+    console = _console(robot, ttl=ttl)
+
+    async def refuse(*args, **kwargs):
+        return receipt
+
+    robot.navigation_goal = refuse
+    if receipt.get("accepted") is False:
+        assert run(console.goal("rosy_01", 1.0, 0.0)) == receipt
+    else:
+        with pytest.raises(RuntimeError):
+            run(console.goal("rosy_01", 1.0, 0.0))
+    assert "rosy_01" not in console._goals
+    assert "rosy_01" not in console.goal_leases
+    assert "rosy_01" not in console._claims
+
+
+def test_rejected_bay_goal_does_not_claim_a_successful_yield():
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+
+    async def refuse(*args, **kwargs):
+        return {"accepted": False}
+
+    robot.navigation_goal = refuse
+    with pytest.raises(RuntimeError):
+        run(console._send_to_bay("rosy_01", (1.0, 1.0), "rosy_02"))
+    assert "rosy_01" not in console._yielding
+    assert "rosy_01" not in console.goal_leases
+
+
 def test_operator_goal_is_leased_and_renewed_while_an_operator_is_present():
     robot, console, _clock = _leased()
     (_, _, _, _, correlation_id, ttl), = _sent(robot)
