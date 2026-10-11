@@ -287,6 +287,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
             page.screenshot(path=str(Path(output) / f"fleet-cell-purpose-{width}x{height}.png"))
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.unroute("**/api/fleet/cell-app/documents")
+    open_token_access(page)
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("접속 완료")
     for control in ("recipe-save", "cell-save", "recipe-load", "cell-load", "read-job"):
