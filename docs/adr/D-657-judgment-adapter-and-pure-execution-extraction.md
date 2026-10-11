@@ -25,3 +25,7 @@ Fleet는 기존 `rosy-execution==0.1.0` wheel을 dependency로 사용한다. Fle
 committed HEAD 원격 RED→GREEN, 기존 dispatcher/journal/fence/late result 및 goal/mission/progress 회귀, Decision→Fleet 의존 금지, pure execution 독립 import, checkout 밖 wheel/sdist의 동일 GoalEvidence 타입, source image closure와 ROS-free 구조 검사를 수행한다. 원격 결과·known_failures·local main 착지를 별도 기록하고 FULL CI·실제 Docker build·배포·물리 정확도를 통과로 집계하지 않는다.
 
 파일별 순서는 [계획](../plans/2026-10-11-judgment-adapter-extraction.md)을 따른다.
+
+### 후속 전체 progress 계산 분리
+
+사용자가 책임 분리 구현 세션의 추가 추출과 이 세션의 import 경계 보완을 처리하도록 요청했다. 기존 전체 progress 계산도 `project_progress(data, now)`로 이전하되 `mission_step_state`, timestamp/freshness, 외부 wire 결과를 보존한다. Fleet는 snapshot transaction·clock·인증·원장/claim/fence를 계속 소유한다. wire schema는 projection 호출 시 불러오고 기존 foundation wheel을 명시 dependency로 선언한다. 순수 helper 단독 import에는 Fleet·DB·HTTP·ROS·wire schema package가 필요하지 않는다. 전체 상태 전이/복구와 D-660~D-662 기능의 구현·착지·활성화는 별도다. [후속 계획](../plans/2026-10-11-pure-progress-projection.md)에 설치와 검증 경계를 기록한다.

@@ -370,7 +370,7 @@ roots:
     legacy: modules/execution/src/rosy/execution/site
     wave: "3a"
     import_prefix: [rosy.execution.site]
-    note: D-657 pure goal verification and progress timestamp/step projection; Fleet retains ledgers, producer authentication, claim/fence and device transport.
+    note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
   - path: middleware/ui/robot
     part: middleware
