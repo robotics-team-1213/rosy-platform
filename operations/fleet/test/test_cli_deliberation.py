@@ -66,3 +66,29 @@ def test_opencode_unverified_version_refuses_before_launch(version):
         CliProvider(kind='opencode', model='ollama/pinned', profile_id='local',
                     launch=lambda: None, cli_version=version)
 
+
+def test_cli_passes_fleet_baseline_and_one_valid_primary_for_review():
+    request = problem(fleet_choice='human')
+    primary = {'profile_id': 'qwen', **reply(request)}
+    seen = []
+    async def launch(argv, stdin, *args):
+        seen.append(json.loads(stdin))
+        return 0, (json.dumps({'type': 'text', 'part': {'text': json.dumps(reply(request))}})
+            + '\n' + json.dumps({'type': 'step_finish', 'part': {'cost': 0}})).encode()
+    provider = CliProvider(kind='opencode', model='configured/glm', profile_id='review', launch=launch)
+    asyncio.run(provider(request, (primary,), 1, budget_usd=.1))
+    assert seen[0]['problem']['fleet_choice'] == 'human'
+    assert seen[0]['prior'] == [primary]
+
+
+@pytest.mark.parametrize('change', [{'generation': 'old'}, {'input_hash': 'wrong'}, {'verified': True},
+                                    {'profile_id': ''}])
+def test_cli_rejects_unbound_primary_review_before_launch(change):
+    request = problem(fleet_choice='human')
+    primary = {'profile_id': 'qwen', **reply(request), **change}
+    async def forbidden(*args):
+        pytest.fail('untrusted comparison must not launch')
+    provider = CliProvider(kind='opencode', model='configured/glm', profile_id='review', launch=forbidden)
+    with pytest.raises(ValueError):
+        asyncio.run(provider(request, (primary,), 1, budget_usd=.1))
+
