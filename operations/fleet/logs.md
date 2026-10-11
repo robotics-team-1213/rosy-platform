@@ -3224,3 +3224,15 @@
 - 변경: 기존 teach의 map pose가 UNKNOWN/DEGRADED 또는 bridge 0.5 m 초과로 유효하지 않으면 기록을 끝낸다. reason pose_lost로 유효한 앞부분만 pending에 남기고 짧은 기록은 폐기한다. 좌표를 다시 얻어도 끊긴 구간을 하나의 도로로 자동 잇지 않으며 로봇 명령은 보내지 않는다. API reference와 기존 정상 기록 fixture 및 세 불연속 시험을 같이 갱신했다.
 - 증거: 세 시험 remote RED 이후 teach API/auth/audit·순수 계산·마커 장소 회귀 26 PASS, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/teach-gap-green-paths/run-1.txt. 잘못된 시험 파일명의 첫 GREEN은 exit 4/실행 없음으로 별도 기록했다. 실제 GREEN은 모델 PC 자원 기준 통과.
 - gate 변화: 기록 단절 source/remote 회귀. 지도 없는 상대 조사 API/UI와 카메라 누적은 계속 진행하며 통합·배포·실제 주행 수용은 미확인이다.
+
+## 2026-10-11 · 1a14e9705a · D-655 지도 없는 상대 주행 조사 API
+
+- 변경: 기존 teach/start의 선택 survey mode로 저장 초안 map_id/reference/revision과 신선한 odom을 확인한 뒤 상대 변환으로 선을 쌓는다. 기준 변경·odom gap/reset에서 유효 앞부분만 남기며 현재 초안 기준이 다른 confirm은 거절하고 기록을 유지한다. 확정은 기존 CAS 저장으로 odometry/observed 간선을 추가하고 조사 검토를 무효화한다. 공개 기준 snapshot은 표시 비교에 쓰며 내부 odom anchor/epoch는 내보내지 않는다. named operator·busy·감사·10분 pending 경로를 유지한다.
+- 증거: 8 remote RED, 첫 구현의 points tuple 회귀를 고친 뒤 1a14e9705a API/auth/audit·stale/reset/gap/frame/CAS/no-motion·기존 teach/순수/마커 장소 37 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/teach-survey-api-final/run-1.txt. 모델 PC 자원 기준 통과. UI 8596f7042b Chromium 6 PASS/NEW 0, 멈춘 선 표시 포함.
+- gate 변화: 상대 기록 API/UI source/remote. 카메라 누적·작업/대형·개입 연결은 진행 중이며 main 통합·CI·서명 배포·실제 현장 주행/측량 수용은 미확인이다.
+
+## 2026-10-11 · 7476837977 · D-655 조사 독립 검토 회귀 수정
+
+- 변경: 일반 teach/place/marker 저장을 활성 지도와 초안의 동일 좌표계로 제한하고 기록의 활성 버전 변경을 차단한다. 거절된 odom은 조사 연속성만 끊고 운행 앵커는 유지한다. 같은 조사 지도에서 정상 teach 편집도 review를 무효화하며 새/변경 간선 observed 근거를 보존한다. 공개 기록 프레임 snapshot으로 다른 지도 위 표시를 제한한다.
+- 증거: 독립 검토의 세 문제 remote RED 5 FAIL 뒤 API·마커·공통 계약 122 PASS/NEW 0, 추가 정상 조사 편집·활성 버전 변경·World 서비스 55 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/survey-frame-final/run-1.txt. AI PC 자원 기준 통과.
+- gate 변화: source/remote 회귀. 통합·CI·배포·실제 주행 정확도는 아직 확인하지 않았다.

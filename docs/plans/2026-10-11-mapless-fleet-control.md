@@ -138,6 +138,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | 현재 기능·공백 조사 | 진행 | camera lane CLI, LOCALIZED-only teach, profile example roads, tools-tab formation 확인 |
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
+| Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; 1a14e9705a 원격 API 37 PASS/NEW 0, 8596f7042b Chromium 6 PASS/NEW 0. Node 24 PASS. Task 3 전체의 카메라 누적은 다음 작업 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
@@ -167,3 +168,29 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - Fleet `MapPoseService` → `TeachService` → `teach_routes.StartRequest` → `site-map-teach.js` 및 API reference를 함께 연결한다. 조사 시작은 저장된 draft revision/map_id/reference revision과 명시적 기준을 요구한다. 상대 odom을 기준에 투영한 선은 observed evidence이며, 검토 전 활성화할 수 없다.
 - 기록 중 odom gap/reset·지도 기준 변경이면 유효한 앞부분만 남기고 기록을 중단한다. 기존 trusted-map 기록의 untrusted pose 건너뛰기 역시 불연속을 자동 잇지 않도록 수정하고 관련 시험을 갱신한다. 기록 중단은 로봇 정지 명령이 아니다.
 - 확정은 현재 초안 기준의 동일성을 확인한 뒤 기존 expected_revision CAS로 저장한다. 주행·카메라 기록의 원본 근거와 연결 후보를 유지하고, 관측되지 않은 연결은 자동 도로로 승격하지 않는다.
+
+### 2026-10-11 상대 주행 조사 API·화면 근거
+
+- ac95a2c756: 8개 remote RED로 mode/basis/relative recording 미지원 확인. e0c6de8616 구현 뒤 33 PASS/1 NEW는 기존 points list 형식 회귀이며 시험을 완화하지 않고 dab3453776에서 배열 형식을 복구했다. HTTP auth/audit/no-motion, stale odom, confirm CAS, 검토 무효화를 추가해 원격 37 PASS/NEW 0.
+- 1a14e9705a: 현재 source API 37 PASS/NEW 0 (`logs/teach-survey-api-final/run-1.txt`), Node 24 PASS. 초안 revision/map_id/reference 확인, 출발 때 odom 기준 고정, 단절/reset/초안 수정 시 유효 앞부분만 유지, 상대 좌표를 운행 MapPose로 승격하지 않음.
+- UI는 기록 방식 선택과 매 시작의 실제 시작점·방향 확인을 요구한다. 로봇·방식·저장 revision이 바뀌면 확인을 초기화하고, 동일 조사 snapshot인 지도에만 선을 표시하며 다른 기준의 초안 확정을 막는다. 기록 중단 표시는 로봇 정지를 뜻하지 않는다고 명시한다.
+- 3c8a1fe713 browser RED는 teach-frame 미존재다. 1a14e9705a Chromium 6 PASS/NEW 0으로 1440/390 px UNKNOWN 로봇 상대 기록→초안 확정과 기존 수동 지도/축구장 프로필을 확인했다. adb94d9097 추가 미리보기 시험은 멈춘 뒤 점 개수를 좌표 배열로 오인한 동작으로 RED였고 8596f7042b에서 수정했다. 최종 실행과 현재 main 통합 회귀 결과는 별도로 기록한다.
+- 이번 구현은 기존 teach의 단일 기록/pending 10분/초안 CAS/감사 경로를 사용한다. 새 이동 명령·새 detector·새 AI 서비스·CORE 계약 변경은 없다. 카메라 누적·선택 로봇의 작업/대형 연결·개입·배포·현장 수용까지 남아 있어 goal은 active다.
+- 8596f7042b 최종 지도 브라우저 6 PASS/NEW 0 (`logs/teach-survey-preview-green/run-1.txt`, 현장 PC 자원 기준 통과). 멈춘 조사 선이 초안 위에 남는 것도 확인했다. 1bde13e444 HTTP/desktop/mobile 읽기 전용 호출 허용 목록 강화는 원격 3 PASS/NEW 0 (`logs/teach-survey-read-only-retry/run-1.txt`, AI PC 자원 기준 통과)다.
+
+### 2026-10-11 독립 검토 수정
+
+- `requesting-code-review`에 따른 `survey_feature_review` 독립 검토는 기존 정상 teach/place의 조사 초안 좌표계 혼입, 거절된 odom 뒤 조사 기록 재개, 분류 간 같은 ID 편집의 삭제 위험을 발견했다. remote RED 5 FAIL/11 PASS와 Node RED 1 FAIL/24 PASS로 재현했다. 실패를 known failure에 추가하지 않았다.
+- 일반 teach는 시작의 map_id·전체 조사 기준·활성 버전을 고정한다. 샘플·확정·pose/마커 장소 저장에서 프레임을 비교하고 다른 프레임은 거절한다. 지도 변경 뒤 기록을 중단하며 내부 변환을 운행 pose로 승격하지 않는다. 거절된 odom은 조사 연속성만 끊고 기존 운행 앵커/epoch는 보존한다. 분류+ID로 편집·삭제하므로 기존 프로필의 분류 간 같은 ID를 보존한다.
+- 추가 검토에서 일반 기록 미리보기가 다른 프로필 위에 표시되는 경로도 고쳤다. 공개 map_id와 선택 survey_reference는 시작 snapshot이며 현재 초안 기준으로 덮어쓰지 않는다. 같은 조사 지도의 정상 teach 확정·pose/마커 추가/이동도 검토를 무효화하고 새/변경 도로에 observed 근거를 붙인다.
+- 2c3f28a10f 원격 API·기록·마커·공통 계약 122 PASS/NEW 0 (`logs/survey-review-final/run-1.txt`). 첫 GREEN의 잘못된 시험 경로는 exit 4/시험 없음으로 기록한다. 추가 정상 동작 fixture의 중복 장소 두 실패는 서로 다른 실제 위치로 고쳤으며 7476837977 주행·활성 버전 변경·World 서비스 55 PASS/NEW 0 (`logs/survey-frame-final/run-1.txt`). Node 26 PASS다.
+- 표시 회귀의 첫 browser 실행은 새 프로필 작성 폼만 열고 지도 전환을 기대한 두 fixture 실패였다. 저장된 프로필 선택까지 포함해 다시 검증한다. 기존 입력·상대 조사·축구장 6개는 해당 실행에서 통과했다.
+- 73295afa26 최종 desktop/mobile Chromium 8 PASS/57 deselected, NEW 0 (`logs/survey-review-browser-final/run-1.txt`). 수동 요소·상대 조사·축구장 프로필과 일반 기록의 다른 지도 표시 거절을 포함한다. d871a9842e 구조 검사 3 PASS/35 deselected, NEW 0 (`logs/survey-structure-final/run-1.txt`). 두 실행은 AI PC 자원 기준 통과다. 전체 65개 browser 회귀는 최종 통합 단계에서 확인한다.
+- 순수 초안 편집을 기존 UI source owner의 site-map-edit.js로 분리해 지도 모델은 770줄이다. HostStatusEvidence는 기존 evidence.py로 옮기고 public schemas alias·wire defaults 시험을 유지했다. 독립 검토를 근거로 Fleet 52,840줄을 재판정했으며 +150 허용량·observe/server/UI 분리 의무·개별 파일 상한은 유지한다. 다음 카메라 추출 구현은 Vision이 소유한다.
+- 이 단계는 source/remote이며 카메라 누적·선택 작업/대형·개입·main 통합·CI·배포·실제 사이트 수용까지 전체 목표는 계속 active다.
+- 최종 독립 검토 `survey_feature_review`는 d871a9842e 소스와 terminal 55/8/3 PASS 로그를 확인해 보고된 Important 사항 해결과 Fleet 재판정을 수용했다. 전체 목표 수용이 아닌 수동 조사/상대 기록 범위의 검토다.
+
+### 다음 카메라 누적 구현의 확인된 연결점
+
+- Vision `lane_map.generate_map`은 측정 homography·lane width·road seed로 초안을 만들고 별도 evidence 파일에 calibration·frame_sha256·proposal_only를 남긴다. 현재 UI import-camera-map은 초안을 교체하므로 누적 경로가 아니다.
+- 기존 추출기를 재사용하고 관측 근거를 지도 간선까지 연결한다. 누적은 기존 map_id와 전체 survey 기준의 동일성 및 명시적 좌표 정합이 선행돼야 한다. ID 충돌을 보존하고 관측되지 않은 장소/간선 연결을 자동 생성하지 않는다. 저장은 기존 bounded draft PUT/CAS/named operator를 사용하며 활성 지도와 source lineage를 교체하지 않는다.
