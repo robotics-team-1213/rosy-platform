@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
 - 2026-10-12 · 7ab44069a · gateway 구성 경로와 credential 값 구분
 - 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
 - 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
 - 2026-10-12 · 4ebcb80c86 · fix: pinned OpenCode CLI compatibility
-- 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
