@@ -37,7 +37,8 @@ def test_shared_floor_assets_have_metric_scale_and_source_poses():
     assert dock['texture'] == (MAP / 'textures/dock_tag_7.png').resolve()
 
 
-@pytest.mark.parametrize('change', ['missing_texture', 'escaped_texture', 'rotated_parent', 'nonfinite_pose'])
+@pytest.mark.parametrize('change', ['missing_texture', 'escaped_texture', 'rotated_parent',
+                                   'nonfinite_pose', 'invalid_ground_size', 'nonfinite_paint'])
 def test_invalid_shared_assets_fail_before_rendering(tmp_path, change):
     map_root = tmp_path / 'map'
     shutil.copytree(MAP / 'textures', map_root / 'textures')
@@ -47,10 +48,14 @@ def test_invalid_shared_assets_fail_before_rendering(tmp_path, change):
         carpet.find('.//albedo_map').text = 'model://control/map/map_v2_fleet/' + (
             '../outside.png' if change == 'escaped_texture' else 'textures/missing.png')
         (tmp_path / 'outside.png').write_bytes(b'existing external asset')
+    elif change == 'invalid_ground_size':
+        tree.find('./world/model[@name="ground_plane"]/link/visual/geometry/plane/size').text = '100 nan'
+    elif change == 'nonfinite_paint':
+        tree.find('./world/model[@name="road_lines"]/pose').text = '0 0 nan 0 0 0'
     else:
         carpet.find('pose').text = '0 0 0 0 .1 0' if change == 'rotated_parent' else 'nan 0 0 0 0 0'
     target = map_root / 'training-curved/worlds/map_v2_fleet_real.world'
     target.parent.mkdir(parents=True)
     tree.write(target)
     with pytest.raises(ValueError):
-        floor_visuals(map_root)
+        map_visual_profile(map_root)
