@@ -1,6 +1,6 @@
 # ROSY Platform 현재 폴더 책임
 
-2026-10-11 후보 소스 배치. 현재 manifest와 실제 구현을 기준으로 CORE 조립 추출까지 기록했다. 소스·설치·시험·배포·장치·현장 증거는 마지막 절처럼 구분한다.
+2026-10-11 local main `7f391fa2d`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
 
 구조 결정은 Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. CORE 세부 책임은 [CORE·Drive 안내](core-drive-responsibilities.md), 소유권·import 규칙은 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이 기준이다. 과거 `d427_target`은 소유권 식별자이고 현재 경로는 `path`와 필요한 `layout_target`으로 읽는다.
 
@@ -164,4 +164,4 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 
-이 안내의 이전/분리 완료는 소스 수준 판정이다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인, CI, 배포 readback, ROS/장치/현장 수용은 각각 별도 evidence이며 root 계획과 검증 로그에서 확인한다.
+이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 85개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. Fleet 내부 `fleet.ai`, `fleet.server.web`의 별도 패키지 분리는 보류이며, 행동 조건부 World model도 후속 계획이다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 확인한다.

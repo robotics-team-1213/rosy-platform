@@ -1,6 +1,6 @@
 # CORE·Drive·Arm의 현재 책임 구조
 
-2026-10-11 후보 소스 배치. Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. [전체 폴더 안내](platform-folder-responsibilities.md)는 현재 manifest의 모든 root를 기록한다. 아래 구현 설명은 source 판정이며 새 후보의 전체 시험·착지·배포·장치 수용 판정은 검증 기록 확정 전까지 대기한다.
+2026-10-11 local main `7f391fa2d`에 반영한 소스 배치. Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. [전체 폴더 안내](platform-folder-responsibilities.md)는 현재 manifest의 모든 root를 기록한다. [검증·착지 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 source와 remote 시험 결과를 배포·장치 수용과 구분한다.
 
 ```text
 middleware/
@@ -71,4 +71,4 @@ KTURN 후진 arc는 기존 rear strip·blind band·trail·freshness 거절 검�
 
 현재 World의 pure MapPose 구현은 `operations/world/src/rosy/world/state/projections/map_pose.py`에 있다. Fleet의 기존 import는 identity alias이고 service·trip·claim·dispatch transaction은 Fleet가 소유한다. 관측/odom 기반 dead reckoning을 행동 조건부 미래 rollout으로 집계하지 않는다. action-conditioned World model, 대응 학습·독립 평가와 실제 decision 소비자는 D-625의 후속 계획이며 빈 prediction 폴더를 만들지 않았다.
 
-[기존 독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 소스 범위 판정이다. 새 후보 전체의 remote 회귀·known_failures·harness/Safety·checkout 밖 설치 결과를 모은 검증 기록은 확정 대기이며, 부분 성공을 전체 GREEN으로 표기하지 않는다. CI·ROS 실행·ARM64 이미지·배포 readback·실물·현장 수용은 각각 별도 evidence다. 후속 작업은 [CORE 계획](../plans/2026-10-11-core-responsibility-and-driving.md), [D-628 실행 계획](../plans/2026-10-11-core-drive-remaining.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)을 따른다.
+[독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 소스 범위 판정이다. remote 회귀·known_failures·harness/Safety·checkout 밖 설치 결과와 local main 착지는 [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 있다. 옛 경로 때문에 실패한 시험과 수정 후 재검사를 각각 기록했다. CI·ROS 실행·ARM64 이미지·배포 readback·실물·현장 수용은 확인하지 않았다. 후속 작업은 [CORE 계획](../plans/2026-10-11-core-responsibility-and-driving.md), [D-628 실행 계획](../plans/2026-10-11-core-drive-remaining.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)을 따른다.
