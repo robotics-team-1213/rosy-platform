@@ -325,7 +325,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_532,
+        54_074,
+        "split: independently re-judged on 2026-10-12 by learning_ui at 54074 for D-683/D-686/D-689. "
+        "Account/login/profile reuse Fleet authentication, SQLite and Console; no service, dependency, "
+        "command authority or SIZE_UNIT added. Keep package +150, all file ceilings and existing "
+        "observe/server/UI split obligations. password_session.py is 549 lines; endpoint growth reaching "
+        "600 must move HTTP installation to server/password_routes.py, retaining validation/storage "
+        "in PasswordSessions. See docs/plans/2026-10-12-fleet-self-profile-plan.md. Previous verdict: "
         "split: independently re-judged on 2026-10-12 by pipeline_review at 53532 for D-685. "
         "Autonomous waiting/replan retain existing stuck and trip owners; bounded observation history "
         "stays in server/observation_store.py, read wiring in console_routes.py, offline unlabeled export "

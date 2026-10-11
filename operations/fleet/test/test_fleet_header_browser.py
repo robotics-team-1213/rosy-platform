@@ -188,7 +188,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
-                    more = page.get_by_role("button", name="접속과 화면 표시")
+                    more = page.get_by_role("button", name="화면 표시와 고급 접속")
                     expect(more).to_be_visible()
                     more.click()
                     expect(page.locator("#theme-choice-label")).to_be_visible()

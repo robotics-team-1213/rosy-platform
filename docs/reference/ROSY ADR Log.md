@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
+| D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
+| D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
 | D-1 | 단일 프로세스 (rclpy + uvicorn 스레드) | Accepted |
 | D-2 | 자체 cmd_vel 멀렉서 (Nav2 출력 remap) | Accepted |
 | D-3 | Flask 완전 대체 — FastAPI 전면 이관 | Accepted |
@@ -754,6 +757,17 @@
 - 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
 - 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
 
+## D-686 — Fleet 초기 계정과 첫 로그인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 사용자 지시).
+- 결정: 초기 ID와 비밀번호를 일치시키되 초기 쿠키는 비밀번호 변경에만 사용하고 완료 전 운용 API를 거절한다. 기존 SQLite의 source-bound 자격과 원자적 세션 회전을 사용한다.
+- 계약: [ADR](../adr/D-686-fleet-first-login-password-change.md). 실제 명단은 private 기록에서만 다루고 설치·발급·당사자 변경은 별도 증거다.
+
+## D-689 — Fleet 내 프로필과 본인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 기본 프로필만).
+- 결정: 표시 이름과 현재 비밀번호 확인 변경은 본인 쿠키에만 제공한다. ID·이메일·권한 원본은 읽기 전용으로 유지하며 기존 SQLite/세션 경로를 재사용한다.
+- 계약: [ADR](../adr/D-689-fleet-self-profile.md). 사진·추가 연락처·관리자 편집은 범위에 없으며 운용 문서의 principal·역할 표시와 초안을 보존한다. 화면 이름은 운용 용어 규칙에 맞춰 `내 계정`으로 통일한다.
 ## D-690 — 도로 인지 평가의 출처 단위 불확실성
 
 **Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
