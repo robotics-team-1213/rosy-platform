@@ -87,3 +87,13 @@ class CallResult:
     def __len__(self): return 2
     def __iter__(self): return iter((self.judgment, self.cost_usd))
     def __getitem__(self, index): return (self.judgment, self.cost_usd)[index]
+
+
+def call_cost_evidence(invocation, problem, bound, checked, cost):
+    """Validate optional immutable call evidence without discarding known numeric cost."""
+    if type(invocation) is not CallResult: return None, False
+    evidence = invocation.cost_evidence
+    if evidence is not None:
+        try: evidence.validate(problem, bound, checked, cost)
+        except (ValueError, TypeError): return None, True
+    return evidence, invocation.evidence_error

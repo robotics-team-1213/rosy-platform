@@ -16,7 +16,7 @@ from fleet.server.incident_deliberation import FleetBaseline
 from .closure import observe_closure
 from .contract import CaseBudget, CaseScope, micros
 from .ledger.receipt import model_receipt
-from rosy.decision.deliberation.contracts.billing import CallResult
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 
 
 class IncidentCaseWorker:
@@ -246,11 +246,7 @@ class IncidentCaseWorker:
             micros(cost)
             state = 'REJECTED'
             checked = judgment(problem, bound, result.payload if type(result) is Judgment else result)
-            if type(invocation) is CallResult:
-                cost_evidence, evidence_error = invocation.cost_evidence, invocation.evidence_error
-                if cost_evidence is not None:
-                    try: cost_evidence.validate(problem, bound, checked, cost)
-                    except (ValueError, TypeError): cost_evidence, evidence_error = None, True
+            cost_evidence, evidence_error = call_cost_evidence(invocation, problem, bound, checked, cost)
             if self._fresh(problem) and not evidence_error: state = 'COMPLETED'
         except asyncio.CancelledError:
             await asyncio.shield(self._db('complete', scope, attempt, worker_id=self._worker_id,
