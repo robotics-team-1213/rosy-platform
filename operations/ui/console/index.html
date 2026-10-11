@@ -93,6 +93,27 @@
       <h3 id="channel-requests-heading">내 대화 요청</h3>
       <p id="channel-requests-state" class="hint" role="status">접속 후 조회합니다.</p>
       <ul id="channel-requests" class="work-list" aria-labelledby="channel-requests-heading"></ul>
+      <section id="channel-review" aria-labelledby="channel-review-heading" hidden>
+        <h3 id="channel-review-heading">대화 요청 검토</h3>
+        <p id="channel-review-original"></p>
+        <p id="channel-review-state" class="hint" role="status"></p>
+        <label for="channel-review-robot">이동할 로봇</label>
+        <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
+        <label for="channel-review-x">공유 지도 X (m)</label>
+        <input id="channel-review-x" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-y">공유 지도 Y (m)</label>
+        <input id="channel-review-y" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-yaw">목표 방향 (rad)</label>
+        <input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-reason">검토 사유</label>
+        <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
+        <div class="actions">
+          <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
+          <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
+          <ui-button id="channel-review-ready" kind="quiet" type="button">이동 후보 저장</ui-button>
+          <ui-button id="channel-review-submit" type="button" hidden>확인 후 Fleet에 요청</ui-button>
+        </div>
+      </section>
     </section>
 
     <section class="panel" aria-labelledby="map-heading">
