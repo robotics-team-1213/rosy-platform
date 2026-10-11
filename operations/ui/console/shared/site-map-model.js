@@ -157,6 +157,7 @@ export const SITE_MAP_ERROR_LABEL = {
 };
 
 export function siteMapErrorText(error) {
+  if (error.code === 'PASSWORD_CHANGE_REQUIRED') return '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요';
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
   if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';

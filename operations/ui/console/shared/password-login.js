@@ -113,6 +113,10 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     } catch (error) {
       if (error?.status === 401 || error?.status === 404) {
         cookie = false; cookiePrincipal = cookieRole = null;
+        if (standalone && changing) {
+          changing = false; host.innerHTML = FORM; bindForm();
+          errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
+        }
         if (!standalone) host.hidden = true;
       } else if (standalone) {
         host.hidden = false;
@@ -147,9 +151,12 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         if (changing && session.password_change_required !== false) throw new Error('Password change not verified');
         verified(session);
       } catch (error) {
-        errorText(changing ? (error?.status === 422 || error?.status === 400
+        if (changing && error?.status === 401) {
+          changing = false; host.innerHTML = FORM; bindForm();
+          errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
+        } else errorText(changing ? (error?.status === 422 || error?.status === 400
           ? '8자 이상이며 아이디와 다른 새 비밀번호를 입력하세요.'
-          : '비밀번호 변경 결과를 확인할 수 없습니다. 연결을 확인한 뒤 다시 시도하세요.') : failureText(error));
+          : '비밀번호 변경 결과를 확인할 수 없습니다. 연결을 확인한 뒤 화면을 새로고침해 계정 상태를 확인하세요.') : failureText(error));
       } finally {
         password.value = ''; if (confirmation) confirmation.value = '';
         busy = false; submitButton.disabled = false;
