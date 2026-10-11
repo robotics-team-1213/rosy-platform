@@ -18,6 +18,7 @@ import inspect
 import logging
 import math
 import time
+from copy import deepcopy
 from typing import Awaitable, Callable, Iterable, Optional
 
 import httpx
@@ -331,17 +332,19 @@ class TripRunner(TripAdmission, TripProgress):
         live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
         live.lap_start = 0
 
-    async def _ai_confirm(self, live: LiveTrip, principal_id: str = "fleet-ai") -> None:
+    async def _ai_confirm(self, live: LiveTrip, principal_id: str = "fleet-ai") -> Optional[bool]:
         """D-610 7: an AI replan switches without ``replan_hold`` once the new route passes the D-494/D-601
         start checks a first trip passes; a refusal leaves the hold for the operator (D-517 M4)."""
         hold = live.view["hold"]
         if not hold or hold.get("reason") != "replan" or hold.get("plan") is None:
             return
         robot_id, segments = live.view["robot_id"], hold["plan"]["segments"]
+        selected = deepcopy(hold)
         token = (self._stop_epoch, self._start_cancels.get(robot_id, 0), live.route_rev)
 
         def current():
             return (live.open and self._live.get(robot_id) is live and live.view["hold"] is hold
+                    and hold == selected
                     and token == (self._stop_epoch, self._start_cancels.get(robot_id, 0), live.route_rev)
                     and (principal_id != "fleet-rule" or robot_id in self.autonomous_robots))
 

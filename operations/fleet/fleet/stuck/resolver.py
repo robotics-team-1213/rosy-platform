@@ -249,6 +249,8 @@ class StuckResolver:
         stuck, mode = _stuck_of(row), _mode_of(row)
         chain = self._chains.get(rid)
         if chain is not None and (mode and chain.mode and mode != chain.mode
+                                  and not (rid in self.autonomous_robots and stuck is not None
+                                           and chain.stuck_id == str(stuck["stuck_id"]))
                                   or (chain.closed_at is not None
                                       and now - chain.closed_at > self.config.restuck_s)):
             del self._chains[rid]                  # mode changed or the window passed
@@ -285,11 +287,18 @@ class StuckResolver:
             return self._escalate(chain, rid, sid, "deadline")
         if rid in self.autonomous_robots and chain.observing is not None:
             # A changed clock is not recovery evidence; only a newly admissible candidate reopens WAIT.
-            if stuck.get("phase") != "ASKING":
+            if stuck.get("phase") == "YIELDED":
+                if chain.rule_answers >= self.config.rule_budget:
+                    return self._escalate(chain, rid, sid, "rule_budget")
+                action = self._next_segment(row, rows)
+            elif stuck.get("phase") in ("ASKING", "WAITING_CONSOLE"):
+                action = pipeline.candidate(self, now, row, stuck, rows, chain)
+            else:
                 return None
-            action = pipeline.candidate(self, now, row, stuck, rows, chain)
             if not isinstance(action, Answer) or action.decision == "WAIT":
                 return action if isinstance(action, Escalate) else None
+            if action.decision in chain.unresolved:
+                return None
             chain.answered.discard(sid)
             chain.held.pop(sid, None)
             chain.observing = None

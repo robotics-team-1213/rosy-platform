@@ -33,8 +33,8 @@ class ObservationStore(CoreEventStore):
             if not isinstance(rid, str) or not rid or type(row.get("online")) is not bool:
                 raise EventRejected("observation identity and online flag are required")
             stamp = row.get("_state_mono")
-            age = (max(0.0, monotonic_now - stamp) if isinstance(stamp, (int, float))
-                   and not isinstance(stamp, bool) and math.isfinite(stamp) else None)
+            age = (monotonic_now - stamp if isinstance(stamp, (int, float))
+                   and not isinstance(stamp, bool) and math.isfinite(stamp) and stamp <= monotonic_now else None)
             body = {key: row.get(key) for key in ("robot_id", "online", "state", "gather_source",
                                                  "goal", "queued", "capabilities", "link", "link_reason")}
             body.update(received_at=received_at, observed_at=None if age is None else received_at - age,
