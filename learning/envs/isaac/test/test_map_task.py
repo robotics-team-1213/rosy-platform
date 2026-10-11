@@ -95,6 +95,13 @@ def test_policy_admission_uses_core_and_stop_clears_old_episode():
     assert owner.halted
 
 
+def test_final_output_refuses_intent_before_nav_slot_timeout():
+    owner = SimulationOwner(); owner.begin(1)
+    assert owner.submit(intent(), observed_at=10., now=10.01).linear > 0
+    assert owner.select_output(now=10.11).linear == 0
+    assert owner.halted and owner.command.select_output(now=10.12).linear == 0
+
+
 @pytest.mark.parametrize('overrides', [dict(device_id='real-pinky'), dict(source='manual'),
     dict(envelope_ref='other'), dict(priority_class=PriorityClass.NAVIGATION),
     dict(valid_for_s=5.), dict(limits={'linear_mps': .2, 'angular_radps': .8})])
@@ -104,8 +111,18 @@ def test_policy_identity_or_envelope_refusal_latches_zero(overrides):
     assert owner.halted
 
 
-@pytest.mark.parametrize('observed_at,now', [(10., 10.2), (9., 10.01), (11., 10.01), (10., math.nan)])
+@pytest.mark.parametrize('observed_at,now', [(10., 10.2), (9., 10.01), (11., 10.01), (10., math.nan),
+                                          (-1., -1.), (True, True)])
 def test_expired_or_nonfinite_observation_cannot_refresh_command(observed_at, now):
     owner = SimulationOwner(); owner.begin(1)
+    owner.submit(intent(), observed_at=10., now=10.01)
     assert owner.submit(intent(), observed_at=observed_at, now=now).linear == 0
+    assert owner.halted
+
+
+@pytest.mark.parametrize('now', [-1., True, math.inf, '10'])
+def test_final_output_invalid_clock_clears_previous_intent(now):
+    owner = SimulationOwner(); owner.begin(1)
+    owner.submit(intent(), observed_at=10., now=10.01)
+    assert owner.select_output(now=now).linear == 0
     assert owner.halted

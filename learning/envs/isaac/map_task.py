@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import random
 import sys
+import time
 
 import yaml
 
@@ -147,6 +148,7 @@ class SimulationOwner:
         self.command = CommandManager(SourceRegistry(), self.modes, self.safety)
         self.epoch = 0
         self.halted = True
+        self.pending = None
 
     def begin(self, epoch):
         from core_features.command.arbitration import Mode
@@ -163,6 +165,7 @@ class SimulationOwner:
         self.command.clear_navigation()
         self.modes.transition(Mode.IDLE)
         self.halted = True
+        self.pending = None
 
     def submit(self, intent, *, observed_at, now):
         from rosy.contracts.motion import MotionIntent, MotionKind, PriorityClass
@@ -174,11 +177,27 @@ class SimulationOwner:
                      and h.priority_class is PriorityClass.POLICY and h.envelope_ref == 'isaac-map-v1'
                      and h.state_sequence == self.epoch and h.valid_for_s <= .1
                      and dict(h.limits) == {'linear_mps': .06, 'angular_radps': .8}
-                     and all(type(v) in (int, float) and math.isfinite(v) for v in (observed_at, now))
+                     and all(type(v) in (int, float) and math.isfinite(v) and v >= 0 for v in (observed_at, now))
                      and 0 <= now - observed_at <= .1 and h.is_valid_at(now)
                      and abs(p.linear_mps) <= .06 and abs(p.angular_radps) <= .8)
         if not valid:
             self.stop()
             return ZERO
+        self.pending = (intent, observed_at)
         self.command.set_nav_twist(Twist(p.linear_mps, p.angular_radps), now=now)
+        return self.select_output(now=now)
+
+    def select_output(self, now=None):
+        from core_features.command.manager import ZERO
+        now = time.monotonic() if now is None else now
+        if self.pending is None or self.halted:
+            return ZERO
+        intent, observed_at = self.pending
+        if (type(now) not in (int, float) or not math.isfinite(now) or now < 0 or not intent.header.is_valid_at(now)
+                or not 0 <= now - observed_at <= .1 or intent.header.state_sequence != self.epoch):
+            self.stop()
+            return ZERO
         return self.command.select_output(now=now)
+
+    def announce_pending(self):
+        self.command.announce_pending()
