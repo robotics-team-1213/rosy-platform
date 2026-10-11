@@ -22,8 +22,9 @@ class Socket:
     async def recv(self):
         return json.dumps(self.events.pop(0))
 
-    async def close(self):
+    async def close(self, **options):
         self.closed = True
+        self.close_code = options.get("code")
 
 
 def packet(event, data, seq):
@@ -81,6 +82,7 @@ def test_identify_and_resume_and_missing_heartbeat_ack():
         assert socket.sent[1]["op"] == 6 and socket.sent[1]["d"]["seq"] == 7
         worker.awaiting_ack = True
         assert await worker.heartbeat(socket) is False and socket.closed
+        assert socket.close_code == 4000
         assert "private-test-bot-token" not in repr(worker)
     asyncio.run(scenario())
 

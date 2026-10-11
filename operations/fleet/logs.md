@@ -3307,6 +3307,6 @@
 - 증거: 원격 RED 모듈 없음1 NEW, manifest 누락1 NEW 및 구조 증가1 NEW를 각각 수정했다. 최신 focused44 PASS/NEW0; 실제 Chromium4 PASS/NEW0(처음4 skipped는 pass 제외). 독립 source/Safety 검토 수용, Fleet53396/app906 재측정, +150/파일 상한/기존 추출 의무 유지. 실제 기명 HTTPS cookie 로그인은 별도 후속 증거에 기록했다.
 - gate 변화: source 접수와 named Console 로그인 확인. Gateway/token/운영 identity mapping/실제 대화 수신 및 후보/승인/reply는 후속이다. Task/Mission/Job/claim/모델/장치 명령·push·image deploy는 없다. 근거: docs/validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md.
 
-## 2026-10-12 — D-675 Discord Gateway 수신 source
+## 2026-10-12 · 38941ff24 · D-675 Discord Gateway 수신 source
 
 기존 Fleet lifespan 수신 worker, private Bot token 파일, 원장 commit 후 resume 및 미해결 session 공백 정지 구현. remote RED는 gateway 모듈 누락 확인; GREEN/설치/실제 수신은 검사 전이다. 장치 명령 없음.
