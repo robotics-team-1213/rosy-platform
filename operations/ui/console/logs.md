@@ -1,11 +1,5 @@
 # console_source verification log
 
-## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
-
-- 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
-- 증거: Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 원격 `440385e24` 95 PASS / 1 NEW의 CSP 대기 helper를 수정하고 `0d01b320c` 재접속/편집 보존/충돌 최종 5 PASS, NEW 0을 확인했다. `06ce50c4a` Android proxy 실제 번들 브라우저 1 PASS와 JVM/assemble을 확인했다. 실패한 전체 묶음은 통과로 합산하지 않는다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
-- 경계: main 착지·push·CI·서명·설치·실물 수용 미확인. 시험 서버 캡처를 배포된 화면의 증거로 부르지 않는다.
-
 ## 2026-10-11 · 0702cdb15 · uiux: 선택 로봇의 배정·진행 작업면 (D-651)
 
 - 변경: 지도 작업면과 선택한 로봇 작업면을 나눴다. 선택은 명령과 분리하고 선택 변경 시 이전 목표 지정·미확정 명령을 취소한다. 기존 경로·한 바퀴·반복 입력은 종류별로 하나씩 표시한다. 지도 장소·신호는 번호·아이콘으로 줄이고 좌표·교통과 기술 옵션은 지도 밖 접힘으로 옮겼다. 전체 취소·개입 큐와 전체 로봇 연결·안전·교정 요약은 보존한다.
@@ -127,3 +121,10 @@
 - 변경: TRIP_START_CANCELED에 한국어 운행 안내를 연결한다. 원시 오류 코드 대신 상태 확인 뒤 재시작을 안내한다.
 - 증거: source 5f3f033a8의 원격 trip code label/취소/Task/goal 회귀 147 PASS, NEW 0; Node site-map 29 PASS. 서버와 물리 stop 권한은 바꾸지 않는다.
 - gate 변화: SOURCE/호스트 회귀만 추가한다. 배포된 UI와 실제 운행 수용은 미확인이다.
+
+## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
+
+- 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
+- 증거: Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 원격 `440385e24` 95 PASS / 1 NEW의 CSP 대기 helper를 수정하고 `0d01b320c` 재접속/편집 보존/충돌 최종 5 PASS, NEW 0을 확인했다. `06ce50c4a` Android proxy 실제 번들 브라우저 1 PASS와 JVM/assemble을 확인했다. 실패한 전체 묶음은 통과로 합산하지 않는다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
+- gate 변화: main 착지·push·CI·서명·설치·실물 수용 미확인. 시험 서버 캡처를 배포된 화면의 증거로 부르지 않는다.
+
