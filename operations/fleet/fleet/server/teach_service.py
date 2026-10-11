@@ -23,6 +23,7 @@ from typing import Callable, Iterable, Optional
 from pydantic import ValidationError
 
 from fleet.routing import teach
+from fleet.localization.map_pose import compose, relative
 from fleet.routing.graph import polyline_length
 from fleet.server.site_map_routes import MAX_DRAFT_BYTES, invalid_errors
 from fleet.site_map import IMPORT_WIDTH_M, MAX_POINTS, MIN_EDGE_M, SiteMap
@@ -53,6 +54,17 @@ class Session:
     stopped_at: Optional[float] = None
     result: Optional[dict] = None
     last_kept_at: float = 0.0
+    mode: str = "map"
+    map_id: Optional[str] = None
+    draft_revision: Optional[str] = None
+    reference: Optional[dict] = None
+    odom_anchor: Optional[tuple] = None
+    odom_epoch: int = 0
+
+
+def survey_reference(body: dict) -> Optional[dict]:
+    reference = body.get("survey")
+    return {k: v for k, v in reference.items() if k not in {"reviewed", "review_note"}} if reference else None
 
 
 class TeachService:
@@ -85,20 +97,59 @@ class TeachService:
                              {"state": getattr(pose, "state", None)})
         return pose
 
+    async def _survey_odom(self, robot_id: str):
+        reader = getattr(self._poses, "survey_odom", None)
+        if reader is None:
+            return None
+        try:
+            await self._poses.refresh(robot_id, force_rest=True)
+            sample = reader(robot_id)
+            return await sample if inspect.isawaitable(sample) else sample
+        except Exception:
+            _LOG.debug("teach: survey odom read for %s failed", robot_id, exc_info=True)
+            return None
+
+    async def _end_record(self, reason: str) -> None:
+        try:
+            await self.stop(IDLE_PRINCIPAL, reason=reason)
+        except TeachError as exc:
+            if exc.code != "TEACH_TOO_SHORT":
+                raise
+
     async def sample(self) -> None:
         """One recording step: read the pose and keep it when the D-494 6 rules allow."""
         session = self._recording
         if session is None or len(session.points) >= MAX_POINTS:
             return
+        if session.mode == "survey":
+            sample = await self._survey_odom(session.robot_id)
+            if session is not self._recording:
+                return
+            draft = self._store.draft_view()
+            body = draft["map"] or {}
+            if (draft["revision"] != session.draft_revision or body.get("map_id") != session.map_id
+                    or survey_reference(body) != session.reference):
+                await self._end_record("survey_changed")
+                return
+            if sample is None:
+                await self._end_record("odom_lost")
+                return
+            odom, _stamp, epoch = sample
+            if epoch != session.odom_epoch:
+                await self._end_record("odom_reset")
+                return
+            x, y, _yaw = compose((*session.reference["origin"], session.reference["heading_rad"]),
+                                relative(session.odom_anchor, odom))
+            point = (round(x, 3), round(y, 3))
+            if not session.points or math.dist(session.points[-1], point) >= teach.SPACING_M:
+                session.points.append(point)
+                session.last_kept_at = self._clock()
+            return
         pose = await self._pose(session.robot_id)
         if session is not self._recording:
             return
         if teach.keep([], pose) is None:  # a later valid pose must not bridge an unobserved road
-            try:
-                await self.stop(IDLE_PRINCIPAL, reason="pose_lost")
-            except TeachError as exc:
-                if exc.code != "TEACH_TOO_SHORT":
-                    raise
+            await self._end_record("pose_lost")
             return
         point = teach.keep(session.points, pose)
         if point is not None and session is self._recording:
@@ -129,21 +180,52 @@ class TeachService:
                 _LOG.exception("teach: sample failed")
             await asyncio.sleep(SAMPLE_S)
 
-    async def start(self, robot_id: str, principal_id: str) -> dict:
+    async def start(self, robot_id: str, principal_id: str, *, mode: str = "map",
+                    map_id: Optional[str] = None, reference_revision: Optional[str] = None,
+                    expected_revision: Optional[str] = None) -> dict:
         if self._recording is not None:
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
                                                  "robot_id": self._recording.robot_id})
-        await self._localized(robot_id)
+        if mode not in {"map", "survey"}:
+            raise TeachError(422, "TEACH_MODE_INVALID")
+        reference, anchor, epoch = None, None, 0
+        if mode == "survey":
+            if robot_id not in set(self._roster()):
+                raise TeachError(404, "UNKNOWN_ROBOT")
+            draft = self._store.draft_view()
+            body = draft["map"] or {}
+            reference = survey_reference(body)
+            if reference is None:
+                raise TeachError(422, "TEACH_SURVEY_REQUIRED")
+            if expected_revision is None or draft["revision"] != expected_revision:
+                raise TeachError(409, "SITE_MAP_DRAFT_CHANGED")
+            if map_id != body.get("map_id") or reference_revision != reference["revision"]:
+                raise TeachError(409, "TEACH_SURVEY_CHANGED")
+            sample = await self._survey_odom(robot_id)
+            if sample is None:
+                raise TeachError(422, "TEACH_ODOM_UNAVAILABLE")
+            anchor, _stamp, epoch = sample
+            if self._store.draft_view()["revision"] != expected_revision:
+                raise TeachError(409, "SITE_MAP_DRAFT_CHANGED")
+        else:
+            if any(value is not None for value in (map_id, reference_revision, expected_revision)):
+                raise TeachError(422, "TEACH_MODE_INVALID")
+            await self._localized(robot_id)
         if self._recording is not None:  # another start won while we read the pose
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
                                                  "robot_id": self._recording.robot_id})
-        session = self._recording = Session(uuid.uuid4().hex, robot_id, principal_id, self._clock())
+        session = self._recording = Session(uuid.uuid4().hex, robot_id, principal_id, self._clock(),
+            mode=mode, map_id=map_id, draft_revision=expected_revision, reference=reference,
+            odom_anchor=anchor, odom_epoch=epoch)
         session.last_kept_at = session.started_at
         self._store.record_event("teach_started", principal_id, {"teach_id": session.teach_id, "robot_id": robot_id})
-        try:  # a failed first read leaves the sampler to retry
-            await self.sample()
-        except Exception:
-            _LOG.exception("teach: first sample failed")
+        if mode == "survey":
+            session.points.append(tuple(round(v, 3) for v in reference["origin"]))
+        else:
+            try:  # a failed first read leaves the sampler to retry
+                await self.sample()
+            except Exception:
+                _LOG.exception("teach: first sample failed")
         self._task = asyncio.ensure_future(self._run())
         return self.view()
 
@@ -159,10 +241,14 @@ class TeachService:
         line = teach.simplify(session.points)
         detail = {"teach_id": session.teach_id, "robot_id": session.robot_id,
                   "points": len(session.points), "kept": len(line), "reason": reason}
+        if session.mode == "survey":
+            detail.update(mode="survey", map_id=session.map_id, reference_revision=session.reference["revision"])
         self._store.record_event("teach_stopped", principal_id, detail)
         if len(line) < 2 or polyline_length(line) <= MIN_EDGE_M:
             raise TeachError(422, "TEACH_TOO_SHORT", {**detail, "min_m": MIN_EDGE_M})
         places = self._base()["places"]
+        if session.mode == "survey" and survey_reference(self._base()) != session.reference:
+            places = []
         session.result = {**detail, "polyline": [list(p) for p in line],
                           "from_candidates": teach.candidates(places, line[0]),
                           "to_candidates": teach.candidates(places, line[-1]),
@@ -200,13 +286,22 @@ class TeachService:
         session = self._pending.get(teach_id)
         if session is None:
             raise TeachError(404, "TEACH_UNKNOWN")
+        base = self._base()
+        if session.mode == "survey" and (base.get("map_id") != session.map_id
+                                         or survey_reference(base) != session.reference):
+            raise TeachError(409, "TEACH_SURVEY_CHANGED")
         try:
             body, edge_id = teach.append_edge(
-                self._base(), [tuple(p) for p in session.result["polyline"]], start=start, end=end,
+                base, [tuple(p) for p in session.result["polyline"]], start=start, end=end,
                 direction=direction, drive_mode=drive_mode, speed_cap_mps=speed_cap_mps,
                 width_m=width_m if width_m is not None else IMPORT_WIDTH_M)
         except teach.TeachRefused as exc:
             raise TeachError(422, exc.code, exc.detail) from exc
+        if session.mode == "survey":
+            edge = next(edge for edge in body["edges"] if edge["id"] == edge_id)
+            edge["evidence"] = {"source": "odometry", "status": "observed",
+                                "reference_revision": session.reference["revision"], "note": ""}
+            body["survey"] = {**body["survey"], "reviewed": False, "review_note": ""}
         draft = self._save(body, expected_revision, principal_id)  # SiteMapError passes through
         del self._pending[teach_id]
         self._store.record_event("teach_confirmed", principal_id, {"teach_id": teach_id, "edge_id": edge_id,
@@ -273,5 +368,9 @@ class TeachService:
     def view(self) -> dict:
         self._prune()
         live = self._recording
-        return {"recording": None if live is None else {**asdict(live), "points": [list(p) for p in live.points]},
+        recording = None if live is None else {k: v for k, v in asdict(live).items()
+            if k not in {"reference", "odom_anchor", "odom_epoch"}}
+        if recording is not None and live.reference is not None:
+            recording["reference_revision"] = live.reference["revision"]
+        return {"recording": recording,
                 "pending": [s.result for s in reversed(self._pending.values())]}  # newest first

@@ -34,6 +34,9 @@
 - 기존 초안·프로필 요청의 크기·revision·named operator·감사 계약은 유지한다. 활성화 및 최초 import는 미검토 survey를 422 `SITE_MAP_SURVEY_UNREVIEWED`, observed/inferred road evidence를 422 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 메타데이터는 World의 운행 MapPose나 CORE 명령을 바꾸지 않는다.
 - 금지 구역에 닿거나 차로 반폭 이내로 접근하는 주행 간선이 있으면 활성화/최초 import는 422 `SITE_MAP_EXCLUSION_OVERLAP`이다. 금지 영역을 그림으로만 표시한 채 경로 계획이 통과하도록 두지 않는다. 간선 기하를 수정하거나 차로 초안에서 제거한 뒤 다시 검토한다.
 - 기존 teach의 map-pose 기록 중 UNKNOWN/DEGRADED 또는 dead_reckon_m >0.5로 유효 좌표가 끊기면 기록을 끝낸다. stop/result의 reason은 `pose_lost`이며, 직전까지 유효한 선만 pending에 남는다(최소 길이 미만은 폐기). 이후 재관측 좌표를 같은 선으로 자동 잇지 않는다. 이는 기록 중단이며 로봇 정지 명령이나 위치 승인으로 사용하지 않는다.
+- `POST /api/fleet/teach/start`에 선택 mode `map`(기본값)/`survey`를 추가한다. map은 기존 요청을 유지하며 조사 필드를 받지 않는다. survey는 저장된 초안의 `map_id`, `reference_revision`(조사 revision 형식), `expected_revision`과 신선한 상대 odom을 요구한다. 현재 로봇 위치를 survey.origin, 현재 방향을 survey.heading_rad에 놓는 상대 변환으로 선을 기록한다. 로봇을 설명에 명시한 실제 시작점·방향에 놓고 시작해야 한다. 운행 MapPose나 map pin은 생성하지 않는다.
+- survey 시작은 초안 없음/조사 없음 422 `TEACH_SURVEY_REQUIRED`, revision 불일치 409 `SITE_MAP_DRAFT_CHANGED`, map_id/조사 기준 불일치 409 `TEACH_SURVEY_CHANGED`, odom 없음·stale·읽기 실패 422 `TEACH_ODOM_UNAVAILABLE`을 반환한다. 유효하지 않은 mode/필드 조합은 422 `TEACH_MODE_INVALID`이다. 기존 named operator·roster·한 사이트 한 기록·busy·감사·pending 10분 계약을 유지한다.
+- survey recording/result에는 mode, map_id, reference_revision을 추가하며 recording의 draft_revision은 시작 시점의 저장 revision이다. 내부 odom anchor/epoch는 공개 응답에 넣지 않는다. 기록 중 초안 수정은 `survey_changed`, odom 단절은 `odom_lost`, odom epoch 변경은 `odom_reset`으로 유효 앞부분만 남기고 끝낸다. confirm은 시작 기준과 현재 초안의 동일성을 확인하고 기존 expected_revision CAS로 저장하며 새 간선을 source=odometry/status=observed로 기록하고 survey 검토를 무효화한다. 기준이 바뀌면 409 `TEACH_SURVEY_CHANGED`로 기록을 유지하고 저장을 거절한다.
 
 # 1. 버저닝 및 폐기 정책
 
