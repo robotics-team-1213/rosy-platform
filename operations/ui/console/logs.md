@@ -1,6 +1,6 @@
 # console_source verification log
 
-## 2026-10-12 · D-683 · 로그인·계정과 업무 복귀
+## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
 
 - 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
 - 증거: `d3dac3633` Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 이전 원격 묶음 `b9145fa9b` 169 PASS / 8 NEW에서 재접속 Apply 복원 결함 및 변경된 계약의 fixture를 수정했다. 수정 후 브라우저와 Android proxy는 진행 중이다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
