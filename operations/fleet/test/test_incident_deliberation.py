@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 import pytest
 
 from fleet.server.deliberation_journal import DeliberationJournal
-from fleet.server.incident_deliberation import run_line_judgment
-from rosy.decision.deliberation import Supervisor
+from fleet.server.incident_deliberation import FleetBaseline, run_line_judgment
+from rosy.decision.deliberation import ConditionalReview, Supervisor
 from rosy_situation.assessment import AssessmentInput, EvidenceRef, assess
 from rosy_situation.snapshot_assessment import POLICY
 
@@ -89,3 +89,52 @@ def test_wrong_owner_or_source_never_calls_models(tmp_path, owner, source):
     result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
         Supervisor(clock=lambda: 101), providers, current=lambda: receipt))
     assert result['state'] == 'HOLD' and result['calls'] == 0
+
+
+def test_scoped_fleet_baseline_mismatch_requests_one_comparison(tmp_path):
+    receipt = judgment()
+    baseline = FleetBaseline.from_assessment(receipt, 'human')
+    providers = [Provider('qwen'), Provider('glm')]
+    result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
+        ConditionalReview(clock=lambda: 101), providers, current=lambda: receipt,
+        baseline=baseline, current_baseline=lambda: baseline))
+    assert result['review_trigger'] == 'fleet_qwen_disagreement' and result['calls'] == 2
+    assert providers[0].calls[0].fleet_choice == 'human'
+    assert result['state'] == 'HOLD' and result['action_admissible'] is False
+
+
+@pytest.mark.parametrize('change', ['case', 'revision', 'policy', 'missing_current'])
+def test_wrong_baseline_scope_does_not_submit_models(tmp_path, change):
+    receipt = judgment()
+    baseline = FleetBaseline.from_assessment(receipt, 'human')
+    other = dict(case=FleetBaseline.from_assessment(judgment(case='other'), 'human'),
+        revision=FleetBaseline.from_assessment(judgment(revision='other'), 'human'),
+        policy=replace(baseline, policy_revision='other'), missing_current=baseline)[change]
+    providers = [Provider('qwen'), Provider('glm')]
+    result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
+        ConditionalReview(clock=lambda: 101), providers, current=lambda: receipt, baseline=other,
+        current_baseline=None if change == 'missing_current' else lambda: other))
+    assert result['state'] == 'HOLD' and result['calls'] == 0
+    assert all(not p.calls for p in providers)
+
+
+def test_fleet_choice_change_while_qwen_runs_prevents_glm_call(tmp_path):
+    receipt = judgment()
+    baseline = FleetBaseline.from_assessment(receipt, 'human')
+    current_baseline = [baseline]
+    providers = [Provider('qwen', lambda: current_baseline.__setitem__(0,
+        FleetBaseline.from_assessment(receipt, 'reobserve'))), Provider('glm')]
+    result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
+        ConditionalReview(clock=lambda: 101), providers, current=lambda: receipt,
+        baseline=baseline, current_baseline=lambda: current_baseline[0]))
+    assert result['reason'] == 'STALE_OR_CHANGED' and result['calls'] == 1
+    assert not providers[1].calls
+
+
+def test_no_fleet_advisory_choice_is_invented_from_assessment(tmp_path):
+    receipt = judgment()
+    providers = [Provider('qwen'), Provider('glm')]
+    result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
+        ConditionalReview(clock=lambda: 101), providers, current=lambda: receipt))
+    assert result['calls'] == 1 and providers[0].calls[0].fleet_choice is None
+    assert not providers[1].calls
