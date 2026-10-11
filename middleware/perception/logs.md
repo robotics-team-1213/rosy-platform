@@ -1467,3 +1467,9 @@
 - 변경: road.py가 GroundPlane이 있을 때 기존 D-491 crosswalk_extent와 BirdsEye로 세로 횡단 줄무늬를 찾는다. 기존 가로 표식은 우선하고 정지선·신호 판정 및 CORE gate는 유지한다.
 - 증거: A24 RGB crosswalk=false를 기록했다. 첫 카메라 프레임은 기동 pose가 없어 명목 투영의 거리 fixture를 철회하고, 정확한 25mm/120mm bars·40mm pitch를 명목 카메라에 투영한 원격 RED 1 NEW·32 PASS로 누락을 재현했다. 초기 RED는 자원 floor fallback, 교정된 RED는 AI PC 기준 충족 실행이다. 단일 정지선·차선·두 줄·옆 차로·빈 프레임 오인식 방지와 투영 없는 거리 미추정 회귀를 추가했다. 수정 후 원격 시험·native·독립 검토는 진행 중이다.
 - gate 변화: 없음. 모델·안전 권한은 변경하지 않았다. 실제 안정 카메라·좌표·오차·신호·완주·병렬 RL 수용은 남았다.
+
+## 2026-10-12 · 47601c453 · 횡단 줄무늬 원격 회귀와 A25 실제 관측
+
+- 변경: D-491 metric 횡단 관측 연결을 원격과 두 CORE·Fleet Gazebo에서 확인했다. 기동 첫 프레임의 거리 단정을 철회하고 안정된 마지막 프레임을 별도 기록했다.
+- 증거: 관련 원격 57 PASS·exit 0·NEW 0, 독립 SOURCE 승인, lint 0 errors·28 warnings. A25 17 패키지 build exit 0·native exit 0. 첫 로봇 road crosswalk=true·lens 거리 0.305m·confidence 0.6786, CORE 센서 API valid=true 두 대. 각 image/line/road 269건·preview/최종 CORE 단일 publisher·명령과 최종 odom 속도 0, online 2/2·기존 pin LOCALIZED. 독립 소유 PID 부재·세 포트 ECONNREFUSED, private 원본 50개 SHA 대조. 같은 host 30회 detector replay 중앙값 5.87/4.46ms·p95 40.62/21.45ms는 live callback 성능이 아니다.
+- gate 변화: 실제 횡단 관측과 CORE valid 수신만 확인했다. 기존 stop_line confidence 0.414 관측과 정책 HOLD는 유지했다. 횡단 서행·신호/장애물·Fleet 주행·지속 위치·unknown uncertainty·완주·병렬 RL·실물 수용은 아직 미완료다.
