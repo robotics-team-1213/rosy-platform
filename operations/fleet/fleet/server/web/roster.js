@@ -360,7 +360,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         next.addEventListener("click", scope.guard(() => {
           const token = document.getElementById("console-token");
           const access = document.getElementById("token-access");
-          if (access) access.open = true;
+          if (access) { access.hidden = false; access.open = true; }
           const more = document.getElementById("topbar-more");
           if (more?.getAttribute("aria-expanded") === "false") more.click();
           token?.focus();
