@@ -1,7 +1,7 @@
 # operations
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
+**Generated:** 2026-10-07 · **Updated:** 2026-10-11
 
 ## Purpose
 
@@ -18,7 +18,8 @@ D-427 operations part and a `colcon_roots` entry. Fleet console, games, vision, 
 | `ui/` | Rosy Cam Android app (see `ui/AGENTS.md`) |
 | `site_devices/` | Dock and signal firmware (see `site_devices/AGENTS.md`) |
 | `execution/` | Wheel `rosy-execution`: PlanBundle and authority projections (see `execution/AGENTS.md`) |
-| `world/` | Wheel `rosy-world`: observation and evidence references (see `world/AGENTS.md`) |
+| `world/` | Wheel `rosy-world`: observation/evidence API and current-state MapPose projection; Fleet keeps service/transaction consumers (see `world/AGENTS.md`, D-630) |
+| `situation/` | Fact-only situation service: `rosy_situation/analyzers` and `incidents`; old module identities remain aliases (see `situation/AGENTS.md`, D-630) |
 
 ## For AI Agents
 
@@ -27,6 +28,8 @@ D-427 operations part and a `colcon_roots` entry. Fleet console, games, vision, 
 - Fleet consumes the robot contract. It does not modify `middleware/core/gateway` to add a field.
 - `execution/` here is `rosy-execution`. The local policy loader is `middleware/execution/local/` (`rosy-execution-local`). Do not merge them.
 - Site vision sends derived sighting JSON. It does not send JPEG to Fleet and it does not publish `/cmd_vel`.
+- World owns `src/rosy/world/state/projections/map_pose.py`; `fleet.localization.map_pose` is its identity facade. The odom `predicted` state is current-state dead reckoning, not future action-conditioned rollout.
+- The complete current manifest-root guide is [platform-folder-responsibilities.md](../docs/reference/platform-folder-responsibilities.md). Future prediction/decision/UI holders require real consumers; do not create empty folders from a planning tree.
 
 ### Testing Requirements
 

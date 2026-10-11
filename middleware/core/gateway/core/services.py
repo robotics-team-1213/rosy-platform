@@ -17,9 +17,13 @@ from core_features.command.manager import CommandManager, Twist
 from core.teleop_config import teleop_timeout_ms
 from core.fleet_loss_wiring import build_fleet_loss
 from core.drive.line_follow import (  # noqa: F401 (tests import the parser here)
-    _line_follow_config, bind_motion_envelope, bind_stuck_recovery)
+    _line_follow_config, build_line_follow, bind_motion_envelope, bind_stuck_recovery)
 from core.drive.docking import (  # noqa: F401 (legacy parser exports)
     _simulation_docking, _seeded_dock_database, build_docking_and_swarm)
+from core.drive.traffic import (  # noqa: F401 (legacy parser exports)
+    _traffic_policy_config, _signal_observer_binding, build_traffic)
+from core.system.power import (  # noqa: F401 (legacy parser and sentinel exports)
+    SHUTDOWN_SENTINEL_NAME, _battery_config, _power_config, build_power_and_battery)
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingManager
 from core_features.fleet_agent.agent import FleetAgent
@@ -74,131 +78,6 @@ from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S
 from core_features.state.manager import StateManager
 from core.system.runtime import HostRuntimeProbe
 from core_features.waypoints.manager import WaypointManager
-
-
-#: 셧다운 요청 표식. 명령이 아니라 관찰이며, 판단과 실행은 호스트 유닛이 한다.
-SHUTDOWN_SENTINEL_NAME = "battery-shutdown-request.json"
-
-
-def _battery_config(raw: dict[str, Any], data_path: Any = None) -> BatteryConfig:
-    """rosy_default.yaml의 safety 블록 → BatteryConfig (누락 키는 기본값 유지).
-
-    곡선이 없거나 무효하면 기존 two-point 스팬으로 되돌아간다. 설정 오타 하나로
-    로봇이 아예 뜨지 않는 것보다 정확도가 낮은 채로 도는 편이 낫다.
-    """
-    defaults = BatteryConfig()
-
-    full = float(raw.get("battery_full_voltage", 8.4))
-    empty = float(raw.get("battery_empty_voltage", 6.4))
-
-    curve: BatteryCurve
-    points = raw.get("battery_curve")
-    try:
-        if points:
-            curve = BatteryCurve([(float(v), float(p)) for v, p in points])
-        else:
-            curve = BatteryCurve.from_span(full=full, empty=empty)
-    except (ValueError, TypeError):
-        try:
-            curve = BatteryCurve.from_span(full=full, empty=empty)
-        except ValueError:
-            curve = BatteryCurve.default()
-
-    sentinel = None if data_path is None else Path(data_path) / SHUTDOWN_SENTINEL_NAME
-
-    return BatteryConfig(
-        curve=curve,
-        filter_tau_s=float(raw.get("battery_filter_tau_s", defaults.filter_tau_s)),
-        warning_percent=float(raw.get("battery_warning_percent", defaults.warning_percent)),
-        critical_percent=float(raw.get("battery_critical_percent", defaults.critical_percent)),
-        deep_percent=float(raw.get("battery_deep_percent", defaults.deep_percent)),
-        enter_samples=int(raw.get("battery_enter_samples", defaults.enter_samples)),
-        exit_samples=int(raw.get("battery_exit_samples", defaults.exit_samples)),
-        hysteresis_percent=float(
-            raw.get("battery_hysteresis_percent", defaults.hysteresis_percent)),
-        deep_dwell_s=float(raw.get("battery_deep_dwell_s", defaults.deep_dwell_s)),
-        sentinel_path=sentinel,
-        shutdown_grace_s=float(
-            raw.get("battery_shutdown_grace_s", defaults.shutdown_grace_s)),
-    )
-
-
-def _power_config(raw: dict[str, Any]) -> PowerConfig:
-    """rosy_default.yaml의 power 블록 → PowerConfig (누락 키는 기본값 유지)."""
-    presence_raw = raw.get("presence", {}) or {}
-    lidar_raw = raw.get("lidar", {}) or {}
-    defaults, presence_defaults = PowerConfig(), PresenceConfig()
-    lidar_defaults = LidarPolicy()
-    lidar = LidarPolicy(
-        standby_stop=bool(lidar_raw.get("standby_stop", lidar_defaults.standby_stop)),
-        spinup_s=float(lidar_raw.get("spinup_s", lidar_defaults.spinup_s)),
-    )
-    presence = PresenceConfig(
-        near_m=float(presence_raw.get("near_m", presence_defaults.near_m)),
-        contact_m=float(presence_raw.get("contact_m", presence_defaults.contact_m)),
-        hysteresis_m=float(presence_raw.get("hysteresis_m", presence_defaults.hysteresis_m)),
-        detect_samples=int(presence_raw.get("detect_samples", presence_defaults.detect_samples)),
-        release_samples=int(presence_raw.get("release_samples", presence_defaults.release_samples)),
-        min_valid_m=float(presence_raw.get("min_valid_m", presence_defaults.min_valid_m)),
-        max_valid_m=float(presence_raw.get("max_valid_m", presence_defaults.max_valid_m)),
-    )
-    return PowerConfig(
-        enabled=bool(raw.get("enabled", defaults.enabled)),
-        idle_after_s=float(raw.get("idle_after_s", defaults.idle_after_s)),
-        standby_after_s=float(raw.get("standby_after_s", defaults.standby_after_s)),
-        warning_idle_after_s=float(raw.get("warning_idle_after_s", defaults.warning_idle_after_s)),
-        warning_standby_after_s=float(raw.get("warning_standby_after_s", defaults.warning_standby_after_s)),
-        critical_idle_after_s=float(raw.get("critical_idle_after_s", defaults.critical_idle_after_s)),
-        critical_standby_after_s=float(raw.get("critical_standby_after_s", defaults.critical_standby_after_s)),
-        info_hold_s=float(raw.get("info_hold_s", defaults.info_hold_s)),
-        active_rate_hz=float(raw.get("active_rate_hz", defaults.active_rate_hz)),
-        idle_rate_hz=float(raw.get("idle_rate_hz", defaults.idle_rate_hz)),
-        standby_rate_hz=float(raw.get("standby_rate_hz", defaults.standby_rate_hz)),
-        presence=presence,
-        lidar=lidar,
-    )
-
-
-def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
-    """Parse revision-bound traffic policy without weakening its bounds."""
-    defaults = TrafficPolicyConfig()
-    return TrafficPolicyConfig(
-        mode=TrafficPolicyMode(raw.get("mode", defaults.mode.value)),
-        map_id=str(raw.get("map_id", defaults.map_id)),
-        scene_revision=str(raw.get(
-            "scene_revision", defaults.scene_revision)),
-        policy_revision=str(raw.get(
-            "policy_revision", defaults.policy_revision)),
-        junction_rule=str(raw.get(
-            "junction_rule", defaults.junction_rule)),
-        approach_distance_m=float(raw.get(
-            "approach_distance_m", defaults.approach_distance_m)),
-        stop_distance_m=float(raw.get(
-            "stop_distance_m", defaults.stop_distance_m)),
-        stop_dwell_s=float(raw.get(
-            "stop_dwell_s", defaults.stop_dwell_s)),
-        stale_after_s=float(raw.get(
-            "stale_after_s", defaults.stale_after_s)),
-        min_confidence=float(raw.get(
-            "min_confidence", defaults.min_confidence)),
-        proceed_speed_scale=float(raw.get(
-            "proceed_speed_scale", defaults.proceed_speed_scale)),
-    )
-
-
-def _signal_observer_binding(
-        raw: dict[str, Any]) -> Optional[SignalObserverSourceConfig]:
-    """D-337 measured-light binding; an absent or empty block is feature-off."""
-    block = raw.get("signal_observer") or {}
-    if not isinstance(block, dict) or not block:
-        return None
-    roi_map = block.get("roi_map") or {}
-    return SignalObserverSourceConfig(
-        url=str(block.get("url", "")),
-        roi_map={str(name): str(target) for name, target in roi_map.items()},
-        timeout_s=float(block.get("timeout_s", 1.0)),
-        poll_interval_s=float(block.get("poll_interval_s", 0.5)),
-    )
 
 
 @dataclass
@@ -332,42 +211,8 @@ class CoreServices:
         nav = NavigationManager(events, state, waypoints, safety,
                                 stuck_timeout_s=float(safety_cfg.get("stuck_timeout_s", 30.0)),
                                 readiness=readiness)
-        line_follow = LineFollowManager(
-            events, config=_line_follow_config(config.get("line_follow", {}) or {}),
-            angular_ceiling=lambda: safety.limits.manual_angular)
-        traffic_policy_config = _traffic_policy_config(
-            config.get("traffic_policy", {}) or {})
-        traffic_policy = TrafficPolicyManager(
-            events,
-            config=traffic_policy_config,
-            simulation_signal_control=bool(
-                (config.get("runtime") or {}).get("mode") == "simulation"
-                and (config.get("traffic_policy") or {}).get(
-                    "simulation_signal_control", False)
-            ),
-        )
-        # D-337 T3: the measured-light poller exists only when the operator
-        # binds an observer; a binding without the policy's map/scene would
-        # have every frame rejected, so it fails the build instead.
-        observer_binding = _signal_observer_binding(
-            config.get("traffic_policy", {}) or {})
-        signal_observer: Optional[SignalObserverMonitor] = None
-        if observer_binding is not None:
-            if not traffic_policy_config.map_id \
-                    or not traffic_policy_config.scene_revision:
-                raise ValueError(
-                    "traffic_policy.signal_observer requires the policy's "
-                    "map_id and scene_revision")
-            signal_observer = SignalObserverMonitor(
-                SignalObserverPoller(
-                    observer_binding,
-                    map_id=traffic_policy_config.map_id,
-                    scene_revision=traffic_policy_config.scene_revision),
-                traffic_policy,
-                stale_after_s=traffic_policy_config.stale_after_s,
-                events=events,
-            )
-            signal_observer.start()
+        line_follow = build_line_follow(config, events=events, safety=safety)
+        traffic_policy, signal_observer = build_traffic(config, events=events)
         vision_cfg = config.get("vision", {}) or {}
         vision = VisionFrameStore(
             max_bytes=int(vision_cfg.get("preview_max_bytes", 512_000)),
@@ -376,10 +221,8 @@ class CoreServices:
             min_pull_interval_s=float(
                 vision_cfg.get("preview_min_pull_interval_s", 0.4)),
         )
-        power = PowerManager(_power_config(config.get("power", {})), events=events)
-        battery = BatteryMonitor(
-            _battery_config(safety_cfg, data_path=waypoints_path.parent),
-            events=events)
+        power, battery = build_power_and_battery(
+            config.get("power", {}), safety_cfg, data_path=waypoints_path.parent, events=events)
         docking, swarm, dock_feed, leave_docking = build_docking_and_swarm(
             simulation_docking=simulation_docking, data_path=waypoints_path.parent,
             events=events, state=state, modes=modes, command=command, safety=safety,

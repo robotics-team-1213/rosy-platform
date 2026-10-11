@@ -70,3 +70,21 @@ def test_refuses_state_inside_release_source(tmp_path):
     source_tree(source)
     with pytest.raises(ValueError, match="separate"):
         release.check_source(source, tmp_path / "root", source / "state")
+
+
+def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
+    source = tmp_path / "source"
+    source_tree(source)
+    helper = source / "middleware/perception/control/_source_layout.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("pass\n")
+    with pytest.raises(ValueError, match="missing"):
+        release.check_source(source, tmp_path / "root", tmp_path / "state")
+    for name in release.SPLIT_REQUIRED:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"source\n")
+    release.check_source(source, tmp_path / "root", tmp_path / "state")
+    before = release.digest_tree(source)
+    (source / "middleware/control/drive/safety/command_gate.py").write_bytes(b"changed\n")
+    assert release.digest_tree(source) != before

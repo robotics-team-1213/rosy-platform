@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from rosy_situation.deadlock import TrafficWatch
+from .traffic_watch import TrafficWatch
 
 VERSION = "1"
 SOURCE = f"analyzer:stuck_scene@{VERSION}"

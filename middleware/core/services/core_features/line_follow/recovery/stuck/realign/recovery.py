@@ -66,7 +66,10 @@ class RealignRecovery(StuckRecovery):
         if self._id is None or stuck_id != self._id:
             self._answered(stuck_id, decision, by, principal_ref, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH", "no open stuck with this id (late or wrong answer)")
-        move, why = (None, "realign_kind") if starter is None else starter(self._last_or(now))
+        if self._answer_clock_invalid(now):
+            move, why = None, "invalid_clock"
+        else:
+            move, why = (None, "realign_kind") if starter is None else starter(self._last_or(now))
         if why is not None:
             self._answered(stuck_id, decision, by, principal_ref, False, why)
             raise AnswerRefused("STUCK_DECISION_REFUSED", f"REALIGN refused: {why}")

@@ -183,6 +183,10 @@ class StuckRecoveryMixin:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
+            if (decision in ("RESUME", "BACK_AND_RETRY", "YIELD", "REALIGN")
+                    and not self._recovery._answer_clock_invalid(current)):
+                # Refresh evidence without advancing phases or replenishing the attempt budget.
+                self._recovery._last = self._stuck_input(current)
             outcome = self._recovery.answer(
                 current, stuck_id, decision, by, principal_ref,
                 yield_m=yield_m, yield_turn_rad=yield_turn_rad)

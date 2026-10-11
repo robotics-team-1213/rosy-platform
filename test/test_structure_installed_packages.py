@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("source,package,modules,entrypoints,config", [
-    ("middleware/core/gateway", "core", ["core", "core.drive"],
+    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power"],
      {"core": "core.main:main"}, None),
     ("middleware/core/api", "core_api_web", ["core_api_web"], {}, None),
     ("middleware/devices/pinky/bringup", "bringup", ["bringup"],
@@ -27,8 +27,15 @@ def test_source_holder_builds_and_installs_the_original_package(
     shutil.copytree(ROOT / source, copied,
                     ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
     wheels, installed = tmp_path / "wheels", tmp_path / "installed"
+    sources = [copied]
+    if package == "core":
+        for dependency in ("contracts/foundation", "middleware/core/events", "middleware/core/services"):
+            target = tmp_path / Path(dependency).name
+            shutil.copytree(ROOT / dependency, target,
+                            ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
+            sources.append(target)
     for operation in ("wheel", "install"):
-        args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), str(copied)]
+        args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), *map(str, sources)]
                 if operation == "wheel" else
                 ["install", "--no-deps", "--no-index", "--target", str(installed),
                  *map(str, wheels.glob("*.whl"))])

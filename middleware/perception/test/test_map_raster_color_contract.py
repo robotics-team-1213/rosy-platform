@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
-RASTER = PACKAGE_ROOT / 'control' / 'sensing' / 'map_raster.py'
+RASTER = PACKAGE_ROOT / 'sensors' / 'sensing' / 'map_raster.py'
 CONSOLE = PACKAGE_ROOT / 'web' / 'diagnostic.html'
 
 

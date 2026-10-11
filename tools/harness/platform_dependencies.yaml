@@ -20,6 +20,9 @@ components:
   - name: world_api
     path: operations/world/src/rosy/world/api
     import_prefix: rosy.world.api
+  - name: world_state
+    path: operations/world/src/rosy/world/state
+    import_prefix: rosy.world.state
   - name: skill_contracts
     path: contracts/skill/src/rosy/contracts/skill
     import_prefix: rosy.contracts.skill
@@ -41,6 +44,8 @@ components:
 
 # Static absolute imports and relative imports resolved from their package path.
 boundaries:
+  - importer_prefix: rosy.world.state
+    forbidden_imports: [fleet, rosy_situation, omx_adapter, core_features, rclpy]
   - importer_prefix: core_common
     forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
   - importer_prefix: rosy_cell

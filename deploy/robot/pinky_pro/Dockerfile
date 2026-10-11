@@ -142,6 +142,11 @@ COPY middleware/control/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
+COPY middleware/control/drive/safety /opt/rosy_ws/src/runtime/control/drive/safety
+COPY middleware/control/drive/recovery /opt/rosy_ws/src/runtime/control/drive/recovery
+COPY middleware/control/drive/tracking /opt/rosy_ws/src/runtime/control/drive/tracking
+COPY middleware/control/drive/calibration /opt/rosy_ws/src/runtime/control/drive/calibration
+COPY middleware/control/drive/planning/grid /opt/rosy_ws/src/runtime/control/drive/planning/grid
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \
