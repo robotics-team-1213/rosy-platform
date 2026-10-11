@@ -7783,3 +7783,9 @@ osy-d395-s1d\`.
 - 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 — D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
+
+- 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
+- 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
+- gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.

@@ -40,7 +40,7 @@ rosy-platform/
 │  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
 │  ├─ world/ (src/rosy/world/api, state/projections)
 │  ├─ situation/ (rosy_situation/assessment, snapshot_assessment, analyzers, incidents)
-│  ├─ execution/ (src/rosy/execution/api, site)
+│  ├─ execution/ (src/rosy/execution/api, site: goal_evidence, workflow 등)
 │  ├─ processes/{cell,palletizing}
 │  ├─ vision/signal_observer
 │  ├─ site_devices/{dock,signal}/firmware
