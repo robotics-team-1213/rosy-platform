@@ -672,6 +672,7 @@
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
+| D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -769,3 +770,9 @@
 **Status:** Accepted (2026-10-12, source 계약)
 
 동일 사건·모델 근거 hash에 실패 책임 제안을 결속하고 모델 의견과 사람 최종 검토 후보를 구분한다. 기존 원인·정답 상태와 원장·CORE API는 유지한다. 전문은 [D-695](../adr/D-695-incident-failure-responsibility.md).
+
+## D-696 — 비식별 사건 인수 근거 export
+
+**Status:** Accepted (2026-10-12).
+
+Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted and case-only named claim remain distinct. [D-696](../adr/D-696-incident-handoff-evidence.md).
