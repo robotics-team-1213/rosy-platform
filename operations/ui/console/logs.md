@@ -78,3 +78,9 @@
 - 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
+
+## 2026-10-12 · 22b307c07 · fix(cell): 미구성 서비스의 다음 행동과 재접속 복구
+
+- 변경: Cell 서비스 미구성 응답을 받은 뒤 서버가 필요한 문서·미리보기·작업 조작을 비활성화하고 구성 확인 사유를 표시한다. 계정 접속·로컬 문서 입력·비상정지는 유지하고 성공한 재접속 문서 조회 뒤 기존 역할·문서·작업 조건으로 돌아간다.
+- 증거: 설치본 Cell이 미구성 안내와 활성 저장 조작을 함께 보이는 것을 확인했다. 회귀에 차단 이유·비상정지/접속 유지·재접속 복구를 추가했다. 첫 통합 회귀의 접힌 접속 조작 클릭 실패는 기존 공용 펼침 helper를 사용해 수정했으며 실패 목록에 추가하지 않았다. 적정 자원 최종 회귀와 설치본 증거는 별도 기록한다.
+- gate 변화: SOURCE 개선이며 새 커밋의 main 착지·push·CI·서명 설치·실제 Cell 작업 수용은 별도다.
