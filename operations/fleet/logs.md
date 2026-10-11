@@ -3213,6 +3213,19 @@
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
 
+## 2026-10-11 · 583db17a3 · fix: 네 문서의 공통 헤더 box model 통일
+
+- 변경: 공통 Fleet 헤더의 ui-topbar에 border-box를 명시했다. styles.css 유무에 따라 site-map/cell의 E-Stop 세로 위치가 console/install보다 8px 내려가는 원인을 공통 CSS 한 줄에서 고쳤다. 버튼 크기·접근성·권한·명령 동작과 strict 시험은 유지한다.
+- 증거: main 063676cbcb의 CI 실패를 같은 immutable SHA의 원격 Chromium에서 재현했다(1 failed, 1 passed, NEW 1). 수정 583db17a3의 기존 browser/header/palette/shared controls 시험은 원격 54 passed, NEW 0. 독립 안전 소스 검토 승인. 최종 main 통합/CI는 별도 확인한다.
+- gate 변화: 공통 헤더 소스 및 원격 브라우저 계약 확인. 사이트 배포·현장 E-Stop 수용·Isaac/Fleet 주행 수용은 승격하지 않는다.
+- 교훈: 공통 헤더의 높이 계산을 각 문서의 전역 스타일에 의존하면 같은 컴포넌트도 배치가 달라진다.
+
+## 2026-10-11 · fb2e5e07d3 · D-657 모델 도구 Fleet 어댑터와 순수 실행 규칙
+
+- 변경: `model_feedback_dispatch`가 기존 store/journal/fence 도구 중재를 소유하고, goal_evidence 및 진척 시각/step 투영은 기존 execution wheel을 소비한다. store/auth/claim/transport는 이전하지 않았다.
+- 검증: `fb2e5e07d3` 원격 212 passed / NEW 0, 독립 소스 리뷰 승인. 기존 execution wheel dependency와 source image COPY/allowlist를 함께 검증했고 Fleet wheel에 execution을 중복 포장하지 않는다.
+- gate: 소스·설치 구성. main 착지·push/CI·실제 Docker build·배포·장치/현장 정확도는 각각 별도 증거다.
+
 ## 2026-10-11 · 0b14fa02b0 · 책임 추출·현재 판단·사람 인수·팀 알림
 
 - 변경: 모델 원장 dispatcher는 Fleet, 순수 목표/진행 규칙은 execution/site에 두었다. D-660 현재 읽기 판단과 자연 해소 근거, D-661 이름 있는 case/revision 인수 및 기본 OFF 알림 outbox를 기존 DB/auth/CORE 경계에 연결했다.

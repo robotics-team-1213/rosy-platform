@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, launch_options, safe_listener
+from browser_harness import browser_tests_enabled, launch_options, open_token_access, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -345,6 +345,7 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console/site-map", posts)
         try:
+            open_token_access(page)
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
             expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -419,6 +420,7 @@ def test_site_map_fit_stays_fixed_while_robots_move(site, monkeypatch, turn):
         browser, page, errors = _open(playwright, site, "/console/site-map", [])
         try:
             page.set_viewport_size({"width": 1440, "height": 900})
+            open_token_access(page)
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
             for _ in range(30):  # timers on the fake clock, answers on the real network

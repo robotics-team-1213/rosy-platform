@@ -32,3 +32,7 @@ World·공통 assessment·Decision 핵심·순수 workflow/검증은 `fleet`, `c
 | D-647·D-642~D-646·D-640 | 0단계의 holder 후보·의존·사례를 구체화한다. 중앙 판단의 근거·비개입·원장·알림·수용이 모델 토론/개선의 선행 관문이다. |
 
 목표 트리·사례·현재/목표 대응은 [설계](../plans/2026-10-11-shared-judgment-structure-design.md), 실제 파일별 분리 순서는 [계획](../plans/2026-10-11-shared-judgment-structure.md)을 따른다. Proposed 수용과 구현·설치·배포 증거는 각각 기록한다.
+
+### 후속 제한 수용 기록 (2026-10-11)
+
+D-652는 단계 0/1 내부 shadow만, [D-657](D-657-judgment-adapter-and-pure-execution-extraction.md)은 단계 2와 단계 3 첫 계산 단위만 수용한다. D-657의 dispatcher·목표 검증·진척 투영 분리와 기존 원장/권한 보존은 별도 [검증 기록](../validation/judgment-adapter-extraction-2026-10-11.md)을 따른다. 이 ADR의 전체 목표를 구현·배포 완료 또는 현장 수용으로 승격하지 않는다.

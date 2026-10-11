@@ -1,6 +1,7 @@
 **
 !operations/fleet/**
 !operations/decision/**
+!operations/execution/src/**
 !operations/ui/console/**
 !operations/situation/rosy_situation/__init__.py
 !operations/situation/rosy_situation/assessment.py

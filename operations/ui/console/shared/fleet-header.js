@@ -19,7 +19,7 @@ function inboxButton() {
   inbox.setAttribute("data-ui-tooltip", "알림 창");
   inbox.setAttribute("data-action-icon", "notification");
   actionIcon(inbox, "notification");
-  $("estop").before(inbox);
+  $("fleet-header-actions").prepend(inbox);
   inbox.addEventListener("click", () => {
     const request = new CustomEvent("rosy:inbox", {cancelable: true});
     if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
