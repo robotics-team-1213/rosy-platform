@@ -68,6 +68,7 @@ def test_first_login_changes_password_before_return_and_does_not_replay_commands
     page.locator('[data-login=password]').fill('alice')
     page.locator('[data-login=password]').press('Enter')
     expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
+    expect(page.locator('[data-login=password]')).to_be_focused()
     expect(page).to_have_url(origin + '/console/login?return=%2Fconsole%3Fview%3Dwork')
     assert page.request.get(origin + '/api/fleet/session').status == 403
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -126,6 +127,7 @@ def test_first_password_change_waits_for_readback_and_recovers_expired_login(acc
     page.locator('[data-login=submit]').click()
     expect(page.locator('[data-login=error]')).to_contain_text('로그인이 만료')
     expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '관제 로그인')
+    expect(page.locator('[data-login=login]')).to_be_focused()
     expect(page.locator('[data-login=password]')).to_have_value('')
 
 
