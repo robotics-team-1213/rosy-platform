@@ -100,6 +100,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
+              "decision/src/rosy/decision/deliberation",
               "perception/vision/perception",
               "perception/vision/perception/learned",
               "perception/vision/perception/drivable")
@@ -108,6 +109,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "decision/src/rosy/decision/deliberation": (
+        231,
+        "accept: responsibility_review independently confirmed the proposal-only Python subpackage "
+        "boundary; measured 231 lines on 2026-10-12. Contract/supervisor and fixed CLI translation "
+        "share this owner; Fleet journal, admission and writers stay outside. "
+        "docs/plans/2026-10-12-decision-deliberation-boundary.md records callers, installation and "
+        "same-change parent measurement; keep the existing +150 allowance.",
+    ),
     "web/ui.js": (
         811,
         "accept: independently reviewed 2026-10-11: the 11 lines above the existing "
@@ -261,8 +270,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_933,
-        "split: independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
+        52_019,
+        "split: re-judged on 2026-10-12: Decision deliberation (231 lines) has its own reviewed "
+        "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
+        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 52019; "
+        "package +150 and observe/server/UI obligations remain. Previous verdict: "
+        "independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
         "named human handoff move unchanged into fleet/incidents (360 lines), counted independently under "
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md. Parent measured at 51933; existing "
         "observe/server/UI split obligations and +150 remain. Previous verdict: "

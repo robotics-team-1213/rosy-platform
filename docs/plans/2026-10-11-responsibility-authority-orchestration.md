@@ -123,6 +123,10 @@ python test/known_failures.py <session>/logs/<unit>-green/run-1.txt
 
 ## Task 6: 후보 전용 모델 숙고와 지속 개선
 
+2026-10-12 추가 지시로 Discord를 제외한 후보 소스를 선행 구현했다.
+실제 경로·검증과 남은 관문은 [책임 경계](2026-10-12-decision-deliberation-boundary.md)를 따른다.
+아래 0~5 receipt 선행 조건은 실제 provider 활성화/운영 승격에 유지한다.
+
 **Detailed plan:** [D-640 모델 토론 실행 계획](2026-10-11-fleet-deliberation-loop.md). 기존 파일별 Task 1~6을 재사용한다.
 
 **Create proposed:** `operations/decision/src/rosy/decision/{deliberation,cli_deliberation}.py`, `operations/fleet/test/{test_deliberation,test_cli_deliberation,test_deliberation_journal,test_deliberation_replay}.py`.

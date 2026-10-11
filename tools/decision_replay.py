@@ -90,7 +90,7 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
             if type(value) is not str or not value or value != value.strip() or len(value) > 128:
                 raise ValueError('invalid frozen case identity')
         key = case['id']
-        source = (case['session_id'], case['recording_id'])
+        source = case['recording_id']
         if (type(key) is not str or not key or key in by_id or source in physical
                 or case['session_id'] in training_sessions
                 or case['recording_id'] in (training_recordings or []) or case['expected'] not in {
@@ -128,11 +128,20 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
             or any(not c.get('reviewed_by') for c in cases)):
         report['state'] = 'HOLD'
     if reviewed_profile is not None:
-        if (set(reviewed_profile) != {'dataset_sha256', 'limits', 'reviewed_by', 'minimum_cases'}
+        if (set(reviewed_profile) != {'dataset_sha256', 'limits', 'reviewed_by', 'minimum_cases', 'revisions'}
                 or reviewed_profile['dataset_sha256'] != digest or reviewed_profile['limits'] != limits
                 or type(reviewed_profile['reviewed_by']) is not str or not reviewed_profile['reviewed_by'].strip()
                 or type(reviewed_profile['minimum_cases']) is not int or reviewed_profile['minimum_cases'] < 1):
             raise ValueError('invalid frozen reviewed profile')
+        revisions = reviewed_profile['revisions']
+        if type(revisions) is not dict or set(revisions) != {'rules', 'single', 'deliberation'}:
+            raise ValueError('invalid frozen revisions')
+        for mode, revision in revisions.items():
+            if (type(revision) is not dict or set(revision) != {'profile_revision', 'policy_revision'}
+                    or any(type(v) is not str or not v.strip() for v in revision.values())
+                    or any(any(row[field] != revision[field] for field in revision)
+                           for row in rows.values() if row['mode'] == mode)):
+                raise ValueError('comparison revision differs from reviewed profile')
         if len(cases) < reviewed_profile['minimum_cases']:
             report['state'] = 'HOLD'
     for mode in ('rules', 'single', 'deliberation'):
