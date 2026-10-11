@@ -21,6 +21,8 @@ M8은 canonical source 172파일을 이동했고, 그중 평탄한 Drive 알고�
 
 현재 manifest 85개 root의 유지·이전·분리·보류 판정과 최대 5단계 의미 구조는 [전체 폴더 안내](../../reference/platform-folder-responsibilities.md)에 있다. 실제 빈 제품·지원 폴더는 0개였다. `data/drive/.gitkeep`는 계약용 placeholder라 유지했다. namespace/resource 내부 깊이를 맞추려고 공개 import나 설치 위치를 바꾸지 않았다.
 
+공유 main readback에서 이전 `middleware/core/api_web`, `middleware/apps/device` 디렉터리는 ignored `__pycache__`·`.omc` 세션 상태 때문에 남아 있었다. 두 경로의 `git ls-files` 결과는 0개이며 제품 구현은 새 경로에 있다. worktree의 제품 폴더 점검과 공유 checkout의 도구 상태를 구분한다. 동료 세션 상태는 AGENTS의 보존 규칙에 따라 그대로 두었다.
+
 `fleet.ai` 10파일과 `fleet.server.web` 66파일은 기존 패키지·transaction·설치 resource 소비자에 묶여 있어 별도 패키지 carve를 보류했다. 행동 조건부 `operations/prediction/world_model`은 구현하지 않았다. 현재 World는 관측·odom 기반 상태 projection이다. 이 두 후속 작업을 이번에 이동 완료한 holder로 집계하지 않는다.
 
 ## 시험과 실패 수정
@@ -44,6 +46,8 @@ M8은 canonical source 172파일을 이동했고, 그중 평탄한 Drive 알고�
 자동 선택기는 packaging/workflow 변경에 대해 CI FULL tier가 남는다고 보고했다. 이전의 중단된 CORE/착지 로그는 통과 증거로 쓰지 않는다. watchdog 재진입 deadlock은 bounded RED 후 `d54c75385`에서 수정했고 전체 CORE를 다시 통과했다. 중단 출력이 새 실패 없음으로 잘못 착지하는 문제도 RED 후 `398728d3c`에서 거절하도록 고쳤다.
 
 [CORE Safety 리뷰](../d628-core-drive-2026-10-11/safety-review.md), [holder Safety 리뷰](safety-review.md)는 production Safety의 source 판정이다. source 착지 직전 diff 검사와 Safety commit-range 검사는 통과했고 harness lint는 0 error였다. 설명 문서의 최종 검사는 별도 후속 commit의 착지 로그로 구분한다.
+
+이동 후 설명 commit `fb50866e4`도 remote 문서·harness·literal·scorecard guard 112 passed, known_failures 0 NEW 이후 local main에 착지했다. 증거는 `logs/land-folder-docs.txt`와 `land-folder-docs/feat-platform-structure-migration/run-1-1.txt`다. 위 공유 checkout 상태 설명은 그 착지 이후 확인한 readback이다.
 
 ## 남은 증거와 후속 순서
 
