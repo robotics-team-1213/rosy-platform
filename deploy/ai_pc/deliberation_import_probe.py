@@ -1,5 +1,6 @@
 """Import and codec readiness only: no provider, credential, marker or device access."""
 from importlib.metadata import version
+import json
 import platform
 import sys
 
@@ -23,7 +24,7 @@ def probe():
                       ('synthetic-evidence',), ('human', 'reobserve'), 'INTERVENE')
     bound = BoundProfile(codec.model_profile('import-only-v2'), problem.digest)
     _, raw = prepare_request(problem, bound, (), 30, budget_usd=0)
-    parsed, checked, _, rendered = codec.request(__import__('json').loads(raw))
+    parsed, checked, _, rendered = codec.request(json.loads(raw))
     if parsed != problem or checked != bound or rendered.encode() != raw:
         raise ValueError('V2_CODEC_NOT_VERIFIED')
     if any((CAPABILITIES.ready, CAPABILITIES.isolated, CAPABILITIES.cost_verified,
