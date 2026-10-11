@@ -109,11 +109,13 @@ async function refreshLobby(host) {
       && Number.isFinite(state?.velocity?.linear) && Number.isFinite(state?.velocity?.angular);
     const velocityEvidence = !state ? "disconnected" : measured ? evidence.evidenceOf("velocity") : "unavailable";
     const moving = measured && (Math.abs(state.velocity.linear) > 0.002 || Math.abs(state.velocity.angular) > 0.002);
-    const word = state?.mode === "SAFE_STOP" || state?.safety?.estop === true
+    const stopReported = state?.mode === "SAFE_STOP" || state?.safety?.estop === true;
+    const word = stopReported
       ? evidence.isFresh("safety") ? "안전 정지" : "안전 정지 보고 · 안전 상태 확인 불가"
       : velocityEvidence !== "fresh" ? `속도 ${EVIDENCE_LABEL[velocityEvidence]}`
         : moving ? (state.mode === "MANUAL" ? "운전 중" : "이동 중") : "정지 상태";
-    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": "", "data-evidence": velocityEvidence});
+    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": "",
+      "data-evidence": stopReported ? evidence.evidenceOf("safety") : velocityEvidence});
     host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
