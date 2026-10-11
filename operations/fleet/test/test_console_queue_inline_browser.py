@@ -230,6 +230,13 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert messages.locator("details").get_attribute("open") is not None
         assert page.locator("#critical-list").inner_text()
+        snapshot = api.pop("/api/fleet/state")
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("상태 갱신 실패")
+        expect(messages.locator("pre")).to_have_count(0)
+        api["/api/fleet/state"] = snapshot
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert not posts and not errors
         _shot(page, "context-inbox-message-stages.png")
         browser.close()
