@@ -9,7 +9,7 @@ import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
-import { capabilityReason, formationCommandReason } from "./motion-readiness.js";
+import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
@@ -477,7 +477,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
     blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : formationCommandReason(view, robot.robot_id, 'goal')
+        : motionCommandReason(view, robot.robot_id, 'goal')
           || capabilityReason(robot.capabilities, "navigation.goal_navigation")
           || (!view.map ? "지도 없음"
           : estop === true ? "비상정지 중"

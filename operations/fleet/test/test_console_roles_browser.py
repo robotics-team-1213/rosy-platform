@@ -264,6 +264,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
         lead.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("start_n")
         lead.locator('ui-button[data-trip-repeat="rosy_01"]').click()
         expect(lead.locator(".trip-line")).to_contain_text("반복 운행", timeout=10000)
+        expect(lead.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('운행.*취소'))
         page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#convoy-leader")).to_have_value("rosy_01", timeout=5000)
         assert page.locator("#convoy-follower option").all_inner_texts() == ["rosy_02", "rosy_03"]
