@@ -48,7 +48,8 @@ def _robot(robot_id: str, pose: dict, **extra) -> dict:
         "yielding": None, "error": None,
         # A Nav2 robot reports its map; the console draws only map poses (field check 2026-10-10).
         "state": {"robot_id": robot_id, "mode": "NAVIGATION", "navigation": "NAVIGATING", "map_id": "map",
-                  "pose": pose, "battery": {"percent": 90}, "safety": {"estop": False}},
+                  "pose": pose, "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+                  "battery": {"percent": 90}, "safety": {"estop": False}},
     }
     row.update(extra)
     return row
@@ -256,16 +257,16 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
         _open_cards(page)
         card = page.locator('#roster article[data-robot-id="rosy_01"]')
         page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '63%'")
-        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+        assert "충전 확인" in card.locator('[data-charging]').inner_text()
 
         robot["power_health_age_s"] = 6.0
         page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '확인 불가'")
-        assert "충전 확인" not in card.locator('[data-fact="charging"]').inner_text()
+        assert "충전 확인" not in card.locator('[data-charging]').inner_text()
 
         robot["power_health_age_s"] = 0.2
         robot["state"]["safety"]["estop"] = True
         page.wait_for_function("() => document.querySelector('#roster [data-fact=safety]')?.textContent.includes('비상 정지')")
-        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+        assert "충전 확인" in card.locator('[data-charging]').inner_text()
         assert "관리자:" in card.inner_text()
         assert not errors
         browser.close()
@@ -631,7 +632,7 @@ def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_
         save_temp_screenshot(page, f"fleet_estop_{'partial' if isinstance(response, dict) else 'unknown'}_{page_file[:-5]}_320.png")
         if isinstance(response, dict):
             if page_file == "index.html":
-                page.locator('[data-context-tab="evidence"]').click()
+                page.locator('[data-context-tab="inbox"]').click()
             assert "rosy_02" in page.locator("#log").inner_text()
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
@@ -784,7 +785,7 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
         details = page.locator("#cancel-all-details")
         assert details.is_visible() and details.get_attribute("href") == "#log"
         details.click()
-        assert page.locator("#context-evidence").is_visible()
+        assert page.locator("#context-inbox").is_visible()
         assert page.evaluate("location.hash") == "#log"
         assert page.locator("#log").is_visible()
         page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for(state="visible")
@@ -982,7 +983,7 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
         page.keyboard.press("Enter")
         assert not any(method == "POST" and path.endswith("/goal") for method, path in posts)
-        page.locator('[data-context-tab="evidence"]').click()
+        page.locator('[data-context-tab="inbox"]').click()
         assert "목표 지정 취소" in page.inner_text("#log")
         assert not errors
         browser.close()
@@ -1754,7 +1755,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
-        page.locator('[data-context-tab="evidence"]').click()
+        page.locator('[data-context-tab="inbox"]').click()
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator('[data-context-tab="status"]').click()
         _open_cards(page)
@@ -1787,7 +1788,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert page.locator("#log ui-empty").count() == 0
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
-        page.locator('[data-context-tab="evidence"]').click()
+        page.locator('[data-context-tab="inbox"]').click()
         assert page.locator("#log").is_visible()
         assert not errors
         browser.close()
@@ -1821,7 +1822,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                          canvas_box["y"] + canvas_box["height"] / 2)
         page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
-        page.locator('[data-context-tab="evidence"]').click()
+        page.locator('[data-context-tab="inbox"]').click()
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
         page.locator('[data-context-tab="status"]').click()
