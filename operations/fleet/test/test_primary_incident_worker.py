@@ -33,7 +33,7 @@ def test_primary_only_has_no_normal_calls_and_exports_real_single_role_receipt(t
         worker.feed(poll(2)); await settled(worker)
         assert len(seen) == 1 and seen[0][1].profile.role == 'primary'
         scope = store.active_scopes()[0]
-        now[0] += 1
+        now[0] += 2
         worker.feed(poll(3, normal=True)); await settled(worker)
         exported = exporter().snapshot(store.path, scope.subject_id, scope.case_id, [asdict(profiles[0])])
         assert exported['schema'] == 'rosy.incident.model_feedback/3'

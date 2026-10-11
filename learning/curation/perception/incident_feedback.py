@@ -82,12 +82,21 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
     if (type(recording_feedback) is not dict or recording_feedback.get('schema') != SCHEMA
             or type(recording_feedback.get('matches')) is not list
             or type(exported) is not dict or set(exported) != {'schema', 'case', 'digest', 'label_state', 'field_accepted'}
-            or exported['schema'] not in {'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2'}
+            or exported['schema'] not in {'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2', 'rosy.incident.model_feedback/3'}
             or exported['label_state'] != 'UNREVIEWED' or exported['field_accepted'] is not False
             or type(exported['case']) is not dict):
         raise ValueError('invalid unreviewed model feedback')
     case = exported['case']
-    if exported['schema'].endswith('/2'):
+    single = exported['schema'].endswith('/3')
+    if single or 'profiles' in case:
+        profiles = case.get('profiles')
+        expected = ['primary'] if single else ['primary', 'reviewer']
+        if (type(profiles) is not list or len(profiles) != len(expected)
+                or any(type(p) is not dict for p in profiles) or [p.get('role') for p in profiles] != expected
+                or hashlib.sha256(json.dumps(profiles, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+                    != (case.get('scope') or {}).get('profile_sha256')):
+            raise ValueError('model feedback manifest or strategy differs')
+    if exported['schema'].endswith('/2') or single and 'handoff' in case:
         if type(case.get('budget')) is not dict or 'handoff' not in case:
             raise ValueError('missing handoff evidence')
         validate_handoff(case['handoff'], case.get('scope'), case['budget'].get('started_at'))

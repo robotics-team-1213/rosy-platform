@@ -78,22 +78,24 @@ def identities(rows, *, evaluation=False):
 
 def checked_export(exported):
     fields(exported, ('schema', 'case', 'digest', 'label_state', 'field_accepted'))
-    if (exported['schema'] not in {'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2'}
+    if (exported['schema'] not in {'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2', 'rosy.incident.model_feedback/3'}
             or exported['label_state'] != 'UNREVIEWED' or exported['field_accepted'] is not False
             or digest(exported['case']) != sha(exported['digest'])):
         raise ValueError('UNBOUND_COMPARISON_EXPORT')
     case = exported['case']
+    single = exported['schema'].endswith('/3')
     base = {'scope', 'budget', 'profiles', 'state', 'reason', 'calls', 'observations',
             'spent_micros', 'reserved_micros', 'attempts', 'closure', 'outcome'}
-    fields(case, base | ({'handoff'} if exported['schema'].endswith('/2') else set()))
+    fields(case, base | ({'handoff'} if exported['schema'].endswith('/2') or single and 'handoff' in case else set()))
     limits = budget_limits(case['budget'])
     scope = case['scope']
     fields(scope, ('subject_id', 'case_id', 'owner_id', 'profile_sha256', 'policy_revision'))
     for value in scope.values(): text(value)
     sha(scope['profile_sha256'])
     profiles = case['profiles']
-    if (type(profiles) is not list or len(profiles) != 2 or any(type(p) is not dict for p in profiles)
-            or [p.get('role') for p in profiles] != ['primary', 'reviewer']
+    expected_roles = ['primary'] if single else ['primary', 'reviewer']
+    if (type(profiles) is not list or len(profiles) != len(expected_roles) or any(type(p) is not dict for p in profiles)
+            or [p.get('role') for p in profiles] != expected_roles
             or digest(profiles) != scope['profile_sha256']):
         raise ValueError('INVALID_PAIRED_STRATEGY_PROFILES')
     if case['state'] not in {'ACTIVE', 'HOLD', 'NOT_NEEDED'}: raise ValueError('INVALID_CASE_STATE')
@@ -175,7 +177,7 @@ def compare(cohort, exports):
     reports, used, strategies = [], set(), set()
     for candidate in candidates:
         fields(candidate, ('strategy', 'strategy_sha256', 'profile_sha256', 'policy_revision', 'exports'))
-        if candidate['strategy'] != 'primary_reviewer': raise ValueError('PAIRED_EXPORT_CANNOT_PROVE_RULE_OR_PRIMARY')
+        if candidate['strategy'] not in {'primary', 'primary_reviewer'}: raise ValueError('MODEL_EXPORT_CANNOT_PROVE_RULE')
         strategy = sha(candidate['strategy_sha256'])
         if strategy in strategies: raise ValueError('DUPLICATE_STRATEGY')
         strategies.add(strategy); sha(candidate['profile_sha256']); text(candidate['policy_revision'])
@@ -189,6 +191,8 @@ def compare(cohort, exports):
             if key not in cases or key in matched or receipt not in available or receipt in used:
                 raise ValueError('COMPARISON_CASE_BINDING_CHANGED')
             case, unknown = available[receipt]; scope = case['scope']
+            if candidate['strategy'] != ('primary' if len(case['profiles']) == 1 else 'primary_reviewer'):
+                raise ValueError('COMPARISON_STRATEGY_CHANGED')
             if ((scope['subject_id'], scope['case_id']) != key or scope['profile_sha256'] != candidate['profile_sha256']
                     or scope['policy_revision'] != candidate['policy_revision']):
                 raise ValueError('COMPARISON_SCOPE_CHANGED')
@@ -202,7 +206,8 @@ def compare(cohort, exports):
     if used != set(available): raise ValueError('EXTRA_COMPARISON_EXPORT')
     return dict(schema='rosy.incident.operational_comparison/1', state='HOLD', promotion_state='HOLD',
         field_accepted=False, truth_admitted=False, cohort_sha256=digest(cohort), candidates=reports,
-        missing=['rule_baseline', 'primary_baseline', 'independent_truth', 'acceptance_limits',
+        missing=['rule_baseline', *([name + '_baseline' for name in ('primary', 'primary_reviewer')
+                 if name not in {row['strategy'] for row in reports}]), 'independent_truth', 'acceptance_limits',
                  'normal_command_coverage', 'recurrence_coverage', 'actual_invoice', 'runtime_admission',
                  'input_lineage_admission', 'strategy_provenance'])
 
