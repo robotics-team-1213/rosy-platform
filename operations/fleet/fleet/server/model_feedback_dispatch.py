@@ -274,7 +274,7 @@ class MissionFeedbackToolDispatcher:
                  arguments: Mapping[str, Any],
                  model_tool_call: ModelToolCall | None = None) -> ER2ToolResult:
         definition = MODEL_TOOL_CATALOG.get(tool_name)
-        valid_name = tool_name if definition is not None else "unsupported"
+        valid_name = tool_name if definition is not None and definition.scope == 'mission' else "unsupported"
         try:
             trusted_scope = (scope if isinstance(scope, MissionFeedbackTurnScope)
                              else MissionFeedbackTurnScope.model_validate(scope))
@@ -283,7 +283,7 @@ class MissionFeedbackToolDispatcher:
         if (not isinstance(call_id, str) or not call_id or call_id != call_id.strip()
                 or len(call_id) > 128 or any(ord(char) < 32 for char in call_id)):
             return self._result(valid_name, "rejected", "INVALID_CALL_ID")
-        if definition is None or not definition.feedback_enabled:
+        if definition is None or definition.scope != 'mission' or not definition.feedback_enabled:
             return self._result(valid_name, "rejected", "TOOL_NOT_ALLOWED")
         try:
             authorized = (self.authorization_check is not None
