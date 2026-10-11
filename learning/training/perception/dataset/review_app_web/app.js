@@ -13,13 +13,12 @@ const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 �
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
 const objectCanvasColumn=document.querySelector('.review-editor-canvas');
-objectCanvasColumn.querySelector('.image-stage').before(document.querySelector('.review-view-bar'));
 objectCanvasColumn.querySelector('.image-stage').after($('candidate-details'));
 document.querySelector('.review-stage').append(document.querySelector('.review-editor-tools'));
 const objectResult=document.createElement('p');
 objectResult.id='object-result';objectResult.className='review-result';objectResult.setAttribute('role','status');
 objectCanvasColumn.querySelector('.image-stage').after(objectResult);
-objectResult.after($('object-quick-classes'));
+objectResult.after(document.querySelector('.review-view-bar'),document.querySelector('.frame-navigation'),$('object-quick-classes'));
 for(const [id,key] of [['prev-frame','ArrowLeft'],['next-frame','ArrowRight'],['next-pending','N'],['undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('undo').title='마지막 저장 라벨 수정 되돌리기 · Ctrl+Z';
 for(const [id,label] of [['prev-frame','이전 사진'],['next-frame','다음 사진'],['next-pending','다음 검수 대기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
