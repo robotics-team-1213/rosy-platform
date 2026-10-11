@@ -142,12 +142,15 @@ def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_
             before = list(posts)
             card = _card(page, 'rosy_02')
             expect(card.locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_02#teach-heading')
+            card.locator('[data-goal-robot-id]').click()
+            expect(card.locator('[data-goal-robot-id]')).to_have_attribute('aria-pressed', 'true')
             leader = page.locator('#formation-leader').input_value()
             card.locator('[data-open-formation]').click()
             expect(page.locator('#context-tools')).to_be_visible()
             expect(page.locator('#formation-form-summary')).to_be_visible()
             assert page.locator('#formation-leader').input_value() == leader
             assert page.locator('#formation-heading').evaluate('node => node === document.activeElement')
+            expect(_card(page, 'rosy_02').locator('[data-goal-robot-id]')).to_have_attribute('aria-pressed', 'false')
             expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
             assert posts == before and errors == []
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
