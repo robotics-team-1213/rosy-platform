@@ -186,3 +186,31 @@ export function teachFrameMatches(record, map) {
   return !map.survey;
 }
 
+export function mergeCameraMap(base, observation) {
+  const reference = map => Object.entries(map?.survey || {}).filter(([k]) => !['reviewed', 'review_note'].includes(k))
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (observation?.schema !== 'rosy.site_map/1' || !base?.survey
+      || observation.map_id !== base.map_id || JSON.stringify(reference(observation)) !== JSON.stringify(reference(base)))
+    throw new Error('카메라 관측과 초안의 지도 ID·전체 조사 기준을 맞추세요');
+  if (!Array.isArray(observation.places) || !Array.isArray(observation.edges) || !observation.edges.length
+      || ['facilities', 'crosswalks', 'turn_bans'].some(k => observation[k]?.length)
+      || observation.edges.some(e => e.evidence?.source !== 'camera' || e.evidence.status !== 'observed'
+        || e.evidence.reference_revision !== base.survey.revision))
+    throw new Error('관측 근거가 있는 카메라 차로 초안이 필요합니다');
+  const next = copy(base), ids = new Map();
+  const signature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps]);
+  const fresh = observation.edges.filter(e => !next.edges.some(old => signature(old) === signature(e)));
+  const free = rows => { let n = 1; while (rows.some(r => r.id === `camera_${n}`)) n++; return `camera_${n}`; };
+  for (const id of new Set(fresh.flatMap(e => [e.from, e.to]))) {
+    const place = observation.places.find(p => p.id === id);
+    if (!place || !Number.isFinite(place.x) || !Number.isFinite(place.y)) throw new Error('카메라 장소 좌표를 확인하세요');
+    if (next.places.some(p => Math.hypot(p.x - place.x, p.y - place.y) <= .05))
+      throw new Error('기존 장소와 가까운 관측은 연결이 모호합니다 · 장소와 차로를 직접 검토하세요');
+    const mapped = free(next.places);
+    ids.set(id, mapped); next.places.push({...copy(place), id: mapped});
+  }
+  for (const edge of fresh) next.edges.push({...copy(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
+  if (fresh.length) next.survey = {...next.survey, reviewed: false, review_note: ''};
+  return next;
+}
+
