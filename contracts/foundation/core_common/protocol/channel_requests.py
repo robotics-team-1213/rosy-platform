@@ -1,7 +1,7 @@
 """D-671 reception receipts carry no execution grant."""
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 Snowflake = str
 
@@ -35,3 +35,11 @@ class ChannelRequestReceipt(BaseModel):
 class ChannelRequestList(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     rows: list[ChannelRequestReceipt] = Field(max_length=50)
+
+
+class ChannelNavigationCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    robot_id: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_.-]+$")
+    x: FiniteFloat
+    y: FiniteFloat
+    yaw: FiniteFloat = 0.0
