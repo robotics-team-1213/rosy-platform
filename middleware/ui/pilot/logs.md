@@ -857,3 +857,9 @@
 - 증거: 원격 Chromium 결합 회귀 039bbbffa 176 passed, 신선도·최근 접속 후속 e01abed51 27 passed, 전체 Robot 캡처 ab2f331a4 3 passed, 겹침·잘림 회귀 432e39895 8 passed, 입구 권한 한 줄 회귀 855e5b46a 3 passed. 각 종료 로그의 known_failures는 0 new/0 known이다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/logs/ 아래 browser, captures, robot-captures, visual-final, entry-final에 있다.
 - 검토: 원격 대역 CORE의 Pilot 목록 없음/읽기 실패 4뷰포트 8장과 Robot 입구·운용·작업 준비·설치 정비 320/390 캡처 8장을 받았다. Pilot 320 실패/2000 빈 상태와 Robot 네 화면 320을 직접 검토했다. 권한 글자 잘림과 상태·설명 혼합을 발견해 수정하고 다시 캡처했다.
 - gate 변화: SOURCE와 원격 Chromium 근거만 추가했다. 노트북 pytest·로컬 browser·착지·push·배포·실제 설치 화면 확인은 하지 않았다. DEVICE/FIELD와 실제 전체 UI 수용은 이 증거로 승격하지 않는다.
+
+## 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+
+- 변경: Windows 전용 batch/Java/cache 경로로 Linux에서 실행되던 앱 proxy 시험을 기존 Android CI 방식과 맞춘다. Linux는 Bash로 같은 Gradle wrapper를 실행하고 호스트 Java/SDK/cache 설정을 상속한다. probe·build·프로젝트 cache·Kotlin 상태는 같은 고유 pytest 임시 경로를 쓴다. 실제 bundled page·capability·접속/조작/자산 검사와 offline 실행을 유지한다.
+- 증거: 적정 자원 통합 후보 80a12948c에서 gradlew.bat PermissionError를 NEW로 관측했다. 파일 blob은 기준·main·후보에서 같지만 이를 기존 통과로 계산하지 않는다. Python 구문 확인은 통과했다. 기존 SDK 도구와 수락된 라이선스 상태로 Linux API 35/build-tools 34를 시험 전용 경로에 준비하며 원격 Gradle cache 예열과 실제 앱 proxy 검사는 이어 실행한다.
+- gate 변화: 시험 실행 경로 보완이다. 실제 Android 설치본·태블릿·주행 수용을 뜻하지 않는다.
