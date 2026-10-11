@@ -6,6 +6,7 @@ import socket
 import threading
 import time
 from dataclasses import asdict
+from dataclasses import replace
 from contextlib import closing
 
 import pytest
@@ -151,6 +152,32 @@ def test_peer_credentials_refuse_another_uid(tmp_path):
             return gate.struct.pack('3i', 100, os.getuid() + 1, os.getgid())
     with gate.Gateway(str(tmp_path / 'gate.sock'), gate.Handler) as server:
         assert not server.verify_request(Peer(), '')
+
+
+def test_fleet_disagreement_accepts_one_validated_prior_only():
+    p = replace(problem(), fleet_choice='reobserve')
+    prior = {**reply(), 'input_hash': p.digest, 'profile_id': 'qwen-local'}
+    body = {'problem': {**asdict(p), 'input_hash': p.digest}, 'prior': [prior], 'instruction': 'test'}
+    assert gate.trusted_body(json.dumps(body))[0] == p
+    for invalid in ([{**prior, 'choice': 'reobserve'}], [{**prior, 'objections': ['unsafe']}],
+                    [{**prior, 'profile_id': ''}], [prior, prior], [{**prior, 'input_hash': 'wrong'}]):
+        body['prior'] = invalid
+        with pytest.raises(ValueError):
+            gate.trusted_body(json.dumps(body))
+
+
+@pytest.mark.parametrize('reasoning', [-1, 101, True])
+def test_reasoning_usage_must_be_within_completion_tokens(reasoning):
+    data = response()
+    data['usage']['completion_tokens_details'] = {'reasoning_tokens': reasoning}
+    with pytest.raises(ValueError):
+        gate.checked_response(problem(), data)
+
+
+def test_reasoning_usage_is_preserved_when_included_in_output_cap():
+    data = response()
+    data['usage']['completion_tokens_details'] = {'reasoning_tokens': 90}
+    assert gate.checked_response(problem(), data)['usage']['completion_tokens_details'] == {'reasoning_tokens': 90}
 
 
 def test_upstream_oversize_and_timeout_are_not_retried(monkeypatch):
