@@ -28,6 +28,7 @@ CONSOLE_ASSETS = {
     "styles.css": ("shared/styles.css", "text/css"),
     "console.js": ("console.js", "application/javascript"),
     "inbox.js": ("inbox.js", "application/javascript"),
+    "work-view.js": ("work-view.js", "application/javascript"),
     "incident-view.js": ("incident-view.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
     "install.js": ("install.js", "application/javascript"),

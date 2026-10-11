@@ -24,6 +24,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
+| `work-view.js` | D-664 source-scoped Task/Mission read view at `/console?view=work`; owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
 | `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; session, polling cadence and command authority remain in `console.js` |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |

@@ -1,6 +1,4 @@
-"""core_common.protocol.schemas — Fleet 프로토콜 envelope/이벤트 스키마 (P1-19, ADR-D-10).
-
-계약 원천: ROSY-API-REF-001 §6~§9.
+"""Fleet protocol schemas and canonical read exports (ROSY-API-REF-001, D-10, D-664).
 - Envelope: 모든 Fleet↔Robot WS 메시지 공통 포장 (API Ref §7.1)
 - HelloPayload / WelcomePayload: 핸드셰이크 (API Ref §7.2)
 - HeartbeatPayload: 1 Hz 상태 전송 (API Ref §7.3)
@@ -24,6 +22,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
+from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
