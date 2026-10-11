@@ -651,6 +651,12 @@ roots:
     wave: none
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
     concern: other
+  - path: tools/packaging
+    part: tools
+    d427_target: tools/packaging
+    wave: none
+    concern: other
+    note: D-652 build-time Fleet source composition and self-contained sdist support; excluded from runtime wheels and images.
   - path: tools/validation
     part: tools
     d427_target: tools/validation
