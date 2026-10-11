@@ -196,6 +196,8 @@ def test_active_foreign_worker_is_not_recovered_or_replayed_automatically(tmp_pa
         assert store.attempt(scope, 'foreign-attempt')['state'] == 'SUBMITTING'
         assert seen == [] and handoffs == []
         await worker.aclose()
+        assert store.attempt(scope, 'foreign-attempt')['state'] == 'SUBMITTING'
+        assert store.case(scope)['state'] == 'ACTIVE' and handoffs == []
     asyncio.run(run())
 
 
