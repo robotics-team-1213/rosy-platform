@@ -8,10 +8,10 @@ from fleet.server.site_auth import SitePrincipal
 from test_channel_workflow import fixture, GOAL, task
 
 
-def client_for(workflow, principal):
+def client_for(workflow, principal, task_service=None):
     app = FastAPI()
     install_workflow_routes(app, workflow, require_operator=lambda: SitePrincipal(principal, "operator"),
-                            read_guard=[])
+                            read_guard=[], task_service=task_service)
     return TestClient(app)
 
 
@@ -46,3 +46,22 @@ def test_invalid_review_body_is_rejected_before_mutation(tmp_path, change):
     body.update(change)
     assert client.put(f"/api/fleet/channel-requests/{receipt['request_id']}/review", json=body).status_code == 422
     assert workflow.read(receipt["request_id"], "op")["revision"] == 0
+
+
+def test_submit_route_reuses_task_owner_and_rejects_stale_review(tmp_path):
+    from fleet.server.task_service import FleetTaskService
+    workflow, _, tasks, _, receipt = fixture(tmp_path)
+    service = FleetTaskService(tasks, robot_ids={"pinky"})
+    client = client_for(workflow, "op", service)
+    path = f"/api/fleet/channel-requests/{receipt['request_id']}"
+    body = {"expected_hash": receipt["content_hash"], "expected_revision": 0,
+            "state": "READY", "candidate": GOAL, "reason": "confirmed"}
+    assert client.put(path + "/review", json=body).status_code == 200
+    assert client.post(path + "/submit", json={"expected_hash": receipt["content_hash"],
+                                               "expected_revision": 0}).status_code == 409
+    submission = {"expected_hash": receipt["content_hash"], "expected_revision": 1}
+    assert client_for(workflow, "other", service).post(path + "/submit", json=submission).status_code == 404
+    first = client.post(path + "/submit", json=submission)
+    assert first.status_code == 200 and first.json()["work_status"] == "QUEUED"
+    assert client.post(path + "/submit", json=submission).json()["work_id"] == first.json()["work_id"]
+    assert tasks.get_task(first.json()["work_id"])["request_key"] == "discord-" + receipt["request_id"]
