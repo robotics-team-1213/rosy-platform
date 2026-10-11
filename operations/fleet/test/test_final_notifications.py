@@ -210,3 +210,33 @@ def test_zero_attempt_origin_binds_revision_after_audit_rotation(tmp_path, origi
         assert log.notifications.enqueue_final(scope, summary, now=101)
     else:
         with pytest.raises(ValueError): log.notifications.enqueue_final(scope, summary, now=101)
+
+
+@pytest.mark.parametrize('reason,current_policy', [('POLICY_CHANGED', 'line-follow-shadow-v1'),
+                                                  ('OTHER_FAILURE', 'line-follow-shadow-v1'),
+                                                  ('POLICY_CHANGED', 'foreign-policy')])
+def test_changed_policy_final_is_diagnostic_only_and_requires_current_trusted_policy(tmp_path, reason, current_policy):
+    _, log, board, channels = _setup(tmp_path)
+    store = IncidentCaseStore(log.path, clock=lambda: 100)
+    scope = CaseScope('pinky', 'case-1', 'core', 'a' * 64, 'old-policy')
+    store.begin_case(scope, CaseBudget(100, 130, 2, 2, 0))
+    observe(board, 100)
+    revision = board.judgment_view('pinky')['request']['revision']
+    store.close_case(scope, state='HOLD', reason=reason)
+    with closing(log._connect()) as connection, connection:
+        connection.execute('CREATE TABLE IF NOT EXISTS fleet_incident_v2_origins '
+                           '(subject_id TEXT,case_id TEXT,observation_revision TEXT,PRIMARY KEY(subject_id,case_id))')
+        connection.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)', (scope.subject_id, scope.case_id, revision))
+        receipt = json.loads(connection.execute('SELECT assessment FROM fleet_judgment_current').fetchone()[0])
+        receipt['policy_revision'] = current_policy
+        connection.execute('UPDATE fleet_judgment_current SET assessment=?', (json.dumps(receipt),))
+    summary = dict(reason=reason, calls=0, observations=0, spent_micros=0, reserved_micros=0,
+                   profile_sha256=scope.profile_sha256, observation_revision=revision)
+    if reason == 'POLICY_CHANGED' and current_policy == 'line-follow-shadow-v1':
+        assert log.notifications.enqueue_final(scope, summary, now=100)
+        sent = []
+        run(log, board, channels, 100, lambda request: sent.append(json.loads(request.content)) or httpx.Response(200, json={'id': '7'}))
+        assert len(sent) == 1 and 'old-policy' in sent[0]['content'] and current_policy in sent[0]['content']
+        assert log.handoff.active() == []
+    else:
+        with pytest.raises(ValueError): log.notifications.enqueue_final(scope, summary, now=100)
