@@ -1,6 +1,6 @@
 ﻿// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
 import {createFleetClient} from '/common/fleet-client.js';
-import {loginHref} from '/console/assets/login-return.js';
+import {loginHref, loginReturn} from '/console/assets/login-return.js';
 
 const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
@@ -46,6 +46,13 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   const part = name => host.querySelector(`[data-login="${name}"]`);
   let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null, changing = false;
   const link = document.getElementById('fleet-login');
+  const profile = document.getElementById('fleet-profile');
+  if (profile) {
+    profile.href = '/console/profile?return=' + encodeURIComponent(loginReturn(location.href, location.origin));
+    if (['/console/site-map', '/console/cell'].includes(location.pathname)) {
+      profile.target = '_blank'; profile.rel = 'noopener'; profile.title = '새 탭에서 내 프로필 · 편집 내용 보존';
+    }
+  }
   if (link) link.href = loginHref(location);
   if (link && ['/console/site-map', '/console/cell'].includes(location.pathname)) {
     link.target = '_blank'; link.rel = 'noopener'; link.href += '&draft=1';
@@ -93,6 +100,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       cookie = session.via === 'cookie';
       cookiePrincipal = cookie ? session.principal_id : null;
       cookieRole = cookie ? session.role : null;
+      if (profile) profile.hidden = !cookie || session.password_change_required === true;
       if (standalone) {
         if (cookie) return verified(session);
       } else {
@@ -113,6 +121,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     } catch (error) {
       if (error?.status === 401 || error?.status === 404) {
         cookie = false; cookiePrincipal = cookieRole = null;
+        if (profile) profile.hidden = true;
         if (standalone && changing) {
           changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');

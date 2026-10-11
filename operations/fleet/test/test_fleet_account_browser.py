@@ -42,7 +42,8 @@ def account_page(tmp_path, request):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                yield browser.new_page(viewport={'width': 320, 'height': 900}), origin
+                context = browser.new_context(viewport={'width': 320, 'height': 900})
+                yield context.new_page(), origin
             finally:
                 browser.close()
     finally:
@@ -116,8 +117,6 @@ def test_first_password_change_waits_for_readback_and_recovers_expired_login(acc
     page.locator('[data-login=submit]').click()
     expect(page.locator('[data-login=error]')).to_contain_text('화면을 새로고침해 계정 상태')
     expect(page.locator('[data-login=password]')).to_have_value('')
-
-
     expect(page.locator('[data-login=confirm]')).to_have_value('')
     expect(page).to_have_url(origin + '/console/login')
     page.unroute('**/api/fleet/auth/change-password')

@@ -21,3 +21,11 @@ test('return strips unrecognized query and fragment data', () => {
   assert.equal(loginHref({origin, href: origin + '/console?view=work'}),
     '/console/login?return=%2Fconsole%3Fview%3Dwork');
 });
+test('profile return preserves one allowed work destination and rejects nested loops', () => {
+  assert.equal(loginReturn('/console/profile?return=%2Fconsole%3Fview%3Dwork', origin),
+    '/console/profile?return=%2Fconsole%3Fview%3Dwork');
+  for (const back of ['https://other.test/console', '/console/profile?return=/console/profile', '/console/login']) {
+    assert.equal(loginReturn('/console/profile?return=' + encodeURIComponent(back), origin),
+      '/console/profile?return=%2Fconsole');
+  }
+});
