@@ -175,11 +175,12 @@ class LineStuckBoard:
         return (FleetJudgmentReceipt(**asdict(assessment)).model_dump(mode="json")
                 if assessment is not None else None)
 
-    async def deliberate(self, robot_id, journal, supervisor, providers):
+    async def deliberate(self, robot_id, journal, supervisor, providers, *, baseline=None, current_baseline=None):
         """Explicit shadow caller; never forwards a stuck answer or activates a provider."""
         from ..server.incident_deliberation import run_line_judgment
         return await run_line_judgment(self.intervention_assessment(robot_id), journal,
-            supervisor, providers, current=lambda: self.intervention_assessment(robot_id))
+            supervisor, providers, current=lambda: self.intervention_assessment(robot_id),
+            baseline=baseline, current_baseline=current_baseline)
 
     def judgments(self, limit: int = 100) -> list[dict]:
         return self._log.judgments(limit) if self._log is not None else []
