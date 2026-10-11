@@ -210,6 +210,24 @@ def test_prelabel_refuses_declared_road_without_model_semantic_evidence():
         prelabel.resolve_classes(entries, model)
 
 
+def test_prelabel_cli_refuses_road_semantic_substitution_before_output(tmp_path, monkeypatch):
+    import yaml
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable',
+                          'color': [0, 255, 0], 'semantic': 'road_surface/1'}]
+    classes = tmp_path / 'classes.yaml'
+    classes.write_text(yaml.safe_dump({'classes': entries}))
+    raw = [dict(c) for c in entries]
+    raw[-1]['semantic'] = 'current_road_region/1'
+    model = SimpleNamespace(manifest=SimpleNamespace(
+        classes=[SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries],
+        raw={'output': {'classes': raw}}))
+    monkeypatch.setattr(prelabel, '_open_model', lambda *args: (model, None))
+    out = tmp_path / 'out'
+    assert prelabel.main([str(tmp_path / 'frames'), '--model', str(tmp_path / 'model'),
+                          '--classes', str(classes), '--out', str(out)]) == 1
+    assert not out.exists()
+
+
 @pytest.mark.parametrize('yaml_semantic,model_semantic', [
     ('road_surface/1', 'current_road_region/1'), ('current_road_region/1', 'road_surface/1'),
     ('road_surface/1', None), (None, 'road_surface/1'),
