@@ -9,3 +9,9 @@ D-699를 구현한다. 변경 전 Fleet 부모는 54,211줄이며 기존 54,074+
 5. read-only observation window 도구를 구현한다. 대상 robot만 먼저 filter하지 않고 동일 capture 전체 roster를 검증한다. 누락·retention·양끝·restart·clock 문제는 HOLD다. 관측 capture 범위와 CORE 명령·모델 호출·재발·현장 수용을 구분한다.
 
 새 `fleet.observe`는 source journal 책임이며 새 process나 별도 wheel이 아니다. setuptools find_packages의 기존 배포 closure를 사용한다. ADR 관계는 D-699의 D-427·D-429·D-430 표를 따른다. 원격 시험·독립 검토 후 승인된 local landing만 수행하며 push는 별도다.
+
+## 이전·기능 추가 후 동시 측정
+
+`1a1df82325`의 기존 source 필터 실측은 Fleet 부모 54,007줄(기존 54,074+150 = 54,224 한도), observe 232줄(이전 기준 212+150 = 362 한도)이다. aliases는 각각 5·2줄이며 CORE event body는 SQLite 정책 import 외에는 그대로 유지했다. 독립 검토에서 실제 동일 DB 원장 책임 분리와 기준 유지에 동의했고 중요 source blocker를 찾지 못했다.
+
+같은 후보의 capture·기존 observation/export·Core event/API·Hub와 ownership/size를 포함한 7개 파일은 적격 AI PC 9GB에서 원격 79개 시험과 known-failures 신규 실패 0건, lint를 통과했다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/observation-capture-green/run-1.txt`다. 실제 wheel build→별도 target 설치→`python -I -S`의 source 없는 import/DB capture는 후속 설치 회귀이며 단말 결과 확인 전에는 설치 closure 통과로 기록하지 않는다. read-only window와 실제 배포·현장 수용은 미완료다.
