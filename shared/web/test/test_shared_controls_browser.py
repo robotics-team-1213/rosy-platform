@@ -241,10 +241,11 @@ def test_all_controls_share_geometry_including_emergency_stop(page, theme):
       const result = {};
       for (const kind of ['primary', 'quiet', 'segment', 'toggle', 'irreversible']) {
         const button = document.createElement('ui-button');
-        button.setAttribute('kind', kind); button.textContent = 'Action';
+        button.setAttribute('kind', kind);
+        const label = document.createElement('span');label.textContent = 'Action';button.append(label);
         document.body.append(button);
         const box = button.getBoundingClientRect(), css = getComputedStyle(button);
-        result[kind] = {height:box.height, width:box.width, text:css.fontSize, inset:css.paddingLeft};
+        result[kind] = {height:box.height, width:box.width, text:getComputedStyle(label).fontSize, inset:css.paddingLeft};
       }
       const field = document.createElement('input');field.className='ui-field';
       document.body.append(field);result.field={height:field.getBoundingClientRect().height};
