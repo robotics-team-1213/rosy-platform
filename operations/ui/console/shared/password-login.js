@@ -29,7 +29,9 @@ function failureText(error) {
 // and no cookie session exists; a cookie session shows its principal and 로그아웃.
 export function createPasswordLogin(host, {onChange = () => {}} = {}) {
   host.innerHTML = TEMPLATE;
-  const part = name => host.querySelector(`[data-login="${name}"]`);
+  const parts = Object.fromEntries([...host.querySelectorAll("[data-login]")].map(node => [node.dataset.login, node]));
+  const part = name => parts[name];
+  document.getElementById("user-role").before(part("who"));
   let locked = true, firstRefresh = true;
 
   async function refresh(nowLocked = locked) {
@@ -44,7 +46,7 @@ export function createPasswordLogin(host, {onChange = () => {}} = {}) {
     // Keep the token input out of the map after connection; its summary remains available for reconnect.
     if (firstRefresh && offered) document.getElementById("token-access")?.removeAttribute("open");
     firstRefresh = false;
-    host.hidden = !cookie && (!offered || !locked);
+    host.hidden = cookie || !offered || !locked;
     part("form").hidden = cookie;
     part("who").hidden = !cookie;
     part("principal").textContent = cookie ? session.principal_id : "";

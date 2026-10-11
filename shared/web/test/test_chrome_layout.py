@@ -29,5 +29,5 @@ def test_header_keeps_one_recipe_of_named_areas():
     assert '"brand role estop" "nav nav estop"' in shell
     # D-501/D-632: document links own their tab row; inbox and stop stay outside connection settings.
     assert '"brand pill inbox more estop"' in fleet
-    assert '"brand more estop" "pill inbox estop"' in fleet
+    assert '"brand more estop" "pill pill inbox"' in fleet
     assert "#fleet-inbox { grid-area: inbox; }" in fleet

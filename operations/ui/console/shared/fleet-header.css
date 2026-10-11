@@ -52,7 +52,8 @@ ui-topbar input[type="checkbox"] { width: auto; }
    선다. 줄이 모자라면 항목이 다음 줄로 내려가고 글자가 접히지 않는다. */
 #topbar-more { display: none; }
 .topbar-extra { display: contents; }
-.fleet-link-status { display: contents; }
+.fleet-link-status { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); min-width: 0; }
+.fleet-link-status ui-tag { flex: none; white-space: nowrap; }
 @media (width >= 90rem) {
   ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
   /* 긴 주체 이름이 머리 줄을 넘치게 하지 않도록 역할 표지는 12rem에서 자른다(전문은 title). */
@@ -83,7 +84,8 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar ui-brand { grid-area: brand; min-width: 0; }
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
-  #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fleet-link-status { grid-area: pill; }
+  #online-pill { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #fleet-inbox { grid-area: inbox; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -106,23 +108,20 @@ ui-topbar input[type="checkbox"] { width: auto; }
   #topbar-more > span:not(.sr-only) { display: none; }
 }
 
-/* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다.
+/* compact: 두 줄 — 이름·접속·정지 / 연결·로그인·알림. 개발 표시는 권한 옆에 둔다.
    D-359 US-008: 320px에서 "ROSY FLEET"가 두 줄로 접혔다(이름 칸 83px, 글자 119px). 시계와
    설정이 한 열을 나눠 쓰던 것을 풀어 이름이 시계 열 위까지 쓴다. 이름 칸을 크기
    컨테이너로 두면 components.css의 워드마크가 칸에 맞게 줄어든다(title 크기가 상한). */
-@media (width < 30rem) {
+@media (width < 48rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand more estop" "pill inbox estop";
+    grid-template-areas: "brand more estop" "pill pill inbox";
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);
   }
   ui-topbar ui-brand { container-type: inline-size; }
-  .fleet-link-status { display: contents; }
-  /* 통신 상태는 좁은 칸에서도 전부 읽을 수 있어야 한다. */
-  #online-pill { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
-  #development-badge { grid-area: brand; align-self: end; justify-self: start; }
-  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-5); }
+  .fleet-link-status { flex-wrap: wrap; }
+  .fleet-link-status:has(#development-badge:not([hidden])) { flex-wrap: nowrap; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   #clock { font-size: var(--text-micro); }
   /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */
