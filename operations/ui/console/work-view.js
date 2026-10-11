@@ -2,7 +2,7 @@
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
-  CANCELED: "취소", EXPIRED: "만료"};
+  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";

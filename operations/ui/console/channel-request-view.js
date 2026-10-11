@@ -1,4 +1,6 @@
 // Fleet binds the current review and existing Task creation in one transaction.
+import {workStatus} from "/console/assets/work-view.js";
+const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절", LINKED: "작업 연결"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
   let receipt = null, review = null, version = 0, busy = false, incidentRows = [];
   const panel = el("channel-review"), state = el("channel-review-state");
@@ -8,22 +10,28 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     el("channel-review-reason").value = "";
   }
   function paint() {
-    el("channel-review-incident").disabled = busy || review.state === "LINKED" || !canManage();
-    el("channel-review-incident-claim").disabled = busy || review.state === "LINKED" || !canManage();
+    const reason = busy ? "요청 처리 중입니다" : review.state === "LINKED" ? "이미 작업과 연결된 요청입니다" : !canManage() ? "이름 있는 운영자 로그인이 필요합니다" : "로봇 연결과 안전 상태를 확인하세요";
+    setOff(el("channel-review-incident"), busy || review.state === "LINKED" || !canManage(), reason);
+    setOff(el("channel-review-incident-claim"), busy || review.state === "LINKED" || !canManage(), reason);
     const incident = review.incident;
     el("channel-review-incident-link-holder").hidden = !incident;
     if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
-    el("channel-review-mission").disabled = busy || review.state === "LINKED" || !canManage();
-    el("channel-review-mission-prepare").disabled = busy || review.state === "LINKED" || !canManage();
+    setOff(el("channel-review-mission"), busy || review.state === "LINKED" || !canManage(), reason);
+    setOff(el("channel-review-mission-prepare"), busy || review.state === "LINKED" || !canManage(), reason);
     el("channel-review-mission-admit-holder").hidden = !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
-    el("channel-review-mission-admit").disabled = busy || !canManage();
+    setOff(el("channel-review-mission-admit"), busy || !canManage(), reason);
     el("channel-review-cell-holder").hidden = review.state === "LINKED" && review.work_kind !== "cell_job";
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
-    state.textContent = `${review.state}${review.work_status ? " · " + review.work_status : ""} · ${review.reason || "검토 사유를 입력하세요."}`;
+    state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
     for (const name of ["ready", "hold", "reject"])
-      el(`channel-review-${name}`).disabled = busy || review.state === "LINKED";
+      setOff(el(`channel-review-${name}`), busy || review.state === "LINKED", reason);
     el("channel-review-submit-holder").hidden = review.state !== "READY";
-    el("channel-review-submit").disabled = busy || !canSubmit(review.candidate?.robot_id);
+    setOff(el("channel-review-submit"), busy || !canSubmit(review.candidate?.robot_id), reason);
+  }
+  function setOff(control, off, reason) {
+    control.disabled = off;
+    if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
+    control.setAttribute("aria-describedby", "channel-review-state");
   }
   async function select(row) {
     const current = ++version, life = scope.capture(); panel.hidden = true;

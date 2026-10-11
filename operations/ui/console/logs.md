@@ -103,3 +103,9 @@
 - 변경: TRIP_START_CANCELED에 한국어 운행 안내를 연결한다. 원시 오류 코드 대신 상태 확인 뒤 재시작을 안내한다.
 - 증거: source 5f3f033a8의 원격 trip code label/취소/Task/goal 회귀 147 PASS, NEW 0; Node site-map 29 PASS. 서버와 물리 stop 권한은 바꾸지 않는다.
 - gate 변화: SOURCE/호스트 회귀만 추가한다. 배포된 UI와 실제 운행 수용은 미확인이다.
+
+## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완
+
+- 변경: 요청 검토 상태를 한국어로 표시하고 기존 workStatus를 재사용한다. 이동 후보 준비와 실행 준비를 구분하며 사건 인수·종료를 표시한다. 비활성 버튼·입력에는 기존 reason 및 aria-describedby 규약을 적용한다.
+- 증거: source28650439cb 통합 원격 검사에서 enum 노출과 사유 없는 비활성 NEW2를 재현했다. Chromium 시험은 표시 문구와 사건 잠금 사유를 검증하도록 갱신했다. 수정 HEAD의 재검증은 후속이다.
+- gate 변화: 실행·승인 권한 변화 없음. 배포·실제 Discord 왕복은 아직 미확인이다.

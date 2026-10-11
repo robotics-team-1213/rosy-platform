@@ -23,3 +23,12 @@
 safety_structure_review는 UI source `f18b37458`를 승인하고 Fleet 부모54,852 =Fleet35,961 +Decision1,666 +Console16,980 +Discord245로 제한 재판정에 동의했다. 기존 열 개 nested unit을 innermost로 한 번만 제외하며 새 SIZE_UNITS는 없다. +150, 기존 모든 파일 상한/hard tier, app906, TaskStore1035/1060, Console.py1325 zero-growth, proposal_store797의 기존800 초과 seam 재검토, UIconsole1032/1175, schemas1386/1389 및 full-progress/observe/server/UI 추출 의무와 이전 판정 역사를 보존했다. incidents505는360+150 안이며 allowance를 늘리지 않았다.
 
 독립 검토는 ed7eba964의 guard 수정과 최초 core_common10,031 제한 판정에도 동의했다. main9,888 대비 전체 DTO 가족136줄+re-export7줄이며 D-693 이전에도10,012였다. 다음 protocol family 확장 전 실제 계약 subpackage·설치/소비자/방향/단일 facade 및 same-change parent/unit 실측 의무를 계획에 기록했다. package10,000/+150·모든 파일 상한/HARD_TIER·기존 schema 추출 의무를 유지하며 새 SIZE_UNITS는 없다. 현재 committed HEAD 구조 재검증/local FF/CI·서명 배포·실제 Discord 원문→Console→원장→원래 메시지 회신은 아직 미확인이다. provider/로봇 명령 없음. 로봇 오프라인 FIELD는 별도 gate다.
+
+
+## 최종 통합 첫 검사와 보완
+
+구조 보완 source69df2be1f4 원격3 PASS/NEW0 및 lint0errors를 확인했다. tools/land.py auto는 최신 main d692ce9df4를 source28650439cb로 통합했으나 착지하지 않았다. 첫 invocation은 terminal 9,240 PASS/493 skipped/30 subtests와 NEW3(API app 버전 표기, raw enum, 비활성 사유 누락)이다. 나머지 두 invocation은 각각 AI/Model SSH 연결이 종료되어 pytest terminal 요약이 없다. known_failures comparator가 partial log를 NEW0로 읽더라도 이 두 검사는 확인 못 함이다. 로그는 X:/DevTemp/land/feat-discord-workflow/run-1-{1,2,3}.txt에 있다.
+
+API 버전 설명, 한국어 검토/작업 상태와 disabled reason/aria-describedby를 보완했다. 기존 workStatus와 이미 설치된 두 asset을 재사용하며 승인·안전 조건은 같다. reviewer는 import cycle 없음, API AST의 버전 문자열 외 동작 동일, Fleet54,860=35,961+1,666+16,988+245로 기존54,852/+150 안임을 확인해 source/Safety 승인했다. 구조 allowance나 SIZE_UNITS를 늘리지 않았다. 수정 committed HEAD의 원격/Chromium/설치 재검증 및 최신 main local FF는 후속이다.
+
+운영 readback은 현장 signed candidate28f6f49695644d7c2b99c0cf86e9dc3dc2d0e8bf와 Fleet/Vision/proxy healthy, site-stack/autoupdate timer active이다. Discord 전용 host config는 없다. 기존 비공개 Bot 토큰으로 Discord v10 읽기만 수행해 Bot1558876462734385213과 guild1558864656037056655/channel1558865220242378752(fleet-ai)가 일치함을 확인했다. token 재발급·메시지 발송·push·배포·장치 명령은 수행하지 않았다. 이는 Fleet Gateway의 운영 접수·회신 수용 증거가 아니다.
