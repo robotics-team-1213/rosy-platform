@@ -192,6 +192,63 @@ def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
     assert states == ["start", "stop"]
 
 
+def test_opt_in_lifespan_receives_and_persists_verified_reply(monkeypatch, tmp_path):
+    import httpx
+    from fastapi import FastAPI
+    from fleet.server import channel_gateway
+    from fleet.server.channel_requests import ChannelConfig, ChannelRequests
+
+    sent, stopped = [], []
+    client = httpx.AsyncClient
+
+    async def handle(request):
+        assert request.method == "POST"
+        assert str(request.url) == f"https://discord.com/api/v10/channels/{CHANNEL}/messages"
+        payload = json.loads(request.content)
+        assert payload["allowed_mentions"] == {"parse": [], "replied_user": False}
+        assert payload["message_reference"]["message_id"] == USER
+        assert "inspect" not in payload["content"]
+        sent.append(payload)
+        return httpx.Response(200, json={
+            "id": BOT, "channel_id": CHANNEL, "author": {"id": BOT, "bot": True},
+            "message_reference": payload["message_reference"],
+        })
+
+    async def run(self):
+        try:
+            await self.dispatch(packet("READY", {"user": {"id": BOT, "bot": True}, "session_id": "s"}, 1))
+            await self.dispatch(packet("MESSAGE_CREATE", message(), 2))
+            await self.dispatch(packet("MESSAGE_CREATE", message(), 3))
+            await asyncio.Event().wait()
+        finally:
+            stopped.append(True)
+
+    monkeypatch.setattr(DiscordGateway, "run", run)
+    monkeypatch.setattr(channel_gateway.httpx, "AsyncClient",
+                        lambda: client(transport=httpx.MockTransport(handle)))
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, replies_enabled=True,
+                           transport_key="transport-key-" * 3, users={USER: "operator"})
+    journal = ChannelRequests(tmp_path / "tasks.db", config, {"operator": "operator"})
+    app = FastAPI()
+    channel_gateway.install_gateway(app, journal, "private-bot-token-" * 4)
+
+    async def scenario():
+        before = asyncio.all_tasks()
+        async with app.router.lifespan_context(app):
+            async def delivered():
+                while True:
+                    rows = await asyncio.to_thread(journal.reply_outbox.rows, "operator")
+                    if rows and rows[0]["state"] == "SENT":
+                        assert len(rows) == 1 and rows[0]["provider_id"] == BOT
+                        return
+                    await asyncio.sleep(0.01)
+            await asyncio.wait_for(delivered(), timeout=5)
+        assert len(sent) == 1 and stopped == [True]
+        assert asyncio.all_tasks() == before
+        assert journal.reply_outbox.rows("operator")[0]["state"] == "SENT"
+    asyncio.run(scenario())
+
+
 def test_reply_client_startup_failure_leaves_no_gateway_task(monkeypatch, tmp_path):
     from fastapi import FastAPI
     from fleet.server import channel_gateway
