@@ -44,6 +44,9 @@ def test_world_wheel_contains_projection_without_fleet(tmp_path):
     result = subprocess.run([sys.executable, "-I", "-c", """
 import pathlib, sys
 sys.path.insert(0, sys.argv[1])
+import importlib.metadata
+assert importlib.metadata.version('core_common') == '0.0.1'
+assert 'core_common>=0.0.1' in importlib.metadata.requires('rosy-world')
 from rosy.world.api import ObservationSnapshot
 from rosy.world.state.projections import map_pose
 from rosy.world.state.projections.road_region import road_region_input_errors
