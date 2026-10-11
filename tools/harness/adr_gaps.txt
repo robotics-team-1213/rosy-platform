@@ -39,3 +39,4 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 D-678 reserved by another active session; ADR not yet landed in this branch
 
 D-680 reserved by another active session; ADR not yet landed in this branch
+D-682 reserved by another active session; ADR not yet landed in this branch

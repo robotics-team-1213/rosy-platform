@@ -723,11 +723,6 @@
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
 
-## D-683 — Fleet 계정 진입점과 전용 로그인·업무 복귀
-
-- 상태: Accepted (2026-10-12).
-- 결정: 우측 계정 진입점·전용 로그인·검증된 세션/로그아웃·업무 복귀와 로컬 초안 보존. 기존 인증/안전 권한 유지.
-- 계약: [ADR](../adr/D-683-fleet-account-entry-and-login-return.md). 구현·원격 회귀·설치 수용은 별도 증거다.
 ## D-679 — Fleet·Qwen 불일치와 제한된 GLM 재평가
 
 - 상태: Accepted (2026-10-12).
