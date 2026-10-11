@@ -83,6 +83,10 @@ function refreshInbox() {
 }
 function paintInboxMessages() {
   const list = el("inbox-messages");
+  if (view.stateUnavailable) {
+    list.textContent = "상태 갱신 실패 · 현재 전달 기록을 확인할 수 없습니다.";
+    return;
+  }
   const old = new Map([...list.children].map(node => [node.dataset.robotId, node]));
   const nodes = view.robots.filter(robot => robot.line_stuck).map(robot => {
     const stuck = robot.line_stuck, inquiry = stuck.inquiry, proposal = stuck.ai_proposal, answer = stuck.fleet_answer;
