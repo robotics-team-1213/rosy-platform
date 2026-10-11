@@ -81,6 +81,68 @@ def test_off_by_default_sends_no_lease_and_shows_nothing():
     assert robot.renewals == [] and _goal(console) == {"x": 1.0, "y": 0.0, "yaw": 0.0}
 
 
+@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_cap"])
+@pytest.mark.parametrize("stop_all", [False, True])
+def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all):
+    async def main():
+        robot, other = LeaseRobot("rosy_01"), LeaseRobot("rosy_02")
+        console = _console(robot, other)
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def pause(value):
+            entered.set()
+            await release.wait()
+            return value
+
+        if stage == "yielded":
+            robot.capabilities = lambda: pause(LEASE_CAPS)
+            console._yielding["rosy_01"] = {"for": "rosy_02"}
+        elif stage == "untrusted":
+            console._gather_state = lambda _rid: pause(({}, "rest"))
+        elif stage == "route":
+            console._route_of = lambda _rid: pause([(0.0, 0.0), (1.0, 0.0)])
+            console._claims["rosy_02"] = [(0.0, 0.0), (1.0, 0.0)]
+        elif stage == "observe":
+            console._observe = lambda: pause(None)
+        elif stage == "map":
+            console.map = lambda: pause(None)
+        else:
+            console._standing_in_the_way = lambda *_args: ["rosy_02"]
+            console._pose_of = lambda _rid: (0.0, 0.0)
+            from fleet.server import console as console_module
+            original_bay = console_module.bays.best_bay
+            console_module.bays.best_bay = lambda *_args, **_kw: (1.0, 1.0)
+            if stage == "bay_map":
+                calls = 0
+
+                async def mapped():
+                    nonlocal calls
+                    calls += 1
+                    return await pause(None) if calls == 2 else None
+
+                console.map = mapped
+            else:
+                other.capabilities = lambda: pause(LEASE_CAPS)
+        goal = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
+        await entered.wait()
+        try:
+            await (console.estop_all() if stop_all else console.cancel("rosy_01"))
+        finally:
+            release.set()
+        try:
+            with pytest.raises((HubError, RuntimeError)):
+                await goal
+            assert "rosy_01" not in console._queued
+            assert "rosy_01" not in console._claims
+            assert "rosy_01" not in console._goals
+            assert not _sent(other)
+        finally:
+            if stage in {"bay_map", "bay_cap"}:
+                console_module.bays.best_bay = original_bay
+
+    run(main())
+
+
 @pytest.mark.parametrize("ttl,leased", [(0.0, False), (4.0, False), (4.0, True)])
 @pytest.mark.parametrize("receipt", [{"accepted": False}, {}, {"accepted": "true"}])
 def test_only_an_explicit_acceptance_records_goal_or_lease(ttl, leased, receipt):
