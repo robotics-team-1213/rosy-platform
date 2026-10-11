@@ -80,3 +80,9 @@ The model PC runs `--model-repo` (default `rosy-ml/repo`), a checkout that must 
 - `mcap`, `numpy`, `opencv-python`, `ffmpeg` for video; `ssh`/`scp` for `harvest.py`
 
 <!-- MANUAL: -->
+
+### 검수 UI 역할
+
+- `review_app_web`은 작업 목록·자료 등록·객체 검수·픽셀 검수 네 하위 화면이다. 검수는 원본 사진과 현재 결과를 먼저 보여주고 편집·승인·다음 대기를 연결한다. 객체/픽셀 승인·export·로봇 실행 수용은 별개다.
+- 공용 토큰과 `ui-*`를 쓰고 canvas 서체는 `canvasFont(role, family, displayScale)`로 읽는다. annotation 색·brush/box 좌표·원본 영상 비율은 데이터 기하이며 UI 테마로 바꾸지 않는다.
+- 재시도는 editing content가 숨겨진 실패·빈 상태에도 도달 가능해야 한다. 단일 작업에서 숨긴 필터는 실제 다중 작업 시험으로 검증한다.

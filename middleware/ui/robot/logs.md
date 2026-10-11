@@ -1251,3 +1251,7 @@
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
 - Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
 - Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 — UI 역할·공용 토큰 소비 (D-639)
+
+- 공용 버튼 inset 소비와 갤러리 제목/접힘 행을 연결하고 의미 기반 readout·현재 절차 fixture를 정리했다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.

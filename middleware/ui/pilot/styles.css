@@ -377,7 +377,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   aspect-ratio: 1;
   border-radius: 50%;
   background: color-mix(in srgb, var(--focus-ring) 85%, var(--ground-deep));
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  box-shadow: none;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -485,8 +485,8 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   body[data-pilot-screen="preview"] ui-topbar ui-button { flex: 1 1 0; min-width: 0; padding-inline: var(--inset-button-irreversible); white-space: nowrap; }
   [data-drive-presets] > ui-text { display: none; }
   [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
-  [data-drive-presets] ui-button { min-width: var(--target-secondary); padding-inline: var(--inset-button-secondary); }
-  [data-drive-pivots] ui-button { min-width: 0; padding-inline: var(--inset-button-secondary); }
+  [data-drive-presets] ui-button { min-width: var(--target-secondary); padding-inline: var(--inset-button); }
+  [data-drive-pivots] ui-button { min-width: 0; padding-inline: var(--inset-button); }
   /* 영상 보기 한 쌍과 도구·종료 한 쌍은 각각 같은 가용 폭을 쓴다. */
   [data-drive-hud] ui-actions {
     display: grid;
@@ -711,7 +711,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: var(--status-good);
-  box-shadow: 0 0 0 2px var(--ground-deep);
+  box-shadow: none;
 }
 [data-intent-steer] {
   min-width: 8.5em;
@@ -791,7 +791,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 [data-arm-pad-knob] {
   position: absolute; top: 50%; left: 50%; width: 38%; aspect-ratio: 1; border-radius: 50%;
   background: color-mix(in srgb, var(--ink) 72%, var(--ground-deep));
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  box-shadow: none;
   transform: translate(-50%, -50%); pointer-events: none;
 }
 [data-arm-pad-knob][data-knob-x] {

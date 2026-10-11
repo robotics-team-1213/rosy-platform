@@ -98,7 +98,7 @@ class GroupDrive(private val context: Context, private val first: PilotConnectio
         val ui = PilotViews(context)
         val dp = ui::dp
         val root = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12))
+            orientation = LinearLayout.VERTICAL; setPadding(dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space3.toInt()), dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space3.toInt()))
             setBackgroundColor(PilotColors.background)
         }
         root.addView(ui.label("2대 함께 조종", RosyMetrics.TextTitle))
@@ -106,7 +106,7 @@ class GroupDrive(private val context: Context, private val first: PilotConnectio
         val cameras = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(cameras, LinearLayout.LayoutParams(-1, 0, 1f))
         for ((endpoint, title) in listOf(a to first.target.id, b to second.target.id)) {
-            val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), dp(4), dp(4)) }
+            val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(RosyMetrics.Space1.toInt()), dp(RosyMetrics.Space1.toInt()), dp(RosyMetrics.Space1.toInt()), dp(RosyMetrics.Space1.toInt())) }
             column.addView(ui.label(title, RosyMetrics.TextBody))
             val frame = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setBackgroundColor(PilotColors.disabled) }
             column.addView(frame, LinearLayout.LayoutParams(-1, 0, 1f))
