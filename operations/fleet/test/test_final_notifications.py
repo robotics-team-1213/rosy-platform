@@ -143,3 +143,45 @@ def test_prepare_still_runs_without_channel_and_failure_rolls_back(tmp_path):
     with closing(log._connect()) as connection:
         assert connection.execute('SELECT COUNT(*) FROM fleet_judgment_current').fetchone()[0] == 0
         assert not connection.execute("SELECT 1 FROM sqlite_master WHERE name='attempted_prepare'").fetchone()
+
+
+def test_final_enqueue_accepts_original_durable_revision_after_next_poll(tmp_path):
+    now, log, board, _, store, scope, summary = managed(tmp_path)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    original = summary['observation_revision']
+    now[0] = 101
+    observe(board, 101)
+    assert original != board.judgment_view('pinky')['request']['revision']
+    assert log.notifications.enqueue_final(scope, summary, now=101)
+    with closing(log._connect()) as connection:
+        payload = json.loads(connection.execute("SELECT payload FROM fleet_notification_outbox WHERE kind='FINAL_REVIEW'").fetchone()[0])
+    assert payload['observation_revision'] == original
+
+
+def test_final_waits_through_stale_poll_and_delivers_after_fresh_same_case(tmp_path):
+    now, log, board, channels, store, scope, summary = managed(tmp_path)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    log.notifications.enqueue_final(scope, summary, now=100)
+    now[0] = 104
+    run(log, board, channels, 104, lambda _: pytest.fail('stale final reached HTTP'))
+    assert next(row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW')['state'] == 'PENDING'
+    now[0] = 105
+    observe(board, 105)
+    sent = []
+    run(log, board, channels, 105, lambda request: sent.append(request) or httpx.Response(200, json={'id': '7'}))
+    assert len(sent) == 1
+
+
+def test_stale_after_dequeue_defers_without_consuming_http_attempt(tmp_path):
+    now, log, board, channels, store, scope, summary = managed(tmp_path)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    log.notifications.enqueue_final(scope, summary, now=100)
+    original = log.notifications.claim_due
+    def claim(at, config):
+        result = original(at, config)
+        now[0] = 104
+        return result
+    log.notifications.claim_due = claim
+    run(log, board, channels, 100, lambda _: pytest.fail('stale final reached HTTP'))
+    final = next(row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW')
+    assert final['state'] == 'PENDING' and final['attempts'] == 0
