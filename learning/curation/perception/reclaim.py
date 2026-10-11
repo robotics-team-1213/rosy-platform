@@ -15,8 +15,9 @@ candidates.
 --shrink compacts sessions that still have no video; a compact that verifies
 becomes a candidate and the .compact folder stays.
 --apply deletes the candidate raw directories after every path is checked.
-A verified video also removes that session's .compact sibling. A compact that
-is the only remaining bag stays. Without --apply nothing is deleted.
+A verified video also removes that session's .compact sibling, including a
+compact left behind after the raw directory is already gone. A compact with
+no checked video stays. Without --apply nothing is deleted.
 Unmatched videos stay. The robot copy and recording_job are untouched.
 """
 from __future__ import annotations
@@ -152,6 +153,39 @@ def compact_sibling(session: Path) -> Path:
     return session.with_name(session.name + ".compact")
 
 
+def iter_compacts(raw: Path) -> list[Path]:
+    """Finished .compact directories in either layout. Partials are left alone."""
+    found = []
+    if not raw.is_dir():
+        return found
+
+    def take(path: Path) -> None:
+        if (path.is_dir() and path.name.endswith(".compact")
+                and not path.name.endswith(".compact.partial")):
+            found.append(path)
+
+    for child in sorted(p for p in raw.iterdir() if p.is_dir()):
+        take(child)
+        if _is_session(child) or is_derivative(child):
+            continue
+        for grand in sorted(p for p in child.iterdir() if p.is_dir()):
+            take(grand)
+    return found
+
+
+def compacts_with_video(raw: Path, video_dir: Path, probe) -> list[Path]:
+    """Compact bags whose learning video already checks out. These can go."""
+    ready = []
+    for path in iter_compacts(raw):
+        try:
+            stem = session_stem(path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if verify_video(video_dir, stem, probe)["status"] == "ok":
+            ready.append(path)
+    return ready
+
+
 def guard_compact(path: Path, raw: Path) -> Path:
     """A .compact directory under raw/. Partials and ordinary sessions are refused."""
     raw_resolved = raw.resolve()
@@ -165,11 +199,12 @@ def guard_compact(path: Path, raw: Path) -> Path:
     return path_resolved
 
 
-def delete_targets(rows: list[dict], raw: Path) -> list[Path]:
+def delete_targets(rows: list[dict], raw: Path, compacts: list[Path] | None = None) -> list[Path]:
     """Delete reclaimable raw sessions. A verified video also drops its .compact sibling."""
     chosen = [Path(row["path"]) for row in rows if row["status"] in RECLAIM_STATUS]
-    compacts = [compact_sibling(Path(row["path"])) for row in rows
-                if row["status"] == "ok" and compact_sibling(Path(row["path"])).is_dir()]
+    compacts = list(compacts or [])
+    compacts += [compact_sibling(Path(row["path"])) for row in rows
+                 if row["status"] == "ok" and compact_sibling(Path(row["path"])).is_dir()]
     checked = []
     seen = set()
     for path in (guard(path, raw) for path in chosen):

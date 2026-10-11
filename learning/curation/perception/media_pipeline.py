@@ -45,7 +45,7 @@ def trainer_recordings(doc: dict) -> list[dict]:
 
 
 def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
-                  removed: list[Path]) -> dict:
+                  removed: list[Path], compacts: list[Path] | None = None) -> dict:
     removed_paths = {path.resolve() for path in removed}
     sessions = []
     for row in rows:
@@ -70,7 +70,15 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
             "video": str(video) if trainable else None,
             "trainable": trainable,
         })
-    return {"schema": SCHEMA, "stages": list(STAGES), "applied": applied, "sessions": sessions}
+    compact_rows = []
+    for path in compacts or []:
+        compact_rows.append({
+            "session": path.name[:-len(".compact")],
+            "compact": str(path),
+            "compact_state": "removed" if path.resolve() in removed_paths else "kept",
+        })
+    return {"schema": SCHEMA, "stages": list(STAGES), "applied": applied,
+            "sessions": sessions, "compacts": compact_rows}
 
 
 def write_receipt(path: Path, doc: dict) -> None:
@@ -90,14 +98,15 @@ def run(raw: Path, video_dir: Path, *, shrink: bool, apply: bool, probe, encode,
     removed: list[Path] = []
     applied = False
     refused = False
+    compacts = reclaim.compacts_with_video(raw, video_dir, probe)
     if apply:
         try:
-            removed = reclaim.delete_targets(rows, raw)
+            removed = reclaim.delete_targets(rows, raw, compacts)
             applied = True
         except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             refused = True
-    doc = build_receipt(rows, video_dir, applied=applied, removed=removed)
+    doc = build_receipt(rows, video_dir, applied=applied, removed=removed, compacts=compacts)
     blocked = refused or any(row["status"] not in READY for row in rows)
     return (1 if blocked else 0), doc
 
