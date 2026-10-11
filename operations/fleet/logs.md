@@ -3398,3 +3398,9 @@
 - 변경: durable pending 선기록과 마지막 await 뒤 law/AI/사람 점유/동일 client 재검사를 연결했다. 모호한 receipt·500·crash는 재시작 후에도 동결하고 확정 대조만 해제한다. 자율 설정은 durable journal과 background resolver가 필수다.
 - 증거: 관련 원격 184 passed, exit 0, known-failures NEW 0. pipeline_review 독립 검토 승인 및 stuck 3317 재판정; 기존 +150·이전 이력·책임 분리 의무 유지.
 - gate 변화: SOURCE와 관련 원격 회귀만 확인. 최종 통합 착지·현장 활성화·물리 수용·실제 학습/승격은 별도 증거다.
+
+## 2026-10-12 · uncommitted · 공유 지도 합법 진입 routing fixture 정합성
+
+- 변경: 기존 east:fwd→SE 재진입을 기대하던 golden fixture를 같은 SW 목표의 east:rev→NE 합법 진입으로 갱신했다. east:fwd에서 SW로 가려는 금지 진입은 TRIP_NO_ROUTE로 거절되는 별도 회귀를 추가했다. planner·지도·TurnBan은 변경하지 않았다.
+- 증거: 최신 main 착지 관련 통합 17,662 PASS·814 SKIP에서 크기·비밀 검사·금지 경로 기대 세 NEW를 확인해 착지를 중단했다. 이 경로는 D-676 NE/SW 진입·NW/SE 진출 목표와 맞지 않았다. 독립 검토·수정 후 원격 시험은 진행 중이다.
+- gate 변화: 없음. 실제 통행권·신호·CORE 주행·카메라 절대 위치·완주·병렬 학습은 미완료다. skipped 시험과 CI·push·실물 수용은 별도다.
