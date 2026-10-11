@@ -77,3 +77,15 @@ def test_changed_receipt_discards_candidate(tmp_path, change):
     result = asyncio.run(run_line_judgment(first, DeliberationJournal(tmp_path / 'fleet.db'),
         Supervisor(clock=lambda: 101), providers, current=lambda: latest[0]))
     assert result['state'] == 'HOLD' and result['choice'] is None and result['calls'] == 1
+
+
+@pytest.mark.parametrize('owner,source', [('unknown', 'core_state'), ('core', 'invented')])
+def test_wrong_owner_or_source_never_calls_models(tmp_path, owner, source):
+    receipt = judgment()
+    request = replace(receipt.request, owner=owner,
+        evidence=(replace(receipt.request.evidence[0], source=source),))
+    receipt = replace(receipt, request=request)
+    providers = [Provider('a'), Provider('b')]
+    result = asyncio.run(run_line_judgment(receipt, DeliberationJournal(tmp_path / 'fleet.db'),
+        Supervisor(clock=lambda: 101), providers, current=lambda: receipt))
+    assert result['state'] == 'HOLD' and result['calls'] == 0
