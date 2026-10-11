@@ -10,10 +10,11 @@ import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView,
   soccerProfileMap,
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
-  planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
+  planTrip, tripRefusalText, planSummaryText, tripPoseReason, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
+import {robotMapPose} from '/console/assets/localization-badge.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
@@ -29,7 +30,7 @@ const W = 800, H = 480;
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, open: [], guide: null, band: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null};
 const ROBOT_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
@@ -280,7 +281,9 @@ function syncButtons() {
     : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
   const target = $('trip-pick').checked ? state.point : $('trip-place').value;
   const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
-  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
+  const poseReason = state.guideUnavailable ? '현장 지도 위치 확인 불가' : tripPoseReason(state.guide, tripRobot.value,
+    state.active, robotMapPose(state.robots.find(robot => robot.robot_id === tripRobot.value)));
+  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || poseReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
   teach.sync();
 }
@@ -295,8 +298,10 @@ async function pollRobots() {
     } catch (error) {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
     }
-    try { state.guide = await request('/api/fleet/guide'); } catch { state.guide = null; }  // an older Fleet has no /guide
+    try { state.guide = await request('/api/fleet/guide'); state.guideUnavailable = false; }
+    catch (error) { state.guide = null; state.guideUnavailable = error.status !== 404; }
     drawRobots();
+    syncButtons();
   }
   setTimeout(pollRobots, ROBOT_POLL_MS);
 }
@@ -317,6 +322,7 @@ async function load() {
     state.robotsError = true;
   }
   state.active = active;
+  state.robots = robots;
   state.draft = draft;
   state.working = draft.map ? draft.map
     : (active ? JSON.parse(JSON.stringify(active.map)) : null);
@@ -703,6 +709,8 @@ $('activate').addEventListener('click', () => guarded(async () => {
 }));
 
 $('trip-plan').addEventListener('click', () => guarded(async () => {
+  syncButtons();
+  if ($('trip-plan').disabled) return;
   const epoch = ++state.planEpoch;
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;

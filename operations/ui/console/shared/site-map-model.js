@@ -43,7 +43,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NO_ROUTE: '갈 수 있는 길이 없습니다',
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
-  TRIP_POSE_UNTRUSTED: '로봇 위치가 LOCALIZED가 아닙니다',
+  TRIP_POSE_UNTRUSTED: '현장 지도 위치를 확인할 수 없습니다 · 위치와 관측 갱신을 확인하세요',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
   // D-494 5 trip start / control
@@ -394,6 +394,14 @@ export function oneLapReason({active, running, start, via}) {
 // D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
 // the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
 const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
+/** The guide is read-only evidence; the server still checks freshness and admission. */
+export function tripPoseReason(guide, robotId, active, corePose = null) {
+  if (!guide) return ''; // Older Fleet has no guide; server admission remains authoritative.
+  if (guide.map_version !== active?.version) return '현장 지도 위치의 지도 버전이 다릅니다 · 다시 조회하세요';
+  const pose = (guide.robots || []).find(row => row.robot_id === robotId)?.pose;
+  if (corePose || (pose?.state === 'LOCALIZED' && [pose.x, pose.y, pose.yaw].every(Number.isFinite))) return '';
+  return TRIP_ERROR_LABEL.TRIP_POSE_UNTRUSTED;
+}
 export function planTrip(request, robotId, body) {
   return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)});
 }
