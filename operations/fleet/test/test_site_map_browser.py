@@ -449,9 +449,11 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     page.locator('#token-save').click()
     expect(page.locator('#teach-robot')).to_have_value('beta')
     page.locator('#teach-robot').select_option('alpha')
+    open_token_access(page)
     page.locator('#token-save').click()
     expect(page.locator('#teach-robot')).to_have_value('alpha')
     roster['robots'][0]['online'] = False
+    open_token_access(page)
     page.locator('#token-save').click()
     expect(page.locator('#teach-target')).to_contain_text('연결 끊김')
     recording['recording'] = {'teach_id': 'running', 'robot_id': 'beta', 'map_id': store.active_view()['map']['map_id'],
@@ -460,6 +462,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     expect(page.locator('#teach-robot')).to_have_value('beta')
     expect(page.locator('#teach-robot')).to_be_disabled()
     roster['robots'] = roster['robots'][:1]
+    open_token_access(page)
     page.locator('#token-save').click()
     expect(page.locator('#teach-target')).to_contain_text('기록 중인 로봇 beta')
     expect(page.locator('#teach-robot')).to_have_value('')
