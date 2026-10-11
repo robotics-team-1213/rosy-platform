@@ -711,3 +711,9 @@
 
 - 변경: actionIcon이 기존 title을 공용 tooltip에 연결하고, 보이는 문구가 없는 아이콘은 접근성 이름을 설명으로 재사용한다. 명시 tooltip·라벨·선택·높이·권한은 보존한다.
 - 증거: 실제 Fleet 테마·영상 새로고침·접속 마크업의 키보드 회귀를 포함한 원격 102 passed(13.15s), known_failures 0 NEW. OMEN strict probe 22 cores/7.6 GB로 하한 충족. 로그 X:/DevTemp/ui-shell-common-641/run-4.txt. 최종 Fleet 통합·설치 수용은 별도다.
+
+## 2026-10-11 · 2a848f3c3 · fix: 공용 설명이 아래 조작의 클릭을 가로막지 않도록 수정
+
+- 변경: tooltip은 pointer 입력을 가로채지 않고 좌표로 hover 유지·이탈을 판단한다. 키보드 설명·Escape·기존 aria-describedby를 유지하며, 설명 아래 다른 버튼도 정상 클릭할 수 있다.
+- 증거: source 5da31e05cb의 CI 38126423478에서 Fleet 헤더 시험이 설명의 클릭 가로채기로 실패했다. 수정된 커밋 2a848f3c3의 원격 Chromium 검증은 15 passed(43.26s), known_failures 0 NEW다. 네 Fleet 문서와 공용 의미 아이콘의 hover·키보드·가림 회귀를 포함한다. 로그는 배포 세션의 tooltip-browser/run-1.txt에 보관했다.
+- gate 변화: 새 커밋의 통합·CI·실제 설치 수용은 별도 검증한다. 명령·권한·토큰·조작 크기와 팔레트는 변경하지 않았다.
