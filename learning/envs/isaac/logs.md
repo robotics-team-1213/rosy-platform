@@ -192,3 +192,9 @@
 - 변경: 실제 training-curved world의 카펫 18개·기준 사각형 4개·도킹 표식 1개를 native scene에 연결한다. 기존 PNG·pose·크기·색상 modulation을 유지하며 맵 밖·누락 텍스처와 비정상 pose를 거절한다. 벽·페인트·주의 표식 조립은 같은 코드로 이동했고 runner는 584줄이다.
 - 증거: source f6057b410의 맵·카메라·구조 원격 152 PASS·NEW 0. 독립 검토에서 텍스처 tint 누락과 다른 missing asset에 의해 우연히 통과할 수 있는 escape 회귀를 지적해 수정했다. committed source 7f8182d71의 보강 원격 5 PASS·NEW 0·독립 SOURCE APPROVE WITH NOTES다.
 - gate 변화: 없음. SDK shader 렌더·UV 방향·실제 영상 밝기·카메라 인식 개선·주행 정지·전체 완주·병렬 RL과 교통/Fleet 수용은 아직 미확인이다. 기존 ground 배경·road_lines model Z offset까지 전체 시각 일치는 추가 확인한다.
+
+## 2026-10-12 · 71c2fa595 · 공유 ground와 paint pose
+
+- 변경: 같은 training-curved world의 ground RGB·크기와 white paint model pose를 native에 적용한다. 원래 wall·caution·CORE·무효 관측 안전 정지와 학습 제외를 유지한다. 현재 알려진 수평 SDF 범위로 제한한다.
+- 증거: source 560515c14 관련 원격 115 PASS·NEW 0, source 71c2fa595의 경로·ground·paint 비정상 입력 거절 보강 원격 8 PASS·NEW 0, 독립 SOURCE APPROVE WITH NOTES. 최신 main을 포함하는 source 66840266e의 7443 파일 hash 검증과 실제 SDK USD 24.5 메타데이터에서 RGB 0.13/0.14/0.13·size 100·paint Z 0.001·23 시각 plane·4 collision wall 및 shader 연결을 확인했다. 이는 116712KiB RSS의 비렌더 검사다.
+- gate 변화: 없음. R26 전체 실행은 자원 gate의 7.9GB 예산으로 기준 8GB에 못 미쳐 SDK 시작 전에 거절됐다. 새 ground의 PhysX·영상·인식 개선·완주·교통/Fleet·병렬 RL은 미확인이다. 시스템 cache 조정에는 관리자 sudo 입력이 필요하며 보호 기준을 낮추거나 다른 프로세스를 종료하지 않았다.
