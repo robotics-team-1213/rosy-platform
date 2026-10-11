@@ -150,5 +150,5 @@ def test_evidence_producer_credential_cannot_be_transport_key(tmp_path, service_
     with pytest.raises(ValueError, match="isolated"):
         install_channel_feature(client.app, config=config, task_service=tasks,
             principals={}, site_logins={}, require_operator=None, read_guard=[],
-            console=client.app.state.console, secrets=(), secret_owners=())
+            console=client.app.state.console, existing_tokens=(), secret_owners=())
     assert not hasattr(client.app.state, "channel_requests")
