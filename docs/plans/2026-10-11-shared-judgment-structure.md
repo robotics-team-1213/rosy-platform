@@ -1,5 +1,7 @@
 # Shared Judgment Responsibility Extraction Implementation Plan
 
+후속 통합 순서와 책임·권한 계약은 [D-656 실행 계획](2026-10-11-responsibility-authority-orchestration.md)을 따른다. 이 문서의 단계별 source/시험 세부는 재사용하며 D-652 완료 범위와 후속 미착수 범위를 구별한다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 단일 셀·로봇·다중 로봇에서 공통 필요성 평가를 재사용하고 작업/자원 승인과 실제 결과를 기존 단일 owner에 연결한다.

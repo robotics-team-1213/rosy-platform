@@ -183,6 +183,8 @@ D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1�
 
 ## D-649 책임 이동 보완
 
+후속 책임·권한·결과 확인 계약은 Accepted [D-656](../adr/D-656-responsibility-authority-and-orchestration-boundaries.md)과 [실행 계획](../plans/2026-10-11-responsibility-authority-orchestration.md)을 따른다. 수용 범위는 논리 경계와 이행 순서이며 위 표의 현재 소스 배치와 D-652 내부 shadow 외의 구현/운영 수용을 뜻하지 않는다.
+
 `middleware/control/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/control/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
 
 반복 이름은 세 종류다: 설치 패키지 이름(`core`, `control`, `fleet`, `rosy` namespace), 서로 다른 권한(장치-local execution/현장 execution, 관측 safety adapter/CORE Safety), 실제 혼재했던 행동 구현(이번 Drive 이동). 호환 initializer에는 알고리즘을 추가하지 않는다. 일반 캘리브레이션 lease와 카메라 장애 복구 자격 판정은 CORE 공통 admission이며 Drive 탈출 운동 구현과 다르다. Perception localization 노드는 상태/관측 근거를 소유한다.

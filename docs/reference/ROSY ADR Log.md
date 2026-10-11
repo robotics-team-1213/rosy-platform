@@ -643,6 +643,7 @@
 | D-651 | 작업 중심 Fleet 지도와 선택 로봇 작업면 | Accepted (2026-10-11) |
 | D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers | Accepted (2026-10-11; internal shadow only, no command or wire changes) |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 | Accepted (2026-10-11; logical responsibility and staged execution only) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
 | D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |

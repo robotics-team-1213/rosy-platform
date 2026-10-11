@@ -220,6 +220,7 @@
 | D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
 
 ## 계획·결과 문서
 
@@ -318,8 +319,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
 - 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
 - 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
 - 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
 - 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
-- 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
