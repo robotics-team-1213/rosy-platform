@@ -97,6 +97,47 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(page_site, width):
+    import math
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    store.save_draft(SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'survey-yard',
+        'places': [], 'edges': [], 'survey': {'revision': 'reference-1', 'origin': [10, 20],
+        'heading_rad': math.pi / 2, 'scale_source': 'odometry', 'description': 'Start at the marked origin'}}),
+        expected_revision=None, principal_id='bob')
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#draft-status')).to_contain_text('초안')
+    page.locator('#teach-frame').select_option('survey')
+    expect(page.locator('#teach-start')).to_be_disabled()
+    expect(page.locator('#teach-start')).to_have_attribute('reason', re.compile('시작점'))
+    expect(page.locator('#teach-reference')).to_contain_text('10.00, 20.00')
+    page.locator('#teach-origin-confirm').check()
+    robot._state = {'robot_id': 'rosy_60', 'pose': None, 'localization': {'state': 'UNKNOWN', 'pose_frame': 'odom'},
+        'odom_pose': {'x': 2, 'y': 3, 'yaw': 0, 'stamp': time.time()}}
+    page.locator('#teach-start').click()
+    expect(page.locator('#teach-status')).to_contain_text('조사 기록 중')
+    robot._state['odom_pose'] = {'x': 2.2, 'y': 3, 'yaw': 0, 'stamp': time.time() + 0.01}
+    expect(page.locator('#teach-status')).to_contain_text('2점')
+    page.locator('#teach-stop').click()
+    expect(page.locator('#teach-form')).to_be_visible()
+    page.locator('#teach-from-name').fill('Origin')
+    page.locator('#teach-to-name').fill('End')
+    page.locator('#teach-confirm').click()
+    expect(page.locator('#notice')).to_contain_text('초안에 차로')
+    body = store.draft_view()['map']
+    assert body['edges'][0]['polyline'] == [[10, 20], [10, 20.2]]
+    assert body['edges'][0]['evidence']['source'] == 'odometry'
+    assert body['survey']['reviewed'] is False and store.active_view() is None
+    assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'line_follow_mode', 'swarm_arm'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_soccer_profile_basic_information_and_template(page_site, width):
     from playwright.sync_api import expect
     page, store, robot = page_site
