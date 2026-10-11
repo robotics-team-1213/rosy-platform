@@ -201,7 +201,7 @@ async function call(path, options = {}) {
   }
 }
 
-const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth});
+const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 
 async function refreshDispatchControl(life = pageScope.capture()) {
   life.check();
