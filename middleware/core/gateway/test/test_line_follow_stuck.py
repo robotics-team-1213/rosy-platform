@@ -115,7 +115,10 @@ def test_no_console_backs_off_through_the_line_decision_then_resumes():
     class Command:
         twist = None
 
-        def set_nav_twist(self, twist, now=None):
+        def clip_line_candidate(self, linear, angular):
+            return linear, angular
+
+        def set_nav_twist(self, twist, now=None, *, preserve_curvature=False):
             self.twist = twist
 
         def clear_navigation(self):
@@ -260,7 +263,10 @@ def test_manual_or_abort_stops_line_follow_before_any_tick_can_reopen():
 class _Command:
     twist = None
 
-    def set_nav_twist(self, twist, now=None):
+    def clip_line_candidate(self, linear, angular):
+        return linear, angular
+
+    def set_nav_twist(self, twist, now=None, *, preserve_curvature=False):
         self.twist = twist
 
     def clear_navigation(self):
