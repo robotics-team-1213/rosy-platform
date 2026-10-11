@@ -671,6 +671,7 @@
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

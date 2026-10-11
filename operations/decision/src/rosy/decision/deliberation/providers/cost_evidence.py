@@ -1,5 +1,4 @@
 """Project trusted transport billing metadata; never accepts model-authored billing."""
-import json
 
 from .. import canonical
 from ..contracts.billing import CostEvidence

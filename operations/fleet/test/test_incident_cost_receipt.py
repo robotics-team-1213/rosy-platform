@@ -6,8 +6,7 @@ from rosy.decision.deliberation.contracts.billing import CallResult
 from rosy.decision.deliberation.judgment import judgment
 from rosy.decision.deliberation.providers.cost_evidence import project
 from rosy.decision.deliberation.providers.versioned_request import prepare_request
-from fleet.incidents.automation.ledger.receipt import ModelReceipt, model_receipt, checked_receipt
-from fleet.incidents.automation.ledger.store import CaseBudget, IncidentCaseStore
+from fleet.incidents.automation.ledger.receipt import model_receipt, checked_receipt
 from test_incident_model_receipt import fixture
 from test_cost_evidence import host_receipt
 from test_incident_case_worker import setup, settled
@@ -38,7 +37,7 @@ def test_actual_worker_cost_evidence_or_failure_reaches_atomic_store_and_readonl
     spec = importlib.util.spec_from_file_location('cost_feedback', Path(__file__).resolve().parents[3] / 'tools/incident_model_feedback.py')
     exporter = importlib.util.module_from_spec(spec); spec.loader.exec_module(exporter)
     async def run():
-        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path)
+        _, seen, _, _, _, store, worker, poll, _ = setup(tmp_path, provider_cost=.05 if failed else 0)
         provider = worker.providers[0]
         async def wrapped(p, bound, prior, remaining, **kwargs):
             raw, cost = await provider(p, bound, prior, remaining, **kwargs)
@@ -51,7 +50,9 @@ def test_actual_worker_cost_evidence_or_failure_reaches_atomic_store_and_readonl
         exported = exporter.snapshot(store.path, scope.subject_id, scope.case_id,
                                      [__import__('dataclasses').asdict(p) for p in worker.profiles])
         trace = exported['case']['attempts'][0]['model_receipt']
-        assert exported['case']['spent_micros'] == 0 and exported['field_accepted'] is False
+        assert exported['case']['spent_micros'] == (50000 if failed else 0)
+        assert exported['case']['attempts'][0]['actual_micros'] == (50000 if failed else 0)
+        assert exported['field_accepted'] is False
         if failed:
             assert trace is None and exported['case']['state'] == 'HOLD'
             worker.feed(poll(2)); await settled(worker)
