@@ -5,6 +5,8 @@ from .cli import CliProvider, _argv, _decode_result
 from ..contracts.judgment import judgment
 from ..contracts.profiles import AdapterCapabilities, BoundProfile, ModelProfile, bind_profile
 from .versioned_request import prepare_request
+from .cost_evidence import project
+from ..contracts.billing import CallResult
 
 
 class VersionedCliProvider:
@@ -32,4 +34,10 @@ class VersionedCliProvider:
         async with asyncio.timeout(remaining):
             code, raw = await launch(argv, body, remaining, self.profile.max_output_bytes, budget_usd)
         payload, cost = _decode_result(self.transport.kind, launch, code, raw, self.profile.max_output_bytes, budget_usd)
-        return judgment(problem, bound, payload, missing_allowlist=missing_allowlist), cost
+        checked = judgment(problem, bound, payload, missing_allowlist=missing_allowlist)
+        billing = getattr(launch, 'billing_receipt', None)
+        if billing is None: return checked, cost
+        try: evidence = project(problem, bound, checked, cost, body, billing)
+        except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
+            return CallResult(checked, cost, evidence_error=True)
+        return CallResult(checked, cost, evidence)
