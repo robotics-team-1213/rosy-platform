@@ -26,3 +26,11 @@ def test_installer_refuses_non_admin_before_changes():
         '--bwrap-sha256', hashlib.sha256(b'fixture').hexdigest()],
         capture_output=True, text=True, timeout=10)
     assert result.returncode == 2 and 'ADMIN_INSTALL_REQUIRED' in result.stderr
+
+
+def test_install_refuses_untrusted_parent_before_writing(tmp_path):
+    from deploy.site.deliberation_install import install_file
+    destination = tmp_path / 'must-not-exist'
+    with pytest.raises(ValueError, match='UNTRUSTED_INSTALL_PARENT'):
+        install_file(destination, b'fixture', 0o755)
+    assert not destination.exists()

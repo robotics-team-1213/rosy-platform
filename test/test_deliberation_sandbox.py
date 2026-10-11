@@ -143,3 +143,15 @@ def test_collected_scope_requires_explicit_absence_readback(monkeypatch, load_st
                 await module.cleanup_scope('rosy-deliberation-test.scope')
     asyncio.run(run())
     assert calls[1][-2:] == ('--value', 'rosy-deliberation-test.scope')
+
+
+def test_cleanup_cannot_target_other_units(monkeypatch):
+    from deploy.site import deliberation_sandbox as module
+    async def forbidden(*args):
+        pytest.fail('invalid unit must never reach systemctl')
+    monkeypatch.setattr(module, 'bounded_process', forbidden)
+    async def run():
+        for unit in ('--all', 'fleet.service', 'rosy-deliberation-test.scope\n', None):
+            with pytest.raises(ValueError):
+                await module.cleanup_scope(unit)
+    asyncio.run(run())
