@@ -109,4 +109,4 @@
 - 문제: 정지 시간의 렌더 초기화는 SDK 기본 수집 주기의 simulation dt를 채우지 못해 current_frame이 초기값0으로 남았고 기존 Fabric 검증에서 첫 녹화 쓰기가 거부됐다.
 - 변경: recording/front Camera의 frequency를 매 렌더 수집(-1)으로 명시한다. 관측24-step/녹화48-step cadence, legacy path 렌더 cadence, 실제 frame 검증·freshness·CORE·정지·cleanup은 유지한다.
 - 증거: 원시 receipt0 재현과 기본120Hz→-1 단일 변수 진단 뒤 c229738784 원격 Isaac174 pass/1 skip·NEW0·exit0 및 독립 source Safety-Review 수용. wrapper 없는 committed-source native에서 전체7123파일 hash를 고정했다. baseline101은 유효98/101관측·10sim초·0.190177m·시간 제한 뒤 실제 정지, Fabric 검증을 통과한52프레임 MP4를 확인했다.
-- 남은 실패: train0은 유효0/22관측·2.191667sim초 뒤 camera loss, updates0·invalid_camera_observation527로 후보를 거부했고 SDK exit1로 종료했다. 녹화 수정의 근거이며 전체 완주·RL 효과·두 대 Fleet·한국 교통·ROS-SIM·실물 수용은 미완료다.
+- gate 변화: train0은 유효0/22관측·2.191667sim초 뒤 camera loss, updates0·invalid_camera_observation527로 후보를 거부했고 SDK exit1로 종료했다. 녹화 수정의 근거이며 전체 완주·RL 효과·두 대 Fleet·한국 교통·ROS-SIM·실물 수용은 미완료다.
