@@ -23,11 +23,11 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def bundle(tmp_path, monkeypatch, **changes):
+def bundle(tmp_path, monkeypatch, *, real_runtime=False, **changes):
     replay = importlib.import_module('road_observation_replay')
     model_folder = tmp_path / 'model'
     model_folder.mkdir()
-    model = _replay_model(model_folder)
+    model = _replay_model(model_folder, real_runtime=real_runtime)
     monkeypatch.setattr(replay.LaneSegModel, 'open', lambda *args: model)
     folder = tmp_path / 'inputs'
     folder.mkdir()
@@ -50,8 +50,9 @@ def bundle(tmp_path, monkeypatch, **changes):
     return replay, model, fixed, doc
 
 
-def test_artifact_roundtrip_binds_model_image_and_snapshot_without_truth(tmp_path, monkeypatch):
-    replay, model, inputs, doc = bundle(tmp_path, monkeypatch)
+@pytest.mark.parametrize('real_runtime', [False, True])
+def test_artifact_roundtrip_binds_model_image_and_snapshot_without_truth(tmp_path, monkeypatch, real_runtime):
+    replay, model, inputs, doc = bundle(tmp_path, monkeypatch, real_runtime=real_runtime)
     out = tmp_path / 'observation.json'
     args = SimpleNamespace(model=str(model.manifest.folder), inputs=str(inputs), max_age_ns=100, out=str(out))
     assert replay.execute(args) == 0
