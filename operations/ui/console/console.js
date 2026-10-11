@@ -264,6 +264,7 @@ function render() {
   const rosterBox = el("roster");
   const focused = document.activeElement;
   const focusedCard = focused?.closest?.("#roster article, #robot-workspace article");
+  const focusedBox = focusedCard?.closest("#robot-workspace") ? el("robot-workspace") : rosterBox;
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
@@ -290,8 +291,7 @@ function render() {
   }
   roster.workspace();
   if (focusedId && document.activeElement !== focused) {  // a kept workspace picker still has it
-    const box = focusedCard.closest("#robot-workspace") ? el("robot-workspace") : rosterBox;
-    const nextCard = [...box.querySelectorAll("article")]
+    const nextCard = [...focusedBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
       ? nextCard?.querySelectorAll("ui-button, button")[focusedButton] : nextCard;

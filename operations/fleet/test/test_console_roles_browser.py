@@ -121,6 +121,7 @@ def _login(playwright, origin):
 
 
 def _card(page, robot_id):
+    page.locator('[data-context-tab="status"]').click()
     page.locator("#robot-choice").select_option(robot_id)
     return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
 
@@ -190,6 +191,7 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
+        page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
         expect(page.locator("#formation-leader")).to_be_disabled()
         page.locator("#formation-shape").select_option("LINE")
@@ -216,7 +218,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
         page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         expect(page.locator("#convoy-go")).to_have_attribute("reason", re.compile("^반복 운행 중인 리더가 없습니다"))
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         lead = _card(page, "rosy_01")
         lead.locator('ui-button[data-trip-open="rosy_01"]').click()
         lead.get_by_role("combobox", name="작업 종류", exact=True).select_option("repeat")
@@ -238,7 +240,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
                 break
             page.wait_for_timeout(100)
         assert body == {"to": "start_n", "via": ["start_s"], "repeat": True, "convoy": {"leader": "rosy_01"}}
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         expect(_card(page, "rosy_02").locator(".trip-line")).to_contain_text("대열 · rosy_01", timeout=10000)
         expect(_card(page, "rosy_01").locator(".trip-line")).to_contain_text("대열 리더 · rosy_02 따라옴")
         assert _raw_words(page) == []
