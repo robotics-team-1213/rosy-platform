@@ -18,6 +18,7 @@ NCNN_SCHEMA = "rosy.perception.model/2"  # old readers must refuse NCNN bundles
 NCNN_FAMILIES = ("yolov8", "yolo11")  # raw detection heads, not end-to-end/NMS outputs
 TASKS = ("lane_seg", "object_det")
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # D-373 d9
+ROAD_SEMANTICS = ("road_surface/1", "current_road_region/1", "trajectory_band/1")
 OBJECT_ROLE = "object"  # D-423: the one role of every object_det class (lane ROLES stay closed)
 # D-602 replaces D-423 §2.2's last name: person_feet is not a class. Order is fixed.
 OBJECT_CLASSES = ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person")
@@ -33,6 +34,11 @@ VERSION_PATTERN = re.compile(r"v\d+\.\d+\.\d{2}")  # D-558 model_version, option
 
 class ManifestError(ValueError):
     """The manifest or a file it names is not acceptable."""
+
+
+def validate_label_semantic(item: dict) -> None:
+    if "semantic" in item and (item.get("role") != "drivable" or item["semantic"] not in ROAD_SEMANTICS):
+        raise ManifestError(f"class semantic: drivable needs one of {ROAD_SEMANTICS}")
 
 
 @dataclass(frozen=True)
@@ -191,6 +197,7 @@ def _parse_classes(doc: dict, task: str = "lane_seg") -> tuple[ClassSpec, ...]:
             raise ManifestError(f"output.classes: duplicate name {name!r}")
         names.add(name)
         role = item.get("role")
+        validate_label_semantic(item)
         allowed = (OBJECT_ROLE,) if task == "object_det" else ROLES
         if role not in allowed:
             raise ManifestError(f"output.classes[{index}].role: one of {allowed}")
@@ -292,6 +299,8 @@ def load_manifest(path: str | Path) -> ModelManifest:
                 or classes[-1].get("role") != "drivable"
                 or sum(c.get("role") == "drivable" for c in classes if isinstance(c, dict)) != 1):
             raise ManifestError("output.classes: v13-drivable needs one final drivable channel")
+        if classes[-1].get("semantic") not in (None, "current_road_region/1"):
+            raise ManifestError("v13-drivable semantic must be current_road_region/1")
     version = doc.get("model_version")
     if version is not None and (not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version)):
         raise ManifestError("model_version: expected v<major>.<minor>.<two-digit patch> (D-558)")

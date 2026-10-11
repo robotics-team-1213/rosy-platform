@@ -60,7 +60,7 @@ _FOUNDATION = str(Path(__file__).resolve().parents[3] / 'contracts/foundation') 
 for _p in (_SENSING, _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from control.sensing.perception.learned.manifest import ROLES  # noqa: E402  the closed list
+from control.sensing.perception.learned.manifest import ROLES, validate_label_semantic  # noqa: E402
 # Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
 # loss, never a class. D-379 addendum 2026-10-01.
 IGNORE_INDEX = 255
@@ -91,13 +91,19 @@ def load_classes(path, require_color: bool = True, *, source_bytes=None) -> list
         elif not (isinstance(color, (list, tuple)) and len(color) == 3):
             raise BuildError(f"classes.yaml: class {c.get('name')!r} needs color [r,g,b]")
         out.append({"index": int(c["index"]), "name": str(c["name"]), "role": str(c["role"]),
-                    "color": None if color is None else [int(v) for v in color]})
+                    "color": None if color is None else [int(v) for v in color],
+                    **({"semantic": c["semantic"]} if "semantic" in c else {})})
     label_to_index(out)
     return out
 
 
 def label_to_index(classes) -> dict[str, int]:
     """CVAT label name -> class index (background role is the label "background")."""
+    for c in classes:
+        try:
+            validate_label_semantic(c)
+        except ValueError as exc:
+            raise BuildError(str(exc)) from exc
     unknown = sorted({c["role"] for c in classes} - set(ROLES))
     if unknown:
         raise BuildError(f"classes: unknown role {unknown}; the closed list is {ROLES}")
