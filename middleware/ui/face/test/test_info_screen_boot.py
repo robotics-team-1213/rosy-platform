@@ -38,12 +38,6 @@ def _has_ink(image, box):
     return _colors(image, box) != {_BG}
 
 
-@pytest.mark.parametrize("stage,title,color", [
-    ("BOOTING", "BOOTING", _MUTED),
-    ("PROVISIONED", "PROVISIONED", _FG),
-    ("CORE_READY", "READY", _FG),
-    ("FAILED:rosy-core", "FAILED", _CRIT),
-])
 def test_booting_shows_rosy_in_the_header():
     image = render_boot({"stage": "BOOTING", "device_name": "rosy-pinky-e4us"}, frame=0)
     header = _colors(image, (0, 0, 140, 30))
@@ -54,6 +48,12 @@ def test_booting_shows_rosy_in_the_header():
     assert not _has_ink(image, (0, 160, 320, 240))
 
 
+@pytest.mark.parametrize("stage,title,color", [
+    ("BOOTING", "BOOTING", _MUTED),
+    ("PROVISIONED", "PROVISIONED", _FG),
+    ("CORE_READY", "READY", _FG),
+    ("FAILED:rosy-core", "FAILED", _CRIT),
+])
 def test_every_stage_has_its_title_and_colour(stage, title, color):
     rows = _rows({**READY, "stage": stage})
 
