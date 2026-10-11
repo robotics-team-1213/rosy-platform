@@ -110,7 +110,7 @@ class MainActivity : Activity() {
         list.addView(header)
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
         groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
-        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(16) })
+        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space4.toInt()) })
         list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", RosyMetrics.TextLabel, true))
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -147,7 +147,7 @@ class MainActivity : Activity() {
         records.forEach { candidate ->
             val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
             robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
-                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(12) })
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space3.toInt()) })
         }
     }
     private fun chooseGroupRobots() {
