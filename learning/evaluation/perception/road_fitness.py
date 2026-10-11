@@ -76,7 +76,8 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
                    domain: str, conditions, now_ns: int, max_age_ns: int) -> dict:
     if domain not in ("real", "simulation"):
         raise ValueError("domain must be real or simulation")
-    if any(not isinstance(c, str) or not c.strip() for c in conditions):
+    if not isinstance(conditions, (list, tuple)) or any(
+            not isinstance(c, str) or not c.strip() for c in conditions):
         raise ValueError("conditions must be named strings")
     road, _ = road_masks(labels, classes)
     errors = road_region_input_errors(image, anchor, now_ns=now_ns, max_age_ns=max_age_ns)
@@ -114,10 +115,13 @@ def _summarize(rows) -> dict:
                 "other_region_truth_pixels", "scored_other_region_truth_pixels",
                 "other_region_included_pixels", "self_region_missed_pixels")})
         tp, fp, fn = (counts[k] for k in ("true_positive_pixels", "false_positive_pixels", "false_negative_pixels"))
-        scored = sum(m["prediction_available"] for m in metrics)
+        predicted = sum(m["prediction_available"] for m in metrics)
+        scored = sum(m["scored_pixels"] > 0 for m in metrics)
         paired = [m for m in metrics if m["boundary_status"] == "ok"]
         boundary_pixels = sum(m["boundary_truth_pixels"] + m["boundary_predicted_pixels"] for m in paired)
-        counts.update(scored_frames=scored, abstained_frames=len(rows) - scored,
+        counts.update(prediction_frames=predicted, scored_frames=scored, abstained_frames=len(rows) - predicted,
+                      unscorable_truth_frames=sum(m["prediction_available"] and not m["valid_truth_pixels"]
+                                                 for m in metrics),
                       frame_coverage=scored / len(rows) if rows else None,
                       pixel_coverage=counts["scored_pixels"] / counts["valid_truth_pixels"]
                       if counts["valid_truth_pixels"] else None,
