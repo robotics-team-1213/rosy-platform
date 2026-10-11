@@ -11,7 +11,7 @@ from fleet.stuck.reports import LineStuckAnswerLog
 from test_judgment_receipts import row
 
 
-def setup(tmp_path):
+def make_board(tmp_path):
     log = LineStuckAnswerLog(tmp_path / 'fleet.sqlite3')
     board = LineStuckBoard(log=log, clock=lambda: 100.0, wall=lambda: 100.0)
     board.observe([row(stuck_id='case-1')])
@@ -20,7 +20,7 @@ def setup(tmp_path):
 
 
 def test_claim_competition_idempotency_and_restart(tmp_path):
-    log, board = setup(tmp_path)
+    log, board = make_board(tmp_path)
     receipt = board.judgment_view('pinky')
     def attempt(principal):
         try:
@@ -42,7 +42,7 @@ def test_claim_competition_idempotency_and_restart(tmp_path):
 
 
 def test_claim_rejects_late_changed_closed_and_unnamed_requests(tmp_path):
-    log, board = setup(tmp_path)
+    log, board = make_board(tmp_path)
     receipt = board.judgment_view('pinky')
     for now in (99.0, 104.0):
         with pytest.raises(ValueError, match='INCIDENT_JUDGMENT_STALE'):
