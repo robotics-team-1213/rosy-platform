@@ -44,7 +44,18 @@ def generate_launch_description():
                      'lane_graph_path': os.path.join(control_share, 'map', 'map_v2_fleet',
                                                     'training-curved', 'lane_graph.yaml'),
                  }]),
-            Node(package='gz_sim', executable='sim_jpeg_relay.py', namespace=ns,
-                 name='sim_jpeg_relay', remappings=[('camera/image_raw', 'camera/front')], output='screen'),
+            Node(package='control', executable='road_observer_node', namespace=ns,
+                 name='road_observer_node', output='screen',
+                 parameters=[os.path.join(control_share, 'config', 'line_follow.yaml'), {
+                     'use_sim_time': True, 'map_id': 'map_v2_fleet',
+                     'scene_revision': 'road-scene-v1',
+                     'rotate_deg': 0, 'require_camera_controls_stable': False,
+                     'dashboard_source': 'GAZEBO', 'camera_ground_mode': 'gazebo_pinhole',
+                     'allow_simulation_ground': True,
+                     'gazebo_camera_height_m': .06343,
+                     'gazebo_camera_pitch_rad': .13962634015954636,
+                     'gazebo_camera_hfov_rad': 1.0334,
+                     'gazebo_camera_max_range_m': .6,
+                 }]),
         ])
     return LaunchDescription(actions)

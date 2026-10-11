@@ -213,10 +213,11 @@ def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch)
     actions = mod.generate_launch_description().entities
     context = LaunchContext()
     context.launch_configurations['learned_lane_pointer'] = '/pinned/model-pointer.txt'
-    for executable in ('image_bridge', 'line_observer_node', 'sim_jpeg_relay.py'):
+    for executable in ('image_bridge', 'line_observer_node', 'road_observer_node'):
         nodes = _named(actions, context, executable)
         assert len(nodes) == 2
         assert {_text(n._Node__node_namespace, context).strip('/') for n in nodes} == {'rosy_01', 'rosy_02'}
+    assert _named(actions, context, 'sim_jpeg_relay.py') == []  # Road observer owns each front preview.
     assert _named(actions, context, 'core') == []  # COREs belong to the included multi launch.
 
 

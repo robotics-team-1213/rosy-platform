@@ -1,6 +1,6 @@
 """D-601 in SIM: every Fleet that drives Gazebo robots loads one of two shared SIM site configs.
 No-camera SIM (gz_multi) keeps ``lane_camera_check: false`` so lane plans are not refused for the
-missing preview; camera SIM launches run sim_jpeg_relay.py and check the preview as on a device."""
+missing preview; camera SIM launches publish a preview and check it as on a device."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ SIM_FLEETS = {
     "docs/validation/lane-trip-lap-sim-2026-10-08/evidence/lap_fleet.py": SIM_CAMERA_SITE,
     "docs/validation/lane-west-bend-candidate-2026-10-09/evidence/lap_fleet.py": SIM_CAMERA_SITE,
 }
-# Camera SIM launches that publish CORE's front preview through the relay.
+# Camera SIM launches that publish CORE's front preview through a relay or road observer.
 CAMERA_LAUNCHES = (
     "integrations/simulation/gazebo/launch/map_v2_fleet_multi_real.launch.py",
     "integrations/simulation/gazebo/launch/map_v2_fleet_lane.launch.py",
@@ -52,7 +52,9 @@ def test_every_sim_fleet_loads_the_shared_sim_site_config_for_its_camera():
 
 
 def test_camera_sim_launches_publish_the_front_preview():
-    missing = [p for p in CAMERA_LAUNCHES if "sim_jpeg_relay" not in (REPO / p).read_text(encoding="utf-8")]
+    missing = [p for p in CAMERA_LAUNCHES
+               if not any(name in (REPO / p).read_text(encoding="utf-8")
+                          for name in ('sim_jpeg_relay', 'road_observer_node'))]
     assert missing == []
 
 
