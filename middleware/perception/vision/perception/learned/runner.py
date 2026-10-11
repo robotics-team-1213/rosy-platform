@@ -180,10 +180,12 @@ class LaneSegModel:
                                           floor_gate=self.floor_gate), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
-        crosswalk = [c.index for c in self.manifest.classes if c.name == "crosswalk"]
-        if crosswalk:
-            info["crosswalk_mask"] = cv2.resize((logits[0].argmax(axis=0) == crosswalk[0]).astype(np.uint8),
-                                                size, interpolation=cv2.INTER_NEAREST)
+        labels = logits[0].argmax(axis=0)
+        for name in ('crosswalk', 'speed_bump'):
+            indexes = [c.index for c in self.manifest.classes if c.name == name]
+            if indexes:
+                info[name + '_mask'] = cv2.resize((labels == indexes[0]).astype(np.uint8),
+                                                 size, interpolation=cv2.INTER_NEAREST)
         return mask, kind, info, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:
