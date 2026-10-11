@@ -107,6 +107,23 @@ def test_cli_print_target_and_never_overwrite_output(tmp_path):
     assert (output / "target.svg").read_text().startswith('<svg')
 
 
+def test_failed_fit_keeps_original_output_and_emits_bounded_review_for_new_output(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    (existing / "report.json").write_text("previous result")
+    with pytest.raises(SystemExit):
+        main(["fit", "--input", str(manifest), "--output", str(existing)])
+    assert (existing / "report.json").read_text() == "previous result"
+    new = tmp_path / "failed"
+    with pytest.raises(SystemExit):
+        main(["fit", "--input", str(manifest), "--output", str(new)])
+    request = json.loads((new / "ai-request.json").read_text())
+    assert request["authority"] == "advisory"
+    assert "capture_or_measurement_failed" in request["warnings"]
+
+
 def test_bad_or_insufficient_measurements_do_not_make_a_candidate():
     samples = views()
     with pytest.raises(ValueError, match="eight"):
