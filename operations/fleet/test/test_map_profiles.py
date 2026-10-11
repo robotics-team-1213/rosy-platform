@@ -23,6 +23,12 @@ def test_profile_basic_information_survives_updates_and_restart(tmp_path):
         assert updated.json()['revision'] != revision
         assert client.put(url, json=body, headers=OPERATOR).status_code == 409
         assert store.profiles()[0]['description'] == '수정한 설명'
+        old_client = client.put(url, json={'name': 'old client', 'map': _line(),
+                                         'expected_revision': updated.json()['revision']}, headers=OPERATOR)
+        assert old_client.status_code == 200
+        assert old_client.json()['kind'] == 'soccer'
+        assert old_client.json()['description'] == '수정한 설명'
+        assert old_client.json()['soccer_field'] == body['soccer_field']
 
 
 @pytest.mark.parametrize('info', [

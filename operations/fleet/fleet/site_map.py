@@ -25,6 +25,34 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from fleet.routing.graph import pinned, polyline_length
 
 SCHEMA = "rosy.site_map/1"
+
+
+class SoccerFieldProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    length_m: float = Field(gt=0, allow_inf_nan=False)
+    width_m: float = Field(gt=0, allow_inf_nan=False)
+    goal_width_m: float = Field(gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _goal_width(self) -> "SoccerFieldProfile":
+        if self.goal_width_m > self.width_m:
+            raise ValueError("goal width must not exceed field width")
+        return self
+
+
+class MapProfileInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["lane_course", "soccer", "general"] = "lane_course"
+    description: str = Field(default="", max_length=1000)
+    soccer_field: Optional[SoccerFieldProfile] = None
+
+    @model_validator(mode="after")
+    def _purpose(self) -> "MapProfileInfo":
+        if (self.kind == "soccer") != (self.soccer_field is not None):
+            raise ValueError("soccer_field is required only for soccer profiles")
+        return self
+
+
 #: A polyline end may sit this far from its place (generated graphs end exactly on the node).
 ENDPOINT_TOL_M = 0.05
 MAX_PLACES = 500

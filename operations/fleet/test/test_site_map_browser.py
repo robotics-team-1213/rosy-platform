@@ -19,6 +19,43 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+def test_soccer_profile_basic_information_and_template(page_site, width):
+    from playwright.sync_api import expect
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도')
+    before = store.active_view()
+    page.locator('#profile-kind').select_option('soccer')
+    page.locator('#profile-description').fill('실측 연습 경기장')
+    page.locator('#profile-length').fill('3')
+    page.locator('#profile-width').fill('2')
+    page.locator('#profile-goal-width').fill('0.5')
+    page.locator('#profile-new').click()
+    page.locator('#profile-id').fill('pitch')
+    page.locator('#profile-save').click()
+    expect(page.locator('#map-status')).to_contain_text('새 축구장')
+    row = next(r for r in store.profiles() if r['profile_id'] == 'pitch')
+    assert row['kind'] == 'soccer' and row['description'] == '실측 연습 경기장'
+    assert row['soccer_field'] == {'length_m': 3, 'width_m': 2, 'goal_width_m': 0.5}
+    assert row['map']['edges'] == []
+    expect(page.locator('[data-pitch-mark]')).to_have_count(4)
+    page.locator('#map-profile').select_option('')
+    page.locator('#map-profile').select_option('pitch')
+    expect(page.locator('#profile-length')).to_have_value('3')
+    expect(page.locator('#profile-description')).to_have_value('실측 연습 경기장')
+    expect(page.locator('#profile-draft')).to_be_disabled()
+    page.locator('#profile-file').set_input_files({'name': 'pitch.json', 'buffer': json.dumps(row).encode()})
+    expect(page.locator('#profile-kind')).to_have_value('soccer')
+    expect(page.locator('#profile-length')).to_have_value('3')
+    assert store.active_view() == before
+    assert not [call for call in robot.calls if call[0] == 'navigation_goal']
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_profiles_rules_import_preview_and_draft_stay_separate(page_site, width):
     from playwright.sync_api import expect
     from test_site_map_trip import _line

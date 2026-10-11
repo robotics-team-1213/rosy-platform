@@ -7,6 +7,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
+  soccerProfileMap,
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
   planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
@@ -82,6 +83,16 @@ function render() {
     el('rect', {...background.field, class: 'plane-border'}, svg);
   }
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
+  const pitch = $('map-source').value === 'profile' ? selectedProfile()?.soccer_field : null;
+  if (pitch && !map.edges.length && soccerProfileMap(pitch, map.map_id).places.every(mark =>
+    map.places.some(p => p.x === mark.x && p.y === mark.y))) {
+    const x = pitch.length_m / 2, y = pitch.width_m / 2, goal = pitch.goal_width_m / 2;
+    for (const points of [[[-x, -y], [x, -y], [x, y], [-x, y], [-x, -y]], [[0, -y], [0, y]],
+      [[-x, -goal], [-x, goal]], [[x, -goal], [x, goal]]]) {
+      const mark = el('polyline', {points: line(points), class: 'edge free', 'data-pitch-mark': 'true'}, svg);
+      el('title', {}, mark).textContent = '축구장 기준선 · 주행 차로 아님';
+    }
+  }
   // D-573 1/7: crosswalk areas under the lanes (read-only polygons) and their waiting bands.
   for (const crosswalk of map.crosswalks || []) {
     const zone = el('polygon', {points: line(crosswalk.polygon), 'data-crosswalk': crosswalk.id,
@@ -208,6 +219,7 @@ function syncButtons() {
   gate('profile-copy', reason || (!shown() ? '복사할 지도가 없습니다' : ''));
   gate('profile-save', reason || (!$('profile-id').value || !$('profile-name').value.trim() || !$('profile-rules').value ? 'ID·이름·지도 규칙을 입력하세요' : ''));
   gate('profile-draft', reason || (!selectedProfile() ? '저장된 프로필을 고르세요' : ''));
+  if (selectedProfile()?.kind === 'soccer') gate('profile-draft', '축구장 기본 정보는 Games 설정용입니다. 차로 초안으로 불러오지 않습니다.');
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
@@ -317,6 +329,9 @@ $('token-save').addEventListener('click', async () => {
   profiles = [];
   $('map-profile').replaceChildren();
   for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).value = '';
+  $('profile-kind').value = 'lane_course';
+  $('profile-description').value = '';
+  $('profile-soccer').hidden = true;
   $('profile-file').value = '';
   state.loadState = 'pending';
   state.planEpoch += 1;
@@ -375,39 +390,59 @@ $('map-source').addEventListener('change', () => { updatePlaneSources(); render(
 async function loadProfiles(preferred = $('map-profile').value) {
   profiles = (await request('/api/fleet/site-map/profiles')).profiles;
   $('map-profile').replaceChildren(new Option('프로필 선택', ''),
-    ...profiles.map(row => new Option(`${row.name} (${row.map.map_id})`, row.profile_id)));
+    ...profiles.map(row => new Option(`${row.name} · ${{lane_course: '차선 코스', soccer: '축구장', general: '일반 지도'}[row.kind || 'lane_course']} (${row.map.map_id})`, row.profile_id)));
   $('map-profile').value = profiles.some(row => row.profile_id === preferred) ? preferred : '';
 }
-function profileInputs(map, id = crypto.randomUUID(), name = '') {
+function profileInfo() {
+  return {kind: $('profile-kind').value, description: $('profile-description').value,
+    soccer_field: $('profile-kind').value === 'soccer' ? {length_m: Number($('profile-length').value),
+      width_m: Number($('profile-width').value), goal_width_m: Number($('profile-goal-width').value)} : null};
+}
+function profileInputs(map, id = crypto.randomUUID(), name = '', info = {}) {
   $('profile-id').value = id;
   $('profile-name').value = name;
+  $('profile-kind').value = info.kind || 'lane_course';
+  $('profile-description').value = info.description || '';
+  $('profile-length').value = info.soccer_field?.length_m ?? 2;
+  $('profile-width').value = info.soccer_field?.width_m ?? 1.4;
+  $('profile-goal-width').value = info.soccer_field?.goal_width_m ?? 0.35;
+  $('profile-soccer').hidden = $('profile-kind').value !== 'soccer';
   $('profile-rules').value = JSON.stringify(map, null, 2);
   syncButtons();
 }
 $('map-profile').addEventListener('change', () => {
   const row = selectedProfile();
-  if (row) profileInputs(row.map, row.profile_id, row.name);
+  if (row) profileInputs(row.map, row.profile_id, row.name, row);
   $('map-source').value = 'profile';
   updatePlaneSources(); select(null); syncButtons();
 });
 for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).addEventListener('input', syncButtons);
-$('profile-copy').addEventListener('click', () => profileInputs(shown()));
-$('profile-new').addEventListener('click', () => {
+$('profile-kind').addEventListener('change', () => { $('profile-soccer').hidden = $('profile-kind').value !== 'soccer'; });
+$('profile-copy').addEventListener('click', () => profileInputs(shown(), crypto.randomUUID(), '',
+  $('map-source').value === 'profile' ? selectedProfile() : {}));
+$('profile-new').addEventListener('click', () => guarded(async () => {
   const id = crypto.randomUUID();
+  const info = profileInfo();
+  if (info.kind === 'soccer') {
+    profileInputs(soccerProfileMap(info.soccer_field, id), id, '새 축구장', info);
+    $('profile-rules').closest('details').open = true;
+    return;
+  }
   profileInputs({schema: 'rosy.site_map/1', map_id: id,
     places: [{id: 'A', name: '시작', kind: 'park', x: 0, y: 0},
       {id: 'B', name: '끝', kind: 'park', x: 2, y: 0}],
-    edges: [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [2, 0]],
-      direction: 'two_way', drive_mode: 'lane', width_m: 0.2, speed_cap_mps: 0.2}]}, id, '새 지도');
+    edges: info.kind === 'general' ? [] : [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [2, 0]],
+      direction: 'two_way', drive_mode: 'lane', width_m: 0.2, speed_cap_mps: 0.2}]}, id, '새 지도', info);
   $('profile-rules').closest('details').open = true;
-});
+}));
 $('profile-file').addEventListener('change', () => guarded(async () => {
   const file = $('profile-file').files[0];
   if (!file) return;
   if (file.size > 2 * 1024 * 1024 - 1024) throw new Error('지도 파일은 2 MiB보다 작아야 합니다.');
-  const map = JSON.parse(await file.text());
+  const input = JSON.parse(await file.text());
+  const map = input.map || input;
   if (map?.schema !== 'rosy.site_map/1') throw new Error('rosy.site_map/1 지도 JSON 파일이 필요합니다.');
-  profileInputs(map, crypto.randomUUID(), file.name.slice(0, 64));
+  profileInputs(map, crypto.randomUUID(), (input.name || file.name).slice(0, 64), input.map ? input : {});
   $('profile-status').textContent = '파일을 읽었습니다. 검증하고 프로필 저장을 누르면 좌표·차로 규칙을 검사합니다.';
 }));
 $('profile-save').addEventListener('click', () => guarded(async () => {
@@ -416,16 +451,16 @@ $('profile-save').addEventListener('click', () => guarded(async () => {
   const current = profiles.find(row => row.profile_id === id);
   const row = await request(`/api/fleet/site-map/profiles/${encodeURIComponent(id)}`, {
     method: 'PUT', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: $('profile-name').value.trim(), map: JSON.parse($('profile-rules').value),
+    body: JSON.stringify({name: $('profile-name').value.trim(), map: JSON.parse($('profile-rules').value), ...profileInfo(),
       expected_revision: current?.revision || null})});
   await loadProfiles(id);
-  profileInputs(row.map, id, row.name);
+  profileInputs(row.map, id, row.name, row);
   $('map-source').value = 'profile';
   updatePlaneSources(); select(null);
   $('profile-status').textContent = '프로필을 저장했습니다. 활성 지도는 그대로입니다.';
 }));
 $('profile-draft').addEventListener('click', () => guarded(async () => {
-  if (operatorReason() || !selectedProfile()) return;
+  if (operatorReason() || !selectedProfile() || selectedProfile().kind === 'soccer') return;
   if (state.dirty || state.draft?.revision) {
     const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 프로필로 바꿀까요?',
       action: '프로필을 초안으로', opener: $('profile-draft')});
