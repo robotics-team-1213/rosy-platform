@@ -58,3 +58,9 @@
 - 증거: Node 29 PASS, 자원 기준 통과 AI PC Chromium 16 PASS/63 deselected, NEW 0. desktop/mobile 파일 읽기와 교체 확인 창 경합에서 이전 요청이 저장되지 않는다. terminal 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-connect-race-green/run-1.txt`. 독립 검토 두 Important 수정 후 수용.
 - gate 변화: source/remote 범위. 선택 로봇 작업·대형 연결, 개입, 통합·배포·실제 사이트 수용은 계속 진행한다. 실물 측량 정확도는 미확인이다.
 
+## 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
+
+- 변경: 선택 로봇 ID를 지도 기록으로 전달하고 기존 대형 패널을 작업 카드에서 연다. 리더/팔로워는 실제 상태에서 표시한다. 진입 시 제출 전 확인·운행 폼·목표·위치 지정만 취소하며 명령은 보내지 않는다. 요청 ID 없음/등록 제거는 다른 로봇으로 대체하지 않는다. 사용자 선택은 새로고침에서 유지하고, 기록 중에는 실제 기록 로봇과 중단 조작을 유지한다. 오프라인 대상은 연결 끊김으로 표시한다.
+- 증거: 새 경로 RED 3 FAIL 뒤 6 PASS. 넓은 회귀 158 PASS/2 fixture FAIL은 목표 미지원 fake를 누른 시험이어서 지원하는 운행 폼으로 수정했다. 기록 대상 RED 뒤 최종 자원 기준 통과 AI PC 역할/배정/대형/대상/지도/구조 30 PASS/111 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/selected-context-acceptance/run-1.txt`). 독립 소스 검토 수용.
+- gate 변화: source/remote 진입·대상 유지 범위. Task 5 충돌 및 지도 활성화 busy 보강, main 통합·CI·배포·실제 사이트·실물 수용은 남아 있다.
+

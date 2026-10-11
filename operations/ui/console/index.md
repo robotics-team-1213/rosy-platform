@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
 - 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
 - 2026-10-11 · ebf05b9811 · D-655 카메라 관측 누적과 근거 보존
 - 2026-10-11 · 7476837977 · D-655 분류별 요소 편집과 기록 프레임 표시
 - 2026-10-11 · 8596f7042b · D-655 상대 주행 조사 화면 연결
-- 2026-10-11 · 9e68d078b · D-655 빈 지도 조사 초안 입력
