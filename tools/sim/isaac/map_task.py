@@ -198,7 +198,7 @@ class SimulationOwner:
         self.halted = True
         self.pending = None
 
-    def submit(self, intent, *, observed_at, now):
+    def submit(self, intent, *, observed_at, now, preserve_curvature=False):
         from rosy.contracts.motion import MotionIntent, MotionKind, PriorityClass
         from core_features.command.manager import Twist, ZERO
         valid = type(intent) is MotionIntent and intent.kind is MotionKind.BASE_TWIST
@@ -215,7 +215,8 @@ class SimulationOwner:
             self.stop()
             return ZERO
         self.pending = (intent, observed_at)
-        self.command.set_nav_twist(Twist(p.linear_mps, p.angular_radps), now=now)
+        self.command.set_nav_twist(Twist(p.linear_mps, p.angular_radps), now=now,
+                                   preserve_curvature=preserve_curvature)
         return self.select_output(now=now)
 
     def select_output(self, now=None):
