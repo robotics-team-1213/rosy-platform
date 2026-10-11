@@ -30,3 +30,9 @@ D-622 reserved in another active branch; not in this structure candidate, remove
 D-621 reserved by another active session; ADR not yet landed in this branch
 D-622 reserved by another active session; ADR not yet landed in this branch
 D-631 reserved by another active session; ADR not yet landed in this branch
+
+D-633 reserved by another active session; not yet landed in this candidate; remove when integrated
+D-634 reserved by another active session; not yet landed in this candidate; remove when integrated
+D-635 reserved by another active session; not yet landed in this candidate; remove when integrated
+D-636 reserved by another active session; not yet landed in this candidate; remove when integrated
+D-637 reserved by another active session; not yet landed in this candidate; remove when integrated

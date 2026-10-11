@@ -202,13 +202,13 @@ def main():
                         policy.update(*previous, result['reward'], state,
                                       terminated=result['terminated'] or result['truncated'])
                     action = 1 if phase == 'baseline' else policy.choose(state, explore=phase == 'train')
-                    if phase == 'eval' and state in policy.table:
-                        learned_steps += 1
                     angular = max(-.8, min(.8, angular * policy.gains[action]))
                     if result['goal_reached'] or result['terminated'] or result['truncated']:
                         owner.stop()
                         speed, angular = 0., 0.
                     else:
+                        if phase == 'eval' and any(value != 0. for value in policy.table.get(state, ())):
+                            learned_steps += 1
                         intent = MotionIntent(MotionKind.BASE_TWIST,
                             MotionHeader(f'isaac:{epoch}:{frame}', 'isaac-pinky', 'learned_policy',
                                 PriorityClass.POLICY, now, .1, envelope_ref='isaac-map-v1', state_sequence=epoch,
