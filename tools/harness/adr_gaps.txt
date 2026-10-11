@@ -29,10 +29,4 @@ D-622 reserved in another active branch; not in this structure candidate, remove
 
 D-621 reserved by another active session; ADR not yet landed in this branch
 D-622 reserved by another active session; ADR not yet landed in this branch
-
-
-
-
-
-
-
+D-654 reserved by another active branch; its ADR is not in this snapshot

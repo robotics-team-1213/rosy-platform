@@ -205,8 +205,12 @@ export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+  for (const facility of map.facilities || []) for (const [x, y] of facility.geometry) add(x, y);
   for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);  // any 90° turn of a box
-  if (!xs.length) { xs.push(0); ys.push(0); }
+  if (!xs.length) {
+    const [x, y] = map.survey?.origin || [0, 0];
+    add(x - 1, y - 1); add(x + 1, y + 1);  // View extent only; no road is inferred.
+  }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6),
     (height - 2 * pad) / Math.max(maxY - minY, 1e-6));
@@ -297,6 +301,75 @@ export function planPolylines(map, plan) {
 }
 
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
+
+export function createSurveyDraft(mapId, reference) {
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(mapId) || !/^[A-Za-z0-9_.-]{1,64}$/.test(reference.revision || ''))
+    throw new Error('지도 ID와 기준 버전을 확인하세요');
+  if (!Array.isArray(reference.origin) || reference.origin.length !== 2
+      || !reference.origin.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)
+      || !Number.isFinite(reference.heading_rad) || Math.abs(reference.heading_rad) > 2 * Math.PI)
+    throw new Error('기준점 좌표와 방향을 확인하세요');
+  if (!['odometry', 'measured'].includes(reference.scale_source)
+      || (reference.scale_source === 'measured' && !(Number.isFinite(reference.measured_distance_m)
+        && reference.measured_distance_m > 0 && reference.measured_distance_m <= 2000)))
+    throw new Error('실측 축척에는 확인한 거리가 필요합니다');
+  if (!reference.description?.trim() || reference.description.length > 1000)
+    throw new Error('시작점·방향·축척 근거를 적으세요');
+  return {schema: 'rosy.site_map/1', map_id: mapId, places: [], edges: [],
+    survey: {...copy(reference), reviewed: false, review_note: ''}};
+}
+
+export function appendSurveyElement(map, item) {
+  if (!map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
+  const {id, name, kind, geometry} = item;
+  if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || !name?.trim() || name.length > 64)
+    throw new Error('요소 ID와 이름을 확인하세요');
+  if (!Array.isArray(geometry) || !geometry.length || geometry.length > 32
+      || !geometry.every(p => Array.isArray(p) && p.length === 2
+        && p.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)))
+    throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
+  const next = copy(map);
+  next.survey = {...next.survey, reviewed: false, review_note: ''};
+  if ([...next.places, ...next.edges, ...(next.facilities || [])].some(row => row.id === id))
+    throw new Error('이미 쓰는 요소 ID입니다');
+  if (PLACE_KINDS.includes(kind)) {
+    if (geometry.length !== 1 || (kind === 'start' && !Number.isFinite(item.yaw)))
+      throw new Error('장소는 한 점이며 출발 장소는 확인한 방향이 필요합니다');
+    const [x, y] = geometry[0];
+    next.places.push({id, name: name.trim(), kind, x, y, ...(Number.isFinite(item.yaw) ? {yaw: item.yaw} : {})});
+  } else if (kind === 'road') {
+    const start = next.places.find(p => p.id === item.from), end = next.places.find(p => p.id === item.to);
+    if (!start || !end || start.id === end.id || geometry.length < 2)
+      throw new Error('서로 다른 시작·끝 장소와 도로 선을 지정하세요');
+    if (!(item.width_m > 0 && item.width_m <= 10) || !Number.isFinite(item.width_m)
+        || !['one_way', 'two_way'].includes(item.direction)) throw new Error('차로 폭과 통행 방향을 확인하세요');
+    if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
+        || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
+      throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
+    next.edges.push({id, from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
+      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
+      evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
+  } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
+    const required = {traffic_signal: 1, stop_line: 2, landmark: 1}[kind];
+    if (required ? geometry.length !== required : geometry.length < 3) throw new Error('요소 종류에 맞게 점을 찍으세요');
+    const approaches = item.approaches || [];
+    if (approaches.some(a => !next.edges.some(e => e.id === a.edge_id))) throw new Error('연결할 도로가 없습니다');
+    if (kind === 'traffic_signal' && (!item.signal_id || !['physical', 'virtual'].includes(item.signal_kind) || !approaches.length))
+      throw new Error('신호등 ID·종류와 제어 진입 차로를 지정하세요');
+    next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copy(geometry), approaches: copy(approaches),
+      ...(kind === 'traffic_signal' ? {signal_id: item.signal_id, signal_kind: item.signal_kind} : {})}];
+  } else throw new Error('알 수 없는 지도 요소입니다');
+  return next;
+}
+
+export function reviewSurveyDraft(map, note) {
+  if (!map?.survey || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
+  const next = copy(map);
+  next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
+  for (const edge of next.edges) edge.evidence = {...(edge.evidence || {source: 'operator'}),
+    status: 'reviewed', reference_revision: next.survey.revision, note: note.trim()};
+  return next;
+}
 
 export function editPlace(map, id, {name, kind}) {
   const next = copy(map);

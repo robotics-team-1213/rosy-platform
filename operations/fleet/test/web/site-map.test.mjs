@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
   addApproach, removeApproach, mergeCrosswalks,
+  createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
 } from '../../../ui/console/shared/site-map-model.js';
 
 const MAP = {
@@ -10,6 +11,43 @@ const MAP = {
   edges: [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [1, 0], [2, 0]], direction: 'one_way',
            width_m: 0.2, speed_cap_mps: 0.2, drive_mode: 'lane'}],
 };
+
+test('a mapless survey starts empty at a usable metric view and rejects missing scale evidence', () => {
+  const reference = {revision: 'survey-1', origin: [3, 4], heading_rad: 0, scale_source: 'odometry', description: 'Start mark'};
+  const map = createSurveyDraft('new', reference);
+  assert.deepEqual(map.places, []);
+  assert.deepEqual(map.edges, []);
+  assert.equal(map.survey.reviewed, false);
+  const view = fitView(map, 800, 480);
+  assert.ok(view.scale > 0 && view.scale < 1000);
+  assert.deepEqual(view.toMap(...view.toPx(3, 4)), [3, 4]);
+  assert.throws(() => createSurveyDraft('new', {...reference, scale_source: 'measured'}));
+  assert.throws(() => createSurveyDraft('new', {...reference, origin: [NaN, 0]}));
+});
+
+test('elements grow only the draft, preserve geometry and require review after additions', () => {
+  const reference = {revision: 'survey-1', origin: [0, 0], heading_rad: 0, scale_source: 'odometry', description: 'Start mark'};
+  let map = createSurveyDraft('new', reference);
+  const empty = structuredClone(map);
+  map = appendSurveyElement(map, {id: 'a', kind: 'junction', name: 'Start', geometry: [[0, 0]]});
+  map = appendSurveyElement(map, {id: 'b', kind: 'park', name: 'Destination', geometry: [[2, 0]]});
+  map = appendSurveyElement(map, {id: 'ab', kind: 'road', name: 'Road', from: 'a', to: 'b',
+    geometry: [[0, 0], [.8, .3], [2, 0]], width_m: .2, direction: 'two_way'});
+  assert.deepEqual(empty.places, []);
+  assert.deepEqual(map.edges[0].polyline, [[0, 0], [.8, .3], [2, 0]]);
+  assert.equal(map.edges[0].evidence.status, 'observed');
+  assert.throws(() => reviewSurveyDraft(map, ' '));
+  map = reviewSurveyDraft(map, 'Origin, scale and lanes inspected');
+  assert.equal(map.survey.reviewed, true);
+  assert.equal(map.edges[0].evidence.status, 'reviewed');
+  const next = appendSurveyElement(map, {id: 'sig', kind: 'traffic_signal', name: 'Light', geometry: [[1, .2]],
+    signal_id: 's1', signal_kind: 'virtual', approaches: [{edge_id: 'ab', forward: true, stop_s_m: .8}]});
+  assert.equal(next.survey.reviewed, false);
+  assert.equal(map.survey.reviewed, true);
+  assert.equal(next.facilities[0].approaches[0].edge_id, 'ab');
+  assert.ok(fitView(next, 800, 480).toPx(1, .2).every(Number.isFinite));
+  assert.throws(() => appendSurveyElement(map, {id: 'x', kind: 'road', name: 'X', from: 'a', to: 'missing', geometry: []}));
+});
 
 test('rectangular camera view preserves metric aspect and rejects mismatched or singular calibration', () => {
   const record = {map_id: 'camera', map_to_image: [100, 0, 200, 0, -100, 100, 0, 0, 1],
