@@ -9,6 +9,60 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 
 
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
+def test_channel_review_keeps_candidate_separate_from_execution(site, size):
+    from playwright.sync_api import expect, sync_playwright
+
+    request_id, digest = "a" * 24, "b" * 64
+    path = f"/api/fleet/channel-requests/{request_id}/review"
+    receipt = {"content": "<script>unsafe()</script> 이동 요청", "request_id": request_id,
+               "content_hash": digest, "received_at": "2026-10-12T00:00:00+00:00"}
+    review = {"request_id": request_id, "content_hash": digest, "revision": 0, "state": "REQUESTED",
+              "candidate": None, "reason": None, "work_id": None, "work_kind": None, "work_status": None,
+              "request_key": "discord-" + request_id}
+    api = {**API, "/api/fleet/work": {"rows": [], "observed_at": receipt["received_at"],
+           "tasks_available": True, "missions_available": True, "truncated_sources": []},
+           "/api/fleet/channel-requests": {"rows": [receipt]}, path: review}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=size)
+        try:
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.locator("#channel-requests ui-button").click()
+            expect(page.locator("#channel-review")).to_be_visible()
+            page.locator("#channel-review-reason").fill("목표 위치 확인 필요")
+
+            def save(route):
+                body = route.request.post_data_json
+                posts.append((path, body))
+                assert body["expected_hash"] == digest and body["expected_revision"] == review["revision"]
+                review.update(state=body["state"], reason=body["reason"], candidate=body["candidate"],
+                              revision=review["revision"] + 1)
+                route.fulfill(json=review)
+
+            page.route("**" + path, lambda route: save(route) if route.request.method == "PUT"
+                       else route.fulfill(json=review))
+            page.locator("#channel-review-hold").click()
+            expect(page.locator("#channel-review-state")).to_contain_text("HOLD")
+            assert review["candidate"] is None and posts[-1][1]["state"] == "HOLD"
+            page.locator("#channel-review-robot").select_option("rosy_03")
+            page.locator("#channel-review-x").fill("1.25")
+            page.locator("#channel-review-y").fill("2.5")
+            page.locator("#channel-review-ready").click()
+            expect(page.locator("#channel-review-state")).to_contain_text("READY")
+            assert review["candidate"] == {"robot_id": "rosy_03", "x": 1.25, "y": 2.5, "yaw": 0}
+            assert all(item[0] == path for item in posts)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            _shot(page, f"channel-review-{size[0]}.png", full_page=True)
+            page.route("**/api/fleet/channel-requests", lambda route: route.fulfill(status=403, json={"detail": "revoked"}))
+            page.locator("#work-refresh").click()
+            expect(page.locator("#channel-review")).not_to_be_visible()
+            assert not errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 @pytest.mark.parametrize("role", ["viewer", "operator"])
 def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, size, role):
     from playwright.sync_api import sync_playwright
