@@ -136,11 +136,17 @@ class LearnedCameraLane:
             crosswalk_mask=self.worker.used_crosswalk, lane_half_width_m=.0925)
         step, decided = keep_step(self.steer, self.worker, self.keeper.last, self.ground,
             self.camera_x, .0925, self.history.pose_at, stamp, None, guide)
+        provenance = 'model_lane_mask'
         if decided:
             info = self.keeper.last.get('drivable_steer', {})
             strategy = self.keeper.last.get('strategy', '')
-            if (not info.get('target_now_m') or not (strategy == 'drivable_centre'
-                    or strategy.startswith('drivable_turn_'))):
+            if info.get('target_now_m') and (strategy == 'drivable_centre'
+                    or strategy.startswith('drivable_turn_')):
+                provenance = 'observed_target'
+            elif (strategy.startswith('drivable_off_line_') and info.get('target_m')
+                    and strategy == 'drivable_off_line_' + str(info.get('straddle'))):
+                provenance = 'observed_straddle'
+            else:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
                 return
@@ -155,6 +161,7 @@ class LearnedCameraLane:
         self.observation = observation if accepted else None
         self.received_at = captured_at if accepted else None
         self.last = {'model_used': True, 'model_revision': self.worker.used_model_revision,
+                     'camera_provenance': provenance,
                      'paint_kind': self.worker.used_paint_kind, 'inference_error': None,
                      'source_stamp': stamp, 'received_at': captured_at, 'processing_s': now - captured_at,
                      'reason': self.keeper.last.get('reason'),
