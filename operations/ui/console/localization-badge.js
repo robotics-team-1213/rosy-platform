@@ -1,6 +1,7 @@
 // D-395 P2-6 — 로봇 카드의 위치 확정 배지. 서버가 준 row.localization(문구 포함)을
 // 태그 어휘로 옮긴다: 확정은 중립, 미확정·미보고는 warn, 사람 확인 필요는 crit.
 // DOM 없는 순수 함수만 둔다(node 시험 대상).
+export { robotMapPose } from "/console/assets/site-map-model.js";
 
 // CORE UNKNOWN and Fleet MapPose are separate evidence sources; show a valid Fleet pose explicitly.
 export function localizationTag(loc, guideRow) {
@@ -39,19 +40,6 @@ export function robotPoseText(state, localization) {
   const pose = state?.pose;
   if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return "—";
   return `${poseFrame(state, localization)} ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
-}
-
-/** The robot's own pose requires explicit map frame and LOCALIZED. Missing localization is unknown.
- * Never odom: a manual-only robot's odom pose
- * drawn on the map put it where it was not (field check 2026-10-10). Fleet's map pose and Rosy Cam
- * tracking have their own layers (guide circle, tracking ring). */
-export function robotMapPose(robot) {
-  const state = robot?.state;
-  const pose = state?.pose;
-  if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y) || !Number.isFinite(pose.yaw)) return null;
-  if (poseFrame(state, robot.localization) !== "map") return null;
-  const loc = state.localization;
-  return loc?.state === "LOCALIZED" && loc.pose_frame === "map" ? pose : null;
 }
 
 /** Fleet's site map pose: "지도 0.69, -0.44 · 확정·카메라", "지도 위치 모름", or null without a guide row. */
