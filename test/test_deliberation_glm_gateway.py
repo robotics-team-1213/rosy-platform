@@ -41,6 +41,22 @@ def test_trusted_payload_requires_current_hash_and_no_prior():
         gate.trusted_body(json.dumps(body))
 
 
+def test_legacy_job_does_not_require_versioned_codec(monkeypatch):
+    import builtins
+    original = builtins.__import__
+    def restricted(name, globals=None, locals=None, fromlist=(), level=0):
+        if 'deliberation_glm_judgment' in fromlist:
+            raise ImportError('Versioned deployment absent')
+        return original(name, globals, locals, fromlist, level)
+    monkeypatch.setattr(builtins, '__import__', restricted)
+    p = problem()
+    raw = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
+                      'prior': [], 'instruction': 'test'})
+    parsed, body = gate.trusted_body(raw)
+    assert parsed == p
+    assert gate.checked_response(p, response(), body=body)['usage']['completion_tokens'] == 100
+
+
 @pytest.mark.parametrize('change', ['tool', 'length', 'tokens', 'scope', 'model', 'missing_model', 'role'])
 def test_invalid_upstream_never_admitted(change):
     data = response()
