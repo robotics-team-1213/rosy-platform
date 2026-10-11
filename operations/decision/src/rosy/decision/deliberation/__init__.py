@@ -100,12 +100,15 @@ class Supervisor:
         self.clock, self.timeout_s, self.max_cost_usd, self.max_active = clock, timeout_s, max_cost_usd, max_active
         self._active = set()
 
-    async def run(self, problem, providers, *, current):
+    async def run(self, problem, providers, *, current, record=None):
         key = (problem.subject_id, problem.case_id)
         result = dict(state='HOLD', reason='UNCONFIGURED', choice=None, calls=0,
-                      cost_usd=0.0, opinions=[], input_hash=problem.digest, action_admissible=False)
+                      cost_usd=0.0, known_cost_usd=0.0, unknown_cost_calls=0,
+                      opinions=[], input_hash=problem.digest, action_admissible=False)
         def finish(reason, state='HOLD', choice=None):
-            return {**result, 'reason': reason, 'state': state, 'choice': choice}
+            complete = result['unknown_cost_calls'] == 0
+            return {**result, 'reason': reason, 'state': state, 'choice': choice,
+                    'cost_complete': complete, 'cost_usd': result['known_cost_usd'] if complete else None}
         def fresh():
             try:
                 return current() is True and 0 <= self.clock() - problem.observed_at <= 3
@@ -132,16 +135,20 @@ class Supervisor:
                         return finish('STALE_OR_CHANGED')
                     remaining = self.timeout_s - (time.monotonic() - start)
                     result['calls'] += 1
+                    result['unknown_cost_calls'] += 1
                     prior = () if index < 2 else tuple(json.loads(canonical(result['opinions'])))
                     payload, cost = await providers[index % 2](problem, prior, remaining,
-                        budget_usd=self.max_cost_usd - result['cost_usd'])
+                        budget_usd=self.max_cost_usd - result['known_cost_usd'])
                     if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
                         return finish('COST_UNKNOWN')
-                    result['cost_usd'] += cost
-                    if result['cost_usd'] > self.max_cost_usd:
+                    result['known_cost_usd'] += cost
+                    result['unknown_cost_calls'] -= 1
+                    if result['known_cost_usd'] > self.max_cost_usd:
                         return finish('COST_EXCEEDED')
                     checked = opinion(problem, payload)
                     result['opinions'].append({'profile_id': providers[index % 2].profile_id, **checked})
+                    if record is not None:
+                        await record(json.loads(canonical(finish('OPINION_RECORDED', 'RUNNING'))))
                     if checked['objections']:
                         return finish('UNRESOLVED_OBJECTION')
                     if index == 1 and checked['choice'] != result['opinions'][0]['choice']:

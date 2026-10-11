@@ -1,3 +1,5 @@
+import hashlib
+import json
 import pytest
 from tools.decision_replay import compare_deliberation
 
@@ -18,8 +20,11 @@ def rows(cases):
 def test_independent_same_cases_all_modes_denominators_and_no_field_pass():
     cases = [case(), case('case-2', expected=None)]
     runs = rows(cases)
+    limits = {'error_rate': 0.5, 'p95_latency_ms': 20, 'cost_usd': 1}
+    profile = {'dataset_sha256': hashlib.sha256(json.dumps(cases, sort_keys=True).encode()).hexdigest(),
+               'limits': limits, 'reviewed_by': 'team', 'minimum_cases': 2}
     report = compare_deliberation(cases, runs, training_sessions=['training'],
-                                 limits={'error_rate': 0.5, 'p95_latency_ms': 20, 'cost_usd': 1})
+                                 training_recordings=[], reviewed_profile=profile, limits=limits)
     assert report['state'] == 'PASS_OFFLINE_ONLY' and report['field_accepted'] is False
     assert all(m['count'] == 2 and m['correct'] == 1 for m in report['modes'].values())
 
