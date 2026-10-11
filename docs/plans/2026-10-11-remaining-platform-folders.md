@@ -1,6 +1,6 @@
 # 남은 플랫폼 폴더 정리 실행 계획
 
-**단계 1–6 완료:** source와 소비자·설치 입력을 먼저 커밋하고 local main `d4988bffba`에 fast-forward했다. 초기 계획 298파일에 동시 추가된 Console inbox 1파일을 포함해 총 299파일(Decision10, Console67, Learning214, 지원2, WSL6)을 처리했다. 아래 표의 85개 root/Console66은 착수 재고이며 현재 재고는 89개 root/Console67·설치 자산65다. 단계7은 source 착지 이후 별도 설명 commit으로 검증·반영한다.
+**단계 1–7 완료:** source와 소비자·설치 입력을 먼저 커밋하고 local main `d4988bffba`에 fast-forward했다. 초기 계획 298파일에 동시 추가된 Console inbox 1파일을 포함해 총 299파일(Decision10, Console67, Learning214, 지원2, WSL6)을 처리했다. 아래 표의 85개 root/Console66은 착수 재고이며 현재 재고는 89개 root/Console67·설치 자산65다. 단계7은 source 착지 이후 설명 `500c5f94c`와 경계 목록 보완 `ff337deb8`을 별도로 커밋하고, 원격 재검증한 `33729c5140`으로 local main에 반영했다.
 
 기준 local main `ea6d4c0a2`, 브랜치 `refactor/remaining-platform-folders`, D-637. 이전 D-630 단계는 끝난 이력이며 이 계획은 남아 있던 실제 source holder를 처리한다. 사용자가 승인한 순서인 실제 이동·소비자 수정 → 검증·커밋·local main 머지 → 결과 설명 갱신을 따른다. ADR·실행 계획은 구현 전에 기록한다.
 
@@ -27,3 +27,7 @@ Fleet setup·source holder helper·manifest·root reference는 주 세션이 통
 ## 소스 착지와 검증
 
 `13b125b746` source 첫 착지 뒤 incoming traffic-view 시험의 lookup을 `d4988bffba`에서 수정·검증·착지했다. 원격 큰 회귀의 4214 passed/181 skipped/62 subtests, 7217 passed/634 skipped(문서 fixture 1실패 후 수정), sensing 34 passed와 후속 수정 gate의 0 NEW를 구분해 [결과](../validation/d637-remaining-folders-2026-10-11/result.md)에 기록한다. Node 45파일과 원격 Fleet 24시험도 최종 source에서 통과했다. CI FULL·Chromium·Jazzy·ARM64·배포·장치·현장 gate는 남는다.
+
+## 설명 단계 완료
+
+설명 첫 후보 `9602e1493`의 373시험 중 기존 shared learning 8파일의 경계 목록 누락으로 1 NEW가 났고 착지하지 않았다. 원래 `control` import 12개를 변경하지 않은 채 8개 실제 integration 경로만 frozen set에 등록했다. 독립 리뷰 후 `33729c5140`의 관련 원격557시험은 537 passed/20 skipped, known_failures0 NEW, lint0 errors로 끝나고 local main FF했다. 기존 scanner·검사 범위·set equality와 known_failures 목록은 유지했다. 설명 gate의 Node는 선택 Fleet web suite가 없어 skip했으며 source `d4988bffba`의 Node290 성공과 구분한다. 채택한 폴더·참조·설치·책임 설명 과제는 완료다; CI FULL·모델 활성화·ARM64·장치·현장 수용은 이 완료 범위 밖이다.
