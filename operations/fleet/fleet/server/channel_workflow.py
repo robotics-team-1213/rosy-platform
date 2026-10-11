@@ -42,7 +42,7 @@ class ChannelWorkflow:
         value = {'request_id': receipt['request_id'], 'content_hash': receipt['content_hash'],
                  'revision': 0, 'state': 'REQUESTED', 'candidate': None, 'reason': None, 'work_id': None}
         if row is not None:
-            value.update({key: row[key] for key in value})
+            value.update({key: row[key] for key in value if key in row.keys()})
             value['candidate'] = json.loads(row['candidate']) if row['candidate'] else None
         value.update(work_kind=row['work_kind'] if value['work_id'] else None, work_status=None,
                      request_key='discord-' + receipt['request_id'])

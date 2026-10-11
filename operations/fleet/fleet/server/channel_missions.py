@@ -22,8 +22,9 @@ class ChannelMissions:
         self.create, self.resolve, self.cell_prepare = proposal_create, proposal_resolve, cell_prepare
         self.admit_owner, self.cell_service_id = mission_admit, cell_service_id
 
-    def _proposal(self, value, principal):
-        proposal = self.proposals.get(value['work_id'])
+    def _proposal(self, value, principal, conn=None):
+        proposal = (self.proposals.get(value['work_id']) if conn is None else
+                    self.proposals.get_in_transaction(conn, value['work_id']))
         author = self.cell_service_id if value['work_kind'] == 'cell_job' else principal
         if (proposal is None or proposal['principal_id'] != author
                 or proposal['request_key'] != value['request_key']
@@ -67,7 +68,7 @@ class ChannelMissions:
             self.workflow._check(current, body.expected_hash, body.expected_revision)
             if current['state'] == 'LINKED':
                 raise HTTPException(409, detail='CHANNEL_WORK_ALREADY_SUBMITTED')
-            self._proposal({**current, 'work_id': proposal_id, 'work_kind': body.kind}, principal)
+            self._proposal({**current, 'work_id': proposal_id, 'work_kind': body.kind}, principal, conn)
             conn.execute('''INSERT INTO fleet_channel_workflow
                 (request_id, revision, state, candidate, reason, work_id, work_kind, preparation_digest)
                 VALUES (?, ?, 'LINKED', NULL, ?, ?, ?, ?)
