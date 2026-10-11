@@ -73,7 +73,7 @@ def test_freshness_does_not_turn_uncertainty_into_normal(stamp, reason):
     request = sample(evidence=(a.EvidenceRef('arm-cell', 'device', 'state-9', stamp, case_id='job-7'),))
     result = assess(request)
     assert (result.necessity, result.reason) == ('ABSTAIN', reason)
-    assert not result.applies_to(request, now=100.0)
+    assert not result.applies_to(request, policy_revision='criteria-v1', now=100.0)
 
 
 @pytest.mark.parametrize('changes,reason', [
@@ -100,13 +100,14 @@ def test_oldest_evidence_and_deadlines_bound_the_permission_to_reuse():
                                a.EvidenceRef('arm-cell', 'goal', 'goal-3', 98.0, case_id='job-7')))
     result = assess(request)
     assert result.valid_until == 100.5
-    assert result.applies_to(request, now=100.49)
-    assert not result.applies_to(request, now=100.5)
+    assert result.applies_to(request, policy_revision='criteria-v1', now=100.49)
+    assert not result.applies_to(request, policy_revision='criteria-v2', now=100.1)
+    assert not result.applies_to(request, policy_revision='criteria-v1', now=100.5)
     for changes in ({'revision': 'state-10'}, {'case_id': 'job-8'}, {'owner': 'another-owner'},
                     {'subject_id': 'another-cell'}):
-        assert not result.applies_to(replace(request, **changes), now=100.1)
-    assert not result.applies_to(request, now=99.9)
-    assert not result.applies_to(request, now=math.nan)
+        assert not result.applies_to(replace(request, **changes), policy_revision='criteria-v1', now=100.1)
+    assert not result.applies_to(request, policy_revision='criteria-v1', now=99.9)
+    assert not result.applies_to(request, policy_revision='criteria-v1', now=math.nan)
 
 
 def test_transient_blockage_expires_at_confirmation_boundary():
