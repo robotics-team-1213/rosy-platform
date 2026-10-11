@@ -8,7 +8,7 @@
 
 `evaluate_model_frame` reuses an opened LaneSegModel and its preprocessing; independent binary truth and anchor pixels start on the original camera grid. Labels/truth/anchors share the resized full-frame grid and predicted crop rows. Known truth outside the prediction ROI is recorded as excluded rather than unknown truth, and full-grid coverage retains those exclusions. Model files, dataset lineage, human authority and physical calibration must still be bound by the replay caller; this per-frame adapter does not admit a model or verify those artifacts.
 
-Use the unified `test/learning/perception` suite and `operations/world/test` through the remote committed-HEAD runner and known-failure comparator. Read repository [AGENTS.md](../../../AGENTS.md), D-637 and D-665 before editing source boundaries. See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md).
+Use `learning/evaluation/perception/test`, the legacy shared `test/learning/perception` suite and `operations/world/test` through the remote committed-HEAD runner and known-failure comparator. Read repository [AGENTS.md](../../../AGENTS.md), D-637 and D-665 before editing source boundaries. See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md).
 
 `judgment_acceptance.py` owns the first Pinky line-stop/re-observation offline checker (D-662). Named independent labels, frozen hashes/splits, denominators and pre-reviewed limits are required; missing acceptance evidence stays HOLD. PASS_OFFLINE_ONLY is never FIELD or provider activation. Curation's incident feedback remains candidate evidence.
 

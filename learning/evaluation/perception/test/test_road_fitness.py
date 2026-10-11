@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 for directory in ("middleware/perception", "contracts/foundation", "operations/world/src",
                   "learning/evaluation/perception"):
     sys.path.insert(0, str(ROOT / directory))
