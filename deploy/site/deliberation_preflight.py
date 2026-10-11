@@ -8,7 +8,7 @@ import uuid
 from contextlib import suppress
 from pathlib import Path
 
-from deploy.site.deliberation_install import BWRAP, PROFILE, PROFILE_PATH
+from deploy.site.deliberation_install import BWRAP, PROFILE, PROFILE_PATH, validated_account
 from deploy.site.deliberation_sandbox import SandboxLauncher, bounded_process, cleanup_scope, protect_cleanup
 
 
@@ -74,8 +74,7 @@ async def check():
     try:
         if not BWRAP.is_file() or not PROFILE_PATH.is_file():
             return result
-        import pwd
-        account = pwd.getpwnam('rosy-deliberation')
+        account = validated_account()
         if os.getuid() != account.pw_uid:
             result['reason'] = 'DEDICATED_ACCOUNT_REQUIRED'
             return result

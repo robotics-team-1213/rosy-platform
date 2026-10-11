@@ -20,14 +20,19 @@ profile rosy-deliberation-bwrap /usr/local/libexec/rosy-deliberation/bwrap flags
 
 def dedicated_account():
     import pwd
-    import grp
     try:
-        user = pwd.getpwnam('rosy-deliberation')
+        pwd.getpwnam('rosy-deliberation')
     except KeyError:
         subprocess.run(['/usr/sbin/useradd', '--system', '--user-group', '--create-home',
             '--home-dir', '/var/lib/rosy-deliberation', '--shell', '/usr/sbin/nologin',
             'rosy-deliberation'], check=True, timeout=10)
-        user = pwd.getpwnam('rosy-deliberation')
+    return validated_account()
+
+
+def validated_account():
+    import pwd
+    import grp
+    user = pwd.getpwnam('rosy-deliberation')
     group = grp.getgrnam('rosy-deliberation')
     if (not 0 < user.pw_uid < 1000 or user.pw_gid != group.gr_gid or group.gr_mem
             or any(p.pw_gid == group.gr_gid and p.pw_name != user.pw_name for p in pwd.getpwall())
