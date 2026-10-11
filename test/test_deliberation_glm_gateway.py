@@ -132,6 +132,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
         server.problem, server.body, server.token = p, body, 'fake-unit-token'
+        server.credential_sha256 = 'f' * 64
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
