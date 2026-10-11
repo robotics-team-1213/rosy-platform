@@ -45,3 +45,20 @@ def test_installer_does_not_adopt_existing_operator_account(monkeypatch):
     monkeypatch.setattr(grp, 'getgrnam', lambda name: SimpleNamespace(gr_gid=1000, gr_mem=[]))
     with pytest.raises(ValueError, match='DEDICATED_ACCOUNT_CONFLICT'):
         dedicated_account()
+
+
+@pytest.mark.parametrize('primary_member', [False, True])
+def test_readonly_account_check_rejects_group_drift(monkeypatch, primary_member):
+    import grp
+    import pwd
+    from types import SimpleNamespace
+    from deploy.site.deliberation_install import validated_account
+    user = SimpleNamespace(pw_uid=990, pw_gid=990, pw_name='rosy-deliberation',
+        pw_dir='/var/lib/rosy-deliberation', pw_shell='/usr/sbin/nologin')
+    monkeypatch.setattr(pwd, 'getpwnam', lambda name: user)
+    monkeypatch.setattr(grp, 'getgrnam', lambda name: SimpleNamespace(
+        gr_gid=990, gr_mem=[] if primary_member else ['operator']))
+    monkeypatch.setattr(pwd, 'getpwall', lambda: [user, SimpleNamespace(pw_gid=990, pw_name='operator')])
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: pytest.fail('read-only check spawned a command'))
+    with pytest.raises(ValueError, match='DEDICATED_ACCOUNT_CONFLICT'):
+        validated_account()

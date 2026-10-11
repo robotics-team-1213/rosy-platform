@@ -23,10 +23,15 @@ Model PC와 AI PC에서 bwrap 0.9.0, systemd 255를 확인했다. 커널 audit�
 ```bash
 sha256sum /usr/bin/bwrap
 sudo python3 -m deploy.site.deliberation_install --bwrap-sha256 e318903862396f96de3df57264e0158682b952fd3fb53ac23d876413e7b30f71
+sudo install -d -o root -g root -m 0755 /opt/rosy-deliberation/deploy/site
+sudo install -o root -g root -m 0644 deploy/site/deliberation_install.py deploy/site/deliberation_sandbox.py deploy/site/deliberation_preflight.py /opt/rosy-deliberation/deploy/site/
+cd /opt/rosy-deliberation
 sudo -u rosy-deliberation env XDG_RUNTIME_DIR=/run/user/$(id -u rosy-deliberation) python3 -m deploy.site.deliberation_preflight
 ```
 
-소스 checkout과 그 상위 경로가 전용 계정에 읽기 가능한 위치여야 한다. 개인 홈을 열어 주거나 운영 자격 증명을 복사하지 않는다. 필요하면 이 세 파일의 검증된 코드만 root 소유 `/opt/rosy-deliberation`에 설치해 그 디렉터리에서 실행한다. 관리자 암호는 현장 관리자 터미널에서 입력한다.
+위 staging은 검증된 세 코드 파일만 root 소유 경로에 둔다. `/opt/rosy-deliberation`이 이미 다른 용도로 사용 중이면 덮어쓰기 전에 중단하고 소유자를 확인한다. 개인 홈을 열어 주거나 운영 자격 증명을 복사하지 않는다. 관리자 암호는 현장 관리자 터미널에서 입력한다.
+
+설치 후 그룹 가입 등 계정 상태가 바뀌면 preflight도 설치와 동일한 읽기 전용 불변식 검사를 통해 HOLD한다. preflight는 계정을 생성하거나 변경하지 않는다.
 
 preflight는 전용 계정·파일 권한, namespace 분리, 빈 환경·호스트 경로 비노출·cap 제거·읽기 전용 runtime·loopback만 있는 네트워크, systemd와 실제 kernel cgroup 한계를 확인한다. 별도 세션에서 실제 살아 있는 자식의 PID와 해당 cgroup을 관측한 다음, 취소와 시간 초과 각각에 대해 자식 종료 및 빈 cgroup을 확인한다. 자식이 실행되지 않았거나 readback이 부족하면 PASS할 수 없다.
 
