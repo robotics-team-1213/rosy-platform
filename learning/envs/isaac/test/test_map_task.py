@@ -28,6 +28,13 @@ def test_exact_map_lineage_and_connected_complete_route():
     assert max(math.dist(a, b) for a, b in zip(track['points'], track['points'][1:])) < .025
 
 
+def test_isaac_uses_the_gazebo_warning_mesh_definition():
+    track = load_track()
+    from build_world import caution_meshes
+    assert track['caution_meshes'] == caution_meshes()
+    assert len(track['caution_meshes']) == 8
+
+
 def test_initial_goal_proximity_cannot_count_as_closed_loop_completion():
     t = MapTask([(0., 0.), (.1, 0.), (.1, .1), (0., 0.)], half_size=(2., 2.))
     s = t.observe(0., 0., 0., 0., 0., 0.)

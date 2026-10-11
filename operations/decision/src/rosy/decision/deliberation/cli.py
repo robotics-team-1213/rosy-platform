@@ -8,15 +8,18 @@ from . import canonical, identifier, opinion
 
 
 class CliProvider:
-    def __init__(self, *, kind, model, profile_id, launch):
+    def __init__(self, *, kind, model, profile_id, launch, cli_version='2.0.22'):
         if not callable(launch):
             raise ValueError('ISOLATED_LAUNCHER_REQUIRED')
         if kind not in {'claude', 'opencode'}:
             raise ValueError('unsupported CLI')
+        if kind == 'opencode' and (type(cli_version) is not str or cli_version not in {'1.18.35', '2.0.22'}):
+            raise ValueError('UNSUPPORTED_OPENCODE_VERSION')
         if type(model) is not str or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/:#-]{0,127}', model) is None:
             raise ValueError('invalid configured model ID')
         self.kind, self.model, self.profile_id = kind, identifier(model), identifier(profile_id)
         self.launch = launch
+        self.cli_version = cli_version
 
     async def __call__(self, problem, prior, remaining, *, budget_usd):
         if (type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30
@@ -39,8 +42,9 @@ class CliProvider:
                     '--json-schema', canonical(schema), '--model', self.model,
                     '--max-turns', '1', '--max-budget-usd', str(budget_usd))
         else:
-            # shortcut: v2.0.22 has no CLI token/cost cap; isolated launcher must enforce both before activation.
-            argv = ('opencode', 'run', '--standalone', '--format', 'json', '--model', self.model)
+            # shortcut: both supported versions need launcher token/cost caps and tool denial before activation.
+            mode = '--pure' if self.cli_version == '1.18.35' else '--standalone'
+            argv = ('opencode', 'run', mode, '--format', 'json', '--model', self.model)
         code, raw = await self.launch(argv, body, remaining, 16384, budget_usd)
         if code != 0 or type(raw) is not bytes or len(raw) > 16384:
             raise ValueError('CLI_RESULT_UNKNOWN')

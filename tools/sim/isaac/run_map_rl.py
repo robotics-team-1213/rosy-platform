@@ -202,14 +202,16 @@ def main():
             cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
             cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
             UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-        paint = UsdGeom.Mesh.Define(stage, '/World/Track/paint')
-        vertices = [Gf.Vec3f(*v) for t in scene.lines for v in t]
-        paint.CreatePointsAttr(vertices)
-        paint.CreateFaceVertexCountsAttr([3] * len(scene.lines))
-        paint.CreateFaceVertexIndicesAttr(list(range(len(vertices))))
-        paint.CreateSubdivisionSchemeAttr('none')
-        paint.CreateDoubleSidedAttr(True)
-        paint.CreateDisplayColorAttr([Gf.Vec3f(1.)])
+        for part in [dict(name='paint', triangles=scene.lines, colour=[1., 1., 1.]),
+                     *track['caution_meshes']]:
+            paint = UsdGeom.Mesh.Define(stage, '/World/Track/' + part['name'])
+            vertices = [Gf.Vec3f(*v) for t in part['triangles'] for v in t]
+            paint.CreatePointsAttr(vertices)
+            paint.CreateFaceVertexCountsAttr([3] * len(part['triangles']))
+            paint.CreateFaceVertexIndicesAttr(list(range(len(vertices))))
+            paint.CreateSubdivisionSchemeAttr('none')
+            paint.CreateDoubleSidedAttr(True)
+            paint.CreateDisplayColorAttr([Gf.Vec3f(*part['colour'])])
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
         if args.record_video or perception is not None:
