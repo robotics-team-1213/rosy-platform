@@ -440,7 +440,7 @@ class FleetTaskStore:
 
     def create_task(self, *, task_id: str, robot_id: str, task_type: str,
                     source: str, actor_id: str, request_key: str,
-                    request: Mapping, evidence: Mapping | None) -> dict:
+                    request: Mapping, evidence: Mapping | None, admission=None) -> dict:
         request_json = _safe_json(dict(request))
         evidence_json = None if evidence is None else _safe_json(dict(evidence))
         now = _now()
@@ -456,9 +456,13 @@ class FleetTaskStore:
                         or existing["request_json"] != request_json
                         or existing["evidence_json"] != evidence_json):
                     raise IdempotencyConflict("idempotency key already belongs to another request")
+                if admission is not None:
+                    admission(connection, existing['task_id'])
                 connection.commit()
                 return {"created": False, "task": self._task_dict(existing)}
 
+            if admission is not None:
+                admission(connection, task_id)
             connection.execute(
                 """INSERT INTO fleet_tasks
                    (task_id, robot_id, task_type, source, actor_id, request_key,

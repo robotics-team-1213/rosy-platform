@@ -50,6 +50,36 @@ class ChannelWorkflow:
         with closing(self.journal._connect()) as conn:
             return self._view(conn, self._receipt(conn, request_id, principal))
 
+    async def submit(self, request_id, principal, *, task_service, expected_hash, expected_revision):
+        if task_service.store.path.resolve() != self.journal.path.resolve():
+            raise ValueError('Discord admission requires the existing tasks DB')
+        snapshot = self.read(request_id, principal)
+        goal = snapshot['candidate']
+        if goal is None:
+            raise HTTPException(409, detail='CHANNEL_REVIEW_NOT_READY')
+
+        def admission(conn, task_id):
+            receipt = self._receipt(conn, request_id, principal)
+            current = self._view(conn, receipt)
+            if current['state'] == 'LINKED' and current['work_id'] == task_id:
+                self._check({**current, 'revision': current['revision'] - 1}, expected_hash, expected_revision)
+                return
+            self._check(current, expected_hash, expected_revision)
+            if current['state'] != 'READY' or current['candidate'] != goal:
+                raise HTTPException(409, detail='CHANNEL_REVIEW_NOT_READY')
+            # The existing Task insertion and its review reservation commit together.
+            conn.execute("UPDATE fleet_channel_workflow SET revision=revision+1, state='LINKED', work_id=? "
+                         "WHERE request_id=?", (task_id, request_id))
+            if self.journal.reply_outbox is not None:
+                self.journal.reply_outbox.enqueue(
+                    conn, receipt, 'LINKED', f"ROSY 작업 원장 연결 · {request_id}\nTask {task_id}"
+                    " · 장치 실행 완료를 의미하지 않습니다.")
+
+        await task_service.submit_navigation(robot_id=goal['robot_id'], x=goal['x'], y=goal['y'], yaw=goal['yaw'],
+                                             source='operator', actor_id=principal, request_key=snapshot['request_key'],
+                                             admission=admission)
+        return self.read(request_id, principal)
+
     @staticmethod
     def _check(value, expected_hash, expected_revision):
         if (expected_hash != value['content_hash'] or type(expected_revision) is not int
