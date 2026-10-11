@@ -192,6 +192,46 @@ def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
     assert states == ["start", "stop"]
 
 
+def test_reply_client_startup_failure_leaves_no_gateway_task(monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from fleet.server import channel_gateway
+    from fleet.server.channel_requests import ChannelConfig, ChannelRequests
+
+    class Unavailable:
+        async def __aenter__(self):
+            await asyncio.sleep(0)
+            raise OSError("HTTP client unavailable")
+
+        async def __aexit__(self, *args):
+            pass
+
+    async def wait(self):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(channel_gateway.httpx, "AsyncClient", Unavailable)
+    monkeypatch.setattr(DiscordGateway, "run", wait)
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, replies_enabled=True,
+                           transport_key="transport-key-" * 3, users={USER: "operator"})
+    journal = ChannelRequests(tmp_path / "tasks.db", config, {"operator": "operator"})
+    app = FastAPI()
+    channel_gateway.install_gateway(app, journal, "private-bot-token-" * 4)
+
+    async def scenario():
+        before = asyncio.all_tasks()
+        with pytest.raises(OSError):
+            async with app.router.lifespan_context(app):
+                raise AssertionError("startup failure admitted lifespan")
+        await asyncio.sleep(0)
+        leaked = asyncio.all_tasks() - before
+        try:
+            assert not leaked
+        finally:
+            for pending in leaked:
+                pending.cancel()
+            await asyncio.gather(*leaked, return_exceptions=True)
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("status,retries", [(503, 2), (401, 1), (403, 1)])
 def test_handshake_retry_is_bounded_to_transient_status(monkeypatch, status, retries):
     from websockets.datastructures import Headers
