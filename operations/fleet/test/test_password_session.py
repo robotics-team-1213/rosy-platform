@@ -647,7 +647,8 @@ def test_long_initial_password_cannot_be_reused(tmp_path):
     HASH = hash_password(LOGIN_ID)
     source = {LOGIN_ID: {"principal_id": "member", "role": "operator", "password_scrypt": HASH}}
     client = _client(_app(tmp_path, logins=source)[0])
-    assert _login(client, login=LOGIN_ID, password=LOGIN_ID).status_code == 204
+    response = _login(client, LOGIN_ID, LOGIN_ID)
+    assert response.status_code == 204
     assert client.post(CHANGE, headers=ORIGIN, json={"password": LOGIN_ID}).status_code == 422
     assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
 

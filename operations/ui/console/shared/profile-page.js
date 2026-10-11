@@ -91,14 +91,15 @@ async function changePassword(event) {
   event.preventDefault();
   if (busy || !$('profile-password-form').reportValidity()) return;
   const fields = ['profile-current', 'profile-new', 'profile-confirm'].map($);
+  const [current, next, confirmation] = fields;
   try {
-    if (fields[1].value !== fields[2].value) {
+    if (next.value !== confirmation.value) {
       status('새 비밀번호와 확인 입력이 일치하지 않습니다.', 'warning'); return;
     }
     lock(true); status('비밀번호 변경과 새 로그인 상태를 확인하고 있습니다.', 'pending');
     await readProfile(owner);
     await request('/api/fleet/auth/change-password', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({current_password: fields[0].value, password: fields[1].value})});
+      body: JSON.stringify({current_password: current.value, password: next.value})});
     const session = await request('/api/fleet/auth/session');
     if (session.via !== 'cookie' || session.password_change_required !== false) throw new Error('Change not verified');
     await load(owner);

@@ -480,15 +480,15 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
                 "code": "PASSWORD_CHANGE_NOT_REQUIRED", "message": "a cookie session is required"})
         password = payload.get("password")
         fields = {"password"} if principal.password_change_required else {"password", "current_password"}
-        current = payload.get("current_password")
+        current_password = payload.get("current_password")
         if (set(payload) != fields or not isinstance(password, str) or not 8 <= len(password) <= 1024
                 or (not principal.password_change_required
-                    and (not isinstance(current, str) or not 1 <= len(current) <= 1024))):
+                    and (not isinstance(current_password, str) or not 1 <= len(current_password) <= 1024))):
             raise HTTPException(status_code=422, detail={
                 "code": "INVALID_REQUEST", "message": "a new password is required"})
         value = request.cookies[COOKIE]
         try:
-            replacement, remember = sessions.change_password(value, password, current_password=current)
+            replacement, remember = sessions.change_password(value, password, current_password=current_password)
         except CurrentPasswordIncorrect:
             raise HTTPException(status_code=422, detail={
                 "code": "CURRENT_PASSWORD_INCORRECT", "message": "current password is incorrect"}) from None
