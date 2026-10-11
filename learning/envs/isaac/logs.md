@@ -110,3 +110,10 @@
 - 변경: recording/front Camera의 frequency를 매 렌더 수집(-1)으로 명시한다. 관측24-step/녹화48-step cadence, legacy path 렌더 cadence, 실제 frame 검증·freshness·CORE·정지·cleanup은 유지한다.
 - 증거: 원시 receipt0 재현과 기본120Hz→-1 단일 변수 진단 뒤 c229738784 원격 Isaac174 pass/1 skip·NEW0·exit0 및 독립 source Safety-Review 수용. wrapper 없는 committed-source native에서 전체7123파일 hash를 고정했다. baseline101은 유효98/101관측·10sim초·0.190177m·시간 제한 뒤 실제 정지, Fabric 검증을 통과한52프레임 MP4를 확인했다.
 - gate 변화: train0은 유효0/22관측·2.191667sim초 뒤 camera loss, updates0·invalid_camera_observation527로 후보를 거부했고 SDK exit1로 종료했다. 녹화 수정의 근거이며 전체 완주·RL 효과·두 대 Fleet·한국 교통·ROS-SIM·실물 수용은 미완료다.
+
+## 2026-10-12 · 005a247b94 · fix(isaac): 첫 camera 학습 실패 뒤 다른 seed도 시험
+
+- 문제: train0에서 유효 카메라 관측0이면 실패 기록·실제 정지를 남긴 뒤에도 다른 curriculum seed를 실행하지 않고 SDK 전체를 종료했다.
+- 변경: 훈련 실패는 camera_usable=false로 남기고 다음 seed를 실행한다. 무효 observation은 Q 갱신에서 제외하고 episode reset/실제 정지·baseline/eval 유효카메라·updates>0·learned state 방문·heldout 전체완주 조건은 유지한다. seed 하나의 실패를 성공으로 바꾸거나 map-only 명령으로 대체하지 않는다.
+- 증거: committed source 모델 PC 원격 camera_lane/map_task93passed·known_failures0NEW. 실패 episode의 무효 transition은 updates0, 이후 유효 transition만 update하며 baseline/eval 무효 관측은 여전히 거절하는 회귀를 포함한다.
+- gate 변화: 없음. 실제 여러 seed native camera 학습·RL 성능 개선·전체 완주·교통/Fleet 수용은 미검증이다.
