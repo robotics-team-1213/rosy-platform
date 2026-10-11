@@ -183,16 +183,9 @@ class PaintMap:
 
     @classmethod
     def from_bundle(cls, bundle_dir: str | Path | None = None) -> PaintMap:
-        """The map_v2_fleet bundle: the source tree's by default, or an
-        installed share/control/map/map_v2_fleet."""
-        if bundle_dir is None:
-            bundle = Path(__file__).resolve().parents[2] / "map" / "map_v2_fleet"
-            if not bundle.is_dir():
-                from ament_index_python.packages import get_package_share_directory
-
-                bundle = Path(get_package_share_directory("control")) / "map" / "map_v2_fleet"
-        else:
-            bundle = Path(bundle_dir)
+        """Use the source bundle by default; ROS callers supply their installed share path."""
+        bundle = (Path(__file__).resolve().parents[2] / "map" / "map_v2_fleet"
+                  if bundle_dir is None else Path(bundle_dir))
         return cls.from_scene(_load_stl_scene(bundle))
 
     def distance_at(self, points: np.ndarray) -> np.ndarray:
