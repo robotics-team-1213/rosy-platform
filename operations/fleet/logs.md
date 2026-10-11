@@ -1,9 +1,5 @@
 # fleet logs
 
-추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
-
-2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
-
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
 - 변경: `progress.md`, `logs.md` 추가
 - 증거: `python -m pytest src/fleet/test -q` 216 passed, 5 skipped (2026-09-15 Windows, 미커밋 WIP 포함 작업 트리); `python -m pytest src/fleet/test/test_boundaries.py -q` 6 passed
@@ -3301,6 +3297,24 @@
 - 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
+## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
+
+- 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
+- 증거: 원격 RED 모듈 없음1 NEW, manifest 누락1 NEW 및 구조 증가1 NEW를 각각 수정했다. 최신 focused44 PASS/NEW0; 실제 Chromium4 PASS/NEW0(처음4 skipped는 pass 제외). 독립 source/Safety 검토 수용, Fleet53396/app906 재측정, +150/파일 상한/기존 추출 의무 유지. 실제 기명 HTTPS cookie 로그인은 별도 후속 증거에 기록했다.
+- gate 변화: source 접수와 named Console 로그인 확인. Gateway/token/운영 identity mapping/실제 대화 수신 및 후보/승인/reply는 후속이다. Task/Mission/Job/claim/모델/장치 명령·push·image deploy는 없다. 근거: docs/validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md.
+
+## 2026-10-12 · 38941ff24 · D-675 Discord Gateway 수신 source
+
+- 변경: 기존 Fleet lifespan 수신 worker, private Bot token 파일, 원장 commit 후 resume 및 미해결 session 공백 정지 구현.
+- 증거: 원격 RED는 gateway 모듈 누락 확인. GREEN43 PASS, resume/secret/API/structure86 PASS+size1NEW; ACK/session 종료 코드 보완 및 독립 검토 중.
+- gate 변화: source 구현 검증 중; 실제 이미지/수신은 미확인. 장치 명령 없음.
+
+## 2026-10-12 · b78edf399 · D-675 optional reception caller closure
+
+- 변경: required/optional intake flag 상호 배제와 FileNotFoundError 전용 OFF; Fleet-only signed Compose 경로.
+- 증거: 원격138 PASS/NEW0, 독립 검토 승인, Fleet53617/CLI890/app906 기존 상한 유지.
+- gate 변화: source 검증 완료; 전체 통합과 실제 signed image/현장 접수는 미완료.
+
 
 
 ## 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
@@ -3329,6 +3343,22 @@
 - 변경: upstream 모델 ID와 assistant 역할이 고정 요청과 다르면 결과 재작성 전에 거부한다.
 - 증거: 새 3개 RED 확인 후 통합 149 passed, exit 0, NEW 0; opencode_admission 독립 검토에서 blocker 해소. model-binding-green/run-1.txt. 자원 하한 fallback 경고는 유지되므로 운영 성능 증거가 아니다.
 - gate 변화: SOURCE/원격 검증만 확인. 실제 호출·영속 사용 표식·배포·자동 처리·독립 보정·현장 수용은 미확인 유지.
+
+## 2026-10-12 · 3861935d44 · D-680 Console 검토 관계와 결과 회신
+
+- 변경: 같은 tasks DB의 named 원문/hash/revision 검토 원장과 기존 operator/actor/key/goal Task 연결을 추가했다. 검토/접수와 회신 intent는 atomic이며 기존 Task 결과를 읽어 상태별 intent를 예약한다. UNKNOWN과 재시작 SENDING은 완료로 승격하거나 맹목 재전송하지 않는다. reply opt-in은 기본 false이며 초기화 실패 시 Gateway를 취소한다.
+- 증거: 원격 영향군192 PASS/NEW0, 실제 Chromium6 PASS/NEW0. wheel/sdist·비밀 경계·권한/중복/회신 fence/lifespan 실패 회귀를 포함한다. 일부 원격 실행의 자원 fallback은 성능 수용 증거가 아니다. docs/validation/discord-fleet-pipeline-2026-10-12/workflow-source.md 참조.
+- gate 변화: source/fake API 경로만 확인했다. Mission/Cell Job과 위험 사건 adapter·독립 크기/권한 검토·최신 main 착지·CI·서명 배포·운영 왕복·실제 로봇 수용은 남았다. provider/장치 명령·채널 전송 없음.
+
+## 2026-10-12 · aa10b5080 · D-687 Discord Mission·Cell owner adapter
+
+- 변경: 원문 기명 owner/hash/revision과 고정 key로 기존 proposal/resolve/Cell document prepare를 사용하고 실행 전 관계를 연결한다. 별도 admit은 기존 Mission owner의 evidence/generation/fence/claims/독립 approver 규약을 유지한다. 결과는 기존 원장에서 읽어 ACTION_SUCCEEDED와 GOAL_CONFIRMED를 구분한다.
+- 증거: 원격 Model PC101 PASS/NEW0. 초기 self-lock과 view projection 신규 실패를 수정했고 기존 실패 목록은 변경하지 않았다. docs/validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md 참조.
+- gate 변화: backend/source fixture만 확인했다. Console UI·위험 adapter·최종 독립 검토·최신 main 착지·CI·서명 배포·실제 Discord 왕복·FIELD는 미완료다. 운영 메시지·provider·장치 명령 없음.
+
+추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+
+2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
 
 
 ## 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결

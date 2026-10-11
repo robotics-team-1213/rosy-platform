@@ -72,6 +72,9 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # 193d54401 omitted the commit field; retain history and append canonical evidence.
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
     # 823847295 committed these two entries without the standard field labels; the
     # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
     "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
