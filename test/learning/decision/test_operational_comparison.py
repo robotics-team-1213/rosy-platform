@@ -105,3 +105,21 @@ def test_missing_resolved_receipt_cannot_be_refrozen_as_unresolved(tmp_path):
     exports[0]['digest'] = hashlib.sha256(encoded).hexdigest()
     cohort['candidates'][0]['exports'][0]['digest'] = exports[0]['digest']
     with pytest.raises(ValueError): compare(cohort, exports)
+
+
+@pytest.mark.parametrize('fault', ['budget_type', 'budget_window', 'call_limit', 'budget_bool', 'active_closure'])
+def test_refrozen_impossible_budget_or_closure_is_rejected(tmp_path, fault):
+    import hashlib
+    cohort, exports = evidence(tmp_path)
+    case = exports[0]['case']
+    if fault == 'budget_type': case['budget'] = 'invalid'
+    elif fault == 'budget_window': case['budget']['deadline'] = case['budget']['started_at']
+    elif fault == 'call_limit': case['budget']['max_calls'] = 0
+    elif fault == 'budget_bool': case['budget']['max_calls'] = True
+    else:
+        case.update(state='ACTIVE', outcome='IN_PROGRESS', reason='RESOLVED_OBSERVED')
+        case['closure'] = dict(scope=case['scope'], requested_at=100, observed_at=101,
+                               closed_at=102, normal_revision='r2', action_credit='NONE', state='RESOLVED_OBSERVED')
+    exports[0]['digest'] = hashlib.sha256(json.dumps(case, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    cohort['candidates'][0]['exports'][0]['digest'] = exports[0]['digest']
+    with pytest.raises(ValueError): compare(cohort, exports)
