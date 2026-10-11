@@ -204,7 +204,7 @@ class PasswordSessions:
         if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
             raise LoginRateLimited()
         try:
-            password_hash = hash_password(password)
+            encoded = hash_password(password)
         finally:
             _SCRYPT_SLOTS.release()
         with self._lock:
@@ -221,16 +221,16 @@ class PasswordSessions:
                     if password == login or not 8 <= len(password) <= 1024:
                         raise ValueError("invalid new password")
                     db.execute("INSERT OR REPLACE INTO fleet_console_passwords VALUES (?,?,?)",
-                               (login, self._sources[login], password_hash))
+                               (login, self._sources[login], encoded))
                     db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (login,))
-                    fresh = {**dict(row), "password_sha256": _digest(password_hash),
+                    fresh = {**dict(row), "password_sha256": _digest(encoded),
                              "created_at": now, "last_used_at": now}
                     db.execute("INSERT INTO fleet_console_sessions VALUES (?,?,?,?,?,?,?,?)", (
                         _digest(replacement), login, fresh["principal_id"], fresh["role"],
                         fresh["password_sha256"], now, now, fresh["remember"]))
             except sqlite3.Error:
                 raise SessionStorageUnavailable() from None
-            self._logins[login] = {**self._logins[login], "password_scrypt": password_hash}
+            self._logins[login] = {**self._logins[login], "password_scrypt": encoded}
             self._required[login] = False
             for cached_key in [k for k, cached in self._cache.items() if cached["login"] == login]:
                 self._forget(cached_key, revoked=True)
