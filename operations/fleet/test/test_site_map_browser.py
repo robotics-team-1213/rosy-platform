@@ -904,7 +904,7 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     page.locator("#apply-edit").click()
     store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None, principal_id="alice")
     page.locator("#save-draft").click()
-    expect(page.locator("#notice")).to_contain_text("변경 내용을 기록한 뒤 다시 접속")
+    expect(page.locator("#notice")).to_contain_text("화면을 새로고침해 최신 초안")
     expect(page.locator("#draft-status")).to_contain_text("저장 안 된 초안")
     expect(page.locator("#activate")).to_be_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -917,7 +917,13 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     page.locator('#site-map-svg [data-place="NW"]').click()
     expect(page.locator("#place-name")).to_have_value("북서 정차")
     page.locator("#save-draft").click()
-    expect(page.locator("#notice")).to_contain_text("변경 내용을 기록한 뒤 다시 접속")
+    expect(page.locator("#notice")).to_contain_text("화면을 새로고침해 최신 초안")
+    assert store.draft_view()["map"]["places"] == store.active_view()["map"]["places"]
+    page.reload()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator("#place-name")).not_to_have_value("북서 정차")
+    expect(page.locator("#draft-status")).not_to_contain_text("저장 안 된 초안")
 
 
 def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):

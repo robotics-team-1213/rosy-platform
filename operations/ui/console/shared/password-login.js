@@ -22,6 +22,18 @@ const WHO = `<div class="password-login-who" data-login="who">
   <ui-button kind="quiet" type="button" data-login="logout">로그아웃</ui-button>
   <span class="password-login-error" data-login="error" role="alert" hidden></span>
 </div>`;
+const CHANGE = `
+  <form class="password-login-form" data-login="form" aria-label="첫 로그인 비밀번호 변경">
+    <p>첫 로그인입니다. 새 비밀번호를 설정해야 현장 업무를 사용할 수 있습니다.</p>
+    <label for="fleet-new-password">새 비밀번호 · 8자 이상, 아이디와 다르게</label>
+    <input id="fleet-new-password" class="ui-field password-login-field" data-login="password" type="password"
+           autocomplete="new-password" minlength="8" maxlength="1024" required>
+    <label for="fleet-confirm-password">새 비밀번호 확인</label>
+    <input id="fleet-confirm-password" class="ui-field password-login-field" data-login="confirm" type="password"
+           autocomplete="new-password" minlength="8" maxlength="1024" required>
+    <ui-button kind="primary" type="button" data-login="submit">비밀번호 변경</ui-button>
+    <span class="password-login-error" data-login="error" role="alert" hidden></span>
+  </form>`;
 
 function failureText(error) {
   if (error?.status === 401) return '아이디 또는 비밀번호가 맞지 않습니다.';
@@ -32,7 +44,7 @@ function failureText(error) {
 export function createPasswordLogin(host, {onChange = () => {}, standalone = false} = {}) {
   host.innerHTML = standalone ? FORM : WHO;
   const part = name => host.querySelector(`[data-login="${name}"]`);
-  let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null;
+  let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null, changing = false;
   const link = document.getElementById('fleet-login');
   if (link) link.href = loginHref(location);
   if (link && ['/console/site-map', '/console/cell'].includes(location.pathname)) {
@@ -43,6 +55,17 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     part('error').textContent = message;
     part('error').hidden = !message;
   };
+  function verified(session) {
+    if (session.via !== 'cookie' || !session.principal_id || !session.role) throw new Error('Session not verified');
+    if (session.password_change_required === true) {
+      if (!changing) {
+        changing = true; host.innerHTML = CHANGE; bindForm();
+      }
+      return false;
+    }
+    onChange(true);
+    return true;
+  }
 
   async function refresh(locked = true) {
     try {
@@ -71,13 +94,20 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       cookiePrincipal = cookie ? session.principal_id : null;
       cookieRole = cookie ? session.role : null;
       if (standalone) {
-        if (cookie) onChange(true);
+        if (cookie) return verified(session);
       } else {
+        if (cookie && session.password_change_required === true) {
+          cookie = false; host.hidden = true;
+          if (link) link.textContent = '비밀번호 변경';
+          return false;
+        }
+        if (link) link.textContent = '로그인';
         host.hidden = false;
         part('principal').textContent = `${session.principal_id} · ${session.role}`;
         part('logout').textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
         part('logout').title = cookie ? '이 브라우저의 현장 로그인 종료' : '서버 토큰은 폐기하지 않습니다';
         part('logout').disabled = false;
+        part('logout').removeAttribute('reason');
       }
       return cookie;
     } catch (error) {
@@ -93,32 +123,50 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     }
   }
 
-  if (standalone) {
+  function bindForm() {
     async function submit(event) {
       event?.preventDefault();
       if (busy || !part('form').reportValidity()) return;
-      busy = true; part('submit').disabled = true; errorText('');
+      const password = part('password'), submitButton = part('submit');
+      const confirmation = part('confirm');
+      if (changing && password.value !== confirmation.value) {
+        errorText('새 비밀번호와 확인 입력이 일치하지 않습니다.');
+        password.value = confirmation.value = ''; return;
+      }
+      busy = true; submitButton.disabled = true;
+      submitButton.setAttribute('reason', changing ? '비밀번호 변경 결과 확인 중' : '로그인 결과 확인 중');
+      errorText('');
       try {
-        await cookieRequest('/api/fleet/auth/login', {
+        await cookieRequest(changing ? '/api/fleet/auth/change-password' : '/api/fleet/auth/login', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({login: part('login').value.trim(), password: part('password').value,
-            remember: part('remember').checked}),
+          body: JSON.stringify(changing ? {password: password.value} : {
+            login: part('login').value.trim(), password: password.value, remember: part('remember').checked}),
         });
         sessionStorage.removeItem('rosy-console-token');
         const session = await cookieRequest('/api/fleet/auth/session');
-        if (session.via !== 'cookie' || !session.principal_id || !session.role) throw new Error('Session not verified');
-        onChange(true);
-      } catch (error) { errorText(failureText(error)); }
-      finally { part('password').value = ''; busy = false; part('submit').disabled = false; }
+        if (changing && session.password_change_required !== false) throw new Error('Password change not verified');
+        verified(session);
+      } catch (error) {
+        errorText(changing ? (error?.status === 422 || error?.status === 400
+          ? '8자 이상이며 아이디와 다른 새 비밀번호를 입력하세요.'
+          : '비밀번호 변경 결과를 확인할 수 없습니다. 연결을 확인한 뒤 다시 시도하세요.') : failureText(error));
+      } finally {
+        password.value = ''; if (confirmation) confirmation.value = '';
+        busy = false; submitButton.disabled = false;
+        submitButton.removeAttribute('reason');
+      }
     }
     part('form').addEventListener('submit', submit);
     part('submit').addEventListener('click', submit);
-    for (const name of ['login', 'password']) part(name).addEventListener('keydown', event => {
+    for (const name of ['login', 'password', 'confirm']) part(name)?.addEventListener('keydown', event => {
       if (event.key === 'Enter') submit(event);
     });
-  } else {
+  }
+  if (standalone) bindForm();
+  else {
     const account = document.getElementById('fleet-account');
     part('logout').disabled = true;
+    part('logout').setAttribute('reason', '계정 상태 확인 중');
     account.addEventListener('keydown', event => {
       if (event.key === 'Escape') { account.open = false; account.querySelector('summary').focus(); }
     });
@@ -126,6 +174,11 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       try {
         const session = await cookieRequest('/api/fleet/auth/session');
         if (session.via !== 'cookie') return;
+        if (session.password_change_required === true) {
+          cookie = false; cookiePrincipal = cookieRole = null;
+          if (link) link.textContent = '비밀번호 변경';
+          onChange(false); return;
+        }
         if (cookie && cookiePrincipal === session.principal_id && cookieRole === session.role) return;
         cookie = true;
         cookiePrincipal = session.principal_id;
@@ -141,6 +194,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     part('logout').addEventListener('click', async () => {
       if (busy) return;
       busy = true; part('logout').disabled = true; errorText('');
+      part('logout').setAttribute('reason', '로그아웃 결과 확인 중');
       try {
         if (cookie) {
           await cookieRequest('/api/fleet/auth/logout', {method: 'POST'});
@@ -156,7 +210,10 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         onChange(false);
         link?.focus();
       } catch { errorText('로그아웃 결과 확인 불가 · 계정 메뉴에서 다시 확인하세요.'); }
-      finally { busy = false; part('logout').disabled = false; }
+      finally {
+        busy = false; part('logout').disabled = false;
+        part('logout').removeAttribute('reason');
+      }
     });
   }
   return {refresh};
