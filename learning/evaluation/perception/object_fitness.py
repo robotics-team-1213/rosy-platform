@@ -1,7 +1,11 @@
 """D-659 object diagnostics on original image boxes; never an approval gate."""
 import math
+from copy import deepcopy
+
+import numpy as np
 
 from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+from core_common.observation import road_region_input_errors
 from object_boxes import _check_human_box, _iou
 
 
@@ -83,6 +87,37 @@ def evaluate_detections(predictions, truth, *, frame_size, match_iou, small_area
                 profile=dict(match_iou=match_iou, small_area_fraction=small_area_fraction),
                 inference_abstained=predictions is None,
                 classes={name: _rates(metric) for name, metric in counts.items()})
+
+
+def evaluate_model_frame(model, bgr, image_snapshot, truth, *, now_ns, max_age_ns,
+                         match_iou, small_area_fraction, domain='real', conditions=()):
+    """Use ObjectDetModel's existing letterbox/decode/NMS; truth never enters infer."""
+    if (not isinstance(bgr, np.ndarray) or bgr.dtype != np.uint8 or bgr.ndim != 3
+            or bgr.shape[2] != 3 or not bgr.size):
+        raise ValueError('expected a non-empty uint8 HxWx3 BGR frame')
+    if (model.manifest.task != 'object_det'
+            or tuple(c['name'] for c in model.manifest.raw['output']['classes']) != OBJECT_CLASSES):
+        raise ValueError('D-602 six-class object detector required')
+    parameters = dict(frame_size=(bgr.shape[1], bgr.shape[0]), match_iou=match_iou,
+                      small_area_fraction=small_area_fraction, domain=domain, conditions=conditions)
+    report = evaluate_detections(None, truth, **parameters)
+    errors = [e for e in road_region_input_errors(image_snapshot, image_snapshot,
+              now_ns=now_ns, max_age_ns=max_age_ns) if e.startswith('image_') and e != 'image_reference_missing']
+    latency = None
+    if not errors:
+        result = model.infer(bgr)
+        if (result.model_revision != model.manifest.model_revision
+                or type(result.latency_ms) not in (int, float)
+                or not math.isfinite(result.latency_ms) or result.latency_ms < 0):
+            raise ValueError('detector result revision or latency differs')
+        report = evaluate_detections(result.detections, truth, **parameters)
+        latency = result.latency_ms
+    return dict(report, input_errors=errors, image_snapshot_id=image_snapshot.snapshot_id,
+                model_revision=model.manifest.model_revision,
+                camera_profile_revision=model.manifest.camera_profile_revision,
+                preprocessing=deepcopy(model.manifest.raw['input']),
+                source_shape=list(bgr.shape[:2]), infer_latency_ms=latency,
+                detector_thresholds=dict(confidence=model._conf, nms_iou=model._iou))
 
 
 def summarize_frames(reports):
