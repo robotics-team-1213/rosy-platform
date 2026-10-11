@@ -33,3 +33,4 @@
 - Source `4bb95bc516` 원격 67 PASS/NEW 0. 변경 파일 style 0 errors. [증거](../validation/discord-fleet-pipeline-2026-10-12/reply-source.md).
 - 다음 작업: 실제 opt-in lifespan 전송 경로 시험, Console 확인과 기존 작업 관계·처리 결과 회신, 위험 사건 어댑터. 운영 배포와 실제 대화 왕복 수용은 미완료다.
 - 기명 Console 검토와 기존 주행 Task 관계 원장/API v1.211을 구현했다. source `f26b367324` 원격 관련67 PASS/NEW 0. [증거](../validation/discord-fleet-pipeline-2026-10-12/workflow-source.md). 이는 backend 경계이며 Console 확인·제출 UI와 실제 전체 경로는 다음 단계다.
+- Console 확인·후보 저장·기존 goal 명시 확인·Task 관계 저장과 검토/Task 결과 회신 intent를 구현했다. Source `3861935d44` 관련192 PASS/NEW0, 실제 Chromium `b45e54d05a` 6 PASS/NEW0. UI는 별도 owner이며 기존 confirmedAction/current safety gate/고정 idempotency key를 재사용한다. 검토와 회신 예약은 atomic이고 UNKNOWN을 완료로 바꾸지 않는다. 기존 단독 Gateway 착지는 main 유입 경로 변수명 secret-scan 오거절로 중단됐으며 최소 이름 수정과 관련 회귀를 C에 통합했다. 실제 배포·전송·장치 명령 없음.
