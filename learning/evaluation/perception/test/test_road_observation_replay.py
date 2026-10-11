@@ -77,7 +77,8 @@ def test_artifact_roundtrip_binds_model_image_and_snapshot_without_truth(tmp_pat
 
 @pytest.mark.parametrize('changes', [
     {'model_manifest_sha256': '0' * 64}, {'image_sha256': '0' * 64},
-    {'image': '../outside.png'}, {'road_truth': [[1]]}, {'destination': 'left'},
+    {'image': '../outside.png'}, {'image': '\\frame.png'}, {'image': 'C:frame.png'},
+    {'road_truth': [[1]]}, {'destination': 'left'},
     {'seed_pixels': [[True, 2]]}, {'now_ns': True}])
 def test_input_mismatch_or_privileged_field_never_writes_output(tmp_path, monkeypatch, changes):
     replay, model, inputs, _ = bundle(tmp_path, monkeypatch, **changes)
@@ -138,3 +139,39 @@ def test_input_directory_symlink_does_not_bypass_fixed_input_gate(tmp_path, monk
     assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=alias,
                                           max_age_ns=100, out=out)) == 2
     assert not out.exists()
+
+
+def test_oversized_prediction_is_rejected_before_session_open(tmp_path, monkeypatch):
+    replay, model, inputs, doc = bundle(tmp_path, monkeypatch)
+    manifest_path = model.manifest.folder / 'model_manifest.json'
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest['input'].pop('crop')
+    manifest['input']['shape'] = [1, 3, 1001, 1001]
+    manifest_path.write_text(json.dumps(manifest))
+    doc['model_manifest_sha256'] = sha(manifest_path.read_bytes())
+    (inputs / 'manifest.json').write_text(json.dumps(doc))
+    changed = inputs.parent / store.content_sha(inputs)
+    inputs.rename(changed)
+    def never_open(*args):
+        pytest.fail('oversized input reached session initialization')
+    monkeypatch.setattr(replay.LaneSegModel, 'open', never_open)
+    with pytest.raises(ValueError, match='oversized'):
+        replay.run(model.manifest.folder, inputs=changed, max_age_ns=100)
+
+
+@pytest.mark.parametrize('target', ['hash', 'snapshot', 'abstention'])
+def test_readback_rejects_inconsistent_lineage_with_matching_hash(tmp_path, monkeypatch, target):
+    replay, model, inputs, _ = bundle(tmp_path, monkeypatch)
+    out = tmp_path / 'out.json'
+    assert replay.execute(SimpleNamespace(model=model.manifest.folder, inputs=inputs,
+                                          max_age_ns=100, out=out)) == 0
+    doc = json.loads(out.read_bytes())
+    if target == 'hash':
+        doc['bindings']['image_sha256'] = '0' * 64
+    elif target == 'snapshot':
+        doc['observation']['image_snapshot_id'] = 'other'
+    else:
+        doc['observation']['input_errors'] = ['anchor_invalid']
+    out.write_text(json.dumps(doc))
+    with pytest.raises(ValueError):
+        replay.read_artifact(out, sha(out.read_bytes()))
