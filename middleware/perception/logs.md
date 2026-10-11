@@ -1428,3 +1428,10 @@
 - 변경: 기존 control.control의 순수 계산 50개를 safety 15개, recovery 11개, tracking 6개, calibration 18개로 나눴다. sensing/vision, grid planning, sensor-only Safety adapter와 wander는 해당 인지/Drive holder로 옮겼다. provider·ROS 배포와 control.* import, console script, share/control을 유지한다. source facade는 선언한 package 경로만 연결하고 설치 wheel은 기존 namespace에 한 벌을 둔다. sdist는 선언한 Drive 원본만 포함한다. map_v2_fleet와 260919 MAP FILE.STL의 계보를 유지한다.
 - 증거: 선행 구조 RED eb4535786 이후 canonical 이전 172개 파일의 원본을 독립 대조했다. 170개는 동일하고 sensing 초기화의 source 검색과 paint_localizer 리소스 lookup만 변경했다. Safety/Drive 알고리즘과 활성 sensor-only 구성은 유지한다. 원격 전체 회귀·wheel/sdist 결과는 날짜별 검증 기록에서 구분한다.
 - gate 변화: 없음. 새 후보의 ROS 실행·ARM64 이미지·장치·현장 수용은 별도다.
+
+## 2026-10-11 · fix/ros-edge-source-scan · fix(control): preserve the ROS-free paint map boundary after holder moves
+- 변경: ROS edge 검사에서 기존 canonical source mapping을 사용해 이동된 안전·추종·영상 모듈까지 검사한다. PaintMap의 암묵적 ament import를 제거하고, 설치 share 경로는 기존 ROS 호출자가 전달한다. 지도 기본값과 출처는 map_v2_fleet 그대로다.
+- 증거: CI 38116968157의 두 구조 검사 실패 및 원격 재검사에서 드러난 paint_localizer ROS import를 재현했다. 수정된 HEAD의 원격 검증 후 결과를 기록한다.
+- gate 변화: 없음. 설치본·현장 주행 증거와 구분한다.
+- 결정: D-171, D-630의 기존 경계 유지.
+- 교훈: 물리 폴더 이동 후 구조 검사는 패키지 소스 매핑을 따라야 한다.
