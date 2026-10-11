@@ -591,6 +591,10 @@ def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
                     page.screenshot(path=str(shot_dir / f"pilot-lobby-{state}-{width}x{height}.png"))
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("[data-lobby-retry]").is_visible()
+                if state == "empty":
+                    status_box = page.locator("[data-lobby-self]").bounding_box()
+                    summary_box = page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").bounding_box()
+                    assert status_box["y"] + status_box["height"] <= summary_box["y"]
                 assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
                 assert page.locator("form[data-pilot-token-form] label").is_visible()
                 estop = page.locator("ui-topbar [data-estop]").bounding_box()
