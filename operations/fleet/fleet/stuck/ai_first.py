@@ -159,7 +159,7 @@ def _counted(first: AiFirst, rid: str, problem, answer, now: float):
     return answer
 
 
-def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, notes):
+def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, notes, *, counted=False):
     """(verdict, Answer or None). None = the rules answer; an escalating WAIT = a human."""
     rid, sid, decision = str(row["robot_id"]), str(stuck["stuck_id"]), proposal["decision"]
     if decision not in STUCK_WORDS:
@@ -169,7 +169,7 @@ def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, not
         return missing, None
     if (rid, problem, decision) in first._refused:
         return "core_refused_before", None
-    limit = first.limit(rid, problem, decision, now)
+    limit = None if counted else first.limit(rid, problem, decision, now)  # Admission already spent this budget.
     if limit is not None:
         return limit, Answer(rid, sid, "WAIT", "ai", escalate=limit)
     if decision == "MANUAL":
