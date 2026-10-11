@@ -12,6 +12,7 @@ REPOSITORY = Path(__file__).resolve().parents[3]
 MAP = REPOSITORY / 'middleware/perception/map/map_v2_fleet'
 SOURCE_SHA256 = 'cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b'
 SEGMENTS = ('east', 'ring_e', 'ring_n', 'ring_w', 'west', 'ring_w', 'ring_s', 'ring_e')
+SIM_DEVICE_IDS = ('isaac-pinky', 'isaac-pinky-a', 'isaac-pinky-b')
 
 
 def load_track():
@@ -170,13 +171,16 @@ class QPolicy:
 
 class SimulationOwner:
     """Private in-process diagnostic owner; never an operational POLICY API."""
-    def __init__(self):
+    def __init__(self, *, device_id='isaac-pinky'):
+        if type(device_id) is not str or device_id not in SIM_DEVICE_IDS:
+            raise ValueError('fixed simulation device identity required')
         from core_features.command.manager import CommandManager
         from core_features.command.arbitration import SourceRegistry, ModeMachine
         from core_features.safety.manager import SafetyManager, SpeedLimits, BatteryPolicy
         self.modes = ModeMachine()
         self.safety = SafetyManager(SpeedLimits(max_linear=.06, max_angular=.8), BatteryPolicy())
         self.command = CommandManager(SourceRegistry(), self.modes, self.safety)
+        self._device_id = device_id
         self.epoch = 0
         self.halted = True
         self.pending = None
@@ -204,7 +208,7 @@ class SimulationOwner:
         valid = type(intent) is MotionIntent and intent.kind is MotionKind.BASE_TWIST
         if valid:
             h, p = intent.header, intent.payload
-            valid = (not self.halted and h.device_id == 'isaac-pinky' and h.source == 'learned_policy'
+            valid = (not self.halted and h.device_id == self._device_id and h.source == 'learned_policy'
                      and h.priority_class is PriorityClass.POLICY and h.envelope_ref == 'isaac-map-v1'
                      and h.state_sequence == self.epoch and h.valid_for_s <= .1
                      and dict(h.limits) == {'linear_mps': .06, 'angular_radps': .8}
