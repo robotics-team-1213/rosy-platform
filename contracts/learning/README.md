@@ -86,7 +86,7 @@ This evidence does not establish recurrence absence, command absence, model
 contribution, independent quality or physical success. No notification or model
 is called by this validator or export.
 
-# 단독 판정 모델 역할 근거 (D-698)
+## 단독 판정 모델 역할 근거 (D-698)
 
 `rosy.contracts.learning.incident_profiles.validate_primary_roles(case)`는 새로운
 `model_feedback/3`의 단독 primary 프로파일, 선언된 역할 예산과 실제 시도 역할을
