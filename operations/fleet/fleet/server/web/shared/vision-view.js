@@ -72,7 +72,14 @@ export async function fetchMapPlane(call, source, held, signal) {
   if (response.headers.get("X-Frame-Rectified") !== "map" || !plane) return { state: "plane-unavailable", lease };
   const age = response.headers.get("X-Frame-Age-Ms");
   return { state: "live", plane, calibrationRevision: response.headers.get("X-Frame-Calibration"),
+    observedFraction: parseObservedFraction(response.headers.get("X-Frame-Observed-Fraction")),
     ageMs: age === null ? NaN : Number(age), blob: await response.blob(), lease };
+}
+
+export function parseObservedFraction(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const fraction = Number(value);
+  return Number.isFinite(fraction) && fraction >= 0 && fraction <= 1 ? fraction : null;
 }
 
 // 프레임 응답 → 배지. 배지는 화면에 보이는 영상의 실제 상태만 말한다(2026-09-30 태블릿 점검:
@@ -199,7 +206,7 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane,
-        calibrationRevision: got.calibrationRevision, ageMs };
+        calibrationRevision: got.calibrationRevision, observedFraction: got.observedFraction, ageMs };
       cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
     } catch (error) {
       if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;

@@ -1619,9 +1619,12 @@ D-560(v1.167)부터 `rectification`에 `{"mode": "map"}`이 추가됐다. `map`�
 
 - 영역: `track_bounds_m`에 여유 `0.15 m`를 더한 직사각형. 지도 `+x`가 오른쪽, `+y`가 위.
 - 축척: `400 px/m`. 긴 변이 1920 px를 넘으면 그 안으로 줄인다(소수 넷째 자리에서 내림).
-- 화면 밖이었던 부분은 어두운 고정색(BGR 24,24,24)이다. JPEG 품질 88.
+- D-636: 시야 밖·지평선 반대편·원본의 bilinear 보간 경계는 어두운 hatch(BGR 24/40)로 표시한다. JPEG 품질 88.
 - 응답 헤더: `X-Frame-Rectified: map`, `X-Frame-Plane: <min_x>,<min_y>,<max_x>,<max_y>,<px_per_m>`
   (미터, 여유 포함, 소수 넷째 자리; `px_per_m`은 줄인 뒤 값), `X-Frame-Calibration: <calibration_revision>`.
+  D-636 `X-Frame-Observed-Fraction: <0..1>`은 이 응답 plane 또는 crop에서 원본의 유효 픽셀로
+  채워진 비율이다. 물리적 가림·교정 오차·로봇 위치 신뢰도를 뜻하지 않는다. 헤더가 없는 구버전은
+  관측 비율 미확인이다. 알려진 기준 지도는 카메라 밖에서도 별도로 표시할 수 있다.
   픽셀 수를 반올림한 뒤 `max_x = min_x + 폭 / px_per_m`, `min_y = max_y − 높이 / px_per_m`로 다시 정하므로
   이 사각형은 영상 크기 / `px_per_m`와 같다.
   `X-Frame-Width`·`X-Frame-Height`는 평면 영상 크기이고 `X-Frame-Rotation-Deg`는 `0`이다.

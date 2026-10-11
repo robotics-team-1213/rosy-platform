@@ -104,7 +104,7 @@ def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():
     image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
     # The plane's left edge (x = -3.15 m) is outside the frame: constant dark fill there,
     # the frame itself in the middle.
-    assert image[plane.size[1] // 2, 0] == pytest.approx(24, abs=4)
+    assert 20 <= image[plane.size[1] // 2, 0] <= 44
     assert image[plane.size[1] // 2, plane.size[0] // 4] == pytest.approx(120, abs=4)
 
 
@@ -118,6 +118,7 @@ def test_map_plane_response_headers():
     assert headers["X-Frame-Rectified"] == "map"
     assert headers["X-Frame-Plane"] == "-1.1500,-0.6500,1.1500,0.6500,400.0000"
     assert headers["X-Frame-Calibration"] == "paint-test"
+    assert float(headers["X-Frame-Observed-Fraction"]) == 1
     assert (headers["X-Frame-Width"], headers["X-Frame-Height"]) == ("920", "520")
     assert headers["X-Frame-Seq"] == "42"
     assert "X-Frame-Age-Ms" in headers and "X-Frame-Captured-At" in headers
@@ -135,6 +136,7 @@ def test_ai_map_crop_lease_returns_only_the_robot_neighborhood():
     response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
     assert response.status_code == 200
     assert response.headers["X-Frame-Rectified"] == "map-crop"
+    assert float(response.headers["X-Frame-Observed-Fraction"]) == 1
     image = cv2.imdecode(np.frombuffer(response.body, np.uint8), cv2.IMREAD_COLOR)
     assert image.shape[:2] == (400, 400)
 
