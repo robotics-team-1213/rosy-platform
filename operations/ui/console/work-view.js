@@ -13,6 +13,9 @@ export function createWorkView({scope, call, el}) {
   const list = el("work-list"), detail = el("work-detail");
   el("work-overview").hidden = !active;
   if (active) {
+    const link = document.querySelector('.doc-tabs a[href="/console?view=work"]');
+    link.closest("nav").querySelectorAll('[aria-current="page"]').forEach(item => item.removeAttribute("aria-current"));
+    link.setAttribute("aria-current", "page");
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
     el("work-context").hidden = false;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
