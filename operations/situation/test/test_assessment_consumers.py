@@ -139,3 +139,19 @@ def test_context_cannot_relabel_old_transport_or_cleared_state_as_current():
     assert ContextDraft()(snapshot(robot(deepcopy(stuck)), [stuck], _state_requested_at=96.0)) == []
     assert ContextDraft()(snapshot(robot(), [stuck])) == []
     assert ContextDraft()(snapshot(robot(deepcopy(stuck), online=False), [stuck])) == []
+
+
+def test_legacy_context_draft_cannot_supply_missing_core_revision_or_time():
+    from rosy_situation.incident_context import ContextDraft
+    stuck = {'robot_id': 'pinky', 'stuck_id': 's1', 'phase': 'WAITING_CONSOLE', 'cause': 'lane_lost'}
+    row = robot(deepcopy(stuck))
+    del row['state']['seq'], row['state']['timestamp']
+    view = snapshot(row, [stuck])
+    drafts = ContextDraft()(view)
+    assert len(drafts) == 1
+    assert drafts[0]['value']['status'] == 'needs_review'
+    view['incident_context'] = {'pinky': drafts[0]}
+    result = adapter().snapshot_assessments(view)['pinky']
+    assert result.necessity == 'ABSTAIN'
+    assert result.request.revision == ''
+    assert result.request.evidence[0].observed_at is None

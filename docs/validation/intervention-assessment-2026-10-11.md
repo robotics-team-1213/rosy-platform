@@ -1,5 +1,7 @@
 # 공통 개입 필요성 평가: D-652 내부 shadow 검증
 
+원래 폴더 개편 세션은 `5de8e9b2a` 구현을 읽고 D-649 책임·설치 경계 정합성을 ACK했다. 책임표의 Situation/설치 설명을 실제 구현에 맞췄으며 빌드 도구를 manifest root로 등록했다. CORE revision·시각이 없는 legacy `ContextDraft`는 검토용 가설만 유지한다. 공통 평가가 해당 초안의 수집 시각을 CORE의 신선한 동일 사건 근거로 승격하지 않고 `ABSTAIN`하는 조건을 회귀 시험으로 고정한다. ACK는 코드 검토이며 독립 실행·장치 수용 증거가 아니다.
+
 착수: `2891e1006`, branch `feat/intervention-assessment`. D-647/D-648의 전체 구조 수용이나 현장 정책 승격 기록이 아니다.
 
 | 책임 | 실제 입력/소비/검증 경로 |
