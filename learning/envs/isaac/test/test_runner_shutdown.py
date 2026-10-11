@@ -59,4 +59,3 @@ def test_sdk_error_survives_runner_cleanup(runner, headless, tmp_path, monkeypat
         assert captured["extra_args"] == ['--/app/extensions/excluded=["isaacsim.gui.menu"]']
     else:
         assert not {"width", "height", "anti_aliasing"}.intersection(captured)
-
