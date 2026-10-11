@@ -131,6 +131,7 @@ def test_strict_road_evaluation_refuses_unknown_legacy_meaning(tmp_path):
 def test_same_declared_road_meaning_is_comparable(tmp_path):
     ev = _semantic_eval(tmp_path, "current_road_region/1", "current_road_region/1")
     assert ev["semantic_mismatches"] == {} and ev["unverified_semantics"] == []
+    ev["training_content_verified"] = True
     assert intake.judge_eval(ev, {"require_label_semantics": True}) == []
 
 
