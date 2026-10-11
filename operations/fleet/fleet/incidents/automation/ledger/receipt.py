@@ -6,7 +6,8 @@ import json
 from rosy.decision.deliberation import Problem, canonical
 from rosy.decision.deliberation.judgment import Judgment, judgment
 from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile
-from .contract import CaseScope
+from rosy.decision.deliberation.contracts.billing import CostEvidence
+from .contract import CaseScope, micros
 
 
 @dataclass(frozen=True)
@@ -22,8 +23,10 @@ def _checked(scope, receipt):
     if type(scope) is not CaseScope or type(receipt) is not ModelReceipt:
         raise ValueError('TYPED_MODEL_RECEIPT_REQUIRED')
     raw = json.loads(receipt.payload_json)
-    if (type(raw) is not dict or set(raw) != {'schema', 'profiles', 'role', 'problem', 'judgment'}
-            or raw['schema'] != 'rosy.incident.model_receipt/1' or canonical(raw) != receipt.payload_json
+    fields = {'schema', 'profiles', 'role', 'problem', 'judgment'}
+    versioned = type(raw) is dict and raw.get('schema') == 'rosy.incident.model_receipt/2'
+    if (type(raw) is not dict or set(raw) != fields | ({'cost_evidence'} if versioned else set())
+            or raw['schema'] not in {'rosy.incident.model_receipt/1', 'rosy.incident.model_receipt/2'} or canonical(raw) != receipt.payload_json
             or type(raw['profiles']) is not list or len(raw['profiles']) != 2):
         raise ValueError('INVALID_MODEL_RECEIPT_FIELDS')
     profiles = tuple(ModelProfile(**value) for value in raw['profiles'])
@@ -40,10 +43,13 @@ def _checked(scope, receipt):
     checked = judgment(p, BoundProfile(selected, p.digest), raw['judgment'])
     if canonical(checked.payload) != canonical(raw['judgment']):
         raise ValueError('MODEL_RECEIPT_JUDGMENT_CHANGED')
+    if versioned:
+        evidence = CostEvidence(canonical(raw['cost_evidence']))
+        evidence.validate(p, BoundProfile(selected, p.digest), checked, evidence.payload['marginal_cash_usd'])
     return raw, p, selected
 
 
-def model_receipt(scope, problem, bound, checked, *, profiles):
+def model_receipt(scope, problem, bound, checked, *, profiles, cost_evidence=None):
     """Build only from the trusted input, frozen pair and semantically checked output."""
     if (type(problem) is not Problem or type(bound) is not BoundProfile or type(checked) is not Judgment
             or type(profiles) is not tuple or any(type(p) is not ModelProfile for p in profiles)
@@ -53,9 +59,13 @@ def model_receipt(scope, problem, bound, checked, *, profiles):
     verified = judgment(problem, bound, checked.payload)
     if verified != checked:
         raise ValueError('FORGED_CHECKED_JUDGMENT')
-    receipt = ModelReceipt(canonical(dict(schema='rosy.incident.model_receipt/1',
+    raw = dict(schema='rosy.incident.model_receipt/1',
         profiles=[asdict(p) for p in profiles], role=bound.profile.role,
-        problem=asdict(problem), judgment=verified.payload)))
+        problem=asdict(problem), judgment=verified.payload)
+    if cost_evidence is not None:
+        if type(cost_evidence) is not CostEvidence: raise ValueError('TYPED_COST_EVIDENCE_REQUIRED')
+        raw.update(schema='rosy.incident.model_receipt/2', cost_evidence=cost_evidence.payload)
+    receipt = ModelReceipt(canonical(raw))
     _checked(scope, receipt)
     return receipt
 
@@ -70,6 +80,8 @@ def checked_receipt(scope, attempt, receipt):
                 or attempt['state'] not in {'COMPLETED', 'REJECTED'}
                 or type(attempt['actual_micros']) is not int or attempt['actual_micros'] < 0):
             raise ValueError('MODEL_RECEIPT_ATTEMPT_CHANGED')
+        if 'cost_evidence' in raw and micros(raw['cost_evidence']['marginal_cash_usd']) != attempt['actual_micros']:
+            raise ValueError('MODEL_COST_EVIDENCE_AMOUNT_CHANGED')
         return raw
     except (TypeError, KeyError, StopIteration, json.JSONDecodeError, RecursionError, OverflowError) as error:
         raise ValueError('INVALID_MODEL_RECEIPT') from error
