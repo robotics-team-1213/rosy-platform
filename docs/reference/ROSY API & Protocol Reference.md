@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.204
+**Version:** v1.205
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.205 Fleet 지도 프로필 (D-631)
+
+이름 있는 지도 프로필 조회·revision 비교 저장을 추가한다. 활성 지도·초안·교정 승인·로봇 명령의 기존 계약은 유지한다. 상세 계약은 문서 끝의 D-631 절이다.
 
 ### v1.204 Fleet 현재 영상과 복구 방향 (D-623)
 
@@ -2779,6 +2783,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
+| v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
 
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
