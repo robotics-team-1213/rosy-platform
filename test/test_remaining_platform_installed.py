@@ -31,20 +31,22 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'operations/world',
-                     'operations/execution', 'middleware/skills/api'):
+                     'operations/execution', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation'):
+        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation',
+                            'integrations/messaging/discord'):
             sources.append(copied)
     expected = {p.relative_to(ROOT / 'operations/ui/console').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 75  # D-683 login and D-689 profile documents/scripts are installed.
+    assert len(expected) == 76  # D-680 request review plus D-683/D-689 account assets.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
-    assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js', 'work-view.js'} <= expected.keys()
+    assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js',
+            'work-view.js', 'channel-request-view.js'} <= expected.keys()
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
@@ -58,6 +60,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/ui/console')
         shutil.rmtree(staging / 'operations/situation')
+        shutil.rmtree(staging / 'integrations/messaging/discord')
         shutil.rmtree(staging / 'tools')
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
@@ -124,6 +127,15 @@ request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
 assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+from rosy_discord.intake import project_message, signed_request
+from rosy_discord.gateway import DiscordGateway
+from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
+from core_common.protocol.channel_requests import ChannelIncidentClaimRequest
+from core_common.protocol.schemas import ChannelIncidentClaimRequest as ExportedIncidentRequest
+assert ExportedIncidentRequest is ChannelIncidentClaimRequest
+assert Path(importlib.util.find_spec('fleet.server.channel_incidents').origin).is_relative_to(installed)
+assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
+assert Path(importlib.util.find_spec('rosy_discord.gateway').origin).is_relative_to(installed)
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
@@ -229,6 +241,9 @@ print('installed namespace, resources and HTTP guards verified')
 import sys
 sys.path.insert(0, sys.argv[1])
 from fleet.server.mission_service import MissionService
+from rosy_discord.intake import project_message, signed_request
+from rosy_discord.gateway import DiscordGateway
+from fleet.server.channel_requests import ChannelRequests
 from fleet.server.mission_progress import MissionProgressService
 from rosy.execution.site.goal_evidence import GoalPredicate
 from rosy.execution.site.workflow import project_progress
@@ -274,6 +289,7 @@ from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal
 from rosy.execution.site.workflow import project_progress
 from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
+from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
 from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence

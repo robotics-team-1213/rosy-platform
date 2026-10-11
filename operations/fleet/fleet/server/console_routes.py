@@ -407,10 +407,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "answer": answer, "result": result}
 
     # D-540 9: claim stays open; the console claims before an ABORT confirm.
-    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
-              tags=["line-stuck"])
-    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
-                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+    async def claim_incident(robot_id, body, principal, *, admission=None) -> dict:
         """D-438 §1: a human opened this stuck; the resolver stops answering it."""
         if console.clients().get(robot_id) is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
@@ -433,7 +430,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                     resolver_loop.claim(robot_id, body.stuck_id)
                 try:
                     claim = await asyncio.to_thread(board._log.handoff.claim,
-                        robot_id, body.stuck_id, receipt, principal.principal_id, now=time.time())
+                        robot_id, body.stuck_id, receipt, principal.principal_id, now=time.time(), admission=admission)
                 except ValueError as exc:
                     raise HTTPException(409, detail={'code': str(exc)}) from exc
             return {'robot_id': robot_id, 'stuck_id': body.stuck_id,
@@ -442,6 +439,12 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             resolver_loop.claim(robot_id, body.stuck_id)
         return {"robot_id": robot_id, "stuck_id": body.stuck_id,
                 "claimed_by": principal.principal_id, 'kind': 'resolver_pause'}
+
+    app.state.claim_incident = claim_incident
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard, tags=["line-stuck"])
+    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        return await claim_incident(robot_id, body, principal)
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:
