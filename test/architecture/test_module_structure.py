@@ -274,7 +274,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_366,
+        53_532,
+        "split: independently re-judged on 2026-10-12 by pipeline_review at 53532 for D-685. "
+        "Autonomous waiting/replan retain existing stuck and trip owners; bounded observation history "
+        "stays in server/observation_store.py, read wiring in console_routes.py, offline unlabeled export "
+        "under learning/curation. No new authority, process, SIZE_UNITS or allowance. Keep package +150, "
+        "Console1325 zero-growth and all observe/server/UI split obligations. Previous verdict: "
         "split: independently re-judged on 2026-10-12 by pipeline_review at 53366 for D-678. "
         "Final admission, stop fencing and receipt/readback stay with existing Console, GoalLeases, "
         "TaskService, TripAdmission, Mission store/dispatcher and FormationSession owners; no engine "

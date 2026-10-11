@@ -25,3 +25,7 @@
 ## 현장 수용
 
 현장 설정은 `fleet.stuck_resolver.autonomous_robots`에 승인된 ID를 명시한다. 기존 resolver credential/AI evidence와 로봇 CORE 계약은 별도 필요 조건이다. 기본 목록은 비어 있으므로 소스 머지가 현장 활성화가 아니다. 실제 설치/센서/시계 정합·두 로봇 교착/정지/복구·미확인 실행 대조와 기록 재생, 학습 데이터 분리 및 독립 평가/승격은 FIELD 증거로 분리한다. 푸시·배포·실제 motion은 이 세션에서 수행하지 않는다.
+
+## 검증 증거
+
+`7c0e4f049` 원격 관련 회귀 238 passed, known_failures NEW 0. Node UI 52 passed. 독립 pipeline_review의 phase/cap/mode/UNKNOWN/시간/학습 원본 경계 리뷰와 Fleet parent 53532 재판정을 반영했다. 마지막 fixture 보강과 최신 main 통합은 tools/land.py의 원격 최종 gate에서 재검증한다. 현장 활성화와 학습 실행 증거는 없다.

@@ -47,14 +47,16 @@ def test_exhaustion_observes_without_resetting_the_budget(config, reason):
     chain = core._chains["rosy_01"]
     initial = (chain.started_at, chain.rule_answers)
     assert core.step(1000, [row]) == []
-    row["state"]["mode"] = "MANUAL"
+    row["state"]["line_follow"]["mode"] = "IR_LINE"
     assert core.step(1001, [row]) == []
+    assert core._chains["rosy_01"] is chain
     assert (chain.started_at, chain.rule_answers) == initial
 
 
 @pytest.mark.parametrize("phase", ["YIELDED", "TURNING", "CRAWLING", "BACKING", "SETTLING"])
-def test_unresolved_yield_only_resumes_after_completed_owner_segment(monkeypatch, phase):
-    core = resolver()
+@pytest.mark.parametrize("budget", [1, 2])
+def test_unresolved_yield_only_resumes_after_completed_owner_segment(monkeypatch, phase, budget):
+    core = resolver(rule_budget=budget)
     row = _row(stuck=_stuck())
     core.step(0, [row])
     answer = Answer("rosy_01", "stuck-1", "YIELD", "meet", yield_m=0.1, yield_turn_rad=0)
@@ -65,10 +67,17 @@ def test_unresolved_yield_only_resumes_after_completed_owner_segment(monkeypatch
     core._escalate(chain, "rosy_01", "stuck-1", "unresolved:YIELD")
     row["state"]["line_follow"]["stuck"]["phase"] = phase
     monkeypatch.setattr(core, "_meet", lambda *_: ("meet", "YIELD", 0, 0.1))
-    assert core.step(21, [row]) == []
+    held = core.step(21, [row])
+    if budget == 1 and phase == "YIELDED":
+        assert len(held) == 1 and held[0].reason == "rule_budget"
+    else:
+        assert held == []
     monkeypatch.setattr(core, "_meet", lambda *_: ("meet", "RESUME"))
     actions = core.step(22, [row])
-    assert actions == ([Answer("rosy_01", "stuck-1", "RESUME", "meet")] if phase == "YIELDED" else [])
+    if budget == 1 and phase == "YIELDED":
+        assert chain.observing == "rule_budget" and actions == []
+    else:
+        assert actions == ([Answer("rosy_01", "stuck-1", "RESUME", "meet")] if phase == "YIELDED" else [])
 
 
 def test_unknown_motion_and_actual_human_claim_never_reopen():

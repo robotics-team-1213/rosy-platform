@@ -165,3 +165,7 @@ plans:
 ### 2026-10-10 D-623 current image and recovery context
 
 SOURCE implemented; remote verification pending. No Fleet REALIGN activation or field motion proof.
+
+### 2026-10-12 D-685 최소 사람 개입과 학습 원본
+
+승인된 autonomous_robots의 WAIT/완료 YIELD 재관측, 같은 사건 예산 유지, UNKNOWN durable freeze와 정확한 CORE 사건 종료 확인, 범위 내 검증된 trip 재계획을 구현했다. SharedGather refresh의 센서/state 원장을 bounded durable 저장하고 read_guard 조회와 hash export로 AI 학습 원본을 준비한다. labels/model activation은 자동 생성하지 않는다. 7c0e4f049 원격 238 pass/NEW 0 및 Node 52 pass; 최종 최신 main 착지 gate 별도. SOURCE 증거이며 설치·실기·FIELD gate는 유지한다.
