@@ -32,6 +32,7 @@ export function routeAttention(trip, facts, now) {
   return [{severity: 'warn', text: `: AI 경로 편차 관찰 — 허용 경계보다 ${cm} cm 밖 · 위치 확인 필요`}];
 }
 export const TRIP_ERROR_LABEL = {
+  TRIP_START_CANCELED: '출발 준비 중 정지 요청을 받았습니다 · 상태를 확인한 뒤 다시 시작하세요',
   TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
   TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',
   TRIP_BODY_UNKNOWN: '로봇 차체 폭을 확인할 수 없어 출발할 수 없습니다',
