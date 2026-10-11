@@ -215,7 +215,12 @@ class ModelSlot:
             return self.current  # same target still backing off
         self._key = key
         try:
-            self.current = self._opener(Path(target))
+            candidate = self._opener(Path(target))
+            if isinstance(candidate, LaneSegModel):
+                error = road_delivery_error(candidate.manifest.raw)
+                if error:
+                    raise ManifestError(error)
+            self.current = candidate
             self.last_error = None
             self._failed = None
         except Exception as exc:  # keep the previous model on any failure
