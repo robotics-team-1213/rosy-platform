@@ -2,7 +2,7 @@
 
 **상태:** D-640 Proposed의 검토용 설계. 서비스 구현·배포·실제 모델 토론·현장 자율 복구의 증거는 없다.
 
-**우선 실행 순서:** 2026-10-11 사용자 추가 지시로 [Fleet 중앙 판단 선행 계획](2026-10-11-fleet-central-judgment-stages.md)의 D-642~D-646을 먼저 수행한다. 개입 불필요/판단 보류도 판정·평가하고 외부 알림과 담당자 처리 결과를 같은 사건으로 회수한다. 중앙 판단 규약과 독립 수용 receipt가 준비되기 전 모델 토론 구현은 진행하지 않는다.
+**우선 실행 순서:** 2026-10-11 사용자 추가 지시로 [Fleet 중앙 판단 선행 계획](2026-10-11-fleet-central-judgment-stages.md)의 D-647에서 공통 판단 책임·초기 배포를 먼저 결정한 뒤 D-642~D-646을 수행한다. 개입 불필요/판단 보류도 판정·평가하고 외부 알림과 담당자 처리 결과를 같은 사건으로 회수한다. 중앙 판단 규약과 독립 수용 receipt가 준비되기 전 모델 토론 구현은 진행하지 않는다.
 
 ## 목적과 흐름
 
@@ -20,7 +20,7 @@ World의 현재 상태와 주어진 목표에서 문제를 만들고, 빠르게 
 
 ```mermaid
 flowchart TD
-  A[World 현재 상태와 목표 및 실행 결과] --> C[Fleet 공통 문제와 빠른 규칙 및 사례]
+  A[World 현재 상태와 목표 및 실행 결과] --> C[공통 상황평가와 빠른 규칙 및 사례]
   A --> B[위험 시 장치 로컬 정지와 readback]
   B --> C
   C --> D[미해결 사건의 숙고 런 supervisor]
@@ -48,7 +48,8 @@ flowchart TD
 | 장치 | 장애 감지, bounded 정지/복구, 실제 상태 읽기 | CORE 및 OMX의 기존 Action owner |
 | Situation | 최신 관측과 문제 종류, 누락 근거 | `operations/situation`, D-619 공통 assessment |
 | 숙고 supervisor | 사건별 큐/예산, 모델 역할, 반론, 후보 검증 | `operations/decision/src/rosy/decision`에 추가 예정 |
-| Fleet | 원장, 권한·자원·generation, 승인과 실행 중재 | `operations/fleet`의 기존 incident/Mission 서비스 |
+| 작업/사건 중재 | 원장·owner·generation, 작업 승인과 결과 | 현재 `operations/fleet`의 incident/Mission 서비스; D-647에서 논리 경계 검토 |
+| Fleet coordination | 가용성·배차·교통·로봇 공유 자원 | 기존 Fleet coordination 경로 |
 | 모델 실행기 | Claude Code/OpenCode의 제한된 구조화 추론 | 공급자 adapter; 전용 Fleet PC 계정, 추론 위치 별도 |
 | 학습·평가 | 사람 정답, 재생 비교, 고정 프로파일·승격 증거 | `learning/curation`, `evaluation`, `registry`, 모델 PC |
 

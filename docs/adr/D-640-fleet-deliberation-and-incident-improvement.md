@@ -8,6 +8,9 @@
 
 사용자는 Fleet PC에서 Claude Code와 OpenCode를 통해 선택한 모델들이 상황을 토론하고 처리 후보를 내는 런 오케스트레이션 계층을 요청했다. CLI/agent host와 기반 모델은 다른 식별이며, GLM 5.x는 실제 제공자 ID·지원 기능·승인 프로파일을 확인하기 전까지 사용자 후보명이다.
 
+### 책임·선행 관문
+[D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md)에서 World·공통 상황평가·후보·작업/자원 중재를 구별하고 초기 배포 위치를 결정한다. Fleet PC supervisor는 잠정 배치이며 공통 판단 전체의 Fleet 소유 확정이 아니다. D-642~D-646의 중앙 판단과 비개입·사람 처리 수용이 이후 모델 토론 구현의 선행 조건이다. 기존 `rosy.decision`은 deliberative 역할에 한정한다.
+
 ### Decision
 
 1. **Fleet PC에 범용 문제 해결 런 supervisor를 둔다.** World 현재 관측, 목표, 제약, 허용 capability, 결과를 공통 문제 자료로 읽는다. 사건·정지뿐 아니라 주어진 작업과 목표 불일치도 입력이다. 논리 구현 소유자는 기존 `operations/decision/src/rosy/decision`이며 Fleet과 같은 배포 경계를 재사용한다. 무거운 로컬 추론은 기존 AI PC 배치 경계를 따른다. Fleet 원장/admission/dispatch와 모델 PC 학습/평가는 기존 소유자에 남는다. 새 최상위 폴더·범용 에이전트 프레임워크는 만들지 않는다.

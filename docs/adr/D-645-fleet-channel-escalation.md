@@ -5,6 +5,9 @@
 ### Context
 중앙 관제 밖의 담당자도 새 문/장애물, 암 실패, 판단 보류·장기 미해결을 받고 처리해야 한다. Discord·Slack·Telegram은 통지·사람 응답 경계이며 로봇 제어 채널이 아니다. 현재 D-632 Console inbox의 읽음은 개입 해결이 아니다.
 
+### 책임·배포 선행 관문
+[D-647 공통 판단 책임·배포 0단계](../adr/D-647-shared-judgment-ownership-and-deployment.md)을 먼저 따른다. 이 ADR의 Fleet은 현재 소비자·서비스 문맥이다. 공통 상황평가 holder와 초기 배포는 아직 미결정이며 권고와 작업/자원 승인·원장 소유를 구별한다. 기존 Fleet transaction과 CORE/OMX 권한은 유지한다.
+
 ### Decision
 1. 흐름은 Fleet 판단/위험도/담당 → 같은 원장 transaction의 durable 알림 outbox → 설정된 Discord/Slack/Telegram adapter → 담당자 확인과 처리 → 단계 3의 Fleet 중재 → 실제 결과와 사건 종료다. 기존 ER2 outbox의 unique claim/SQLite 정책 패턴을 재사용하되 그 큐를 채널 전송용으로 소비하지 않는다.
 2. 최초 버전은 세 채널의 발송 adapter와 인증된 Console 사건 처리 링크다. 메시지에는 공개 가능한 사건 식별, 발생 시각, 증상·개입 필요/보류 이유, 검증된 근거/누락, 현재 owner와 처리 기한을 넣는다. 링크는 bearer token 없이 Console 로그인·scope 검사를 거친다. 채널/수신자는 명시 설정되며 기본 외부 발송은 꺼짐이다. 실제 채널·secret·담당 매핑 없이 발송을 주장하지 않는다.
