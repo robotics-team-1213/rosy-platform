@@ -718,7 +718,7 @@
 - 증거: source 5da31e05cb의 CI 38126423478에서 Fleet 헤더 시험이 설명의 클릭 가로채기로 실패했다. 수정된 커밋 2a848f3c3의 원격 Chromium 검증은 15 passed(43.26s), known_failures 0 NEW다. 네 Fleet 문서와 공용 의미 아이콘의 hover·키보드·가림 회귀를 포함한다. 로그는 배포 세션의 tooltip-browser/run-1.txt에 보관했다.
 - gate 변화: 새 커밋의 통합·CI·실제 설치 수용은 별도 검증한다. 명령·권한·토큰·조작 크기와 팔레트는 변경하지 않았다.
 
-## 2026-10-11 · uiux/rosy-brand · D-654 경로 R 플랫폼 심볼
+## 2026-10-11 · f62299e82 · feat: D-654 경로 R 플랫폼 심볼
 
 - 변경: 평면 SVG 정본과 플랫폼 타일을 공용 allowlist·CMake에 등록하고 ui-brand 워드마크에 같은 mask를 사용한다. 기존 장미색·글자 토큰, 역할별 앱 아이콘, 접근성 이름과 목적지를 유지한다.
-- 검증: 작은 silhouette·파생 기하·토큰·설치 목록 및 두 테마의 실제 브라우저 검사를 추가했다. 실행 결과·CI·설치 수용은 검증 뒤 기록하며 현재 이 행은 통과를 주장하지 않는다.
+- 검증: source f62299e82의 원격 Chromium·토큰·기하·설치 계약 검사 78개가 통과했고 known_failures NEW 0이다. 두 테마, 네 Fleet 문서·여섯 폭, Cell 320px 정지 접근을 포함하며 데스크톱·모바일 캡처를 직접 확인했다. source bec3528c5의 CI에서 교체 중인 로봇 버튼을 한 번만 읽던 측정 경합이 발견돼 살아 있는 locator를 재확인하는 단언으로 수정했다. 로그는 관리 세션 rosy-brand의 logs/browser/run-1.txt다. 정확한 CI·서명 설치·native 앱 수용은 별도다.
