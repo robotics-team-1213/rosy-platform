@@ -47,7 +47,8 @@ def test_soccer_profile_basic_information_and_template(page_site, width):
     expect(page.locator('#profile-length')).to_have_value('3')
     expect(page.locator('#profile-description')).to_have_value('실측 연습 경기장')
     expect(page.locator('#profile-draft')).to_be_disabled()
-    page.locator('#profile-file').set_input_files({'name': 'pitch.json', 'buffer': json.dumps(row).encode()})
+    page.locator('#profile-file').set_input_files({'name': 'pitch.json', 'mimeType': 'application/json',
+                                                  'buffer': json.dumps(row).encode()})
     expect(page.locator('#profile-kind')).to_have_value('soccer')
     expect(page.locator('#profile-length')).to_have_value('3')
     assert store.active_view() == before
