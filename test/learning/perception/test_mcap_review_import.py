@@ -196,7 +196,7 @@ def test_human_eval_publication_is_immutable_and_keeps_reviewed_unknown(tmp_path
                                     'complete_frame_review': True, 'background_reviewed': True,
                                     'unknown_pixels_reviewed': True}, Conflict)
     result = review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)
-    from dataset.build import read_eval_set
+    from build import read_eval_set
     folder = Path(result['path'])
     assert folder.parent.name == 'heldout-human'
     assert read_eval_set(folder)[1] == {'session'}

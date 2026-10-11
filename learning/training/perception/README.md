@@ -2,7 +2,7 @@
 
 학습은 Colab이든 GPU PC든 어디서 돌려도 된다. 로봇 쪽과의 약속은 **입력과 출력**뿐이다.
 이 폴더의 `export_cell.py`와 `check_manifest.py`가 그 약속의 실물이다.
-Colab에서 셀 단위로 따라 하는 절차는 [COLAB.md](COLAB.md)에 있다.
+Colab에서 셀 단위로 따라 하는 절차는 [COLAB.md](docs/COLAB.md)에 있다.
 바로 실행하는 Colab 노트북(기준 모델 학습부터 넘기기까지)은 [rosy_lane_training.ipynb](rosy_lane_training.ipynb)다(D-373).
 노트북은 개발 PC에서 셀을 차례로 실행하는 **로컬 stub 실행으로만** 확인했다. 실제 Colab 런타임에서는 아직 돌려 보지 않았다.
 
@@ -123,7 +123,7 @@ TorchScript만 있다면 개발 PC에서 `learning/registry/perception/export_on
 쓰고, `tensorboard`가 있으면 이벤트 파일도 쓴다. `train(..., on_epoch=chain(log.on_epoch, ...))`로 연결하고, 끝에 `log.finish({...})`를 부른다.
 `config`의 토큰·키·비밀번호 항목은 기록에서 빠진다. 기록 폴더는 모델 폴더 밖에 둔다(store로 넘어가지 않는다).
 manifest의 `metrics.experiment`는 선택이고 두 형태만 받는다: `{"tracker": "wandb", "run_id", "url", "project"}` 또는
-`{"tracker": "local", "run_id", "path": "runs/<run_id>"}`(상대 경로, 호스트 경로 없음, `export_cell`이 검증). 기록 오류는 학습을 멈추지 않는다. W&B는 선택이다. 절차는 [COLAB.md](COLAB.md)의 "실험 기록(로컬 + TensorBoard)".
+`{"tracker": "local", "run_id", "path": "runs/<run_id>"}`(상대 경로, 호스트 경로 없음, `export_cell`이 검증). 기록 오류는 학습을 멈추지 않는다. W&B는 선택이다. 절차는 [COLAB.md](docs/COLAB.md)의 "실험 기록(로컬 + TensorBoard)".
 
 ## 넘기기 전에
 

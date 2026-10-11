@@ -8,7 +8,7 @@ supplies its stable byte reader and retains publication and PNG pixel proof.
 from pathlib import Path as _SourcePath
 import sys as _source_sys
 _source_sys.path[:0] = [str(_SourcePath(__file__).resolve().parents[3] / p)
-                        for p in ('learning/registry/perception',)]
+                        for p in ('learning/registry/perception', 'learning/curation/perception')]
 
 
 
@@ -27,7 +27,7 @@ def _capture_video_companions(eval_folders, companion_files, *, read_bytes):
     named by its exact inventory. External snapshot paths are not this contract.
     """
     from store import file_hashes
-    from dataset.build import read_eval_set
+    from build import read_eval_set
     def require(condition, message):
         if not condition:
             raise ValueError('eval companion: ' + message)
@@ -168,9 +168,9 @@ def _capture_mcap_companions(eval_folders, companion_files, *, read_bytes):
     import cv2
     import numpy as np
 
-    from dataset.build import load_classes, read_eval_set
-    from dataset.mcap_proof import prove_frames
-    from dataset.review_evidence import encoded, identity, sha, validate_authority
+    from build import load_classes, read_eval_set
+    from mcap_proof import prove_frames
+    from review_evidence import encoded, identity, sha, validate_authority
     from store import file_hashes
 
     def require(ok, why):
@@ -309,7 +309,7 @@ def _capture_mcap_companions(eval_folders, companion_files, *, read_bytes):
 
 def capture_eval_companions(eval_folders, companion_files, *, read_bytes):
     """Keep D-379 semantics; dispatch human MCAP evals to independent proof."""
-    from dataset.build import read_eval_set
+    from build import read_eval_set
 
     human, video = [], []
     for folder in eval_folders:

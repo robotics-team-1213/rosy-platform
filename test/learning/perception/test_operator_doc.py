@@ -60,7 +60,7 @@ TRAINING = Path(__file__).resolve().parents[3] / 'learning/training/perception'
 
 
 def test_trainer_docs_need_no_hf():
-    for name in ("COLAB.md", "README.md"):
+    for name in ("docs/COLAB.md", "README.md"):
         text = (TRAINING / name).read_text(encoding="utf-8")
         for needle in ("store", "READY", "models/inbox", "content_sha"):
             assert needle in text, (name, needle)
