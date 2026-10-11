@@ -2675,3 +2675,8 @@
 - 변경: 실제 관리자 설치 후 PWD 때문에 실패한 환경 검사에서 PWD=/tmp만 허용하고 PATH도 고정값으로 검증한다. 다른 변수·HOME/PATH/PWD 경로 변경은 거절한다.
 - 증거: 사용자 AI PC 출력은 환경 검사 외 12개 경계 true, 최초 HOST 결과는 HOLD. 원격 RED에서 정상 PWD 오거절과 변경 PATH 오수용을 재현했다. 수정 후 시험·실제 재실행은 후속 증거로 기록한다.
 - gate 변화: HOST PASS 미확인 유지. 관리자 설치 완료 출력은 확인했으나 모델·장치 수용으로 승격하지 않는다.
+
+## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
+
+- 증거: 팀 관리자 preflight 13개 true / PASS_HOST_OFFLINE_ONLY. 기존 적재 digest의 로컬 Qwen 실제 strict JSON 응답 및 기존 Supervisor HOLD / UNRESOLVED_OBJECTION / calls=1 확인. `docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md`.
+- gate 변화: 전용 호스트 OFFLINE 경계와 수동 모델 transport 확인. 운영 제공자 admission, 독립 모델 평가·실제 Pinky·FIELD는 미확인 유지. OpenCode CLI 수용은 병렬 작업으로 분리한다.
