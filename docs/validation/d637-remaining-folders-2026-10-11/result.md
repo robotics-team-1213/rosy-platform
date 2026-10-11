@@ -4,7 +4,7 @@
 
 ## 실제 이동과 순서
 
-source·caller·fixture·config·export·설치 입력을 먼저 커밋하고 local main `13b125b746`에 fast-forward했다. 동시에 들어온 traffic-view 시험의 lookup을 `d4988bffba`에서 수정하고 원격 시험·Node 검증 후 다시 fast-forward했다. 이 SHA는 source 착지 snapshot이며 다른 세션이 main을 계속 갱신할 수 있다. 설명은 그 이후 별도 commit으로 갱신한다. push·배포·운용 활성화는 수행하지 않았다.
+source·caller·fixture·config·export·설치 입력을 먼저 커밋하고 local main `13b125b746`에 fast-forward했다. 동시에 들어온 traffic-view 시험의 lookup을 `d4988bffba`에서 수정하고 원격 시험·Node 검증 후 다시 fast-forward했다. 이 SHA는 source 착지 snapshot이며 다른 세션이 main을 계속 갱신할 수 있다. 설명은 그 이후 별도 `500c5f94c`로 커밋하고 경계 목록 보완 `ff337deb8`과 함께 원격 검증한 `33729c5140`으로 local main에 반영했다. push·배포·운용 활성화는 수행하지 않았다.
 
 | 범위 | 실제 결과 |
 |---|---|
@@ -43,4 +43,11 @@ Ralph는 PRD6개 story·progress·독립 리뷰·terminal 증거로 운영했다
 
 폴더·source·호스트 설치 증거만 완료다. SOURCE/LOCAL GO는 해당 범위이며 ROS-SIM·ARM64 ARTIFACT·DEVICE·FIELD는 HOLD다. selection은 harness/setup/conftest/workflow 변경으로 FULL이므로 GitHub CI FULL 증거가 남는다. Chromium 옵트인은 실행하지 않아 skip을 수용으로 집계하지 않는다. Jazzy/ARM64 image·sim·모델 활성화·실물 주행·현장 수용을 실행하지 않았다. World 미래 행동 예측과 후속 Decision 모델 파이프라인은 계획이며 현재 기능으로 표시하지 않는다.
 
-설명 commit의 원격 회귀·known_failures·main ancestry·독립 story별 최종 판정은 세션 `evidence/description-closure.json`과 `prd.json`에 terminal readback 후 기록한다. 이 기록은 위 source 시험과 분리하며, 설명 commit 착지 전에 최종 완료로 올리지 않는다.
+
+## 설명·계획 최종 확정
+
+설명 첫 후보 `9602e1493`의 원격 gate는 1 NEW로 중단했다. shared learning corpus 이동으로 ROOT/test 검색 대상에 들어온 기존 8개 artifact/runtime integration 시험이었다. 원본 import 12개의 module·level·symbol·alias가 모두 같음을 독립 검토했고, 정확한 8경로와 유지 이유만 frozen metadata에 등록했다. `_IMPORT`, `_found`와 검색 root, 기존 set equality·known_failures는 바꾸지 않았다. 보충 [독립 검토](closing-review.md)를 적용했다.
+
+`33729c5140` 원격 최종 gate는 **537 passed/20 skipped, terminal exit0, known_failures0 NEW**로 끝났고 harness lint0 errors 뒤 local main에 fast-forward했다. architecture·harness·functional ownership·scorecard·문서/provenance·installed wheel/sdist·CLI와 8개 integration 시험을 포함한다. 새 설명 gate에서 Node는 Fleet web을 선택하지 않아 skip했으므로 기존 source Node290 receipt와 분리한다. 독립 terminal readback과 source→설명 ancestor 확인은 `evidence/description-closure.json`에 기록했다.
+
+채택한 폴더 단계1–7와 PRD6개 story의 소스/설명 범위는 완료다. 이 확정 기록 자체도 별도 docs commit의 원격 가드·local main 반영을 거친다. 최신 shared main은 다른 세션에 의해 계속 움직일 수 있으므로 위 SHA는 확인한 착지 snapshot이다. 기존 untracked lock·메모3개와 동료 변경을 그대로 보존했다.
