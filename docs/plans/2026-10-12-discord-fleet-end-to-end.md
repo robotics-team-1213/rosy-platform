@@ -36,6 +36,8 @@
 
 ## 진행 기록
 
+- Mission·Cell Console를 기존 owner 경로에 연결했다. 실제 Chromium 작업 화면8 PASS와 Cell 전체53 PASS, source lineage 거절 포함52 PASS/NEW0. 피드백 후보의 source fence가 복사로 소실되는 독립 검토 blocker는 일반 후보만 허용하여 해결했다. 최신 main4dc522986 통합 source48d3aa835f의 실제 owner/GLM 영향109 PASS/NEW0, lint0errors. [증거](../validation/discord-fleet-pipeline-2026-10-12/mission-cell-console.md). 구조 최종 재판정은 미완료다. D-693 현재 사건 인수의 동일 트랜잭션 관계·회신 계약을 작성했으며 구현→시험→최종 검토→local FF→운영 왕복을 계속한다.
+
 - D-687/API1.213의 Mission·Cell prepare/admit backend와 기존 원장 결과 observer를 구현했다. source `aa10b5080` 관련101 PASS/NEW0, Model PC floor 충족. 실제 기존 owner/독립 승인, prepare 중 다른 탭 HOLD, 권한 철회와 상태별 회신 intent를 포함한다. 초기 새 view/self-lock 실패를 고쳤고 기존 실패 목록은 바꾸지 않았다. [증거](../validation/discord-fleet-pipeline-2026-10-12/mission-cell-source.md). Console 준비·승인 UI, 위험 사건 연결과 운영 왕복은 여전히 후속이다.
 
 - D-680 source design과 원래 메시지 회신 transport를 작성했다. 접수 회신 intent와 원문 receipt의 atomic commit, bounded retry/UNKNOWN/fence, 전송 전 권한·목적지 재검사와 기본 OFF worker를 구현했다.

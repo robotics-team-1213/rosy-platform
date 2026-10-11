@@ -834,7 +834,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 else UnavailableHostHelper()))
 
     install_static_routes(app)
-
     return app
 
 
