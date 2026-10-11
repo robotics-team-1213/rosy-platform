@@ -15,7 +15,7 @@ from test_judgment_profiles import profile, adapter
 from test_model_judgment import payload
 
 
-def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, provider_hook=None):
+def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, budget_observations=4, provider_hook=None):
     now, seen, handoffs = [101.0], [], []
     log = LineStuckAnswerLog(tmp_path / 'fleet.db')
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
@@ -41,7 +41,7 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4, provider_hook
         call.profile, call.adapter = selected, adapter()
         providers.append(call)
     store = IncidentCaseStore(log.path, clock=lambda: now[0])
-    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, 4, 0,
+    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, budget_observations, 0,
                                        tuple((p.role, p.max_calls) for p in profiles))
     async def handoff(scope, summary): handoffs.append((scope, summary))
     worker = IncidentCaseWorker(store, IncidentObservationPort(board, human_owned=lambda *_: human[0], clock=lambda: now[0]),
@@ -230,6 +230,24 @@ def test_cancel_during_database_commit_waits_and_closes_only_owned_reservation(t
         with store._transaction() as conn:
             row = conn.execute('SELECT state,actual_micros FROM fleet_incident_v2_attempts').fetchone()
             assert tuple(row) == ('REJECTED', 0)
+    asyncio.run(run())
+
+
+def test_restart_without_read_intent_admission_cannot_skip_observation_budget(tmp_path):
+    async def run():
+        now, seen, handoffs, _, board, store, worker, poll, _ = setup(tmp_path, budget_observations=0)
+        worker.feed(poll()); await settled(worker)
+        scope = store.active_scopes()[0]
+        await worker.aclose()
+        replacement = IncidentCaseWorker(store, worker.observation, board, profiles=worker.profiles,
+            providers=worker.providers, admission=worker.admission, current_profiles=worker.current_profiles,
+            human_owned=worker.human_owned, budget=worker.budget, final_handoff=worker.final_handoff,
+            clock=worker.clock, enabled=True)
+        now[0] += 1; replacement.feed(poll(2)); await settled(replacement)
+        assert len(seen) == 1 and store.case(scope)['observations'] == 0
+        assert store.case(scope)['state'] == 'HOLD'
+        assert handoffs[0][1]['reason'] == 'READ_CONTINUATION_NOT_ADMITTED'
+        await replacement.aclose()
     asyncio.run(run())
 
 
