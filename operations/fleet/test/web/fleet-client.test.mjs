@@ -87,3 +87,25 @@ test('lost network explains readback and never replays a command', async () => {
       && /현재 상태를 다시 조회/.test(error.message) && error.status === undefined);
   assert.equal(sent, 1);
 });
+
+test('null abort reason remains the original cancellation without sending', async () => {
+  const controller = new AbortController();
+  controller.abort(null);
+  let sent = 0;
+  const client = createFleetClient({origin: 'https://fleet.test',
+    fetchImpl: async () => { sent += 1; return new Response('{}'); }});
+  await assert.rejects(client('/api/fleet/estop', {method: 'POST', signal: controller.signal}),
+    reason => reason === null);
+  assert.equal(sent, 0);
+});
+
+for (const failure of [Object.freeze(new TypeError('Failed to fetch')),
+  new DOMException('NetworkError when attempting to fetch resource.', 'NetworkError')]) {
+  test(`immutable ${failure.name} remains the original network failure without replay`, async () => {
+    let sent = 0;
+    const client = createFleetClient({origin: 'https://fleet.test',
+      fetchImpl: async () => { sent += 1; throw failure; }});
+    await assert.rejects(client('/api/fleet/estop', {method: 'POST'}), reason => reason === failure);
+    assert.equal(sent, 1);
+  });
+}
