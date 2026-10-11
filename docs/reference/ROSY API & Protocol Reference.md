@@ -2825,6 +2825,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
+| v1.210 | 2026-10-12 | Additive (D-692): native ISAAC containment 출처·같은 영상 경계/횡단보도 관측; 검증되지 않은 오차 null 유지. envelope 1.0과 CORE/Fleet 권한 유지. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
