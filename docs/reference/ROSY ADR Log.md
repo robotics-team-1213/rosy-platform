@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
+| D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
+| D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
 | D-1 | 단일 프로세스 (rclpy + uvicorn 스레드) | Accepted |
 | D-2 | 자체 cmd_vel 멀렉서 (Nav2 출력 remap) | Accepted |
 | D-3 | Flask 완전 대체 — FastAPI 전면 이관 | Accepted |
@@ -674,7 +677,9 @@
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-692 | Native Isaac 카메라 경계 관측 출처 | Accepted |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
+| D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
+| D-697 | 독립 운영 성과 비교와 증거 생산 책임 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -759,6 +764,17 @@
 - 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
 - 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
 - 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.
+## D-686 — Fleet 초기 계정과 첫 로그인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 사용자 지시).
+- 결정: 초기 ID와 비밀번호를 일치시키되 초기 쿠키는 비밀번호 변경에만 사용하고 완료 전 운용 API를 거절한다. 기존 SQLite의 source-bound 자격과 원자적 세션 회전을 사용한다.
+- 계약: [ADR](../adr/D-686-fleet-first-login-password-change.md). 실제 명단은 private 기록에서만 다루고 설치·발급·당사자 변경은 별도 증거다.
+
+## D-689 — Fleet 내 프로필과 본인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 기본 프로필만).
+- 결정: 표시 이름과 현재 비밀번호 확인 변경은 본인 쿠키에만 제공한다. ID·이메일·권한 원본은 읽기 전용으로 유지하며 기존 SQLite/세션 경로를 재사용한다.
+- 계약: [ADR](../adr/D-689-fleet-self-profile.md). 사진·추가 연락처·관리자 편집은 범위에 없으며 운용 문서의 principal·역할 표시와 초안을 보존한다. 화면 이름은 운용 용어 규칙에 맞춰 `내 계정`으로 통일한다.
 ## D-690 — 도로 인지 평가의 출처 단위 불확실성
 
 **Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
@@ -776,3 +792,14 @@
 **Status:** Accepted (2026-10-12, source 계약)
 
 동일 사건·모델 근거 hash에 실패 책임 제안을 결속하고 모델 의견과 사람 최종 검토 후보를 구분한다. 기존 원인·정답 상태와 원장·CORE API는 유지한다. 전문은 [D-695](../adr/D-695-incident-failure-responsibility.md).
+
+## D-697 — 독립 운영 성과 비교와 증거 생산 책임
+
+**Status:** Accepted (2026-10-12, 설계 계약)
+
+모델 주도 범용 사건 종결 목표의 독립 운영 비교를 learning에 두고 Fleet 불변 export로 연결한다. 규칙·기본 모델·조건부 검토의 동일 cohort, 인수·정상 명령·재발·비용의 생산 책임과 자료 부족 HOLD를 고정한다. 전문은 [D-697](../adr/D-697-independent-operational-comparison.md).
+## D-696 — 비식별 사건 인수 근거 export
+
+**Status:** Accepted (2026-10-12).
+
+Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted and case-only named claim remain distinct. [D-696](../adr/D-696-incident-handoff-evidence.md).

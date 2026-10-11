@@ -197,8 +197,9 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
       stage.querySelector('#topbar-more .ui-icon-label').hidden = true;
     }""", snippets)
     tooltip = page.get_by_role("tooltip")
-    for name, target in [("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
-                         ("접속과 화면 표시", "#topbar-more")]:
+    for snippet, (name, target) in zip(snippets, [
+        ("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
+        ("접속과 화면 표시", "#topbar-more")], strict=True):
         control = page.locator(f"#existing-icons {target}")
         assert control.get_attribute("data-ui-tooltip") == name
         assert control.get_attribute("title") == name
@@ -206,7 +207,7 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
         tooltip.wait_for(state="visible")
         assert tooltip.inner_text() == name
         assert control.get_attribute("aria-describedby") == "rosy-shared-tooltip"
-        assert control.get_attribute("data-icon-only") is None
+        assert control.get_attribute("data-icon-only") == ("" if 'data-icon-only=""' in snippet else None)
         assert control.evaluate("node => getComputedStyle(node).minHeight") == "48px"
     assert page.locator("#existing-icons [data-theme-choice]").get_attribute("aria-pressed") == "true"
     fallback = page.evaluate("""async () => {

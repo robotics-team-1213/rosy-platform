@@ -869,6 +869,12 @@
 - 증거: 통합 원격 버전 정렬 시험에서 불일치를 재현했다. 수정 HEAD의 재검증 대기.
 - gate 변화: 없음. API 동작이나 운영 활성화를 변경하지 않았다.
 
+## 2026-10-12 · d002c579d · D-689 계약 버전 설명 정렬
+
+- 변경: API factory 문서와 FastAPI 설명의 계약 버전을 v1.211에 맞췄다.
+- 증거: 전체 영향 원격 버전 정렬 시험에서 v1.209 설명의 불일치를 재현했고 known_failures NEW를 확인했다. 수정 재검증 대기다.
+- gate 변화: 없음. API 동작과 장치 수용을 변경하지 않았다.
+
 ## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
 
 - 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.

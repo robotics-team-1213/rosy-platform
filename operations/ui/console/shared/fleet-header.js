@@ -69,6 +69,11 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
 
 // English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
 export function showSession(identity) {
+  $('fleet-login').hidden = true;
+  $('fleet-account').hidden = false;
+  $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
+  const token = $('token-access');
+  if (token) token.open = false;
   const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = `${identity.principal_id} · ${identity.role}`;
@@ -82,6 +87,9 @@ export function showSession(identity) {
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
 // the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
 export function showSignedOut({fold = true, refused = true} = {}) {
+  $('fleet-account').hidden = true;
+  $('fleet-account').open = false;
+  $('fleet-login').hidden = false;
   const tag = $("user-role");
   tag.textContent = "인증 필요";
   tag.removeAttribute("title");
