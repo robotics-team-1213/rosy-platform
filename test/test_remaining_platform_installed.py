@@ -74,6 +74,16 @@ import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
 assert not (installed / '_build').exists()
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
+from rosy.execution.site.workflow import project_progress
+assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy', 'core'))
+try:
+    GoalPredicate.from_mapping({'predicate_id': 'p', 'condition': 'object_in_destination',
+                                'object_id': 'o', 'destination_id': 'd', 'evidence_source': 'model_summary'})
+except GoalEvidenceError:
+    pass
+else:
+    raise AssertionError('model summary admitted as independent goal evidence')
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
@@ -81,6 +91,7 @@ request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
 assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
+assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
     assert Path(module.__file__).resolve().is_relative_to(installed), name
@@ -142,6 +153,9 @@ import json
 import sys
 sys.path[:0] = json.loads(sys.argv[1])
 from fleet.stuck.board import LineStuckBoard
+from fleet.server.mission_service import MissionService
+from rosy.execution.site.goal_evidence import verify_goal
+from rosy.execution.site.workflow import project_progress
 from rosy_situation.assessment import Assessment
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)
