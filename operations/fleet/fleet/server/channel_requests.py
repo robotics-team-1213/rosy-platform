@@ -24,6 +24,7 @@ class ChannelConfig(BaseModel):
     bot_id: str = Field(pattern=r"^[0-9]{17,20}$")
     transport_key: str = Field(min_length=32, max_length=128, repr=False, exclude=True)
     users: dict[str, str] = Field(min_length=1, max_length=100)
+    bot_token_file: str | None = Field(default=None, min_length=1, max_length=4096)
 
     @classmethod
     def load(cls, path):
@@ -134,15 +135,29 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
     if task_service is None:
         raise ValueError("Discord intake requires the existing tasks DB")
     key = config.transport_key
-    if (hashlib.sha256(key.encode()).hexdigest() in principals or key in secrets
-            or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)
-            or any(owner is not None and owner.uses_token(key) for owner in secret_owners)):
-        raise ValueError("Discord transport credential must be isolated")
-    for name in ("goal_evidence_service", "cell_goal_evidence_service"):
-        service = getattr(app.state, name, None)
-        if service is not None and any(producer.token == key for producer in service.registry.producers):
+    token = None
+    if config.bot_token_file is not None:
+        try:
+            token = Path(config.bot_token_file).read_text(encoding="utf-8").strip()
+        except OSError:
+            raise ValueError("Discord Bot credential file unavailable") from None
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{40,200}", token) or token == key:
+            raise ValueError("invalid or shared Discord Bot credential")
+    for credential in (key, token):
+        if credential is None:
+            continue
+        if (hashlib.sha256(credential.encode()).hexdigest() in principals or credential in secrets
+                or console.uses_rest_token(credential) or console.uses_agent_pairing_token(credential)
+                or any(owner is not None and owner.uses_token(credential) for owner in secret_owners)):
             raise ValueError("Discord transport credential must be isolated")
+        for name in ("goal_evidence_service", "cell_goal_evidence_service"):
+            service = getattr(app.state, name, None)
+            if service is not None and any(producer.token == credential for producer in service.registry.producers):
+                raise ValueError("Discord transport credential must be isolated")
     accounts = {p.principal_id: p.role for p in principals.values()}
     accounts.update({entry['principal_id']: entry['role'] for entry in (site_logins or {}).values()})
     app.state.channel_requests = ChannelRequests(task_service.store.path, config, accounts)
     install_channel_routes(app, app.state.channel_requests, require_operator=require_operator, read_guard=read_guard)
+    if token is not None:
+        from .channel_gateway import install_gateway
+        install_gateway(app, app.state.channel_requests, token)

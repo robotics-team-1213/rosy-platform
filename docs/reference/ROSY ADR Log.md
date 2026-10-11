@@ -662,6 +662,7 @@
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
+| D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Proposed (2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 
@@ -724,3 +725,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
+
+## D-675 — Discord Gateway 수신과 기존 Fleet lifecycle
+
+- 상태: Proposed (2026-10-12).
+- 결정: 기존 Fleet lifespan의 선택적 수신; receipt commit 후 resume, 미해결 session 공백은 정지.
+- 계약: [ADR](../adr/D-675-discord-gateway-fleet-lifecycle.md). 실제 수신과 설치 검증 전이며 실행 권한 없음.

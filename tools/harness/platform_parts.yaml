@@ -40,7 +40,7 @@ import_rules:
     forbidden_external: [lerobot, torch]   # training stack; devices ship onnxruntime only (D-356)
   operations:
     allow: [contracts, shared_web]
-    integrations: [models, storage]
+    integrations: [models, storage, messaging]
   learning:
     allow: [contracts]
     integrations: [models, policies/lerobot_training, simulation, storage]
