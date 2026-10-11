@@ -65,3 +65,18 @@ These are importable geometry and joint models; `run_rosy.py` is a Pinky mobile-
 [Latest-main headless evidence](../../../docs/validation/isaac-latest-core-main-2026-10-11/result.md) records the current CORE source, remote regression and measured motion/stop results. Rotation tracking remains below the acceptance band, so the complete ROS-SIM/RL gate stays HOLD.
 
 The Pinky URDF places wheel joint origins at ±0.04055 m, a geometric center separation of **0.0811 m**; the wheel collision cylinders sit a further ±0.008 m out, a contact separation of **0.0971 m**. The Gazebo drive plugin and the Isaac controller both use that URDF nominal **0.0971 m** as `wheelDistance` (D-397, `middleware/devices/pinky/profile/config/geometry.yaml`); a robot's accepted `wheel_odometry` calibration record refines it on the device. On the GPU host, import the USD, confirm wheel axis/sign and ground contact, then compare commanded yaw with `/odom` and observed rotation. Also confirm one `/clock` publisher, TF frame IDs, command topic ownership, and zero-command/command-loss stopping before Nav2 or an extended run. The runtime receipt watchdog and zero target readback do not replace measured physical stopping or yaw tracking. Keep motion acceptance separate from an import or host test.
+
+## 한 대 실제 맵 CPU RL 진단
+
+[D-638](../../../docs/adr/D-638-isaac-single-pinky-cpu-rl-diagnostic.md)의 `run_map_rl.py`는 `260919 MAP FILE.STL`에서 생성한 curved 경로와 30cm 외곽 벽을 사용한다. 기존 Drive `PathFollower`의 yaw 후보에 CPU Q-learning gain을 적용하고 기존 CORE `CommandManager`·`cmd_vel_cycle`로 최종 출력한다. 한 대 native SDK 진단이며 D-606 Isaac Lab, ROS-SIM 및 두 대 Fleet·신호 수용과 구분한다.
+
+모델 PC의 격리 SDK Python에서 준비한 URDF와 새 출력 디렉터리를 지정한다. 운영 `ROSY_CONFIG`/`ROSY_NAMESPACE` 환경은 거부한다. 실행 전후 source 파일 해시, 자원 여유와 소유 작업의 종료를 확인한다.
+
+```bash
+"$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_map_rl.py" \
+  --urdf /scratch/rosy-isaac/rosy.urdf \
+  --output-dir /scratch/rosy-isaac/map-rl-new-run \
+  --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" --train-episodes 6
+```
+
+baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 X: 세션과 모델 PC scratch에 보관한다.
