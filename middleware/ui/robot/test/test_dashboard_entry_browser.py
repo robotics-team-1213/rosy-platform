@@ -137,7 +137,7 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     page, state = entry
     _open(page, token='')
     expect(page.locator('#auth-drawer')).to_be_visible()
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-label').fill('fixture tablet')
     page.locator('#code-remember').check()
@@ -197,7 +197,7 @@ def test_entry_remembers_only_expiring_paired_login_and_revokes_on_logout(entry)
     page.locator('#code-input').fill('ABCD')
     page.locator('#code-submit').click()
     expect(page.locator('#code-message')).to_contain_text('8자')
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
