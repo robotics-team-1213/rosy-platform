@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
+import threading
 
 from fleet.incidents.automation.worker import IncidentCaseWorker
 from fleet.incidents.automation.store import CaseBudget, IncidentCaseStore
@@ -204,6 +205,32 @@ def test_preparation_rejects_foreign_database_without_writing_parent(tmp_path):
         assert conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] == 0
         conn.rollback()
     assert store.active_scopes() == ()
+
+
+@pytest.mark.parametrize('boundary', ['reserve', 'mark_submitting'])
+def test_cancel_during_database_commit_waits_and_closes_only_owned_reservation(tmp_path, boundary):
+    async def run():
+        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        entered, released = threading.Event(), threading.Event()
+        original = getattr(store, boundary)
+        def delayed(*args, **kwargs):
+            entered.set()
+            if not released.wait(3): raise AssertionError('test release missing')
+            return original(*args, **kwargs)
+        setattr(store, boundary, delayed)
+        worker.feed(poll())
+        while not entered.is_set(): await asyncio.sleep(.002)
+        closer = asyncio.create_task(worker.aclose())
+        await asyncio.sleep(.01)
+        released.set()
+        await closer
+        assert seen == [] and len(handoffs) == 1
+        case = store.case(handoffs[0][0])
+        assert case['state'] == 'HOLD' and case['reserved_micros'] == 0
+        with store._transaction() as conn:
+            row = conn.execute('SELECT state,actual_micros FROM fleet_incident_v2_attempts').fetchone()
+            assert tuple(row) == ('REJECTED', 0)
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize('fault', ['replaced', 'left_roster', 'restart', 'stale_normal'])
