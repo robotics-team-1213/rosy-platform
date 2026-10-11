@@ -338,7 +338,17 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        54_852,
+        55_664,
+        "split: independently re-judged by safety_structure_review on 2026-10-12 at 55664 "
+        "= Fleet36296 + Decision1666 + Console17457 + Discord245 after main233ca5746a account/profile "
+        "and Discord integration. Existing PasswordSessions/authorize/SQLite and Console resource owners "
+        "retain all authority; no process/provider/writer/dependency/SIZE_UNITS/exclusions added. "
+        "Keep +150 and every file/hard ceiling, full-progress/observe/server/UI extraction obligation. "
+        "password_session549 reaching600 must move HTTP installation to server/password_routes.py "
+        "while PasswordSessions retains storage/validation. automation472 is at322+150 and requires "
+        "review before any production growth. Principal-switch fence source approval remains pending "
+        "its regression; CI/deployment/runtime are separate. Preserve both snapshot verdicts below. "
+        "Previous verdict at54852: "
         "split: combined main be457256e5/Discord source independently reviewed by safety_structure_review "
         "at 54996 = Fleet36094 + Decision1666 + Console16991 + Discord245 on 2026-10-12; keep54852+150, "
         "no new baseline/units/exclusions. Native claim/pending fences, autonomous empty default, "
@@ -372,6 +382,12 @@ SIZE_VERDICTS = {
         "existing-DB journal and owner-only Console reading, with no work creation or device/model authority. "
         "app.py remains at its existing 906 ceiling. Keep +150, every file ceiling and existing full-progress/"
         "observe/server/UI extraction obligations. Previous verdict: "
+        "split: independently re-judged on 2026-10-12 by learning_ui at 54074 for D-683/D-686/D-689. "
+        "Account/login/profile reuse Fleet authentication, SQLite and Console; no service, dependency, "
+        "command authority or SIZE_UNIT added. Keep package +150, all file ceilings and existing "
+        "observe/server/UI split obligations. password_session.py is 549 lines; endpoint growth reaching "
+        "600 must move HTTP installation to server/password_routes.py, retaining validation/storage "
+        "in PasswordSessions. See docs/plans/2026-10-12-fleet-self-profile-plan.md. Previous verdict: "
         "split: independently re-judged on 2026-10-12 by pipeline_review at 53532 for D-685. "
         "Autonomous waiting/replan retain existing stuck and trip owners; bounded observation history "
         "stays in server/observation_store.py, read wiring in console_routes.py, offline unlabeled export "

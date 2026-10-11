@@ -42,7 +42,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 71  # D-680 adds the Console request-review owner.
+    assert len(expected) == 76  # D-680 request review plus D-683/D-689 account assets.
+    assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
+    assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js',
             'work-view.js', 'channel-request-view.js'} <= expected.keys()
     if delivery == 'sdist':

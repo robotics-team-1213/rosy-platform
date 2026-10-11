@@ -41,6 +41,19 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
             page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
             assert not posts
 
+            claim.click()
+            api['/api/fleet/session'] = {'principal_id': 'alice', 'role': 'operator'}
+            page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
+            expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+            expect(page.locator('#channel-review')).to_be_hidden()
+            assert not posts
+            api['/api/fleet/session'] = {'principal_id': 'bob', 'role': 'operator'}
+            page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
+            page.clock.run_for(2000)
+            page.locator('#channel-requests ui-button').click()
+            page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
+            page.locator('#channel-review-reason').fill('current risk review')
+
             def accept(route):
                 body = route.request.post_data_json
                 assert body == {'expected_hash': digest, 'expected_revision': 0, 'robot_id': 'rosy_03',
