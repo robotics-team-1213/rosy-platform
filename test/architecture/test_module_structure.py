@@ -270,10 +270,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_098,
+        53_093,
         "split: re-judged on 2026-10-12 with D-655/D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
         "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
-        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53098; "
+        "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53093; "
         "package +150 and observe/server/UI obligations remain. Previous verdict: "
         "independently re-judged on 2026-10-11 by survey_feature_review at 53012 after "
         "merging D-655 survey/recording/UI and D-664 source-scoped work read; incidents remains "
