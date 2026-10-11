@@ -55,7 +55,7 @@ def test_gain_changes_steering_before_manager_caps_and_authority_gate():
                                      authority_required=True))
     out = held.tick_gain(10., gain=1.7)
     assert (out.linear, out.angular) == (0., 0.)
-    assert held.status().reason == 'authority_missing'
+    assert held.status().reason == 'authority_none'
 
 
 def test_camera_stale_and_invalid_gain_cannot_drive():
@@ -118,3 +118,28 @@ def test_low_light_image_never_calls_model():
     assert lane.last['reason'] == 'low_light'
     out = lane.manager.tick_gain(10., gain=1.)
     assert (out.linear, out.angular) == (0., 0.)
+
+
+def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    rows, cols = np.mgrid[0:240, 0:320]
+    denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lateral = ground.height_m * (cols - 160) / denominator
+    way = ((denominator > 0) & (np.abs(lateral) < .0925)).astype(np.uint8)
+    calls = []
+    def infer(frame):
+        calls.append(frame)
+        return way, 'drivable', {}, 1.
+    model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=infer)
+    lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
+    frame = np.full((240, 320, 3), 100, np.uint8)
+    lane.observe(frame, stamp=1., source_now=1., pose=(0., 0., 0.))
+    assert lane.last['model_used'] and lane.last['paint_kind'] == 'drivable'
+    out = lane.manager.tick_gain(10., gain=1.)
+    assert out.linear > 0. and abs(out.angular) < .01
+    lane.observe(frame, stamp=1., source_now=1., pose=(0., 0., 0.))
+    stopped = lane.manager.tick_gain(10., gain=1.7)
+    assert (stopped.linear, stopped.angular) == (0., 0.) and len(calls) == 1
