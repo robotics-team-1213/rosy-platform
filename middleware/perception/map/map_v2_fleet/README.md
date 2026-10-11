@@ -55,6 +55,21 @@ curl -X PUT http://127.0.0.1:8080/api/v1/line-follow/mode -H "Authorization: Bea
 
 ## Limits
 
+- The four orange/yellow and black diagonal warning patches use the shared
+  `caution_markers` definition in `lane_rules.yaml`. `build_world.caution_meshes()`
+  supplies the same triangles and colours to all three Gazebo worlds and the
+  Isaac native map runner. Generated `meshes/caution_*.stl` are tracked and
+  installed with this bundle; regenerate with `scripts/build_world.py`.
+  The stronger S-bend remains in `training-curved/` for both simulators.
+- Warning positions come from the rectified real overhead recording (D-525
+  rev. 5, `paint-7b220d432c2a`), projected onto the CAD spokes by less than
+  1.7 cm. Photo centres are retained in the rules. Size is approximately
+  15 x 4 cm, position uncertainty +-3 cm; physical measurement is pending.
+  They are flat visual fixtures, not physical speed bumps or white stop lines.
+  Adding them does not enable a traffic policy or prove a stop/observe action.
+  The two white crosswalks and their graph remain unchanged. Actual RGB/mask
+  evidence and provenance stay in the ignored `private/isaac` journal.
+
 - Lane paint is visual-only. Nav2 and LiDAR see only the rectangle, which looks the same after a 180 deg turn, so AMCL is ambiguous here. The two floor reference squares (`reference_squares` in `lane_rules.yaml`; red outline, blue fill; A at (-1.26, 0.49), B at (0.86, -0.52)) break that ambiguity once a camera observes one: the rotated layout has no square within 0.4 m of any real one. Coordinates are image-derived, +-3 cm, tape measurement pending (D-395 rev. 1). The sim world draws them as flat visual-only patches.
 - The launch uses `edge_left` mode (Gazebo ground only): one full lap around the inner block passes in Gazebo; other routes need junction choices. See `docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`.
 - Orientation vs the physical mat: the Gazebo top view matches the STL under a proper rotation (no mirror). Not yet compared against a photo of the physical mat.
