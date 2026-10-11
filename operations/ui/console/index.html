@@ -18,8 +18,9 @@
 </head>
 <body>
   <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
-  <ui-shell grammar="exception">
+  <ui-shell grammar="exception" class="fleet-shell">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
+  <header class="fleet-header">
   <ui-topbar>
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
@@ -43,18 +44,20 @@
       </div>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
+    <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
-    <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  </header>
   <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" aria-current="page">관제</a>
-    <a href="/console/install">설치·보정</a>
-    <a href="/console/site-map">현장 지도</a>
-    <a href="/console/cell">Cell</a>
+    <a href="/console" data-action-icon="fleet" aria-current="page">관제</a>
+    <a href="/console/install" data-action-icon="install">설치·보정</a>
+    <a href="/console/site-map" data-action-icon="map">현장 지도</a>
+    <a href="/console/cell" data-action-icon="cell">Cell</a>
   </nav>
+  <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
@@ -96,6 +99,7 @@
         </details>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
+      <div class="map-board">
       <div class="map-stage" id="map-stage" data-map-state="loading">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
@@ -107,6 +111,27 @@
         </div>
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
+      </div>
+      <aside class="map-readouts" aria-label="지도 상황">
+      <div class="map-context">
+      <h3 class="ui-section-heading">장소</h3>
+      <ol id="map-places" class="map-place-list" aria-label="지도 번호별 장소" hidden></ol>
+      <h3 class="ui-section-heading">교통</h3>
+      <ul id="map-traffic-status" class="map-traffic-status" aria-label="지도 교통 상태"><li>교통 상태 대기</li></ul>
+      <p class="hint" id="map-calibration-status" role="status" hidden></p>
+      </div>
+      <div class="tracking-bar">
+        <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
+        <details id="tracking-coordinate-details">
+        <summary class="ui-disclosure-row">관측 좌표</summary>
+        <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
+          <caption>지도 좌표 · m · 카메라 관측</caption>
+          <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
+          <tbody id="tracking-position-rows"></tbody>
+        </table>
+        </details>
+      </div>
+      </aside>
       </div>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
       <div class="legend" id="map-legend" hidden>
@@ -120,17 +145,6 @@
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
-      <div class="map-readouts">
-      <ul id="map-traffic-status" class="map-traffic-status" aria-label="지도 교통 상태"><li>교통 상태 대기</li></ul>
-      <div class="tracking-bar">
-        <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
-        <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
-          <caption>지도 좌표 · m · 카메라 관측</caption>
-          <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
-          <tbody id="tracking-position-rows"></tbody>
-        </table>
-      </div>
-      </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
       <details class="note">
         <summary class="ui-disclosure-row">관제 범위 안내</summary>
@@ -138,7 +152,7 @@
       </details>
     </section>
     </div>
-    <div class="console-secondary">
+    <aside class="console-secondary" aria-label="현재 상태와 대응">
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
@@ -156,10 +170,10 @@
       </section>
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" aria-controls="context-status" aria-selected="true">로봇 상태</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" data-ui-tooltip="등록 로봇의 현재 상태와 대응 확인" aria-controls="context-status" aria-selected="true">로봇 상태</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" data-ui-tooltip="수신된 관제 메시지 확인" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" data-ui-tooltip="사건 기록과 영상 근거 검토" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" data-ui-tooltip="대형과 신호 등 운영 도구 확인" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
       <section class="panel" aria-labelledby="roster-heading">
@@ -351,9 +365,12 @@
 
         </div>
       </section>
-    </div>
+    </aside>
   </main>
 
+  </div>
+  </div>
+  <footer class="fleet-footer" aria-label="운영 정보"><span>현재 시각</span><ui-text id="clock" scale="value">--:--:--</ui-text><a href="/console?inbox=1" data-action-icon="notification">관제 알림</a></footer>
   </ui-shell>
 </body>
 </html>

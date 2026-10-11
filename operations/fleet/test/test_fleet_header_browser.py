@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = [("console", "/console"), ("install", "/console/install"),
         ("site-map", "/console/site-map"), ("cell", "/console/cell")]
-SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844), (320, 568)]
+SIZES = [(1920, 1080), (1366, 768), (1440, 900), (1024, 768), (390, 844), (320, 568)]
 STUCK = {"stuck_id": "stuck-abc", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 41.0,
          "attempts": 1, "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 9.0,
          "last_answer": None, "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
@@ -136,6 +136,17 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 page.wait_for_timeout(400)
                 fact = page.evaluate(PROBE)
                 measured[(name, width)] = fact
+                nav = page.locator(".doc-tabs").bounding_box()
+                main = page.locator("main").bounding_box()
+                footer = page.get_by_role("contentinfo")
+                expect(footer.locator("#clock")).not_to_have_text("--:--:--")
+                expect(page.get_by_role("banner")).to_have_count(1)
+                assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                if width >= 1024:
+                    assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
+                else:
+                    assert nav["y"] + nav["height"] <= main["y"] + 1, (name, width, nav, main)
+                assert footer.bounding_box()["y"] >= main["y"] + main["height"] - 1
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
                 assert page.locator("#development-badge").evaluate(

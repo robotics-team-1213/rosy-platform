@@ -184,7 +184,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console", posts)
         try:
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)  # the first 1 s traffic poll
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
@@ -214,6 +214,40 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             page.locator("#traffic-toggle").click()
             expect(page.locator("#legend-traffic")).to_be_visible()
             assert not posts, posts
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+def test_map_context_keeps_place_names_off_the_floor(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, "/console", [])
+        try:
+            expect(page.locator("#map-places li")).to_have_count(len(PLACES))
+            expect(page.locator("#map-places li").first).to_have_text("남서 · 0.00, 0.00 m")
+            page.evaluate("""() => {
+                window.__floorWords = [];
+                const original = CanvasRenderingContext2D.prototype.fillText;
+                CanvasRenderingContext2D.prototype.fillText = function(text, ...args) {
+                    if (this.canvas.id === 'map-canvas') window.__floorWords.push(String(text));
+                    return original.call(this, text, ...args);
+                };
+            }""")
+            for width, height in [(1920, 1080), (390, 844)]:
+                page.set_viewport_size({"width": width, "height": height})
+                page.select_option("#map-display-mode", "coordinates")
+                page.clock.run_for(1500)
+                plane = page.locator("#map-stage").bounding_box()
+                context = page.locator(".map-readouts").bounding_box()
+                if width >= 1024:
+                    assert context["x"] >= plane["x"] + plane["width"] - 1
+                else:
+                    assert context["y"] >= plane["y"] + plane["height"] - 1
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            words = page.evaluate("window.__floorWords")
+            assert words and not any(place["name"] in word for place in PLACES for word in words), words
             assert not errors, errors
         finally:
             browser.close()
@@ -251,7 +285,7 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
         try:
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)
             expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
             expect(page.locator('#site-map-svg [data-robot="rosy_02"]')).to_have_class("robot c2 degraded")
