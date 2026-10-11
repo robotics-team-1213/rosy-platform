@@ -211,11 +211,14 @@
             <summary class="ui-disclosure-row" id="site-path-heading">관제 경로 · <span id="site-path-summary" role="status" aria-live="polite">확인 중</span></summary>
             <ul id="site-path-list"></ul>
           </details>
-          <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
         </div>
         <div class="workspace-heading"><h3>목적지·작업 배정</h3><span class="hint">선택 → 배정 → 진행 확인</span></div>
         <p id="robot-workspace-empty" class="hint" role="status">로봇을 선택하면 작업 배정과 진행 상태를 확인할 수 있습니다.</p>
         <div id="robot-workspace" aria-label="선택한 로봇의 작업"></div>
+        <details class="robot-list-details" open>
+          <summary class="ui-disclosure-row">등록 로봇 · 연결·안전 요약</summary>
+          <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
+        </details>
       </section>
 
         </div>
