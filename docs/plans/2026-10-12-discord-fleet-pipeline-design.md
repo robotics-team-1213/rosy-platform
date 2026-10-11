@@ -32,6 +32,8 @@ flowchart LR
 | 원래 대화 결과 | 사건 OPEN/CLOSED 통지만 구현 | 요청 message→작업/사건→결과 revision→reply 관계와 중복·UNKNOWN 처리 |
 | 설치·운영 | webhook만 준비; Bot transport와 Fleet runtime 설정 없음 | wheel/sdist/source/native closure, 기명 계정·실제 Console HTTPS, 기본 OFF 활성화 계약 |
 
+점검 중 사용자 계정에서 Rosy Fleet Bot application을 생성했다. 사람 확인은 사용자가 직접 완료했다. application 생성은 서버 설치·Bot token 발급·Gateway 접속·Fleet 계정 연결이나 대화 intake 구현이 아니다. 세 privileged intent는 꺼져 있으며 실제 실행 권한을 부여하지 않았다.
+
 이 공백은 구현이 없다는 뜻이며 확인하지 않은 현장 장애를 추정한 목록이 아니다. 기존 outbox와 기명 인수의 transaction/freshness 검사는 유지한다. 특히 `LineStuckBoard.judgment_view`는 읽을 때 근거 나이를 재평가하므로 그 검사를 중복 구현하지 않는다.
 
 ## 분리할 파이프라인
@@ -39,6 +41,8 @@ flowchart LR
 일반 요청은 사람의 의도를 보존하는 draft이며 바로 Mission이나 장치 요청이 아니다. 현재 사용자/대상/지도·capability에 맞는 구조화 후보가 생긴 뒤 기존 Console에서 확인한다. 잘못된 위치를 임의 좌표로 대체하거나 현재 map/source lineage를 바꾸지 않는다. 요청 문장에 여러 작업이 있으면 첫 버전은 한 작업씩 확인한다.
 
 위험 대응은 현재 사건의 ID·근거·판단 revision을 먼저 고정한다. 알림 답변·담당 인수·정지 요청·복구 이동·해소는 서로 다른 기록이다. ‘제가 처리할게요’는 인수 요청으로 검토하며 관측상 해소나 실행 성공으로 기록하지 않는다. 연결/원장 실패는 UNKNOWN/보류로 남기고 CORE 보호를 계속 유지한다.
+
+첫 사건 대응의 현재 owner는 Pinky 차선 정지 board/handoff다. 배터리·trip·카메라 신뢰·Arm Action 실패는 각각의 기존 상태/사건 owner를 확인한 뒤 연결하며, line-stuck API를 모든 위험의 범용 인수 API로 재해석하지 않는다. 현재 주행 Task는 navigate, 일반 Mission은 고정 workcell PICK_PLACE, Cell Job은 제한된 pallet.transfer이므로 대화 입력만으로 혼합 장치 실행 범위를 넓히지 않는다.
 
 Discord의 표시 이름으로 Fleet operator를 만들어서는 안 된다. Bot token, webhook, Fleet 계정 credential, provider credential을 서로 분리한다. 공개 문서·스크린샷·로그에 token을 넣지 않는다. 관리자에게 이미 존재하는 채널의 권한과 기명 principal 연결을 확인받아야 한다.
 
