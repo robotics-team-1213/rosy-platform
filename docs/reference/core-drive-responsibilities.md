@@ -14,10 +14,11 @@ middleware/
 │  ├─ services/core_features/
 │  │  ├─ command/ (mode·candidate admission·최종 선택)
 │  │  ├─ safety/ (공통 보호·policy·velocity 검증)
-│  │  ├─ line_follow/ (차선·body·recovery 알고리즘)
-│  │  └─ navigation, localization, docking, swarm, power 등
+│  │  └─ state, power, diagnostics, calibration lease, recovery admission 등
 │  └─ events/ (core_events)
 ├─ control/drive/
+│  ├─ behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}
+│  ├─ runtime/ (기존 control/goal/wander/safety ROS 진입 모듈)
 │  ├─ planning/{nav2,grid}
 │  ├─ tracking/wander
 │  ├─ recovery/
@@ -40,7 +41,7 @@ middleware/
 | Drive 조립 | `core/drive/line_follow.py`, `docking.py`, `traffic.py` | 기존 line manager와 live angular provider, docking/swarm, policy/observer 생성. 새로운 framework/process/container 없음 |
 | 공통 power/battery | `core/system/power.py`, `core_features.power` | 기존 parser fallback·validation·data path와 power→battery 생성 순서. shutdown sentinel은 요청이며 host unit이 halt 소유 |
 | Drive planning backend | `middleware/control/drive/planning/nav2`, `planning/grid` | ROS `navigation`과 기존 `control.planning` identity. CORE goal facade·취소 generation·backend 입출력 구분 |
-| 차선·군집·localization 실행 | `core_features.line_follow`, `swarm`, `localization` | 기존 feature owner. 모든 알고리즘을 새로운 control library로 이전한 상태는 아님 |
+| 차선·군집·localization 실행 | `middleware/control/drive/behaviors`의 해당 구현 | D-649로 소스 이전. 설치 identity는 기존 `core_features.*`, 새 library/process 없음 |
 | 기존 Control Drive 알고리즘 | `middleware/control/drive/{tracking,recovery,calibration,safety}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
 | 공통 Base 명령/Safety | `core_features.command`, `core_features.safety`, `core.bridge` | CORE 최종 command 선택과 ROS publisher. E-stop/readiness/deadman·policy·세대 검증 |
 | Drive 기하·운동 proof | `line_follow/{clearance,body_stop}`, recovery sweep, Drive envelope·floor/body 검사 | 현재 후보의 곡률·전진·후진·pivot 근거. CORE 공통 Safety를 대체하지 않음 |
