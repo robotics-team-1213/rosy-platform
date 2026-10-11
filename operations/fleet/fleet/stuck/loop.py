@@ -66,6 +66,7 @@ class StuckResolverLoop:
         await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         actions = self._resolver.step(now, robots)
+        selected = self._rows.copy()
         verdicts, self._resolver.ai_verdicts[:] = list(self._resolver.ai_verdicts), []
         if verdicts and self.ai_board is not None:
             for verdict in verdicts:
@@ -78,7 +79,7 @@ class StuckResolverLoop:
             if isinstance(action, Escalate):
                 self._escalated(action)
             else:
-                await self._answer(action, now)
+                await self._answer(action, now, selected=selected.get(action.robot_id))
         if self.problems is not None:              # D-610 4: stalled and pose_lost
             await self.problems.run(self, now, robots)
 
@@ -160,8 +161,7 @@ class StuckResolverLoop:
         self._rows = {str(row["robot_id"]): self._row(row) for row in rows}
         return self._rows.get(robot_id)
 
-    async def _answer(self, answer: Answer, now: float) -> None:
-        selected = self._rows.get(answer.robot_id)
+    async def _answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> None:
         row = await self._admission_row(answer.robot_id)
         if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
             return

@@ -96,6 +96,8 @@ class ProblemWatch:
         if verdict == "forwarded":
             current = await loop._admission_row(rid)
             verdict = law_hold(current, decision=decision) or first.evidence_invalid(proposal, rid) or "forwarded"
+            if verdict == "forwarded" and loop.ai_board.problem_proposal(pid) != proposal:
+                verdict = "ai_proposal_changed"
             if verdict == "forwarded":
                 key = problem_key(current, kind, None, loop._resolver.at_crosswalk(rid))
                 verdict = ("ai_disabled" if not first.on(rid) else f"human_class:{key}"
