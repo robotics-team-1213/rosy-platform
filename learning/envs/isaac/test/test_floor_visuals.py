@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import shutil
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -31,6 +32,7 @@ def test_shared_floor_assets_have_metric_scale_and_source_poses():
 @pytest.mark.parametrize('change', ['missing_texture', 'escaped_texture', 'rotated_parent', 'nonfinite_pose'])
 def test_invalid_shared_assets_fail_before_rendering(tmp_path, change):
     map_root = tmp_path / 'map'
+    shutil.copytree(MAP / 'textures', map_root / 'textures')
     tree = ET.parse(MAP / 'training-curved/worlds/map_v2_fleet_real.world')
     carpet = tree.find('./world/model[@name="carpet"]')
     if change in ('missing_texture', 'escaped_texture'):
