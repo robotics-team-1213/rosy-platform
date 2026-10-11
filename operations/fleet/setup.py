@@ -5,6 +5,7 @@ import shutil
 
 from setuptools import find_packages, setup
 from setuptools.command.sdist import sdist
+from setuptools.command.build_py import build_py
 
 
 layout = runpy.run_path('fleet/_source_layout.py')
@@ -12,7 +13,15 @@ roots = layout['SOURCE_ROOTS']
 package_dirs = {
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
     'fleet.server.web': roots['console'],
+    'rosy_situation': roots['assessment'] / 'rosy_situation',
 }
+ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment')
+
+
+class PureAssessment(build_py):
+    def find_package_modules(self, package, package_dir):
+        modules = super().find_package_modules(package, package_dir)
+        return [item for item in modules if package != 'rosy_situation' or item[1] in ASSESSMENT_MODULES]
 
 
 class HolderSource(sdist):
@@ -21,8 +30,15 @@ class HolderSource(sdist):
         super().make_release_tree(base_dir, [name for name in files
             if (root / name).resolve().is_relative_to(root)])
         for name, folder in roots.items():
-            shutil.copytree(folder, Path(base_dir) / '_source_roots' / name,
-                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            destination = Path(base_dir) / '_source_roots' / name
+            if name == 'assessment':
+                destination = destination / 'rosy_situation'
+                destination.mkdir(parents=True, exist_ok=True)
+                for module in ASSESSMENT_MODULES:
+                    shutil.copy2(folder / 'rosy_situation' / (module + '.py'), destination)
+            else:
+                shutil.copytree(folder, destination,
+                                ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'fleet.egg-info/SOURCES.txt'
         text = manifest.read_text(encoding='utf-8')
         for name, folder in roots.items():
@@ -39,7 +55,7 @@ setup(
     packages=(find_packages(exclude=['test']) + list(package_dirs)
               + ['fleet.server.web.' + name for name in find_packages(where=str(roots['console']))]),
     package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
-    cmdclass={'sdist': HolderSource},
+    cmdclass={'sdist': HolderSource, 'build_py': PureAssessment},
     package_data={'fleet.server.web': [
         '*.html', '*.css', '*.js',
         'shared/*.css', 'shared/*.js',

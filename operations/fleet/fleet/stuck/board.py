@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Callable, Iterable, Optional
 
 from .lane_lost import peer_ahead
 from .resolver import ResolverConfig
+from rosy_situation.assessment import assess
+from rosy_situation.snapshot_assessment import POLICY, robot_input
 
 if TYPE_CHECKING:
     from .reports import LineStuckAnswerLog
@@ -46,6 +48,7 @@ class LineStuckBoard:
         self._clock = clock
         self._wall = wall
         self._open: dict[str, dict] = {}
+        self._assessment_inputs = {}
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
@@ -114,6 +117,14 @@ class LineStuckBoard:
         now = self._observed_at = self._clock()
         seen = set()
         robots = list(robots)
+        wall = self._wall()
+        self._assessment_inputs = {}
+        for row in robots:
+            source = dict(row)
+            received = source.get('_state_mono')
+            if type(received) in (int, float):
+                source['state_age_s'] = now - received
+            self._assessment_inputs[row['robot_id']] = robot_input(source, now=wall, sampled_at=wall)
         for row in robots:
             robot_id = row["robot_id"]
             seen.add(robot_id)
@@ -145,6 +156,11 @@ class LineStuckBoard:
             del self._open[robot_id]   # left the roster
             self._drop_notes(robot_id)
             self._close_episode(robot_id, "left_roster")
+
+    def intervention_assessment(self, robot_id: str):
+        """Internal shadow read; recheck age without refreshing the original evidence."""
+        request = self._assessment_inputs.get(robot_id)
+        return assess(request, now=self._wall(), policy=POLICY) if request is not None else None
 
     # ---- episode log: one write per open / close transition, never per poll -------------
 

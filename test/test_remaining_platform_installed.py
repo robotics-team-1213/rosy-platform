@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
 
 import pytest
 
@@ -41,6 +42,10 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
         sources[0] = next(archives.glob('fleet-*.tar.gz'))
+        with tarfile.open(sources[0]) as archive:
+            assessment_files = {Path(name).name for name in archive.getnames()
+                                if '/_source_roots/assessment/' in name and name.endswith('.py')}
+            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/ui/console')

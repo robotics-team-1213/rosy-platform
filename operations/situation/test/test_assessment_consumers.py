@@ -4,6 +4,7 @@ import importlib
 import importlib.util
 import json
 from copy import deepcopy
+from datetime import datetime, timezone
 
 import pytest
 
@@ -92,8 +93,7 @@ def test_situation_logs_normal_and_abstention_without_problems_or_actions(tmp_pa
             calls.append((path, body))
             if path == '/api/fleet/state':
                 current = deepcopy(row)
-                current['state']['timestamp'] = __import__('datetime').datetime.fromtimestamp(
-                    now[0] - 1, __import__('datetime').timezone.utc).isoformat()
+                current['state']['timestamp'] = datetime.fromtimestamp(now[0] - 1, timezone.utc).isoformat()
                 return {'robots': [current]}
             return {}
 
@@ -117,7 +117,7 @@ def test_situation_logs_normal_and_abstention_without_problems_or_actions(tmp_pa
 def test_context_refreshes_active_case_at_ttl_and_trims_closed_cases():
     from rosy_situation.incident_context import ContextDraft
     stuck = {'robot_id': 'pinky', 'stuck_id': 's1', 'phase': 'WAITING_CONSOLE', 'cause': 'lane_lost'}
-    view = snapshot(robot(stuck), [stuck])
+    view = snapshot(robot(deepcopy(stuck)), [stuck])
     drafts = ContextDraft()
     assert len(drafts(view)) == 1
     view['observed_at'] = 102.9
