@@ -32,6 +32,8 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             page.clock.run_for(2000)
             page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 2")
             assert page.locator("#work-overview").is_visible()
+            assert not page.locator('[aria-labelledby="map-heading"]').is_visible()
+            assert page.locator('.doc-tabs a[href="/console?view=work"]').get_attribute("aria-current") == "page"
             page.locator("#work-list ui-button").filter(has_text="팔 작업").click()
             assert page.locator("#work-detail").inner_text().find("packing") >= 0
             assert page.locator("#work-detail").inner_text().find("목표 확인 대기") >= 0
