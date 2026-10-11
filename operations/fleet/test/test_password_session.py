@@ -643,12 +643,12 @@ def test_password_change_stores_only_hash_and_preserves_remember(tmp_path):
 
 
 def test_long_initial_password_cannot_be_reused(tmp_path):
-    login = "teamuser"
-    HASH = hash_password(login)
-    source = {login: {"principal_id": "member", "role": "operator", "password_scrypt": HASH}}
+    LOGIN_ID = "teamuser"
+    HASH = hash_password(LOGIN_ID)
+    source = {LOGIN_ID: {"principal_id": "member", "role": "operator", "password_scrypt": HASH}}
     client = _client(_app(tmp_path, logins=source)[0])
-    assert _login(client, login=login, password=login).status_code == 204
-    assert client.post(CHANGE, headers=ORIGIN, json={"password": login}).status_code == 422
+    assert _login(client, login=LOGIN_ID, password=LOGIN_ID).status_code == 204
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": LOGIN_ID}).status_code == 422
     assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
 
 

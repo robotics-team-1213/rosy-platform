@@ -30,13 +30,14 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
-def test_dedicated_login_document_and_allowlisted_assets_keep_csp():
+@pytest.mark.parametrize('path', ['/console/login', '/console/profile'])
+def test_dedicated_login_document_and_allowlisted_assets_keep_csp(path):
     client = _client(FakeRobot('rosy_01'), token='operator-secret')
-    page = client.get('/console/login')
+    page = client.get(path)
     assert page.status_code == 200
     assert page.headers['cache-control'] == 'no-cache'
     assert "script-src 'self'" in page.headers['content-security-policy']
-    for asset in ('login-page.js', 'login-return.js', 'password-login.js', 'password-login.css'):
+    for asset in ('login-page.js', 'profile-page.js', 'login-return.js', 'password-login.js', 'password-login.css'):
         assert client.get('/console/assets/' + asset).status_code == 200
     assert client.get('/console/assets/unknown-login.js').status_code == 404
 

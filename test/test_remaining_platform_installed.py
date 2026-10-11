@@ -41,8 +41,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 73  # D-683 adds the login document and its two shared scripts.
+    assert len(expected) == 75  # D-683 login and D-689 profile documents/scripts are installed.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
+    assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js', 'work-view.js'} <= expected.keys()
     if delivery == 'sdist':
         archives = tmp_path / 'archives'
