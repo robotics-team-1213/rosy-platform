@@ -145,6 +145,42 @@ def test_resealed_truth_requires_exact_pixel_approval(tmp_path, monkeypatch):
         run(paths)
 
 
+def test_individually_approved_sets_must_share_the_source_image(tmp_path, monkeypatch):
+    paths = list(bundle(tmp_path, monkeypatch))
+    region = paths[3]
+    _, encoded = cv2.imencode(".jpg", np.full((12, 12, 3), 80, np.uint8))
+    (region / "image.jpg").write_bytes(encoded.tobytes())
+    digest = review.sha(encoded.tobytes())
+    authority = json.loads((region / "authority.json").read_bytes())
+    row = authority["frames"][0]
+    row["image_sha256"] = row["pixel_approval"]["image_sha256"] = digest
+    del authority["decision_sha256"]
+    authority["decision_sha256"] = review.sha(review.encoded(authority))
+    review.validate_authority(authority)
+    (region / "authority.json").write_bytes(review.encoded(authority))
+    def update(doc):
+        doc["authority_sha256"] = authority["decision_sha256"]
+        doc["frames"][0].update(image_sha256=digest,
+            approval_sha256=review.sha(review.encoded(row["pixel_approval"])))
+    paths[3] = revise(region, update)
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(region_eval_sha256=paths[3].name))
+    with pytest.raises(ValueError, match="paired road/region source image"):
+        run(paths)
+
+
+def test_exact_training_image_overlap_is_rejected_with_distinct_groups(tmp_path, monkeypatch):
+    paths = list(bundle(tmp_path, monkeypatch))
+    train = next((paths[1] / "datasets/train").iterdir())
+    (train / "image.jpg").write_bytes((paths[2] / "image.jpg").read_bytes())
+    train = seal(train)
+    model_doc = json.loads((paths[0] / "model_manifest.json").read_bytes())
+    model_doc["dataset"]["revision"] = train.name
+    (paths[0] / "model_manifest.json").write_bytes(review.encoded(model_doc))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(training_refs=[f"train@{train.name}"]))
+    with pytest.raises(ValueError, match="training/evaluation source or image overlap"):
+        run(paths)
+
+
 @pytest.mark.parametrize("slot", [0, 2, 3, 4])
 def test_root_alias_is_refused_before_resolving(tmp_path, monkeypatch, slot):
     paths = list(bundle(tmp_path, monkeypatch))
