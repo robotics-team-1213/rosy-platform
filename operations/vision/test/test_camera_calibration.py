@@ -66,7 +66,7 @@ def test_measured_floor_and_plane_are_separate_from_raw_homography():
                    capture_signature="g", models=("pinhole",))["candidates"][0]
     pixels = np.array([[50., 50.], [550, 50], [550, 400], [50, 400], [300, 200], [100, 300]])
     metres = pixels / 200 - 1
-    checks = np.array([[160., 120.], [440., 330.]])
+    checks = np.array([[160., 120.], [440., 330.], [410., 120.]])
     floor = fit_floor(c, pixels, metres, checks, checks / 200 - 1, map_id="measured-map",
                       pixel_space="undistorted")
     assert floor["validation"]["max_m"] < 1e-5
