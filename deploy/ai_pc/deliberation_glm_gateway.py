@@ -17,7 +17,7 @@ from rosy.decision.deliberation import Problem, canonical, identifier, opinion
 
 MODEL = 'glm-5.3-flash'
 UPSTREAM = 'https://api.z.ai/api/coding/paas/v4/chat/completions'
-SECRET = Path('/var/lib/rosy-deliberation/glm-coding-plan.json')
+CONFIG_PATH = Path('/var/lib/rosy-deliberation/glm-coding-plan.json')
 LIMIT = 16384
 
 
@@ -43,7 +43,7 @@ def trusted_body(raw):
 
 
 def read_secret():
-    fd = os.open(SECRET, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(CONFIG_PATH, os.O_RDONLY | os.O_NOFOLLOW)
     try:
         info = os.fstat(fd)
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
@@ -157,7 +157,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     job = json.loads(sys.stdin.buffer.readline(LIMIT + 1024))
-    if set(job) != {'body', 'deadline_s', 'socket_path', 'secret_path'} or job['secret_path'] != str(SECRET):
+    if set(job) != {'body', 'deadline_s', 'socket_path', 'secret_path'} or job['secret_path'] != str(CONFIG_PATH):
         raise ValueError('INVALID_JOB')
     duration = job['deadline_s']
     if type(duration) not in (int, float) or not math.isfinite(duration) or not 0 < duration <= 30:
