@@ -15,6 +15,7 @@ def subject():
 
 def test_fresh_config_has_one_model_and_denies_extra_calls():
     module = subject()
+    assert module.GlmOpenCodeLauncher.cost_verified is False
     config = module.smoke_config()
     assert config['model'] == config['small_model'] == module.MODEL
     assert config['enabled_providers'] == ['zai-coding-plan']

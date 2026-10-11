@@ -42,6 +42,8 @@ def isolated_command(sandbox, argv, unit, directory):
 
 
 class GlmOpenCodeLauncher:
+    cost_verified = False
+
     def __init__(self):
         self.sandbox = SandboxLauncher('opencode', EXECUTABLE, EXECUTABLE_SHA256)
         self.used = False
