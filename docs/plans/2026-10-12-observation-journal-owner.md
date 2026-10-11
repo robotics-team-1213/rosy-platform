@@ -10,6 +10,12 @@ D-699를 구현한다. 변경 전 Fleet 부모는 54,211줄이며 기존 54,074+
 
 새 `fleet.observe`는 source journal 책임이며 새 process나 별도 wheel이 아니다. setuptools find_packages의 기존 배포 closure를 사용한다. ADR 관계는 D-699의 D-427·D-429·D-430 표를 따른다. 원격 시험·독립 검토 후 승인된 local landing만 수행하며 push는 별도다.
 
+## 기록 창 구현과 검사
+
+기존 `learning/curation/pinky/fleet_observations.py`의 `capture_window`와 `--window` CLI를 재사용 경로로 구현했다. 새로운 operations 역방향 import·서비스·모델 호출은 없다. read-only WAL transaction, 전체 boundary roster, capture run/sequence·clock/cadence, strict canonical finite JSON·privacy·64KiB 입력, 24시간·4,096행 한도를 검증한다. 결과는 ID/hash와 미검수 coverage이며 command/model/recurrence 수치는 null이다. source clock의 오래된 값·offline null은 capture 시계로 취급하지 않는다.
+
+원격 RED는 미구현 함수의 18개 실패와 미연결 CLI의 1개 실패를 각각 확인했다. `07419256c`의 window·기존 관측/export·capture·holder/size 5개 파일은 적격 AI PC에서 87 passed, terminal exit 0, known-failures NEW 0이다. 단독 CLI는 `python -I -S`로 실행하고 출력 재사용을 거절했다. 로그는 세션 `logs/observation-window-cli-green/run-1.txt`다. 독립 검토와 최신 main 통합·local landing은 다음 gate이며 실제 서비스 배포·현장 수용·정상 무명령·재발 0건을 입증하지 않는다.
+
 ## 이전·기능 추가 후 동시 측정
 
 `1a1df82325`의 기존 source 필터 실측은 Fleet 부모 54,007줄(기존 54,074+150 = 54,224 한도), observe 232줄(이전 기준 212+150 = 362 한도)이다. aliases는 각각 5·2줄이며 CORE event body는 SQLite 정책 import 외에는 그대로 유지했다. 독립 검토에서 실제 동일 DB 원장 책임 분리와 기준 유지에 동의했고 중요 source blocker를 찾지 못했다.
