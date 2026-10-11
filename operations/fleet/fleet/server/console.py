@@ -431,6 +431,8 @@ class FleetConsole(TripAware):
         caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
+        if stop != self.goal_leases.stop_token(robot_id):
+            raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during goal admission")
         if robot_id in self._formation_members():
             # 팔로워는 리더 pose 를 따라가는 중이다. 여기에 목표를 따로 내리면 로봇 안에서
             # 두 임자가 같은 바퀴를 두고 다툰다 - 대형을 풀고 보내라고 돌려준다.
@@ -452,6 +454,8 @@ class FleetConsole(TripAware):
         state, _source = await self._gather_state(robot_id)
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during localization check")
+        if stop != self.goal_leases.stop_token(robot_id):
+            raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during goal admission")
         self._seen.pop(robot_id, None)
         self._remember([{"robot_id": robot_id, "state": state}])
         if self._verdict(robot_id) == trust.UNTRUSTED:
@@ -463,8 +467,6 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
                     "reason": "LOCALIZATION_UNTRUSTED"}
-        if stop != self.goal_leases.stop_token(robot_id):
-            raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during goal admission")
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation during goal admission")
         if lease_source != "trip" and self.trip_busy(robot_id):
@@ -478,9 +480,12 @@ class FleetConsole(TripAware):
         self._queued.pop(robot_id, None)
 
         route = await self._route_of(robot_id)
+        self.goal_leases.check_stop(robot_id, stop)
         blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
         if blocker is not None:
+            stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
             cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+            self.goal_leases.check_stop(robot_id, stop)
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -499,12 +504,15 @@ class FleetConsole(TripAware):
                     "waiting_on": [blocker], "reason": "ROUTE_CONFLICT"}
 
         await self._observe()
+        self.goal_leases.check_stop(robot_id, stop)
         intended = self._intended_route(robot_id, route, x, y)
         untrusted = next((rid for rid in self._order
                           if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
         if untrusted is not None:
             # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
+            stop = (stop[0], stop[1] + 1)
             cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+            self.goal_leases.check_stop(robot_id, stop)
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -517,6 +525,7 @@ class FleetConsole(TripAware):
                     "cancel_confirmed": True, "blocked_by": untrusted,
                     "waiting_on": [untrusted], "reason": "LOCALIZATION_UNTRUSTED"}
         grid = bays.Grid.from_payload(await self.map())
+        self.goal_leases.check_stop(robot_id, stop)
         standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
         if standing:
             return await self._make_room(
@@ -624,7 +633,9 @@ class FleetConsole(TripAware):
         적어, 사람이 손을 대야 풀린다는 것을 화면이 말하게 한다.
         """
         standing = list(standing)
+        stop = self.goal_leases.stop_token(mover)
         grid = bays.Grid.from_payload(await self.map())
+        self.goal_leases.check_stop(mover, stop)
         yielded, no_space = [], []
         for robot_id in standing:
             pose = self._pose_of(robot_id)
@@ -632,13 +643,17 @@ class FleetConsole(TripAware):
             # 0.38 s). 이벤트 루프에서 돌리면 그동안 다른 로봇의 폴링까지 같이 멈춘다.
             bay = None if pose is None or self.trip_busy(robot_id) else await asyncio.to_thread(
                 bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
+            self.goal_leases.check_stop(mover, stop)
             if bay is None:
                 no_space.append(robot_id)
                 continue
             await self._send_to_bay(robot_id, bay, mover)
+            self.goal_leases.check_stop(mover, stop)
             yielded.append(robot_id)
 
+        stop = (stop[0], stop[1] + 1)
         cancel_receipt = await self.goal_leases.cancel(mover, self._client(mover))
+        self.goal_leases.check_stop(mover, stop)
         if not self._cancel_confirmed(cancel_receipt):
             raise RuntimeError("navigation goal cancellation was not confirmed")
         self._goals.pop(mover, None)
@@ -667,6 +682,7 @@ class FleetConsole(TripAware):
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
         client = self._client(robot_id)
         stop = self.goal_leases.stop_token(robot_id)
+        mover_stop = self.goal_leases.stop_token(mover)
         caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
@@ -676,7 +692,11 @@ class FleetConsole(TripAware):
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation while planning a yield")
         if self.trip_busy(robot_id):
             raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
+        self.goal_leases.check_stop(mover, mover_stop)
         result = await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
+        if mover_stop != self.goal_leases.stop_token(mover):
+            await self.goal_leases.cancel(robot_id, client)
+            self.goal_leases.check_stop(mover, mover_stop)
         if result["accepted"] is False:
             raise RuntimeError("navigation yield goal was rejected")
         own = self._goals.pop(robot_id, None)
@@ -1204,6 +1224,8 @@ class FleetConsole(TripAware):
             follower_ids = [rid for rid in member_ids if rid != leader_id]
         if not follower_ids:
             raise HubError("NO_FOLLOWERS", "a formation needs at least one follower")
+        if self._goal_busy.intersection(follower_ids):
+            raise HubError("COMMAND_REJECTED", "a follower has a goal pipeline in flight")
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {"relay_factory": self._relay_factory} if self._relay_factory is not None else {}

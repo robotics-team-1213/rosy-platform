@@ -81,9 +81,9 @@ def test_off_by_default_sends_no_lease_and_shows_nothing():
     assert robot.renewals == [] and _goal(console) == {"x": 1.0, "y": 0.0, "yaw": 0.0}
 
 
-@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_cap"])
+@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_calc", "bay_cap", "bay_receipt", "traffic_cancel"])
 @pytest.mark.parametrize("stop_all", [False, True])
-def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all):
+def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch):
     async def main():
         robot, other = LeaseRobot("rosy_01"), LeaseRobot("rosy_02")
         console = _console(robot, other)
@@ -95,8 +95,12 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all):
             return value
 
         if stage == "yielded":
-            robot.capabilities = lambda: pause(LEASE_CAPS)
-            console._yielding["rosy_01"] = {"for": "rosy_02"}
+            async def yielded():
+                caps = await pause(LEASE_CAPS)
+                console._yielding["rosy_01"] = {"for": "rosy_02"}
+                return caps
+
+            robot.capabilities = yielded
         elif stage == "untrusted":
             console._gather_state = lambda _rid: pause(({}, "rest"))
         elif stage == "route":
@@ -106,12 +110,22 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all):
             console._observe = lambda: pause(None)
         elif stage == "map":
             console.map = lambda: pause(None)
+        elif stage == "traffic_cancel":
+            robot._path = [(0.0, 0.0), (1.0, 0.0)]
+            console._claims["rosy_02"] = list(robot._path)
+            cancels = 0
+
+            async def canceled():
+                nonlocal cancels
+                cancels += 1
+                return await pause({"canceled": True}) if cancels == 1 else {"canceled": True}
+
+            robot.navigation_cancel = canceled
         else:
             console._standing_in_the_way = lambda *_args: ["rosy_02"]
             console._pose_of = lambda _rid: (0.0, 0.0)
             from fleet.server import console as console_module
-            original_bay = console_module.bays.best_bay
-            console_module.bays.best_bay = lambda *_args, **_kw: (1.0, 1.0)
+            monkeypatch.setattr(console_module.bays, "best_bay", lambda *_args, **_kw: (1.0, 1.0))
             if stage == "bay_map":
                 calls = 0
 
@@ -121,24 +135,57 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all):
                     return await pause(None) if calls == 2 else None
 
                 console.map = mapped
-            else:
+            elif stage == "bay_cap":
                 other.capabilities = lambda: pause(LEASE_CAPS)
+            elif stage == "bay_calc":
+                monkeypatch.setattr(console_module.asyncio, "to_thread", lambda *_args, **_kw: pause((1.0, 1.0)))
+            else:
+                other.navigation_goal = lambda *_args, **_kw: pause({"accepted": True})
         goal = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
         await entered.wait()
         try:
             await (console.estop_all() if stop_all else console.cancel("rosy_01"))
         finally:
             release.set()
+        with pytest.raises((HubError, RuntimeError)):
+            await goal
+        assert "rosy_01" not in console._queued
+        assert "rosy_01" not in console._claims
+        assert "rosy_01" not in console._goals
+        assert not _sent(other)
+        assert "rosy_02" not in console._yielding
+        if stage == "bay_receipt":
+            assert ("navigation_cancel",) in other.calls
+
+    run(main())
+
+
+def test_formation_cannot_arm_a_follower_with_a_goal_in_flight():
+    async def main():
+        from fakes import FakeRelay
+
+        leader, follower = LeaseRobot("rosy_01"), LeaseRobot("rosy_02")
+        console = _console(leader, follower)
+        console._relay_factory = lambda *_args, **_kw: FakeRelay()
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = follower.navigation_goal
+
+        async def sending(*args, **kw):
+            entered.set()
+            await release.wait()
+            return await original(*args, **kw)
+
+        follower.navigation_goal = sending
+        goal = asyncio.create_task(console.goal("rosy_02", 1.0, 0.0))
+        await entered.wait()
         try:
-            with pytest.raises((HubError, RuntimeError)):
-                await goal
-            assert "rosy_01" not in console._queued
-            assert "rosy_01" not in console._claims
-            assert "rosy_01" not in console._goals
-            assert not _sent(other)
+            with pytest.raises(HubError):
+                await console.formation_start("rosy_01")
+            assert not any(call[0] == "follow" for call in follower.calls)
+            assert console._formation is None
         finally:
-            if stage in {"bay_map", "bay_cap"}:
-                console_module.bays.best_bay = original_bay
+            release.set()
+            await goal
 
     run(main())
 
