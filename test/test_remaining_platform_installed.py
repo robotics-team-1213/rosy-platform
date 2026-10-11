@@ -30,7 +30,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
-                     'contracts/foundation', 'contracts/skill', 'operations/world',
+                     'contracts/foundation', 'contracts/skill', 'contracts/motion', 'operations/world',
                      'operations/execution', 'middleware/skills/api'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
