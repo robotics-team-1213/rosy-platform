@@ -72,6 +72,45 @@ def test_bay_refusal_after_mover_send_keeps_task_unknown(tmp_path, monkeypatch, 
     assert len([call for call in robot.calls if call[0] == "navigation_goal"]) == 1
 
 
+@pytest.mark.parametrize("stage", ["route_cancel", "trust_cancel", "observe"])
+def test_post_acceptance_owner_errors_keep_task_unknown(tmp_path, stage):
+    from fakes import FakeRobot
+    from fleet.server.console import FleetConsole
+    from fleet.swarm.robots import RobotEndpoint
+
+    robot, other = FakeRobot("rosy_01"), FakeRobot("rosy_02")
+    console = FleetConsole([RobotEndpoint(r.robot_id, "http://127.0.0.1", "t")
+                            for r in (robot, other)], [robot, other])
+    service = _service(tmp_path / "fleet.sqlite3")
+    run(service.submit_navigation(robot_id="rosy_01", x=1.0, y=0.0, source="operator",
+                                  actor_id="site-console", request_key=stage))
+
+    async def failed_cancel():
+        raise RobotApiError("rosy_01", 409, "COMMAND_REJECTED", "cancel not confirmed")
+
+    robot.navigation_cancel = failed_cancel
+    if stage == "route_cancel":
+        robot._path = [(0.0, 0.0), (1.0, 0.0)]
+        console._claims["rosy_02"] = list(robot._path)
+    elif stage == "trust_cancel":
+        console._untrusted_blocks = lambda *_args: True
+    else:
+        async def failed_observe():
+            raise HubError("UNKNOWN_ROBOT", "roster changed after send")
+
+        console._observe = failed_observe
+
+    async def dispatch(attempt):
+        return await console.goal("rosy_01", **attempt["request"]["goal"],
+                                  task_id=attempt["task_id"], attempt_id=attempt["attempt_id"])
+
+    result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    assert result["status"] == "UNKNOWN"
+    assert service.store.resource_claims(resource_kind="robot", resource_id="rosy_01")
+    assert run(service.dispatch_next({"rosy_01"}, dispatch=dispatch)) is None
+    assert len([call for call in robot.calls if call[0] == "navigation_goal"]) == 1
+
+
 def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_path):
     service = _service(tmp_path / "fleet.sqlite3")
     queued = run(service.submit_navigation(
