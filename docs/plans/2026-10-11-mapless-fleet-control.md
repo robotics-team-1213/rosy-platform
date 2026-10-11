@@ -142,6 +142,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
 | Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
 | Task 3 카메라 관측 누적 | 완료 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어 및 명시적 endpoint 연결 구현. 연결·비동기 경합 원격 16 PASS/NEW 0, Node 29 PASS. main 통합·배포·실물 정확도는 Task 6 |
+| Task 4 선택 로봇·기록·대형 맥락 | 진행 · source/remote | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 5 충돌 처리와 Task 6 실제 수용은 남음 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
@@ -213,3 +214,12 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - 78d642317b 연결 화면 시험은 통과했으나 구조 시험에서 Fleet 52995 > 52840+150 NEW가 발생했다. 독립 검토에서 같은 좌표의 다른 장소 ID를 무시하는 중복 처리와 파일/확인 창 대기 중 바뀐 선택·편집이 저장되는 경합을 발견했다.
 - 962fa15277은 명시적 endpoint ID와 robot_kinds까지 중복 비교하고, 클릭 당시 선택을 고정하며 파일·초안·미저장 편집·선택·접속 변경 시 대기 중 저장을 취소한다. Node 29 PASS와 AI PC 자원 기준 통과 원격 Chromium 16 PASS/63 deselected, NEW 0. 독립 검토 수용. package 53010 재측정과 split 재판정을 기록하며 +150·파일 상한·기존 observe/server/UI 분리 의무를 유지한다.
 - 1ea4f4c2c 최종 연결/구조 원격 19 PASS/98 deselected, NEW 0 (`logs/camera-connect-final/run-1.txt`, 모델 PC 23.2 cores/8.5 GB 기준 통과). 연결은 inferred로 보존하며 별도 검토 전 활성화를 거절한다. 이 증거는 실물 연결 정확도·main 통합·CI·배포·실제 사이트 수용이 아니다.
+
+### Task 4 선택 로봇의 기록·대형 진입과 대상 유지
+
+- 6d655ecce 원격 RED 3 FAIL은 선택 카드 진입과 요청 ID 안내 부재다. 0d9adef961은 현재 로봇 ID를 지도 기록 링크로 전달하고 대형 관리에서 실제 리더·팔로워를 보여 준다. 관리 진입은 기존 대형 리더를 바꾸지 않고, e6081fcc70에서 제출 전 확인/운행 폼/목표/위치 지정만 취소한다. 로봇 정지나 시작 명령은 보내지 않는다.
+- e6081fcc70 넓은 역할/운행/기록/지도/구조 회귀는 158 PASS, 새 시험 2 FAIL(지원하지 않는 가짜 로봇의 목표 주행 버튼 클릭)이었다. 실제 지원하는 운행 배정 폼으로 시험을 고쳤으며 제품 capability 거절을 완화하지 않았다. NEW로 기록하고 기존 실패 목록에는 넣지 않았다.
+- a9f5eaf35 기록 대상 RED는 오프라인 안내가 없었다. a1b850f7d은 사용자 선택을 새로고침에서 유지하고 기록 중에는 서버가 보고한 robot_id에 선택을 고정한다. 등록에서 사라진 기록 로봇을 다른 로봇으로 바꾸지 않고 기록 중단은 유지한다. 잘못된 URL ID는 빈 선택과 대상 안내로 표시한다.
+- a1b850f7d 원격 대상/desktop/mobile/기존 지도 편집/구조 10 PASS/131 deselected, NEW 0 (`logs/selected-context-final/run-1.txt`). 이 실행은 자원 부족 fallback 경고가 있으므로 자원 기준 통과 수용으로 쓰지 않는다. 동일 소스의 전체 역할/운행 및 대상/지도/구조 acceptance를 AI PC 18 cores/7 GB 기준 통과 상태에서 실행 중이다.
+- Task 5에서 대형 팔로워 목표·대형 참여자 단독 운행·문제 개입의 기존 서버 거절과 화면 사유를 대조한다. Task 6은 이동 중 폴더 소유/현재 main 통합, 원격 회귀, CI, 서명 배포, 실제 사이트 확인을 계속 요구한다.
+- 동일 a1b850f7d 최종 acceptance: AI PC 18 cores/7 GB 기준 통과, 전체 역할/카드 운행과 대상/지도 편집/구조 30 PASS/111 deselected, NEW 0 (`logs/selected-context-acceptance/run-1.txt`). 독립 검토는 기록 대상 수정과 기존 권한 보존을 수용했다. Task 5 점검에서 app.py의 site-map 활성화 busy 주입이 진행 중 trip만 확인하고 formation/teach는 확인하지 않는 공백을 찾았다. 이 공백을 보강하기 전 통합·배포 완료로 판정하지 않는다.
