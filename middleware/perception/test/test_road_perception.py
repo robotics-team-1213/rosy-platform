@@ -1,5 +1,9 @@
 import numpy as np
 import pytest
+import cv2
+from pathlib import Path
+
+from control.sensing.perception.camera_ground import simulation_ground_plane
 
 from control.sensing.perception.road import (
     PreviewRateLimiter,
@@ -13,6 +17,19 @@ from control.sensing.perception.road import (
 
 WIDTH = 320
 HEIGHT = 240
+
+
+def test_actual_260919_longitudinal_crosswalk_frame_has_metric_road_evidence():
+    # A24 native camera: the road detector missed the along-lane bars in this frozen frame.
+    frame = cv2.imread(str(Path(__file__).parent / 'fixtures/gazebo-a24-crosswalk-20261012.png'))
+    assert frame is not None and frame.shape == (HEIGHT, WIDTH, 3)
+    ground = simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=WIDTH, height_px=HEIGHT, height_m=.06343,
+        pitch_rad=.13962634015954636, hfov_rad=1.0334, max_range_m=.6)
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert 0 < observation.crosswalk.distance_m < .3
 
 
 def _frame(*, lane_x=None, stop_y=None, crosswalk_rows=(), signals=()):
