@@ -25,8 +25,9 @@ def _sha(raw):
 
 
 def run(model_folder, *, inputs, max_age_ns):
-    inputs, model_folder = Path(inputs).resolve(), Path(model_folder)
+    inputs, model_folder = Path(inputs), Path(model_folder)
     doc = store.read_fixed_manifest(inputs)
+    inputs = inputs.resolve()
     if doc.get('schema') != INPUT_SCHEMA or set(doc) != INPUT_FIELDS:
         raise ValueError('observation input schema/fields differ; truth and policy are not inputs')
     store.refuse_publication_links(model_folder)
