@@ -3251,3 +3251,9 @@ private `replies_enabled`는 strict bool이며 기본false다. true는 Bot 자�
 `GET /api/fleet/channel-requests`는 등록된 기명 operator의 자기 요청 최근50건 `{rows:[ChannelRequestReceipt]}`만 읽는다. 미인증401/다른 역할·공용·development403다. CLI `--discord-intake-config`가 없으면 두 경로는404다. account/mapping 변경은 기존 site-users와 같이 서버 재시작으로 반영한다. Gateway 수신 실행기, Bot token 주입, 실수신 및 후보/승인 연결은 후속 gate다. CORE/OMX writer, 기존 Mission/Cell Job 권한 및 WS protocol_version 1.0은 유지한다.
 
 D-675 source only: private intake 설정에 선택적 ot_token_file을 지정하면 기존 Fleet lifespan에 Discord 수신기를 연결한다. 토큰은 별도 private 파일이며 없으면 OFF다. 기명 접수 계약과 API는 그대로이며 실제 이미지/수신 검증은 후속 gate다.
+
+### Fleet execution admission closure (D-678)
+
+Fleet navigation goal/bay admission preserves its stop token across capability and state awaits. A cancel or E-stop during admission refuses the unsent command with `COMMAND_REJECTED`; a concurrent goal/bay pipeline for the same robot is refused with the same code. Sequential goal replacement remains supported. A goal receipt requires an explicit boolean `accepted`: false is a refusal; missing or malformed acknowledgement is an unknown result and cannot create a goal or lease record. A late receipt after a stop cannot restart lease renewal; Fleet reissues navigation cancellation while preserving ambiguous Task outcomes.
+
+Trip start preserves its stop generation across capability, pose/alignment, and lease admission. A stop during those awaits returns HTTP 409 `TRIP_START_CANCELED`, opens no live trip, and releases a lease already obtained for that start. This does not establish physical standstill. Task policy evidence, enablement and current dispatch generation are checked again at the owner-send boundary; known-unsent refusals remain reasoned HOLD records. Robot API/envelope versions and final CORE/Arm command authority are unchanged.

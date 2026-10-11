@@ -22,6 +22,7 @@ class ModelToolDefinition:
     feedback_enabled: bool
     _parameters_json: str
     device_action_api: bool = False
+    scope: str = 'mission'
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -77,6 +78,11 @@ _PICK_PLACE_ARGUMENTS = json.dumps({
 }, separators=(",", ":"))
 
 MODEL_TOOL_CATALOG = MappingProxyType({
+    "get_incident_status": ModelToolDefinition(
+        name="get_incident_status", description="Read trusted evidence for the already scoped incident.",
+        effect_class=ToolEffectClass.READ_ONLY, feedback_enabled=True,
+        _parameters_json=_EMPTY_OBJECT, scope='incident',
+    ),
     "get_mission_status": ModelToolDefinition(
         name="get_mission_status",
         description=("Read current Fleet evidence and bounded manipulation phase progress "
@@ -101,12 +107,14 @@ MODEL_TOOL_CATALOG = MappingProxyType({
 })
 
 
-def provider_tool_schemas(*, feedback_only: bool = True) -> list[dict[str, Any]]:
+def provider_tool_schemas(*, feedback_only: bool = True, scope: str = 'mission') -> list[dict[str, Any]]:
     """Project only the selected turn's catalog entries as fresh JSON objects."""
+    if scope not in {'mission', 'incident'}:
+        raise ValueError('UNSUPPORTED_TOOL_SCOPE')
     return [
         definition.provider_schema()
         for definition in MODEL_TOOL_CATALOG.values()
-        if not feedback_only or definition.feedback_enabled
+        if definition.scope == scope and (not feedback_only or definition.feedback_enabled)
     ]
 
 
