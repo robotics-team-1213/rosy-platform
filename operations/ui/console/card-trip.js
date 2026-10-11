@@ -132,7 +132,13 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       kind.select.append(option);
     }
     kind.select.value = mine.kind || "route";
-    kind.select.disabled = mine.busy;
+    setReason(kind.select, mine.busy ? "요청 처리 중" : "");
+    if (mine.busy) {
+      const reason = line("hint", "요청 처리 중 · 완료 후 작업 종류를 바꿀 수 있습니다");
+      reason.id = `${id}-trip-kind-reason`;
+      kind.select.setAttribute("aria-describedby", reason.id);
+      kind.wrap.append(reason);
+    }
 
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
     // drops the previewed plan from the buttons on screen now.
