@@ -2,6 +2,7 @@
 import hashlib
 import importlib
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +10,10 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+for holder in ('learning/registry/perception', 'learning/evaluation/perception'):
+    sys.path.insert(0, str(ROOT / holder))
 
 import store
 from test_road_fitness import _replay_model, _snapshots
