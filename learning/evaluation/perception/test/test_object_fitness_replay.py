@@ -151,3 +151,61 @@ def test_cli_works_without_robot_config_and_refuses_output_overwrite(tmp_path, m
     before = output.read_bytes()
     assert rosy_ml.main(args) == 2
     assert output.read_bytes() == before
+
+
+def change_training(data, mutator):
+    model_folder, registry, truth, inputs, model, opened = data
+    observations = json.loads((inputs / 'manifest.json').read_bytes())
+    name, digest = store.parse_dataset_ref(observations['training_refs'][0])
+    old = registry.dataset_path(name, digest)
+    stage = old.parent / 'changed'
+    old.rename(stage)
+    doc = json.loads((stage / 'manifest.json').read_bytes())
+    mutator(stage, doc)
+    (stage / 'manifest.json').write_bytes(evidence.encoded(doc))
+    train = seal(stage)
+    raw = json.loads((model_folder / 'model_manifest.json').read_bytes())
+    raw['dataset']['revision'] = train.name
+    (model_folder / 'model_manifest.json').write_bytes(evidence.encoded(raw))
+    model.manifest = load_manifest(model_folder)
+    return modify_inputs(data, lambda d: d.update(training_refs=[f'{name}@{train.name}'],
+        model_manifest_sha256=evidence.sha((model_folder / 'model_manifest.json').read_bytes())))
+
+
+@pytest.mark.parametrize('overlap', ['session', 'capture_group', 'image'])
+def test_training_overlap_is_refused_with_content_consistent_refs(tmp_path, monkeypatch, overlap):
+    data = bundle(tmp_path, monkeypatch)
+    frame = store.read_fixed_manifest(data[2])['frames'][0]
+    def alter(stage, doc):
+        if overlap == 'image':
+            raw = (data[2] / frame['image']).read_bytes()
+            (stage / 'image.png').write_bytes(raw)
+            doc['frames'][0]['image_sha256'] = evidence.sha(raw)
+        else:
+            doc['frames'][0][overlap] = frame[overlap]
+    changed = change_training(data, alter)
+    with pytest.raises(ValueError, match='overlap'):
+        run(changed)
+    assert data[5] == []
+
+
+def test_training_class_order_must_match_candidate(tmp_path, monkeypatch):
+    data = bundle(tmp_path, monkeypatch)
+    def alter(stage, doc):
+        doc['classes'][0]['name'], doc['classes'][1]['name'] = doc['classes'][1]['name'], doc['classes'][0]['name']
+    changed = change_training(data, alter)
+    with pytest.raises(ValueError, match='class'):
+        run(changed)
+    assert data[5] == []
+
+
+def test_reservation_change_during_inference_refuses_report(tmp_path, monkeypatch):
+    data = bundle(tmp_path, monkeypatch)
+    original = data[4].infer
+    def mutate(bgr):
+        result = original(bgr)
+        monkeypatch.setattr(store.Store, 'eval_reservations', lambda self: {})
+        return result
+    monkeypatch.setattr(data[4], 'infer', mutate)
+    with pytest.raises(ValueError, match='reservation'):
+        run(data)
