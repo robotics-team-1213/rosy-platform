@@ -26,3 +26,10 @@
 2026-10-11: keep traffic/coordinate readouts at a fixed height while the desktop map fills the remaining panel height; avoid wide-screen overflow without changing expired-coordinate behavior. Update the site-map browser API fixture for saved map settings. Committed remote Chromium and deployment verification follow.
 
 2026-10-11: use numbered place dots instead of floor name/coordinate paragraphs; keep place names, traffic and calibration diagnostics in a desktop sideboard that stacks below the map on compact screens. Preserve every calibration warning and its authority outside the floor plane. Browser regression covers names off the plane, responsive placement and expired-coordinate frame stability.
+
+## 2026-10-11 · fb54c9f47f · fix(ci): 사건 인수 버튼 종류·비활성 사유
+
+- 문제: main 4bcfc55d88의 CI 38147167947에서 incident-view 인수 버튼의 kind와 처리 중 비활성 사유가 빠져 공용 UI 계약 두 건이 실패했다.
+- 변경: 기존 ui-button에 quiet 종류와 처리 중 사유를 명시한다. 기존 권한 검사·중복 요청 차단·요청 본문·갱신·오류 처리는 유지한다.
+- 증거: 같은 기준 SHA의 원격 RED 2 NEW 뒤 수정 SHA에서 공용 UI 계약과 Fleet 사건/알림 시험 61 PASS, NEW 0. 독립 리뷰가 fb54c9f47f의 세 파일을 승인했다.
+- gate 변화: SOURCE/원격 관련 회귀 확인. main 통합·새 CI·배포·주행 수용은 별도다.
