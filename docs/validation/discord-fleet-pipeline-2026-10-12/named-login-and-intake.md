@@ -19,3 +19,11 @@ Remote RED commit `adbaad0e5`: 없는 수신 모듈 collection 실패1/NEW1. 첫
 ## 남은 수용
 
 Gateway 실행기, Bot token 비공개 주입, 운영 immutable identity mapping, 실제 Discord 메시지 → Fleet receipt → 실제 Console 조회, 후보/승인/결과 reply는 미완료다. main 착지와 실제 image build/deploy·FIELD는 다른 증거다. D-669의 새 실행 권한 및 D-640 provider gate는 유지한다.
+
+## 후속 원격·독립 검토
+
+`066a19f8f`의 구조 NEW1은 Fleet 전체/조립 파일 증가였다. 기능 조립을 feature owner로 이동하고 기존 shared credential tuple을 재사용했다. 독립 검토가 일반 Goal/Cell Goal producer credential 중복 누락을 발견했고 양쪽 registry를 검사하는 회귀를 추가했다.
+
+최신 통합 source commit `40b7937fa0`: AI PC 접수·기존 work owner read·manifest44 passed/NEW0/terminal0. Chromium은 처음 notebook 환경 변수가 전달되지 않아4 skipped였으며 이를 pass로 집계하지 않았다. 기존 remote runner의 선택·자원·committed shipping을 유지하고 시험 PC에서 opt-in을 설정한 `ac7a0bd59f` 실제 Chromium4 passed/NEW0/terminal0(320/1366 viewport, viewer/operator, 원문 XSS 미실행·권한 철회 삭제·overflow 검사)다. Console source는 이후 변경하지 않았다.
+
+`safety_structure_review`는 `40b7937fa0` source/Safety를 승인했다. 실제 설치 holder를 포함한 Fleet53396, app.py906을 독립 재측정했다. 기존 +150 및 모든 file ceiling, full-progress/observe/server/UI 분리 의무는 유지한다. 과거 판정은 보존하고 새 설치 holder도 기존 크기/의존성 검사에 포함했다. 최종 착지는 최신 main 통합 원격 검증으로 별도 확인한다.
