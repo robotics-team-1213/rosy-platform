@@ -128,6 +128,8 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
+  SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
+  SITE_MAP_PROFILE_LIMIT: '지도 프로필은 최대 100개입니다. 기존 프로필을 선택해 수정하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',

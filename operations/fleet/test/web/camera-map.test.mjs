@@ -47,3 +47,27 @@ test("camera map accepts only a fresh raw frame with matching source, map, lens 
   assert.equal(cameraMapCalibration({ ...frame, lens: { ...frame.lens, hfov_deg: 104.10001 } },
     [calibration], siteMap), calibration);
 });
+
+test("corrected comparison clears when a frame expires or calibration changes", (t) => {
+  const previous = globalThis.document;
+  const ctx = new Proxy({}, {get: () => () => {}});
+  globalThis.document = {createElement: () => ({getContext: () => ctx})};
+  t.after(() => { globalThis.document = previous; });
+  const canvas = {getContext: () => ctx}, status = {}, details = {open: true};
+  const el = id => ({'camera-corrected': canvas, 'camera-corrected-status': status,
+    'camera-comparison': details})[id] || null;
+  const view = {siteMap: {maps: [{map_id: 'map_v2_fleet',
+    polygon_m: [[0, 0], [2, 0], [2, 1], [0, 1]],
+    bounds_m: {min_x: 0, min_y: 0, max_x: 2, max_y: 1}}]}};
+  const backdrop = createCameraBackdrop({scope: {}, el, view, draw() {}});
+  backdrop.setCalibrations([calibration]);
+  assert.equal(canvas.hidden, true);
+  backdrop.setCameraFrame(frame);
+  assert.equal(canvas.hidden, false);
+  assert.match(status.textContent, /map_v2_fleet/);
+  backdrop.setCameraFrame({...frame, ageMs: 3001});
+  assert.equal(canvas.hidden, true);
+  backdrop.setCameraFrame(frame);
+  backdrop.setCalibrations([{...calibration, map_id: 'other'}]);
+  assert.equal(canvas.hidden, true);
+});
