@@ -90,15 +90,20 @@ SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/control/drive/runtime/control_node.py",
                   "middleware/control/drive/safety/adapter/__init__.py",
                   "middleware/control/drive/tracking/wander/__init__.py")
+FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
+FITNESS_WORLD_FILES = ("operations/world/src/rosy/world/api/__init__.py",
+                       "operations/world/src/rosy/world/api/observation.py",
+                       "operations/world/src/rosy/world/state/projections/road_region.py")
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
+                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
+                 *FITNESS_WORLD_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "operations/vision",
+                "middleware/perception", "contracts/foundation", "operations/vision", "operations/world/src",
                 *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
@@ -317,6 +322,9 @@ def unpack(archive, dest):
     if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
+    if (dest / FITNESS_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in FITNESS_WORLD_FILES):
+            raise ValueError("missing road-fitness observation dependency")
 
 
 def replace_link(root, target):
@@ -502,6 +510,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
                                                 "middleware/perception/control/_source_layout.py"]).strip()
         if not split_layout:
             paths = tuple(p for p in paths if p not in SPLIT_CODE_PREFIXES)
+        fitness = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                           FITNESS_ENTRY]).strip()
+        if not fitness:
+            paths = tuple(p for p in paths if p not in FITNESS_WORLD_FILES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.
