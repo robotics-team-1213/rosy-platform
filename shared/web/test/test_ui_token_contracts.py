@@ -34,10 +34,19 @@ def surface_scripts() -> list[Path]:
     return sorted(WEB_ROOT.glob("*.js"))
 
 
+def registered_style_sources():
+    """Registry CSS, nested assets and embedded styles under the active type contract."""
+    for surface in registry.for_contract(registry.REPO, "typography_focus"):
+        for page, css in registry._style_sources(registry.REPO, surface.relative_to(registry.REPO).as_posix()):
+            if page.resolve() != TOKENS.resolve():
+                yield page, css
+
+
 def test_all_registered_web_token_references_are_declared():
     sources = {page: text for row in _web_rows()
                for page, text in registry.colour_sources(registry.REPO, row)}
-    declared = {name for text in sources.values() for name in DECLARATION.findall(text)}
+    declared = {name for text in sources.values()
+                for name in re.findall(r"(?<![\w-])(--[a-z0-9-]+)\s*:", text)}
     missing = [f"{page.relative_to(registry.REPO)}: {name}"
                for page, text in sources.items() for name in sorted(set(REFERENCE.findall(text)) - declared)]
     assert missing == [], "\n".join(missing)
@@ -268,28 +277,31 @@ def test_nominal_carries_no_colour():
     assert not offenders, f"정상을 초록으로 칠한 자리: {offenders}"
 
 
+def decoration_problems(css):
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    # Solid 1px joystick crosshair axes are control geometry, not a gradient wash.
+    css = css.replace("linear-gradient(var(--line-14), var(--line-14))", "")
+    problems = []
+    for line in css.splitlines():
+        if any(token in line for token in ("linear-gradient", "radial-gradient", "drop-shadow(")):
+            problems.append(line.strip()[:120])
+        for value in re.findall(r"box-shadow\s*:\s*([^;}]+)", line):
+            if not re.search(r"\binset\b|^\s*none\s*$", value):
+                problems.append(f"box-shadow: {value}")
+    return problems
+
+
 def test_no_decoration_effects_in_surfaces():
     """장식은 임계 경보가 쓸 대비를 먼저 써버린다.
 
     gradient wash, glow, drop-shadow는 concept 16 Law 1이 금지하는 장식이다.
     깊이를 주는 그림자(`box-shadow: inset ...`)는 면 위계이므로 대상이 아니다.
     """
-    banned = ("linear-gradient", "radial-gradient", "drop-shadow(")
     offenders: dict[str, list[str]] = {}
-    for path in surface_stylesheets():
-        hits = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if any(token in stripped for token in banned):
-                hits.append(stripped[:80])
-            elif "box-shadow:" in stripped and not any(
-                ok in stripped for ok in ("inset", "none")
-            ):
-                # `inset`은 면 위계이고 `none`은 그림자를 **없애는** 선언이다.
-                # 둘 다 이 게이트가 막으려는 장식이 아니다.
-                hits.append(stripped[:80])
+    for path, css in registered_style_sources():
+        hits = decoration_problems(css)
         if hits:
-            offenders[path.name] = hits
+            offenders[path.relative_to(registry.REPO).as_posix()] = hits
     assert not offenders, f"장식 효과가 남아 있다: {offenders}"
 
 
@@ -499,6 +511,26 @@ def test_spacing_comes_from_the_step_scale():
 FONT_SIZE = re.compile(r"(?<![-a-z])(font-size|font):\s*([^;}]+)")
 
 
+def type_size_problems(css):
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    hits = []
+    for prop, value in FONT_SIZE.findall(css):
+        text = value.strip()
+        if "--text-" in text or text == "inherit":
+            continue
+        if prop == "font-size" and re.fullmatch(r"[\d.]+em", text):
+            continue
+        hits.append(f"{prop}: {text[:80]}")
+    return hits
+
+
+def test_type_and_decoration_guards_reject_drift_but_keep_geometry():
+    assert type_size_problems(".label { font-size: 13px; }")
+    assert type_size_problems(".label { font-size: var(--text-label); }") == []
+    assert decoration_problems(".panel { background: linear-gradient(red, blue); }")
+    assert decoration_problems(".stick { background: linear-gradient(var(--line-14), var(--line-14)) center / 1px 100%; }") == []
+
+
 def test_type_sizes_come_from_the_scale():
     """글자도 닫힌 계단이다(--text-micro ~ --text-title).
 
@@ -507,17 +539,10 @@ def test_type_sizes_come_from_the_scale():
     벗어나지 않는다 — 나이 접미사가 값 크기를 따라가는 자리에 쓴다.
     """
     offenders: dict[str, list[str]] = {}
-    for path in surface_stylesheets():
-        hits = []
-        for prop, value in FONT_SIZE.findall(path.read_text(encoding="utf-8")):
-            text = value.strip()
-            if "--text-" in text or text == "inherit":
-                continue
-            if prop == "font-size" and re.fullmatch(r"[\d.]+em", text):
-                continue
-            hits.append(f"{prop}: {text[:40]}")
+    for path, css in registered_style_sources():
+        hits = type_size_problems(css)
         if hits:
-            offenders[path.name] = hits
+            offenders[path.relative_to(registry.REPO).as_posix()] = hits
     assert not offenders, f"--text-* 밖의 글자 크기: {offenders}"
 
 
