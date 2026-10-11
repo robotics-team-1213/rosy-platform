@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7758,3 +7758,10 @@ osy-d395-s1d\`.
 - 변경: docs/fleet-judgment-stages에서 D-648 Proposed, 목표 트리·의존·단일 셀/로봇/다중 로봇·비개입 사례와 파일별 분리 계획을 작성했다. 중앙 판단 0단계 및 현재 폴더 책임 안내에 목표 문서를 연결했다.
 - 증거: 현재 World 관측 참조, Situation 사실/제안 분리, Fleet store를 쓰는 Decision tool dispatcher와 Mission/Job/claim·execution/site 소비자를 읽었다. 문서 자체의 lint와 committed-HEAD 원격 계약 결과는 별도 검증한다.
 - gate 변화: 없음. 현재 Accepted 폴더/원장·설치·writer를 유지한다. 실제 코드 이전·새 판단·모델 호출·알림·배포·main 착지·push는 미실행이다.
+
+## 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
+
+- 사용자 확정: 카메라 차선 인식·기존 line_follow·기존 인식 모델·강화학습을 함께 사용한다. D-638 경로 관측 정책과 별도 저장/평가한다.
+- 변경: D-650과 tools/sim/isaac의 고정 모델/기존 keep/manager 연결, 카메라 관측 Q 정책의 schema·model revision/SHA 검사를 추가했다. 제품 manager/API·실기 pointer·intake 기준은 변경하지 않았다.
+- 증거: 원격 camera/map-task/SDK-entrypoint60 passed/NEW0. main 098a0c0c0의 D-649 기존 Drive 소스 이동을 병합한 뒤 Isaac 전체 및 기존 drivable/model 회귀 227 passed/2 skipped/NEW0. Native 카메라 R1은 no-wall 모델의 floor_gate 설정 오류, R2는 strict 관측이 카메라 기반 off-line 복귀도 막아 종료됐다. 설정과 provenance/freshness를 수정하고 독립 소스 재검토를 받았으며 실제 완주 재시험은 별도 기록한다.
+- gate 변화: 없음. 두 대 Fleet/신호/횡단보도·실물 수용은 미확인이고 카메라 학습 정책은 HOLD다.
