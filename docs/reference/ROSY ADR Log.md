@@ -639,6 +639,7 @@
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 | Proposed (2026-10-11) |
 | D-647 | 공통 판단 0단계 World·Work Orchestration·Fleet 책임과 배포 경계 | Proposed (2026-10-11) |
 | D-648 | 공통 상황평가·Decision·작업 실행·Fleet 목표 소스 구조 | Proposed (2026-10-11) |
+| D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
 
