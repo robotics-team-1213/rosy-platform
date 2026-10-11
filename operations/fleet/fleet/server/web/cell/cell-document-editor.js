@@ -6,6 +6,7 @@ export function renderStructuredDocument(kind, document, root, change) {
     const element = window.document.createElement(collapsed ? 'details' : 'fieldset');
     element.className = 'document-group';
     const heading = window.document.createElement(collapsed ? 'summary' : 'legend');
+    if (collapsed) heading.className = 'ui-disclosure-row';
     heading.textContent = title; element.append(heading); root.append(element); return element;
   }
   function field(container, path, title, type = 'number', choices = null) {
