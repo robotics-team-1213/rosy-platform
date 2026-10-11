@@ -417,6 +417,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             assert len(shared) <= 2, labels                     # one spot: the rest hide instead of stacking
             assert page.evaluate("window.__mapChipsHidden") >= 3
             page.select_option("#map-display-mode", "camera")
+            expect(page.locator("#map-canvas")).not_to_be_visible()
             assert page.evaluate("(window.__mapChips || []).every(c => Number.isFinite(c.x) && Number.isFinite(c.y))")
             page.select_option("#map-display-mode", "coordinates")
             assert not errors
