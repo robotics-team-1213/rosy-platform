@@ -146,7 +146,8 @@ class LearnedCameraLane:
         self.manager.observe_return_pose(stamp_ns=round(stamp * 1e9),
             source_now_ns=round(source_now * 1e9), frame='odom',
             x=pose[0], y=pose[1], yaw=pose[2], received_at=captured_at)
-        if self.wall is not None and not 0 <= source_now - self.wall[1] <= .25:
+        # Compare in the native scan's nanoseconds to avoid a rounding-induced future sample.
+        if self.wall is not None and not 0 <= round(source_now * 1e9) - self.scan_stamp_ns <= 250_000_000:
             self.invalidate('native_scan_stale')
             return
         self.worker.submit(bgr, tag=self.frame, stamp=stamp)

@@ -54,6 +54,34 @@ def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
         lane.close()
 
 
+@pytest.mark.parametrize('age_ns,accepted', [(0, True), (250_000_001, False), (-1_000_000, False)])
+def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns, accepted):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    source_now = 241 / 240
+    stamp_ns = round(source_now * 1e9) - age_ns
+    assert source_now < round(source_now * 1e9) / 1e9
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=stamp_ns)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY)
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=source_now, source_now=source_now, pose=(0., 0., 0.))
+        assert (lane.state() is not None) is accepted
+        if not accepted:
+            assert lane.last['reason'] == 'native_scan_stale'
+    finally:
+        lane.close()
+
+
 @pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
 def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     import math
