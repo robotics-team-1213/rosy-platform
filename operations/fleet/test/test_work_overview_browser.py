@@ -41,12 +41,26 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
             page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
             assert not posts
 
+            pending = []
+            page.route('**/api/fleet/channel-requests', lambda route: pending.append(route))
+            page.locator('#work-refresh').click()
+            page.clock.run_for(500)
+            assert len(pending) == 1
             claim.click()
             api['/api/fleet/session'] = {'principal_id': 'alice', 'role': 'operator'}
             page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
             expect(page.locator('dialog.ui-confirm')).to_have_count(0)
             expect(page.locator('#channel-review')).to_be_hidden()
             assert not posts
+            pending[0].fulfill(json={'rows': [receipt]})
+            page.wait_for_function("""() => {
+              const text = document.getElementById('channel-requests-state').textContent;
+              return text.includes('1건') || text.includes('조회 실패');
+            }""")
+            expect(page.locator('#channel-requests')).not_to_contain_text(receipt['content'])
+            expect(page.locator('#channel-requests ui-button')).to_have_count(0)
+            assert not posts
+            page.unroute('**/api/fleet/channel-requests')
             api['/api/fleet/session'] = {'principal_id': 'bob', 'role': 'operator'}
             page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
             page.clock.run_for(2000)
