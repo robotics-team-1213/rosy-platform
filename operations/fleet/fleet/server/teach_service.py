@@ -92,10 +92,13 @@ class TeachService:
     async def _localized(self, robot_id: str):
         if robot_id not in set(self._roster()):
             raise TeachError(404, "UNKNOWN_ROBOT")
+        map_frame = self._map_frame()
         pose = await self._pose(robot_id)
         if pose is None or pose.state != "LOCALIZED" or pose.x is None:
             raise TeachError(422, "TEACH_POSE_UNTRUSTED",
                              {"state": getattr(pose, "state", None)})
+        if self._map_frame(pose) != map_frame:
+            raise TeachError(409, "TEACH_MAP_CHANGED")
         return pose
 
     async def _survey_odom(self, robot_id: str):
@@ -217,11 +220,7 @@ class TeachService:
         else:
             if any(value is not None for value in (map_id, reference_revision, expected_revision)):
                 raise TeachError(422, "TEACH_MODE_INVALID")
-            if robot_id not in set(self._roster()):
-                raise TeachError(404, "UNKNOWN_ROBOT")
-            map_frame = self._map_frame()
-            if self._map_frame(await self._localized(robot_id)) != map_frame:
-                raise TeachError(409, "TEACH_MAP_CHANGED")
+            map_frame = self._map_frame(await self._localized(robot_id))
             map_id = map_frame[0]
         if self._recording is not None:  # another start won while we read the pose
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
@@ -343,7 +342,6 @@ class TeachService:
     async def place(self, robot_id: str, *, name: str, kind: str, expected_revision: Optional[str],
                     principal_id: str) -> dict:
         pose = await self._localized(robot_id)
-        self._map_frame(pose)
         body = self._base()
         place_id = teach.add_place(body, name, kind, pose.x, pose.y, pose.yaw)
         draft = self._save(body, expected_revision, principal_id)
