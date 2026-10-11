@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+import xml.etree.ElementTree as ET
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -86,6 +87,11 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         assert len(archived_stl) == 1
         assert wheel.read(archived_stl[0]) == (PACKAGE / stl).read_bytes()
         assert not any("_source_roots" in name for name in names)
+        package_xml = ET.fromstring(wheel.read(next(name for name in names
+                                                   if name.endswith("/share/control/package.xml"))))
+        assert package_xml.findtext("version") == "0.1.1"
+        assert next(d for d in package_xml.findall("exec_depend")
+                    if d.text == "core_common").get("version_gte") == "0.0.1"
         wheel.extractall(installed)
     check = (
         "import importlib, importlib.metadata, pathlib, sys; "
@@ -98,7 +104,8 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "e.value == 'control.sensor_provider:PROVIDER' for e in entries); "
         "root = pathlib.Path(sys.argv[1]).resolve(); "
         "modules = ['control.sensing.lidar', 'control.sensing.perception.lane', "
-        "'control.control.recover', 'control.planning.goals']; "
+        "'control.control.recover', 'control.planning.goals', "
+        "'control.sensing.perception.learned.road_observation', 'core_common.observation']; "
         "assert all(pathlib.Path(importlib.import_module(m).__file__).resolve()"
         ".is_relative_to(root) for m in modules)"
     )
