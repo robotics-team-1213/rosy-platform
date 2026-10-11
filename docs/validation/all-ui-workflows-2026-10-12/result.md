@@ -1,5 +1,13 @@
 # 전체 활성 UI/UX 정보 배치·작업 흐름 검증
 
+## 후속 통합·푸시·CI 상태
+
+commit `e94a0ae515`의 최종 착지 gate는 적정 AI PC 22.7 cores/10.2 GB와 Model PC 23.8 cores/8.2 GB에서 5478 + 4631 = **10,109 passed**, 각 종료 0·NEW 0, Node **322 passed/0 failed**였다 (`logs/land-profile-preflight-green/uiux-header-all-surfaces/`). 해당 후보는 main에 반영됐다. canonical pre-push의 누적 영향 검사는 514 + 5601 + 5377 = **11,492 passed**, 각 종료 0·NEW 0이며 같은 commit을 푸시했다 (`logs/prepush-final/`).
+
+Cam·Pilot Android CI [38179188636](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38179188636)은 성공했다. 주 CI [38179188613](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38179188613)은 누적 Fleet 안전 커밋 열 개의 검토 trailer 누락으로 scope에서 실패해 시험 job이 실행되지 않았다. [독립 소급 검토](../fleet-continuation-safety-review-2026-10-12/result.md)로 실제 diff와 필수 후속 수정을 검토했으며 기존 이력 기록 방식으로 보완한다. 실패한 SHA의 이미지 빌드는 취소했다. CI 통과·서명·설치·팀원 계정 발급은 아직 완료가 아니다.
+
+재부팅 뒤 gate의 부분 실행, main 이동으로 반복한 성공 회차와 공개 commit 표기 탐지 실패는 이전 로그에 보존한다. 비밀 탐지 기준이나 기존 실패 목록을 완화하지 않았다. 최신 후보의 production 비밀 탐지 사전 점검은 0건이었다. 설치본 비교는 Windows 작업 파일 대신 후보 Git blob의 SHA-256을 사용한다.
+
 ## 첫 로그인·기본 내 프로필 — D-686/D-689
 
 사용자는 팀원 네 명에게만 사람 계정을 발급하고 초기 비밀번호를 로그인 ID와 일치시키되 첫 로그인에서 반드시 변경하도록 요청했다. 기본 프로필은 표시 이름 수정·현재 비밀번호 확인 변경·ID/이메일/권한 조회로 확정했다. 기존 기계·운용·AI 자격은 보존하며 실제 명단·자격을 이 문서에 기록하지 않는다. 서버는 초기 쿠키의 운용 API 접근을 거절하고 기존 SQLite에서 자격·프로필·세션 회전을 관리한다. 화면 이름과 우상단 링크는 운용 용어 규칙에 맞춰 **내 계정**으로 통일했다. Map/Cell 새 탭으로 입력을 보존한다.

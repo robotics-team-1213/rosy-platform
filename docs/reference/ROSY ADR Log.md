@@ -680,6 +680,7 @@
 | D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
 | D-697 | 독립 운영 성과 비교와 증거 생산 책임 | Accepted |
+| D-698 | 단독 기본 모델 사건 처리와 프로파일 원장 근거 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -803,3 +804,9 @@
 **Status:** Accepted (2026-10-12).
 
 Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted and case-only named claim remain distinct. [D-696](../adr/D-696-incident-handoff-evidence.md).
+
+## D-698 — 단독 기본 모델 사건 처리와 프로파일 원장 근거
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 단독 primary 실행과 새 receipt/export /3을 결속한다. 검토가 필요하면 미구성 제공자를 호출하지 않고 최종 인수한다. 전문은 [D-698](../adr/D-698-primary-only-incident-evidence.md).
