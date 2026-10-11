@@ -7802,3 +7802,9 @@ osy-d395-s1d\`.
 - 변경: branch `docs/perception-fitness-design`에서 사용자 합의 설계를 D-659 Accepted로 기록했다. 도로면·현재 구역·선택 경로의 의미, 독립 정답과 split, 시뮬레이션 입력 누설, 불확실/지연 판정 및 인지/주행 승인 경계를 구현 전 선행 조건으로 묶었다.
 - 증거: 기존 D-475/D-576/D-379/D-356과 학습·평가 소유 경로를 대조했다. ADR 번호 선점, Log BOM/CRLF 보존, generate/lint 및 커밋 HEAD 원격 계약 시험 결과는 검증 기록으로 구분한다.
 - gate 변화: 없음. 계약 수용이며 의미별 출력 구현, 실제 정답 검수·모델 평가·장치 추론 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
+
+- 변경: 모델 원장 중재·순수 작업 규칙을 실제 소유 경로로 분리하고 현재 판단/결과 기록, 이름 있는 사람 인수, 3채널 기본 OFF outbox와 Pinky 독립 offline checker를 구현했다. API Reference v1.207 및 설치 소비 경로를 갱신했다.
+- 증거: 단위별 원격 terminal/NEW0와 독립 검토·수정은 docs/validation/responsibility-boundaries-2026-10-11/implementation.md에 기록했다. 최종 main 통합/착지는 별도 기록한다.
+- gate 변화: 소스·원격 fake/설치 계약. 팀이 새 Discord 서버/채널과 실제 정답·한계를 준비한다. 단계 3~5 운영 수용 및 단계 6은 HOLD; CI/push·배포·실제 provider/발송·실물 motion 없음.
