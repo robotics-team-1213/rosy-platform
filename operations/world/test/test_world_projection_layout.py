@@ -50,7 +50,9 @@ from packaging.utils import canonicalize_name
 assert importlib.metadata.version('core_common') == '0.0.1'
 requirements = {canonicalize_name(requirement.name): requirement
                 for requirement in map(Requirement, importlib.metadata.requires('rosy-world'))}
-assert str(requirements['core-common'].specifier) == '>=0.0.1'
+dependency = requirements['core-common']
+assert str(dependency.specifier) == '>=0.0.1'
+assert dependency.marker is None and not dependency.extras
 from rosy.world.api import ObservationSnapshot
 from rosy.world.state.projections import map_pose
 from rosy.world.state.projections.road_region import road_region_input_errors
