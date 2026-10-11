@@ -54,6 +54,24 @@ def camera_sample_due(frame, episode_start_frame):
     return (frame - episode_start_frame) % 24 == 0
 
 
+def camera_route_guide(task, pose, result, stamp):
+    ahead = task.index
+    while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
+        ahead += 1
+    dx, dy = task.points[ahead][0] - pose[0], task.points[ahead][1] - pose[1]
+    centre = task.points[task.index]
+    after = next((p for p in task.points[task.index + 1:] if math.dist(centre, p) > 1e-9), None)
+    if after is None:
+        before = next(p for p in reversed(task.points[:task.index]) if math.dist(centre, p) > 1e-9)
+        local_x, local_y = centre[0] - before[0], centre[1] - before[1]
+    else:
+        local_x, local_y = after[0] - centre[0], after[1] - centre[1]
+    relative = lambda x, y: math.degrees(math.atan2(math.sin(math.atan2(y, x) - pose[2]),
+                                                   math.cos(math.atan2(y, x) - pose[2])))
+    return (relative(dx, dy), stamp, True, relative(local_x, local_y),
+            result['deviation_m'], result['progress_m'])
+
+
 def policy_state_sha256(state):
     return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
 
@@ -401,14 +419,7 @@ def main():
                             if rgba.shape != (240, 320, 4) or rgba.dtype != np.uint8:
                                 lane.invalidate('invalid_native_camera')
                             else:
-                                ahead = task.index
-                                while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
-                                    ahead += 1
-                                dx, dy = task.points[ahead][0] - pose[0], task.points[ahead][1] - pose[1]
-                                guide_deg = math.degrees(math.atan2(math.sin(math.atan2(dy, dx) - pose[2]),
-                                                                   math.cos(math.atan2(dy, dx) - pose[2])))
-                                guide = (guide_deg, world.current_time, True, guide_deg,
-                                         result['deviation_m'], result['progress_m'])
+                                guide = camera_route_guide(task, pose, result, world.current_time)
                                 lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
                                     stamp=float(image['rendering_time']), source_now=world.current_time,
                                     pose=pose[:3], guide=guide)
