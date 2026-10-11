@@ -27,6 +27,16 @@ RECORD = {
 POINT = (0.5, 0.25)
 
 
+def test_off_frame_pixels_have_a_mask_and_crop_specific_coverage():
+    from rosy_vision.rectify import plane_observed_fraction
+    record = {**RECORD, "track_bounds_m": {"min_x": -3., "min_y": -2., "max_x": 5., "max_y": 3.}}
+    plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert plane.valid_mask.shape == (plane.size[1], plane.size[0])
+    assert 0 < plane_observed_fraction(plane) < 1
+    assert plane_observed_fraction(plane, (0., 0., .1)) == 1
+    assert plane_observed_fraction(plane, (4.5, 2.5, .1)) == 0
+
+
 def _frame_jpeg():
     """640x360 frame (half the record size) with a white dot at the image of POINT."""
     image = np.full((360, 640, 3), 120, np.uint8)
