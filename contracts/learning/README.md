@@ -4,6 +4,8 @@
 `rosy-contracts-learning`은 ROS·torch·LeRobot에 의존하지 않는 공용 wheel이다.
 Episode·DatasetManifest·PolicyArtifact·PromotionRecord의 구조와 파일 해시를 검증한다.
 
+D-700의 0.1.10은 `incident_rule.validate_rule()`로 실제 Fleet 규칙 선택 JSON을 검사한다. `selected_not_executed`, `action_admissible:false`, `outcome:null`을 유지하며 RULE_ONLY/MIXED·NONE/ANSWER/HOLD/HANDOFF를 구분한다. physical WAIT를 포함한 ANSWER는 reobserve/human으로 변환하지 않는다. 보정·정답·명령·현장 수용을 승인하는 SDK가 아니며 Fleet 기본 원장 사용 때문에 필수 설치 의존성이 됐다. 기존 `fleet[learning]` 설치 이름은 호환한다.
+
 ```python
 from rosy.contracts.learning import seal, validate_episode
 
