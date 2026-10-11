@@ -138,3 +138,9 @@
 - 변경: 0cb3c199b에서 무효 카메라 타깃의 여섯 진단 필드와 원인별 실제 PNG를 최대 8개로 제한해 기록했다. 25add33f95에서 camera admission 실패를 episode에 남기고 실제 정지 검증 후 다음 방향을 측정한다. 실패 pair의 비교를 제외하고 admission 오류 하나라도 있으면 full_map_complete=false·종료 실패를 유지한다. 무효 관측의 명령 0·학습 제외·고정 정책 검사는 유지한다.
 - 증거: 원격 관련 시험 111 PASS 후 최종 117 PASS·각 known_failures NEW 0, 독립 소스 리뷰 차단 결함 없음. R18 실제 SDK는 600초 제한에서도 seed707 baseline/RL 약 0.220m에서 13.7/13.8초 차선 상실, +90도 seed808 유효 관측 0/18로 실패했다. 종료 1, 정책 SHA-256 불변. 실제 영상 3개 및 원본 19개 artifact hash·프레임·시각 순서·실제 정지·SDK 잔여 0 확인 후 private 보관했다. R19는 준비 소스 25add33f95의 7313개 파일을 검증하고 자원 예약 해제 뒤 22 cores·9GB와 빈 GPU에서 시작했다. 실행 시작은 결과 수용 증거가 아니다.
 - gate 변화: 없음. 네 방향 native 최종 결과·완주·정책 개선·교통/Fleet·Gazebo 두 대 주행·병렬 RL·실물 수용은 HOLD다. 카메라 containment/crosswalk evidence의 native CORE 연결과 주의 표시 판정은 아직 미구현이다.
+
+## 2026-10-12 · fff1b93a6 · fix(isaac): 콘솔 admission 오류와 R19 픽셀 재현
+
+- 변경: admission 오류를 episode에 넣은 뒤 EPISODE를 출력해 콘솔에도 거절 사유를 남긴다. 기존 최종 수용·명령·학습 판단은 유지한다.
+- 증거: committed-source 원격 camera_lane/map_task 103 PASS·known_failures NEW 0. R19 실제 네 방향 baseline/eval 8회는 모두 차선 상실로 SDK 종료 1, 정방향만 0.220m 진행했다. 실제 영상 8개 hash·ffprobe 960x540·프레임 수 및 원본 57개 복사 hash, episode/cleanup 실제 정지·정책 hash 불변·GPU 작업 종료를 확인했다. 원본 픽셀 14개의 CPU 재현은 모델 drivable 출력이 있으나 pivot/reorient 선택 뒤 native strict 관측이 거절함을 보여준다. 기존 CORE turn_spot/odom_pivot 회전 경로와 camera containment/Fleet cue 연결이 빠져 있으며 지도 pivot_ok=true는 회전 가능 증거가 아니다. 기록 및 재현 결과는 private에 보관했다. 단일 프레임 재현은 scan/시간 기억/주행 증거가 아니다.
+- gate 변화: 없음. CORE 회전 검증 경로 연결·camera 재획득·완주·교통/Fleet·Gazebo 두 대 주행·병렬 RL·실물 수용은 미완료다. 무효 카메라를 학습 상태로 승인하거나 안전 정지를 해제하지 않는다.
