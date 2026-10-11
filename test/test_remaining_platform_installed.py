@@ -138,6 +138,7 @@ assert cli._argv is cli_owner._argv
 assert cli._decode_result is cli_owner._decode_result
 assert calibration.CalibrationArtifact is calibration_owner.CalibrationArtifact
 assert calibration.evaluate_calibration is calibration_owner.evaluate_calibration
+assert calibration.wilson_lower is calibration_owner.wilson_lower
 from fleet.server import proposal_store
 from fleet.server import mission_store, mission_service, goal_evidence_service
 assert proposal_store.ModelToolCall is ModelToolCall

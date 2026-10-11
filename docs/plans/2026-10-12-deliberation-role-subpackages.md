@@ -30,7 +30,7 @@
 실제 구현은 새 하위패키지에 한 벌만 둔다. 기존 `profiles`, `judgment`, `cli`,
 `versioned_cli`, `versioned_request`, `local`, `calibration`, `calibration_metrics`,
 `calibration_selection` 경로는 명시적 import만 가진다. `_argv`, `_decode_result`
-등 기존 helper도 같은 함수 객체를 가리킨다. 추출 전후 아홉 실제 모듈의
+등 기존 helper와 imported public names도 같은 객체를 가리킨다. 추출 전후 아홉 실제 모듈의
 non-import AST는 동일하며 import 상대 깊이만 조정한다.
 
 기존 소비자는 그대로 연결한다: Fleet 사건 bridge/journal, AI PC Ollama broker,
@@ -56,7 +56,7 @@ wheel과 격리된 sdist 설치 후 실제 하위 모듈을 양쪽 import 순서
 | Fleet 부모 | 53,408 | 기존 53,366 유지 | +150 |
 | incidents 잔여 | 360 | 기존 360 유지 | +150 |
 | incident automation | 322 | 신규 실제 경계 322 | +150 |
-| deliberation 잔여 | 343 | 기존 231 유지 | +150 |
+| deliberation 잔여 | 339 | 기존 231 유지 | +150 |
 | 판단 contracts | 232 | 신규 실제 경계 232 | +150 |
 | provider codecs | 204 | 신규 실제 경계 204 | +150 |
 | pure evaluation | 275 | 신규 실제 경계 275 | +150 |
@@ -71,6 +71,14 @@ Fleet 부모와 기존 숙고·incidents 기준은 증가시키지 않는다. �
 RED commit `1f767fcc0`: 원격 actual wheel/sdist의 새 owner import가 둘 다 실패했고
 기존 size guard도 deliberation 988 및 incidents 599의 허용량 초과로 실패했다.
 known-failure 비교는 NEW 3, known 0이다. 평가·provider·원장 기능은 변경하지 않았다.
+
+첫 GREEN 요청은 CLI 시험 경로 오기로 collection exit 4여서 실행 증거가 아니다.
+GREEN-2는 346 passed, 2 failed/NEW 2다. calibration facade의 기존 `wilson_lower`
+export 누락은 기존 imported public names 전체를 재export해 수정했다. 다른 실패는
+자식 프로세스가 `/proc/<pid>/stat` open과 read 사이에 사라져 검사 코드가
+`ProcessLookupError`를 받은 것이다. 해당 시험만 `FileNotFoundError`와 동일한
+프로세스 소멸로 처리하도록 고쳤고 production cleanup은 변경하지 않았다.
+두 실패를 기존 known failure로 분류하거나 숨기지 않는다.
 
 GREEN은 installed wheel/sdist, architecture/holder/harness, 기존 숙고·조건부 검토,
 v2 profile/judgment/provider/request, calibration 및 실제 CLI subprocess,
