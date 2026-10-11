@@ -661,12 +661,15 @@
 | D-672 | Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임 | Accepted (2026-10-12) |
 | D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 | Accepted (2026-10-12) |
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 | Accepted (2026-10-12) |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 | Accepted (2026-10-12, 계약; 운영 활성화·현장 수용 별도) |
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-676 | Fleet 신호·CORE 교통 gate·차선 RL의 두 Pinky 완주 파이프라인 | Accepted (2026-10-12) |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
+| D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
+| D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -723,6 +726,11 @@
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
 
+## D-682 — 예약된 물체 정답과 고정 detector의 인지 적합성 재생
+
+- 상태: Accepted (2026-10-12).
+- 결정: 학습 export와 구별한 예약 MCAP 물체 정답 출판, 고정 detector·관측·학습 참조 결속과 HOLD 재생을 정의한다.
+- 계약: [ADR](../adr/D-682-fixed-object-truth-and-fitness-replay.md). 실제 독립 성능·장치 수용은 별도다.
 ## D-679 — Fleet·Qwen 불일치와 제한된 GLM 재평가
 
 - 상태: Accepted (2026-10-12).
@@ -734,3 +742,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: 같은 판정 계약으로 Qwen·GLM·Jev·Laya를 교체하고 독립 보정·안전·결과 확인으로 자동 처리한다. 사람은 최종 미해결 사건을 인수한다.
 - 계약: [ADR](../adr/D-681-model-led-incident-closure.md). 모델 보고 확률과 실측 신뢰도를 구분하며 첫 연결 시험 한도와 HOLD는 유지한다.
+
+## D-684 — Pinky 사건 재관측과 지속 예산 원장
+
+- 상태: Accepted (2026-10-12, 계약).
+- 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
+- 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.

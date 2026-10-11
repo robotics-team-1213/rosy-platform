@@ -121,6 +121,23 @@ class FleetTaskService:
                          result.get("task_id"))
         return result
 
+    def admit_attempt(self, task_id: str, attempt_id: str) -> None:
+        """Final synchronous admission, after the console's capability/localization awaits."""
+        task = self.store.get_task(task_id)
+        if (task is None or task["attempt_id"] != attempt_id
+                or task["status"] != "QUEUED" or task["dispatch_phase"] != "DISPATCHING"):
+            raise HubError("COMMAND_REJECTED", "task no longer owns the dispatch attempt")
+        reason = None
+        if not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
+            reason = "STOP_GENERATION_CHANGED_BEFORE_SEND"
+        elif task["source"] == "policy":
+            reason = self._policy_admission_reason(task["evidence"]["evidence_id"], robot_id=task["robot_id"])
+            if reason is None and not self.POLICY_DISPATCH_ENABLED:
+                reason = "POLICY_NOT_ACCEPTED"
+        if reason is not None:
+            self.store.transition(task_id, "HOLD", actor_id=task["actor_id"], source=task["source"], reason=reason)
+            raise HubError("COMMAND_REJECTED", reason)
+
     async def _dispatch_next(
         self, available_robot_ids: set[str], *,
         dispatch: Callable[[dict], Awaitable[Mapping]],
@@ -128,6 +145,14 @@ class FleetTaskService:
         task = self.scheduler.claim_next(available_robot_ids)
         if task is None:
             return None
+        if task["source"] == "policy":
+            admission = self._policy_admission_reason(task["evidence"]["evidence_id"],
+                                                      robot_id=task["robot_id"])
+            if admission is not None or not self.POLICY_DISPATCH_ENABLED:
+                return self.store.transition(
+                    task["task_id"], "HOLD", actor_id=task["actor_id"], source=task["source"],
+                    reason=admission or "POLICY_NOT_ACCEPTED",
+                )
         attempt = self.scheduler.begin_dispatch(task["task_id"])
 
         try:

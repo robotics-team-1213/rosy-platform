@@ -143,10 +143,12 @@ class FormationSession:
             self.assignment = assignment
         except SessionError as exc:
             # 무장 거절 — 이미 흐르는 스트림을 끊고 팔로워를 푼다.
+            stopped = self.state is SessionState.STOPPED
             await self._stop_relay()
             await self._disarm(self._followers)
             self.state = SessionState.STOPPED
-            self.reason = (f"arming_failed:{exc}", getattr(exc, "robot_id", None))
+            if not stopped:
+                self.reason = (f"arming_failed:{exc}", getattr(exc, "robot_id", None))
             raise
         for robot in [self._leader, *self._followers]:
             self._watchers.append(asyncio.create_task(self._watch(robot)))
@@ -451,6 +453,9 @@ class FormationSession:
                 raise ArmingFailed(follower.robot_id, "TRAIL_NOT_SUPPORTED",
                                    "robot did not report trail follow")
             armed.append(follower)
+            if self.state is SessionState.STOPPED:
+                await self._disarm(armed)
+                raise SessionError("session stopped while arming")
 
     async def _disarm(self, armed: Sequence[RobotClient]) -> None:
         for follower in armed:

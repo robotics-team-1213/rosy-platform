@@ -2,16 +2,18 @@
 from pathlib import Path
 import hashlib
 import json
+import math
 
 from road_fitness_replay import _snapshot
 import cv2
 import numpy as np
 import store
-from review_evidence import safe_file
-from control.sensing.perception.learned.manifest import load_manifest, verify_files
+from review_evidence import safe_file, valid_digest
+from control.sensing.perception.learned.manifest import load_manifest, verify_files, _parse_input, check_revision
 from control.sensing.perception.learned.runner import LaneSegModel
 from control.sensing.perception.learned.road_observation import observe_model_frame
-from control.sensing.perception.learned.road_region import road_masks
+from control.sensing.perception.learned.road_region import road_masks, observed_road_region
+from core_common.observation import road_region_input_errors
 
 INPUT_SCHEMA = 'rosy.perception.road-observation-input/1'
 SCHEMA = 'rosy.perception.road-observation-artifact/1'
@@ -71,10 +73,19 @@ def _decode(raw):
         raise ValueError('observation artifact schema differs')
     observed = doc['observation']
     inputs, bindings = doc['inputs'], doc['bindings']
+    if any(not isinstance(value, dict) for value in (observed, inputs, bindings)):
+        raise ValueError('observation artifact mappings required')
     if inputs.get('schema') != INPUT_SCHEMA or set(inputs) != INPUT_FIELDS:
         raise ValueError('observation input schema/fields differ')
     if any(bindings[key] != inputs[key] for key in ('model_manifest_sha256', 'image_sha256')):
         raise ValueError('observation binding hashes differ')
+    if any(not valid_digest(bindings.get(key)) for key in
+           ('inputs_sha256', 'model_manifest_sha256', 'image_sha256')):
+        raise ValueError('observation binding digests required')
+    image, anchor = (_snapshot(inputs[key + '_snapshot']) for key in ('image', 'anchor'))
+    errors = list(road_region_input_errors(image, anchor, now_ns=inputs['now_ns'], max_age_ns=bindings['max_age_ns']))
+    if observed['input_errors'] != errors:
+        raise ValueError('observation validity differs from snapshots and clock')
     if any(observed[key + '_snapshot_id'] != inputs[key + '_snapshot']['snapshot_id']
            for key in ('image', 'anchor')):
         raise ValueError('observation snapshot identity differs')
@@ -82,13 +93,45 @@ def _decode(raw):
         raise ValueError('invalid region inputs cannot carry a region')
     if observed['fitness_verdict'] != 'HOLD':
         raise ValueError('observation artifact must remain HOLD')
+    check_revision(observed['model_revision'])
+    profile = observed['camera_profile_revision']
+    if not isinstance(profile, str) or not profile.strip() or profile != profile.strip():
+        raise ValueError('camera profile revision required')
+    preprocessing = observed['preprocessing']
+    if not isinstance(preprocessing, dict):
+        raise ValueError('observation preprocessing mapping required')
+    spec = _parse_input(preprocessing['input'])
+    source = preprocessing['source_shape']
+    if (not isinstance(source, list) or len(source) != 2
+            or any(type(v) is not int or v <= 0 for v in source) or math.prod(source) > PIXEL_LIMIT):
+        raise ValueError('invalid source grid')
+    height = spec.crop[0] if spec.crop is not None else spec.height
+    lo, hi = spec.crop[2:] if spec.crop is not None else (0, height)
+    if (height * spec.width > PIXEL_LIMIT or preprocessing['prediction_shape'] != [height, spec.width]
+            or preprocessing['predicted_rows'] != [lo, hi]):
+        raise ValueError('observation preprocessing grid or crop differs')
+    seeds = inputs['seed_pixels']
+    if (not isinstance(seeds, list) or any(not isinstance(p, list) or len(p) != 2
+            or any(type(v) is not int for v in p) for p in seeds)):
+        raise ValueError('anchors must be integer (row, col) pixels')
+    mapped = [[int(np.floor((r + .5) * height / source[0])),
+               int(np.floor((c + .5) * spec.width / source[1]))] for r, c in seeds]
+    if preprocessing['seed_pixels'] != mapped:
+        raise ValueError('observation anchor grid differs')
     classes = doc['bindings']['classes']
     road_masks(np.full((1, 1), 255, np.uint8), classes)
     labels = observed['labels']
+    image_invalid = any(e in ('image_invalid', 'image_stale', 'image_future') for e in errors)
+    if (labels is None) != image_invalid:
+        raise ValueError('observation labels differ from image validity')
     if labels is None:
-        if observed['road_surface'] is not None or observed['current_region'] is not None:
+        if (observed['road_surface'] is not None or observed['current_region'] is not None
+                or observed['region_reason'] != 'invalid_inputs' or observed['infer_latency_ms'] is not None):
             raise ValueError('abstained labels cannot carry masks')
         return doc
+    latency = observed['infer_latency_ms']
+    if type(latency) not in (int, float) or not math.isfinite(latency) or latency < 0:
+        raise ValueError('inference latency must be finite and non-negative')
     labels = np.asarray(labels)
     if (labels.ndim != 2 or not labels.size or labels.size > PIXEL_LIMIT
             or not np.issubdtype(labels.dtype, np.integer)):
@@ -96,6 +139,8 @@ def _decode(raw):
     road, _ = road_masks(labels, classes)
     if list(labels.shape) != observed['preprocessing']['prediction_shape']:
         raise ValueError('labels/preprocessing grid differs')
+    if np.any(labels[:lo] != 255) or np.any(labels[hi:] != 255):
+        raise ValueError('labels outside model crop must remain unknown')
     for key in ('road_surface', 'current_region'):
         mask = observed[key]
         if mask is None:
@@ -109,6 +154,11 @@ def _decode(raw):
             raise ValueError('road mask differs from class labels')
         if key == 'current_region' and np.any(mask & ~road):
             raise ValueError('region mask extends outside road')
+    region, reason = (None, 'invalid_inputs') if errors else observed_road_region(labels, classes, mapped)
+    actual = observed['current_region']
+    if (observed['region_reason'] != reason or (actual is None) != (region is None)
+            or (region is not None and not np.array_equal(actual, region))):
+        raise ValueError('current region differs from observed anchors and road')
     return doc
 
 
@@ -138,8 +188,9 @@ def execute(args):
             stream.write(raw)
         digest = _sha(raw)
         read_artifact(output, digest)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f'observation diagnostic error: {exc}')
+    except Exception as exc:
+        # Backend-specific failures also close the diagnostic without an artifact.
+        print(f'observation diagnostic error ({type(exc).__name__}): {exc}')
         return 2
     print(f'observation diagnostic HOLD: {output} sha256={digest}')
     return 0

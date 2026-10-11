@@ -100,7 +100,11 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
+              "fleet/fleet/incidents/automation",
               "decision/src/rosy/decision/deliberation",
+              "decision/src/rosy/decision/deliberation/contracts",
+              "decision/src/rosy/decision/deliberation/providers",
+              "decision/src/rosy/decision/deliberation/evaluation",
               "perception/vision/perception",
               "perception/vision/perception/learned",
               "perception/vision/perception/drivable")
@@ -111,11 +115,44 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 SIZE_VERDICTS = {
     "decision/src/rosy/decision/deliberation": (
         231,
-        "accept: responsibility_review independently confirmed the proposal-only Python subpackage "
-        "boundary; measured 231 lines on 2026-10-12. Contract/supervisor and fixed CLI translation "
-        "share this owner; Fleet journal, admission and writers stay outside. "
-        "docs/plans/2026-10-12-decision-deliberation-boundary.md records callers, installation and "
-        "same-change parent measurement; keep the existing +150 allowance.",
+        "split: responsibility_review applied three actual responsibility subpackages on 2026-10-12. "
+        "The remaining supervisor and import-only stable API paths measure 339 lines, within the "
+        "unchanged original 231+150 allowance. Contract validation, provider translation and pure "
+        "offline evaluation are counted once in their innermost units; Fleet admission and writers "
+        "stay outside. docs/plans/2026-10-12-deliberation-role-subpackages.md records installed "
+        "wheel/sdist closure, callers and same-change parent measurement. The original "
+        "docs/plans/2026-10-12-decision-deliberation-boundary.md remains applicable.",
+    ),
+    "decision/src/rosy/decision/deliberation/contracts": (
+        232,
+        "accept: actual validated Profile/BoundProfile/AdapterCapabilities and v2 Judgment/schema "
+        "implementations, independently scoped by responsibility_review on 2026-10-12; no provider "
+        "calls, runtime admission receipt, database or dispatch. Measured 232 physical lines; "
+        "docs/plans/2026-10-12-deliberation-role-subpackages.md. Keep +150 and file limits.",
+    ),
+    "decision/src/rosy/decision/deliberation/providers": (
+        204,
+        "accept: actual fixed CLI/local codecs and versioned request projection through explicit "
+        "admitted launch ports, independently scoped by responsibility_review on 2026-10-12. "
+        "No default launcher, host admission or Fleet writer. Measured 204 physical lines; "
+        "docs/plans/2026-10-12-deliberation-role-subpackages.md. Keep +150 and file limits.",
+    ),
+    "decision/src/rosy/decision/deliberation/evaluation": (
+        275,
+        "accept: actual pure immutable calibration, lineage/metric computation and pinned-artifact "
+        "advisory selection, independently scoped by responsibility_review on 2026-10-12. "
+        "Model PC CLI uses this API; no inference, promotion, files or robot access in this unit. "
+        "Measured 275 physical lines; docs/plans/2026-10-12-deliberation-role-subpackages.md. "
+        "Keep +150 and file limits; no learning-holder relocation claimed.",
+    ),
+    "fleet/fleet/incidents/automation": (
+        322,
+        "accept: actual opt-in incident parent/attempt budget journal and existing-poll observation "
+        "adapter, independently scoped by responsibility_review on 2026-10-12. Same Fleet SQLite "
+        "ownership; no gather, provider activation, CORE command or notification transport. "
+        "Measured 322 physical lines; docs/plans/2026-10-12-deliberation-role-subpackages.md "
+        "and docs/plans/2026-10-12-incident-observation-budget-store.md. Keep +150 and file limits; "
+        "later worker growth needs a fresh responsibility and size review.",
     ),
     "web/ui.js": (
         811,
@@ -274,7 +311,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_093,
+        53_366,
+        "split: responsibility_review verified the 2026-10-12 incident automation and three "
+        "Decision role extractions at 53408 remaining parent lines, within the unchanged "
+        "53366+150 allowance. Units are counted once by the existing innermost filter. "
+        "docs/plans/2026-10-12-deliberation-role-subpackages.md records the source and installed "
+        "closure. Previous verdict: independently re-judged on 2026-10-12 by pipeline_review "
+        "at 53366 for D-678. "
+        "Final admission, stop fencing and receipt/readback stay with existing Console, GoalLeases, "
+        "TaskService, TripAdmission, Mission store/dispatcher and FormationSession owners; no engine "
+        "or SIZE_UNITS added. Keep package +150 and existing observe/server/UI split obligations. "
+        "See docs/plans/2026-10-12-fleet-pipeline-complete.md. Previous verdict: "
         "split: re-judged on 2026-10-12 with D-655/D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
         "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
         "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53093; "
@@ -979,7 +1026,12 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1255,
+        1325,
+        "accept: independently re-judged on 2026-10-12 by pipeline_review at 1325 for D-678: "
+        "goal/bay admission, queue and post-send traffic share the existing mutable Console state. "
+        "Stop token authority stays in GoalLeases; Task policy and Trip/formation owners remain separate. "
+        "Splitting only these guards would scatter the same state authority. Keep zero growth and "
+        "existing server/UI obligations; docs/plans/2026-10-12-fleet-pipeline-complete.md. Previous verdict: "
         "accept: re-judged at 1255 on 2026-10-10 (console.py grew to 1255 after the D-581 " +
         "follow-ups; the drift-watch merge adds no console.py lines). " +
         "No goal, stop or admission path changed; the zero growth allowance remains. Previously "

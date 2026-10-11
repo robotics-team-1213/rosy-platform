@@ -14,10 +14,11 @@ import time
 import urllib.request
 
 from rosy.decision.deliberation import Problem, canonical, identifier, opinion
+from .deliberation_smoke_budget import claim
 
 MODEL = 'glm-5.3-flash'
 UPSTREAM = 'https://api.z.ai/api/coding/paas/v4/chat/completions'
-SECRET = Path('/var/lib/rosy-deliberation/glm-coding-plan.json')
+CONFIG_PATH = Path('/var/lib/rosy-deliberation/glm-coding-plan.json')
 LIMIT = 16384
 
 
@@ -43,7 +44,7 @@ def trusted_body(raw):
 
 
 def read_secret():
-    fd = os.open(SECRET, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(CONFIG_PATH, os.O_RDONLY | os.O_NOFOLLOW)
     try:
         info = os.fstat(fd)
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
@@ -134,12 +135,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     or any(item.get('tool_calls') or item.get('function_call')
                            or item.get('role') in {'tool', 'function'} for item in incoming['messages'])):
                 raise ValueError('REQUEST_REFUSED')
-            server.calls = 1
             request = {'model': MODEL, 'messages': [
                 {'role': 'system', 'content': 'Return only the requested bound JSON opinion. No tools.'},
                 {'role': 'user', 'content': server.body}], 'max_tokens': 1024, 'stream': False,
                 'thinking': {'type': 'enabled'}, 'reasoning_effort': 'low',
                 'response_format': {'type': 'json_object'}}
+            claim(server.body)
+            server.calls = 1
             response = checked_response(server.problem, upstream(request, server.token,
                 max(0.01, server.deadline - time.monotonic())))
             stream = incoming.get('stream') is True
@@ -157,7 +159,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     job = json.loads(sys.stdin.buffer.readline(LIMIT + 1024))
-    if set(job) != {'body', 'deadline_s', 'socket_path', 'secret_path'} or job['secret_path'] != str(SECRET):
+    if set(job) != {'body', 'deadline_s', 'socket_path', 'secret_path'} or job['secret_path'] != str(CONFIG_PATH):
         raise ValueError('INVALID_JOB')
     duration = job['deadline_s']
     if type(duration) not in (int, float) or not math.isfinite(duration) or not 0 < duration <= 30:

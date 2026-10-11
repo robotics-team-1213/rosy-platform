@@ -59,6 +59,7 @@
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 | D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 
 ## 계획·결과 문서
 
@@ -96,8 +97,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+- 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결
 - 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
 - 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
 - 2026-10-12 · cb7c3396c · D-674 실행 파이프라인 최종 검증
-- 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
-- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
