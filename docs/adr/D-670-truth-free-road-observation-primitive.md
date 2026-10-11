@@ -13,6 +13,7 @@ D-666은 독립 정답과 관측 입력을 분리해 고정 모델을 평가한�
 3. 반환값은 내부 Python mapping이며 numpy labels/도로면/현재 구역 mask, 구역 사유와 입력 오류, 두 snapshot ID, 실제 로드한 model revision/camera profile revision/input 전처리, 원본·예측 grid와 crop 행, 모델 추론 지연을 포함한다. 원본 기준점은 픽셀 중심 기준으로 예측 grid에 매핑한다. 경계 밖 기준점을 중앙/최대 영역으로 보충하지 않는다. model camera profile revision과 snapshot calibration revision은 서로 다른 계보이며 동일성·물리 보정이 검증됐다고 추정하지 않는다.
 4. 반환 판단은 항상 진단/HOLD다. infer latency는 모델 추론 구간이며 촬영부터 전달까지 지연이나 프레임 손실을 뜻하지 않는다. 함수는 네트워크·파일 전달·pointer 변경·주행 명령을 수행하지 않는다. 운영 연결에는 별도 consumer/전달·버전 readback·clock alignment·지연/손실·장치 증거가 필요하다.
 5. D-666 모델 평가도 같은 원시 추론 함수를 사용한다. 원본 정답 검증은 resize 전에 수행하며 ROI 제외 분모와 실물/시뮬레이션 분리는 유지한다. 기존 legacy 추론과 전달의 거절 조건을 완화하지 않는다.
+6. 관측 함수가 필요한 `core_common.observation`은 Foundation 0.0.1부터 제공된다. control 배포물/ROS package를 0.1.1로 맞추고 Python dependency와 ROS exec dependency에 `core_common>=0.0.1` 최소 버전을 명시한다. sdist에서 만든 wheel과 설치된 Foundation만으로 관측 import와 metadata를 검증한다.
 
 ### Verification and consequences
 
