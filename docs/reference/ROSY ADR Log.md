@@ -688,6 +688,7 @@
 | D-699 | Fleet 관측 capture 식별과 기록 창 무결성 | Accepted |
 | D-700 | Fleet 실제 규칙 선택과 모델 비교 기준 | Accepted |
 | D-701 | 실제 규칙 선택의 독립 비교 export | Accepted |
+| D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -862,4 +863,10 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 **Status:** Accepted (2026-10-12, source contract)
 
 실제 선택 원장의 read-only export와 별도 규칙 후보를 같은 사건 cohort에 결속한다. 선택 건수와 전체 운영 성과를 구분하며 미확인 coverage/결과/비용은 null·HOLD다. 전문은 [D-701](../adr/D-701-independent-rule-selection-export.md).
+
+## D-702 — 독립 보정 평가의 구간 표본 수와 금지 오류
+
+**Status:** Accepted (2026-10-12, source contract)
+
+검수된 구간 최소 표본 수를 오프라인 평가와 advisory 선택에 동일하게 적용한다. 네 가지 금지 오류 건수와 forbidden 사건 분모를 구분하며 부족한 근거는 HOLD다. 전문은 [D-702](../adr/D-702-independent-calibration-bin-support.md).
 
