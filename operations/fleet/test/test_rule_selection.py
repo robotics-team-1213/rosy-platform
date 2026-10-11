@@ -108,6 +108,16 @@ def test_disabled_ai_first_is_not_mixed_and_default_factory_uses_actual_selectio
     application = app(tmp_path / 'runtime', config)
     actual = application.state.stuck_resolver
     assert actual.incident_worker.baseline == actual.rule_baseline
+    actual._board._wall = lambda: 100
+    actual._resolver.autonomous_robots = frozenset({'pinky'})
+    source = row(100, stuck_id='case-1')
+    source['state']['line_follow']['stuck']['cause'] = 'unsupported-cause'
+    async def snapshot():
+        actual._board.observe([source])
+        return {'robots': [source]}
+    actual._snapshot = snapshot
+    asyncio.run(actual.run_once())
+    assert actual.incident_worker._problem(actual._board.intervention_assessment('pinky')).fleet_choice == 'reobserve'
     custom = lambda _: None
     application = app(tmp_path / 'custom', {**config, 'baseline': custom})
     assert application.state.stuck_resolver.incident_worker.baseline is custom
