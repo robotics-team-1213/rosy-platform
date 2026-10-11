@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
 import {createFleetClient} from '/common/fleet-client.js';
@@ -42,7 +43,7 @@ function gate(id, reason) {  // '' enables; otherwise the button says why it is 
 function notice(text) { $('notice').textContent = text; }
 function status(id, text, kind) { $(id).textContent = text; $(id).setAttribute('state', kind); }
 function shown() { return $('map-source').value === 'draft' ? state.working : state.active?.map; }
-function operatorReason() { return state.role === 'operator' ? '' : state.role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다'; }
+function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
 
 function el(name, attrs, parent) {
   const node = document.createElementNS(SVG, name);

@@ -28,7 +28,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   let calibrationsAt = 0;
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
-  const font = (size) => window.RosyPalette.canvasFont(size, "mono");
+  const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
@@ -115,10 +115,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   function drawChip(ctx, grid, cx, cy, text, tone, important = true) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
-    const fontSize = Math.max(12, Math.round(12 * ctx.canvas.width / displayedWidth));
+    const fontSize = window.RosyPalette.canvasTextSize("micro") * Math.max(1, ctx.canvas.width / displayedWidth);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = font(fontSize);
+    ctx.font = font("micro", fontSize / window.RosyPalette.canvasTextSize("micro"));
     const padding = fontSize * 0.4;
     const maxTextWidth = Math.max(fontSize, ctx.canvas.width - padding * 2 - 8);
     while (ctx.measureText(text).width > maxTextWidth && text.length > 1) {
@@ -161,7 +161,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.textBaseline = "middle";
     ctx.lineWidth = 0.4;
     for (const { x, y, width, height, fontSize, text, tone } of pendingChips) {
-      ctx.font = font(fontSize);
+      ctx.font = font("micro", fontSize / window.RosyPalette.canvasTextSize("micro"));
       ctx.globalAlpha = 0.92;
       ctx.fillStyle = css("--scrim");
       ctx.fillRect(x - width / 2, y - height / 2, width, height);
@@ -474,7 +474,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
         + " 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).";
       ctx.save();
-      ctx.font = font(13);
+      ctx.font = font("label");
       const boxWidth = ctx.measureText(text).width + 24;
       ctx.fillStyle = css("--scrim");
       ctx.fillRect(Math.max(4, (width - boxWidth) / 2), 8, boxWidth, 28);
@@ -484,7 +484,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.fillText(text, width / 2, 14);
       ctx.restore();
     }
-    const labelFont = font(12);
+    const labelFont = font("micro");
 
     // 0.5 m 격자
     ctx.save();

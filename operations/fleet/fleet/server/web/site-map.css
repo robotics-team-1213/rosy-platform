@@ -57,7 +57,7 @@ a { color: var(--text-primary); }
 #robot-layer .robot-tip { fill: currentColor; }
 #robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
-#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); background: var(--surface-flat); }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; }
 @media (width < 64rem) {
   .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
   .form { grid-template-columns: 1fr; }
