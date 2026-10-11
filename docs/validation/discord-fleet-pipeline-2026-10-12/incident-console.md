@@ -32,3 +32,11 @@ safety_structure_review는 UI source `f18b37458`를 승인하고 Fleet 부모54,
 API 버전 설명, 한국어 검토/작업 상태와 disabled reason/aria-describedby를 보완했다. 기존 workStatus와 이미 설치된 두 asset을 재사용하며 승인·안전 조건은 같다. reviewer는 import cycle 없음, API AST의 버전 문자열 외 동작 동일, Fleet54,860=35,961+1,666+16,988+245로 기존54,852/+150 안임을 확인해 source/Safety 승인했다. 구조 allowance나 SIZE_UNITS를 늘리지 않았다. source193d54401 AI PC 2cores/9GB 자원 하한 충족, 원격 Chromium10건을 포함한 문구·disabled·버전·설치·구조 선택군 terminal exit0/NEW0 및 Node work-view2 PASS이다. 로그는 기존 session/logs/workflow-operator-guidance-fixed/run-1.txt다. 전체 영향 검사·최신 main local FF·CI·서명 배포·실제 왕복은 후속이다.
 
 운영 readback은 현장 signed candidate28f6f49695644d7c2b99c0cf86e9dc3dc2d0e8bf와 Fleet/Vision/proxy healthy, site-stack/autoupdate timer active이다. Discord 전용 host config는 없다. 기존 비공개 Bot 토큰으로 Discord v10 읽기만 수행해 Bot1558876462734385213과 guild1558864656037056655/channel1558865220242378752(fleet-ai)가 일치함을 확인했다. token 재발급·메시지 발송·push·배포·장치 명령은 수행하지 않았다. 이는 Fleet Gateway의 운영 접수·회신 수용 증거가 아니다.
+
+## 전체 영향 재검사와 확인창 등록
+
+source164fb34c2의 harness/affected 원격 회귀는 terminal exit0/NEW0이고 lint0errors다. 최신 main4727e379d5를 source5a1aeb508e에 합친 다음 전체 선택군 세 묶음은 모두 terminal 결과를 회수했다. 첫 묶음9,242 PASS/493 skipped/NEW1(거절 결과 문자열을 행 행동으로 읽는 규약), 두 번째4,718 PASS/349 skipped/NEW2(확인창 핀, 동료 문서의 Git 해시 오탐), Fleet 세 번째4,396 PASS/225 skipped/NEW0다. 로그는 session/logs/landing-operator-guidance/feat-discord-workflow/run-1-{1,2,3}.txt이며 각 known_failures 비교를 완료했다. 새 실패는 기존 목록에 넣지 않았고 main 착지는 중단했다.
+
+거절 결과를 '거절됨'으로 표시한다. 기존 확인 처리기 주입 bridge Console4와 기존 current-incident/Mission/Task 확인 호출 channel owner3을 정확한 pin으로 등록한다. 독립 검토는 세 확인의 snapshot/eligible/owner.signal/check, 기존 안전·generation·atomic owner와 모든 다른 pin·scanner·window.confirm 금지 보존을 확인해 승인했다. 동료 문서의 두 Git 값은 cat-file type commit 및 unique resolve를 확인한10자리 prefix로 줄였다. 비밀 검출기는 변경하지 않았다. 수정 committed HEAD의 재검증 및 들어온 main 변경 통합은 후속이다.
+
+현장 기명 로그인livsbittt는 operator-livsbittt/operator로 직접 readback했다. 실제 mounted config의 autonomous_robots는 빈 목록이고 Discord config는 없다. 비공개 접수·회신 활성화 초안을 X의 기존 private session에 준비했으나 현장 설치·활성화는 하지 않았다. 관리자 비대화형 접근은 불가능해 실제 설정 적용에는 사용자 sudo 입력이 필요하다. 로봇 명령·push·배포·추가 Discord 전송은 없다.

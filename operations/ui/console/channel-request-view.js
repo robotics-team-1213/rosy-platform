@@ -1,6 +1,6 @@
 // Fleet binds the current review and existing Task creation in one transaction.
 import {workStatus} from "/console/assets/work-view.js";
-const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절", LINKED: "작업 연결"};
+const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
   let receipt = null, review = null, version = 0, busy = false, incidentRows = [];
   const panel = el("channel-review"), state = el("channel-review-state");
