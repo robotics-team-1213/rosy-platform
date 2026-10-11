@@ -8,6 +8,20 @@ Cam·Pilot Android CI [38179188636](https://github.com/robotics-team-1213/rosy-p
 
 재부팅 뒤 gate의 부분 실행, main 이동으로 반복한 성공 회차와 공개 commit 표기 탐지 실패는 이전 로그에 보존한다. 비밀 탐지 기준이나 기존 실패 목록을 완화하지 않았다. 최신 후보의 production 비밀 탐지 사전 점검은 0건이었다. 설치본 비교는 Windows 작업 파일 대신 후보 Git blob의 SHA-256을 사용한다.
 
+## 전체 CI 호환성 보완
+
+commit `40e7287971`은 추가 G1 **307 passed**와 canonical pre-push **7,828 passed**를 거쳐 push했다. 전체 CI [38180852375](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38180852375)의 scope·hardware-safety는 성공했으나 Fleet 시험 hook, Cell 인증 안내 기대 문구, 센싱 고립 설치 의존성 문자열 비교가 실패했다. unsigned 후보 빌드 성공은 CI 통과·서명·설치를 대신하지 않는다.
+
+CI와 같은 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0을 canonical 원격 실행의 독립 작업 폴더에만 설치했다. 공유 시험 venv는 변경하지 않았다. diagnostic RED에서 `core-common >=0.0.1` 원문을 확인했고 PEP 508의 정규 이름·정확한 `>=0.0.1` 조건·extras/marker/URL 없음으로 검증을 바꿨다. provider identity·실제 설치 경로·버전·지도 바이트 조건은 유지한다. 예약된 `setup` helper만 이름을 바꿨으며 Cell의 401 기대를 실제 로그인·고급 접속 안내로 맞췄다.
+
+수정 후 선택 원격 **95 passed**, 실제 Chromium Cell 거절·세션 초기화 **6 passed**, 각각 exit 0/NEW 0이다. RED는 1 NEW이며 기존 실패로 분류하지 않았다. `logs/ci-compatible-diagnostic/`, `logs/ci-compatible-green/`, `logs/ci-compatible-cell/`에 보존한다. 최신 통합·전체 CI·서명·설치·팀원 초기 계정 발급은 아직 진행 중이다.
+
+최신 도구의 선택 회귀는 **101 passed**, exit 0/NEW 0이다(`logs/compat-modern-green/`). canonical G1은 최신 main 이동에 따라 두 회차를 수행했다. commit `c624339426`은 6165 + 4371 = **10,536 passed**, commit `03378323ea`는 6165 + 4396 = **10,561 passed**, 각 묶음 exit 0/NEW 0, Node 각각 **318 passed/0 failed**이다. 두 번째 후보는 로컬 main에 착지했다(`logs/land-ci-compat/uiux-header-all-surfaces/`).
+
+새로 합쳐진 `test_channel_incidents.py` 도우미도 같은 pytest 7.4 hook 충돌을 일으켜 원격 **9 NEW**를 재현했다. 정의·호출 세 곳의 이름만 바꾼 commit `1e29edaed`는 같은 CI 도구와 최신 도구에서 각각 **9 passed**, exit 0/NEW 0이다(`logs/ci-peer-helper-red/`, `logs/ci-peer-helper-green/`, `logs/peer-helper-modern-green/`). native_games_ui가 의미·단언 보존과 확정 UX 문서 범위를 독립 승인했다. 출하 범위의 안전 검토 기록 **171 commits**도 통과했다(`logs/safety-ci-compat-range.txt`). 최신 main의 초기 API 제한·본인 프로필·초안 보존은 robot_pilot_ui가 추가 검토했다. 현장 선택적 Discord 설정 파일이 없는 것만 확인했고 외부 메시지를 보내거나 활성화하지 않았다.
+
+최종 후보 전체 CI·서명·설치·초기 계정 발급은 아직 완료하지 않았다. 당사자 최종 비밀번호와 실제 로봇/폰/LCD 수용은 대신 완료하지 않는다.
+
 ## 첫 로그인·기본 내 프로필 — D-686/D-689
 
 사용자는 팀원 네 명에게만 사람 계정을 발급하고 초기 비밀번호를 로그인 ID와 일치시키되 첫 로그인에서 반드시 변경하도록 요청했다. 기본 프로필은 표시 이름 수정·현재 비밀번호 확인 변경·ID/이메일/권한 조회로 확정했다. 기존 기계·운용·AI 자격은 보존하며 실제 명단·자격을 이 문서에 기록하지 않는다. 서버는 초기 쿠키의 운용 API 접근을 거절하고 기존 SQLite에서 자격·프로필·세션 회전을 관리한다. 화면 이름과 우상단 링크는 운용 용어 규칙에 맞춰 **내 계정**으로 통일했다. Map/Cell 새 탭으로 입력을 보존한다.

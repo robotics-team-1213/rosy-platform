@@ -8,7 +8,7 @@ import pytest
 from rosy.decision.deliberation import canonical
 from rosy.decision.deliberation.contracts.billing import CostEvidence, CallResult, usd
 from rosy.decision.deliberation.providers.versioned_request import prepare_request
-from test_versioned_cli import setup
+from test_versioned_cli import make_cli_provider
 
 
 def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
@@ -27,7 +27,7 @@ def host_receipt(p, bound, body, payload):
 
 @pytest.mark.parametrize('fault', [None, 'job_sha256', 'profile_sha256', 'judgment_sha256', 'marginal_cash_usd'])
 def test_cli_attaches_call_bound_cost_evidence_without_losing_known_cost(fault):
-    p, bound, transport, provider = setup('opencode')
+    p, bound, transport, provider = make_cli_provider('opencode')
     transport.cost = 0.0
     original = transport.__class__.__call__
     class BillingTransport(transport.__class__):
@@ -54,7 +54,7 @@ def test_cli_attaches_call_bound_cost_evidence_without_losing_known_cost(fault):
 
 
 def test_legacy_cli_call_still_returns_tuple_two_without_cost_metadata():
-    p, bound, _, provider = setup()
+    p, bound, _, provider = make_cli_provider()
     result = asyncio.run(provider(p, bound, (), 2, budget_usd=.05))
     assert type(result) is tuple and len(result) == 2
 
