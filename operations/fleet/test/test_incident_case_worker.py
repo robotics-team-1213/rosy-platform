@@ -29,7 +29,7 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4):
             raw[key]['evidence_ids'] = list(p.evidence_ids)
         if change == 'conflict': raw['objections'] = ['conflict']
         if change == 'unsafe': raw['objections'] = ['unsafe']
-        if change == 'invalid': raw['case_id'] = 'foreign'
+        if change == 'invalid' and len(seen) == 1: raw['case_id'] = 'foreign'
         if change == 'unknown': raise RuntimeError('private provider error')
         if change == 'human': human[0] = True
         return raw, 0.0
@@ -39,7 +39,8 @@ def setup(tmp_path, *, admitted=True, change=None, budget_calls=4):
         call.profile, call.adapter = selected, adapter()
         providers.append(call)
     store = IncidentCaseStore(log.path, clock=lambda: now[0])
-    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, 4, 0)
+    def budget(scope): return CaseBudget(now[0], now[0] + 30, budget_calls, 4, 0,
+                                       tuple((p.role, p.max_calls) for p in profiles))
     async def handoff(scope, summary): handoffs.append((scope, summary))
     worker = IncidentCaseWorker(store, IncidentObservationPort(board, human_owned=lambda *_: human[0], clock=lambda: now[0]),
         board, profiles=profiles, providers=tuple(providers), admission=lambda *_: admitted,

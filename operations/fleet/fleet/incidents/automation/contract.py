@@ -41,6 +41,7 @@ class CaseBudget:
     max_calls: int
     max_observations: int
     max_cost_usd: float
+    role_limits: tuple[tuple[str, int], ...] = ()
 
     def __post_init__(self):
         if (any(type(value) not in (int, float) or not math.isfinite(value)
@@ -51,6 +52,14 @@ class CaseBudget:
                 or type(self.max_cost_usd) not in (int, float) or not 0 <= self.max_cost_usd <= 10):
             raise ValueError('INVALID_CASE_BUDGET')
         micros(self.max_cost_usd, ceiling=False)
+        if (type(self.role_limits) not in (tuple, list) or len(self.role_limits) > 2
+                or any(type(item) not in (tuple, list) or len(item) != 2
+                       or item[0] not in ('primary', 'reviewer') or type(item[1]) is not int
+                       or not 1 <= item[1] <= 8 for item in self.role_limits)):
+            raise ValueError('INVALID_CASE_ROLE_LIMITS')
+        limits = tuple(tuple(item) for item in self.role_limits)
+        if len({item[0] for item in limits}) != len(limits): raise ValueError('DUPLICATE_ROLE_LIMIT')
+        object.__setattr__(self, 'role_limits', limits)
 
 
 def summary_json(value):

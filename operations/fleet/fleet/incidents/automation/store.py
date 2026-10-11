@@ -27,9 +27,13 @@ class IncidentCaseStore:
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_attempts (
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, attempt_id TEXT NOT NULL,
                 input_hash TEXT NOT NULL, observation_revision TEXT NOT NULL, kind TEXT NOT NULL,
-                worker_id TEXT NOT NULL, state TEXT NOT NULL,
+                worker_id TEXT NOT NULL, state TEXT NOT NULL, role TEXT,
                 reserved_micros INTEGER NOT NULL, actual_micros INTEGER, summary_json TEXT,
                 PRIMARY KEY(subject_id,case_id,attempt_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_closures (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, receipt_json TEXT NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
                 FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
 
     @contextmanager
@@ -57,21 +61,51 @@ class IncidentCaseStore:
                 raise ValueError('CASE_NOT_ACTIVE_OR_EXPIRED')
         return result
 
-    def begin_case(self, scope, budget):
+    def begin_case(self, scope, budget, *, connection=None):
+        if connection is not None:
+            if not connection.in_transaction:
+                raise ValueError('CALLER_TRANSACTION_REQUIRED')
+            return self._begin_case(connection, scope, budget)
+        with self._transaction() as conn:
+            return self._begin_case(conn, scope, budget)
+
+    def _begin_case(self, conn, scope, budget):
         if type(budget) is not CaseBudget:
             raise ValueError('EXPLICIT_CASE_BUDGET_REQUIRED')
         key, scope_json, budget_json = self._key(scope), canonical(asdict(scope)), canonical(asdict(budget))
+        prior = conn.execute('SELECT * FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?', key).fetchone()
+        if prior is not None:
+            if prior['scope_json'] != scope_json or prior['budget_json'] != budget_json:
+                raise ValueError('CASE_SCOPE_OR_BUDGET_CHANGED')
+        else:
+            if conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] >= self.max_cases:
+                raise ValueError('CASE_CAPACITY')
+            conn.execute('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
+                         (*key, scope_json, budget_json, 'ACTIVE', 'OPEN', 0, 0, 0, 0))
+        return self._case(conn, scope)
+
+    def active_scopes(self):
         with self._transaction() as conn:
-            prior = conn.execute('SELECT * FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?', key).fetchone()
-            if prior is not None:
-                if prior['scope_json'] != scope_json or prior['budget_json'] != budget_json:
-                    raise ValueError('CASE_SCOPE_OR_BUDGET_CHANGED')
-            else:
-                if conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] >= self.max_cases:
-                    raise ValueError('CASE_CAPACITY')
-                conn.execute('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
-                             (*key, scope_json, budget_json, 'ACTIVE', 'OPEN', 0, 0, 0, 0))
-            return self._case(conn, scope)
+            return tuple(CaseScope(**json.loads(row[0])) for row in conn.execute(
+                "SELECT scope_json FROM fleet_incident_v2_cases WHERE state='ACTIVE'"))
+
+    def observed_closure(self, scope, proof=None):
+        from .closure import ObservedClosure
+        with self._transaction() as conn:
+            case = self._case(conn, scope)
+            if proof is not None:
+                if (type(proof) is not ObservedClosure or proof.scope != scope or case['state'] != 'ACTIVE'
+                        or proof.requested_at != case['started_at']
+                        or not proof.requested_at < proof.observed_at <= self.clock()
+                        or not proof.requested_at < proof.closed_at <= self.clock()
+                        or proof.action_credit not in ('NONE', 'UNVERIFIED')
+                        or conn.execute("SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND state IN ('RESERVED','SUBMITTING')", self._key(scope)).fetchone()):
+                    raise ValueError('TRUSTED_OBSERVED_CLOSURE_REQUIRED')
+                body = canonical({**asdict(proof), 'state': 'RESOLVED_OBSERVED'})
+                conn.execute('INSERT INTO fleet_incident_v2_closures VALUES (?,?,?)', (*self._key(scope), body))
+                conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD',reason='RESOLVED_OBSERVED' WHERE subject_id=? AND case_id=?", self._key(scope))
+            row = conn.execute('SELECT receipt_json FROM fleet_incident_v2_closures WHERE subject_id=? AND case_id=?', self._key(scope)).fetchone()
+            return json.loads(row[0]) if row else None
 
     def case(self, scope):
         with self._transaction() as conn:
@@ -85,7 +119,7 @@ class IncidentCaseStore:
                                (*self._key(scope), attempt_id)).fetchone()
             return dict(row) if row else None
 
-    def reserve(self, scope, *, attempt_id, input_hash, observation_revision, kind, max_cost_usd, worker_id):
+    def reserve(self, scope, *, attempt_id, input_hash, observation_revision, kind, max_cost_usd, worker_id, role=None):
         for value in (attempt_id, observation_revision, worker_id):
             identifier(value)
         sha256(input_hash)
@@ -95,6 +129,13 @@ class IncidentCaseStore:
         with self._transaction() as conn:
             case = self._case(conn, scope, active=True)
             key = self._key(scope)
+            limits = dict(case.get('role_limits', ()))
+            if kind == 'observation' and role is not None or kind == 'model' and limits and role not in limits:
+                raise ValueError('CASE_MODEL_ROLE_REQUIRED')
+            if kind == 'model' and role in limits and conn.execute(
+                    'SELECT COUNT(*) FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND role=?',
+                    (*key, role)).fetchone()[0] >= limits[role]:
+                raise ValueError('CASE_ROLE_BUDGET_EXHAUSTED')
             if conn.execute('SELECT 1 FROM fleet_incident_v2_attempts WHERE subject_id=? AND case_id=? AND attempt_id=?',
                             (*key, attempt_id)).fetchone():
                 raise ValueError('ATTEMPT_ALREADY_RESERVED')
@@ -104,8 +145,8 @@ class IncidentCaseStore:
             if case[count] >= case[limit] or case['spent_micros'] + case['reserved_micros'] + cost > micros(case['max_cost_usd'], ceiling=False):
                 raise ValueError('CASE_BUDGET_EXHAUSTED')
             conn.execute(f'UPDATE fleet_incident_v2_cases SET {count}={count}+1,reserved_micros=reserved_micros+? WHERE subject_id=? AND case_id=?', (cost, *key))
-            conn.execute('INSERT INTO fleet_incident_v2_attempts VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL)',
-                         (*key, attempt_id, input_hash, observation_revision, kind, worker_id, 'RESERVED', cost))
+            conn.execute('INSERT INTO fleet_incident_v2_attempts VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL)',
+                         (*key, attempt_id, input_hash, observation_revision, kind, worker_id, 'RESERVED', role, cost))
             return {'attempt_id': attempt_id, 'state': 'RESERVED', 'reserved_micros': cost}
 
     def mark_submitting(self, scope, attempt_id, *, worker_id):
