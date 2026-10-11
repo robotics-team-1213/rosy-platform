@@ -74,6 +74,14 @@ creator 취소 및 외부 in-flight 차단 증거는 담당 worker plan에 기�
 목록에 넣지 않는다. 추출 후 같은 실제 설치·크기 검사와 원장·worker·FINAL·
 feedback 영향군의 원격 GREEN을 확인한 뒤 완료 증거를 이 문서에 기록한다.
 
+첫 GREEN 후보 `c17eb326c`는 Site PC 8.9 GB/3.4 cores 기준을 충족했으나
+terminal exit 1, known-failures 2 NEW였다. 두 실패 모두 같은 Fleet index의
+생성 기록 누락이었다. 로그 제목을 source SHA 형식으로 고친 뒤 generate를
+하지 않아 최신 원장 책임 기록이 index에 빠졌다. 설치·size·원장·worker·FINAL·
+feedback 검사에는 실패가 없었다. 원래 generator가 해당 최근 기록 행만
+갱신했으며, 이를 커밋한 뒤 같은 15파일을 다시 검증한다. 기존 실패 목록은
+바꾸지 않는다.
+
 이 변경은 소스·설치 책임 분리다. 운영 활성화·provider 실제 호출·배포·push·
 독립 보정 품질·물리 장치 수용은 입증하지 않는다. CORE 최종 명령, 사람 인수,
 모델 실행 admission과 새로운 평가 데이터 승격은 기존 관문에 남는다.
