@@ -168,6 +168,8 @@ def test_actual_console_identity_link_focuses_card_without_arming_or_post(consol
         page.goto(install_url(console_url), wait_until='networkidle')
         page.locator('#peer-list a').click()
         page.wait_for_function("document.activeElement?.dataset.robotId==='rosy_02'")
+        expect(page.locator("#context-status")).to_be_visible()
+        expect(page.locator('[data-context-tab="status"]')).to_have_attribute("aria-selected", "true")
         expect(page.locator('#roster article.selected')).to_have_count(0)
         expect(page.locator('#map-canvas')).to_have_class('idle')
         expect(page.locator('[data-goal-robot-id="rosy_02"]')).to_have_attribute('aria-pressed', 'false')
