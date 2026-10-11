@@ -158,3 +158,12 @@ def test_wait_is_a_physical_candidate_not_a_completed_human_handoff(tmp_path):
         receipt = pipeline.selection_receipt(assessment, answer, source_sha256='a'*64,
                                              config_sha256='b'*64, mixed=False)
         assert baseline_choice(receipt) is None
+
+
+def test_rule_configuration_change_refuses_the_previous_comparison_baseline(tmp_path):
+    loop, _ = make_loop(tmp_path, autonomous=True)
+    asyncio.run(loop.run_once())
+    assessment = loop._board.intervention_assessment('pinky')
+    assert loop.rule_baseline(assessment).choice == 'reobserve'
+    loop._resolver.config = replace(loop._resolver.config, rule_budget=0)
+    assert loop.rule_baseline(assessment) is None
