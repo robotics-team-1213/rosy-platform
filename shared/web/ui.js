@@ -521,6 +521,9 @@ export function canvasTextSize(role = "micro") {
     throw new TypeError(`Unknown canvas text role: ${role}`);
   }
   if (fontCache.has(`size:${role}`)) return fontCache.get(`size:${role}`);
+  if (!getComputedStyle(document.documentElement).getPropertyValue(`--text-${role}`).trim()) {
+    throw new Error(`Missing canvas text token: --text-${role}`);
+  }
   const probe = document.createElement("span");
   probe.style.fontSize = `var(--text-${role})`;
   probe.style.position = "absolute";
