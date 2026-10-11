@@ -261,7 +261,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
 
         robot["power_health_age_s"] = 6.0
         page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '확인 불가'")
-        assert "충전 확인" not in card.locator('[data-charging]').inner_text()
+        assert card.locator('[data-charging]').get_attribute("data-charging") == "확인 불가"
 
         robot["power_health_age_s"] = 0.2
         robot["state"]["safety"]["estop"] = True
