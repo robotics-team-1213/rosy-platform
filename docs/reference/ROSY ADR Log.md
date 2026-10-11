@@ -670,6 +670,7 @@
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 | D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
+| D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -754,3 +755,8 @@
 - 상태: Accepted (2026-10-12, 사용자 결정).
 - 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다.
 - 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.
+## D-690 — 도로 인지 평가의 출처 단위 불확실성
+
+**Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
+
+검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
