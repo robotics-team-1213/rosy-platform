@@ -32,3 +32,4 @@
 - D-680 source design과 원래 메시지 회신 transport를 작성했다. 접수 회신 intent와 원문 receipt의 atomic commit, bounded retry/UNKNOWN/fence, 전송 전 권한·목적지 재검사와 기본 OFF worker를 구현했다.
 - Source `4bb95bc516` 원격 67 PASS/NEW 0. 변경 파일 style 0 errors. [증거](../validation/discord-fleet-pipeline-2026-10-12/reply-source.md).
 - 다음 작업: 실제 opt-in lifespan 전송 경로 시험, Console 확인과 기존 작업 관계·처리 결과 회신, 위험 사건 어댑터. 운영 배포와 실제 대화 왕복 수용은 미완료다.
+- 기명 Console 검토와 기존 주행 Task 관계 원장/API v1.211을 구현했다. source `f26b367324` 원격 관련67 PASS/NEW 0. [증거](../validation/discord-fleet-pipeline-2026-10-12/workflow-source.md). 이는 backend 경계이며 Console 확인·제출 UI와 실제 전체 경로는 다음 단계다.
