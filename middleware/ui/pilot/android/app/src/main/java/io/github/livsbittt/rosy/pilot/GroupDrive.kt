@@ -101,23 +101,23 @@ class GroupDrive(private val context: Context, private val first: PilotConnectio
             orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12))
             setBackgroundColor(PilotColors.background)
         }
-        root.addView(ui.label("2대 함께 조종", 24f))
-        root.addView(ui.label("같은 속도·회전 명령을 두 로봇에 보냅니다. 위치를 유지하는 추종 모드는 준비 중입니다.", 14f, true))
+        root.addView(ui.label("2대 함께 조종", RosyMetrics.TextTitle))
+        root.addView(ui.label("같은 속도·회전 명령을 두 로봇에 보냅니다. 위치를 유지하는 추종 모드는 준비 중입니다.", RosyMetrics.TextLabel, true))
         val cameras = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(cameras, LinearLayout.LayoutParams(-1, 0, 1f))
         for ((endpoint, title) in listOf(a to first.target.id, b to second.target.id)) {
             val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), dp(4), dp(4)) }
-            column.addView(ui.label(title, 17f))
+            column.addView(ui.label(title, RosyMetrics.TextBody))
             val frame = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setBackgroundColor(PilotColors.disabled) }
             column.addView(frame, LinearLayout.LayoutParams(-1, 0, 1f))
-            val cameraState = ui.label("카메라 대기", 13f, true)
+            val cameraState = ui.label("카메라 대기", RosyMetrics.TextLabel, true)
             column.addView(cameraState)
             cameras.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
             cameraPool.execute { cameraLoop(endpoint, frame, cameraState) }
         }
         val controls = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
         root.addView(controls)
-        val state = ui.label("조종 준비 전 · 두 로봇 정지", 15f)
+        val state = ui.label("조종 준비 전 · 두 로봇 정지", RosyMetrics.TextBody)
         controls.addView(state, LinearLayout.LayoutParams(0, -2, 1f))
         armButton = ui.button("두 로봇 수동 조종 시작", true) { arm() }.also { controls.addView(it) }
         controls.addView(ui.button("두 로봇 정지") { disarm("두 로봇 정지 요청") })

@@ -1,6 +1,7 @@
 package io.github.livsbittt.rosy.cam.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -8,12 +9,16 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 
 /** Semantic facade over generated shared/web/tokens.css values (D-639). */
 object RosyColors {
@@ -82,9 +87,34 @@ val RosyColorScheme: ColorScheme = darkColorScheme(
     surfaceContainerHighest = RosyColors.GroundCard2,
 )
 
+val RosyButtonShape = RoundedCornerShape(RosyMetrics.RadiusButton.dp)
+val RosyButtonPadding = PaddingValues(horizontal = RosyMetrics.InsetButton.dp, vertical = RosyMetrics.Space2.dp)
+
+private fun tokenText(size: Float, weight: Float, leading: Float) = TextStyle(
+    fontSize = size.sp, lineHeight = (size * leading).sp, fontWeight = FontWeight(weight.toInt()),
+)
+
+private val RosyTypography = Typography(
+    displayLarge = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    displayMedium = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    displaySmall = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    headlineLarge = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    headlineMedium = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    headlineSmall = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    titleLarge = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    titleMedium = tokenText(RosyMetrics.TextValue, RosyMetrics.WeightMedium, RosyMetrics.LeadingLabel),
+    titleSmall = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightMedium, RosyMetrics.LeadingBody),
+    bodyLarge = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightRegular, RosyMetrics.LeadingBody),
+    bodyMedium = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightRegular, RosyMetrics.LeadingBody),
+    bodySmall = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightRegular, RosyMetrics.LeadingCopy),
+    labelLarge = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightLabel, RosyMetrics.LeadingControl),
+    labelMedium = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightLabel, RosyMetrics.LeadingControl),
+    labelSmall = tokenText(RosyMetrics.TextMicro, RosyMetrics.WeightLabel, RosyMetrics.LeadingLabel),
+)
+
 @Composable
 fun RosyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = RosyColorScheme) {
+    MaterialTheme(colorScheme = RosyColorScheme, typography = RosyTypography) {
         // Screens draw on a plain Column, not a Surface, so set the ink here; otherwise Text
         // falls back to LocalContentColor's default (black) on the dark ground.
         CompositionLocalProvider(LocalContentColor provides RosyColorScheme.onBackground, content = content)

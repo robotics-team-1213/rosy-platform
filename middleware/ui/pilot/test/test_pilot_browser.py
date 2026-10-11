@@ -579,6 +579,8 @@ def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
             page.goto(f"{base_url}/pilot")
             page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").wait_for()
             for state in ("empty", "failed"):
+                # refreshLobby appends retry after the independent self-state read settles.
+                page.locator("[data-lobby-retry]").wait_for(state="visible")
                 if state == "failed":
                     response["fail"] = True
                     page.locator("[data-lobby-retry]").click()

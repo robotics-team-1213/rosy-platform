@@ -83,7 +83,7 @@ class MainActivity : Activity() {
         val compact = resources.configuration.screenWidthDp < 720
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(columns, LinearLayout.LayoutParams(-1, -1))
-        healthText = views.label("태블릿 상태 확인 중", 14f, true)
+        healthText = views.label("태블릿 상태 확인 중", RosyMetrics.TextLabel, true)
         lastHealth?.let { renderHealth(it) }
         val deviceButton = button("기기·연결") { deviceDetails() }
         if (!compact) {
@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
             identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
             identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
-            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
+            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(24), 0, 0) })
             identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
             identity.addView(healthText)
             identity.addView(deviceButton, LinearLayout.LayoutParams(-2, -2).apply { gravity = android.view.Gravity.START; topMargin = views.dp(8) })
@@ -108,10 +108,10 @@ class MainActivity : Activity() {
         header.addView(label("로봇 선택", 28f).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
-        status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
+        status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
         groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
         list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(16) })
-        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", 14f, true))
+        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", RosyMetrics.TextLabel, true))
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         if (compact) {
