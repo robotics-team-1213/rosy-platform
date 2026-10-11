@@ -247,8 +247,13 @@ class IncidentCaseWorker:
             if cost is not None:
                 try: micros(cost)
                 except ValueError: cost, state = None, 'UNKNOWN'
+        summary = {'reason': 'MODEL_CHECKED' if state == 'COMPLETED' else 'MODEL_RESULT_REJECTED',
+                   'observation_revision': problem.generation}
+        if state == 'COMPLETED' and checked is not None:
+            summary.update(verdict=checked.payload['verdict'], choice=checked.choice,
+                           receipt_sha256=hashlib.sha256(checked.payload_json.encode()).hexdigest())
         await self._db('complete', scope, attempt, worker_id=self._worker_id, state=state,
-                       actual_cost_usd=cost, summary={'reason': 'MODEL_CHECKED' if state == 'COMPLETED' else 'MODEL_RESULT_REJECTED'})
+                       actual_cost_usd=cost, summary=summary)
         updated = await self._db('case', scope)
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
