@@ -7661,3 +7661,9 @@ osy-d395-s1d\`.
 - 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
 - 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
 - gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
+
+- 변경: 렌즈 모델 조사와 부분보드·robust 지도 등록 조사를 병행해 원논문·공식 문서와 현행 소스를 비교했다. 측정 내참수 → 바닥 등록 → 단일 inverse remap, 유효/미관측/오차 검증 영역, crop 계보와 불확실성 검증을 Proposed ADR로 기록했다.
+- 증거: docs/validation/camera-calibration-research-2026-10-11/result.md 및 docs/adr/D-633-measured-camera-calibration.md. 문헌·소스 확인이며 실측 데이터·알고리즘 구현·현장 오차 증거가 아니다. 원격 문서 계약 검증은 별도 기록한다.
+- gate 변화: 조사·설계 기록만. 기존 승인 교정·프로토콜·map_to_image·운영 지도·로봇 명령은 변경하지 않았다.
