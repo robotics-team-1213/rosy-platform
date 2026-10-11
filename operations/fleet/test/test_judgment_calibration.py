@@ -174,3 +174,25 @@ def test_small_or_empty_confidence_bin_never_promoted_and_raw_gap_is_separate():
 def test_frozen_collection_types_have_identical_metrics(sequence):
     fit, evaluation = sequence(rows('fit')), sequence(rows('evaluation'))
     assert evaluate(fit, evaluation).report['metrics']['count'] == 60
+
+
+def test_fitted_probabilities_are_tested_without_refitting_on_evaluation_truth():
+    fit, evaluation = rows('fit'), rows('evaluation')
+    for row in fit:
+        row['expected'] = 'human'
+    report = evaluate(fit, evaluation, profile(fit, evaluation, limits())).report
+    assert report['state'] == 'FAIL'
+    assert report['metrics']['calibrated_top_brier'] == 1
+    assert report['metrics']['calibrated_ece'] == 1
+    assert report['metrics']['brier'] == pytest.approx(.0002)
+
+
+def test_evaluation_bin_missing_from_fit_is_uncertified_not_fake_zero_error():
+    fit, evaluation = rows('fit'), rows('evaluation')
+    for row in evaluation:
+        row['alternatives'] = [dict(choice='reobserve', probability=.01), dict(choice='human', probability=.99)]
+        row['expected'] = 'human'
+    report = evaluate(fit, evaluation, profile(fit, evaluation, limits())).report
+    assert report['state'] == 'HOLD'
+    assert report['metrics']['calibrated_coverage'] == 0
+    assert report['metrics']['calibrated_top_brier'] is None
