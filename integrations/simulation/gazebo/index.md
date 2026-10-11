@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · eae0f59da0 · fix(sim): CORE 범위와 Gazebo 예약 도메인 일치
 - 2026-10-12 · 3c50387944 · test(sim): Gazebo 두 카메라·CORE 정지 상태 연결
 - 2026-10-12 · 3c50387944 · feat(sim): D-676 camera 두 대 전용 launch
 - 2026-10-12 · 785b46314 · feat(sim): 두 대 Gazebo의 공통 curved 맵 선택
 - 2026-10-10 · bb6347eba · feat(sim): 곡률 학습 맵 선택
-- 2026-10-10 · 5aa301e83 · feat(sim): 카메라 SIM 런치가 앞 미리보기를 낸다 (D-605, D-601 B)
