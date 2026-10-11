@@ -16,6 +16,16 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 D-701 source checkpoint: commit `410d69f8e72ed223fcfba9f52982c8df4bd34294`로 실제 규칙 선택의 읽기 전용 export와 독립 cohort /2 비교를 로컬 main에 착지했다. 기존 /1·단독 primary /3과 동일 사건·hash·scope·split 검증을 유지한다. 적격 AI PC 9GB의 관련 26개 파일 원격 통합 시험 667 passed, terminal exit 0, known-failures NEW 0과 lint를 확인했다. 독립 검토의 전체 JSON 크기·실제 CLI 연결 지적도 수정했다. 고정 로그는 세션 `logs/rule-export-land-410d69f8e7/run-1.txt`다. 상세는 [독립 규칙 export 계획](2026-10-12-independent-rule-export.md)을 따른다.
+
+다음은 독립 정답·수용 한계와 정상 무명령·모델 호출·재발의 완전한 기록 범위다. 규칙 선택만으로 운영 성공이나 0건을 주장하지 않으며 실제 모델·배포·현장 수용·승격/복귀는 미완료다. 통합 목표는 ACTIVE다. 아래 D-700 checkpoint는 이전 단계의 증거다.
+
+최신 D-700 source checkpoint: commit `8520b77d663e1922f68518821ed771ad4d080d5e`로 실제 resolver 반환·Assessment·roster/config hash의 선택 원장과 현재 baseline 포트를 로컬 main에 착지했다. normal/ABSTAIN·NONE/ANSWER/HOLD/HANDOFF·RULE_ONLY/MIXED를 보존하며 physical WAIT를 human으로 해석하지 않는다. claim·stale·사건/revision·rule config 변경과 기록 실패에서 비교 기준을 거절한다. factory의 기본 포트가 실제 선택을 worker Problem.fleet_choice로 연결하며 기존 명시적 포트는 유지한다.
+
+적격 AI PC 9GB에서 최신 main 통합의 12개 시험 그룹 621 passed/1 skipped, terminal exit 0, known-failures NEW 0과 lint를 확인했다. 실제 wheel·sdist SDK 위치·기본 resolver 생성과 local execution 계약 호환, 기존 resolver/worker와 구조 회귀를 포함한다. 독립 검토의 설치/WAIT 문제를 수정하고 SDK 0.1.10·Fleet 필수 의존성·CI/local pin을 동기화했다. 고정 로그는 세션 `logs/rule-land-8520b77d66/run-1.txt`, SHA256 `e0d75ec886a2ff32916deab02ef4106ad5678f3b5e5a00f881697d724f47b557`다.
+
+다음은 [규칙 근거 계획](2026-10-12-fleet-rule-selection-evidence.md)의 실제 원장 export와 D-697 독립 cohort 소비다. 선택 원장은 실행·성공·모델 호출 0건·정상 무명령·재발 0건과 같은 의미가 아니다. map/lifecycle 전체 provenance·독립 정답/한계·승격/복귀·실제 모델·전체 CI·배포·현장 수용은 미완료다. 전체 목표는 ACTIVE이며 아래 D-699 checkpoint는 이전 단계의 증거다.
+
 #### 이번 목표의 실행 기준
 
 활성 목표를 유지하며 새 목표로 기존 진행을 초기화하지 않는다. 사용자가 지정한 순서는 **소유자 확인 → 모델 원장 도구 분리 → 작업 규칙 추출 → 중앙 판단·결과 연결 → 알림·사람 인수 → 독립 평가 → 제한 모델 토론·개선**이다. 아래 checkpoint의 source 완료와 실제 운영 완료를 구분하고, 미완료 범위는 다음 검증 작업으로 남긴다.
