@@ -27,6 +27,7 @@
 
 ### v1.206 지도 없는 조사 좌표와 도로 시설 (D-655)
 
+- `POST /api/fleet/site-map/activate`는 진행 중 trip, 대형 ARMING/RUNNING/HOLDING, 진행 중 teach 기록에서 기존 409 `SITE_MAP_ROUTE_ACTIVE`를 반환한다. 초안·프로필 저장은 가능하고 멈춘 teach의 pending 검토만으로 활성화를 막지 않는다. busy 검사와 활성 버전 저장은 같은 이벤트 루프의 await 없는 구간이다. 거절은 지도·기록·대형·로봇을 변경하지 않으며 운용 종료 뒤에도 별도 활성화와 기존 draft revision 검사가 필요하다.
 - 카메라 차선 추출 결과의 간선은 camera/observed 근거를 가진다. calibration JSON의 선택 survey는 기존 SurveyReference와 같고, 생성 결과의 review는 false로 초기화한다. survey가 없으면 reference_revision은 calibration JSON의 SHA256 지문으로 생성한 식별자다. 간선 note는 교정 지문과 CLI 원본 프레임 SHA256을 보존한다. 검토 전 활성화는 기존 ROAD_UNREVIEWED/SURVEY_UNREVIEWED 가드로 거절한다.
 - 화면의 관측 누적은 기존 draft PUT/CAS/named operator만 사용한다. 대상과 입력의 map_id 및 reviewed/review_note를 제외한 전체 survey 기준이 같아야 한다. 기존 시설·규칙·간선을 유지하고 새 관측의 ID는 분류 안에서 재배정한다. 동일 기하·운행 속성의 기존 차로는 중복 추가하지 않는다. 신규 관측 장소가 기존 장소의 0.05 m 이내면 연결이 모호하므로 자동 접합하지 않고 검토를 요구한다. 입력 시설/횡단보도/회전 규칙은 이 차선 누적 경로에서 거절하며 기존 편집 경로를 사용한다.
 - 동일 차로의 다른 관측 note는 기존 근거에 덧붙이고 검토를 무효화한다. 같은 파일의 재누적은 idempotent이며 note 합계 1000자 초과는 거절한다. 검토와 도로/장소 교정은 원본 관측 지문을 유지한다. survey가 없는 카메라 초안도 도로 근거 검토가 가능하며 운행 속성·marker geometry 수정 뒤 operator/observed로 재검토한다.

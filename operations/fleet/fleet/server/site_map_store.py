@@ -225,7 +225,7 @@ class SiteMapStore:
     def activate(self, *, expected_revision: str, principal_id: str, route_active: bool) -> dict:
         if route_active:
             raise SiteMapError(409, "SITE_MAP_ROUTE_ACTIVE",
-                               "a lane route is running; activate after it ends")
+                               "a trip, formation or map recording is active; activate after it ends")
         with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
             row = self._db.execute("SELECT body, revision FROM site_map_draft").fetchone()
