@@ -15,7 +15,7 @@ The trainer-side contract of the D-356/D-373 learned loop. Training itself runs 
 | File | Description |
 |------|-------------|
 | `README.md` | The training contract: store layout, model folder and manifest rules (Korean) |
-| `COLAB.md` | Manual, step-by-step Colab procedure for people using their own notebook. Hand-written; keep it in step with the notebook. States that the notebook has only been run as a local stub, not on a real Colab runtime |
+| `docs/COLAB.md` | Manual, step-by-step Colab procedure for people using their own notebook. Hand-written; keep it in step with the notebook. States that the notebook has only been run as a local stub, not on a real Colab runtime |
 | `rosy_lane_training.ipynb` | Ready-to-run Colab notebook: baseline model training, export, check, hand-over. Generated, do not edit by hand |
 | `gen_notebook.py` | Source of the notebook: edit here, then `python gen_notebook.py`; `test_training_notebook.py` fails if they differ |
 | `rosy_lane_model.py` | Baseline trainer (`LaneUNet`, same structure as the deployed 0930 model). Imports torch at module level; `train(on_epoch=...)` feeds an optional tracker, never imports wandb |

@@ -2,7 +2,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/robotics-team-1213/rosy-platform/blob/main/learning/training/perception/rosy_lane_training.ipynb)
 
-**바로 실행하는 노트북(D-373):** 위 배지로 [`rosy_lane_training.ipynb`](rosy_lane_training.ipynb)를 연다. 입력 칸만 채우면 기준 모델(LaneUNet)로 학습, export, 검사, store inbox로 넘기기까지 끝난다. 5b 셀에서 자기 모델로 바꿔 끼울 수 있다. 아래 절차는 자기 노트북을 쓰는 사람을 위한 것이다.
+**바로 실행하는 노트북(D-373):** 위 배지로 [`rosy_lane_training.ipynb`](../rosy_lane_training.ipynb)를 연다. 입력 칸만 채우면 기준 모델(LaneUNet)로 학습, export, 검사, store inbox로 넘기기까지 끝난다. 5b 셀에서 자기 모델로 바꿔 끼울 수 있다. 아래 절차는 자기 노트북을 쓰는 사람을 위한 것이다.
 
 > **검증 범위:** 이 노트북은 개발 PC에서 셀을 차례로 실행하는 **로컬 stub 실행으로만** 확인했다
 > (clone 대신 로컬 저장소, Drive·업로드 창 없이 로컬 store 폴더, CPU 1 에폭). 실제 Colab
@@ -38,7 +38,7 @@ store는 경로 하나다. 지금은 사이트 PC의 로컬 폴더이고, 팀이
 
 이 문서는 노트북(Colab 또는 GPU PC)에서 차선 분할 모델을 학습하는 사람을 위한 절차서다.
 셀을 위에서부터 차례로 복사해 실행하면 된다. 약속의 전체 정의는 같은 폴더의
-[README.md](README.md)에 있다.
+[README.md](../README.md)에 있다.
 
 **결과물은 딱 하나다:** `model.onnx`와 `model_manifest.json`이 든 폴더.
 로봇 쪽은 이 폴더를 받아 검사(intake)하고, 통과하면 로봇에 섀도로 배포한다.

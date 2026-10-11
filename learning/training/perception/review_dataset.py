@@ -17,7 +17,8 @@ from pathlib import Path, PurePosixPath
 import time
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+for holder in ('learning/registry/perception', 'learning/curation/perception'):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / holder))
 
 from review_authority import advance_revision, validate_current, verify_bundle
 from review_provenance import _stable_bytes, _proof_path, _capture_proofs
@@ -102,7 +103,7 @@ def image_blockers(raw, *, width, height):
 
 def _classes(raw, current):
     import yaml
-    from dataset.build import load_classes
+    from build import load_classes
     doc = yaml.safe_load(raw)
     rows = doc.get('classes') if isinstance(doc, dict) else None
     if not isinstance(rows, list) or not rows:
@@ -128,7 +129,7 @@ def _classes(raw, current):
 
 
 def _eval_inventory(folders):
-    from dataset.build import read_eval_set
+    from build import read_eval_set
     refs, sessions, groups, videos, images = [], set(), set(), set(), set()
     complete = bool(folders)
     for folder in folders:
@@ -442,7 +443,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                     raise ValueError('approved mask integrity: ' + ','.join(mask_errors))
                 video_requests.append((proofs[proof_key], frame['video_frame'], image_bytes[frame['image_sha256']]))
             _verify_video_requests(video_requests, scratch)
-            from dataset.build import assign_splits, load_classes
+            from build import assign_splits, load_classes
             component_keys = {tuple(component): hashlib.sha256(json.dumps(sorted({(by_frame[i]['source_session'], by_frame[i]['capture_group'], by_frame[i]['source_video_sha256']) for i in component})).encode()).hexdigest()
                               for component in eligible_components}
             splits = assign_splits(component_keys.values())

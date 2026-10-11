@@ -17,8 +17,9 @@ import shutil
 import sys
 import tempfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
-from dataset.build import read_eval_set
+for holder in ('learning/registry/perception', 'learning/curation/perception'):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / holder))
+from build import read_eval_set
 from review_eval_companion import capture_eval_companions
 from review_provenance import _stable_bytes
 from store import file_hashes, _sha256

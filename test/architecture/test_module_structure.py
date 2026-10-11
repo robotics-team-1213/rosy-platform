@@ -107,6 +107,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "deploy/site/rosy_model_code.py": (
+        639,
+        "accept: independently reviewed 2026-10-11 under D-637: one signed source-release, "
+        "work-lock, switch and rollback transaction. Baseline 580 to 639 adds the five-holder "
+        "closure, exact job aliases and retained health/dirty/busy guards; signature, READY and "
+        "durable state remain unchanged. Keep the existing 600-line threshold, growth allowance "
+        "and HARD_TIER=1000; revisit source-layout resolution before further growth.",
+    ),
     "deploy/site/rosy_site_autoupdate.py": (
         616,
         "accept: D-569 adds only the authenticated inventory baseline to the existing signed "

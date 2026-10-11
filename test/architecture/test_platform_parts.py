@@ -10,8 +10,8 @@ Step B migration fields (docs/plans/2026-10-03-d427-source-migration.md, wave 0)
 moves with (Q2). See ``_state`` for moved / partly moved / pending.
 
 KNOWN_VIOLATIONS is checked by set equality (D-168 P5 convention): a new edge
-fails, and so does a listed edge that no longer occurs. The list only shrinks;
-remove an entry in the change that removes the import.
+fails, and so does a listed edge that no longer occurs. Existing import debt only
+shrinks; D-637 repartitions unchanged imports when their source owners split.
 
 Honest holes, not oversights:
 - Only static ``import`` / ``from`` statements are seen. ``sys.path`` script
@@ -65,6 +65,15 @@ KNOWN_VIOLATIONS = {
     ),
     ("learning/curation/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
+    ),
+    ("learning/registry/perception", "middleware/perception"): (
+        "D-637 inherited model inspection/benchmark imports; baseline control import symbols unchanged"
+    ),
+    ("learning/evaluation/perception", "middleware/perception"): (
+        "D-637 inherited replay camera-ground/lane-keep imports; baseline control import symbols unchanged"
+    ),
+    ("learning/training/perception", "middleware/perception"): (
+        "D-637 retained trainer manifest/review imports; baseline control import symbols unchanged"
     ),
 }
 
@@ -413,21 +422,23 @@ def test_import_rules_only_shrink():
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
 #: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
 LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
+    # The reused-holder regression must still exercise rejection of retired children.
+    ("test/architecture/test_platform_parts.py", "tools/perception/model"),
+    ("test/architecture/test_platform_parts.py", "tools/perception/model/deliver.py"),
+    # Signed-source refusal explicitly exercises a retained pre-wave-1 convert job.
+    ("test/test_model_pc_autoupdate.py", "tools/perception/model/convert.py"),
+    ("test/architecture/test_platform_parts.py", "tools/perception/model/convert.py"),
     # D-446: installed pre-migration signed releases remain runnable after
     # rollback. New archives use canonical roots; only pinned bootstrap paths
     # and the regression fixture retain the old layout.
     # D-446 dirty-code guard observes the enrolled pre-wave-1 checkout too.
-    ("deploy/site/rosy_model_code.py", "tools/perception/"),
     ("deploy/site/rosy_model_code.py", "src/runtime/sensing/control/"),
     ("deploy/site/rosy_model_code.py", "src/contracts/foundation/core_common/"),
-    ("test/test_model_pc_autoupdate.py", "tools/perception/rosy_ml.py"),
     ("test/test_model_pc_autoupdate.py", "src/runtime/sensing/control/model.py"),
     ("test/test_model_pc_autoupdate.py", "src/contracts/foundation/core_common/model.py"),
     # This closed registry names the same intentional guard/fixture strings.
-    ("test/architecture/test_platform_parts.py", "tools/perception/"),
     ("test/architecture/test_platform_parts.py", "src/runtime/sensing/control/"),
     ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/"),
-    ("test/architecture/test_platform_parts.py", "tools/perception/rosy_ml.py"),
     ("test/architecture/test_platform_parts.py", "src/runtime/sensing/control/model.py"),
     ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/model.py"),
     ("deploy/site/rosy_model_code.py", "src/runtime/sensing"),
@@ -438,11 +449,7 @@ LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
     ("test/architecture/test_platform_parts.py", "src/contracts/foundation"),
     # D-427 1-pre: the site model-watch wrapper falls back to the pre-move checkout
     # layout on purpose, so a site source copy older than wave 1 keeps working.
-    ("deploy/site/rosy-model-watch", "$SRC/tools/perception"),
-    ("learning/training/perception/test/test_site_install_model_watch.py", "tools/perception"),
     # ... and the two entries above name those strings themselves.
-    ("test/architecture/test_platform_parts.py", "$SRC/tools/perception"),
-    ("test/architecture/test_platform_parts.py", "tools/perception"),
 }
 
 
@@ -454,7 +461,10 @@ def _read_text(path: str) -> str | None:
 def _legacy_report(roots, tracked, read, allowlist) -> list[str]:
     """Problems left by moved roots: files under ``legacy``, old-path references
     in the scan scope (see ``_legacy_paths``), and stale allowlist entries."""
-    legacies = {root["legacy"]: root["path"] for root in roots if root.get("legacy")}
+    current = {root["path"] for root in roots}
+    # D-637 reuses tools/perception for the CLI; its retired child holders stay guarded.
+    legacies = {root["legacy"]: root["path"] for root in roots
+                if root.get("legacy") and root["legacy"] not in current}
     problems = [
         f"{root['path']}: legacy only on moved or partly moved roots, not {_state(root, roots)}"
         for root in roots if root.get("legacy") and _state(root, roots) == "pending"
@@ -483,6 +493,21 @@ def test_moved_roots_leave_nothing_behind():
     assert sum(map(in_scope, tracked)) > 1000, "old-path scan scope shrank; check in_scope"
     problems = _legacy_report(_manifest()["roots"], tracked, _read_text, LEGACY_SCAN_ALLOWLIST)
     assert problems == [], problems
+
+
+def test_reused_current_holder_keeps_retired_child_guard():
+    roots = [
+        {"path": "learning/training/perception", "d427_target": "learning/training/perception",
+         "legacy": "tools/perception"},
+        {"path": "tools/perception", "d427_target": "tools/perception"},
+        {"path": "learning/registry/perception", "d427_target": "learning/registry/perception",
+         "legacy": "tools/perception/model"},
+    ]
+    current = "tools/perception/rosy_ml.py"
+    assert _legacy_report(roots, [current], lambda _: current, set()) == []
+    retired = "tools/perception/model/deliver.py"
+    problems = _legacy_report(roots, [retired], lambda _: retired, set())
+    assert any(retired + ": tracked file under legacy root" in item for item in problems)
 
 
 def test_later_layout_move_preserves_ownership_and_still_rejects_pending_legacy():

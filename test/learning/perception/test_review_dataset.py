@@ -97,7 +97,7 @@ def test_older_previous_revision_refuses_current():
 
 
 def test_eval_full_content_union_and_missing_source_group_remains_unknown(tmp_path):
-    from dataset.build import content_sha
+    from build import content_sha
     folders = []
     for i in range(2):
         stage = tmp_path / ('eval' + str(i)) / 'staging'; stage.mkdir(parents=True)
@@ -129,7 +129,7 @@ def test_duplicate_class_indices_denied():
 
 
 def test_raw_yaml_hash_and_normalized_signature_are_distinct():
-    from dataset.build import load_classes
+    from build import load_classes
     raw = b'classes:\n - {index: 0, name: floor, role: background}\n - {index: 1, name: crosswalk, role: ignore}\n'
     classes = load_classes('captured', require_color=False, source_bytes=raw)
     current = {'pixel_classes_sha256': hashlib.sha256(raw).hexdigest(),
@@ -154,7 +154,7 @@ def test_primary_image_dimensions_are_decoded_from_captured_bytes():
 
 
 def test_empty_hashed_eval_inventory_cannot_establish_source_disjointness(tmp_path):
-    from dataset.build import content_sha
+    from build import content_sha
     stage = tmp_path / 'eval' / 'stage'; stage.mkdir(parents=True)
     (stage / 'manifest.json').write_text(json.dumps({'purpose': 'eval', 'frames': [], 'labels': [{'session': 'held'}]}))
     final = stage.with_name(content_sha(stage)); stage.rename(final)
@@ -181,7 +181,7 @@ def test_whole_video_connects_adjacent_frames_even_different_group_aliases():
 
 def build_fixture(tmp_path, shared_group=False, with_drivable=False):
     from test_review_authority import encoded, refs, reseal
-    from dataset.build import load_classes, content_sha
+    from build import load_classes, content_sha
     from store import Store
     np = pytest.importorskip('numpy'); cv2 = pytest.importorskip('cv2')
     store = Store(tmp_path / 'store'); bundle = tmp_path / 'bundle'; bundle.mkdir()
@@ -329,7 +329,7 @@ def test_one_capture_component_holds(tmp_path):
 
 
 def test_eval_missing_frame_identity_holds(tmp_path):
-    from dataset.build import content_sha
+    from build import content_sha
     args, _ = build_fixture(tmp_path)
     root = args['eval_folders'][0]; doc = json.loads((root / 'manifest.json').read_bytes())
     doc['frames'][0].pop('video_frame'); (root / 'manifest.json').write_text(json.dumps(doc))
@@ -421,7 +421,7 @@ def test_proof_path_traversal_is_rejected(tmp_path):
 
 
 def test_eval_whole_video_identity_blocks_other_frame(tmp_path):
-    from dataset.build import content_sha
+    from build import content_sha
     np = pytest.importorskip('numpy'); cv2 = pytest.importorskip('cv2')
     args, authority = build_fixture(tmp_path)
     root = args['eval_folders'][0]; doc = json.loads((root / 'manifest.json').read_bytes())
