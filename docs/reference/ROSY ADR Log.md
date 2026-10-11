@@ -620,6 +620,8 @@
 | D-634 | 카메라 촬영·교정·관측·좌표 표시의 역할 분담과 표시 안정성 | Proposed |
 | D-635 | 지도 프로필의 용도와 기본 정보 및 Games 경기장 재사용 | Accepted (2026-10-11) |
 | D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 | Accepted (2026-10-11) |
+| D-629 | 일반 조작 48px·글자·여백 통일, 58px 안전 예외 유지; 현재 개입·지도·로봇을 먼저 보고 사건 기록은 중립·접힘·별도 시작 시각으로 구분 | Accepted (2026-10-11; SOURCE·원격 G1·G2·설치본·현장 수용 별도) |
+| D-632 | 공통 Fleet 알림 진입점과 오른쪽 알림 창; 현재 개입·관제 메시지 조회, 반복 폴링 중복 방지, 읽음과 실제 처리 상태 분리 | Accepted (2026-10-11; SOURCE·원격 시험·설치본·현장 별도) |
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 | Accepted (2026-10-11, 사용자 후속 실행 요청; M3–M6 source 이전, 설치·장치·현장 수용은 별도) |
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
 | D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |

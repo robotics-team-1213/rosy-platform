@@ -167,6 +167,7 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
     origin, robots = fleet_site
     with sync_playwright() as playwright:
         browser, page, errors, posts = _login(playwright, origin)
+        page.get_by_role("tab", name="운영 도구").click()
         page.locator(".formation-form-wrap > summary").click()
         page.locator("#formation-leader").select_option("rosy_02")
         boxes = page.locator("#formation-members input")
@@ -213,13 +214,16 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
     origin, _robots = fleet_site
     with sync_playwright() as playwright:
         browser, page, errors, posts = _login(playwright, origin)
+        page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         expect(page.locator("#convoy-go")).to_have_attribute("reason", re.compile("^반복 운행 중인 리더가 없습니다"))
+        page.get_by_role("tab", name="로봇 상태").click()
         lead = _card(page, "rosy_01")
         lead.locator('ui-button[data-trip-open="rosy_01"]').click()
         lead.locator(".card-trip select").nth(1).select_option("start_n")
         lead.locator('ui-button[data-trip-repeat="rosy_01"]').click()
         expect(lead.locator(".trip-line")).to_contain_text("반복 운행", timeout=10000)
+        page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#convoy-leader")).to_have_value("rosy_01", timeout=5000)
         assert page.locator("#convoy-follower option").all_inner_texts() == ["rosy_02", "rosy_03"]
         page.locator("#convoy-follower").select_option("rosy_02")
@@ -234,6 +238,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
                 break
             page.wait_for_timeout(100)
         assert body == {"to": "start_n", "via": ["start_s"], "repeat": True, "convoy": {"leader": "rosy_01"}}
+        page.get_by_role("tab", name="로봇 상태").click()
         expect(_card(page, "rosy_02").locator(".trip-line")).to_contain_text("대열 · rosy_01", timeout=10000)
         expect(_card(page, "rosy_01").locator(".trip-line")).to_contain_text("대열 리더 · rosy_02 따라옴")
         assert _raw_words(page) == []
@@ -264,6 +269,7 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
         assert ("/api/fleet/robots/rosy_03/line-follow", '{"mode":"IR_LINE"}') in posts
         card.locator("ui-button", has_text="IR 차선 추종 끄기").click()
         expect(card.locator("[data-line-follow]")).to_have_count(0, timeout=10000)
+        page.get_by_role("tab", name="알림", exact=True).click()
         expect(page.locator("#log")).to_contain_text("IR 차선 추종 끔 · 꺼짐")
         assert _raw_words(page) == []
         assert not errors
@@ -334,6 +340,7 @@ def test_a_hundred_robots_stay_usable(tmp_path):
                 page.wait_for_timeout(1200)
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
                 assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), width
+            page.get_by_role("tab", name="운영 도구").click()
             page.locator(".formation-form-wrap > summary").click()
             members = page.locator("#formation-members")
             assert members.bounding_box()["height"] <= 12 * 16 + 1  # a bounded list, not 99 rows of boxes

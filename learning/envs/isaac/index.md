@@ -9,6 +9,8 @@
 
 | ID | 제목 |
 |---|---|
+| D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
+| D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 |
 
 ## 계획·결과 문서
 
@@ -24,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
 - 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
 - 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
 - 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
 - 2026-10-04 · uncommitted · docs(isaac): 모델 PC의 주행·관제·적재 연계 검토
-- 2026-09-30 · uncommitted · fix(sim): isaac_sim을 D-310 target 표에 등록
