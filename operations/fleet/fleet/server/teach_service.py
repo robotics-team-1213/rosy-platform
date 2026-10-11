@@ -217,7 +217,11 @@ class TeachService:
         else:
             if any(value is not None for value in (map_id, reference_revision, expected_revision)):
                 raise TeachError(422, "TEACH_MODE_INVALID")
-            map_frame = self._map_frame(await self._localized(robot_id))
+            if robot_id not in set(self._roster()):
+                raise TeachError(404, "UNKNOWN_ROBOT")
+            map_frame = self._map_frame()
+            if self._map_frame(await self._localized(robot_id)) != map_frame:
+                raise TeachError(409, "TEACH_MAP_CHANGED")
             map_id = map_frame[0]
         if self._recording is not None:  # another start won while we read the pose
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
