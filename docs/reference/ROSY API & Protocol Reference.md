@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.209
+**Version:** v1.210
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.210 Rosy Cam은 요청이 있는 동안만 보낸다 (D-691)
+
+`rosy-overhead/1` 하향 `demand`는 `{"type":"demand","wanted":bool}`이다. 유효한 Vision preview lease로 `frame`, `field-proposal`, `map-proposal`을 읽으면 그 source를 30초(`stream_hold_s`) 동안 송출하게 한다. 프레임이 없거나 오래됐거나 429여도 요청이다. 401은 요청이 아니다. 폰은 소켓을 유지한 채 `wanted:false`에서 센서와 JPEG를 멈춘다. 이전 앱은 `demand`를 무시하고 계속 보낸다. 자세한 결정은 D-691이다.
 
 ### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
@@ -1550,6 +1554,12 @@ bytes. The optional `rectification` object on lease creation is signed into the
 lease, so Vision can verify and bound CPU preview work without a new camera
 credential. No browser or Fleet process connects to ROS/DDS.
 
+D-691: those authorized reads, from any Rosy product, are what asks the phone to
+send. Vision answers on the same socket with `demand.wanted`. The phone keeps
+sending for 30 seconds after the last read, then releases the sensor and stops
+JPEG while the socket stays up. A read that finds no frame, a stale frame, or
+429 still asks. 401 does not. An older phone ignores `demand` and keeps sending.
+
 | Method | Path | Credential | Result |
 |---|---|---|---|
 | GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN address | Configured preview source IDs |
@@ -2817,6 +2827,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.210 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Older peers keep streaming. |
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |

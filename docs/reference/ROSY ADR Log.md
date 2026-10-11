@@ -669,6 +669,7 @@
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -747,3 +748,9 @@
 - 상태: Accepted (2026-10-12, 계약).
 - 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
 - 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
+
+## D-691 — Rosy Cam은 요청이 있는 동안만 보낸다
+
+- 상태: Accepted (2026-10-12, 사용자 결정).
+- 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다.
+- 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.

@@ -229,6 +229,7 @@ private fun StatusPanel(
         val stateText = when {
             !state.running -> R.string.state_stopped
             state.previewOnly -> R.string.state_preview_only
+            link.state == LinkState.STREAMING && !state.transmitting -> R.string.state_standby
             link.state == LinkState.STREAMING -> R.string.state_streaming
             link.state == LinkState.CONNECTING -> R.string.state_connecting
             else -> R.string.state_disconnected

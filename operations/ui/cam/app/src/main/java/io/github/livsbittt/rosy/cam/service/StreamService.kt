@@ -88,6 +88,8 @@ data class StreamState(
     val exposure: ExposureStatus = ExposureStatus(),
     /** D-589: who sets the camera now (Vision, local, off, heat hold) and what it runs with. */
     val tuning: TuningStatus = TuningStatus(),
+    /** JPEG is leaving the phone. False while waiting for a Rosy to ask (D-691). */
+    val transmitting: Boolean = false,
     val photoSaving: Boolean = false,
     val photoName: String? = null,
     val photoFailed: Boolean = false,
@@ -259,10 +261,18 @@ class StreamService : LifecycleService() {
                     )
                 }
             }
+            val opening = CaptureGate.decide(
+                paired = plan.sendFrames,
+                wanted = null,
+                previewVisible = previewSurface.value != null,
+                legacyStream = false,
+            )
+            newCamera.setCapture(opening.cameraOn, opening.sendFrames)
             _state.update {
                 it.copy(
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
                     previewOnly = !plan.sendFrames,
+                    transmitting = opening.sendFrames,
                     lens = pick,
                     wideAvailable = LensSelector.hasWide(backCameras),
                 )
@@ -300,6 +310,40 @@ class StreamService : LifecycleService() {
 
             launch { previewSurface.collect { newCamera.setPreviewSurface(it) } }
             newLink?.let { activeLink ->
+                val legacyStream = MutableStateFlow(false)
+                var legacyJob: Job? = null
+                launch {
+                    activeLink.status.map { it.state to it.wanted }.distinctUntilChanged()
+                        .collect { (linkState, wanted) ->
+                            legacyJob?.cancel()
+                            if (linkState == LinkState.STREAMING && wanted == null) {
+                                legacyJob = launch {
+                                    delay(CaptureGate.LEGACY_GRACE_MS)
+                                    legacyStream.value = true
+                                }
+                            } else {
+                                legacyStream.value = false
+                            }
+                        }
+                }
+                launch {
+                    combine(
+                        activeLink.status.map { it.wanted },
+                        activeLink.status.map { it.state },
+                        previewSurface.map { it != null },
+                        legacyStream,
+                    ) { wanted, linkState, preview, legacy ->
+                        if (linkState != LinkState.STREAMING && wanted == null) {
+                            CaptureGate(cameraOn = preview, sendFrames = false)
+                        } else {
+                            CaptureGate.decide(paired = true, wanted, preview, legacy)
+                        }
+                    }.distinctUntilChanged().collect { gate ->
+                        newCamera.setCapture(gate.cameraOn, gate.sendFrames)
+                        _state.update { it.copy(transmitting = gate.sendFrames) }
+                        refreshNotification()
+                    }
+                }
                 launch {
                     activeLink.status.map { it.config }.distinctUntilChanged().collect { newCamera.applyConfig(it) }
                 }
@@ -342,7 +386,7 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
+            current.copy(running = false, previewOnly = false, transmitting = false, health = null, lens = null, lensSwitchFailed = false,
                 photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(), tuning = TuningStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
@@ -387,10 +431,12 @@ class StreamService : LifecycleService() {
             Intent(this, StreamService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = if (previewOnly) R.string.state_preview_only else when (linkState) {
-            LinkState.STREAMING -> R.string.state_streaming
-            LinkState.CONNECTING -> R.string.state_connecting
-            LinkState.DISCONNECTED -> R.string.state_disconnected
+        val text = when {
+            previewOnly -> R.string.state_preview_only
+            linkState == LinkState.STREAMING && !_state.value.transmitting -> R.string.state_standby
+            linkState == LinkState.STREAMING -> R.string.state_streaming
+            linkState == LinkState.CONNECTING -> R.string.state_connecting
+            else -> R.string.state_disconnected
         }
         // Warnings first: the collapsed notification shows one line.
         val lines = buildList {
