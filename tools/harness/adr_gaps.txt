@@ -24,3 +24,7 @@ D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lan
 D-621 reserved by another active session; ADR not yet landed in this branch
 D-622 reserved by another active session; ADR not yet landed in this branch
 D-655 reserved by another active branch; its ADR is not in this snapshot
+D-660 reserved by another active session (refs/adr/D-660); not present at the D-664 review baseline
+D-661 reserved by another active session (refs/adr/D-661); not present at the D-664 review baseline
+D-662 reserved by another active session (refs/adr/D-662); not present at the D-664 review baseline
+D-663 reserved by another active session (refs/adr/D-663); not present at the D-664 review baseline
