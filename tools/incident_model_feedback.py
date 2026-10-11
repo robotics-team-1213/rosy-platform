@@ -11,7 +11,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'operations/fleet'), str(ROOT / 'operations/decision/src'),
-                str(ROOT / 'contracts/foundation')]
+                str(ROOT / 'contracts/foundation'), str(ROOT / 'contracts/learning/src'), str(ROOT / 'tools')]
+from incident_handoff_snapshot import snapshot_handoff
 from fleet.incidents.automation.contract import CaseBudget, CaseScope, sha256, summary_json
 from fleet.incidents.automation.ledger.receipt import ModelReceipt, checked_receipt
 from rosy.decision.deliberation import canonical, identifier
@@ -50,7 +51,8 @@ def closure_receipt(value, scope, budget, reason, state):
     return value
 
 
-def snapshot(path, subject_id, case_id, profiles):
+def snapshot(path, subject_id, case_id, profiles, *, include_handoff=False):
+    if type(include_handoff) is not bool: raise ValueError('EXPLICIT_HANDOFF_OPTION_REQUIRED')
     identifier(subject_id), identifier(case_id)
     if type(profiles) not in (list, tuple) or len(profiles) != 2:
         raise ValueError('FROZEN_PROFILE_PAIR_REQUIRED')
@@ -131,7 +133,8 @@ def snapshot(path, subject_id, case_id, profiles):
                       reserved_micros=reserved, attempts=attempts, closure=closure,
                       outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE'
                       else 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else 'UNRESOLVED')
-    exported = dict(schema='rosy.incident.model_feedback/1', case=result, label_state='UNREVIEWED',
+        if include_handoff: result['handoff'] = snapshot_handoff(conn, scope, budget, case)
+    exported = dict(schema=f'rosy.incident.model_feedback/{2 if include_handoff else 1}', case=result, label_state='UNREVIEWED',
                     field_accepted=False, digest=hashlib.sha256(feedback_json(result).encode()).hexdigest())
     feedback_json(exported)
     return exported
@@ -143,6 +146,7 @@ def main(argv=None):
     parser.add_argument('--subject', required=True)
     parser.add_argument('--case', required=True)
     parser.add_argument('--profiles', type=Path, required=True)
+    parser.add_argument('--include-handoff', action='store_true', help='deidentified recorded final-review and claim evidence')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -150,7 +154,7 @@ def main(argv=None):
             data = source.read(65537)
         if len(data) > 65536:
             raise ValueError('PROFILE_MANIFEST_LIMIT')
-        result = snapshot(args.database, args.subject, args.case, json.loads(data))
+        result = snapshot(args.database, args.subject, args.case, json.loads(data), include_handoff=args.include_handoff)
         with args.out.open('x', encoding='utf-8') as output:
             output.write(feedback_json(result) + '\n')
         print(result['digest'])

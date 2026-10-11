@@ -188,7 +188,7 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if (error.status === 401 && !cameraPreview) markLocked();
+    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -577,7 +577,7 @@ async function refreshAuthorization() {
     render();
   } catch (_err) {
     if (_err.name === "AbortError") return;
-    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
+    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
   }
 }
 

@@ -4,6 +4,18 @@ import sys
 
 import pytest
 
+
+def test_failure_analysis_keeps_opt_in_handoff_evidence_unreviewed():
+    from test_incident_feedback import handoff_feedback
+    exported = handoff_feedback()
+    value = analysis(review('judgment'))
+    value['model_feedback_digest'] = exported['digest']
+    base = incident_feedback.bind({'reports': [report()]}, markers('stuck-a'))
+    result = incident_feedback.attach_failure_analysis(base, exported, value)
+    row = result['matches'][0]
+    assert row['model_feedback']['handoff'] == exported['case']['handoff']
+    assert row['failure_analysis']['label_state'] == row['model_feedback']['label_state'] == 'UNREVIEWED'
+
 from test_incident_feedback import incident_feedback, report, markers, model_feedback
 
 
