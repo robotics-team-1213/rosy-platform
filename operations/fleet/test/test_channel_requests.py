@@ -129,9 +129,26 @@ def test_create_app_wiring_requires_accounts_and_isolated_key(tmp_path):
     assert client.get("/api/fleet/channel-requests", headers={"Authorization": "Bearer operator-secret"}).json() == {"rows": []}
 
 
-def test_transport_rejects_oversize_and_nonascii_signature(tmp_path):
+def test_transport_rejects_oversize_and_malformed_signature(tmp_path):
     client, _, _ = fixture(tmp_path)
     assert client.post("/api/fleet/channel-requests/discord", content=b"x" * 8193).status_code == 413
     response = client.post("/api/fleet/channel-requests/discord", json=envelope(),
                            headers={"X-ROSY-Timestamp": "1000", "X-ROSY-Signature": "wrong"})
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize("service_name", ["goal_evidence_service", "cell_goal_evidence_service"])
+def test_evidence_producer_credential_cannot_be_transport_key(tmp_path, service_name):
+    from types import SimpleNamespace
+    from fleet.server.channel_requests import install_channel_feature
+    from test_mission_api import _client
+    client, tasks, _ = _client(tmp_path, goal_evidence_enabled=True)
+    producer = SimpleNamespace(token=KEY)
+    setattr(client.app.state, service_name, SimpleNamespace(registry=SimpleNamespace(producers=(producer,))))
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
+                           transport_key=KEY, users={USER: "operator-1"})
+    with pytest.raises(ValueError, match="isolated"):
+        install_channel_feature(client.app, config=config, task_service=tasks,
+            principals={}, site_logins={}, require_operator=None, read_guard=[],
+            console=client.app.state.console, secrets=(), secret_owners=())
+    assert not hasattr(client.app.state, "channel_requests")
