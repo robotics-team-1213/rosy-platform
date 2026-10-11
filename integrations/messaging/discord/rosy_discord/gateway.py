@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from contextlib import suppress
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
@@ -55,7 +56,9 @@ class DiscordGateway:
                 raise GatewayStop("Discord Bot identity mismatch")
             resume = data.get("resume_gateway_url", self.url)
             parsed = urlsplit(resume)
-            if parsed.scheme != "wss" or parsed.hostname != "gateway.discord.gg" or parsed.port is not None:
+            if (parsed.scheme != "wss" or not re.fullmatch(r"gateway(?:-[a-z0-9-]+)?\.discord\.gg", parsed.hostname or "")
+                    or parsed.port is not None or parsed.username is not None or parsed.password is not None
+                    or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
                 raise GatewayStop("Discord resume endpoint refused")
             self.url, self.session_id = resume.rstrip("/"), data["session_id"]
             LOG.info("Discord Gateway READY")
@@ -79,6 +82,9 @@ class DiscordGateway:
         async with connect(self.url + "/?v=10&encoding=json", max_size=1024 * 1024,
                            open_timeout=15, close_timeout=5, ping_interval=None) as socket:
             hello = json.loads(await asyncio.wait_for(socket.recv(), 15))
+            if hello.get("op") == 7:
+                await socket.close(code=4000)
+                return
             interval = hello.get("d", {}).get("heartbeat_interval")
             if hello.get("op") != 10 or type(interval) not in (int, float) or not 1000 <= interval <= 120000:
                 raise GatewayStop("Discord HELLO refused")

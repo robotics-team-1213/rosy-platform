@@ -152,3 +152,26 @@ def test_evidence_producer_credential_cannot_be_transport_key(tmp_path, service_
             principals={}, site_logins={}, require_operator=None, read_guard=[],
             console=client.app.state.console, existing_tokens=(), secret_owners=())
     assert not hasattr(client.app.state, "channel_requests")
+
+
+@pytest.mark.parametrize("kind", ["missing", "malformed", "shared", "producer"])
+def test_bot_token_file_is_optional_private_and_isolated(tmp_path, kind):
+    from types import SimpleNamespace
+    from fleet.server.channel_requests import install_channel_feature
+    from test_mission_api import _client
+    client, tasks, _ = _client(tmp_path, goal_evidence_enabled=True)
+    path = tmp_path / "bot.token"
+    token = "private-bot-test-token-" * 3
+    if kind != "missing":
+        path.write_text("invalid token" if kind == "malformed" else KEY if kind == "shared" else token)
+    if kind == "producer":
+        producer = SimpleNamespace(token=token)
+        client.app.state.goal_evidence_service = SimpleNamespace(registry=SimpleNamespace(producers=(producer,)))
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
+                           transport_key=KEY, users={USER: "operator-1"}, bot_token_file=str(path))
+    with pytest.raises(ValueError) as error:
+        install_channel_feature(client.app, config=config, task_service=tasks, principals={}, site_logins={},
+            require_operator=None, read_guard=[], console=client.app.state.console,
+            existing_tokens=(), secret_owners=())
+    assert token not in str(error.value) and KEY not in str(error.value)
+    assert not hasattr(client.app.state, "channel_requests")

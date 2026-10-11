@@ -102,7 +102,7 @@ def test_session_loss_stops_when_receipt_is_unresolved():
         worker.forget_session()
 
 
-@pytest.mark.parametrize("failure", ["journal", "reconnect", "invalid-resumable"])
+@pytest.mark.parametrize("failure", ["journal", "reconnect", "invalid-resumable", "before-hello"])
 def test_session_retries_keep_resume_valid(monkeypatch, failure):
     import rosy_discord.gateway as module
     async def scenario():
@@ -111,8 +111,10 @@ def test_session_retries_keep_resume_valid(monkeypatch, failure):
         worker = gateway(consume)
         await worker.dispatch(packet("READY", {"user": {"id": BOT, "bot": True}, "session_id": "s"}, 4))
         event = {"journal": packet("MESSAGE_CREATE", message(), 5),
-                 "reconnect": {"op": 7}, "invalid-resumable": {"op": 9, "d": True}}[failure]
-        socket = Socket([{"op": 10, "d": {"heartbeat_interval": 45000}}, event])
+                 "reconnect": {"op": 7}, "invalid-resumable": {"op": 9, "d": True},
+                 "before-hello": {"op": 7, "d": None}}[failure]
+        socket = Socket([event] if failure == "before-hello" else
+                        [{"op": 10, "d": {"heartbeat_interval": 45000}}, event])
         class Connection:
             async def __aenter__(self):
                 return socket
@@ -129,6 +131,28 @@ def test_session_retries_keep_resume_valid(monkeypatch, failure):
         next_socket = Socket([])
         await worker.authenticate(next_socket)
         assert next_socket.sent[0]["op"] == 6 and next_socket.sent[0]["d"]["seq"] == 4
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("url,allowed", [
+    ("wss://gateway-us-east1-b.discord.gg", True),
+    ("wss://gateway.discord.gg/", True),
+    ("wss://gateway.discord.gg.evil.example", False),
+    ("ws://gateway.discord.gg", False), ("wss://user@gateway.discord.gg", False),
+    ("wss://gateway.discord.gg:443", False), ("wss://gateway.discord.gg/other", False),
+    ("wss://gateway.discord.gg/?token=value", False),
+])
+def test_ready_resume_endpoint_is_discord_only(url, allowed):
+    async def scenario():
+        worker = gateway(None)
+        event = packet("READY", {"user": {"id": BOT, "bot": True}, "session_id": "s",
+                                  "resume_gateway_url": url}, 1)
+        if allowed:
+            await worker.dispatch(event)
+            assert worker.url == url.rstrip("/")
+        else:
+            with pytest.raises(GatewayStop):
+                await worker.dispatch(event)
     asyncio.run(scenario())
 
 
