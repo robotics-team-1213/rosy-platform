@@ -328,6 +328,57 @@ def test_other_problem_rechecks_law_and_condition_before_dispatch(change, reason
     assert loop.ai_board.verdicts[-1]["verdict"] == reason
 
 
+@pytest.mark.parametrize("change,reason", [
+    ("disabled", "ai_disabled"), ("human", "human_class:pose_lost:none:lane"),
+    ("client", "no_resolver_token"),
+])
+def test_other_problem_rechecks_ai_permission_after_await(change, reason):
+    from fakes import FakeRobot
+
+    robot, row, first = FakeRobot("rosy_01"), _row(), _first()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(first, {proposal["stuck_id"]: proposal}, robot)
+
+    async def refresh(rid):
+        if change == "disabled":
+            first.enabled = False
+        elif change == "human":
+            first.human_classes = lambda: {problem_key(row, "pose_lost", None, False)}
+        else:
+            loop._robot = None
+        return row
+
+    loop._admission_row = refresh
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == reason
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("disabled", "ai_disabled"), ("human", "human_class:stuck:obstacle_ahead:lane"),
+    ("expired", "evidence_stale:rosy_cam"), ("replaced", "ai_proposal_changed"),
+])
+def test_stuck_ai_admission_binds_original_candidate_and_current_permission(change, reason):
+    from copy import deepcopy
+    from fleet.stuck.pipeline import ai_hold
+
+    first, row = _first(), _row(stuck=_stuck())
+    resolver, proposal = _resolver(first), _vlm()
+    row["ai_proposal"] = proposal
+    current = deepcopy(row)
+    if change == "disabled":
+        first.enabled = False
+    elif change == "human":
+        first.human_classes = lambda: {problem_key(current, "stuck", "obstacle_ahead", False)}
+    elif change == "expired":
+        first.wall = lambda: WALL + 4
+    else:
+        current["ai_proposal"]["reason"] = "new-observation"
+    answer = Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")
+    assert ai_hold(resolver, answer, row, current, [current]) == reason
+
+
 def test_offline_readback_cannot_close_an_accepted_answer_as_resolved():
     outcomes, row = Outcomes(), _row()
     outcomes.answered("stuck", "rosy_01", "stuck-1", "BACK_AND_RETRY", None, 0.0)
