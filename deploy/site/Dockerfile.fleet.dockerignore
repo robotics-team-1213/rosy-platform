@@ -1,5 +1,6 @@
 **
 !operations/fleet/**
+!operations/world/src/**
 !contracts/foundation/core_common/**
 !contracts/learning/src/**
 !operations/apps/fleet/src/**
