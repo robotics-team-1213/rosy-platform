@@ -141,3 +141,27 @@ def test_upstream_fixed_tls_and_no_redirects(monkeypatch):
     assert seen[0].full_url == gate.UPSTREAM and seen[0].method == 'POST'
     with pytest.raises(ValueError, match='REDIRECT'):
         gate.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.invalid')
+
+
+def test_peer_credentials_refuse_another_uid(tmp_path):
+    class Peer:
+        def getsockopt(self, *args):
+            return gate.struct.pack('3i', 100, os.getuid() + 1, os.getgid())
+    with gate.Gateway(str(tmp_path / 'gate.sock'), gate.Handler) as server:
+        assert not server.verify_request(Peer(), '')
+
+
+def test_upstream_oversize_and_timeout_are_not_retried(monkeypatch):
+    calls = []
+    class Reply:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, limit): return b'x' * limit
+    class Opener:
+        def open(self, *args, **kwargs):
+            calls.append(1)
+            return Reply()
+    monkeypatch.setattr(gate.urllib.request, 'build_opener', lambda *handlers: Opener())
+    with pytest.raises(ValueError, match='OUTPUT_EXCEEDED'):
+        gate.upstream({'model': gate.MODEL}, 'fake-unit-token', 1)
+    assert calls == [1]

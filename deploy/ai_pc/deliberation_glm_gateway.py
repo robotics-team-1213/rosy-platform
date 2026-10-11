@@ -70,11 +70,12 @@ def upstream(body, token, remaining):
 def checked_response(problem, response):
     choice, = response['choices']
     message = choice['message']
-    usage = response['usage']
+    usage = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
     if (choice['finish_reason'] != 'stop' or message.get('tool_calls')
             or message.get('function_call') or type(message['content']) is not str
-            or type(usage['completion_tokens']) is not int
-            or not 0 <= usage['completion_tokens'] <= 1024):
+            or any(type(value) is not int or value < 0 for value in usage.values())
+            or usage['completion_tokens'] > 1024
+            or usage['total_tokens'] != usage['prompt_tokens'] + usage['completion_tokens']):
         raise ValueError('INVALID_UPSTREAM_RESULT')
     payload = opinion(problem, json.loads(message['content']))
     return {'id': 'rosy-glm-one-shot', 'object': 'chat.completion', 'model': MODEL,
@@ -105,7 +106,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         server = self.server
         self.connection.settimeout(max(0.01, server.deadline - time.monotonic()))
         try:
-            if self.path != '/v1/chat/completions' or server.calls:
+            if (self.path != '/v1/chat/completions' or server.calls
+                    or sum(len(k) + len(v) for k, v in self.headers.items()) > 8192):
                 raise ValueError('REQUEST_REFUSED')
             size = int(self.headers.get('Content-Length', '-1'))
             if not 0 < size <= LIMIT or self.headers.get('Transfer-Encoding'):
