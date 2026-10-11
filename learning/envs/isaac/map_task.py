@@ -45,6 +45,7 @@ class MapTask:
         self.half_size = half_size
         self.time_limit = time_limit
         self.index = 0
+        self.window_end = 0
         self.previous = None
         self.stopped_since = None
         self.result = None
@@ -99,8 +100,11 @@ class MapTask:
 
     def pursuit(self, x, y, yaw):
         from control.control.pursuit import pursuit_index
-        upper = min(len(self.points), bisect.bisect_right(self.distance, self.distance[self.index] + .35))
-        route = self.points[max(0, self.index - 1):upper]
+        if not self.window_end or self.distance[self.window_end - 1] - self.distance[self.index] < .12:
+            self.window_end = min(len(self.points), bisect.bisect_right(
+                self.distance, self.distance[self.index] + .35))
+        # Matching remaining suffix preserves the existing Drive alignment history.
+        route = self.points[max(0, self.index - 1):self.window_end]
         target = pursuit_index(route, x, y, .06)
         dx, dy = route[target][0] - x, route[target][1] - y
         error = math.atan2(math.sin(math.atan2(dy, dx) - yaw), math.cos(math.atan2(dy, dx) - yaw))
