@@ -645,6 +645,7 @@
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers | Accepted (2026-10-11; internal shadow only, no command or wire changes) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+| D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
