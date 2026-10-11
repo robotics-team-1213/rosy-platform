@@ -191,3 +191,18 @@ def test_inference_wall_time_cannot_refresh_an_old_camera_frame():
     out = lane.manager.tick_gain(now[0], gain=1.)
     assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
     assert lane.last['reason'] == 'camera_processing_stale'
+
+
+def test_existing_camera_derived_off_line_recovery_keeps_its_provenance():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    way = np.zeros((240, 320), np.uint8)
+    way[90:, :100] = 1
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda _f: (way, 'drivable', {}, 1.)), ground, camera_x=.03317, clock=lambda: 10.)
+    lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+    assert lane.observation is not None
+    assert lane.last['strategy'] == 'drivable_off_line_left'
+    assert lane.last['camera_provenance'] == 'observed_straddle'
+    assert lane.manager.tick_gain(10., gain=1.).angular > 0.
