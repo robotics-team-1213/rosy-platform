@@ -55,6 +55,8 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                 _assert_control(page.locator("#fleet-inbox"))
                 if path == "/console":
                     _assert_control(page.locator(".queue-row").first)
+                    # Current roster opens one selected robot's controls in its workspace.
+                    page.locator('[data-select-robot-id="rosy_03"]').click()
                     _assert_control(page.locator("[data-auth-focus]"))
                     page.locator("[data-auth-focus]").click()
                     expect(page.locator("#console-token")).to_be_focused()

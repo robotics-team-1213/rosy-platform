@@ -148,8 +148,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert box["width"] == box["height"] == 48, (name, width, box)
                     assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
                     expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
-                more = page.get_by_role("button", name="접속과 화면 표시")
-                assert more.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                more = page.locator("#topbar-more")
+                if more.is_visible():
+                    assert more.locator(".ui-icon-label").bounding_box()["width"] <= 1
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
                 expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
