@@ -52,6 +52,8 @@ ROS 서버·센서 없는 진단의 별도 실행은 MemoryMax 4GiB, MemorySwapM
 
 현재 가설: 새 바닥 API의 기본 restitution 0.8과 초기 접촉·solver가 기존 바닥 runner와 다른 진동을 만들 수 있다. 아직 확인된 원인이 아니다. 다음 검사는 전체 정지 trace의 실제 pose 변화·차체 속도·wheel targets를 비교하고, 기존 바닥의 material/physics 설정을 확인한 뒤 한 변수씩 수정한다.
 
+R3 종료 확인: 최초와 cleanup 정지 모두 실패했고 SDK exit 1이다. 마지막 30step의 평균 절대 angular velocity는 약 0.071rad/s지만 pose 차분의 평균 절대 yaw rate는 약 0.0093rad/s였다. pose 이동이 작다고 정지 판정을 통과시키지 않는다. 초기 접촉에 따른 solver 속도와 pose 변화가 다르게 나타나는 이유를 조사한다. 기존 default restitution 0.8 대신 0으로 한 변수만 바꾼 R4를 실행해 비교한다. 형상·질량·휠 gain·정지 기준은 그대로 유지한다.
+
 ## 다음 단계
 
 1. 최초 정지 실패 원인을 확인하고 동일 기준으로 재시험한다.
