@@ -59,7 +59,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     if (session.via !== 'cookie' || !session.principal_id || !session.role) throw new Error('Session not verified');
     if (session.password_change_required === true) {
       if (!changing) {
-        changing = true; host.innerHTML = CHANGE; bindForm();
+        changing = true; host.innerHTML = CHANGE; bindForm(); part('password').focus();
       }
       return false;
     }
@@ -114,7 +114,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (error?.status === 401 || error?.status === 404) {
         cookie = false; cookiePrincipal = cookieRole = null;
         if (standalone && changing) {
-          changing = false; host.innerHTML = FORM; bindForm();
+          changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
         }
         if (!standalone) host.hidden = true;
@@ -152,7 +152,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         verified(session);
       } catch (error) {
         if (changing && error?.status === 401) {
-          changing = false; host.innerHTML = FORM; bindForm();
+          changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
         } else errorText(changing ? (error?.status === 422 || error?.status === 400
           ? '8자 이상이며 아이디와 다른 새 비밀번호를 입력하세요.'
