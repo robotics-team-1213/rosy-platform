@@ -676,3 +676,9 @@
 - Status: Accepted (2026-10-11).
 - Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
 - Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.
+
+## D-654 ROSY 플랫폼 경로 R 심볼
+
+- Status: Accepted (2026-10-11).
+- Decision: One canonical platform mark, shared token-driven wordmark application, distinct role icons, accessible names, and separately evidenced rollout.
+- Contract: [ADR](../adr/D-654-rosy-platform-route-mark.md), [plan](../plans/2026-10-11-rosy-brand.md).
