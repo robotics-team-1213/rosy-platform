@@ -19,10 +19,12 @@ def _boundary_metrics(pred, target, valid) -> dict:
                                 borderValue=0).astype(bool)
     raw_truth = boundary(target)
     expected = raw_truth & known
-    actual = boundary(pred) & known if pred is not None else np.zeros_like(target)
+    raw_predicted = boundary(pred) if pred is not None else np.zeros_like(target)
+    actual = raw_predicted & known
     nt, npred = int(expected.sum()), int(actual.sum())
     result = {"boundary_truth_pixels": nt, "boundary_predicted_pixels": npred,
               "boundary_excluded_truth_pixels": int((raw_truth & ~known).sum()),
+              "boundary_excluded_predicted_pixels": int((raw_predicted & ~known).sum()),
               "boundary_distance_sum_px": None, "boundary_mean_error_px": None}
     if pred is None:
         status = "abstained"
@@ -86,6 +88,7 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
         raise ValueError("current region truth lies outside declared road truth")
     other = (road_truth == 1) & (region_truth == 0)
     region_metrics.update(other_region_truth_pixels=int(other.sum()),
+                          scored_other_region_truth_pixels=int(other.sum()) if region is not None else 0,
                           other_region_included_pixels=int((region & other).sum()) if region is not None else None,
                           self_region_missed_pixels=region_metrics["false_negative_pixels"])
     return {"domain": domain, "conditions": sorted(set(conditions)),
@@ -95,14 +98,21 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
 
 
 def _summarize(rows) -> dict:
-    result = {"frames": len(rows), "region_reasons": dict(Counter(r["region_reason"] for r in rows))}
+    result = {"frames": len(rows), "unconditioned_frames": sum(not r["conditions"] for r in rows),
+              "region_reasons": dict(Counter(r["region_reason"] for r in rows)),
+              "input_errors": dict(Counter(e for r in rows for e in r["input_errors"]))}
     for target in ("road_surface", "current_region"):
         metrics = [r[target] for r in rows]
         counts = {k: sum(m[k] or 0 for m in metrics) for k in (
             "valid_truth_pixels", "unknown_truth_pixels", "truth_pixels", "outside_truth_pixels",
             "scored_pixels", "scored_truth_pixels", "scored_outside_truth_pixels",
             "true_positive_pixels", "false_positive_pixels", "false_negative_pixels",
-            "boundary_truth_pixels", "boundary_predicted_pixels", "boundary_excluded_truth_pixels")}
+            "boundary_truth_pixels", "boundary_predicted_pixels", "boundary_excluded_truth_pixels",
+            "boundary_excluded_predicted_pixels")}
+        if target == "current_region":
+            counts.update({k: sum(m[k] or 0 for m in metrics) for k in (
+                "other_region_truth_pixels", "scored_other_region_truth_pixels",
+                "other_region_included_pixels", "self_region_missed_pixels")})
         tp, fp, fn = (counts[k] for k in ("true_positive_pixels", "false_positive_pixels", "false_negative_pixels"))
         scored = sum(m["prediction_available"] for m in metrics)
         paired = [m for m in metrics if m["boundary_status"] == "ok"]
@@ -111,11 +121,15 @@ def _summarize(rows) -> dict:
                       frame_coverage=scored / len(rows) if rows else None,
                       pixel_coverage=counts["scored_pixels"] / counts["valid_truth_pixels"]
                       if counts["valid_truth_pixels"] else None,
+                      truth_pixel_coverage=counts["scored_truth_pixels"] / counts["truth_pixels"]
+                      if counts["truth_pixels"] else None,
                       iou=tp / (tp + fp + fn) if tp + fp + fn else None,
                       outside_false_positive_rate=fp / counts["scored_outside_truth_pixels"]
                       if counts["scored_outside_truth_pixels"] else None,
                       missed_fraction=fn / counts["scored_truth_pixels"] if counts["scored_truth_pixels"] else None,
                       boundary_scored_frames=len(paired),
+                      boundary_scored_pixels=boundary_pixels,
+                      boundary_distance_sum_px=sum(m["boundary_distance_sum_px"] for m in paired),
                       boundary_statuses=dict(Counter(m["boundary_status"] for m in metrics)),
                       boundary_mean_error_px=sum(m["boundary_distance_sum_px"] for m in paired) / boundary_pixels
                       if boundary_pixels else None)

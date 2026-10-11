@@ -207,6 +207,7 @@ def test_summary_keeps_abstained_denominators_and_separates_domains():
     assert real["scored_pixels"] == 144 and real["scored_truth_pixels"] == 120
     assert real["scored_frames"] == 1 and real["abstained_frames"] == 1
     assert real["pixel_coverage"] == real["frame_coverage"] == 0.5
+    assert real["truth_pixel_coverage"] == 0.5
     assert real["iou"] == 0.5 and sim["scored_frames"] == 1
     assert result["conditions"]["real"]["junction"]["frames"] == 2
     assert result["domains"]["real"]["region_reasons"] == {"ok": 1, "no_anchor": 1}
@@ -227,3 +228,24 @@ def test_summary_empty_domain_is_visible_and_iou_uses_pixel_counts():
     assert result["domains"]["simulation"]["frames"] == 0
     assert result["domains"]["simulation"]["road_surface"]["iou"] is None
     assert summarize_frames([])["domains"]["real"]["road_surface"]["pixel_coverage"] is None
+
+
+def test_summary_preserves_other_region_errors_and_boundary_denominator():
+    image, anchor = _snapshots()
+    labels = _labels()
+    road_truth = (labels == 2).astype(np.uint8)
+    region_truth = np.zeros_like(road_truth)
+    region_truth[:, 7:] = 1
+    frames = [evaluate_frame(labels, CLASSES, image, anchor, seeds, road_truth, region_truth,
+                             domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+              for seeds in (((10, 2),), ())]
+    result = summarize_frames(frames)["domains"]["real"]
+    metrics = result["current_region"]
+    assert result["unconditioned_frames"] == 2
+    assert metrics["other_region_truth_pixels"] == 120
+    assert metrics["scored_other_region_truth_pixels"] == 60
+    assert metrics["other_region_included_pixels"] == metrics["self_region_missed_pixels"] == 60
+    assert metrics["boundary_scored_pixels"] > 0
+    assert metrics["boundary_mean_error_px"] == pytest.approx(
+        metrics["boundary_distance_sum_px"] / metrics["boundary_scored_pixels"])
+    assert metrics["boundary_statuses"] == {"ok": 1, "abstained": 1}
