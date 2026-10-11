@@ -16,6 +16,12 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 source checkpoint: D-696 인수 export와 D-697 독립 원장 소비자는 `3a431bbc53e3caf15bbad68f0d64f4740bb1724e`로 로컬 main에 착지했다. 적격 AI PC 9GB의 관련 12개 파일 원격 통합 시험 219개, known-failures 신규 실패 0건과 lint를 통과했다. 인수 근거와 독립 소비자에 대한 독립 검토의 중요 지적은 수정했다. 고정 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/operational-land-3a431bbc53/run-1.txt`다.
+
+소비자는 실제 paired export의 원장 상태 건수·한계 비용·UNKNOWN 예약 책임과 고정 cohort를 연결한다. 누락·변조·학습/보정/평가 ID와 원본 hash 중복, budget·종결 상태 모순을 거절한다. 기존 export /1과 선택 /2, 직접 producer 객체와 단독 JSON CLI를 유지한다. 단독 CLI는 설치된 contract wheel 없이 source checkout에서도 동작한다. 모든 출력은 HOLD이며 관측 종료를 인과적 성공률로 표시하지 않는다.
+
+아래 3의 근거 생산과 4의 첫 소비자는 구현됐지만 전체 운영 성과 비교는 미완료다. 규칙·Qwen 단독 생산 기준, 독립 정답·수용 한계, 정상 명령과 재발의 완전한 기록 범위, 실제 청구·런타임 수용이 여전히 필요하다. 실제 제공자·독립 품질·운영 활성화·현장 수용과 push는 이 checkpoint에 포함하지 않는다.
+
 | 순서 | 작업 | 완료 증거 |
 |---|---|---|
 | 1 | 소유자 확인·모델 원장 도구 분리·작업 규칙 추출 | 기존 책임·import·패키지 경계와 원격 회귀 유지 |
