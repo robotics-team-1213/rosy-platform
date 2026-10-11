@@ -154,6 +154,7 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - 순수 UI helper Node 20 PASS; 아직 실제 입력 화면이나 새 기능 배포 수용은 아니다.
 - 입력 화면 48a2fbfc1: 원격 Chromium 4 PASS, NEW 0. 빈 지도 생성·도로와 신호등 추가·수정·저장·재조회 및 기존 축구장 프로필을 1440/390 px에서 검증했다. 전체 회귀에서 예전 임의 예제 도로·관리자 안내 기대값을 발견해 빈 지도 시작 계약에 맞춰 수정했다. 시험 수정의 잘못된 동일 문자열 매칭은 9e68d078b에서 바로잡았다. 실패는 기존 실패로 분류하지 않는다.
 - 935306768: 기존 장소·차로 편집기에서도 조사 검토를 무효화한다. 통행 방향·주행 방식·속도 변경 뒤 재검토를 거치며, 원본 입력과 과거 지도 본문을 보존한다. Node 22 PASS, harness 0 errors/23 기존 검증 시점 경고.
+- 9e68d078b 최종 전체 브라우저 실행은 43개 진행 표시 뒤 SSH connection reset(exit 255)으로 종결됐다. 이는 전체 통과 증거가 아니며 `logs/site-map-regression-final/run-1.txt`에 남겼다. 자원·접속 가능한 호스트를 다시 고르는 terminal 실행에서 전체 결과를 얻어야 한다. 문서 변경 ea44178ce 이후 harness generate는 차이를 만들지 않았다.
 
 ### Task 3 구현 전 확인한 연결 범위
 
