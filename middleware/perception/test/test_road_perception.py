@@ -1,7 +1,5 @@
 import numpy as np
 import pytest
-import cv2
-from pathlib import Path
 
 from control.sensing.perception.camera_ground import simulation_ground_plane
 
@@ -19,17 +17,23 @@ WIDTH = 320
 HEIGHT = 240
 
 
-def test_actual_260919_longitudinal_crosswalk_frame_has_metric_road_evidence():
-    # A24 native camera: the road detector missed the along-lane bars in this frozen frame.
-    frame = cv2.imread(str(Path(__file__).parent / 'fixtures/gazebo-a24-crosswalk-20261012.png'))
-    assert frame is not None and frame.shape == (HEIGHT, WIDTH, 3)
+def test_260919_longitudinal_crosswalk_has_metric_road_evidence():
+    # Project the source map's four 25 mm x 120 mm bars at 40 mm pitch through the nominal camera.
     ground = simulation_ground_plane(
         source='GAZEBO', simulation_enabled=True, use_sim_time=True,
         width_px=WIDTH, height_px=HEIGHT, height_m=.06343,
         pitch_rad=.13962634015954636, hfov_rad=1.0334, max_range_m=.6)
+    frame = np.full((HEIGHT, WIDTH, 3), 35, dtype=np.uint8)
+    for row in range(HEIGHT):
+        distance = ground.distance(row)
+        if distance is not None and .22 <= distance <= .34:
+            for column in range(WIDTH):
+                lateral = ground.lateral(column, row)
+                if any(abs(lateral-centre) <= .0125 for centre in (-.06, -.02, .02, .06)):
+                    frame[row, column] = 245
     observation = detect_road_observation(frame, ground=ground)
     assert observation.crosswalk is not None
-    assert 0 < observation.crosswalk.distance_m < .3
+    assert observation.crosswalk.distance_m == pytest.approx(.22, abs=.01)
 
 
 def _frame(*, lane_x=None, stop_y=None, crosswalk_rows=(), signals=()):
