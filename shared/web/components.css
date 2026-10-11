@@ -79,6 +79,7 @@
 }
 .ui-tooltip {
   position: fixed;
+  pointer-events: none;
   left: attr(data-ui-tip-x px, 0px);
   top: attr(data-ui-tip-y px, 0px);
   z-index: 2002;
