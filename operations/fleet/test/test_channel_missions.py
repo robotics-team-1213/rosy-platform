@@ -62,8 +62,9 @@ def test_prepare_and_independent_existing_admit(tmp_path, kind):
         assert conn.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 0
 
 
-@pytest.mark.parametrize("change", [{"principal_id": "other"}, {"request_key": "arbitrary"},
-                                  {"expected_revision": True}, {"reason": " "}])
+@pytest.mark.parametrize("change", [
+    {"principal_id": "other"}, {"request_key": "arbitrary"}, {"expected_revision": True}, {"reason": " "},
+])
 def test_untrusted_prepare_fields_never_create_proposal(tmp_path, change):
     client, tasks, _ = _client(tmp_path, channel_config=config())
     receipt = receive(client)

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.212
+**Version:** v1.213
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2823,6 +2823,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.210 | 2026-10-12 | Additive (D-671): 전용 Discord transport 인증과 기명 접수 원장·Console owner read; 실행 권한 없음. |
 | v1.211 | 2026-10-12 | Additive (D-680): 기명 Console 요청 검토와 기존 주행 Task 관계 조회·연결. 기존 실행·승인 계약 유지. |
 | v1.212 | 2026-10-12 | Additive (D-680): 기명 요청의 최신 검토와 기존 Task 생성을 같은 트랜잭션에서 확인하는 submit. |
+| v1.213 | 2026-10-12 | Additive (D-687): Discord 요청의 기존 Mission/Cell proposal 준비와 별도 admission. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
@@ -3208,6 +3209,14 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 
 `GET /api/fleet/notifications?limit=100`(viewer+)는 `{records:[{event_id,robot_id,stuck_id,kind,channel,state,created_at,expires_at,next_attempt_at,attempts,last_code,provider_id,delivered_at}]}`다. kind는 OPEN/CLOSED, state는 PENDING/SENDING/SENT/RETRY/UNKNOWN/FAILED/EXPIRED/SUPERSEDED, 시각은 UTC epoch seconds다. limit 1..1000, 미인증401/잘못된 limit422이며 private endpoint·메시지 payload·secret·설치 주소를 반환하지 않는다. line_stuck incident report의 `notifications`는 같은 형식의 해당 사건 최근20건이다. SENT는 provider 수락이며 실제 수신/인수/해소가 아니다. UNKNOWN은 맹목 재시도하지 않는다. durable producer는 Fleet 사건/판단 owner, consumer는 opt-in notification worker와 Console이다.
 ## v1.212 Discord 요청의 원자적 Task 제출 (D-680)
+
+### v1.213 Mission·Cell Job owner adapter (D-687)
+
+`POST /api/fleet/channel-requests/{request_id}/prepare`는 현재 mapping의 기명 operator owner가 확인한 실행 전 proposal을 기존 소유자로 준비한다. strict 본문 공통 필드는 `kind`, `expected_hash`, `expected_revision`, `reason`(비어 있지 않은1..256자), `workcell_id`, `instance_id`다. `kind=mission`은 기존 Mission의 `candidate` 객체를 사용하며 원문을 observation으로 만들지 않는다. `kind=cell_job`은 기존 Cell app의 `recipe_id/recipe_digest/cell_id/cell_digest`를 사용한다. `principal_id`, `request_key`, 임의 work ID는 받지 않는다. Fleet가 `discord-{request_id}` key와 기존 author를 주입한다.
+
+기존 proposal 생성·resolve 검증 뒤 현재 owner/hash/revision을 DB 트랜잭션에서 다시 확인하여 LINKED로 연결한다. 관계 연결 전 검토 변경409는 실행 전 proposal만 남기며 admission하지 않는다. 같은 본문/원문/원래 revision 재시도는 같은 관계를 반환하고 다른 본문409다. 기존 proposal key의 다른 candidate는 기존 conflict 계약을 따른다. 미설정503, invalid body422, 다른 owner404/403이다. `ChannelWorkflowView.work_kind`는 task/mission/cell_job/null이며 candidate가 null인 연결된 Mission/Cell은 별도 실행 전 제안이다.
+
+`POST /api/fleet/channel-requests/{request_id}/admit`의 strict `ChannelWorkAdmitRequest`는 `expected_hash`, `expected_revision`, `expected_generation`(bool을 제외한 비음수 정수)뿐이다. 현재 owner와 LINKED proposal의 author/key/kind/RESOLVED provenance를 확인하고 기존 Mission admit 함수만 호출한다. Cell service author와 기명 approver는 다르며 resolver 최신성, generation/fence, claims 및 기존 admission 오류를 유지한다. 새로운 writer·dispatch 활성화·rearm이 없다. Console의 별도 명시 승인이 필요하다. 결과는 현재 기존 원장을 읽은 `ChannelWorkflowView`이며 ACTION_SUCCEEDED와 GOAL_CONFIRMED를 구분한다.
 
 `POST /api/fleet/channel-requests/{request_id}/submit`은 현재 mapping의 기명 operator owner만 호출한다. strict `ChannelSubmitRequest` 본문은 `expected_hash`(원문 SHA256 64자리 hex), `expected_revision`(bool을 제외한 0 이상 정수)뿐이다. principal/goal/task ID는 본문에서 받지 않는다. Console의 명시 확인 후 서버가 검토 candidate와 기존 FleetTaskService의 operator actor 및 `discord-{request_id}` key를 사용한다.
 

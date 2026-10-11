@@ -147,7 +147,9 @@ def install_channel_routes(app, journal, *, require_operator, read_guard, clock=
 
 
 def install_channel_feature(app, *, config, task_service, principals, site_logins,
-                            require_operator, read_guard, console, existing_tokens, secret_owners):
+                            require_operator, read_guard, console, existing_tokens, secret_owners,
+                            proposals=None, proposal_create=None, proposal_resolve=None, cell_prepare=None,
+                            mission_admit=None, cell_service_id=None):
     if config is None:
         return
     if task_service is None:
@@ -182,6 +184,13 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
     app.state.channel_workflow = ChannelWorkflow(app.state.channel_requests, task_store=task_service.store)
     install_workflow_routes(app, app.state.channel_workflow, require_operator=require_operator, read_guard=read_guard,
                             task_service=task_service, console=console)
+    from .channel_missions import ChannelMissions, install_channel_mission_routes
+    app.state.channel_missions = ChannelMissions(
+        app.state.channel_workflow, proposals=proposals, proposal_create=proposal_create,
+        proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit,
+        cell_service_id=cell_service_id)
+    install_channel_mission_routes(app, app.state.channel_missions, require_operator=require_operator,
+                                   read_guard=read_guard)
     if token is not None:
         from .channel_gateway import install_gateway
         install_gateway(app, app.state.channel_requests, token)

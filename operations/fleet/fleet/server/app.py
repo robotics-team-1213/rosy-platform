@@ -767,9 +767,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    zones=trip_runner.traffic.zone_edges)
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
-    proposal_create = proposal_resolve = None
+    proposal_create = proposal_resolve = mission_admit = None
     if mission_service is not None:
-        proposal_create, proposal_resolve = install_mission_routes(
+        proposal_create, proposal_resolve, mission_admit = install_mission_routes(
             app, mission_service=mission_service, proposal_store=proposal_store,
             cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
             goal_evidence_service=goal_evidence_service, mission_progress=mission_progress,
@@ -786,17 +786,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.channel_requests import install_channel_feature
     install_work_routes(app, task_service=task_service, mission_service=mission_service,
                         require_viewer=require_viewer, read_guard=read_guard)
-    install_channel_feature(app, config=channel_config, task_service=task_service, principals=principals,
-                            site_logins=site_logins, require_operator=require_operator, read_guard=read_guard,
-                            console=console, existing_tokens=other_tokens, secret_owners=(sightings, policy_evidence))
     from fleet.server.cell_app_routes import install_cell_app_routes
-    install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
+    cell_prepare = install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
                             service_id=cell_app_service_id, principals=principals,
                             proposal_create=proposal_create, proposal_resolve=proposal_resolve,
                             require_viewer=require_viewer, require_named_operator=require_named_operator)
-
-    install_intent_routes(app, console=console, task_service=task_service,
-                          require_operator=require_operator,
+    install_channel_feature(app, config=channel_config, task_service=task_service, principals=principals,
+        site_logins=site_logins, require_operator=require_operator, read_guard=read_guard, console=console,
+        existing_tokens=other_tokens, secret_owners=(sightings, policy_evidence), proposals=proposal_store,
+        proposal_create=proposal_create, proposal_resolve=proposal_resolve, cell_prepare=cell_prepare,
+        mission_admit=mission_admit, cell_service_id=cell_app_service_id)
+    install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(

@@ -2,6 +2,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from .cell_app import CellAppCompileRequest
 
 Snowflake = str
 
@@ -78,7 +79,33 @@ class ChannelWorkflowView(BaseModel):
     state: Literal["REQUESTED", "READY", "HOLD", "REJECTED", "LINKED"]
     candidate: ChannelNavigationCandidate | None
     reason: str | None
-    work_kind: Literal["task"] | None
+    work_kind: Literal["task", "mission", "cell_job"] | None
     work_id: str | None
     work_status: str | None
     request_key: str
+
+
+class ChannelWorkPrepareRequest(ChannelSubmitRequest):
+    reason: str = Field(min_length=1, max_length=256)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+
+    @model_validator(mode="after")
+    def reason_required(self):
+        if not self.reason.strip():
+            raise ValueError("review reason required")
+        return self
+
+
+class ChannelMissionPrepareRequest(ChannelWorkPrepareRequest):
+    kind: Literal["mission"]
+    candidate: dict[str, object]
+
+
+class ChannelCellPrepareRequest(CellAppCompileRequest, ChannelWorkPrepareRequest):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    kind: Literal["cell_job"]
+
+
+class ChannelWorkAdmitRequest(ChannelSubmitRequest):
+    expected_generation: int = Field(ge=0)
