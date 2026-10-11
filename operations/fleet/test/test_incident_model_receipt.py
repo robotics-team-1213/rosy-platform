@@ -1,5 +1,6 @@
 from dataclasses import asdict, replace
 import hashlib
+import json
 
 import pytest
 
@@ -94,14 +95,21 @@ def test_completion_atomically_keeps_verified_cost_with_valid_trace_or_trace_rej
         if rows: assert rows[0][0] == receipt.payload_json
 
 
-def test_deeply_nested_forged_receipt_rejects_trace_without_losing_known_cost(tmp_path):
-    scope, p, _, _, _, _ = fixture()
+@pytest.mark.parametrize('fault', ['depth', 'probability', 'observation_time'])
+def test_malformed_numeric_or_nested_receipt_preserves_known_cost(tmp_path, fault):
+    scope, p, models, bound, checked, _ = fixture()
     store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
     store.begin_case(scope, CaseBudget(100, 130, 1, 0, .1))
     store.reserve(scope, attempt_id='model-1', input_hash=p.digest, observation_revision=p.generation,
                   kind='model', max_cost_usd=.1, worker_id='worker', role='primary')
     store.mark_submitting(scope, 'model-1', worker_id='worker')
-    forged = ModelReceipt('[' * 5000 + '0' + ']' * 5000)
+    if fault == 'depth':
+        forged = ModelReceipt('[' * 5000 + '0' + ']' * 5000)
+    else:
+        raw = json.loads(model_receipt(scope, p, bound, checked, profiles=models).payload_json)
+        if fault == 'probability': raw['judgment']['alternatives'][0]['probability'] = 10**400
+        else: raw['problem']['observed_at'] = 10**400
+        forged = ModelReceipt(canonical(raw))
     result = store.complete(scope, 'model-1', worker_id='worker', state='COMPLETED',
                             actual_cost_usd=.05, summary={'reason': 'MODEL_CHECKED'}, model_receipt=forged)
     assert result['state'] == 'REJECTED'
