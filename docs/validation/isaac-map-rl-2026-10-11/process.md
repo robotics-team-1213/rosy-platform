@@ -61,3 +61,9 @@ R3 종료 확인: 최초와 cleanup 정지 모두 실패했고 SDK exit 1이다.
 3. 짧은 지도 구간에서 CPU Q-learning을 수행하고 Q 변화·학습 궤적을 보존한다.
 4. 정책을 고정한 독립 시드 두 개에서 전체 경로·벽·정지를 검사한다.
 5. exit·cleanup·소스 해시·자원과 함께 결과를 판정한다. 두 대 Fleet와 신호·카메라·실물 수용은 별도다.
+
+## 2026-10-11 최종 판정
+
+이 문서는 초기 R1~R3 진행 스냅샷이다. 이후 날짜별 문제·원인/가설·수정·재시험의 정본은 Git 제외 경로 `private/isaac/journal/2026-10-11-map-rl.md`다. 계획·결과·다음 일지 양식도 `private/isaac/`로 분리했다. 공개 검증 요약은 [최종 결과](result.md)를 따른다.
+
+R6 한 대 native CPU 학습과 고정 정책 두 시드의 ordered-map 완주·물리 정지는 통과했다. R6의 비동기 GUI 종료 traceback은 R7의 공통 headless-close 수리와 별도 SDK 생명주기 검사로 확인했다. 두 실행의 source SHA와 증거를 혼합하지 않는다. 운영 ROS-SIM·두 대 Fleet·신호·실물은 이 진단으로 수용하지 않는다.
