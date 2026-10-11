@@ -112,7 +112,7 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         assert page.locator("main").inner_html() == before
 
         page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         assert page.evaluate("__requests.length") > count
         if document == "index.html":
             assert page.locator("#context-status").is_visible()
@@ -144,11 +144,11 @@ def test_old_401_cannot_lock_a_reauthenticated_document(console_url, document):
         _open_token_access(page)
         page.fill("#console-token", "fleet-lifetime-b")
         page.locator("#token-save").click()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         assert page.evaluate("__pending[0].signal?.aborted === true")
         page.evaluate("__pending[0].release({detail: 'old token expired'}, 401)")
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
-        assert "fresh-role" in page.locator("#user-role").inner_text()
+        assert page.locator("#user-role").get_attribute("title") == "fresh-role · operator"
         assert page.locator("#console-token").get_attribute("aria-invalid") is None
         assert page.evaluate("__requests.every(row => row.method === 'GET')")
         assert not errors
@@ -178,7 +178,7 @@ def test_pending_confirmation_is_cancelled_and_cannot_submit_after_restore(conso
         page.evaluate("dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))")
         page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
         page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         page.evaluate("__oldConfirmation.dispatchEvent(new MouseEvent('click'))")
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
         assert page.evaluate("__requests.every(row => row.method === 'GET')")

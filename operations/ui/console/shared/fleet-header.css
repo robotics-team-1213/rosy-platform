@@ -3,6 +3,7 @@
 
 /* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
 body { margin: 0; }
+.fleet-header { position: sticky; top: 0; z-index: 10; }
 
 /* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
@@ -83,7 +84,6 @@ ui-topbar input[type="checkbox"] { width: auto; }
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #clock { display: none; }
   #fleet-inbox { grid-area: inbox; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -119,8 +119,10 @@ ui-topbar input[type="checkbox"] { width: auto; }
   }
   ui-topbar ui-brand { container-type: inline-size; }
   .fleet-link-status { display: contents; }
+  /* 통신 상태는 좁은 칸에서도 전부 읽을 수 있어야 한다. */
+  #online-pill { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
   #development-badge { grid-area: brand; align-self: end; justify-self: start; }
-  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-6); }
+  ui-topbar:has(#development-badge:not([hidden])) ui-brand { padding-bottom: var(--space-5); }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   #clock { font-size: var(--text-micro); }
   /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */

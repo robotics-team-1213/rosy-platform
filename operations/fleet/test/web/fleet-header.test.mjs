@@ -3,9 +3,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
-import {
+// Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
+const { register } = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
+const {
   SESSION_REASON, bindEstop, estopReason, roleLabel, showSession, showSignedOut,
-} from "../../../ui/console/shared/fleet-header.js";
+} = await import("../../../ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
   const attributes = new Map();
@@ -41,10 +44,10 @@ test("role words are Korean; English stays out of the text", () => {
   assert.equal(roleLabel("nobody"), "권한 없음");
 });
 
-test("a named session shows its name and role; a development session shows the badge", () => {
+test("a session shows its Korean role and title identity; a development session shows the badge", () => {
   const nodes = fakeHeader();
   showSession({principal_id: "bob", role: "operator"});
-  assert.equal(nodes["user-role"].textContent, "bob · 운영자");
+  assert.equal(nodes["user-role"].textContent, "운영자");
   assert.equal(nodes["user-role"].title, "bob · operator");
   assert.equal(nodes.estop.disabled, false);
   assert.equal(nodes["development-badge"].hidden, true);
@@ -55,7 +58,8 @@ test("a named session shows its name and role; a development session shows the b
   assert.equal(nodes["development-badge"].hidden, false);
 
   showSession({principal_id: "vic", role: "viewer"});
-  assert.equal(nodes["user-role"].textContent, "vic · 보기 전용");
+  assert.equal(nodes["user-role"].textContent, "보기 전용");
+  assert.equal(nodes["user-role"].title, "vic · viewer");
   assert.equal(nodes.estop.disabled, true);
   assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
 });

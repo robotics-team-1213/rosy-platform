@@ -317,8 +317,9 @@ def test_field_view_review_fixes_are_served():
     # The inbox remains outside the fold and the shared 48px stop keeps its own column.
     assert "@media (width < 90rem)" in styles and '"brand pill inbox more estop"' in styles
     assert "#fleet-inbox { grid-area: inbox; }" in styles
-    # D-501: the Cell link sits once in the shared document tab row.
-    assert '<a href="/console/cell">Cell</a>' in page
+    # D-501/D-641: the single Cell document link keeps its label and shared semantic icon.
+    import re
+    assert re.findall(r'<a href="/console/cell" data-action-icon="cell">(.*?)</a>', page) == ["Cell"]
     assert "#estop { grid-area: estop; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
