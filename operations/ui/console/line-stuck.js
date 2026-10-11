@@ -137,6 +137,7 @@ function escalationText(code) {
 export function resolverText(note) {
   if (!note) return "";
   if (note.escalated) {
+    if (note.escalated.startsWith("auto_hold:")) return `자동 대기 · 상태 관측 중 (${escalationText(note.escalated.slice(10))})`;
     if (note.escalated === "human_claimed") return "운영자가 맡음";
     const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
     const why = code ? `CORE 응답 ${code}` : escalationText(note.escalated);

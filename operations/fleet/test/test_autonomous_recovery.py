@@ -40,7 +40,8 @@ def test_accepted_hold_reobserves_and_recovers_once_without_a_person():
 def test_exhaustion_observes_without_resetting_the_budget(config, reason):
     core = resolver(**config)
     row = _row(stuck=_stuck())
-    held = core.step(1, [row])[0]
+    first = core.step(0, [row])
+    held = core.step(1, [row])[0] if reason == "deadline" else first[0]
     assert type(held).__name__ == "Hold" and held.reason == reason
     chain = core._chains["rosy_01"]
     initial = (chain.started_at, chain.rule_answers)

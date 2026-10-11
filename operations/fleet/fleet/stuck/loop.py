@@ -18,7 +18,7 @@ from fleet.server.console_routes import transport_failure
 from fleet.stuck import closed_loop, pipeline
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.outcome import Outcomes
-from fleet.stuck.resolver import Answer, Escalate, StuckResolver
+from fleet.stuck.resolver import Answer, Escalate, Hold, StuckResolver
 from fleet.swarm.transport import RobotApiError
 
 PRINCIPAL_ID = "fleet-resolver"
@@ -147,6 +147,14 @@ class StuckResolverLoop:
 
     def _escalated(self, action: Escalate, *, rule: Optional[str] = None,
                    decision: Optional[str] = None) -> None:
+        if isinstance(action, Hold):
+            reason = f"auto_hold:{action.reason}"
+            self._board.note_resolver(action.robot_id, action.stuck_id, tier="rule", rule=rule or "R5",
+                                      decision="WAIT", escalated=reason)
+            self._board.record(robot_id=action.robot_id, stuck_id=action.stuck_id,
+                               decision="WAIT", principal_id=PRINCIPAL_ID, accepted=None,
+                               tier="rule", rule=rule or "R5", escalated=reason)
+            return
         log.warning("stuck %s on %s escalated to a human: %s",
                     action.stuck_id, action.robot_id, action.reason)
         closed_loop.human(self, action.robot_id, action.stuck_id)
@@ -168,9 +176,15 @@ class StuckResolverLoop:
         hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
             or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
         if hold is not None:
-            self._resolver.claim(answer.robot_id, answer.stuck_id)
-            self._escalated(Escalate(answer.robot_id, answer.stuck_id, hold),
-                            rule=answer.rule, decision=answer.decision)
+            if answer.robot_id in self._resolver.autonomous_robots:
+                chain = self._resolver._chains.get(answer.robot_id)
+                action = self._resolver._escalate(chain, answer.robot_id, answer.stuck_id, hold) if chain else None
+                if action is not None:
+                    self._escalated(action, rule=answer.rule, decision=answer.decision)
+            else:
+                self._resolver.claim(answer.robot_id, answer.stuck_id)
+                self._escalated(Escalate(answer.robot_id, answer.stuck_id, hold),
+                                rule=answer.rule, decision=answer.decision)
             return
         client = self._clients().get(answer.robot_id)
         if client is None:
