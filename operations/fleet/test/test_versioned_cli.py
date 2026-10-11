@@ -96,3 +96,23 @@ def test_other_case_prior_refuses_without_transport_call():
     with pytest.raises(ValueError):
         asyncio.run(provider(p, bound, ((other_bound, checked),), 2, budget_usd=.05))
     assert not transport.calls
+
+
+def test_versioned_deadline_cancels_a_hanging_transport_without_replay():
+    p, bound, transport, provider = setup()
+    ended = []
+
+    class Hanging(Transport):
+        async def __call__(self, *args):
+            self.calls.append(args)
+            try:
+                await asyncio.sleep(1)
+                return await super().__call__(*args)
+            finally:
+                ended.append(True)
+
+    hanging = Hanging(transport.adapter_capabilities, 'claude', payload(p))
+    provider.transport.launch = hanging
+    with pytest.raises(TimeoutError):
+        asyncio.run(provider(p, bound, (), .01, budget_usd=.05))
+    assert ended == [True] and len(hanging.calls) == 1
