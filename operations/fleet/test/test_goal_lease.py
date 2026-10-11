@@ -4,6 +4,7 @@ Each goal source renews only while its reason to move holds (Safety-Review 2026-
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from fleet.server.goal_lease import goal_lease_supported
 from fleet.server.trip_guard import install_trip_guard
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
+from fleet.hub.hub import HubError
 
 LEASE_CAPS = {"navigation": {"goal_navigation": True},
               "controls": {"schema": "rosy.controls/1", "items": [
@@ -134,6 +136,60 @@ def test_a_receipt_after_a_stop_cannot_recreate_a_goal_or_renew_its_lease(stop):
     assert [call for call in robot.calls if call[0] == "navigation_cancel"]
     run(console.goal_leases.renew())
     assert robot.renewals == []
+
+
+@pytest.mark.parametrize("stop", ["cancel", "estop"])
+@pytest.mark.parametrize("phase", ["capabilities", "state", "bay"])
+def test_stop_during_admission_prevents_any_later_goal_send(stop, phase):
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+    method = "capabilities" if phase == "bay" else phase
+    original = getattr(robot, method)
+
+    async def interrupted():
+        result = await original()
+        if stop == "cancel":
+            await console.cancel("rosy_01")
+        else:
+            await console.estop_all()
+        return result
+
+    setattr(robot, method, interrupted)
+    with pytest.raises(HubError):
+        if phase == "bay":
+            run(console._send_to_bay("rosy_01", (1.0, 1.0), "rosy_02"))
+        else:
+            run(console.goal("rosy_01", 1.0, 0.0))
+    assert _sent(robot) == []
+    assert "rosy_01" not in console.goal_leases
+
+
+def test_concurrent_goal_is_refused_until_the_first_goal_pipeline_finishes():
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+
+    async def main():
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = robot.navigation_goal
+
+        async def blocked(*args, **kwargs):
+            entered.set()
+            await release.wait()
+            return await original(*args, **kwargs)
+
+        robot.navigation_goal = blocked
+        first = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
+        await entered.wait()
+        try:
+            with pytest.raises(HubError):
+                await console.goal("rosy_01", 2.0, 0.0)
+        finally:
+            release.set()
+            await first
+        assert console._goals["rosy_01"]["x"] == 1.0
+        assert len(_sent(robot)) == 1
+
+    run(main())
 
 
 def test_operator_goal_is_leased_and_renewed_while_an_operator_is_present():
