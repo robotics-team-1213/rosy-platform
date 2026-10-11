@@ -110,6 +110,38 @@ def test_slot_keeps_previous_when_new_model_has_incompatible_road_semantics(tmp_
     assert "drivable semantic" in slot.last_error
 
 
+@pytest.mark.parametrize("signed", [False, True])
+def test_semantic_swap_refusal_preserves_previous_signature_status(tmp_path, monkeypatch, signed):
+    from control.sensing.perception.learned import signature
+
+    good = _model_dir(tmp_path)
+    other = _model_dir(tmp_path, "other", "lane-seg-other")
+    path = other / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": "road_surface/1"})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+    def verify(folder, _):
+        if (folder == good) == signed:
+            return "test-key"
+        raise signature.SignatureError("test unsigned")
+
+    monkeypatch.setattr(signature, "verify_manifest_signature", verify)
+    checked = signature.SignatureCheck(lambda p: LaneSegModel.open(
+        p, session_factory=_factory(n_classes=3 if p == other else 2)), enforce=False)
+    pointer = tmp_path / "shadow"
+    now = [0.0]
+    slot = ModelSlot(pointer, opener=checked, clock=lambda: now[0], poll_s=1.0)
+    pointer.write_text(str(good), encoding="utf-8")
+    previous = slot.poll()
+    previous_status = (checked.signed, checked.reason)
+    pointer.write_text(str(other), encoding="utf-8")
+    now[0] = 1.0
+    assert slot.poll() is previous
+    assert (checked.signed, checked.reason) == previous_status
+
+
 def test_open_refuses_tampered_file(tmp_path):
     d = _model_dir(tmp_path)
     (d / "model.onnx").write_bytes(b"other")
