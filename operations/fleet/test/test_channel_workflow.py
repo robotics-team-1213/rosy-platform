@@ -104,6 +104,43 @@ def test_restarted_result_observation_does_not_reply_to_revoked_receipt(tmp_path
     assert outbox.rows("op") == []
 
 
+@pytest.mark.parametrize("next_state", ["HOLD", "READY"])
+def test_review_changed_between_read_and_task_creation_prevents_creation(tmp_path, monkeypatch, next_state):
+    import asyncio
+    from contextlib import closing
+    from fleet.server.task_service import FleetTaskService
+    workflow, journal, tasks, _, receipt = fixture(tmp_path)
+    service = FleetTaskService(tasks, robot_ids={"pinky"})
+    ready = review(workflow, receipt)
+    create = tasks.create_task
+
+    def race(**kwargs):
+        workflow.review(receipt["request_id"], "op", expected_hash=receipt["content_hash"],
+                        expected_revision=ready["revision"], state=next_state,
+                        candidate={**GOAL, "x": 9.0} if next_state == "READY" else None, reason="changed in other tab")
+        return create(**kwargs)
+    monkeypatch.setattr(tasks, "create_task", race)
+    with pytest.raises(HTTPException) as stale:
+        asyncio.run(workflow.submit(receipt["request_id"], "op", task_service=service,
+                                    expected_hash=receipt["content_hash"], expected_revision=ready["revision"]))
+    assert stale.value.status_code == 409
+    with closing(journal._connect()) as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_tasks").fetchone()[0] == 0
+
+
+def test_submit_creates_and_links_once_with_original_confirmation_revision(tmp_path):
+    import asyncio
+    from fleet.server.task_service import FleetTaskService
+    workflow, _, tasks, _, receipt = fixture(tmp_path)
+    service = FleetTaskService(tasks, robot_ids={"pinky"})
+    ready = review(workflow, receipt)
+    body = dict(task_service=service, expected_hash=receipt["content_hash"], expected_revision=ready["revision"])
+    first = asyncio.run(workflow.submit(receipt["request_id"], "op", **body))
+    assert first["state"] == "LINKED" and first["work_status"] == "QUEUED"
+    assert asyncio.run(workflow.submit(receipt["request_id"], "op", **body))["work_id"] == first["work_id"]
+    assert tasks.get_task(first["work_id"])["actor_id"] == "op"
+
+
 def test_review_is_durable_owner_scoped_revision_checked_and_not_execution(tmp_path):
     workflow, journal, tasks, _, receipt = fixture(tmp_path)
     assert workflow.read(receipt["request_id"], "op")["revision"] == 0
