@@ -7933,3 +7933,11 @@ osy-d395-s1d\`.
 - 통합 추가 검증: d6205067f의 영향 시험은 4997 PASS/252 SKIP/2 NEW로 머지가 거절됐다. cancel-all 사유를 typed NavigationStopped로 보존하고 trip 시작 취소 UI 안내를 연결했다. 보상 cancel 409 RED 1 NEW 뒤 source 5f3f033a8의 원격 취소/label/goal/Task/policy 147 PASS, exit 0, NEW 0; Node site-map 29 PASS. Generic transport 오류와 CancelledError 분류는 유지한다. 최종 HEAD의 영향 gate는 다시 실행한다.
 - main 통합 guard: 64d60b3d9 원격 영향 시험은 5050 PASS/252 SKIP/1 NEW로 멈췄다. main의 gateway Path 상수가 credential 검사에 오인되어 CONFIG_PATH로 명확히 바꾸고 유일한 시험 monkeypatch를 연결했다. source 7ab44069a의 보안/gateway/opencode/relay/sandbox 원격 134 PASS, exit 0, NEW 0; 독립 검토 승인. 경로·job·권한 검사와 스캐너 기준은 유지하며 최종 영향 검사를 다시 실행한다.
 - gate 변화: SOURCE/원격 회귀/리뷰 완료. 최신 main 통합과 전체 영향 범위는 tools/land.py의 최종 gate로 별도 기록한다. CI, push, 배포, 현장 overlay 및 실제 다중 로봇/물리 수용은 미확인이다. CORE/Arm writer와 policy/AI opt-in을 유지한다.
+
+
+## 2026-10-12 · f1255e01d2 · D-673 관측 readback 일관성
+
+- 변경: 기존 snapshot·기준점·crop 검증과 연결 구역 계산을 재사용해 모순된 관측 파일을 거절한다. 추론 backend 실패는 파일 작성 전 진단 exit 2로 끝낸다.
+- 증거: 관련 원격 회귀 103 PASS / 3 SKIP, terminal exit 0, known-failures NEW0 및 독립 소스 리뷰 blocker 없음. 기존 ONNX Runtime 설치 환경의 합성 CLI/readback에서 도로면 16화소·현재 구역 8화소, 입력 보류와 matching-hash 모순 5개 거절을 확인했다.
+- 자료: 초기 drivable 검수본 1,428장의 이미지·mask 실제 해시가 일치하지만 모두 기존 2,769장에 포함된다. 전체 도로면 독립 정답으로 승격하지 않는다.
+- 범위: [후속 실행 기록](validation/road-observation-readback-2026-10-12.md). 최신 main 통합·착지는 별도 최종 gate로 확인한다. 독립 인지 성능·실제 장치 전달·CI·push·배포·주행·현장 수용은 미확인이다.
