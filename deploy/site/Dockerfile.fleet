@@ -20,6 +20,7 @@ COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
 COPY deploy/site/site_db.py /opt/rosy/site_db.py
 COPY operations/fleet/ /opt/rosy/src/site/fleet/
 COPY operations/decision/ /opt/rosy/src/site/decision/
+COPY operations/execution/src/ /opt/rosy/src/site/execution/src/
 COPY operations/ui/console/ /opt/rosy/src/site/ui/console/
 COPY operations/situation/rosy_situation/__init__.py operations/situation/rosy_situation/assessment.py operations/situation/rosy_situation/snapshot_assessment.py /opt/rosy/src/site/situation/rosy_situation/
 COPY operations/execution/src/rosy/execution/site/__init__.py operations/execution/src/rosy/execution/site/goal_evidence.py operations/execution/src/rosy/execution/site/workflow.py /opt/rosy/src/site/execution/src/rosy/execution/site/

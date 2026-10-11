@@ -1,6 +1,7 @@
 """Measure shared role styles on the actual Fleet consumers; no device writes."""
 
 from urllib.parse import urlparse
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -12,13 +13,12 @@ SIZES = [(1920, 1080), (1366, 768), (390, 844), (320, 568)]
 
 
 def _assert_control(control):
-    fact = control.evaluate("""node => {
-      const box = node.getBoundingClientRect(), css = getComputedStyle(node);
-      return {height:box.height, text:css.fontSize, left:css.paddingLeft, right:css.paddingRight};
-    }""")
-    assert fact["height"] >= 48, fact
-    assert fact["text"] == "14px", fact
-    assert fact["left"] == fact["right"] == "12px", fact
+    from playwright.sync_api import expect
+    # Roster refresh replaces controls; locator assertions re-resolve the live element.
+    expect(control).to_have_css("height", re.compile(r"^(?:4[89]|[5-9]\d|[1-9]\d{2,})(?:\.\d+)?px$"))
+    expect(control).to_have_css("font-size", "14px")
+    expect(control).to_have_css("padding-left", "12px")
+    expect(control).to_have_css("padding-right", "12px")
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])

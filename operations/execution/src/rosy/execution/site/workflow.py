@@ -63,13 +63,7 @@ def project_progress(data: dict[str, Any], *, now: datetime) -> dict[str, Any]:
         revision=mission["updated_at"], freshness="CURRENT",
         reason=mission["reason"],
     )
-    step_state = {
-        "PROPOSED": "NOT_ADMITTED", "READY": "READY",
-        "RUNNING": "RUNNING",
-        "ACTION_SUCCEEDED": "AWAITING_GOAL_EVIDENCE",
-        "GOAL_CONFIRMED": "COMPLETED", "HOLD": "HOLD",
-        "CANCELED": "CANCELED",
-    }.get(mission["status"], "UNKNOWN")
+    step_state = mission_step_state(mission["status"])
     step_axis = MissionProgressAxis(
         state=step_state, source="fleet_missions", last_event_id=watermark,
         observed_at=_timestamp(mission["updated_at"]),
@@ -203,3 +197,13 @@ def project_progress(data: dict[str, Any], *, now: datetime) -> dict[str, Any]:
         "history_truncated": data["history_truncated"],
         "progress": progress,
     }
+
+
+def mission_step_state(status: str) -> str:
+    return {
+        "PROPOSED": "NOT_ADMITTED", "READY": "READY",
+        "RUNNING": "RUNNING",
+        "ACTION_SUCCEEDED": "AWAITING_GOAL_EVIDENCE",
+        "GOAL_CONFIRMED": "COMPLETED", "HOLD": "HOLD",
+        "CANCELED": "CANCELED",
+    }.get(status, "UNKNOWN")

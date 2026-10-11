@@ -41,6 +41,62 @@ def camera_tick(lane, now, *, gain):
     return decision, state
 
 
+def episode_phases(train_episodes, *, camera, evaluation_only):
+    evaluations = ([(707, 0.), (808, math.pi / 2), (909, math.pi), (1001, -math.pi / 2)]
+                   if evaluation_only else [(202, 0.), (303, 0.)] + ([(404, 0.)] if camera else []))
+    phases = [] if evaluation_only else [('baseline', 101, 0.),
+                                         *[('train', seed, 0.) for seed in range(train_episodes)]]
+    return phases + [(phase, seed, angle) for seed, angle in evaluations
+                     for phase in (('baseline', 'eval') if camera else ('eval',))]
+
+
+def camera_sample_due(frame, episode_start_frame):
+    return (frame - episode_start_frame) % 24 == 0
+
+
+def camera_route_guide(task, pose, result, stamp):
+    ahead = task.index
+    while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
+        ahead += 1
+    dx, dy = task.points[ahead][0] - pose[0], task.points[ahead][1] - pose[1]
+    centre = task.points[task.index]
+    after = next((p for p in task.points[task.index + 1:] if math.dist(centre, p) > 1e-9), None)
+    if after is None:
+        before = next(p for p in reversed(task.points[:task.index]) if math.dist(centre, p) > 1e-9)
+        local_x, local_y = centre[0] - before[0], centre[1] - before[1]
+    else:
+        local_x, local_y = after[0] - centre[0], after[1] - centre[1]
+    relative = lambda x, y: math.degrees(math.atan2(math.sin(math.atan2(y, x) - pose[2]),
+                                                   math.cos(math.atan2(y, x) - pose[2])))
+    return (relative(dx, dy), stamp, True, relative(local_x, local_y),
+            result['deviation_m'], result['progress_m'])
+
+
+def policy_state_sha256(state):
+    return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+
+
+def camera_comparison(baseline, evaluated):
+    fields = ('seed', 'initial_heading_offset_rad', 'initial_target_pose', 'time_limit_s', 'policy_state_sha256')
+    if (baseline['phase'] != 'baseline' or evaluated['phase'] != 'eval'
+            or evaluated['epoch'] != baseline['epoch'] + 1
+            or any(baseline[key] != evaluated[key] for key in fields)):
+        raise ValueError('paired camera evaluation conditions differ')
+    before, after = baseline['initial_pose'], evaluated['initial_pose']
+    if not all(math.isfinite(value) for value in (*before, *after)):
+        raise ValueError('paired camera start is nonfinite')
+    position_delta = math.dist(before[:2], after[:2])
+    heading_delta = abs(math.atan2(math.sin(after[2] - before[2]), math.cos(after[2] - before[2])))
+    # Match the native reset position tolerance and the configured initial heading jitter bound.
+    if position_delta > .015 or heading_delta > .025:
+        raise ValueError('paired camera physical starts differ')
+    return dict(seed=evaluated['seed'], initial_heading_offset_rad=evaluated['initial_heading_offset_rad'],
+                baseline_epoch=baseline['epoch'], eval_epoch=evaluated['epoch'],
+                baseline_complete=baseline['complete'], eval_complete=evaluated['complete'],
+                baseline_sim_s=baseline['sim_s'], eval_sim_s=evaluated['sim_s'],
+                initial_position_delta_m=position_delta, initial_heading_delta_rad=heading_delta)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--urdf', type=Path, required=True)
@@ -248,7 +304,8 @@ def main():
             nonlocal frame
             if not app.is_running():
                 raise RuntimeError('SDK stopped before task result')
-            world.step(render=frame % (48 if recorder is not None else 30) == 0)
+            # Camera episodes render explicitly at their local observation/recording cadence.
+            world.step(render=front_camera is None and frame % (48 if recorder is not None else 30) == 0)
             frame += 1
 
         def physical_stop():
@@ -277,10 +334,10 @@ def main():
         stop_robot = physical_stop
         summary['initial_stop'] = physical_stop()
         baseline = None
-        phases = ([('eval', 707, 0.), ('eval', 808, math.pi / 2),
-                   ('eval', 909, math.pi), ('eval', 1001, -math.pi / 2)] if saved is not None else
-                  [('baseline', 101, 0.), *[('train', i, 0.) for i in range(args.train_episodes)],
-                   ('eval', 202, 0.), ('eval', 303, 0.)])
+        phases = episode_phases(args.train_episodes, camera=perception is not None,
+                                evaluation_only=saved is not None)
+        if perception is not None:
+            summary['camera_comparisons'] = []
         for phase, seed, heading_offset in phases:
             physical_stop()
             rng = random.Random(seed)
@@ -319,14 +376,15 @@ def main():
             start_time = world.current_time
             initial_pose = read_pose()
             wall_start = time.monotonic()
+            episode_start_frame = frame
             previous = None
-            frozen = policy.export() if phase == 'eval' else None
+            frozen = policy.export() if phase == 'eval' or (perception is not None and phase == 'baseline') else None
             if phase == 'eval' and (policy.updates == 0 or not any(
                     value != 0. for values in policy.table.values() for value in values)):
                 raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
             learned_steps = 0
             camera_frames = camera_visible_frames = 0
-            if camera is not None and phase == 'eval':
+            if camera is not None and (phase == 'eval' or (perception is not None and phase == 'baseline')):
                 from native_recording import NativeRecorder
                 # Initialize the native render product before accepting episode frames.
                 for _ in range(20):
@@ -334,11 +392,14 @@ def main():
                 pixels = camera.get_rgba()
                 if pixels.shape != (540, 960, 4) or np.ptp(pixels[:, :, :3]) < 20:
                     raise RuntimeError('native recording camera has no visible image')
-                recorder = NativeRecorder(output / f'isaac-eval-{seed}.mp4')
+                recorder = NativeRecorder(output / f'isaac-{phase}-{seed}.mp4')
             with (output / f'trace-{epoch}-{phase}-{seed}.jsonl').open('w') as trace:
                 while True:
                     pose = read_pose()
-                    if recorder is not None and (recorder.frames == 0 or (frame - 1) % 48 == 0):
+                    recording_step = frame - episode_start_frame if perception is not None else frame - 1
+                    if recorder is not None and (recorder.frames == 0 or recording_step % 48 == 0):
+                        if perception is not None:
+                            world.render()
                         image_frame = camera.get_current_frame()
                         recorder.write(camera.get_rgba(),
                             render_frame=image_frame['rendering_frame'],
@@ -350,7 +411,7 @@ def main():
                     if lane is None:
                         state, speed, angular = task.pursuit(*pose[:3])
                     else:
-                        if camera_frames == 0 or (frame - 1) % 24 == 0:
+                        if camera_sample_due(frame, episode_start_frame):
                             position_front_camera()
                             world.render()
                             image = front_camera.get_current_frame()
@@ -358,14 +419,7 @@ def main():
                             if rgba.shape != (240, 320, 4) or rgba.dtype != np.uint8:
                                 lane.invalidate('invalid_native_camera')
                             else:
-                                ahead = task.index
-                                while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
-                                    ahead += 1
-                                dx, dy = task.points[ahead][0] - pose[0], task.points[ahead][1] - pose[1]
-                                guide_deg = math.degrees(math.atan2(math.sin(math.atan2(dy, dx) - pose[2]),
-                                                                   math.cos(math.atan2(dy, dx) - pose[2])))
-                                guide = (guide_deg, world.current_time, True, guide_deg,
-                                         result['deviation_m'], result['progress_m'])
+                                guide = camera_route_guide(task, pose, result, world.current_time)
                                 lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
                                     stamp=float(image['rendering_time']), source_now=world.current_time,
                                     pose=pose[:3], guide=guide)
@@ -426,7 +480,10 @@ def main():
             episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
                            sim_s=elapsed, wall_s=time.monotonic() - wall_start,
                            initial_heading_offset_rad=heading_offset, initial_pose=initial_pose,
+                           initial_target_pose=[*route[0], heading], time_limit_s=task.time_limit,
                            learned_state_steps=learned_steps, stop=physical_stop())
+            if frozen is not None:
+                episode['policy_state_sha256'] = policy_state_sha256(frozen)
             if lane is not None:
                 episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames)
             if recorder is not None:
@@ -443,14 +500,16 @@ def main():
                 recorder = None
             summary['episodes'].append(episode)
             print('EPISODE ' + json.dumps(episode), flush=True)
-            if phase == 'baseline':
+            if phase == 'baseline' and seed == 101 and saved is None:
                 baseline = result
-            if phase == 'eval' and policy.export() != frozen:
+            if frozen is not None and policy.export() != frozen:
                 raise RuntimeError('evaluation mutated policy')
             if phase == 'eval' and learned_steps == 0:
                 raise RuntimeError('evaluation visited no learned state')
             if lane is not None and camera_visible_frames == 0:
                 raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
+            if phase == 'eval' and perception is not None:
+                summary['camera_comparisons'].append(camera_comparison(summary['episodes'][-2], episode))
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates

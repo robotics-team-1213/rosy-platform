@@ -13,7 +13,7 @@ SOURCE_ROOTS = {
 }
 
 
-def bootstrap_decision():
+def bootstrap_sources():
     for folder in (SOURCE_ROOTS['decision'] / 'src', SOURCE_ROOTS['assessment'], SOURCE_ROOTS['execution'] / 'src'):
         root = str(folder)
         if root not in sys.path:
