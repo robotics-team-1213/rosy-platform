@@ -3,6 +3,7 @@
 
 /* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
 body { margin: 0; }
+.fleet-header { position: sticky; top: 0; z-index: 10; }
 
 /* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
