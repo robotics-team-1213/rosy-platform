@@ -86,3 +86,38 @@ def test_transport_auth_freshness_revocation_and_capacity(tmp_path):
 def test_config_rejects_unknown_fields_and_short_key():
     with pytest.raises(ValueError):
         ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, transport_key="short", users={USER: "op"})
+
+
+def test_discord_projection_and_signature_matches_fleet(tmp_path):
+    from rosy_discord.intake import project_message, signed_request
+    client, _, _ = fixture(tmp_path)
+    message = {"guild_id": GUILD, "channel_id": CHANNEL, "id": MESSAGE,
+               "author": {"id": USER}, "content": f"<@{BOT}> inspect robot", "mentions": [{"id": BOT}]}
+    projected = project_message(message, guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT)
+    body, headers = signed_request(projected, key=KEY, now=1000)
+    assert client.post("/api/fleet/channel-requests/discord", content=body, headers=headers).status_code == 200
+    for changes in ({"guild_id": None}, {"author": {"id": USER, "bot": True}},
+                    {"mentions": []}, {"webhook_id": MESSAGE}):
+        assert project_message({**message, **changes}, guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT) is None
+
+
+def test_create_app_wiring_requires_accounts_and_isolated_key(tmp_path):
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from fleet.swarm.robots import RobotEndpoint
+    console = FleetConsole([RobotEndpoint("r1", "http://127.0.0.1:8080", "robot-token")], [FakeRobot("r1")])
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite"), robot_ids=("r1",))
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, transport_key=KEY, users={USER: "op"})
+    users = {hashlib.sha256(b"operator-secret").hexdigest(): {"principal_id": "op", "role": "operator"}}
+    with pytest.raises(ValueError):
+        create_app(console, task_service=tasks, channel_config=config)
+    with pytest.raises(ValueError):
+        create_app(console, task_service=tasks, channel_config=config, console_token=KEY, site_users=users)
+    app = create_app(console, task_service=tasks, channel_config=config, site_users=users,
+                     start_task_dispatcher=False)
+    client = TestClient(app)
+    assert client.get("/api/fleet/channel-requests").status_code == 401
+    assert client.get("/api/fleet/channel-requests", headers={"Authorization": "Bearer operator-secret"}).json() == {"rows": []}

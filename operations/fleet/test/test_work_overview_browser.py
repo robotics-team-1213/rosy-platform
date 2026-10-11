@@ -24,6 +24,9 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                                "tasks_available": True, "missions_available": True, "truncated_sources": []},
            "/api/fleet/tasks/same": {"task": {**rows[0], "source": "console", "task_id": "same"}, "history": []},
            "/api/fleet/missions/same": {"mission": rows[1], "history": []}}
+    if role == "operator":
+        api["/api/fleet/channel-requests"] = {"rows": [{"content": "<script>window.intakeXss=true</script>" + "x" * 1000,
+            "received_at": "2026-10-12T00:00:00+00:00", "request_id": "request-1"}]}
     with sync_playwright() as playwright:
         posts = []
         browser, page, errors = _open(playwright, site, api, posts, size=size)
@@ -45,6 +48,13 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             page.locator("#work-list ui-button").click()
             assert "CORE" in page.locator("#work-detail").inner_text()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            if role == "operator":
+                assert page.locator("#channel-requests").inner_text().find("<script>") >= 0
+                assert page.evaluate("window.intakeXss === undefined")
+                page.route("**/api/fleet/channel-requests", lambda route: route.fulfill(status=403, json={"detail": "revoked"}))
+                page.locator("#work-refresh").click()
+                page.wait_for_function("() => document.getElementById('channel-requests').childElementCount === 0")
+                assert "기명 운영자" in page.locator("#channel-requests-state").inner_text()
             page.locator("#work-filter").select_option("all")
             _shot(page, f"mixed-work-{role}-{size[0]}.png", full_page=True)
             page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
