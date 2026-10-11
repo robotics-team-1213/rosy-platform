@@ -169,7 +169,6 @@ def test_prepare_receipt_shares_transaction_and_does_not_reset_parent(tmp_path):
     with log._connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
         assert worker.prepare_receipt(conn, board.judgment_view('pinky')) is True
-        scope = store.active_scopes()[0]
         assert worker.prepare_receipt(conn, board.judgment_view('pinky')) is True
         conn.rollback()
     assert store.active_scopes() == ()
