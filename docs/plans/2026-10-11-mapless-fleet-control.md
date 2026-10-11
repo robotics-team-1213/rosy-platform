@@ -142,8 +142,9 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
 | Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
 | Task 3 카메라 관측 누적 | 완료 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어 및 명시적 endpoint 연결 구현. 연결·비동기 경합 원격 16 PASS/NEW 0, Node 29 PASS. main 통합·배포·실물 정확도는 Task 6 |
-| Task 4 선택 로봇·기록·대형 맥락 | 진행 · source/remote | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 5 충돌 처리와 Task 6 실제 수용은 남음 |
-| Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
+| Task 4 선택 로봇·기록·대형 맥락 | 완료 · source/remote | 선택 ID로 기록 화면 이동, 기존 대형 패널 진입·리더/팔로워 표시, 제출 전 단독 폼 취소, 기록 대상 유지·제거/오프라인 안내 구현. a1b850f7d 자원 기준 통과 역할/배정/대형/기록 대상/지도/구조 30 PASS/NEW 0. Task 5 source 충돌 처리를 완료했고 Task 6 실제 수용은 남음 |
+| Task 5 개입·작업 충돌 | 완료 · source/remote | 활성화 busy·조회 경합·대형/운행 명령 사유·복구 수락 표시 보강. 최종 d6abc8e863 원격 140 PASS, 개입 253 PASS, Node 301 PASS/NEW 0. 독립 검토 수용; Task 6 미완료 |
+| Task 1–5 구현·검증 | 완료 · source/remote | 각 단계의 새 source·원격 근거를 아래 기록. main 통합·CI·배포·실제 사이트 수용은 Task 6에서 별도 확인 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
 
@@ -223,3 +224,10 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - a1b850f7d 원격 대상/desktop/mobile/기존 지도 편집/구조 10 PASS/131 deselected, NEW 0 (`logs/selected-context-final/run-1.txt`). 이 실행은 자원 부족 fallback 경고가 있으므로 자원 기준 통과 수용으로 쓰지 않는다. 동일 소스의 전체 역할/운행 및 대상/지도/구조 acceptance를 AI PC 18 cores/7 GB 기준 통과 상태에서 실행 중이다.
 - Task 5에서 대형 팔로워 목표·대형 참여자 단독 운행·문제 개입의 기존 서버 거절과 화면 사유를 대조한다. Task 6은 이동 중 폴더 소유/현재 main 통합, 원격 회귀, CI, 서명 배포, 실제 사이트 확인을 계속 요구한다.
 - 동일 a1b850f7d 최종 acceptance: AI PC 18 cores/7 GB 기준 통과, 전체 역할/카드 운행과 대상/지도 편집/구조 30 PASS/111 deselected, NEW 0 (`logs/selected-context-acceptance/run-1.txt`). 독립 검토는 기록 대상 수정과 기존 권한 보존을 수용했다. Task 5 점검에서 app.py의 site-map 활성화 busy 주입이 진행 중 trip만 확인하고 formation/teach는 확인하지 않는 공백을 찾았다. 이 공백을 보강하기 전 통합·배포 완료로 판정하지 않는다.
+
+## 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
+
+- 변경: trip뿐 아니라 진행 중 대형과 지도 기록에서도 활성화를 거절한다. 일반 기록 시작·pose 장소 저장은 위치 조회 전후 map_id·전체 조사 기준·활성 버전을 비교해 이전 위치의 새 지도 저장을 막는다. 팔로워 목표와 참여자 개별 운행, 진행 중 trip의 개별 목표를 기존 admission에 맞춰 설명하며 확인 직전 재검사한다. 충돌 작업을 자동 해제하거나 이동 명령을 추가하지 않는다. 재개·후진 수락과 실제 로봇 진행을 구분한다.
+- 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
+- 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
+- gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.

@@ -94,8 +94,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 - 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
 - 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토
 - 2026-10-11 · 7476837977 · D-655 조사 독립 검토 회귀 수정
 - 2026-10-11 · 1a14e9705a · D-655 지도 없는 상대 주행 조사 API
-- 2026-10-11 · 7bf0f597dc · D-655 주행 기록 위치 단절 처리
