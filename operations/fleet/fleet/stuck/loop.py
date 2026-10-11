@@ -47,7 +47,7 @@ class StuckResolverLoop:
         self.outcomes, self.episodes, self.problems = Outcomes(), None, None
         self._rows: dict[str, dict] = {}
         self.wake = asyncio.Event()
-        if board is not None and board._log is not None:
+        if board is not None and board._log is not None and hasattr(resolver, "_uncertain"):
             resolver._uncertain.update(board._log.uncertain_motion())
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
