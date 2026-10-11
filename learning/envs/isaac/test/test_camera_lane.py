@@ -75,6 +75,37 @@ def test_measured_terminal_transition_does_not_bootstrap_and_counts_real_update(
     assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
 
 
+def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    from run_map_rl import camera_tick
+    now = [10.]
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda frame: (way, 'drivable', {}, 1.)),
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+        camera_x=.03317, clock=lambda: now[0])
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+        original = lane.manager.tick_gain
+        def delayed_tick(current, *, gain):
+            decision = original(current, gain=gain)
+            assert decision.linear > 0.
+            now[0] += .002
+            return decision
+        monkeypatch.setattr(lane.manager, 'tick_gain', delayed_tick)
+        now[0] = 10.299
+        decision, state = camera_tick(lane, now[0], gain=1.)
+        assert state is None
+        applied = []
+        assert lane.manager.apply_if_current(decision, lambda command:
+                                             applied.append((command.linear, command.angular)))
+        assert applied == [(0., 0.)]
+    finally:
+        lane.close()
+
+
 def test_two_camera_lanes_keep_distinct_core_event_identity_and_loss_state():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
