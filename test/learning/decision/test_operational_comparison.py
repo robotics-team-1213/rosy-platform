@@ -87,7 +87,7 @@ def test_cli_joins_actual_export_and_never_overwrites(tmp_path, handoff):
     cohort_path = tmp_path / 'cohort.json'; cohort_path.write_text(json.dumps(cohort))
     export_path = tmp_path / 'case.json'; export_path.write_text(json.dumps(exports[0]))
     output = tmp_path / 'report.json'
-    command = [sys.executable, str(ROOT / 'learning/evaluation/decision/operational_comparison.py'),
+    command = [sys.executable, '-S', str(ROOT / 'learning/evaluation/decision/operational_comparison.py'),
                str(cohort_path), str(export_path), '--out', str(output)]
     result = subprocess.run(command, capture_output=True)
     assert result.returncode == 0, result.stderr
