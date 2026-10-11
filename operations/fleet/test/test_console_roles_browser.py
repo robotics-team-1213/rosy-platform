@@ -114,7 +114,7 @@ def _login(playwright, origin):
     page.locator("#password-login [data-login=login]").fill("kim")
     page.locator("#password-login [data-login=password]").fill("pw-1234")
     page.locator("#password-login [data-login=submit]").click()
-    page.locator("#user-role").filter(has_text="kim").wait_for(timeout=15000)
+    page.locator('#user-role[title^="kim"]').wait_for(timeout=15000)
     if more.get_attribute("aria-expanded") == "true":
         more.click()
     return browser, page, errors, posts
