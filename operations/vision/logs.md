@@ -481,3 +481,8 @@
 - 증거: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
 - gate 변화: SOURCE regression verified; live LED confirmation pending.
 
+## 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
+- 변경: AprilGrid 생성·부분 관측·일반/어안 렌즈 후보·독립 바닥 등록·단일 remap과 AI advisory 형식을 추가했다. map-plane horizon/시야 밖 mask와 같은 응답의 유효 원본 비율을 표시한다. 원격 시험은 기존 Vision OpenCV 배포 pin을 사용한다.
+- 증거: docs/validation/compact-camera-calibration-2026-10-11/result.md. 원격 관련 841·Node 286·Chromium 2 passed, NEW 0. 독립 리뷰의 바닥 검증 경계 3건을 수정했다.
+- gate 변화: SOURCE/원격 합성/브라우저 증거. 운영 교정 교체·자동 AI 호출·main 착지·push·배포·실물 정확도 수용은 별도다.
+

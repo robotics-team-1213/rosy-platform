@@ -1,8 +1,8 @@
-# ROSY API & Protocol Reference
+﻿# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.204
+**Version:** v1.205
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.205 Fleet 지도 프로필 (D-631)
+
+이름 있는 지도 프로필 조회·revision 비교 저장을 추가한다. 활성 지도·초안·교정 승인·로봇 명령의 기존 계약은 유지한다. 상세 계약은 문서 끝의 D-631 절이다.
 
 ### v1.204 Fleet 현재 영상과 복구 방향 (D-623)
 
@@ -1615,9 +1619,12 @@ D-560(v1.167)부터 `rectification`에 `{"mode": "map"}`이 추가됐다. `map`�
 
 - 영역: `track_bounds_m`에 여유 `0.15 m`를 더한 직사각형. 지도 `+x`가 오른쪽, `+y`가 위.
 - 축척: `400 px/m`. 긴 변이 1920 px를 넘으면 그 안으로 줄인다(소수 넷째 자리에서 내림).
-- 화면 밖이었던 부분은 어두운 고정색(BGR 24,24,24)이다. JPEG 품질 88.
+- D-636: 시야 밖·지평선 반대편·원본의 bilinear 보간 경계는 어두운 hatch(BGR 24/40)로 표시한다. JPEG 품질 88.
 - 응답 헤더: `X-Frame-Rectified: map`, `X-Frame-Plane: <min_x>,<min_y>,<max_x>,<max_y>,<px_per_m>`
   (미터, 여유 포함, 소수 넷째 자리; `px_per_m`은 줄인 뒤 값), `X-Frame-Calibration: <calibration_revision>`.
+  D-636 `X-Frame-Observed-Fraction: <0..1>`은 이 응답 plane 또는 crop에서 원본의 유효 픽셀로
+  채워진 비율이다. 물리적 가림·교정 오차·로봇 위치 신뢰도를 뜻하지 않는다. 헤더가 없는 구버전은
+  관측 비율 미확인이다. 알려진 기준 지도는 카메라 밖에서도 별도로 표시할 수 있다.
   픽셀 수를 반올림한 뒤 `max_x = min_x + 폭 / px_per_m`, `min_y = max_y − 높이 / px_per_m`로 다시 정하므로
   이 사각형은 영상 크기 / `px_per_m`와 같다.
   `X-Frame-Width`·`X-Frame-Height`는 평면 영상 크기이고 `X-Frame-Rotation-Deg`는 `0`이다.
@@ -2779,6 +2786,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
+| v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
 
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
@@ -3134,3 +3142,10 @@ POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 
 취소하고, 아니면 409 `NO_HOST_CONTROL_REBOOT`이다. 그 호스트의 연결 설정이 없으면 503
 `HOST_HELPER_UNAVAILABLE`, SSH나 도우미가 실패하면 502 `HOST_HELPER_FAILED`이다. 성공은 200
 `{host, action, unit, requested_by, code:"ACCEPTED", output}`이다. 이 API는 로봇을 재부팅하지 않는다.
+
+
+### D-631 Site map profiles
+
+See [D-631](../adr/D-631-map-profiles-and-views.md) for the profile API contract. GET `/api/fleet/site-map/profiles` requires read permission and returns `{profiles: [...]}`. PUT `/api/fleet/site-map/profiles/{profile_id}` requires a named operator, accepts `{name,map,expected_revision}` and returns the saved row. Each row contains `profile_id`, `name`, `map`, `revision`, `saved_by`, `saved_at`. Maps use `rosy.site_map/1` validation and the 2 MiB body limit. Profile IDs match `[A-Za-z0-9_.-]{1,64}`; names have 1-64 characters with non-whitespace content. Updates compare revisions; new profiles use null. Errors: 409 `SITE_MAP_PROFILE_CHANGED`, 409 `SITE_MAP_PROFILE_LIMIT` (100 profiles), 422 `SITE_MAP_INVALID`, 413 `SITE_MAP_TOO_LARGE`. Saves emit `profile_saved` and do not change the active map or draft. Loading into draft and activation use the existing APIs.
+
+D-635 adds profile kind (lane_course, soccer, general, default lane_course), description (up to 1000 characters, default empty), and soccer_field (default null). Soccer requires positive finite length_m, width_m, goal_width_m with goal_width_m <= width_m; other kinds require null. These fields are returned with each saved profile. Metadata updates use the same revision and permissions; they do not activate a map or start Games. Updates omitting all three metadata fields preserve existing metadata (older clients); new rows default to lane_course.

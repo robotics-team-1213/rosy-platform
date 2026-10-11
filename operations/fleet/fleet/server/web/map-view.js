@@ -440,7 +440,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
     // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
     const drift = calibration && view.trackingDrift ? view.trackingDrift : null;
-    const cameraOn = Boolean(calibration);
+    const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
@@ -573,6 +573,29 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
+    const activeMap = view.activeSiteMap?.map;
+    if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
+      ctx.save();
+      ctx.strokeStyle = css("--series-primary");
+      ctx.fillStyle = css("--ink");
+      ctx.lineWidth = 2;
+      ctx.font = labelFont;
+      for (const edge of activeMap.edges || []) {
+        ctx.setLineDash(edge.drive_mode === "free" ? [6, 4] : []);
+        ctx.beginPath();
+        edge.polyline.forEach(([x, y], index) => {
+          const p = toPx(x, y);
+          if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+        });
+        ctx.stroke();
+      }
+      for (const place of activeMap.places || []) {
+        const p = toPx(place.x, place.y);
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText(`${place.name} (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) m`, p.x + 8, p.y - 8);
+      }
+      ctx.restore();
+    }
     drawCrosswalks(ctx, toPx, 1.5);
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
@@ -865,6 +888,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     sightingsUnavailable = false;
     await refreshSiteMap();
     life.check();
+    // The activated site frame stays the coordinate basis when robots start or stop serving SLAM grids.
+    if (!auth.locked && view.siteMap?.maps?.some(map => map.map_id === view.activeSiteMap?.map?.map_id)) {
+      view.map = null;
+      showSiteMap();
+      return;
+    }
     if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {

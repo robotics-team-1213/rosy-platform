@@ -26,7 +26,7 @@ from fleet.routing.graph import Graph, build_graph
 from fleet.routing.snap import PlanError, snap_start
 from fleet.routing.trip import prepare
 from fleet.server.sqlite_policy import configure_connection, enable_wal
-from fleet.site_map import SiteMap
+from fleet.site_map import MapProfileInfo, SiteMap
 
 PLAN_KEEP = 1000
 PLAN_KEEP_S = 30 * 24 * 3600.0
@@ -61,6 +61,9 @@ class SiteMapStore:
                 CREATE TABLE IF NOT EXISTS site_map_draft (
                     slot INTEGER PRIMARY KEY CHECK (slot = 1), body TEXT NOT NULL,
                     revision TEXT NOT NULL, saved_by TEXT NOT NULL, saved_at REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS site_map_profiles (
+                    profile_id TEXT PRIMARY KEY, name TEXT NOT NULL, body TEXT NOT NULL,
+                    revision TEXT NOT NULL, saved_by TEXT NOT NULL, saved_at REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS site_trip_plans (
                     plan_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, principal_id TEXT NOT NULL,
                     map_version INTEGER, request TEXT NOT NULL, result TEXT NOT NULL,
@@ -72,6 +75,8 @@ class SiteMapStore:
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
                     principal_id TEXT NOT NULL, detail TEXT NOT NULL, at REAL NOT NULL);
             """)
+            if "info" not in {row[1] for row in self._db.execute("PRAGMA table_info(site_map_profiles)")}:
+                self._db.execute("ALTER TABLE site_map_profiles ADD COLUMN info TEXT NOT NULL DEFAULT '{}'")
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
         self._publish()
 
@@ -155,6 +160,37 @@ class SiteMapStore:
             version = self._insert_version(site_map, f"import:{source}"[:96])
         self._publish()
         return version
+
+    def profiles(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT profile_id, name, body, revision, saved_by, saved_at, info "
+                                    "FROM site_map_profiles ORDER BY profile_id").fetchall()
+        return [{"profile_id": r[0], "name": r[1], "map": json.loads(r[2]),
+                 "revision": r[3], "saved_by": r[4], "saved_at": r[5],
+                 **MapProfileInfo.model_validate_json(r[6]).model_dump()} for r in rows]
+
+    def save_profile(self, profile_id: str, *, name: str, site_map: SiteMap,
+                     expected_revision: Optional[str], principal_id: str, info: Optional[MapProfileInfo] = None) -> dict:
+        row = {"profile_id": profile_id, "name": name, "map": site_map.body(),
+               "revision": uuid.uuid4().hex, "saved_by": principal_id, "saved_at": self.clock(),
+               **(info or MapProfileInfo()).model_dump()}
+        with self._lock, self._db:
+            self._db.execute("BEGIN IMMEDIATE")
+            current = self._db.execute("SELECT revision, info FROM site_map_profiles WHERE profile_id = ?",
+                                       (profile_id,)).fetchone()
+            if (current[0] if current else None) != expected_revision:
+                raise SiteMapError(409, "SITE_MAP_PROFILE_CHANGED", "profile changed; reload first")
+            if current is None and self._db.execute("SELECT count(*) FROM site_map_profiles").fetchone()[0] >= 100:
+                raise SiteMapError(409, "SITE_MAP_PROFILE_LIMIT", "at most 100 profiles can be stored")
+            info = info or (MapProfileInfo.model_validate_json(current[1]) if current else MapProfileInfo())
+            row.update(info.model_dump())
+            self._db.execute("INSERT OR REPLACE INTO site_map_profiles "
+                             "(profile_id, name, body, revision, saved_by, saved_at, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (profile_id, name, json.dumps(row["map"], ensure_ascii=False),
+                              row["revision"], principal_id, row["saved_at"],
+                              info.model_dump_json()))
+            self._event("profile_saved", principal_id, {"profile_id": profile_id, "revision": row["revision"]})
+        return row
 
     # ---- draft ----------------------------------------------------------------------
 
