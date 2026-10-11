@@ -235,7 +235,7 @@ main {
 @media (width >= 64rem) and (height >= 40rem) {
   ui-shell:has(> #fleet-main) { height: 100dvh; }
   #fleet-main > .console-primary > .panel { flex: 1 1 auto; }
-  #fleet-main .map-stage { flex: 1; min-height: 0; }
+  #fleet-main .map-stage { flex: 1; min-height: 12.5rem; }
 }
 .panel {
   background: var(--panel-fill);
@@ -772,7 +772,7 @@ main {
 
 
 /* D-457 관제 카메라 추적 — 상태줄과 범례. 색은 토큰만(CSP style-src 'self'). */
-.map-readouts { flex: none; block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
+.map-readouts { flex: 0 1 11rem; min-height: 0; block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
 .map-traffic-status { list-style: none; padding: 0; margin: 0; font-size: var(--text-body); overflow-wrap: anywhere; }
 .map-traffic-status li { padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
