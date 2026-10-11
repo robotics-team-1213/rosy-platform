@@ -115,13 +115,16 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
             assert b'[DONE]' in output if change == 'stream' else json.loads(output)['usage']
             worker = threading.Thread(target=server.handle_request, daemon=True)
             worker.start()
-            with closing(Connection(path)) as conn:
-                conn.request('POST', '/v1/chat/completions', json.dumps(incoming))
-                denied = conn.getresponse()
-                denied.read()
-                assert denied.status == 400
+            try:
+                with closing(Connection(path)) as conn:
+                    conn.request('POST', '/v1/chat/completions', json.dumps(incoming))
+                    denied = conn.getresponse()
+                    denied.read()
+                    assert denied.status == 400
+            except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+                pass  # Replay may close before its refused body is transmitted.
             worker.join(4)
-            assert len(seen) == 1
+            assert not worker.is_alive() and len(seen) == server.calls == 1
         else:
             assert result.status == 400 and seen == []
 
