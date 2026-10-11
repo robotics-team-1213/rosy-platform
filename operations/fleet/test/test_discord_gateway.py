@@ -177,3 +177,25 @@ def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
     with TestClient(app):
         assert states == ["start"]
     assert states == ["start", "stop"]
+
+
+@pytest.mark.parametrize("status,retries", [(503, 2), (401, 1), (403, 1)])
+def test_handshake_retry_is_bounded_to_transient_status(monkeypatch, status, retries):
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response
+    from websockets.exceptions import InvalidStatus
+    import rosy_discord.gateway as module
+    async def scenario():
+        attempts = []
+        async def session(self):
+            attempts.append(True)
+            if len(attempts) > 1:
+                raise GatewayStop("finished test")
+            raise InvalidStatus(Response(status, "private server body", Headers()))
+        async def pause(seconds):
+            assert seconds == 5
+        monkeypatch.setattr(DiscordGateway, "session", session)
+        monkeypatch.setattr(module.asyncio, "sleep", pause)
+        await gateway(None).run()
+        assert len(attempts) == retries
+    asyncio.run(scenario())

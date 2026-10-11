@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from .intake import project_message
 
@@ -132,6 +132,11 @@ class DiscordGateway:
             except GatewayStop:
                 LOG.error("Discord Gateway stopped; configuration or receipt readback required")
                 return
+            except InvalidStatus as error:
+                if error.response.status_code not in (500, 502, 503, 504):
+                    LOG.error("Discord Gateway handshake refused")
+                    return
+                LOG.warning("Discord Gateway retrying temporary handshake failure")
             except ConnectionClosed as error:
                 code = getattr(error.rcvd, "code", None)
                 if code in (4004, 4010, 4011, 4012, 4013, 4014):
@@ -145,4 +150,7 @@ class DiscordGateway:
                         return
             except (OSError, TimeoutError, ValueError):
                 LOG.warning("Discord Gateway reconnecting after transport or journal failure")
+            except Exception:
+                LOG.error("Discord Gateway stopped after invalid transport state")
+                return
             await asyncio.sleep(5)
