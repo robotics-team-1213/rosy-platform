@@ -621,6 +621,7 @@
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
 | D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
+| D-639 | 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성 | Accepted (2026-10-11; 구현·CI·설치본·현장 수용 별도) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -635,3 +636,9 @@
 - 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
 - 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
 - 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).
+
+## D-639 — 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성
+
+- 상태: Accepted (2026-10-11).
+- 결정: 등록 표면의 역할·토큰 참조·공용 조작·캔버스 글자·native 척도를 하나의 출처와 검사로 닫는다. 화면별 시각 덧칠과 중복 YAML 키를 거절한다. 입력 기하·도메인 자료·고정 매체는 구분한다.
+- 계약과 범위: [ADR 본문](../adr/D-639-operational-ui-role-token-closure.md), [실행 계획](../plans/2026-10-11-platform-ui-role-tokens.md). 기존 CORE/Fleet 권한과 API는 유지하며 모든 표면 구현·설치본·현장 수용은 별도 검증이다.
