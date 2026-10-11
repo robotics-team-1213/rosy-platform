@@ -23,6 +23,9 @@ def run(args, cwd):
 @pytest.mark.parametrize('delivery', ['wheel', 'sdist'])
 def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path, delivery):
     staging = tmp_path / 'source'
+    support = staging / 'tools/packaging/fleet_sources.py'
+    support.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'operations/world',
@@ -43,6 +46,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
         sources[0] = next(archives.glob('fleet-*.tar.gz'))
         with tarfile.open(sources[0]) as archive:
+            assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
             assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
@@ -50,6 +54,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/ui/console')
         shutil.rmtree(staging / 'operations/situation')
+        shutil.rmtree(staging / 'tools')
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
@@ -67,6 +72,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
+assert not (installed / '_build').exists()
 from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
