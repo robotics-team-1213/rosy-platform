@@ -2,6 +2,7 @@
 
 
 def validate_primary_roles(case):
+    if type(case) is not dict: raise ValueError('INVALID_PRIMARY_EVIDENCE')
     profiles, budget, attempts = case.get('profiles'), case.get('budget'), case.get('attempts')
     if (type(profiles) is not list or len(profiles) != 1 or type(profiles[0]) is not dict
             or profiles[0].get('role') != 'primary' or type(budget) is not dict

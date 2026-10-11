@@ -168,3 +168,9 @@ def test_generic_store_cannot_export_unbound_single_primary_roles(tmp_path, faul
         with sqlite3.connect(store.path) as connection:
             connection.execute('UPDATE fleet_incident_v2_cases SET budget_json=?', (canonical(altered),))
     with pytest.raises(ValueError): exporter().snapshot(store.path, scope.subject_id, scope.case_id, manifest)
+
+
+@pytest.mark.parametrize('case', [None, [], 'invalid', True])
+def test_shared_primary_contract_rejects_non_object_json(case):
+    from rosy.contracts.learning.incident_profiles import validate_primary_roles
+    with pytest.raises(ValueError): validate_primary_roles(case)
