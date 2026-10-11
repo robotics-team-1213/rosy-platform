@@ -7,6 +7,10 @@ from rosy.decision.deliberation import ConditionalReview
 from test_deliberation import Provider, problem, reply
 
 
+def changed(request, **changes):
+    return {**reply(request), **changes}
+
+
 def run(first=None, second=None, request=None, **kwargs):
     providers = [first or Provider('qwen'), second or Provider('glm')]
     return asyncio.run(ConditionalReview(clock=lambda: 101, **kwargs).run(
@@ -31,7 +35,7 @@ def test_valid_primary_does_not_call_glm():
     ({'choice': 'RESUME'}, 'INVALID_REPLY'), ({'objections': ['conflict']}, 'conflict'),
     ({'objections': ['insufficient_evidence']}, 'insufficient_evidence')])
 def test_problematic_primary_gets_one_independent_review_and_stays_hold(change, trigger):
-    first = Provider('qwen', lambda p: reply(p, **change))
+    first = Provider('qwen', lambda p: changed(p, **change))
     result, providers = run(first)
     assert result['state'] == 'HOLD' and result['reason'] == 'SECONDARY_REVIEW_COMPLETED'
     assert result['choice'] is None and result['action_admissible'] is False
@@ -42,7 +46,7 @@ def test_problematic_primary_gets_one_independent_review_and_stays_hold(change, 
 
 
 def test_unsafe_primary_never_calls_secondary():
-    result, providers = run(Provider('qwen', lambda p: reply(p, objections=['unsafe'])))
+    result, providers = run(Provider('qwen', lambda p: changed(p, objections=['unsafe'])))
     assert result['state'] == 'HOLD' and result['calls'] == 1
     assert not providers[1].calls
 
@@ -52,7 +56,7 @@ def test_primary_unknown_or_excess_cost_never_calls_secondary(cost):
     class Costed(Provider):
         async def __call__(self, request, prior, remaining, **kwargs):
             self.calls.append((prior, remaining))
-            return reply(request, generation='bad'), cost
+            return changed(request, generation='bad'), cost
     result, providers = run(Costed('qwen'))
     assert result['state'] == 'HOLD' and result['calls'] == 1
     assert not providers[1].calls
@@ -79,7 +83,7 @@ def test_changed_generation_after_primary_does_not_submit_glm():
             async def __call__(self, p, *args, **kwargs):
                 nonlocal active
                 active = False
-                return reply(p, objections=['conflict']), 0
+                return changed(p, objections=['conflict']), 0
         second = Provider('glm')
         result = await ConditionalReview(clock=lambda: 101).run(problem(necessity='INTERVENE'),
             [Changed('qwen'), second], current=lambda: active)
@@ -98,7 +102,7 @@ def test_secondary_cost_uses_remaining_budget_and_partial_records_keep_one_run()
         async def record(value):
             records.append(value)
         result = await ConditionalReview(clock=lambda: 101, max_cost_usd=.1).run(
-            problem(necessity='INTERVENE'), [Provider('qwen', lambda p: reply(p, generation='bad')),
+            problem(necessity='INTERVENE'), [Provider('qwen', lambda p: changed(p, generation='bad')),
                 Reviewed('glm')], current=lambda: True, record=record)
         assert budgets == pytest.approx([.09])
         assert result['cost_usd'] == pytest.approx(.03) and result['cost_complete'] is True
