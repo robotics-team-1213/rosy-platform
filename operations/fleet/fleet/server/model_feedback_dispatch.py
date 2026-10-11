@@ -274,7 +274,7 @@ class MissionFeedbackToolDispatcher:
                  arguments: Mapping[str, Any],
                  model_tool_call: ModelToolCall | None = None) -> ER2ToolResult:
         definition = MODEL_TOOL_CATALOG.get(tool_name)
-        valid_name = tool_name if definition is not None else "unsupported"
+        valid_name = tool_name if definition is not None and definition.scope == 'mission' else "unsupported"
         try:
             trusted_scope = (scope if isinstance(scope, MissionFeedbackTurnScope)
                              else MissionFeedbackTurnScope.model_validate(scope))
