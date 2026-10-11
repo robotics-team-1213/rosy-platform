@@ -52,3 +52,9 @@ D-670은 정답·목적지·통행 정책 없이 기존 모델 세션과 D-665/D
 설치 closure 검토 지적은 control 0.1.1과 Foundation 최소 0.0.1 의존 선언으로 수정했다. `db1eb3058b`의 설치 metadata RED 뒤 `dc3148cdde`의 sdist→wheel·Foundation wheel 설치·격리 import 및 관련 회귀가 terminal exit 0이다. Foundation source 경로를 import에 넣지 않고 설치본만으로 새 관측 함수와 공통 타입을 읽었다. 실제 ARM64 이미지 또는 장치 설치는 미확인이다.
 
 물체 평가, 조건별 최소 표본·coverage와 출처 단위 불확실성, 사전 고정 수용 임계값, 실제 장치의 관측 전용 전달·버전 readback·지연/손실도 미확인이다. 이 작업에서 push·장치 배포·운영 활성화·주행·실물/시뮬레이션 성능 수용을 수행하지 않았다. SOURCE 시험과 local main 착지를 이 단계의 수용으로 확대하지 않는다.
+
+## 검수의 도로면 의미 보존
+
+`be11481c27` 원격 RED 4건은 전체 도로면의 unknown 병합·indexed draft import에 자기 차선 제한이 적용되던 문제와 차선 전용 도구의 잘못된 입력 수용을 재현했다. `3cdbe9d244`에서 공통 검수는 명시적 `road_surface/1`에만 자기 차선 제한을 적용하지 않고, lane clipping/Qwen completion은 전체 도로면을 처리 전에 거절하도록 수정했다. 구형/현재 구역 제한과 검수 화소 불변, 255 및 pending/명시 승인·classes hash 결속은 유지한다.
+
+관련 원격 회귀 56건은 terminal exit 0, NEW0이다. 추가하려던 bootstrap 시험 파일이 없는 첫 GREEN 호출은 collection exit 4였으므로 통과 근거에 포함하지 않았다. 교정한 기존 시험 경로로 GREEN을 확인했다. 합성 import/apply/approve 시험은 검수 기능의 증거이며 실제 독립 사람이 정답을 검수했다는 증거가 아니다. 기존 Desktop 원본·classes·검수 승인은 수정하지 않았다. 실제 도로면 정답·다른 자동 라벨 producer의 지원·장치 관측 전달은 여전히 별도다.
