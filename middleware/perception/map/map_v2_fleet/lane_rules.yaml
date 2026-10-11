@@ -6,6 +6,10 @@ roundabout:
   centre: [-0.3357, 0.0011]     # circle fit to the ring's ridge points
   radius: 0.2514
   direction: ccw                # one-way; roads are two-way (user, 2026-09-22)
+turn_bans:
+  # D-676: NE/SW enter the ring; NW/SE are exits, not additional entrances.
+  - {at: NW, from_edge: west, to_edge: ring_w}
+  - {at: SE, from_edge: east, to_edge: ring_e}
 roads:
   west:                         # SW spoke -> bottom-west -> left lane -> top-west -> NW spoke
     two_way: true
