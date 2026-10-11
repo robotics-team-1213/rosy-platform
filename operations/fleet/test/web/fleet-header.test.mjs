@@ -24,7 +24,8 @@ function fakeNode(id) {
 
 function fakeHeader() {
   const nodes = Object.fromEntries(["user-role", "development-badge", "estop", "estop-feedback", "topbar-more",
-    "topbar-extra", "online-pill", "fleet-name", "clock"].map(id => [id, fakeNode(id)]));
+    "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-login", "fleet-account",
+    "fleet-account-identity"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
   globalThis.document = {getElementById: id => nodes[id]};
@@ -47,6 +48,9 @@ test("role words are Korean; English stays out of the text", () => {
 test("a session shows its Korean role and title identity; a development session shows the badge", () => {
   const nodes = fakeHeader();
   showSession({principal_id: "bob", role: "operator"});
+  assert.equal(nodes["fleet-login"].hidden, true);
+  assert.equal(nodes["fleet-account"].hidden, false);
+  assert.equal(nodes["fleet-account-identity"].textContent, "bob · 운영자");
   assert.equal(nodes["user-role"].textContent, "운영자");
   assert.equal(nodes["user-role"].title, "bob · operator");
   assert.equal(nodes.estop.disabled, false);

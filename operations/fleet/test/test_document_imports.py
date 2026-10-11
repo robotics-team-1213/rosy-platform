@@ -22,6 +22,7 @@ SHARED = {
     "poll-gate.js",
     "development-auth.js",
     "password-login.js",
+    "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
     "vision-view.js",

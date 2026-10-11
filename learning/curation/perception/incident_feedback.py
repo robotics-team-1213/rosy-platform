@@ -14,6 +14,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.incident_handoff import validate_handoff
 
 CAUSES = {"line_marking", "obstacle", "robot_fault", "localization", "traffic_wait", "unknown"}
 SCHEMA = "rosy.recording.incident_feedback/1"
@@ -78,11 +82,17 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
     if (type(recording_feedback) is not dict or recording_feedback.get('schema') != SCHEMA
             or type(recording_feedback.get('matches')) is not list
             or type(exported) is not dict or set(exported) != {'schema', 'case', 'digest', 'label_state', 'field_accepted'}
-            or exported['schema'] != 'rosy.incident.model_feedback/1'
+            or exported['schema'] not in {'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2'}
             or exported['label_state'] != 'UNREVIEWED' or exported['field_accepted'] is not False
             or type(exported['case']) is not dict):
         raise ValueError('invalid unreviewed model feedback')
     case = exported['case']
+    if exported['schema'].endswith('/2'):
+        if type(case.get('budget')) is not dict or 'handoff' not in case:
+            raise ValueError('missing handoff evidence')
+        validate_handoff(case['handoff'], case.get('scope'), case['budget'].get('started_at'))
+    elif 'handoff' in case:
+        raise ValueError('versioned handoff evidence required')
     encoded = json.dumps(case, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()
     if len(encoded) > 1024 * 1024 or hashlib.sha256(encoded).hexdigest() != exported['digest']:
         raise ValueError('model feedback content hash differs')
@@ -108,6 +118,7 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
                                      'observations', 'spent_micros', 'reserved_micros')}
             row['model_feedback'].update(profile_sha256=scope['profile_sha256'], digest=exported['digest'],
                                          label_state='UNREVIEWED')
+            if 'handoff' in case: row['model_feedback']['handoff'] = json.loads(json.dumps(case['handoff']))
     result['schema'] = 'rosy.recording.incident_feedback/2'
     return result
 
