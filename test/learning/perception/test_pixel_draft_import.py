@@ -69,6 +69,20 @@ def test_whole_road_import_apply_and_approve_keep_other_road_regions(tmp_path):
     assert np.array_equal(review_masks.pixels(store, approved), pixels)
 
 
+def test_whole_road_class_does_not_disable_another_current_region_boundary():
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5, 'role': 'drivable',
+                            'semantic': 'current_road_region/1'},
+                           {'name': 'whole_road', 'index': 6, 'role': 'drivable',
+                            'semantic': 'road_surface/1'}]}
+    human = np.array([[255, 1, 5, 2, 255]], np.uint8)
+    assert review_masks.merge_unknown(human, np.full(human.shape, 5, np.uint8), binding).tolist() == human.tolist()
+    with pytest.raises(ValueError, match='outside visible lane'):
+        review_masks.require_inside_lane_boundaries(np.array([[5, 1, 5, 2, 5]], np.uint8), binding)
+    review_masks.require_inside_lane_boundaries(np.array([[6, 1, 5, 2, 6]], np.uint8), binding)
+
+
 def test_merge_unknown_clips_new_drivable_to_human_lane_edges():
     current = np.array([[5, 1, 255, 255, 2, 255]], dtype=np.uint8)
     proposal = np.full(current.shape, 5, np.uint8)
