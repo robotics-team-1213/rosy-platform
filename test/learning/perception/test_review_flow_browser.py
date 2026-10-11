@@ -534,6 +534,12 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
+    title = page.locator('ui-topbar h1').bounding_box()
+    theme = page.locator('ui-topbar #theme').bounding_box()
+    assert title['x'] + title['width'] <= theme['x'], (route, title, theme)
+    for link in page.locator('.workspace-tabs a').all():
+        bounds = link.bounding_box()
+        assert bounds['height'] >= 44 and bounds['y'] + bounds['height'] <= topbar['height'], (route, bounds)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
