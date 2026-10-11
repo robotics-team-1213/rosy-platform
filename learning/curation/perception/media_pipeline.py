@@ -6,10 +6,11 @@ Usage: media_pipeline.py [--root data/perception] [--video-dir data/teleop/learn
 Stages, in order: scan, video, verify, reclaim, receipt.
 scan reads both raw layouts. video runs bag_to_video for a stem that has no
 video yet. verify requires the mp4, sidecar, meta and ffprobe count to agree.
-reclaim deletes those raw directories only with --apply. receipt is
-rosy.learning.media/1. trainer_recordings() turns each checked video into one
-recording-job row {"session", "video"}. A compact bag can free disk, but it is
-not a training input.
+reclaim deletes those raw directories only with --apply. A verified video also
+removes its .compact sibling; a compact that is the only remaining bag stays.
+receipt is rosy.learning.media/1. trainer_recordings() turns each checked video
+into one recording-job row {"session", "video"}. A compact bag is not a
+training input.
 
 Does not harvest, label, train, or delete the robot copy. recording_job still
 does not delete raw: run this stage first, then point that job at the receipt.
@@ -51,6 +52,13 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
         raw = Path(row["path"])
         video = video_dir / f"{row['stem']}.mp4" if row["stem"] else None
         trainable = row["status"] == "ok" and video is not None and video.is_file()
+        sibling = reclaim.compact_sibling(raw)
+        if sibling.resolve() in removed_paths:
+            compact_state = "removed"
+        elif sibling.is_dir():
+            compact_state = "kept"
+        else:
+            compact_state = "absent"
         sessions.append({
             "session": raw.name,
             "stem": row["stem"],
@@ -58,6 +66,7 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
             "raw": str(raw),
             "raw_bytes": row["bytes"],
             "raw_state": "removed" if raw.resolve() in removed_paths else "kept",
+            "compact_state": compact_state,
             "video": str(video) if trainable else None,
             "trainable": trainable,
         })

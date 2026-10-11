@@ -55,14 +55,18 @@ def test_checked_video_is_one_trainer_row_and_raw_stays(tmp_path):
 
 def test_apply_removes_raw_and_keeps_the_trainer_video(tmp_path):
     session = _session(tmp_path)
+    compact = session.with_name(session.name + ".compact")
+    compact.mkdir()
+    (compact / "session.json").write_text("{}", encoding="utf-8")
     video = tmp_path / "video"
     _video(video)
     code, doc = media.run(tmp_path / "raw", video, shrink=False, apply=True,
                           probe=lambda _p: 2, encode=lambda *_a: 1, compact=lambda _s: (False, _s))
     assert code == 0
-    assert not session.exists()
+    assert not session.exists() and not compact.exists()
     assert (video / f"{STEM}.mp4").is_file()
     assert doc["sessions"][0]["raw_state"] == "removed"
+    assert doc["sessions"][0]["compact_state"] == "removed"
     assert media.trainer_recordings(doc)[0]["video"].endswith(f"{STEM}.mp4")
 
 
