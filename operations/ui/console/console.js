@@ -43,7 +43,8 @@ const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  const ordered = workView.active ? [el("work-overview"), ...layoutPanels.filter(node => node.id !== "work-overview")] : layoutPanels;
+  const ordered = workView.active ? [el("work-overview"), document.querySelector('.console-context'),
+    ...layoutPanels.filter(node => node.id !== "work-overview" && !node.matches('.console-context'))] : layoutPanels;
   ordered.forEach((node) => {
     const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
