@@ -230,7 +230,7 @@ def test_localized_writes_refuse_activation_during_localization_read(tmp_path, m
     async def write():
         if action == 'start':
             return await client.app.state.teach.start('rosy_60', 'bob')
-        return await client.app.state.teach.place('rosy_60', name='old pose', kind='stop',
+        return await client.app.state.teach.place('rosy_60', name='old_pose', kind='stop',
             expected_revision=None, principal_id='bob')
     with client:
         future = client.portal.start_task_soon(write)
