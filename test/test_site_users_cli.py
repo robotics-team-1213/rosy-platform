@@ -266,3 +266,58 @@ def test_validate_users_document_accepts_service_rows_and_normalizes_spaces():
     users = validate_users_document({"users": [
         {"principal_id": "  cell-1  ", "role": "service", "token_sha256": "a" * 64}]})
     assert users == [{"principal_id": "cell-1", "role": "service", "token_sha256": "a" * 64}]
+
+
+def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeypatch, capsys):
+    from fleet.server.site_users import hash_password, load_site_accounts, verify_password
+
+    path = tmp_path / "site-users.yaml"
+    machine = _entry("situation", "ai_observer")
+    original = [_entry(), machine]
+    _seed(path, *original)
+    encoded = hash_password("test-only-password")
+    _stdin(monkeypatch, encoded + "\n")
+    command = ["add-login", str(path), "--principal", "human-1", "--role", "operator",
+               "--login", "human", "--password-hash-stdin"]
+    assert main([*command, "--dry-run"]) == 0
+    assert yaml.safe_load(path.read_text())["users"] == original
+    _stdin(monkeypatch, encoded)
+    assert main(command) == 0
+    entries = yaml.safe_load(path.read_text())["users"]
+    assert entries[:2] == original
+    tokens, logins = load_site_accounts(path)
+    assert len(tokens) == 2
+    assert logins["human"]["principal_id"] == "human-1"
+    assert verify_password("test-only-password", logins["human"]["password_scrypt"])
+    output = capsys.readouterr()
+    assert encoded not in output.out + output.err
+    assert "test-only-password" not in output.out + output.err
+    assert main(["list", str(path)]) == 0
+    assert encoded not in capsys.readouterr().out
+    gid = ["--gid", str(path.stat().st_gid)] if os.name == "posix" else []
+    assert main(["validate", str(path), *gid]) == 0
+    _no_temp_files_left(tmp_path)
+
+
+def test_login_invalid_or_duplicate_credentials_leave_registry_unchanged(tmp_path, monkeypatch):
+    from fleet.server.site_users import hash_password
+
+    encoded = hash_password("test-only-password")
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry(), {
+        "principal_id": "human-1", "role": "operator", "login": "human",
+        "password_scrypt": encoded})
+    for principal, role, login, credential in [
+        ("human-1", "operator", "new", encoded),
+        ("human-2", "operator", "human", encoded),
+        ("human-2", "service", "new", encoded),
+        ("human-2", "operator", "UPPER", encoded),
+        ("human-2", "operator", "new", "plaintext"),
+        ("human-2", "operator", "new", encoded.replace("32768", "999999999")),
+    ]:
+        _stdin(monkeypatch, credential)
+        with pytest.raises(SystemExit):
+            main(["add-login", str(path), "--principal", principal, "--role", role,
+                  "--login", login, "--password-hash-stdin"])
+        assert path.read_bytes() == original
+    _no_temp_files_left(tmp_path)
