@@ -108,6 +108,12 @@
         <input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0">
         <label for="channel-review-reason">검토 사유</label>
         <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
+        <label for="channel-review-incident">현재 열린 위험 사건</label>
+        <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
+        <div class="actions">
+          <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
+          <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
+        </div>
         <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
         <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
         <div class="actions">

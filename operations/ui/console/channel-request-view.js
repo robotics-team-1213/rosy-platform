@@ -1,6 +1,6 @@
 // Fleet binds the current review and existing Task creation in one transaction.
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
-  let receipt = null, review = null, version = 0, busy = false;
+  let receipt = null, review = null, version = 0, busy = false, incidentRows = [];
   const panel = el("channel-review"), state = el("channel-review-state");
   const path = () => `/api/fleet/channel-requests/${encodeURIComponent(receipt.request_id)}`;
   function reset() {
@@ -8,6 +8,11 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     el("channel-review-reason").value = "";
   }
   function paint() {
+    el("channel-review-incident").disabled = busy || review.state === "LINKED" || !canManage();
+    el("channel-review-incident-claim").disabled = busy || review.state === "LINKED" || !canManage();
+    const incident = review.incident;
+    el("channel-review-incident-link-holder").hidden = !incident;
+    if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
     el("channel-review-mission").disabled = busy || review.state === "LINKED" || !canManage();
     el("channel-review-mission-prepare").disabled = busy || review.state === "LINKED" || !canManage();
     el("channel-review-mission-admit-holder").hidden = !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
@@ -58,6 +63,41 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     for (const row of rows.filter(row => row.source === "mission" && row.status === "PROPOSED"))
       picker.append(new Option(`${row.source_id} · ${row.workcell_id}`, row.source_id));
     picker.value = previous;
+  }
+  function setIncidents(reports) {
+    incidentRows = reports.filter(row => row.closed_at == null && row.judgment_revision && row.robot_ids?.length === 1);
+    const picker = el("channel-review-incident"), previous = picker.value;
+    picker.replaceChildren(new Option("사건 선택", ""));
+    for (const row of incidentRows) {
+      const key = `${row.robot_ids[0]}/${row.stuck_id}`;
+      picker.append(new Option(`${row.robot_ids[0]} · ${row.stuck_id}`, key));
+    }
+    picker.value = previous;
+  }
+  async function claimIncident() {
+    if (!receipt || !review || busy || review.state === "LINKED" || !canManage()) return;
+    const key = el("channel-review-incident").value, reason = el("channel-review-reason").value.trim();
+    const incident = incidentRows.find(row => `${row.robot_ids[0]}/${row.stuck_id}` === key);
+    if (!incident || !reason) { state.textContent = "현재 열린 사건과 검토 사유를 확인하세요."; return; }
+    const current = version, snapshot = review, base = path();
+    await confirm({message: `${incident.robot_ids[0]}의 사건 ${incident.stuck_id}를 맡을까요? 조치·해소는 별도 확인합니다.`,
+      opener: el("channel-review-incident-claim"), kind: "channel-incident",
+      eligible: () => current === version && review === snapshot && !busy && canManage()
+        && incidentRows.some(row => row.robot_ids[0] === incident.robot_ids[0] && row.stuck_id === incident.stuck_id
+          && row.judgment_revision === incident.judgment_revision),
+      request: async owner => {
+        busy = true; paint();
+        try {
+          const result = await call(base + "/incident", {method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
+              robot_id: incident.robot_ids[0], stuck_id: incident.stuck_id,
+              judgment_revision: incident.judgment_revision, reason}), signals: [owner.signal]});
+          owner.check(); if (current === version) review = result;
+        } finally { busy = false; if (current === version && review) paint(); }
+      }, onError: error => {
+        if ([401, 403].includes(error.status)) reset();
+        else state.textContent = "인수 결과 미확인 · 자동 재전송하지 않습니다. 현재 사건 기록을 확인하세요.";
+      }});
   }
   async function prepareMission() {
     if (!receipt || !review || busy || review.state === "LINKED" || !canManage()) return;
@@ -159,5 +199,6 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
   scope.listen(el("channel-review-submit"), "click", submit);
   scope.listen(el("channel-review-mission-prepare"), "click", prepareMission);
   scope.listen(el("channel-review-mission-admit"), "click", admitMission);
-  return {select, refresh, reset, setSources};
+  scope.listen(el("channel-review-incident-claim"), "click", claimIncident);
+  return {select, refresh, reset, setSources, setIncidents};
 }
