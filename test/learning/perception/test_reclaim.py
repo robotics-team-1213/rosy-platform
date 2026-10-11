@@ -76,7 +76,7 @@ def test_probe_mismatch_and_probe_error(tmp_path):
     assert reclaim.plan(sessions, video, boom)[0]["status"] == "probe_error"
 
 
-def test_apply_deletes_raw_copies_and_keeps_video_and_compact(tmp_path, capsys):
+def test_apply_deletes_raw_copies_and_a_verified_videos_compact(tmp_path, capsys):
     flat = _session(tmp_path, nested=False)
     nested = _session(tmp_path, nested=True)
     compact = nested.with_name(nested.name + ".compact")
@@ -89,8 +89,7 @@ def test_apply_deletes_raw_copies_and_keeps_video_and_compact(tmp_path, capsys):
                         probe=_probe_ok)
     assert code == 0
     out = capsys.readouterr().out
-    assert not flat.exists() and not nested.exists()
-    assert compact.is_dir()
+    assert not flat.exists() and not nested.exists() and not compact.exists()
     assert (video / f"{STEM}.mp4").is_file()
     assert (video / "teleop_201_upright.mp4").is_file()
     assert "unmatched videos 1" in out
@@ -160,6 +159,22 @@ def test_failed_shrink_does_not_delete(tmp_path):
                         probe=_probe_ok, compact=lambda _src: (False, _src))
     assert code == 1
     assert session.is_dir()
+
+
+def test_bad_compact_preflight_deletes_nothing(tmp_path):
+    session = _session(tmp_path, nested=False)
+    outside = tmp_path / "elsewhere.compact"
+    outside.mkdir()
+    rows = [{"status": "ok", "path": str(session)}]
+    original = reclaim.compact_sibling
+    reclaim.compact_sibling = lambda _session: outside
+    try:
+        with pytest.raises(ValueError):
+            reclaim.delete_targets(rows, tmp_path / "raw")
+    finally:
+        reclaim.compact_sibling = original
+    assert session.is_dir()
+    assert outside.is_dir()
 
 
 def test_guard_rejects_raw_root_derivative_and_outside(tmp_path):
