@@ -128,6 +128,31 @@ class LaneSegModel:
         return InferResult(evidence, (time.perf_counter() - t0) * 1000.0,
                            self.manifest.model_revision)
 
+    def infer_road_surface(self, bgr: np.ndarray) -> tuple[np.ndarray, float]:
+        """D-670 raw labels on the resized camera grid; crop-excluded pixels stay unknown."""
+        from .road_region import road_masks
+
+        if (not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3
+                or not bgr.size or bgr.dtype != np.uint8):
+            raise ManifestError("expected a non-empty uint8 HxWx3 BGR frame")
+        if self.manifest.task != "lane_seg":
+            raise ManifestError("road inference needs a lane_seg model")
+        classes = self.manifest.raw["output"]["classes"]
+        road_masks(np.full((1, 1), 255, np.uint8), classes)
+        spec = self.manifest.input
+        height = spec.crop[0] if spec.crop is not None else spec.height
+        lo, hi = spec.crop[2:] if spec.crop is not None else (0, height)
+        t0 = time.perf_counter()
+        logits = self._session.run(preprocess(bgr, spec))
+        if (not isinstance(logits, np.ndarray)
+                or logits.shape != (1, len(classes), spec.height, spec.width)
+                or not np.isfinite(logits).all()):
+            raise ManifestError("model logits have invalid shape or non-finite values")
+        indices = np.array([c.index for c in self.manifest.classes], dtype=np.uint8)
+        labels = np.full((height, spec.width), 255, np.uint8)
+        labels[lo:hi] = indices[logits[0].argmax(axis=0)]
+        return labels, (time.perf_counter() - t0) * 1000.0
+
     def infer_mask(self, bgr: np.ndarray) -> tuple[np.ndarray, float]:
         """Only the lane_marking mask at the frame's size and the latency in ms: the D-408
         paint path, which has no use for lane_evidence (8.7 ms on the Pi)."""
