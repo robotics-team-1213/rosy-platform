@@ -9,8 +9,10 @@ Fleet; this tool never holds a Fleet token or calls a robot.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+import re
 
 CAUSES = {"line_marking", "obstacle", "robot_fault", "localization", "traffic_wait", "unknown"}
 SCHEMA = "rosy.recording.incident_feedback/1"
@@ -68,14 +70,60 @@ def bind(incidents: dict, markers: dict) -> dict:
     return {"schema": SCHEMA, "matches": matches, "missing_incidents": missing}
 
 
+def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
+    """Attach bound, unreviewed model evidence; a content hash is not a truth label."""
+    if (type(recording_feedback) is not dict or recording_feedback.get('schema') != SCHEMA
+            or type(recording_feedback.get('matches')) is not list
+            or type(exported) is not dict or set(exported) != {'schema', 'case', 'digest', 'label_state', 'field_accepted'}
+            or exported['schema'] != 'rosy.incident.model_feedback/1'
+            or exported['label_state'] != 'UNREVIEWED' or exported['field_accepted'] is not False
+            or type(exported['case']) is not dict):
+        raise ValueError('invalid unreviewed model feedback')
+    case = exported['case']
+    encoded = json.dumps(case, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+    if len(encoded) > 1024 * 1024 or hashlib.sha256(encoded).hexdigest() != exported['digest']:
+        raise ValueError('model feedback content hash differs')
+    scope = case.get('scope')
+    if (type(scope) is not dict or set(scope) != {'subject_id', 'case_id', 'owner_id', 'profile_sha256', 'policy_revision'}
+            or any(type(scope[k]) is not str or not scope[k] for k in scope)
+            or re.fullmatch('[0-9a-f]{64}', scope['profile_sha256']) is None
+            or type(case.get('reason')) is not str or re.fullmatch('[A-Z0-9_]{1,64}', case['reason']) is None
+            or case.get('state') not in {'ACTIVE', 'HOLD', 'NOT_NEEDED'}
+            or case.get('outcome') not in {'IN_PROGRESS', 'UNRESOLVED', 'RESOLVED_OBSERVED'}):
+        raise ValueError('invalid bound model feedback')
+    for key in ('calls', 'observations', 'spent_micros', 'reserved_micros'):
+        if type(case.get(key)) is not int or not 0 <= case[key] <= (8 if key in {'calls', 'observations'} else 1_000_000_000_000):
+            raise ValueError('invalid model feedback counter')
+    matches = [row for row in recording_feedback['matches']
+               if (row.get('robot_id'), row.get('stuck_id')) == (scope['subject_id'], scope['case_id'])]
+    if len(matches) != 1:
+        raise ValueError('model feedback does not match exactly one recording incident')
+    result = json.loads(json.dumps(recording_feedback, allow_nan=False))
+    for row in result['matches']:
+        if (row['robot_id'], row['stuck_id']) == (scope['subject_id'], scope['case_id']):
+            row['model_feedback'] = {key: case[key] for key in ('state', 'outcome', 'reason', 'calls',
+                                     'observations', 'spent_micros', 'reserved_micros')}
+            row['model_feedback'].update(profile_sha256=scope['profile_sha256'], digest=exported['digest'],
+                                         label_state='UNREVIEWED')
+    result['schema'] = 'rosy.recording.incident_feedback/2'
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("incidents", type=Path)
     parser.add_argument("markers", type=Path)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--model-feedback", type=Path, help="unreviewed fixed Fleet model feedback export")
     args = parser.parse_args()
     result = bind(json.loads(args.incidents.read_text(encoding="utf-8-sig")),
                   json.loads(args.markers.read_text(encoding="utf-8-sig")))
+    if args.model_feedback is not None:
+        with args.model_feedback.open('rb') as source:
+            raw = source.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError('model feedback file limit exceeded')
+        result = attach_model_feedback(result, json.loads(raw))
     with args.out.open("x", encoding="utf-8") as output:
         output.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(f"{len(result['matches'])} matched, {len(result['missing_incidents'])} missing: {args.out}")
