@@ -314,6 +314,10 @@ $('token-save').addEventListener('click', async () => {
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
+  profiles = [];
+  $('map-profile').replaceChildren();
+  for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).value = '';
+  $('profile-file').value = '';
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;

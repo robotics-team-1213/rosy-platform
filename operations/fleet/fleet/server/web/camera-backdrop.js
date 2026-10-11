@@ -82,7 +82,10 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
   let calibrations = [];
   // D-560: Vision's map plane is the picture; the D-515 raw warp is only the fallback.
   let planes = null;
-  const planeFrame = () => planes?.current() ?? null;
+  const planeFrame = () => {
+    const frame = planes?.current();
+    return cameraFrame && fresh(cameraFrame) && frame?.source === cameraFrame.source ? frame : null;
+  };
   const setCalibrations = (rows) => { calibrations = rows; redraw(); };
   const usesPlane = () => Boolean(planeCalibration(planeFrame(), calibrations, view.siteMap));
   const calibration = () => planeCalibration(planeFrame(), calibrations, view.siteMap)
@@ -176,7 +179,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
       if (frame.state !== "live" || !fresh(frame)) {
-        lastFrame = null; setCameraFrame(null); setLive(null); return;
+        lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false); return;
       }
       lastFrame = frame;
       // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
@@ -185,7 +188,9 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       showFrame();
       // Ask Vision only when the site view can draw it (no grid map, a site map, a calibration on it).
       planes.refresh(!view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0);
-      cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
+      cancelMapCameraExpiry = scope.timeout(() => {
+        lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false);
+      }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
   return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };
