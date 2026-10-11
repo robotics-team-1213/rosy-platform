@@ -67,6 +67,11 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
+from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
+assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
+                          (EvidenceRef('robot', 'core', 'state-1', 99.0),))
+assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
     assert Path(module.__file__).resolve().is_relative_to(installed), name
@@ -74,13 +79,9 @@ from rosy.decision.model_tool_contract import ModelToolCall
 from fleet.server import proposal_store
 assert proposal_store.ModelToolCall is ModelToolCall
 assert importlib.util.find_spec('fleet.ai') is None
-from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
 assert importlib.util.find_spec('rosy_situation.service') is None
 assert importlib.util.find_spec('rosy_situation.analyzers') is None
 assert importlib.util.find_spec('rosy_situation.incidents') is None
-request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
-                          (EvidenceRef('robot', 'core', 'state-1', 99.0),))
-assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 from fleet.server.static_routes import WEB_ROOT, CONSOLE_ASSETS, CONSOLE_CSP, install_static_routes
 assert WEB_ROOT == installed / 'fleet/server/web'
 actual = {p.relative_to(WEB_ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()

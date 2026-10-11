@@ -3199,3 +3199,10 @@
 - 변경: 가상 신호는 작은 점선 램프로 표시하고, 점유·대기·입구별 상태는 지도 아래 고정 높이 영역으로 옮겼습니다. 지도 프레임 크기를 관측 행 수와 영상 유무에서 분리했습니다. 좌표 만료 시 값만 지우고 대기 행을 유지합니다.
 - 증거: Node 287 passed. Chromium 데스크톱/모바일 관측→익명→만료 및 지연 응답의 프레임 크기 검증은 이어 진행합니다. 설계: docs/plans/2026-10-11-stable-map-readouts-design.md.
 - gate 변화: 화면 구현. 서명 배포·현장 화면·실물 위치 정확도는 각각 별도입니다.
+
+## 2026-10-11 · D-652 · 공통 개입 필요성 shadow 소비
+
+- 변경: Situation 순수 필요성 평가를 기존 Fleet holder/wheel/sdist에 세 파일로 포함하고 현재 로봇 상태의 내부 shadow read에 연결했다. 사건 ID·owner·revision·freshness·유효기간을 대조하며 정상/개입/보류를 구분한다. 기존 resolver와 CORE final writer는 유지한다.
+- 증거: AI PC 원격 Situation/Fleet API·근거·no-motion·wheel/sdist 178 passed, NEW 0 (`0926fc4fa5`). 추가 freshness/설치 순수성 및 최종 main 통합 검사는 착지 receipt에 기록한다.
+- gate 변화: 내부 소스/원격 설치 계약. 현장 활성화·화면 의미 수용·Discord/Slack/Telegram·모델 토론/학습 승격은 후속이며 FIELD는 승격하지 않는다. 상세: docs/validation/intervention-assessment-2026-10-11.md.
+

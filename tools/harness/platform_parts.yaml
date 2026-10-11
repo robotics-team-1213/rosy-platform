@@ -503,7 +503,9 @@ roots:
     import_prefix: [rosy_situation]
     concern: other
     note: >-
-      D-577 3 AI PC situation service; reads Fleet and posts facts only (shadow), no robot or command path.
+      D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
+      D-652 pure necessity assessment is shared with Fleet through three static holder files;
+      new consumers are internal shadow only, no robot or command authority.
   - path: operations/vision
     part: operations
     d427_target: operations/vision

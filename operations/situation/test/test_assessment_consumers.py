@@ -123,6 +123,7 @@ def test_context_refreshes_active_case_at_ttl_and_trims_closed_cases():
     view['observed_at'] = 102.9
     assert drafts(view) == []
     view['observed_at'] = 103.0
+    view['state']['robots'][0]['state']['timestamp'] = '1970-01-01T00:01:42+00:00'
     assert len(drafts(view)) == 1
     view['state']['robots'][0]['state']['line_follow']['stuck']['stuck_id'] = 's2'
     view['observed_at'] = 106.0
@@ -130,3 +131,11 @@ def test_context_refreshes_active_case_at_ttl_and_trims_closed_cases():
     view['line_stuck']['pending'] = []
     drafts(view)
     assert drafts.seen == set()
+
+
+def test_context_cannot_relabel_old_transport_or_cleared_state_as_current():
+    from rosy_situation.incident_context import ContextDraft
+    stuck = {'robot_id': 'pinky', 'stuck_id': 's1', 'phase': 'WAITING_CONSOLE', 'cause': 'lane_lost'}
+    assert ContextDraft()(snapshot(robot(deepcopy(stuck)), [stuck], _state_requested_at=96.0)) == []
+    assert ContextDraft()(snapshot(robot(), [stuck])) == []
+    assert ContextDraft()(snapshot(robot(deepcopy(stuck), online=False), [stuck])) == []
