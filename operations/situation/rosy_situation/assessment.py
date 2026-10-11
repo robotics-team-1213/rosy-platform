@@ -64,9 +64,10 @@ class Assessment:
     def revision(self):
         return self.request.revision
 
-    def applies_to(self, request, *, now):
+    def applies_to(self, request, *, now, policy_revision):
         return (self.necessity != 'ABSTAIN' and finite(now)
-                and self.evaluated_at <= now < self.valid_until and self.request == request)
+                and self.evaluated_at <= now < self.valid_until and self.request == request
+                and self.policy_revision == policy_revision)
 
 
 def assess(request: AssessmentInput, *, now: float, policy: AssessmentPolicy) -> Assessment:
