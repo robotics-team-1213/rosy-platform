@@ -12,7 +12,7 @@ def test_fixed_sandbox_has_no_host_home_network_or_environment(tmp_path):
     executable = tmp_path / 'provider'
     executable.write_bytes(b'trusted executable fixture')
     launcher = SandboxLauncher('claude', executable, hashlib.sha256(executable.read_bytes()).hexdigest())
-    command = launcher.command(('claude', '--bare', '-p'), 'rosy-deliberation-test')
+    command = launcher.command(('claude', '--bare', '-p'), 'rosy-deliberation-test.scope')
     assert '--unshare-all' in command and '--new-session' in command
     assert '--clearenv' in command and '--cap-drop' in command
     assert 'MemoryMax=1G' in command and 'TasksMax=32' in command
@@ -20,7 +20,22 @@ def test_fixed_sandbox_has_no_host_home_network_or_environment(tmp_path):
     assert command[-4:] == ('--', '/provider', '--bare', '-p')
     executable.write_bytes(b'changed')
     with pytest.raises(ValueError, match='digest'):
-        launcher.command(('claude', '-p'), 'rosy-deliberation-test')
+        launcher.command(('claude', '-p'), 'rosy-deliberation-test.scope')
+
+
+def test_scope_cleanup_uses_exact_generated_scope(tmp_path, monkeypatch):
+    from deploy.site import deliberation_sandbox as module
+    executable = tmp_path / 'provider'
+    executable.write_bytes(b'fixture')
+    launcher = SandboxLauncher('opencode', executable, hashlib.sha256(b'fixture').hexdigest())
+    calls = []
+    async def fake_process(argv, body, remaining, limit):
+        calls.append(argv)
+        return 0, b'{}'
+    monkeypatch.setattr(module, 'bounded_process', fake_process)
+    assert asyncio.run(launcher(('opencode', 'run'), b'{}', 1, 32, .1)) == (0, b'{}')
+    scope = next(arg.split('=', 1)[1] for arg in calls[0] if arg.startswith('--unit='))
+    assert scope.endswith('.scope') and calls[1] == ('/usr/bin/systemctl', '--user', 'stop', scope)
 
 
 def test_stdout_is_bounded_and_stderr_is_not_returned():
