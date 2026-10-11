@@ -277,15 +277,25 @@ def test_unknown_final_has_durable_revision_and_retries_queue_failure_without_mo
 
 def test_old_policy_scope_cannot_invoke_new_policy_provider(tmp_path):
     from fleet.incidents.automation.contract import CaseScope
+    from fleet.incidents.notifications import Channel, NotificationConfig
     async def run():
-        _, seen, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        now, seen, _, log, board, store, worker, poll, _ = setup(tmp_path)
         snapshot = poll()
         scope = CaseScope('pinky', 'lane-1', 'core', worker.profile_sha256, 'old-policy')
-        store.begin_case(scope, worker.budget(scope))
+        revision = board.judgment_view('pinky')['request']['revision']
+        store.begin_case(scope, worker.budget(scope), initial_revision=revision)
+        log.notifications.config = NotificationConfig('https://console.example.test/console',
+                                      (Channel('slack', 'https://hooks.slack.com/services/A/B/C'),))
+        async def enqueue(scope, summary):
+            return await asyncio.to_thread(log.notifications.enqueue_final, scope, summary, now=now[0])
+        worker.final_handoff = enqueue
         worker.feed(snapshot); await settled(worker)
         assert seen == [] and store.case(scope)['state'] == 'HOLD'
-        assert handoffs[0][1]['reason'] == 'POLICY_CHANGED'
+        assert store.case(scope)['reason'] == 'POLICY_CHANGED'
         assert store.case(scope)['started_at'] == 101
+        finals = [row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW']
+        assert len(finals) == 1 and finals[0]['state'] == 'PENDING'
+        assert store.pending_handoffs() == () and log.handoff.active() == []
         await worker.aclose()
     asyncio.run(run())
 
