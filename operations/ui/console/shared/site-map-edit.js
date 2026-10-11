@@ -193,7 +193,7 @@ export function teachFrameMatches(record, map) {
   return !map.survey;
 }
 
-export function mergeCameraMap(base, observation) {
+function validateCameraMap(base, observation) {
   const reference = map => Object.entries(map?.survey || {}).filter(([k]) => !['reviewed', 'review_note'].includes(k))
     .sort(([a], [b]) => a.localeCompare(b));
   if (observation?.schema !== 'rosy.site_map/1' || !base?.survey
@@ -204,11 +204,41 @@ export function mergeCameraMap(base, observation) {
       || observation.edges.some(e => e.evidence?.source !== 'camera' || e.evidence.status !== 'observed'
         || e.evidence.reference_revision !== base.survey.revision))
     throw new Error('관측 근거가 있는 카메라 차로 초안이 필요합니다');
+}
+
+const cameraSignature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps]);
+
+export function cameraConnectionCandidates(base, observation) {
+  validateCameraMap(base, observation);
+  const used = new Set(observation.edges.filter(e => !base.edges.some(old => cameraSignature(old) === cameraSignature(e)))
+    .flatMap(e => [e.from, e.to]));
+  return observation.places.filter(p => used.has(p.id)).map(p => ({observation_id: p.id, name: p.name, x: p.x, y: p.y,
+    candidates: base.places.map(old => ({id: old.id, name: old.name, x: old.x, y: old.y,
+      distance_m: Math.hypot(old.x - p.x, old.y - p.y)})).filter(old => old.distance_m <= .05)}))
+    .filter(row => row.candidates.length);
+}
+
+export function mergeCameraMap(base, observation, connections = {}) {
+  validateCameraMap(base, observation);
+  observation = copy(observation);
+  const joins = new Map(Object.entries(connections));
+  for (const [id, target] of joins) {
+    const point = observation.places.find(p => p.id === id), old = base.places.find(p => p.id === target);
+    if (!point || !old || Math.hypot(point.x - old.x, point.y - old.y) > .05)
+      throw new Error('연결 후보의 장소와 0.05 m 이내 거리를 확인하세요');
+    point.x = old.x; point.y = old.y;
+    for (const edge of observation.edges.filter(e => e.from === id || e.to === id)) {
+      if (edge.from === id) edge.polyline[0] = [old.x, old.y];
+      if (edge.to === id) edge.polyline[edge.polyline.length - 1] = [old.x, old.y];
+      edge.evidence.status = 'inferred';
+      edge.evidence.note = [edge.evidence.note, `connection ${id} -> ${target}`].filter(Boolean).join('\n');
+      if (edge.evidence.note.length > 1000) throw new Error('관측과 연결 근거는 1000자 이내여야 합니다');
+    }
+  }
   const next = copy(base), ids = new Map();
-  const signature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps]);
   let addedEvidence = false;
   const fresh = observation.edges.filter(e => {
-    const old = next.edges.find(row => signature(row) === signature(e));
+    const old = next.edges.find(row => cameraSignature(row) === cameraSignature(e));
     if (!old) return true;
     const note = e.evidence.note || '';
     if (note && !old.evidence?.note?.includes(note)) {
@@ -223,12 +253,16 @@ export function mergeCameraMap(base, observation) {
   for (const id of new Set(fresh.flatMap(e => [e.from, e.to]))) {
     const place = observation.places.find(p => p.id === id);
     if (!place || !Number.isFinite(place.x) || !Number.isFinite(place.y)) throw new Error('카메라 장소 좌표를 확인하세요');
+    if (joins.has(id)) { ids.set(id, joins.get(id)); continue; }
     if (next.places.some(p => Math.hypot(p.x - place.x, p.y - place.y) <= .05))
       throw new Error('기존 장소와 가까운 관측은 연결이 모호합니다 · 장소와 차로를 직접 검토하세요');
     const mapped = free(next.places);
     ids.set(id, mapped); next.places.push({...copy(place), id: mapped});
   }
-  for (const edge of fresh) next.edges.push({...copy(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
+  for (const edge of fresh) {
+    if (ids.get(edge.from) === ids.get(edge.to)) throw new Error('도로의 두 끝을 같은 장소에 연결할 수 없습니다');
+    next.edges.push({...copy(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
+  }
   if (fresh.length || addedEvidence) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }

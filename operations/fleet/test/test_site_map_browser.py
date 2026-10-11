@@ -1035,3 +1035,52 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_camera_connections_require_review_before_extending_the_saved_map(page_site, width):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    from fleet.server.site_map_store import SiteMapError
+    page, store, robot = page_site
+    active = store.active_view()
+    reference = {'revision': 's1', 'origin': [0, 0], 'heading_rad': 0,
+        'scale_source': 'measured', 'measured_distance_m': 2, 'description': 'Measured origin'}
+    base = SiteMap.model_validate({'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'a', 'name': 'Start', 'x': 0, 'y': 0}, {'id': 'b', 'name': 'Junction', 'x': 2, 'y': 0}],
+        'edges': [{'id': 'ab', 'from': 'a', 'to': 'b', 'polyline': [[0, 0], [2, 0]],
+            'width_m': .2, 'speed_cap_mps': .03}]})
+    draft = store.save_draft(base, expected_revision=None, principal_id='bob')
+    observation = SiteMap.model_validate({'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'near', 'name': 'Observed start', 'x': 2.02, 'y': 0}, {'id': 'far', 'name': 'Branch end', 'x': 3, 'y': 1}],
+        'edges': [{'id': 'branch', 'from': 'near', 'to': 'far', 'polyline': [[2.02, 0], [3, 1]],
+            'width_m': .2, 'speed_cap_mps': .03, 'evidence': {'source': 'camera', 'status': 'observed',
+                'reference_revision': 's1', 'note': 'frame sha256 abc'}}]}).body()
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    page.locator('#camera-map-file').set_input_files({'name': 'branch.json', 'mimeType': 'application/json',
+        'buffer': json.dumps(observation).encode()})
+    page.locator('#preview-camera-connections').click()
+    expect(page.locator('#camera-connections')).to_contain_text('Observed start')
+    expect(page.locator('#camera-connections')).to_contain_text('0.020')
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-connections select').select_option('b')
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-connect-confirm').check()
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(2)
+    saved = store.draft_view()
+    assert saved['map']['places'][:2] == draft['map']['places']
+    assert saved['map']['edges'][1]['from'] == 'b'
+    assert saved['map']['edges'][1]['polyline'][0] == [2, 0]
+    assert saved['map']['edges'][1]['evidence']['status'] == 'inferred'
+    assert 'near -> b' in saved['map']['edges'][1]['evidence']['note']
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=saved['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_SURVEY_UNREVIEWED'
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
