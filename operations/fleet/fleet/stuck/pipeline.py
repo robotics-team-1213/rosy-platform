@@ -52,8 +52,9 @@ def ai_hold(resolver, answer, selected, current, rows):
                                              resolver.config, resolver._painted())
     verdict, candidate = ai_first._check(resolver, first, proposal, current, stuck, rows, chain,
                                          chain.started_at, 0.0, [], counted=True)
-    return None if verdict == "forwarded" and candidate == answer else verdict if verdict != "forwarded" \
-        else "ai_candidate_changed"
+    if verdict != "forwarded":
+        return verdict
+    return None if candidate == answer else "ai_candidate_changed"
 
 
 def candidate(resolver, now, row, stuck, rows, chain):
