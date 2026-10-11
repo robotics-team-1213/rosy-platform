@@ -187,6 +187,10 @@ def main():
             wall_start = time.monotonic()
             previous = None
             frozen = policy.export() if phase == 'eval' else None
+            if phase == 'eval' and (policy.updates == 0 or not any(
+                    value != 0. for values in policy.table.values() for value in values)):
+                raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
+            learned_steps = 0
             with (output / f'trace-{epoch}-{phase}-{seed}.jsonl').open('w') as trace:
                 while True:
                     pose = read_pose()
@@ -198,6 +202,8 @@ def main():
                         policy.update(*previous, result['reward'], state,
                                       terminated=result['terminated'] or result['truncated'])
                     action = 1 if phase == 'baseline' else policy.choose(state, explore=phase == 'train')
+                    if phase == 'eval' and state in policy.table:
+                        learned_steps += 1
                     angular = max(-.8, min(.8, angular * policy.gains[action]))
                     if result['goal_reached'] or result['terminated'] or result['truncated']:
                         owner.stop()
@@ -218,13 +224,16 @@ def main():
                     previous = (state, action)
                     step()
             episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
-                           sim_s=elapsed, wall_s=time.monotonic() - wall_start, stop=physical_stop())
+                           sim_s=elapsed, wall_s=time.monotonic() - wall_start,
+                           learned_state_steps=learned_steps, stop=physical_stop())
             summary['episodes'].append(episode)
             print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'baseline':
                 baseline = result
             if phase == 'eval' and policy.export() != frozen:
                 raise RuntimeError('evaluation mutated policy')
+            if phase == 'eval' and learned_steps == 0:
+                raise RuntimeError('evaluation visited no learned state')
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates
