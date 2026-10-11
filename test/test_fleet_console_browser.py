@@ -224,7 +224,8 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         choose.focus()
         page.keyboard.press('Enter')
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
-        assert card.locator('.robot-actions').is_visible()
+        assert card.locator('[data-goal-robot-id="rosy_01"]').is_visible()
+        assert card.locator('[data-map-recording]').is_visible()
         assert page.locator('#robot-choice').input_value() == 'rosy_01'
         page.wait_for_timeout(1500)
         assert card.is_visible()
