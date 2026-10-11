@@ -16,6 +16,8 @@ export function createTeachPanel(host) {
   let drawn = '';
   let markersKey = '';
   let basisKey = '';
+  const requestedRobot = new URLSearchParams(location.search).get('robot');
+  let robotsFilled = false;
   for (const kind of PLACE_KINDS) $('teach-place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
   function gate(id, reason) {
@@ -38,6 +40,10 @@ export function createTeachPanel(host) {
     $('teach-origin-check').hidden = !survey;
     $('teach-frame').disabled = Boolean(recording);
     $('teach-robot').disabled = Boolean(recording);
+    $('teach-target').textContent = recording ? `기록 중인 로봇 ${recording.robot_id}`
+      : $('teach-robot').value ? `기록 대상 ${$('teach-robot').value} · 시작 전 실제 로봇을 확인하세요`
+        : requestedRobot ? `요청한 로봇 ${requestedRobot}이 등록 목록에 없습니다 · 기록할 로봇을 직접 선택하세요`
+          : '기록할 로봇을 선택하세요';
     $('teach-reference').textContent = reference
       ? `조사 기준 ${reference.revision} · 시작 ${reference.origin.map(v => v.toFixed(2)).join(', ')} m · 방향 ${Math.round(reference.heading_rad * 180 / Math.PI)}° · ${reference.description}`
       : '조사 기준 없음 · 지도 없이 시작에서 기준을 정해 저장하세요';
@@ -162,7 +168,12 @@ export function createTeachPanel(host) {
   return {
     sync,
     robots(robots) {
-      $('teach-robot').replaceChildren(...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
+      const selected = robotsFilled ? $('teach-robot').value : requestedRobot ?? robots[0]?.robot_id;
+      $('teach-robot').replaceChildren(new Option('기록할 로봇 선택', ''),
+        ...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
+      $('teach-robot').value = robots.some(robot => robot.robot_id === selected) ? selected : '';
+      robotsFilled = true;
+      sync();
     },
     /** Lines in map metres to draw over the map: the live recording, then the newest stopped one. */
     lines() {
