@@ -33,7 +33,9 @@ def _checked(scope, receipt):
         raise ValueError('MODEL_RECEIPT_MANIFEST_CHANGED')
     selected = next((p for p in profiles if p.role == raw['role']), None)
     p = Problem(**raw['problem'])
-    if selected is None or (p.subject_id, p.case_id) != (scope.subject_id, scope.case_id):
+    if (selected is None or (p.subject_id, p.case_id) != (scope.subject_id, scope.case_id)
+            or p.domain not in selected.domains or 'text' not in selected.modalities
+            or canonical(asdict(p)) != canonical(raw['problem'])):
         raise ValueError('MODEL_RECEIPT_CASE_OR_ROLE_CHANGED')
     checked = judgment(p, BoundProfile(selected, p.digest), raw['judgment'])
     if canonical(checked.payload) != canonical(raw['judgment']):
