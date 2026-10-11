@@ -4,6 +4,7 @@ import hashlib
 import pytest
 
 from fleet.incidents.automation.contract import CaseScope
+from fleet.incidents.automation.store import IncidentCaseStore, CaseBudget
 from fleet.incidents.automation.ledger.receipt import ModelReceipt, model_receipt, checked_receipt
 from rosy.decision.deliberation import canonical
 from rosy.decision.deliberation.judgment import Judgment, judgment
@@ -61,3 +62,23 @@ def test_builder_revalidates_typed_judgment_and_stale_checked_evidence_still_rep
     receipt = model_receipt(scope, p, bound, checked, profiles=profiles)
     attempt.update(state='REJECTED', actual_micros=50000)
     assert checked_receipt(scope, attempt, receipt)['judgment']['input_hash'] == p.digest
+
+
+@pytest.mark.parametrize('forged', [False, True])
+def test_completion_atomically_keeps_verified_cost_with_valid_trace_or_trace_rejection(tmp_path, forged):
+    scope, p, profiles, bound, checked, _ = fixture()
+    store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
+    store.begin_case(scope, CaseBudget(100, 130, 2, 2, .3))
+    store.reserve(scope, attempt_id='model-1', input_hash=p.digest, observation_revision=p.generation,
+                  kind='model', max_cost_usd=.1, worker_id='worker', role='primary')
+    store.mark_submitting(scope, 'model-1', worker_id='worker')
+    receipt = model_receipt(scope, p, bound, checked, profiles=profiles)
+    if forged: receipt = ModelReceipt('{"raw_response":"private"}')
+    result = store.complete(scope, 'model-1', worker_id='worker', state='COMPLETED',
+                            actual_cost_usd=.05, summary={'reason': 'MODEL_CHECKED'}, model_receipt=receipt)
+    assert result['state'] == ('REJECTED' if forged else 'COMPLETED')
+    assert store.case(scope)['spent_micros'] == 50000 and store.case(scope)['reserved_micros'] == 0
+    with store._transaction() as conn:
+        rows = conn.execute('SELECT receipt_json FROM fleet_incident_v2_model_receipts').fetchall()
+        assert len(rows) == (0 if forged else 1)
+        if rows: assert rows[0][0] == receipt.payload_json
