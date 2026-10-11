@@ -1,0 +1,47 @@
+"""D-631 profile library never changes the active map or draft."""
+import pytest
+from fleet.server.site_map_store import SiteMapStore, SiteMapError
+from fleet.site_map import SiteMap
+from test_site_map_trip import _app, _line, OPERATOR, VIEWER
+
+
+def test_profiles_survive_restart_and_refuse_lost_updates(tmp_path):
+    path = tmp_path / 'profiles.sqlite3'
+    store = SiteMapStore(path)
+    site = SiteMap.model_validate(_line())
+    first = store.save_profile('first', name='첫 지도', site_map=site,
+                               expected_revision=None, principal_id='bob')
+    store.save_profile('second', name='다른 지도', site_map=site.model_copy(update={'map_id': 'other'}),
+                       expected_revision=None, principal_id='bob')
+    with pytest.raises(SiteMapError) as err:
+        store.save_profile('first', name='덮어쓰기', site_map=site,
+                           expected_revision=None, principal_id='eve')
+    assert err.value.code == 'SITE_MAP_PROFILE_CHANGED'
+    assert store.active_view() is None
+    assert store.draft_view()['map'] is None
+    assert store.events()[0]['action'] == 'profile_saved'
+    store.close()
+    again = SiteMapStore(path)
+    assert len(again.profiles()) == 2
+    assert again.profiles()[0] == first
+    again.close()
+
+
+def test_profile_api_permissions_validation_and_conflict(tmp_path):
+    client, tasks, store, robot = _app(tmp_path)
+    with client:
+        active = client.get('/api/fleet/site-map/active', headers=VIEWER).json()
+        url = '/api/fleet/site-map/profiles/room-1'
+        body = {'name': '연습장', 'map': _line(), 'expected_revision': None}
+        assert client.get('/api/fleet/site-map/profiles').status_code == 401
+        assert client.put(url, json=body, headers=VIEWER).status_code == 403
+        saved = client.put(url, json=body, headers=OPERATOR)
+        assert saved.status_code == 200, saved.text
+        assert client.put(url, json=body, headers=OPERATOR).status_code == 409
+        body['expected_revision'] = saved.json()['revision']
+        body['map']['edges'][0]['to'] = 'missing'
+        assert client.put(url, json=body, headers=OPERATOR).status_code == 422
+        assert client.put(url, content=b'x' * (2 * 1024 * 1024 + 1), headers=OPERATOR).status_code == 413
+        rows = client.get('/api/fleet/site-map/profiles', headers=VIEWER).json()['profiles']
+        assert rows == [saved.json()]
+        assert client.get('/api/fleet/site-map/active', headers=VIEWER).json() == active
