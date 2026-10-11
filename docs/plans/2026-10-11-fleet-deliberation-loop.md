@@ -10,6 +10,8 @@
 
 **Status:** D-640 Proposed. [설계](2026-10-11-fleet-deliberation-loop-design.md)를 먼저 읽는다. 구현·설치·실제 모델 토론은 미실행이다. 아래 새 파일명은 구현 예정이며 현재 존재하는 API가 아니다.
 
+**선행 조건 (2026-10-11 사용자 추가 지시):** [Fleet 중앙 판단 단계 계획](2026-10-11-fleet-central-judgment-stages.md)의 D-642~D-646을 먼저 수행한다. 근거/현재 상태, 개입·비개입·판단 보류, 중앙 조치/결과, 외부 알림·사람 처리, 독립 수용 receipt가 준비될 때 이 계획의 모델 라우팅/토론 구현 관문을 연다. 정상/비개입도 평가 분모에 포함한다. 선행 문서 계약 통과는 런타임 수용 완료가 아니다.
+
 ## 1. 내부 런 계약과 의미 검증
 
 Create: `operations/decision/src/rosy/decision/deliberation.py`.

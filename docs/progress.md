@@ -29,6 +29,11 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-642
+- D-643
+- D-644
+- D-645
+- D-646
 - D-640
 - D-627
 - D-626

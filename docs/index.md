@@ -214,6 +214,11 @@
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
 | D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
+| D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 |
+| D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 |
+| D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
+| D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
+| D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
 
 ## 계획·결과 문서
 
@@ -312,8 +317,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)
 - 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
 - 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
 - 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
-- 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증

@@ -7733,3 +7733,9 @@ osy-d395-s1d\`.
 - 변경: docs/fleet-deliberation-loop에서 D-640 Proposed와 주행·암 사건 폐루프, Claude Code/OpenCode 제한 토론, 독립 평가·그림자·되돌리기 기준 및 파일별 구현 계획을 기록했다.
 - 증거: 기존 D-392/D-516/D-527/D-608/D-619/D-637와 현재 source owner, 실행기 공식 문서를 대조했다. 문서 검증은 이 커밋의 원격 계약/lint 결과로 별도 보고한다.
 - gate 변화: 없음. 실제 모델 호출·런타임 구현·배포·장치 움직임·FIELD 수용은 미실행.
+
+## 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)
+
+- 변경: docs/fleet-judgment-stages에 근거 규약, 개입/비개입/보류, 중앙 중재/결과, Discord·Slack·Telegram 알림/사람 처리, Console·독립 수용의 5개 Proposed ADR과 파일별 계획을 기록했다. D-640 모델 토론 계획의 선행 관문으로 연결했다.
+- 증거: 현재 ContextDraft 고정 점수·seen, 사건 시작 단계, 수락 tier 기반 resolved_by, stuck 결과 및 D-632 inbox를 소스로 확인했다. 외부 callback 공식 규약은 조사 근거이며 실채널 발송/처리는 실행하지 않았다. 문서 계약/lint는 이 변경의 원격 결과로 별도 보고한다.
+- gate 변화: 없음. 중앙 판단 코드·화면·알림 구현·모델 호출·배포·장치/실채널 수용은 미실행.
