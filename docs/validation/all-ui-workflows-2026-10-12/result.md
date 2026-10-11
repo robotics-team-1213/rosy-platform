@@ -8,6 +8,20 @@ Cam·Pilot Android CI [38179188636](https://github.com/robotics-team-1213/rosy-p
 
 재부팅 뒤 gate의 부분 실행, main 이동으로 반복한 성공 회차와 공개 commit 표기 탐지 실패는 이전 로그에 보존한다. 비밀 탐지 기준이나 기존 실패 목록을 완화하지 않았다. 최신 후보의 production 비밀 탐지 사전 점검은 0건이었다. 설치본 비교는 Windows 작업 파일 대신 후보 Git blob의 SHA-256을 사용한다.
 
+## CI 설치·Android·브라우저 후속 검사
+
+commit `9d5b7d0a6446`의 canonical G1은 **5,397 passed**, exit 0/NEW 0, Node **318 passed/0 failed**이다(`logs/land-ci-helper/`). 실제 pre-push 네 묶음은 516 + 9252 + 4550 + 4624 = **18,942 passed**, 각 exit 0/NEW 0이다(`logs/prepush-ci-compat/`). 다른 세션이 검사 중 같은 SHA를 먼저 푸시하여 이번 push 명령은 ref 경합으로 종료 1이었다. fetch 및 원격 ref 직접 읽기로 origin/main이 검사한 동일 SHA임을 확인했다. 이번 명령 자체의 push 성공으로 계산하지 않는다.
+
+해당 SHA의 GitHub FULL CI `38184558238`과 Android CI `38184558259`는 실패했다. Fleet pytest 도우미·센싱 설치 의존성 보완은 통과했지만 공통 colcon 설치 다섯 job, Pilot Kotlin 컴파일, Fleet 브라우저 두 기대값은 별도 보완이 필요하다. Cam job은 fail-fast로 취소되어 통과로 계산하지 않는다. unsigned site build `38184558208` 성공은 서명·배포 증거가 아니다. 설치본은 종전 SHA이며 사람 계정을 변경하지 않았다.
+
+colcon 외부 package_dir 임시 링크 정리가 실제 Discord 소스 디렉터리를 unlink하려는 원인을 확인했다. Fleet에 한해 colcon의 기존 full-install fallback을 사용하며 wheel/sdist·설치 자산 검사를 유지한다. 이 구성에서 Fleet은 `--symlink-install`에도 복사 설치되므로 편집 뒤 다시 빌드해야 한다. Pilot 공유 소스에 기존 PhoneHeat를 추가한다. 브라우저 검사는 동적으로 생성되는 이유 설명 ID를 구조 비교에서 제외하고 독립 로그인·안전한 복귀·고급 토큰 복구 흐름을 검증한다. 원격 Chromium 두 기대값은 `a73d0761b`에서 **2 passed**, exit 0/NEW 0이다(`logs/ci-browser-fix-green/`). 초기 수정의 잘못된 안내 selector는 1 NEW로 보존하고 실제 가용성 상태 요소의 정확한 문구·숨긴 로그인 form으로 보완했다. native_games_ui가 구조 검사와 복구 단언 보존을 승인했다.
+
+Pilot 원격 Gradle 단위 검사·debug APK와 실제 bundled page proxy는 **BUILD SUCCESSFUL + 1 passed**, exit 0/NEW 0이다(`logs/pilot-phone-heat-green/`). 첫 실행에서 잘못 지정한 pytest 경로의 종료 4는 보존하며 전체 성공으로 계산하지 않는다.
+
+최신 main의 설치 계약도 보존했다. `fc055ee116`의 wheel·sdist·계약 회귀는 CI pytest 7.4.4/setuptools 68.1.2와 최신 도구에서 각각 **4 passed**, exit 0/NEW 0이다(`logs/fleet-packaging-compat-green/`, `logs/fleet-packaging-modern/`). 이전 raw Requires-Dist 단언의 2 NEW는 이름·정확한 specifier·extras/marker/URL을 PEP 508로 확인해 해결했다. 실제 colcon-core 0.21.3/setuptools 68.1.2의 clean `--symlink-install` 및 legacy editable marker 정리는 종료 0이며 설치 import/alias·계약 버전·Discord Python 4개 원본·Console 76개 자산 바이트를 확인했다(`logs/colcon-fleet-migration-2/`). 최초 migration fixture의 누락된 내부 package symlink 실패도 원본 로그에 남겼다. 최신 setuptools는 upstream에서 develop uninstall 지원을 제거했으므로 이 legacy 전환 검증 범위는 명시한 68.1.2다. 통합 후보의 전체 CI·서명·설치는 다음 gate다.
+
+native_games_ui가 legacy 정리·현대 도구 조건부 검사 및 정확한 Requirement 계약 비교를 최종 승인했다. robot_pilot_ui는 PhoneHeat 공유 소스의 직접 의존성·생성 경로를 승인했다.
+
 ## 전체 CI 호환성 보완
 
 commit `40e7287971`은 추가 G1 **307 passed**와 canonical pre-push **7,828 passed**를 거쳐 push했다. 전체 CI [38180852375](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38180852375)의 scope·hardware-safety는 성공했으나 Fleet 시험 hook, Cell 인증 안내 기대 문구, 센싱 고립 설치 의존성 문자열 비교가 실패했다. unsigned 후보 빌드 성공은 CI 통과·서명·설치를 대신하지 않는다.
@@ -63,7 +77,7 @@ CI와 같은 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0을 canonical 원격 실
 
 증거 경로는 공용 세션 `X:/DevTemp/projects/rosy-platform/2026-10-12--015344--fleet-header-proof--958a02/` 기준이다. `evidence/account-screens-final/`의 10개 PNG는 시험 서버의 로그인 및 네 계정 메뉴 320/1366px 관측이며 설치본 증거가 아니다. 해당 계정 시나리오는 `b9145fa9b`와 후속 묶음에서 통과했다. 실패한 전체 묶음을 통과로 합산하지 않으며, 나머지 95개 통과와 마지막 5개 재접속 통과를 각 SHA/범위로 구분한다.
 
-현재 계정 변경의 main 착지·push·해당 SHA의 CI·서명·설치·실물 수용은 아직 확인하지 않았다. 아래의 과거 설치 관측과 혼용하지 않는다.
+계정 변경은 main 및 원격 동일 SHA에 반영됐으나 해당 CI가 실패하여 서명·새 설치·계정 발급·실물 수용은 완료하지 않았다. 아래의 과거 설치 관측과 혼용하지 않는다.
 
 ## 범위와 정보 위치
 
@@ -107,7 +121,7 @@ PARKED 진단과 개발용 시뮬레이터를 활성 제품 화면으로 바꾸�
 
 현재 사이트의 Fleet 컨테이너 source revision은 `5f4040f306bf076648993376ed85834824e8d744`였다. 해당 설치본 `/console`, `/console/install`, `/console/site-map`, `/console/cell`을 1366px·320px에서 직접 열었다. **8 조합**에서 네 헤더 영역, 가로 넘침, 48px 정지·이동 조작, 글자/여백, 브랜드 자산 응답을 확인했다. `evidence/live/result.json` 및 8 PNG가 관찰 기록이다. TLS 인증서 신뢰 확인을 생략하는 브라우저 옵션을 사용했다. 이 기록은 새 변경의 배포 증거가 아니다.
 
-이번 브랜치의 main 착지·push·CI·서명 릴리스·새 설치는 수행하지 않았다. 저장소 「같이 하는 깃」 6항의 명시 지시가 필요하다. 로봇 접속 실패와 ADB 기기 부재 때문에 실물 Robot·Pilot·Cam·LCD 및 실제 작업 수용은 미확인이다. 비상 정지 해제·주행·페어링·Cell 작업 제안 같은 운영 변경으로 화면 검사를 대신하지 않았다.
+이 절의 최초 관측 당시에는 main 착지·push·새 설치를 수행하지 않았다. 이후 명시 승인으로 통합·푸시 검사를 진행했으며 최신 상태는 문서 첫 절의 후속 기록을 따른다. 로봇 접속 실패와 ADB 기기 부재 때문에 실물 Robot·Pilot·Cam·LCD 및 실제 작업 수용은 미확인이다. 비상 정지 해제·주행·페어링·Cell 작업 제안 같은 운영 변경으로 화면 검사를 대신하지 않았다.
 
 ## 최종 후속 검증
 
