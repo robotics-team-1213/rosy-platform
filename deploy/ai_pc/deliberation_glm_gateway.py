@@ -13,7 +13,7 @@ import sys
 import time
 import urllib.request
 
-from rosy.decision.deliberation import Problem, canonical, opinion
+from rosy.decision.deliberation import Problem, canonical, identifier, opinion
 
 MODEL = 'glm-5.3-flash'
 UPSTREAM = 'https://api.z.ai/api/coding/paas/v4/chat/completions'
@@ -23,13 +23,21 @@ LIMIT = 16384
 
 def trusted_body(raw):
     data = json.loads(raw)
-    if set(data) != {'problem', 'prior', 'instruction'} or data['prior']:
+    if (set(data) != {'problem', 'prior', 'instruction'}
+            or type(data['prior']) is not list or len(data['prior']) > 1):
         raise ValueError('INVALID_TRUSTED_JOB')
     fields = dict(data['problem'])
     digest = fields.pop('input_hash')
     problem = Problem(**fields)
     if digest != problem.digest:
         raise ValueError('INVALID_TRUSTED_JOB')
+    if data['prior']:
+        prior = dict(data['prior'][0])
+        identifier(prior.pop('profile_id'))
+        checked = opinion(problem, prior)
+        if (problem.fleet_choice is None or checked['choice'] == problem.fleet_choice
+                or 'unsafe' in checked['objections']):
+            raise ValueError('INVALID_TRUSTED_JOB')
     canonical(data)
     return problem, canonical(data)
 
@@ -77,6 +85,12 @@ def checked_response(problem, response):
             or usage['completion_tokens'] > 1024
             or usage['total_tokens'] != usage['prompt_tokens'] + usage['completion_tokens']):
         raise ValueError('INVALID_UPSTREAM_RESULT')
+    details = response['usage'].get('completion_tokens_details', {})
+    if 'reasoning_tokens' in details:
+        count = details['reasoning_tokens']
+        if type(count) is not int or not 0 <= count <= usage['completion_tokens']:
+            raise ValueError('INVALID_REASONING_USAGE')
+        usage['completion_tokens_details'] = {'reasoning_tokens': count}
     payload = opinion(problem, json.loads(message['content']))
     return {'id': 'rosy-glm-one-shot', 'object': 'chat.completion', 'model': MODEL,
             'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': canonical(payload)},

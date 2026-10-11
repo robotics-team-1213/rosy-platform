@@ -40,6 +40,7 @@ class ConditionalReview(Supervisor):
             return finish('BUSY')
         self._active.add(key)
         started = time.monotonic()
+        review_prior = ()
         try:
             async with asyncio.timeout(self.timeout_s):
                 for index in range(2):
@@ -50,7 +51,7 @@ class ConditionalReview(Supervisor):
                         return finish('COST_EXCEEDED')
                     result['calls'] += 1
                     result['unknown_cost_calls'] += 1
-                    payload, cost = await providers[index](problem, (),
+                    payload, cost = await providers[index](problem, review_prior if index else (),
                         self.timeout_s - (time.monotonic() - started), budget_usd=budget)
                     if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
                         return finish('COST_UNKNOWN')
@@ -78,13 +79,16 @@ class ConditionalReview(Supervisor):
                             if checked['objections']:
                                 result['review_trigger'] = ('insufficient_evidence'
                                     if 'insufficient_evidence' in checked['objections'] else 'conflict')
+                            if problem.fleet_choice is not None and checked['choice'] != problem.fleet_choice:
+                                result['review_trigger'] = 'fleet_qwen_disagreement'
+                                review_prior = tuple(json.loads(canonical(result['opinions'])))
                     if record is not None:
                         await record(json.loads(canonical(finish('OPINION_RECORDED', 'RUNNING'))))
                     if not fresh():
                         return finish('STALE_OR_CHANGED')
                     if index:
                         return finish('SECONDARY_REVIEW_COMPLETED')
-                    if checked is not None and not checked['objections']:
+                    if checked is not None and result['review_trigger'] is None:
                         return finish('PRIMARY_OPINION_ONLY', 'CANDIDATE', checked['choice'])
             return finish('UNCONFIGURED')
         except TimeoutError:
