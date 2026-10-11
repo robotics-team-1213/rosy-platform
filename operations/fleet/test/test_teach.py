@@ -218,7 +218,8 @@ def _app(tmp_path):
     return TestClient(app), tasks, store, poses
 
 
-def test_normal_recording_start_refuses_activation_during_localization_read(tmp_path, monkeypatch):
+@pytest.mark.parametrize('action', ['start', 'place'])
+def test_localized_writes_refuse_activation_during_localization_read(tmp_path, monkeypatch, action):
     client, _tasks, store, poses = _app(tmp_path)
     entered, release = threading.Event(), asyncio.Event()
 
@@ -226,8 +227,13 @@ def test_normal_recording_start_refuses_activation_during_localization_read(tmp_
         entered.set()
         await release.wait()
     monkeypatch.setattr(poses, 'refresh', delayed_refresh)
+    async def write():
+        if action == 'start':
+            return await client.app.state.teach.start('rosy_60', 'bob')
+        return await client.app.state.teach.place('rosy_60', name='old pose', kind='stop',
+            expected_revision=None, principal_id='bob')
     with client:
-        future = client.portal.start_task_soon(client.app.state.teach.start, 'rosy_60', 'bob')
+        future = client.portal.start_task_soon(write)
         try:
             assert entered.wait(5)
             draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
@@ -239,6 +245,7 @@ def test_normal_recording_start_refuses_activation_during_localization_read(tmp_
             future.result(timeout=5)
         assert error.value.code == 'TEACH_MAP_CHANGED'
         assert client.app.state.teach.view()['recording'] is None
+        assert store.draft_view()['map'] is None
 
 
 def test_activation_preserves_running_teach_and_allows_stopped_pending_records(tmp_path):
