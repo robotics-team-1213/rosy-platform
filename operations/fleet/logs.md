@@ -3243,3 +3243,10 @@
 - 변경: 판단·resolver·장치 명령 소유권을 보존하고 incidents 경계·직접 호출자·설치 계약을 최종 통합했다.
 - 증거: AI PC 원격493 passed/NEW0, 독립 책임·설치 검토 통과, tools/land.py 로컬 main FF `7afb0e2c4f`. 실제 범위·로그·후속 관문은 docs/validation/responsibility-boundaries-2026-10-11/landing.md.
 - gate 변화: 로컬 소스 통합 완료. 새 팀 Discord와 독립 현장 정답 수용은 팀 담당 HOLD; 실제 provider/발송/배포/motion 없음.
+
+## 2026-10-11 · 89c9b79bbd · fix(test): 추적 응답 fixture 설치 뒤 화면 초기화
+
+- 문제: 좌표 수명 브라우저 시험은 로그인 뒤에 tracking 응답을 가로챘다. 그 전에 실제 미설정404를 받으면 tracking view가 unavailable을 기억하므로 fixture가 있어도 표가 숨겨져 CI가 간헐 실패했다.
+- 변경: 먼저 실제404 응답을 기다리는 새로고침으로 실패 조건을 고정하고, 모의 응답 설치 뒤 화면을 새로 초기화한다. 좌표 만료·복귀·표 가시성·지도 크기·페이지 오류 검사는 유지한다. 제품 UI/API·관측 수명·CORE·Fleet 명령은 바꾸지 않는다.
+- 증거: 원격 실제 Chromium의 결정적 RED1 NEW 뒤 roles browser 전체6 pass·NEW0·exit0. 첫 원격 호출은 browser opt-in이 빠져 skip이었으며 실행 증거로 세지 않았다.
+- gate 변화: 시험 준비 순서와 원격 브라우저 회귀를 확인했다. main 통합·새 CI·사이트 배포·Isaac/Gazebo 주행과 두 대 Fleet 수용은 별도다.
