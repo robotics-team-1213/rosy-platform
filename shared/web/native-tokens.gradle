@@ -26,7 +26,8 @@ def nativeTokens = tasks.register('generateNativeTokens') {
             return Double.parseDouble(value.group(1)) * (value.group(2) == 'rem' ? 16 : 1)
         }
         def metrics = declarations.keySet().findAll {
-            it ==~ /(?:text|space|radius|target|weight|leading)-[a-z0-9-]+/ ||
+            it ==~ /(?:space|radius|target|weight|leading)-[a-z0-9-]+/ ||
+                it ==~ /text-(?:micro|label|body|value|title|display)/ ||
                 it in ['inset-button', 'focus-ring-width', 'focus-ring-offset', 'disabled-opacity']
         }.collect { "    const val ${pascal(it)} = ${resolve(it)}f // --$it" }
         ['line-14', 'gauge-track'].each { name ->
