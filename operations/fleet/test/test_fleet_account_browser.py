@@ -1,5 +1,6 @@
 """D-683 account discovery, verified authentication and no automatic operation replay."""
 import threading
+import os
 import time
 from pathlib import Path
 
@@ -72,12 +73,20 @@ def test_account_entry_returns_to_each_document_without_commands(account_page, p
         page.locator('#fleet-login').click()
         login = page
     _credentials(login)
+    if output := os.environ.get('ROSY_SHOT_DIR'):
+        for width in (320, 1366):
+            login.set_viewport_size({'width': width, 'height': 900})
+            login.screenshot(path=str(Path(output) / f'account-login-{width}.png'), full_page=True)
     login.locator('[data-login=password]').press('Enter')
     expect(login).to_have_url(origin + path)
     expect(login.locator('#fleet-account')).to_be_visible()
     login.locator('#fleet-account > summary').click()
     expect(login.locator('#fleet-account-identity')).to_contain_text('alice')
-    assert login.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    for width in (320, 1366):
+        login.set_viewport_size({'width': width, 'height': 900})
+        assert login.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if output := os.environ.get('ROSY_SHOT_DIR'):
+            login.screenshot(path=str(Path(output) / f'account-{path.rsplit("/", 1)[-1]}-{width}.png'), full_page=True)
     assert writes == [origin + '/api/fleet/auth/login']
 
 

@@ -50,7 +50,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 page.locator('#fleet-login').click()
                 form = page.locator("#password-login [data-login=form]")
                 expect(form).to_be_visible(timeout=15000)
-                expect(page.locator("#token-access")).not_to_have_attribute("open", "")
+                expect(page.locator('#token-access')).to_have_count(0)
                 page.locator("#password-login [data-login=login]").fill("alice")
                 page.locator("#password-login [data-login=password]").fill("wrong")
                 page.locator("#password-login [data-login=submit]").click()
