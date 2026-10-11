@@ -322,7 +322,18 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        54_214,
+        54_852,
+        "split: independently re-judged by safety_structure_review at 54852 on 2026-10-12 "
+        "for D-687/D-693: existing Mission/Cell proposal-resolve-admit and named incident handoff "
+        "retain author/independent approver, evidence/generation/fence and same-DB transaction owners. "
+        "Discord adds scoped relations, bounded original-message replies and Console confirmation; "
+        "pure transport stays in its existing holder. Fleet35961 + Decision1666 + Console16980 + Discord245; "
+        "existing ten nested units excluded once by the innermost filter. No new SIZE_UNITS or writers. "
+        "Keep +150, all file ceilings/hard tiers, app906, TaskStore1035/1060, Console.py1325 zero-growth, "
+        "proposal_store797 with its existing seam review above800, UIconsole1032/1175 and schemas1386/1389. "
+        "Incidents505 stays within360+150; do not expand its allowance. Preserve full-progress, observe, "
+        "server and UI extraction obligations. See docs/plans/2026-10-12-discord-fleet-end-to-end.md. "
+        "CI, signed deployment, live Discord roundtrip and FIELD remain separate. Previous verdict: "
         "split: independently re-judged by safety_structure_review at 54214 on 2026-10-12 "
         "for a4a3ad4a0: D-680 atomic existing-Task admission, scoped durable replies and Console review. "
         "Fleet35511 + Decision1658 + Console16800 + Discord245; app906, TaskStore1035/1060, "
