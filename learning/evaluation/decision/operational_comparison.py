@@ -160,6 +160,8 @@ def checked_export(exported):
 
 def compare(cohort, exports):
     """Report unreviewed evidence counts, never causal success or accepted quality."""
+    if type(cohort) is dict and cohort.get('schema') == 'rosy.incident.operational_cohort/2':
+        return compare_with_rules(cohort, exports)
     digest(cohort)
     fields(cohort, ('schema', 'domain', 'training', 'fit', 'evaluation', 'candidates'))
     if cohort['schema'] != 'rosy.incident.operational_cohort/1': raise ValueError('INVALID_COHORT_SCHEMA')
@@ -213,6 +215,90 @@ def compare(cohort, exports):
                  if name not in {row['strategy'] for row in reports}]), 'independent_truth', 'acceptance_limits',
                  'normal_command_coverage', 'recurrence_coverage', 'actual_invoice', 'runtime_admission',
                  'input_lineage_admission', 'strategy_provenance'])
+
+
+def checked_rule_export(exported):
+    from rosy.contracts.learning.incident_rule import validate_rule
+    fields(exported, ('schema', 'scope', 'records', 'digest', 'label_state', 'field_accepted', 'coverage'))
+    if (exported['schema'] != 'rosy.incident.rule_feedback/1' or exported['label_state'] != 'UNREVIEWED'
+            or exported['field_accepted'] is not False or exported['coverage'] != 'retained_selections_only'
+            or digest(dict(scope=exported['scope'], records=exported['records'])) != sha(exported['digest'])):
+        raise ValueError('UNBOUND_RULE_COMPARISON_EXPORT')
+    scope = exported['scope']
+    fields(scope, ('subject_id', 'case_id', 'owner_id', 'config_sha256', 'policy_revision', 'start', 'end'))
+    for name in ('subject_id', 'case_id', 'owner_id', 'policy_revision'): text(scope[name])
+    sha(scope['config_sha256'])
+    if not 0 < timestamp(scope['end']) - timestamp(scope['start']) <= 86400:
+        raise ValueError('INVALID_RULE_COMPARISON_WINDOW')
+    records = exported['records']
+    if type(records) is not list or not 1 <= len(records) <= 4096: raise ValueError('EMPTY_RULE_COMPARISON_RECORDS')
+    ids, selections, necessities = [], {}, {}
+    for row in records:
+        fields(row, ('selection_id', 'received_at', 'receipt', 'sha256'))
+        if count(row['selection_id']) < 1: raise ValueError('INVALID_RULE_COMPARISON_CURSOR')
+        received = timestamp(row['received_at'])
+        receipt = validate_rule(row['receipt']); assessment = receipt['assessment']; request = assessment['request']
+        raw = json.dumps(receipt, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()
+        if (hashlib.sha256(raw).hexdigest() != sha(row['sha256']) or receipt['strategy'] != 'RULE_ONLY'
+                or (request['subject_id'], request['case_id'], request['owner']) !=
+                   (scope['subject_id'], scope['case_id'], scope['owner_id'])
+                or receipt['config_sha256'] != scope['config_sha256'] or assessment['policy_revision'] != scope['policy_revision']
+                or not scope['start'] <= received <= scope['end'] or received < assessment['evaluated_at']):
+            raise ValueError('RULE_COMPARISON_SCOPE_CHANGED')
+        ids.append(row['selection_id'])
+        for counts, value in ((selections, receipt['selection']['kind']), (necessities, assessment['necessity'])):
+            counts[value] = counts.get(value, 0) + 1
+    if ids != sorted(set(ids)): raise ValueError('DUPLICATE_RULE_COMPARISON_CURSOR')
+    return scope, selections, necessities
+
+
+def compare_with_rules(cohort, exports):
+    fields(cohort, ('schema', 'domain', 'training', 'fit', 'evaluation', 'candidates', 'rules'))
+    digest(cohort)
+    if type(exports) is not list or len(exports) > 4096: raise ValueError('INVALID_EXPORT_SET')
+    models, available = [], {}
+    for exported in exports:
+        if type(exported) is dict and exported.get('schema') == 'rosy.incident.rule_feedback/1':
+            checked = checked_rule_export(exported)
+            if exported['digest'] in available: raise ValueError('DUPLICATE_RULE_COMPARISON_EXPORT')
+            available[exported['digest']] = checked
+        else: models.append(exported)
+    model_cohort = {key: value for key, value in cohort.items() if key != 'rules'}
+    model_cohort['schema'] = 'rosy.incident.operational_cohort/1'
+    report = compare(model_cohort, models)
+    cases = identities(cohort['evaluation'], evaluation=True)[1]
+    if type(cohort['rules']) is not list or not 1 <= len(cohort['rules']) <= 4: raise ValueError('EMPTY_RULE_CANDIDATES')
+    used, strategies = set(), {row['strategy_sha256'] for row in report['candidates']}
+    for candidate in cohort['rules']:
+        fields(candidate, ('strategy_sha256', 'config_sha256', 'owner_id', 'policy_revision', 'exports'))
+        strategy = sha(candidate['strategy_sha256']); sha(candidate['config_sha256'])
+        text(candidate['owner_id']); text(candidate['policy_revision'])
+        if strategy in strategies: raise ValueError('DUPLICATE_STRATEGY')
+        strategies.add(strategy)
+        if type(candidate['exports']) is not list or len(candidate['exports']) != len(cases): raise ValueError('INCOMPLETE_RULE_CASES')
+        matched, selections, necessities = set(), {}, {}
+        for binding in candidate['exports']:
+            fields(binding, ('subject_id', 'case_id', 'digest'))
+            key, receipt_hash = (text(binding['subject_id']), text(binding['case_id'])), sha(binding['digest'])
+            if key not in cases or key in matched or receipt_hash not in available or receipt_hash in used:
+                raise ValueError('RULE_COMPARISON_CASE_CHANGED')
+            scope, selected, necessary = available[receipt_hash]
+            if ((scope['subject_id'], scope['case_id']) != key or scope['config_sha256'] != candidate['config_sha256']
+                    or scope['owner_id'] != candidate['owner_id'] or scope['policy_revision'] != candidate['policy_revision']):
+                raise ValueError('RULE_COMPARISON_STRATEGY_CHANGED')
+            matched.add(key); used.add(receipt_hash)
+            for total, counts in ((selections, selected), (necessities, necessary)):
+                for name, value in counts.items(): total[name] = total.get(name, 0) + value
+        report['candidates'].append(dict(strategy='rule', strategy_sha256=strategy,
+            config_sha256=candidate['config_sha256'], policy_revision=candidate['policy_revision'],
+            case_count=len(matched), selections=selections, necessities=necessities, outcomes=None,
+            model_call_count=None, known_marginal_micros=None, reserved_liability_micros=None,
+            unknown_cost_attempts=None, observed_invoice_micros=None, normal_command_count=None, recurrence_count=None))
+    if used != set(available): raise ValueError('EXTRA_RULE_COMPARISON_EXPORT')
+    report.update(schema='rosy.incident.operational_comparison/2', cohort_sha256=digest(cohort))
+    report['missing'].remove('rule_baseline')
+    report['missing'] += ['rule_operational_baseline', 'rule_command_coverage', 'rule_model_call_coverage']
+    return report
 
 
 def main(argv=None):
