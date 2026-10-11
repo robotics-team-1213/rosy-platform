@@ -311,9 +311,13 @@ def _verified_manifest(path: Path) -> dict:
         if not isinstance(doc, dict) or not isinstance(doc.get("classes"), list):
             raise ValueError("no classes list")
         for c in doc["classes"]:
-            if not isinstance(c, dict):
+            if (not isinstance(c, dict) or not isinstance(c.get("name"), str)
+                    or not c["name"] or not isinstance(c.get("role"), str)):
                 raise ValueError("invalid class entry")
             validate_label_semantic(c)
+        if not isinstance(doc.get("frames"), list) or any(
+                not isinstance(f, dict) or not isinstance(f.get("session"), str) for f in doc["frames"]):
+            raise ValueError("invalid frames/session metadata")
         return doc
     except (OSError, ValueError) as exc:
         raise EvalSetError(f"dataset {path}: {exc}") from exc
@@ -327,7 +331,7 @@ def _sessions(manifest: dict) -> set[str]:
 
 def training_sessions(store, revision, *, verify_content=False) -> tuple[str, set[str], set[str], set[str], dict] | None:
     """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
-    found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
+    found as <store>/datasets/*/<revision>/manifest.json, with its manifest; None when it cannot be resolved
     (no store, a revision that is not a 64-hex content sha, no such folder)."""
     if not store or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
         return None
