@@ -18,10 +18,18 @@ def digest(data):
     return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
+def full_profile_digest():
+    from dataclasses import asdict
+    from test_judgment_profiles import profile as runtime_profile
+    return digest(asdict(runtime_profile(profile_revision=IDENTITY['profile_revision'],
+        model_revision=IDENTITY['model_revision'], calibration_revision=IDENTITY['calibration_revision'])))
+
+
 def rows(split, count=60):
     return [dict(id=f'{split}-{i}', session_id=split, recording_id=f'{split}-{i}',
                  session_sha256=digest(split), recording_sha256=digest(f'{split}-{i}'),
                  reviewed_by='fixture-reviewer', expected='reobserve', **IDENTITY,
+                 full_profile_sha256=full_profile_digest(),
                  alternatives=[dict(choice='reobserve', probability=.99), dict(choice='human', probability=.01)],
                  abstained=False, latency_ms=10, unsafe_error=False, binding_error=False,
                  unnecessary_effect=False, required_abstain_error=False) for i in range(count)]
@@ -33,7 +41,8 @@ def manifest():
 
 
 def profile(fit, evaluation, limits=None):
-    return dict(**IDENTITY, choices=['reobserve', 'human'], reviewed_by='fixture-reviewer',
+    return dict(**IDENTITY, full_profile_sha256=full_profile_digest(),
+                choices=['reobserve', 'human'], reviewed_by='fixture-reviewer',
                 fit_sha256=digest(fit), evaluation_sha256=digest(evaluation),
                 training_sha256=digest(manifest()), limits=limits)
 
