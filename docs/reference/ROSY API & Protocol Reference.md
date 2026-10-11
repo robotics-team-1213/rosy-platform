@@ -3214,3 +3214,5 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 응답은 `ChannelRequestReceipt`: request_id(접수 key), principal_id, guild_id/channel_id/message_id/author_id, 원문 content 및 content_hash(SHA256), received_at(UTC ISO8601), status=`REQUESTED`다. 같은 scope와 같은 envelope는 같은 receipt이고 수정된 내용은409다. 설정된 DB 최대1000건에서503이며 자동 삭제하지 않는다. 재접수도 현재 권한을 다시 검사한다. 접수는 Task/Mission/Job/승인/장치 요청/모델 호출을 만들지 않는다.
 
 `GET /api/fleet/channel-requests`는 등록된 기명 operator의 자기 요청 최근50건 `{rows:[ChannelRequestReceipt]}`만 읽는다. 미인증401/다른 역할·공용·development403다. CLI `--discord-intake-config`가 없으면 두 경로는404다. account/mapping 변경은 기존 site-users와 같이 서버 재시작으로 반영한다. Gateway 수신 실행기, Bot token 주입, 실수신 및 후보/승인 연결은 후속 gate다. CORE/OMX writer, 기존 Mission/Cell Job 권한 및 WS protocol_version 1.0은 유지한다.
+
+D-675 Proposed: private intake 설정에 선택적 ot_token_file을 지정하면 기존 Fleet lifespan에 Discord 수신기를 연결한다. 토큰은 별도 private 파일이며 없으면 OFF다. 기명 접수 계약과 API는 그대로이며 실제 이미지/수신 검증은 후속 gate다.

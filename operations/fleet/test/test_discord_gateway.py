@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-import fleet  # Load the same source holders as the installed Fleet caller.
+import fleet  # noqa: F401 - Load the same source holders as the installed Fleet caller.
 from rosy_discord.gateway import DiscordGateway, GatewayStop
 
 GUILD, CHANNEL, BOT, USER = [str(100000000000000000 + i) for i in range(4)]
@@ -83,3 +83,33 @@ def test_identify_and_resume_and_missing_heartbeat_ack():
         assert await worker.heartbeat(socket) is False and socket.closed
         assert "private-test-bot-token" not in repr(worker)
     asyncio.run(scenario())
+
+
+def test_session_loss_stops_when_receipt_is_unresolved():
+    worker = gateway(None)
+    worker.pending = True
+    with pytest.raises(GatewayStop):
+        worker.forget_session()
+
+
+def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from fleet.server.channel_gateway import install_gateway
+    from fleet.server.channel_requests import ChannelConfig, ChannelRequests
+    states = []
+    async def run(self):
+        states.append("start")
+        try:
+            await asyncio.Event().wait()
+        finally:
+            states.append("stop")
+    monkeypatch.setattr(DiscordGateway, "run", run)
+    config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
+                           transport_key="transport-key-" * 3, users={USER: "operator"})
+    journal = ChannelRequests(tmp_path / "tasks.db", config, {"operator": "operator"})
+    app = FastAPI()
+    install_gateway(app, journal, "private-bot-token-" * 4)
+    with TestClient(app):
+        assert states == ["start"]
+    assert states == ["start", "stop"]
