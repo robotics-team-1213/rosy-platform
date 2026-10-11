@@ -71,5 +71,5 @@ def checked_receipt(scope, attempt, receipt):
                 or type(attempt['actual_micros']) is not int or attempt['actual_micros'] < 0):
             raise ValueError('MODEL_RECEIPT_ATTEMPT_CHANGED')
         return raw
-    except (TypeError, KeyError, StopIteration, json.JSONDecodeError) as error:
+    except (TypeError, KeyError, StopIteration, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('INVALID_MODEL_RECEIPT') from error
