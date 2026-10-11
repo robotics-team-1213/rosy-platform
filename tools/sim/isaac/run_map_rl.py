@@ -41,6 +41,13 @@ def camera_tick(lane, now, *, gain):
     return decision, state
 
 
+def camera_episode_usable(phase, visible_frames):
+    usable = visible_frames > 0
+    if not usable and phase != 'train':
+        raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
+    return usable
+
+
 def episode_phases(train_episodes, *, camera, evaluation_only):
     evaluations = ([(707, 0.), (808, math.pi / 2), (909, math.pi), (1001, -math.pi / 2)]
                    if evaluation_only else [(202, 0.), (303, 0.)] + ([(404, 0.)] if camera else []))
@@ -494,7 +501,8 @@ def main():
             if frozen is not None:
                 episode['policy_state_sha256'] = policy_state_sha256(frozen)
             if lane is not None:
-                episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames)
+                episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames,
+                               camera_usable=camera_visible_frames > 0)
             if recorder is not None:
                 # Record the true completed stop even when it falls between sample ticks.
                 for _ in range(2):
@@ -515,8 +523,9 @@ def main():
                 raise RuntimeError('evaluation mutated policy')
             if phase == 'eval' and learned_steps == 0:
                 raise RuntimeError('evaluation visited no learned state')
-            if lane is not None and camera_visible_frames == 0:
-                raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
+            if lane is not None:
+                # Failed training starts stay in the report; other seeds still train after a measured stop.
+                camera_episode_usable(phase, camera_visible_frames)
             if phase == 'eval' and perception is not None:
                 summary['camera_comparisons'].append(camera_comparison(summary['episodes'][-2], episode))
             if phase == 'train':

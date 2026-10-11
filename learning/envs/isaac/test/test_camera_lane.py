@@ -117,6 +117,28 @@ def test_missing_camera_observation_is_not_a_learning_state():
         lane.close()
 
 
+def test_unusable_training_episode_preserves_failure_and_allows_later_valid_learning():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import camera_episode_usable, learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    assert camera_episode_usable('train', 0) is False
+    assert learn_transition(policy, ((3, 1), 1), None,
+                            dict(reward=-10., terminated=True, truncated=False)) == 'invalid_camera_observation'
+    assert policy.updates == 0 and policy.table == {}
+    assert camera_episode_usable('train', 1) is True
+    assert learn_transition(policy, ((3, 1), 1), (3, 1),
+                            dict(reward=1., terminated=True, truncated=False)) == 'updated'
+    assert policy.updates == 1
+
+
+@pytest.mark.parametrize('phase', ['baseline', 'eval'])
+def test_camera_admission_still_rejects_an_unusable_baseline_or_evaluation(phase):
+    from run_map_rl import camera_episode_usable
+    assert camera_episode_usable(phase, 1) is True
+    with pytest.raises(RuntimeError, match='candidate not accepted'):
+        camera_episode_usable(phase, 0)
+
+
 def test_learning_state_expires_with_source_age_and_processing_time():
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
