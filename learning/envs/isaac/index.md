@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
+- 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
 - 2026-10-12 · 484ce96805 · fix(isaac): 지도 prior를 회전 승인으로 사용하지 않기
 - 2026-10-12 · fa75953dfe · feat(isaac): native camera containment 관측 연결
 - 2026-10-12 · fff1b93a6 · fix(isaac): 콘솔 admission 오류와 R19 픽셀 재현
-- 2026-10-12 · 25add33f95 · fix(isaac): 실패 픽셀 보존과 네 방향 진단 계속
-- 2026-10-12 · eae0f59da0 · test(isaac): 카메라 RL 업데이트와 진단 실패 기록
