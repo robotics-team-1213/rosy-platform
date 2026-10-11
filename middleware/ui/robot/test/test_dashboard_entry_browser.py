@@ -143,7 +143,8 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
-    assert state['calls'][0] == ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})
+    assert [call for call in state['calls'] if call[1] == '/api/v1/auth/pair'] == [
+        ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})]
     # A response beyond seven days may never become a remembered browser token.
     assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == 'fixture-paired'

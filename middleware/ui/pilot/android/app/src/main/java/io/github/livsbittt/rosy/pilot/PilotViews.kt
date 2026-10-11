@@ -55,7 +55,7 @@ class PilotViews(private val context: Context) {
         copy.addView(label(if (!enabled) "연결 보류 · 목록을 다시 찾거나 태블릿 상태를 확인하세요" else candidate.robotId.ifBlank { "로봇 · 같은 Wi-Fi" }, RosyMetrics.TextLabel, true))
         addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
         addView(label(if (enabled) "연결" else "보류", RosyMetrics.TextBody).apply { setPadding(dp(RosyMetrics.Space4.toInt()), 0, 0, 0) })
-        addView(ImageView(context).apply { setImageResource(R.drawable.ic_back); rotation = 180f; imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(12) })
+        addView(ImageView(context).apply { setImageResource(R.drawable.ic_back); rotation = 180f; imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(RosyMetrics.Space3.toInt()) })
         isEnabled = enabled; isClickable = enabled; isFocusable = enabled
         contentDescription = "$title, ${if (enabled) "연결" else "연결 보류"}"
         setOnClickListener { if (isEnabled) action() }

@@ -137,7 +137,7 @@ fun PairingScreen(
                         PairingText.groupedCode(code),
                         style = MaterialTheme.typography.displayLarge,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight(RosyMetrics.WeightStrong.toInt()),
                         modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") },
                     )
                     Text(stringResource(R.string.pairing_waiting), style = MaterialTheme.typography.bodyMedium)
@@ -151,7 +151,7 @@ fun PairingScreen(
                         state.fingerprint.replace("-", "-\u200B"),
                         style = MaterialTheme.typography.headlineMedium,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight(RosyMetrics.WeightStrong.toInt()),
                         modifier = Modifier.semantics { contentDescription = state.fingerprint },
                     )
                     Text(
