@@ -131,7 +131,7 @@ ui-button[kind="irreversible"] {
   border-color: transparent;
   color: var(--button-irreversible-ink);
   background: var(--button-irreversible-bg);
-  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
 }
 
 ui-button[kind="segment"] {

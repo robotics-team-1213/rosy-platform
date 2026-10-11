@@ -93,7 +93,7 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
           };
         }""")
         assert page.evaluate("window.__sharedContract") == {
-            "sizes": ["48px", "48px", "58px"],
+            "sizes": ["48px", "48px", "48px"],
             "activeSegment": "rgb(53, 56, 60)",
             "defaultRole": "status",
             "live": "polite",
