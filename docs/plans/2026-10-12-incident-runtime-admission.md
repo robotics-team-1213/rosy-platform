@@ -58,7 +58,11 @@
 
 [OllamaTransport](../../deploy/ai_pc/deliberation_ollama.py)는 고정 local endpoint/backend를 사용하지만 기본 `ready/isolated/cost_verified`가 false다. 실제 호스트 수용 descriptor와 schema 2의 요청/응답 검증이 있어야 `VersionedLocalProvider`에 연결할 수 있다. Fleet에서 AI PC의 loopback broker까지의 전달 경로는 현재 운영 구성에 없으며, 임의 URL 인자를 추가해서 해결하지 않는다.
 
-[GLM gateway](../../deploy/ai_pc/deliberation_glm_gateway.py)의 기존 첫 시험은 legacy `{problem, prior, instruction}`과 schema 1 opinion을 검증한다. [VersionedCliProvider](../../operations/decision/src/rosy/decision/deliberation/providers/versioned_cli.py)의 schema 2 요청과 그대로 호환하지 않는다. [GlmOpenCodeLauncher](../../deploy/ai_pc/deliberation_opencode.py)는 `cost_verified=False`이고 schema 2 transport admission도 제공하지 않는다. 실제 v2 reviewer 연결에는 별도 고정 broker/codec와 격리·한계·비용 수용 증거가 필요하다.
+[GLM gateway](../../deploy/ai_pc/deliberation_glm_gateway.py)는 기존 legacy opinion 경로를 유지하며 별도 v2 codec으로 공통 판정 요청·검증된 prior·응답을 연결한다. [GlmOpenCodeLauncher](../../deploy/ai_pc/deliberation_opencode.py)의 기본 `ready/isolated/cost_verified`는 false다. v2 호출에는 정확한 전체 ModelProfile, 외부 runtime admission, 유효한 included-plan 정책 증거가 모두 필요하다. 동일 revision이라도 calibration·역할·한도가 바뀌면 거절한다.
+
+[GLM receipt](../../deploy/ai_pc/deliberation_glm_receipt.py)는 host gateway의 요청·프로파일·판정 hash, 실제 제공자 response/request ID와 사용량을 재검증한다. 정책의 credential fingerprint는 실제 gateway 키와 READY·영속 호출 표식·upstream 전에 대조한다. SDK의 cost 값은 비용 증거로 사용하지 않는다. 승인된 포함 플랜의 한계 현금 비용 정책으로 0을 기록하더라도 실제 관측 청구는 null, 원래 host 비용 상태는 UNKNOWN으로 보존한다. 포함 플랜 정책은 월 구독료·quota 소비가 없다는 뜻도, 격리·정확도·현장 수용 증거도 아니다.
+
+`7bccf0a6a0`의 관련 5개 파일 source 시험은 적격 AI PC 10.3GB에서 90 passed, exit 0, known-failures NEW 0이다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/glm-launcher-final-green/run-1.txt`다. 키·프로파일 drift 관련 독립 검토 지적을 반영했다. 실제 정책·admission 증거 생성과 제공자 호출은 수행하지 않았다. 기존 v1-only admin staging에는 v2의 Decision/Foundation 및 pinned Python 의존성이 없으므로 새 설치 closure를 확인해야 한다.
 
 D-679의 최초 GLM 시험 한 번·30초·1,024 토큰·무재시도 표식은 유지한다. 반복 worker를 구성하며 이 표식을 지우거나 첫 시험 허용을 반복 호출 허용으로 바꾸지 않는다. 사용량과 실제 과금 증거를 구분하고, 미확인 비용은 UNKNOWN과 예약 예산으로 남긴다.
 

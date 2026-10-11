@@ -114,6 +114,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         p, bound, body = fixture(prior=True)
         body = body.decode()
         answer['choices'][0]['message']['content'] = json.dumps(opinion(p, bound))
+        answer.update(id='response-1', request_id='request-1')
     def upstream(body, token, remaining):
         seen.append(body)
         assert token == 'fake-unit-token' and 0 < remaining <= 30
@@ -131,14 +132,21 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
         server.problem, server.body, server.token = p, body, 'fake-unit-token'
+        server.credential_sha256 = 'f' * 64
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
         worker.start()
-        with closing(Connection(path)) as conn:
-            conn.request('POST', route, raw, {'Content-Type': 'application/json'})
-            result = conn.getresponse()
-            output = result.read()
+        result = None
+        try:
+            with closing(Connection(path)) as conn:
+                conn.request('POST', route, raw, {'Content-Type': 'application/json'})
+                result = conn.getresponse()
+                output = result.read()
+        except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+            if change not in {'route', 'oversize'}:
+                raise
+            # Header rejection may close before the refused body is transmitted.
         worker.join(4)
         assert not worker.is_alive()
         if change in {'valid', 'stream'}:
@@ -160,7 +168,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
             worker.join(4)
             assert not worker.is_alive() and len(seen) == server.calls == 1
         else:
-            assert result.status == 400 and seen == []
+            assert (result is None or result.status == 400) and seen == [] and server.calls == 0
 
 
 def test_upstream_fixed_tls_and_no_redirects(monkeypatch):
