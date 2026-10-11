@@ -3175,3 +3175,9 @@
 - 변경: 차선 코스·축구장·일반 지도 종류, 설명과 축구장 치수 저장·선택·파일 입력. 중심 원점의 축구장 경계 템플릿과 기준선 표시. SQLite 추가 열로 기존 지도/기본 정보를 보존하며, 이전 클라이언트가 기본 정보를 생략하면 현재 정보를 유지한다. Games 기존 Field·SoccerGame 재사용 방향과 별도 연결 검증을 ADR로 기록했다.
 - 검증: 기존 API/DB에서 기본 정보 미지원 실패를 원격 시험으로 재현했고, 축구장 템플릿 시험은 Node에서 실패 후 통과했다. 최종 원격 계약·Chromium 검증은 별도 기록한다.
 - gate 변화: 구현 단계. 자동 Games 시작·Vision 축구 인식·배포·실물 수용은 이번 구현 범위에 포함되지 않는다.
+
+## 2026-10-11 · 655093d8a · test(fleet): 지도 종류와 기본 정보 관리 검증
+
+- 변경: D-635 기본 정보 관리와 Games 재사용 경계의 검증을 기록했다.
+- 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 관련 원격 pytest 175 passed·Node 285 passed·Chromium 데스크톱/모바일 4 passed·DB 재개방 포함 프로필 시험 11 passed, known_failures NEW 0. browser fixture MIME 누락은 수정 후 재검증했다.
+- gate 변화: SOURCE/원격 계약/Chromium. 자동 Games 연결·Vision 축구 인식·착지·push·배포·실물 경기 수용은 별도다.
