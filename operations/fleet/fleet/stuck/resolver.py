@@ -151,6 +151,9 @@ class StuckResolver:
         """A human opened this stuck's decision (D-438 §1): the resolver stays silent."""
         self._claims.add((robot_id, stuck_id))
 
+    def is_claimed(self, robot_id: str, stuck_id: str) -> bool:
+        return (robot_id, stuck_id) in self._claims
+
     def sent(self, answer: Answer, now: float) -> None:
         chain = self._chains.get(answer.robot_id)
         if chain is None:

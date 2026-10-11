@@ -2,7 +2,11 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
+<<<<<<< HEAD
 **Version:** v1.206
+=======
+**Version:** v1.207
+>>>>>>> main
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2796,6 +2800,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
+| v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
+| v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.206 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
@@ -3160,3 +3166,22 @@ POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 
 See [D-631](../adr/D-631-map-profiles-and-views.md) for the profile API contract. GET `/api/fleet/site-map/profiles` requires read permission and returns `{profiles: [...]}`. PUT `/api/fleet/site-map/profiles/{profile_id}` requires a named operator, accepts `{name,map,expected_revision}` and returns the saved row. Each row contains `profile_id`, `name`, `map`, `revision`, `saved_by`, `saved_at`. Maps use `rosy.site_map/1` validation and the 2 MiB body limit. Profile IDs match `[A-Za-z0-9_.-]{1,64}`; names have 1-64 characters with non-whitespace content. Updates compare revisions; new profiles use null. Errors: 409 `SITE_MAP_PROFILE_CHANGED`, 409 `SITE_MAP_PROFILE_LIMIT` (100 profiles), 422 `SITE_MAP_INVALID`, 413 `SITE_MAP_TOO_LARGE`. Saves emit `profile_saved` and do not change the active map or draft. Loading into draft and activation use the existing APIs.
 
 D-635 adds profile kind (lane_course, soccer, general, default lane_course), description (up to 1000 characters, default empty), and soccer_field (default null). Soccer requires positive finite length_m, width_m, goal_width_m with goal_width_m <= width_m; other kinds require null. These fields are returned with each saved profile. Metadata updates use the same revision and permissions; they do not activate a map or start Games. Updates omitting all three metadata fields preserve existing metadata (older clients); new rows default to lane_course.
+
+
+## v1.206 Fleet 현재 판단 참고와 관측 종료 (D-660)
+
+`GET /api/fleet/state`(viewer+)의 로봇 행 `judgment`는 null 또는 `FleetJudgmentReceipt`다. `necessity`는 `INTERVENE | DO_NOT_INTERVENE | ABSTAIN`, `reason`, `policy_revision`, epoch-second `evaluated_at`/`valid_until`, `request`는 원본 subject/case/revision/owner/condition/evidence/since/until/conflicted 참고 metadata다. 잘못된 값·누락도 보류 근거이므로 request를 실행 인자로 사용하지 않는다. `shadow=true`, `action_admissible=false`는 고정이며 필요성은 장치 발행 허가가 아니다. 현재 시각에 신선도를 다시 검사하고 과거 증거 시각을 갱신하지 않는다.
+
+`GET /api/fleet/judgments?limit=100`(viewer+)는 `{records:[{judgment_id,robot_id,recorded_at,assessment}]}`다. limit은 정수 1..1000(기본100), 미인증401, 범위 밖422다. assessment는 같은 receipt 형식의 당시 기록이며 7일 보존한다. 필요성/사유/case/owner/정책 변화와 같은 분류의 60초 표본을 기록한다. 조회·정상 표본은 장치 요청·새 사건·외부 발송을 만들지 않는다. 당시 receipt의 TTL은 현재 조치 허가가 아니다.
+
+`GET /api/fleet/incidents`의 line_stuck report에 `closure: FleetObservedClosure`를 추가한다. status는 `OPEN | NATURAL_CLEARANCE | CLEARANCE_OBSERVED | OBSERVATION_ENDED`, action_credit은 `NONE | UNVERIFIED`, reason은 기존 close_reason 또는 null, observed_at은 closed_at 또는 null이다. 수락/응답불명 답 뒤 cleared는 관측상 해소이며 조치 성공 증명이 아니다. restart/replaced/left_roster는 관측 종료다. 기존 evidence.fleet.resolved_by는 마지막 수락 답의 주체이며 인과적 성공으로 해석하지 않는다. 과거 원인 초안 점수는 보정된 정확도·확률이 아니다.
+
+추가 형식의 기계 계약은 `core_common.protocol.schemas.FleetJudgmentReceipt`와 `FleetObservedClosure`, producer는 `fleet.stuck.board/reports`, consumer는 Fleet Console이다. 로봇 WS envelope protocol_version(1.0)과 기존 명령/사람 인수/stop-generation 계약은 변경하지 않는다.
+
+### D-661 이름 있는 사건 인수 (v1.207)
+
+기존 `POST /api/fleet/robots/{robot_id}/line-stuck/claim` 본문에 선택 `judgment_revision`(소문자 SHA-256 64자리)을 추가한다. 없으면 기존 자동 해결기 중지이고 응답의 `kind`는 `resolver_pause`다. 있으면 이름 있는 operator와 기존 durable Fleet DB가 필요하며 현재 사건/의미 revision/최근 Fleet 평가/경쟁 담당을 다시 검사한다. 성공 응답은 기존 robot_id/stuck_id/claimed_by와 `kind:incident_handoff`, `handoff:{robot_id,stuck_id,principal_id,judgment_revision,claimed_at}`(UTC epoch seconds)다. 기한/사건/revision 변경 또는 다른 담당은409, 미인증401, viewer/이름 없는 인수403, 원장 미설정503다. 성공은 검토 책임이며 CORE 실행·목표·해소를 뜻하지 않는다. 같은 담당 중복은 같은 receipt다. 다른 담당자의 이동 답은409이며 WAIT/ABORT는 유지한다.
+
+`GET /api/fleet/incidents`의 line_stuck report에 `handoff`(없으면null), `judgment_revision`(현재 열린 case가 아니면null)을 추가한다. 조회는 선택 `robot_id`와 `stuck_id`를 함께 받으며 기존 limit 안에서 해당 사건만 반환한다. 하나만 주거나 식별자 형식이 잘못되면422다. token 없는 `/console?inbox=1&robot=<id>&incident=<id>` 링크는 기존 viewer/operator 로그인 이후 이 조회와 인수 UI로 연결되며 GET으로 인수하지 않는다. 공개 인수·조회 producer는 Fleet routes/기존 원장, consumer는 Console이다.
+
+`GET /api/fleet/notifications?limit=100`(viewer+)는 `{records:[{event_id,robot_id,stuck_id,kind,channel,state,created_at,expires_at,next_attempt_at,attempts,last_code,provider_id,delivered_at}]}`다. kind는 OPEN/CLOSED, state는 PENDING/SENDING/SENT/RETRY/UNKNOWN/FAILED/EXPIRED/SUPERSEDED, 시각은 UTC epoch seconds다. limit 1..1000, 미인증401/잘못된 limit422이며 private endpoint·메시지 payload·secret·설치 주소를 반환하지 않는다. line_stuck incident report의 `notifications`는 같은 형식의 해당 사건 최근20건이다. SENT는 provider 수락이며 실제 수신/인수/해소가 아니다. UNKNOWN은 맹목 재시도하지 않는다. durable producer는 Fleet 사건/판단 owner, consumer는 opt-in notification worker와 Console이다.

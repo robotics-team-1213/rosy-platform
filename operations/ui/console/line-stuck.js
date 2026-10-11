@@ -8,6 +8,15 @@ import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js
 
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
+export function judgmentText(receipt, caseId, now = Date.now() / 1000) {
+  if (!receipt) return "현재 판단 미확인";
+  if (receipt.request?.case_id !== caseId || receipt.evaluated_at > now || receipt.valid_until <= now)
+    return "현재 판단 보류 · 관측 갱신 필요";
+  return {INTERVENE: "현재 판단 참고 · 개입 필요 · 실행 승인은 별도",
+    DO_NOT_INTERVENE: "현재 판단 참고 · 개입 불필요",
+    ABSTAIN: "현재 판단 보류 · 추가 근거 필요"}[receipt.necessity] || "현재 판단 미확인";
+}
+
 export const DECISION_LABEL = Object.freeze({
   WAIT: "대기",
   RESUME: "재개",
@@ -510,7 +519,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     return figure;
   }
 
-  function item(robotId, stuck) {
+  function item(robotId, stuck, judgment) {
     const li = document.createElement("div");
     li.className = "stuck-item";
     li.dataset.robotId = robotId;
@@ -569,7 +578,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     }
     const summaryLine = document.createElement("p");
     summaryLine.className = "stuck-resolver";
-    summaryLine.textContent = stuckSummary(stuck);
+    summaryLine.textContent = `${stuckSummary(stuck)} · ${judgmentText(judgment, stuck.stuck_id)}`;
     const detail = document.createElement("details"), detailTitle = document.createElement("summary");
     detail.dataset.focusKey = "evidence";
     detailTitle.dataset.focusKey = "evidence-summary";
@@ -705,12 +714,12 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       if (!preview || (preview.state !== "loading" && Date.now() - preview.at >= 2000)) {
         loadPreview(robot.robot_id, stuck.stuck_id);
       }
-      const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
+      const signature = JSON.stringify([stable, judgmentText(robot.judgment, stuck.stuck_id), confirming.get(robot.robot_id) || null,
         previews.get(robot.robot_id)?.state || null, previews.get(robot.robot_id)?.at || null,
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
-        const replacement = item(robot.robot_id, stuck);
+        const replacement = item(robot.robot_id, stuck, robot.judgment);
         if (node?.dataset.stuckId === stuck.stuck_id) {
           for (const fold of node.querySelectorAll("details[data-focus-key]")) {
             const next = replacement.querySelector(`details[data-focus-key="${fold.dataset.focusKey}"]`);

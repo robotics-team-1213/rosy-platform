@@ -23,10 +23,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
+from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
 from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
-
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus, OdomPose

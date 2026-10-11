@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-  previewFresh, headingText, fleetAnswerText, stuckSummary,
+  previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText,
 } = await import("../../../ui/console/line-stuck.js");
 
 const STUCK = {
@@ -17,6 +17,15 @@ const STUCK = {
   front_clearance_m: 0.123, rear_clearance_m: 0.31, turn_clearance_m: null, preview_seq: 812,
 };
 const byDecision = (buttons) => Object.fromEntries(buttons.map((b) => [b.decision, b]));
+
+test('judgment display refuses stale or other-case receipts', () => {
+  const receipt = {necessity: 'INTERVENE', request: {case_id: 's'}, evaluated_at: 99, valid_until: 103};
+  assert.match(judgmentText(receipt, 's', 100), /개입 필요.*실행 승인은 별도/);
+  assert.match(judgmentText(receipt, 's', 104), /보류.*갱신/);
+  assert.match(judgmentText(receipt, 'other', 100), /보류.*갱신/);
+  assert.match(judgmentText({...receipt, necessity: 'DO_NOT_INTERVENE'}, 's', 100), /개입 불필요/);
+  assert.match(judgmentText({...receipt, necessity: 'ABSTAIN'}, 's', 100), /보류/);
+});
 
 test("operator summary separates proposal, transmission, receipt and completion", () => {
   assert.match(stuckSummary(STUCK), /멈춰 판단을 요청.*조치를 선택/);

@@ -7809,6 +7809,7 @@ osy-d395-s1d\`.
 - 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
 - gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
 
+<<<<<<< HEAD
 
 ## 2026-10-11 · db1b69bc0 · D-664 혼합 장치 작업 개념과 책임 검토
 
@@ -7821,3 +7822,22 @@ osy-d395-s1d\`.
 - 변경: bounded 작업 목록 API·typed schema·SRS와 공통 Task/Mission 화면을 추가했다. principal 소유 범위, 출처별 identity/state, 목록 갱신 및 세션 상실 시 무효화, 장치·공간·업무·실행 owner 상세를 유지한다.
 - 증거: 첫 API/헤더/팔레트/기능 잠금 원격 28 passed 및 순수 JS 2 passed. 원격 브라우저와 설치 회귀에서 드러난 캡처 파일 확장자 및 추가 자산 수 fixture를 수정했다. 최종 검증 결과는 별도 receipt로 기록한다.
 - gate 변화: SOURCE 구현. 배포/현장 및 다장치 실행 수용은 아직 증명하지 않았다.
+=======
+## 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
+
+- 변경: 모델 원장 중재·순수 작업 규칙을 실제 소유 경로로 분리하고 현재 판단/결과 기록, 이름 있는 사람 인수, 3채널 기본 OFF outbox와 Pinky 독립 offline checker를 구현했다. API Reference v1.207 및 설치 소비 경로를 갱신했다.
+- 증거: 단위별 원격 terminal/NEW0와 독립 검토·수정은 docs/validation/responsibility-boundaries-2026-10-11/implementation.md에 기록했다. 최종 main 통합/착지는 별도 기록한다.
+- gate 변화: 소스·원격 fake/설치 계약. 팀이 새 Discord 서버/채널과 실제 정답·한계를 준비한다. 단계 3~5 운영 수용 및 단계 6은 HOLD; CI/push·배포·실제 provider/발송·실물 motion 없음.
+
+## 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
+
+- 변경: D-661 팀 통지·사람 인수를 incidents 하위 패키지로 분리하고 최신 main의 순수 진척·지연 schema import를 통합했다. 단계별 계획·팀 인수·독립 평가·착지 증거를 기록했다.
+- 증거: 최종 AI PC 원격493 passed/0 skipped/NEW0, 독립 검토 및 tools/land.py lint/시험 통과, 로컬 main FF `7afb0e2c4f`. 상세 docs/validation/responsibility-boundaries-2026-10-11/landing.md. 이전 전체 회귀16676 성공과 당시 크기1 NEW는 최종 영향군 결과와 구별했다.
+- gate 변화: 로컬 통합 완료, push·CI·배포·실제 채널/현장 수용 없음. 팀의 Discord 준비·Pinky 검수 이후 운영 수용; 단계6 HOLD 유지.
+
+## 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
+
+- 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
+- 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
+- gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
+>>>>>>> main
