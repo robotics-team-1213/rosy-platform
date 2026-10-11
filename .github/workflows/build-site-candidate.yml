@@ -30,6 +30,9 @@ on:
       - operations/ui/console/**
       - operations/world/src/**
       - operations/execution/src/**
+      - operations/situation/rosy_situation/__init__.py
+      - operations/situation/rosy_situation/assessment.py
+      - operations/situation/rosy_situation/snapshot_assessment.py
       - operations/vision/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
