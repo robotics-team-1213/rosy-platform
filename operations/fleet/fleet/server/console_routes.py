@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import math
+import sqlite3
 import time
 from functools import partial
 from typing import Callable, Literal, Optional
@@ -96,6 +97,8 @@ class SharedGather:
         self._snapshot: Optional[dict] = None
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
+        self.observations = None
+        self.recording_status = {"state": "disabled", "reason": "durable_database_not_configured"}
 
     def _observed_at(self, robots) -> dict:
         """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
@@ -110,6 +113,14 @@ class SharedGather:
             if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
                 gathered_at = self._tracking.now() if self._tracking is not None else None
                 snapshot = await self._console.snapshot()
+                if self.observations is not None:
+                    try:
+                        await asyncio.to_thread(self.observations.append_snapshot, snapshot["robots"],
+                                                received_at=time.time(), monotonic_now=self._console._clock())
+                    except (OSError, sqlite3.Error, ValueError):
+                        self.recording_status = {"state": "error", "reason": "observation_storage_failed"}
+                    else:
+                        self.recording_status = {"state": "recording", "reason": None}
                 if self._tracking is not None:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at,
                                                   observed=self._observed_at(snapshot["robots"]))
@@ -132,6 +143,25 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    journal = getattr(getattr(console, "hub", None), "event_store", None)
+    observation_path = answer_log_path or (journal.path if journal is not None else None)
+    if observation_path is not None:
+        from fleet.server.observation_store import ObservationStore
+        gather.observations = ObservationStore(observation_path)
+
+    @app.get("/api/fleet/observations", dependencies=read_guard, tags=["fleet-observations"])
+    def observation_history(after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
+                            robot_id: Optional[str] = Query(None, min_length=1, max_length=96)):
+        if gather.observations is None:
+            return {"observations": [], "next_cursor": after_id, "has_more": False,
+                    "recording": gather.recording_status}
+        try:
+            rows = gather.observations.read_observations(after_id=after_id, limit=limit, robot_id=robot_id)
+        except (OSError, sqlite3.Error):
+            raise HTTPException(503, detail={"code": "OBSERVATION_STORAGE_UNAVAILABLE"}) from None
+        page = rows[:limit]
+        return {"observations": page, "next_cursor": page[-1]["observation_id"] if page else after_id,
+                "has_more": len(rows) > limit, "recording": gather.recording_status}
     # D-509: CORE battery evidence goes stale after 5 s, so refresh each second off the request
     # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
