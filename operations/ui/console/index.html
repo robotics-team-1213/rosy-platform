@@ -127,11 +127,14 @@
       <ul id="map-traffic-status" class="map-traffic-status" aria-label="지도 교통 상태"><li>교통 상태 대기</li></ul>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
+        <details id="tracking-coordinate-details">
+        <summary class="ui-disclosure-row">관측 좌표</summary>
         <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
           <caption>지도 좌표 · m · 카메라 관측</caption>
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
         </table>
+        </details>
       </div>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
@@ -159,10 +162,10 @@
       </section>
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" aria-controls="context-status" aria-selected="true">로봇 상태</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" data-ui-tooltip="등록 로봇의 현재 상태와 대응 확인" aria-controls="context-status" aria-selected="true">로봇 상태</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" data-ui-tooltip="수신된 관제 메시지 확인" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" data-ui-tooltip="사건 기록과 영상 근거 검토" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" data-ui-tooltip="대형과 신호 등 운영 도구 확인" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
       <section class="panel" aria-labelledby="roster-heading">
