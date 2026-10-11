@@ -33,7 +33,7 @@ class IncidentCaseWorker:
         self.current_profiles, self.human_owned, self.budget = current_profiles, human_owned, budget
         self.final_handoff, self.clock, self.enabled, self.baseline = final_handoff, clock, enabled, baseline
         self.profile_sha256 = hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest()
-        self._snapshot, self._task, self._waiting, self._recovered = None, None, {}, set()
+        self._snapshot, self._task, self._waiting = None, None, {}
         self._worker_id, self._closed = uuid.uuid4().hex, False
 
     @property
@@ -69,6 +69,7 @@ class IncidentCaseWorker:
             if not self._admitted(): return False
             checked = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode='json')
             checked.pop('action_admissible')
+            checked.pop('shadow')
             request = checked.pop('request')
             request['evidence'] = tuple(EvidenceRef(**e) for e in request['evidence'])
             problem = self._problem(Assessment(request=AssessmentInput(**request), **checked))
@@ -111,10 +112,6 @@ class IncidentCaseWorker:
             snapshot, self._snapshot = self._snapshot, None
             scopes = await self._db('active_scopes')
             for scope in scopes:
-                if scope not in self._recovered:
-                    self._recovered.add(scope)
-                    if await self._db('recover', scope):
-                        await self._finish(scope, 'RESTART_OUTCOME_UNKNOWN'); continue
                 await self._process(scope, snapshot)
             for row in snapshot['robots']:
                 assessment = self.board.intervention_assessment(row['robot_id'])
@@ -129,7 +126,6 @@ class IncidentCaseWorker:
                         self._check_budget(selected)
                         case = await self._db('begin_case', scope, selected)
                     if case['state'] != 'ACTIVE': continue
-                    self._recovered.add(scope)
                     await self._process(scope, snapshot)
                 except (ValueError, TypeError, KeyError):
                     continue
@@ -195,7 +191,7 @@ class IncidentCaseWorker:
                 self._waiting[scope] = (problem.generation, step)
             else: await self._finish(scope, 'NO_ADMITTED_READ_OR_REVIEW')
         except ValueError as error:
-            if str(error) == 'ATTEMPT_ALREADY_RESERVED': return
+            if str(error) in {'ATTEMPT_ALREADY_RESERVED', 'CASE_ATTEMPT_INFLIGHT'}: return
             await self._finish(scope, str(error) if str(error) in {'CASE_BUDGET_EXHAUSTED', 'CASE_ROLE_BUDGET_EXHAUSTED'} else 'READ_OR_PROVIDER_UNAVAILABLE')
 
     async def _reserve(self, scope, problem, kind, role, cost):
@@ -227,6 +223,7 @@ class IncidentCaseWorker:
         except asyncio.CancelledError:
             await asyncio.shield(self._db('complete', scope, attempt, worker_id=self._worker_id,
                 state='UNKNOWN', actual_cost_usd=cost, summary={'reason': 'WORKER_CANCELLED'}))
+            await asyncio.shield(self._finish(scope, 'WORKER_CANCELLED'))
             raise
         except Exception:
             if cost is not None:
