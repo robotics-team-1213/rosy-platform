@@ -939,3 +939,49 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_camera_observation_accumulates_without_replacing_operator_features(page_site, width):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    page, store, robot = page_site
+    active = store.active_view()
+    reference = {'revision': 'survey-camera', 'origin': [0, 0], 'heading_rad': 0,
+        'scale_source': 'measured', 'measured_distance_m': 2, 'description': 'Measured origin'}
+    base = SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'yard', 'survey': reference,
+        'places': [], 'edges': [], 'facilities': [{'id': 'mark', 'name': 'Origin marker',
+            'kind': 'landmark', 'geometry': [[0, 0]], 'approaches': []}]})
+    draft = store.save_draft(base, expected_revision=None, principal_id='bob')
+    observation = SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'A', 'name': 'A', 'x': 1, 'y': 0}, {'id': 'B', 'name': 'B', 'x': 2, 'y': 0}],
+        'edges': [{'id': 'ab', 'from': 'A', 'to': 'B', 'polyline': [[1, 0], [2, 0]], 'width_m': .2,
+            'evidence': {'source': 'camera', 'status': 'observed', 'reference_revision': 'survey-camera',
+                'note': 'Frame sha256 fixture'}}]}).body()
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-map-file').set_input_files({'name': 'observation.json',
+        'mimeType': 'application/json', 'buffer': json.dumps(observation).encode()})
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#map-source')).to_have_value('draft')
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    saved = store.draft_view()
+    assert saved['map']['facilities'] == draft['map']['facilities']
+    assert saved['map']['edges'][0]['evidence']['source'] == 'camera'
+    assert saved['map']['survey']['reviewed'] is False
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#notice')).to_contain_text('??')
+    assert len(store.draft_view()['map']['edges']) == 1
+    other = {**observation, 'map_id': 'wrong-frame'}
+    page.locator('#camera-map-file').set_input_files({'name': 'wrong.json',
+        'mimeType': 'application/json', 'buffer': json.dumps(other).encode()})
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#notice')).to_contain_text('?? ID')
+    assert store.draft_view()['map'] == saved['map']
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
