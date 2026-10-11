@@ -5,9 +5,21 @@ import { trafficDrawing } from "/console/assets/site-map-model.js";
 // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
 // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.
 // 테두리는 굵은 선에서 가는 선을 지운 따로 그린 판이라 밑의 실영상을 덮지 않는다.
-export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on }) {
+export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length || drawing.signals.length);
+  const status = el("map-traffic-status");
+  if (status) {
+    const labels = drawing ? [
+      ...drawing.zones.map(zone => `${zone.unit} · ${zone.label}`),
+      ...drawing.signals.map(stop => `가상 · ${stop.signal} · ${stop.approach} · ${stop.text}`),
+    ] : [];
+    status.replaceChildren(...(labels.length ? labels : [on ? "교통 상태 대기" : "교통 표시 꺼짐"]).map(text => {
+      const row = document.createElement("li");
+      row.textContent = text;
+      return row;
+    }));
+  }
   if (!drawing) return;
   const band = Math.max(6, Math.min(16, 0.09 * pxPerM));
   const trace = (target, points) => {
@@ -69,22 +81,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
   }
   ctx.restore();
   // 통행권 끝에 로봇 이름 — 띠 색만으로는 어느 로봇의 블록인지 읽히지 않는다(같은 계열 색).
-  for (const tick of drawing.ticks) {
-    const p = toPoint(tick.x, tick.y);
-    drawChip(ctx, null, p.x, p.y - band - 14, tick.robot, "");
-  }
-  // 구역 글은 차로망 안쪽(가운데 쪽)에 둔다 — 띠·통행권 표시와 바깥 사각형 치수 글을 덮지 않는다.
-  const centre = toPoint(...drawing.centre);
-  for (const zone of drawing.zones) {
-    const p = toPoint(zone.anchor.x, zone.anchor.y);
-    const q = toPoint(zone.anchor.x + Math.cos(zone.anchor.angle) * 0.05, zone.anchor.y + Math.sin(zone.anchor.angle) * 0.05);
-    const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
-    let nx = -(q.y - p.y) / span, ny = (q.x - p.x) / span;
-    if (nx * (centre.x - p.x) + ny * (centre.y - p.y) < 0) { nx = -nx; ny = -ny; }
-    const reach = band + 18 + Math.abs(nx) * 52;  // a sideways label needs room for its width
-    drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
-  }
-  // D-525 8: 가상 신호 — 정지선 막대(접근로에 가로)와 그 바깥의 등 하나, 옆에 글자(색만으로 구별하지 않는다).
+  // Traffic descriptions live below the map; only geometry stays on the floor plane.
   for (const stop of drawing.signals) {
     const p = toPoint(stop.x, stop.y);
     const q = toPoint(stop.x + Math.cos(stop.angle) * 0.05, stop.y + Math.sin(stop.angle) * 0.05);
@@ -102,10 +99,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     convoys: drawing.convoys.length, signals: drawing.signals.length };
 }
 
-// D-525 rev 3: T-map 식 신호 알약 — 정지선 앞 접근 차로 오른쪽(다가오는 로봇이 보는 자리)에 등 하나와 남은 초.
-// 주황 점선 테두리와 "가상" 글자로 실제 신호기가 아님을 말한다(색만으로 말하지 않는다). "≥7"은 구역이 비어야
-// 켜지는 다음 녹색의 하한이다. 로봇 층 위에 그려 몸체 원에 가리지 않는다. 점유 기반(rev 6)에서는 초록·주황·적과
-// "비어 있음"·"점유 예정 · rosy_01"·"점유 중 · rosy_01" 글이다(주황은 --status-warn, 황색 등과 같은 색).
+// Small dashed lamps mark virtual signals; names and state stay in the readout.
 export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   if (!drawing?.signals?.length) return;
@@ -115,19 +109,12 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
     const mx = stop.x - Math.cos(stop.angle) * back + Math.sin(stop.angle) * side;
     const my = stop.y - Math.sin(stop.angle) * back - Math.cos(stop.angle) * side;
     const { x: cx, y: cy } = toPoint(mx, my);
-    const label = stop.text;  // "적 ≥7", or rev 6 occupancy "주황 · 점유 예정 · rosy_01"
     ctx.save();
-    ctx.font = window.RosyPalette.canvasFont(12, "mono");
-    const w = 30 + ctx.measureText(label).width, h = 22;
-    ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 11);
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fillStyle = css("--ground-deep"); ctx.fill();
     ctx.setLineDash([4, 3]); ctx.lineWidth = 2; ctx.strokeStyle = css("--status-warn"); ctx.stroke(); ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(cx - w / 2 + 12, cy, 6, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
     ctx.fillStyle = lampColour[stop.lamp] || lampColour.red; ctx.fill();
-    ctx.fillStyle = css("--ink"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.fillText(label, cx - w / 2 + 22, cy + 0.5);
-    ctx.fillStyle = css("--status-warn"); ctx.textAlign = "center";
-    ctx.fillText("가상", cx, cy - h / 2 - 7);
     ctx.restore();
   }
 }
