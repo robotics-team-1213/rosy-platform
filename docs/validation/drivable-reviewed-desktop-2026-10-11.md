@@ -53,3 +53,9 @@ v2 추가분은 이전 모델이 틀린 장면을 우선 포함하며 자동 초
 기존 모델·검수분·추가 어려운 장면은 버전과 원본 hash를 유지해 기준선으로 활용한다. 새 도로면 검수는 D-663 road_surface classes로 별도 작성하고, 현재 구역 정답은 로직 평가용으로 분리한다. 원본 영상 단위 예약/split, 독립 검수 authority, 실제 기준점 투영, 실물/시뮬레이션별 coverage와 사전 고정 profile은 후속 결속 대상이다.
 
 원시 확인 로그는 X: 세션 `2026-10-11--213319--perception-fitness-pipeline--024175/evidence/desktop-20261010-*`에 있다. 주소·계정·원본 이미지·모델 파일은 공개 저장소에 넣지 않는다. 이번 확인은 새 학습·모델 재추론·시뮬레이션·장치 지연·배포·주행 활성화·현장 수용 증거가 아니다.
+
+## 저장 검수 마스크의 직접 대조 (2026-10-12)
+
+동일 dataset manifest SHA256을 다시 확인하고 추가 검수분 1,341장의 `review/saved` 마스크와 최종 dataset 마스크를 직접 읽었다. rows 110..239의 화소 불일치는 0, dataset rows 0..109에서 255가 아닌 화소도 0이다. 최종 mask 파일 hash 1,341개 모두 manifest와 일치했고 저장 검수 누락·크기 오류는 없었다. split은 train 1,092 / val 168 / test 81이다. 따라서 앞 기록에서 미확인이었던 saved mask→최종 mask 보존은 이 추가분에 한해 확인됐다. 기존 1,428장의 저장 검수 대조나 검수 독립성을 확대한 결론은 아니다.
+
+readback 로그는 위 비공개 세션의 `evidence/desktop-20261010-saved-mask-readback-20261012.json`이며 SHA256은 `316647b1aa78512d47fe0b132f2b3dfeb55503fbe719b4fb65a5b38f1043422b`이다. 이 로그는 UTF-16로 저장된 원격 JSON 출력의 byte hash다. 기존 mask·classes·manifest를 수정하지 않았다. 현재 구역 기준선이라는 의미와 새 도로면 적합성 HOLD를 유지한다.
