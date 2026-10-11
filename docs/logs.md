@@ -7900,3 +7900,9 @@ osy-d395-s1d\`.
 - 변경: D-669 Proposed와 설계/구현 계획을 작성했다. 일반 관리는 Console, 위험 대응은 Discord로 협업하되 transport·기명 principal·후보·기존 작업/사건 원장·장치 writer와 목표 근거의 경계를 분리했다. 일반 Mission 동일 owner와 Cell Job 별도 approver 계약을 구분했다.
 - 증거: 현재 source/승인·인수·통지·work/progress 경로와 독립 책임 검토를 대조했다. 사용자 계정에서 지정 팀 webhook을 생성하고 승인된 연결 확인 1건 HTTP 200·메시지 ID·UI readback을 확인했다. 비공개 receipt/화면은 X 세션에 보관한다.
 - gate 변화: Discord 연결 확인만 완료했다. Fleet outbox·Bot 대화 intake·기명 principal 연결·실제 조치/목표/FIELD는 미확인이며, source 문서·원격 계약 검증은 별도 기록이다. Bot은 operator 자격을 공유하지 않고 device/provider/push/deploy를 활성화하지 않는다.
+
+## 2026-10-12 · c175120a7 · World 설치 의존성 검사 형식 정합성
+
+- 변경: 최신 통합 CI의 World wheel 시험에서 D-667 의존성 raw 문자열 비교가 실패했다. 기존 설치 시험과 같은 Requirement/canonicalize_name으로 이름·공백 표기만 정규화하고 최소 >=0.0.1, 설치 버전0.0.1, 무조건부/no-extras, import identity와 Fleet 비의존 검사를 유지했다. 패키지 의존성·관측 동작은 바꾸지 않았다.
+- 증거: 8eab47497의 site-vision-cell job 실패 subprocess line6을 확보했다. 첫 수정291c77151 원격2 PASS/NEW0 후 독립 검토가 marker/extras 엄격성을 지적해 c175120a7에 보강했다. 최종 엄격성은 착지 원격 시험과 후속 CI로 다시 확인하며 실패를 기존 실패 목록에 추가하지 않는다.
+- gate 변화: 배포5f4040f306의 사이트 수용 근거는 유지한다. 후속 main 통합 CI 실패와 시험 수정은 별도이고 실물/장치/AI 권한을 승격하지 않는다. 원본 로그는 지도 조사 X 세션의 logs/ci-8eab-site-vision-job.txt 및 logs/world-metadata-fix/에 보존한다.
