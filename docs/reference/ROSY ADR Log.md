@@ -619,3 +619,17 @@
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
 | D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |
 | D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
+
+## D-628 — CORE Drive 출력과 복구의 현재 근거
+
+- 상태: Accepted (2026-10-11).
+- 결정: owning-mode epoch 아래 불변 후보를 원자적으로 저장하고 정책 평가 전후 identity를 확인한다. line 후보의 profile/traffic 검토 뒤 공통 감속은 곡률을 유지하며 비동일 actuation을 거절한다. 복구 응답은 현재 근거를 재검사하고 KTURN 후진은 차체 sweep을 확인한다.
+- 계약과 범위: [ADR 본문](../adr/D-628-core-drive-output-and-recovery-boundaries.md). 기존 Base/Arm writer와 bounded budget을 유지한다. D-442 전체 producer identity와 장치 수용은 후속이다.
+- 검토: [독립 소스 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md).
+
+## D-630 — 나머지 Platform 의미 holder와 설치 경계
+
+- 상태: Accepted (2026-10-11).
+- 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
+- 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
+- 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).
