@@ -41,6 +41,7 @@ class FleetTaskService:
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
         source: str, actor_id: str, request_key: str,
         evidence: Mapping | None = None,
+        admission=None,
     ) -> dict:
         if source not in {"operator", "policy"}:
             raise ValueError("INVALID_TASK_SOURCE")
@@ -69,6 +70,7 @@ class FleetTaskService:
             source=source, actor_id=actor_id, request_key=request_key,
             request={"goal": {"x": float(x), "y": float(y), "yaw": float(yaw)}},
             evidence=evidence,
+            admission=admission,
         )
         task = created["task"]
         if not created["created"]:
