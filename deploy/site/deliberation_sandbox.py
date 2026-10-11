@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import math
 import os
+import re
 import signal
 import sys
 import uuid
@@ -62,7 +63,7 @@ class SandboxLauncher:
     def command(self, argv, unit):
         if (type(argv) is not tuple or not argv or argv[0] != self.kind
                 or any(type(v) is not str or '\0' in v for v in argv)
-                or not unit.startswith('rosy-deliberation-') or not unit.replace('-', '').isalnum()):
+                or re.fullmatch(r'rosy-deliberation-[a-z0-9-]+\.scope', unit) is None):
             raise ValueError('invalid trusted sandbox command')
         with self.executable.open('rb') as stream:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != self.digest:
@@ -79,9 +80,13 @@ class SandboxLauncher:
     async def __call__(self, argv, body, remaining, output_limit, budget_usd):
         if type(budget_usd) not in (int, float) or not math.isfinite(budget_usd) or not 0 < budget_usd <= 10:
             raise ValueError('invalid provider cost budget')
-        unit = 'rosy-deliberation-' + uuid.uuid4().hex
+        unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
+        started = asyncio.get_running_loop().time()
+        async with asyncio.timeout(remaining):
+            command = await asyncio.to_thread(self.command, argv, unit)
         try:
-            return await bounded_process(self.command(argv, unit), body, remaining, output_limit)
+            return await bounded_process(command, body,
+                remaining - (asyncio.get_running_loop().time() - started), output_limit)
         finally:
             # Stop only this generated scope, including children that changed their process group.
             code, _ = await bounded_process(('/usr/bin/systemctl', '--user', 'stop', unit), b'', 2, 256)
