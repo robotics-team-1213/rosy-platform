@@ -91,7 +91,7 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
     if single or 'profiles' in case:
         profiles = case.get('profiles')
         expected = ['primary'] if single else ['primary', 'reviewer']
-        if (type(profiles) is not list or len(profiles) != len(expected)
+        if (type(case.get('scope')) is not dict or type(profiles) is not list or len(profiles) != len(expected)
                 or any(type(p) is not dict for p in profiles) or [p.get('role') for p in profiles] != expected
                 or hashlib.sha256(json.dumps(profiles, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
                     != (case.get('scope') or {}).get('profile_sha256')):
