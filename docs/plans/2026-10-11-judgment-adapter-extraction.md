@@ -10,6 +10,8 @@
 
 **Start:** `063676cbcb4427234a1eb9f666bba077caea5b30`, branch `refactor/judgment-adapter-extraction`.
 
+**Status:** 단계 2 및 단계 3 첫 단위의 소스·설치 분리 구현 `fb2e5e07d3`, 원격 212 passed / NEW 0 및 독립 소스 리뷰 승인. 최신 main 착지 검사는 후속이며 [검증 기록](../validation/judgment-adapter-extraction-2026-10-11.md)에서 증거를 구별한다.
+
 ## 1. 계약과 RED 고정
 
 - `test/test_judgment_extraction.py`에 canonical module, Decision의 Fleet import 금지, DB/HTTP/ROS 없는 execution import/호출과 상태·시각 경계 사례를 고정한다.
