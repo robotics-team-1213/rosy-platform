@@ -32,3 +32,6 @@ D-622 reserved by another active session; ADR not yet landed in this branch
 
 
 
+D-675 reserved on feat/discord-fleet-pipeline; remove when its ADR lands
+D-676 reserved on feat/perception-fitness-pipeline; remove when its ADR lands
+D-677 allocated outside this branch and absent from main; remove when its ADR lands

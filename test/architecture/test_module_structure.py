@@ -274,7 +274,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_093,
+        53_352,
+        "split: independently re-judged on 2026-10-12 by pipeline_review at 53352 for D-678. "
+        "Final admission, stop fencing and receipt/readback stay with existing Console, GoalLeases, "
+        "TaskService, TripAdmission, Mission store/dispatcher and FormationSession owners; no engine "
+        "or SIZE_UNITS added. Keep package +150 and existing observe/server/UI split obligations. "
+        "See docs/plans/2026-10-12-fleet-pipeline-complete.md. Previous verdict: "
         "split: re-judged on 2026-10-12 with D-655/D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
         "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
         "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53093; "
@@ -979,7 +984,12 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1255,
+        1322,
+        "accept: independently re-judged on 2026-10-12 by pipeline_review at 1322 for D-678: "
+        "goal/bay admission, queue and post-send traffic share the existing mutable Console state. "
+        "Stop token authority stays in GoalLeases; Task policy and Trip/formation owners remain separate. "
+        "Splitting only these guards would scatter the same state authority. Keep zero growth and "
+        "existing server/UI obligations; docs/plans/2026-10-12-fleet-pipeline-complete.md. Previous verdict: "
         "accept: re-judged at 1255 on 2026-10-10 (console.py grew to 1255 after the D-581 " +
         "follow-ups; the drift-watch merge adds no console.py lines). " +
         "No goal, stop or admission path changed; the zero growth allowance remains. Previously "

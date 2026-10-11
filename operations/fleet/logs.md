@@ -3317,3 +3317,11 @@
 - 검토: pipeline_review가 admission 경합 수정과 3163줄 size 판정을 독립 수용했다. 기존 +150 및 ai_facts 분리 의무는 유지한다. Harness lint 0 error/27 기존 검증 시점 경고. 변경 파일 flake8은 기준 커밋에도 있던 E128/W391 5건만 남고 새 오류는 없다.
 - 근거: X:/DevTemp/projects/rosy-platform/2026-10-12--024325--fleet-rulebook--cdb91d/logs/affected/run-1.txt 및 run-2.txt.
 - gate 변화: SOURCE/원격 영향 범위 검증 완료. skipped 시험, CI 전체, main 통합, push, 배포, 현장 overlay/장치/물리 수용은 확인하지 않았다. SharedGather 최대 1 s 캐시와 CORE 최종 검사 권한을 유지한다.
+
+
+## 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결
+
+- 변경: 실행 경로별 law/후보/최종 승인/owner/접수/readback/종결을 통합 규칙집에 연결했다. Task의 실제 발행 직전 policy/attempt/fence 검사, goal/bay의 명시적 receipt와 stop generation, trip 시작 취소, 늦은 formation 무장 rollback, Mission 다중 owner의 순환 대조를 구현했다. mover 취소와 겹친 불명 bay 전송에는 보상 cancel을 요청한다.
+- 증거: source 25c036ae8의 원격 navigation/traffic/trip/Task policy/formation 324 PASS, exit 0, known_failures NEW 0/known 0. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/logs/traffic-green-3/run-1.txt. RED로 재현한 실패를 known_failures 목록에 추가하지 않았다.
+- 검토: pipeline_review가 최종 소스/규칙집을 승인하고 Fleet parent 53352, Console 1322줄 재판정을 독립 수용했다. 기존 package +150/Console zero-growth와 observe/server/UI 분리 의무를 유지한다.
+- gate 변화: SOURCE/원격 회귀/리뷰 완료. 최신 main 통합과 전체 영향 범위는 tools/land.py의 최종 gate로 별도 기록한다. CI, push, 배포, 현장 overlay 및 실제 다중 로봇/물리 수용은 미확인이다. CORE/Arm writer와 policy/AI opt-in을 유지한다.
