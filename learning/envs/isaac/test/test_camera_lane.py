@@ -158,3 +158,36 @@ def test_existing_model_revision_hash_and_roles_must_match_before_inference():
     model.manifest.classes = [SimpleNamespace(role='lane_marking')]
     with pytest.raises(ValueError):
         camera_model_identity(model, revision='lane-seg-test', sha256='a' * 64)
+
+
+@pytest.mark.parametrize('guide_deg', [0., 60., 170.])
+def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    way = np.zeros((240, 320), np.uint8)
+    way[140:165, 110:210] = 1  # A real nonempty mask, but no way under the robot.
+    model = SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda _f: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
+    lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1.,
+                 pose=(0., 0., 0.), guide=(guide_deg, 1., True, guide_deg, 0., 0.))
+    out = lane.manager.tick_gain(10., gain=1.7)
+    assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
+    assert lane.last['reason'] == 'camera_target_unavailable'
+
+
+def test_inference_wall_time_cannot_refresh_an_old_camera_frame():
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    now = [10.]
+    def infer(_frame):
+        now[0] += .31
+        return np.ones((240, 320), np.uint8), 'drivable', {}, 310.
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test', infer_drivable=infer),
+                             ground, camera_x=.03317, clock=lambda: now[0])
+    lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+    out = lane.manager.tick_gain(now[0], gain=1.)
+    assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
+    assert lane.last['reason'] == 'camera_processing_stale'
