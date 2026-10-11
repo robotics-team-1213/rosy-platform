@@ -150,3 +150,9 @@
 - 변경: D-692/API v1.210의 ISAAC 출처로 keeper의 같은 영상 경계·횡단보도 관측을 strict typed CORE에 전달하고 trace에 보존한다. 승인된 projection/detection bounds가 없으므로 uncertainty null을 유지하며 GAZEBO 2px 오차를 상속하지 않는다. invalid 관측·학습 제외·명령 0은 유지한다.
 - 증거: committed-source 원격 camera/producer/crosswalk/protocol alignment 100 PASS·known_failures NEW 0. 첫 시험의 API description·changelog 정합성 NEW 2를 같은 브랜치에서 수정했다. 독립 D-430 소스 리뷰 차단 결함 없음. R21은 fa75953dfe 파일 7314개 hash 검증 후 22 cores·9GB·빈 GPU에서 시작했다. R20은 문서 정합성 수정 전 준비만 했으며 SDK를 실행하지 않았다.
 - gate 변화: SOURCE 관측 연결만 확인했다. unknown error로 lane-return/crosswalk 안전 증거는 생성되지 않는다. 실제 R21 결과·오차 검증·회전/Fleet 연결·재획득·완주·교통·두 대·병렬 RL은 미완료다.
+
+## 2026-10-12 · 484ce96805 · fix(isaac): 지도 prior를 회전 승인으로 사용하지 않기
+
+- 변경: native camera_route_guide의 무조건 pivot_ok=true를 제거했다. 지도 방향은 유지하지만 실제 Fleet turn spot·native sweep clearance 증거가 없는 prior는 false다. invalid camera의 명령 0·학습 제외는 유지한다.
+- 증거: 원격 camera/map_task 104 PASS·known_failures NEW 0. R21 맵 정적 기하 비교에서 시작점은 Fleet 허용 지점에서 37.66mm로 18mm 허용 범위 밖이며 남쪽 두 spot의 native 충돌 원 페인트 겹침 29.78/37.30mm는 기존 25mm 한도를 넘었다. static paint/AABB 계산은 센서/회전 승인 증거가 아니며 원본 JSON을 private hash 대조 보관했다. R22 committed source 7331개 파일 검증 준비 후 strict Isaac 자원 floor에 거절되어 SDK는 미실행이다.
+- gate 변화: 없음. 실제 Fleet cue·CORE 회전 연결·재획득·native 완주·교통/Fleet·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. geometry 승인·SDK 결과 없는 회전을 성공이나 안전 증거로 보고하지 않는다.
