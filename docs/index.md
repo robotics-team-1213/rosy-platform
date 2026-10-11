@@ -222,6 +222,7 @@
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 | D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
 | D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
 
 ## 계획·결과 문서
 

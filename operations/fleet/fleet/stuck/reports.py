@@ -11,6 +11,7 @@ from typing import Optional
 
 from fleet.server.sqlite_policy import configure_connection
 from core_common.protocol.schemas import FleetJudgmentReceipt, FleetObservedClosure
+from .handoff import IncidentHandoff, judgment_revision
 
 
 def _resolution(answers) -> tuple:
@@ -88,6 +89,7 @@ class LineStuckAnswerLog:
             connection.execute("CREATE INDEX IF NOT EXISTS fleet_judgment_robot ON fleet_judgment_records(robot_id, judgment_id)")
             connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_current (
                 robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
+        self.handoff = IncidentHandoff(self)
 
     def record_judgment(self, receipt: dict) -> None:
         receipt = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode="json")
@@ -169,16 +171,23 @@ class LineStuckAnswerLog:
                 (limit,)).fetchall()
         return [dict(row) for row in found]
 
-    def reports(self, limit: int = 100) -> list[dict]:
+    def reports(self, limit: int = 100, *, robot_id=None, stuck_id=None) -> list[dict]:
         """Read-only, source-separated incident records for operator review and offline learning."""
         with closing(self._connect()) as connection:
+            where, params = ('', []) if robot_id is None else (' WHERE robot_id=? AND stuck_id=?', [robot_id, stuck_id])
             episodes = connection.execute(
-                "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?", (limit,)).fetchall()
+                'SELECT * FROM fleet_line_stuck_episodes' + where + ' ORDER BY rowid DESC LIMIT ?',
+                (*params, limit)).fetchall()
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             reports = []
             for episode in episodes:
                 row = dict(episode)
                 robot_id, stuck_id = row["robot_id"], row["stuck_id"]
+                current = connection.execute('SELECT assessment FROM fleet_judgment_current WHERE robot_id=?',
+                                             (robot_id,)).fetchone()
+                receipt = json.loads(current['assessment']) if current else None
+                revision = (judgment_revision(receipt) if row['closed_at'] is None and receipt is not None
+                            and receipt['request'].get('case_id') == stuck_id else None)
                 answers = [dict(item) for item in connection.execute(
                     """SELECT at, decision, principal_id, accepted, outcome, code, tier, escalated
                        FROM fleet_line_stuck_answers WHERE robot_id=? AND stuck_id=? ORDER BY answer_id""",
@@ -239,6 +248,8 @@ class LineStuckAnswerLog:
                 ).model_dump(mode='json')
                 reports.append({"schema": "rosy.incident.v1", "id": f"line_stuck:{robot_id}:{stuck_id}",
                                 "closure": closure,
+                                "handoff": self.handoff.get(robot_id, stuck_id),
+                                "judgment_revision": revision,
                                 "stuck_id": stuck_id,
                                 "classification": "line_stuck", "robot_ids": [robot_id],
                                 "opened_at": row["opened_at"], "closed_at": row["closed_at"],

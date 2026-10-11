@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.206
+**Version:** v1.207
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3160,3 +3160,9 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 `GET /api/fleet/incidents`의 line_stuck report에 `closure: FleetObservedClosure`를 추가한다. status는 `OPEN | NATURAL_CLEARANCE | CLEARANCE_OBSERVED | OBSERVATION_ENDED`, action_credit은 `NONE | UNVERIFIED`, reason은 기존 close_reason 또는 null, observed_at은 closed_at 또는 null이다. 수락/응답불명 답 뒤 cleared는 관측상 해소이며 조치 성공 증명이 아니다. restart/replaced/left_roster는 관측 종료다. 기존 evidence.fleet.resolved_by는 마지막 수락 답의 주체이며 인과적 성공으로 해석하지 않는다. 과거 원인 초안 점수는 보정된 정확도·확률이 아니다.
 
 추가 형식의 기계 계약은 `core_common.protocol.schemas.FleetJudgmentReceipt`와 `FleetObservedClosure`, producer는 `fleet.stuck.board/reports`, consumer는 Fleet Console이다. 로봇 WS envelope protocol_version(1.0)과 기존 명령/사람 인수/stop-generation 계약은 변경하지 않는다.
+
+### D-661 이름 있는 사건 인수 (v1.207)
+
+기존 `POST /api/fleet/robots/{robot_id}/line-stuck/claim` 본문에 선택 `judgment_revision`(소문자 SHA-256 64자리)을 추가한다. 없으면 기존 자동 해결기 중지이고 응답의 `kind`는 `resolver_pause`다. 있으면 이름 있는 operator와 기존 durable Fleet DB가 필요하며 현재 사건/의미 revision/최근 Fleet 평가/경쟁 담당을 다시 검사한다. 성공 응답은 기존 robot_id/stuck_id/claimed_by와 `kind:incident_handoff`, `handoff:{robot_id,stuck_id,principal_id,judgment_revision,claimed_at}`(UTC epoch seconds)다. 기한/사건/revision 변경 또는 다른 담당은409, 미인증401, viewer/이름 없는 인수403, 원장 미설정503다. 성공은 검토 책임이며 CORE 실행·목표·해소를 뜻하지 않는다. 같은 담당 중복은 같은 receipt다. 다른 담당자의 이동 답은409이며 WAIT/ABORT는 유지한다.
+
+`GET /api/fleet/incidents`의 line_stuck report에 `handoff`(없으면null), `judgment_revision`(현재 열린 case가 아니면null)을 추가한다. 조회는 선택 `robot_id`와 `stuck_id`를 함께 받으며 기존 limit 안에서 해당 사건만 반환한다. 하나만 주거나 식별자 형식이 잘못되면422다. token 없는 `/console?inbox=1&robot=<id>&incident=<id>` 링크는 기존 viewer/operator 로그인 이후 이 조회와 인수 UI로 연결되며 GET으로 인수하지 않는다. 공개 인수·조회 producer는 Fleet routes/기존 원장, consumer는 Console이다.

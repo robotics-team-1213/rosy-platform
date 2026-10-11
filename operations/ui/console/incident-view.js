@@ -8,6 +8,9 @@ const INCIDENT_CAUSES = {
 
 export function createIncidentView({scope, el, view, call, log, auth}) {
 let incidentReports = [], incidentTrafficReports = [];
+const linked = new URLSearchParams(location.search);
+const linkedRobot = linked.get('robot'), linkedIncident = linked.get('incident');
+let linkedFocused = false;
 function incidentSummary(summary, report, title) {
   const name = document.createElement("span");
   name.textContent = title;
@@ -71,7 +74,9 @@ async function refreshIncidents() {
   if (auth.locked) return;
   const status = el("incident-status");
   try {
-    const payload = await call("/api/fleet/incidents?limit=10");
+    const filter = linkedRobot && linkedIncident
+      ? `&robot_id=${encodeURIComponent(linkedRobot)}&stuck_id=${encodeURIComponent(linkedIncident)}` : '';
+    const payload = await call(`/api/fleet/incidents?limit=10${filter}`);
     incidentReports = payload.reports || [];
     incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
@@ -129,16 +134,43 @@ async function refreshIncidents() {
         : "조치: 기록 없음");
       incidentLine(raw, `조치 필드: ${JSON.stringify(report.actions)}`);
       const latest = report.reviews.at(-1);
+      incidentLine(detail, report.handoff
+        ? `담당 인수: ${report.handoff.principal_id} · 조치 수락·해소는 별도 확인`
+        : '담당 인수: 아직 없음 · 자동 해결기 중지 요청과 구별');
       incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
       if (auth.role === "operator") {
+        if (!report.closed_at && !report.handoff && report.judgment_revision) {
+          const claim = document.createElement('ui-button');
+          claim.textContent = '이 사건 맡기';
+          claim.addEventListener('click', scope.listener(async () => {
+            claim.disabled = true;
+            try {
+              await call(`/api/fleet/robots/${encodeURIComponent(report.robot_ids[0])}/line-stuck/claim`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({stuck_id: report.stuck_id, judgment_revision: report.judgment_revision}),
+              });
+              log('담당 인수를 기록했습니다. 조치와 해소는 별도 확인합니다.', 'good');
+              await refreshIncidents();
+            } catch (error) {
+              log(`담당 인수 미확인: ${error.message} · 현재 기록을 다시 확인하세요.`, 'bad');
+              await refreshIncidents();
+            }
+          }));
+          detail.append(claim);
+        }
         detail.append(incidentReviewForm(report,
           `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
       }
       item.append(detail);
       detail.append(raw);
       list.append(item);
+      if (!linkedFocused && report.robot_ids[0] === linkedRobot && report.stuck_id === linkedIncident) {
+        detail.open = true;
+        summary.focus();
+        linkedFocused = true;
+      }
     }
     const trafficList = el("incident-traffic-list");
     trafficList.replaceChildren();
