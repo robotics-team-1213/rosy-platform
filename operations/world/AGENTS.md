@@ -5,7 +5,9 @@
 
 ## Purpose
 
-Wheel `rosy-world` 0.1.0. ROS-free observation references and current-state projections. `rosy.world.api` holds evidence references; `rosy.world.state.projections.map_pose` owns the existing sighting/odom projection consumed by Fleet. `COLCON_IGNORE` keeps colcon off this folder.
+Wheel `rosy-world` 0.1.1. ROS-free observation references and current-state projections. `rosy.world.api` holds evidence references; `rosy.world.state.projections.map_pose` owns the existing sighting/odom projection consumed by Fleet. `COLCON_IGNORE` keeps colcon off this folder.
+
+D-667: observation types and pure input validity are implemented once in `core_common.observation`. Existing World API/projection imports re-export those same objects. The wheel declares `core_common`; installed-wheel tests include that contract wheel. World still owns observation producers, state and physical calibration.
 
 ## Key Files
 

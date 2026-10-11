@@ -700,3 +700,9 @@
 
 - 상태: Accepted (2026-10-11).
 - Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
+
+## D-667 — 오프라인 인지 평가의 공통 관측 계약
+
+- 상태: Accepted (2026-10-12).
+- 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
+- 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.
