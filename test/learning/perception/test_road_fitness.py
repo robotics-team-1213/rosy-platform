@@ -358,3 +358,42 @@ def test_replay_checks_truth_before_resizing_and_rejects_nonfinite_logits(tmp_pa
     with pytest.raises(ValueError, match="logits"):
         evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor, (), truth, truth,
                              domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+
+
+def test_replay_refuses_contradictory_truth_even_outside_prediction_roi(tmp_path):
+    model = _replay_model(tmp_path)
+    image, anchor = _snapshots()
+    road = (_labels() == 2).astype(np.uint8)
+    region = road.copy()
+    region[0, 6] = 1
+    with pytest.raises(ValueError, match="outside declared road"):
+        evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor, (), road, region,
+                             domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+
+
+def test_replay_session_receives_only_preprocessed_rgb_image(tmp_path):
+    model = _replay_model(tmp_path)
+    image, anchor = _snapshots()
+    truth = (_labels() == 2).astype(np.uint8)
+    bgr = np.zeros((12, 12, 3), np.uint8)
+    bgr[..., 2] = 255
+    inputs = []
+    run = model._session.run
+    def capture(tensor):
+        inputs.append(tensor.copy())
+        return run(tensor)
+    model._session.run = capture
+    evaluate_model_frame(model, bgr, image, anchor, ((10, 2),), truth, truth,
+                         domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+    assert len(inputs) == 1 and inputs[0].shape == (1, 3, 4, 6)
+    assert (inputs[0][:, 0] == 1).all() and not inputs[0][:, 1:].any()
+
+
+@pytest.mark.parametrize("seeds", [None, ((True, 2),), ((1.5, 2),)])
+def test_replay_does_not_coerce_malformed_anchor_pixels(tmp_path, seeds):
+    model = _replay_model(tmp_path)
+    image, anchor = _snapshots()
+    truth = (_labels() == 2).astype(np.uint8)
+    with pytest.raises(ValueError, match="anchors"):
+        evaluate_model_frame(model, np.zeros((12, 12, 3), np.uint8), image, anchor, seeds, truth, truth,
+                             domain="real", conditions=(), now_ns=1050, max_age_ns=100)
