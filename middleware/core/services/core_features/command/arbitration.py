@@ -98,7 +98,8 @@ class ModeMachine:
         # Check-and-set only. Listeners run after the lock is released: the
         # docking listener takes the docking lock, and docking calls in here
         # while holding it (docking lock -> mode lock, never the reverse).
-        self._lock = threading.Lock()
+        # Watchdog renewal may read the mode epoch again on the committing thread.
+        self._lock = threading.RLock()
         self._epoch = 0
         self.manual_active: Callable[[], bool] = lambda: False
         self._motion_reserved = False
