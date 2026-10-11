@@ -404,3 +404,34 @@ test('camera maps without a survey can be reviewed and edits require re-review',
   assert.ok(reviewed.edges[0].evidence.note.includes('frame sha256 abc'));
   assert.equal(editEdge(reviewed, 'ab', {direction: 'two_way'}).edges[0].evidence.status, 'observed');
 });
+
+test('camera endpoint connections need explicit same-frame review and remain inferred until approved', async () => {
+  const {cameraConnectionCandidates, mergeCameraMap} = await import('../../../ui/console/shared/site-map-edit.js');
+  const survey = {revision: 's1', origin: [0, 0], heading_rad: 0, scale_source: 'odometry', description: 'Marked origin'};
+  const base = {...MAP, map_id: 'yard', survey};
+  const observation = {schema: 'rosy.site_map/1', map_id: 'yard', survey,
+    places: [{id: 'near', name: 'Observed endpoint', kind: 'junction', x: 2.02, y: 0},
+      {id: 'far', name: 'Branch end', kind: 'junction', x: 3, y: 1}],
+    edges: [{id: 'branch', from: 'near', to: 'far', polyline: [[2.02, 0], [2.5, .5], [3, 1]],
+      direction: 'two_way', drive_mode: 'lane', width_m: .2, speed_cap_mps: .03,
+      evidence: {source: 'camera', status: 'observed', reference_revision: 's1', note: 'frame sha256 abc'}}]};
+  const candidates = cameraConnectionCandidates(base, observation);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].observation_id, 'near');
+  assert.equal(candidates[0].candidates[0].id, 'B');
+  assert.ok(Math.abs(candidates[0].candidates[0].distance_m - .02) < 1e-9);
+  assert.throws(() => mergeCameraMap(base, observation));
+  assert.throws(() => mergeCameraMap(base, observation, {near: 'A'}));
+  assert.throws(() => mergeCameraMap(base, observation, {typo: 'B'}));
+  const joined = mergeCameraMap(base, observation, {near: 'B'});
+  assert.equal(joined.places.length, 3);
+  assert.equal(joined.edges[1].from, 'B');
+  assert.deepEqual(joined.edges[1].polyline, [[2, 0], [2.5, .5], [3, 1]]);
+  assert.equal(joined.edges[1].evidence.status, 'inferred');
+  assert.ok(joined.edges[1].evidence.note.includes('frame sha256 abc'));
+  assert.ok(joined.edges[1].evidence.note.includes('near -> B'));
+  assert.deepEqual(base.places, MAP.places);
+  assert.equal(reviewSurveyDraft(joined, 'Endpoint connection checked').edges[1].evidence.status, 'reviewed');
+  assert.deepEqual(mergeCameraMap(joined, observation, {near: 'B'}), joined);
+  assert.throws(() => cameraConnectionCandidates(base, {...observation, map_id: 'other'}));
+});
