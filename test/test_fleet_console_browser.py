@@ -315,6 +315,15 @@ def _open_cards(page):
     page.evaluate("() => document.activeElement?.blur()")
 
 
+def _open_token_access(page):
+    """Open the operator connection fold before using its token controls."""
+    if page.locator("#topbar-extra").is_hidden():
+        page.locator("#topbar-more").click()
+    if not page.locator("#token-access").evaluate("node => node.open"):
+        page.locator("#token-access > summary").click()
+    page.locator("#console-token").wait_for(state="visible")
+
+
 def _open_console(playwright, api, posts=None, init_script=""):
     """D-153 회차4 — 상태별 Fleet G2 셀. api 값은 (status, body) 또는 body."""
     browser, page, errors = open_page(playwright, 1920, 1080)
@@ -700,6 +709,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         page.locator('#cancel-all').click()
         expect(dialog).to_have_count(0)
         assert calls.count(('POST', '/api/fleet/cancel-all')) == 1
+        _open_token_access(page)
         page.locator('#console-token').fill('replacement-fixture-token')
         page.locator('#token-save').click()
         page.wait_for_function('() => !document.querySelector("#dispatch-rearm").disabled')
@@ -1164,6 +1174,7 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
                                timeout=7000)
         assert "192.0.2.11" not in page.inner_text("#discovery-list")
         api["/api/fleet/discovery"] = devices
+        _open_token_access(page)
         page.locator("#token-save").click()
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')",
                                timeout=7000)
@@ -3395,6 +3406,7 @@ def test_move_candidate_timeout_and_pagehide_keep_server_code_flow_owned(console
         page.wait_for_timeout(100)
         move.click()
         assert len(held) == 4  # An old finally cannot release the newer lookup.
+        _open_token_access(page)
         page.locator('#console-token').fill('replacement-fixture-token')
         page.locator('#token-save').click()
         page.wait_for_function('() => !document.querySelector("#enroll-address-add").disabled')
@@ -3465,6 +3477,7 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api, init_script=held_state)
         page.goto(console_url, wait_until="domcontentloaded")
+        _open_token_access(page)
         page.fill("#console-token", "operator-token")
         page.locator("#token-save").click()
         page.wait_for_function(

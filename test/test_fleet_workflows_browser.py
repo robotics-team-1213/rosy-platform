@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from browser_harness import browser_tests_enabled
 
-from test_fleet_console_browser import API, _open_console as _open_base, console_url  # noqa: F401
+from test_fleet_console_browser import API, _open_console as _open_base, _open_token_access, console_url  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='optional Chromium regression')
@@ -62,6 +62,7 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         page.locator('#enroll-address').fill('192.0.2.55:8080')
         page.locator('#robot-enrollment').evaluate('node=>window.retainedEnrollment=node')
         api['/api/fleet/session'] = {'principal_id': 'reader', 'role': 'viewer'}
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_contain_text('보기 전용')  # D-540 2
         choose(page, '카메라 연결 승인')
@@ -71,6 +72,7 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         expect(page.locator('[data-corner="0"][data-axis="0"]')).to_be_disabled()
         assert page.locator('[role=tabpanel]:visible').count() == 1
         api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_have_text('인증 필요')
         choose(page, '로봇 등록')
@@ -144,6 +146,7 @@ def test_actual_install_viewer_chooser_navigation_and_401_clear_owner_links(cons
         choose(page, '장비 찾기')
         expect(page.locator('#peer-picker')).to_be_visible()
         api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_have_text('인증 필요')
         expect(page.locator('#peer-list')).to_be_hidden()
