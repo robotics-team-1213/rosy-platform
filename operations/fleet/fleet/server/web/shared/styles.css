@@ -48,7 +48,7 @@
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .console-context, .context-panel { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
 .context-panel[hidden] { display: none; }
-.context-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); }
+.context-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
 .context-tabs ui-button { min-width: 0; white-space: normal; }
 .context-panel > .panel { padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel > .panel + .panel { border-top: 1px solid var(--border-subtle); }
@@ -56,6 +56,8 @@
 .context-panel .formation { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel .ops-block { grid-template-columns: minmax(0, 1fr); }
 #context-tools .ops-block > * { grid-column: 1; grid-row: auto; }
+#inbox-messages pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-micro); }
+#inbox-messages summary { min-height: var(--target-secondary); cursor: pointer; }
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
@@ -552,6 +554,7 @@ main {
 }
 
 @media (width < 30rem) {
+  .context-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }

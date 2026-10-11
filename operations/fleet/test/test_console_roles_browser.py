@@ -241,7 +241,7 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
         assert ("/api/fleet/robots/rosy_03/line-follow", '{"mode":"IR_LINE"}') in posts
         card.locator("ui-button", has_text="IR 차선 추종 끄기").click()
         expect(card.locator("[data-line-follow]")).to_have_count(0, timeout=10000)
-        page.get_by_role("tab", name="기록·근거").click()
+        page.get_by_role("tab", name="알림", exact=True).click()
         expect(page.locator("#log")).to_contain_text("IR 차선 추종 끔 · 꺼짐")
         assert _raw_words(page) == []
         assert not errors

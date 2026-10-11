@@ -166,6 +166,9 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             _shot(page, f"context-status-{theme}-{width}x{height}.png")
             status.focus()
             status.press("ArrowRight")
+            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
             expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
             expect(page.locator("#context-evidence")).to_be_visible()
             expect(page.locator("#context-status")).not_to_be_visible()
@@ -191,6 +194,44 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
                 assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
                 assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
         assert not errors
+        browser.close()
+
+
+def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    stuck = {**STUCK, "inquiry": {"version": "situation-inquiry-v1", "problem_id": STUCK["stuck_id"],
+        "observations": {"cause": "obstacle_ahead"}},
+        "ai_proposal": {"decision": "WAIT", "class": "accepted", "verdict": "forwarded", "outcome": "hold"},
+        "fleet_answer": {"decision": "WAIT", "tier": "ai", "accepted": True, "outcome": "hold"}}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [
+        _robot("rosy_01", line_stuck=stuck), OFFLINE]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        button = page.locator("#fleet-inbox")
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(page.locator("#context-inbox")).to_be_visible()
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        messages = page.locator("#inbox-messages")
+        expect(messages).to_contain_text("CORE 문의")
+        expect(messages).to_contain_text("AI 제안 대기")
+        expect(messages).to_contain_text("CORE 수락 · 복구 완료는 별도 확인")
+        messages.locator("summary").click()
+        expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
+        page.get_by_role("tab", name="로봇 상태").click()
+        page.clock.run_for(6000)
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
+        page.clock.run_for(3000)
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        assert messages.locator("details").get_attribute("open") is not None
+        assert page.locator("#critical-list").inner_text()
+        assert not posts and not errors
+        _shot(page, "context-inbox-message-stages.png")
         browser.close()
 
 
