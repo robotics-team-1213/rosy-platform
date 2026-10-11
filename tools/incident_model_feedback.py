@@ -13,8 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'operations/fleet'), str(ROOT / 'operations/decision/src'),
                 str(ROOT / 'contracts/foundation')]
 from fleet.incidents.automation.contract import CaseBudget, CaseScope, sha256, summary_json
+from fleet.incidents.automation.ledger.receipt import ModelReceipt, checked_receipt
 from rosy.decision.deliberation import canonical, identifier
 from rosy.decision.deliberation.profiles import ModelProfile
+
+
+def feedback_json(value):
+    encoded = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+    if len(encoded.encode()) >= 1024 * 1024:
+        raise ValueError('FEEDBACK_EXPORT_LIMIT')
+    return encoded
 
 
 def money(value):
@@ -71,6 +79,13 @@ def snapshot(path, subject_id, case_id, profiles):
                             'ORDER BY attempt_id LIMIT 17', (subject_id, case_id)).fetchall()
         if len(rows) > 16:
             raise ValueError('ATTEMPT_EXPORT_LIMIT')
+        traces = {}
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_incident_v2_model_receipts'").fetchone():
+            records = conn.execute('SELECT attempt_id,receipt_json FROM fleet_incident_v2_model_receipts '
+                                   'WHERE subject_id=? AND case_id=? LIMIT 9', (subject_id, case_id)).fetchall()
+            traces = {row['attempt_id']: row['receipt_json'] for row in records}
+            if len(records) > 8 or len(traces) != len(records) or set(traces) - {r['attempt_id'] for r in rows}:
+                raise ValueError('UNBOUND_MODEL_TRACE')
         attempts, spent, reserved = [], 0, 0
         for source in rows:
             row = dict(source)
@@ -94,8 +109,9 @@ def snapshot(path, subject_id, case_id, profiles):
             summary = json.loads(row['summary_json']) if row['summary_json'] is not None else None
             if summary is not None:
                 summary_json(summary)
+            trace = checked_receipt(scope, row, ModelReceipt(traces[row['attempt_id']])) if row['attempt_id'] in traces else None
             attempts.append({key: row.get(key) for key in ('attempt_id', 'input_hash', 'observation_revision',
-                            'kind', 'role', 'state', 'reserved_micros', 'actual_micros')} | {'summary': summary})
+                            'kind', 'role', 'state', 'reserved_micros', 'actual_micros')} | {'summary': summary, 'model_receipt': trace})
         calls = sum(a['kind'] == 'model' for a in attempts)
         observations = len(attempts) - calls
         if ((calls, observations, spent, reserved) != (case['calls'], case['observations'],
@@ -115,8 +131,10 @@ def snapshot(path, subject_id, case_id, profiles):
                       reserved_micros=reserved, attempts=attempts, closure=closure,
                       outcome='RESOLVED_OBSERVED' if closure else 'IN_PROGRESS' if case['state'] == 'ACTIVE'
                       else 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else 'UNRESOLVED')
-    return dict(schema='rosy.incident.model_feedback/1', case=result, label_state='UNREVIEWED',
-                field_accepted=False, digest=hashlib.sha256(canonical(result).encode()).hexdigest())
+    exported = dict(schema='rosy.incident.model_feedback/1', case=result, label_state='UNREVIEWED',
+                    field_accepted=False, digest=hashlib.sha256(feedback_json(result).encode()).hexdigest())
+    feedback_json(exported)
+    return exported
 
 
 def main(argv=None):
@@ -134,7 +152,7 @@ def main(argv=None):
             raise ValueError('PROFILE_MANIFEST_LIMIT')
         result = snapshot(args.database, args.subject, args.case, json.loads(data))
         with args.out.open('x', encoding='utf-8') as output:
-            output.write(canonical(result) + '\n')
+            output.write(feedback_json(result) + '\n')
         print(result['digest'])
         return 0
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):

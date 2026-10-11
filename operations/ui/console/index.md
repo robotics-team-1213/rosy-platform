@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
 - 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
 - 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 - 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
-- 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes

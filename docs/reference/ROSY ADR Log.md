@@ -669,8 +669,11 @@
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
+| D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
+| D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -761,3 +764,14 @@
 - 상태: Accepted (2026-10-12, 사용자 결정).
 - 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다. 심한 발열(화면 끄기와 같은 기준)이면 요청보다 먼저 멈춘다.
 - 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 2026-10-12 S21에서 Fleet lease JPEG 순번이 늘었다. 현장 Vision은 demand를 보내지 않아 2초 유예 송출이었다. 발열 정지는 배터리 36.2°C라 기기에서 확인하지 않았다. 대기 전류와 첫 프레임 지연은 측정하지 않았다.
+## D-694 — 모델 비용 근거와 사건 receipt v2
+
+**Status:** Accepted (2026-10-12, 소스 계약)
+
+포함 요금제 marginal cash와 미관측 청구액을 분리하고 검증된 호출별 비용 근거를 숫자 원장과 원자적으로 결속한다. 과거 tuple2와 model receipt/1을 유지하며 계정·원문 키를 export하지 않는다. 실제 제공자 활성화는 별도 admission이다. 전문은 [D-694](../adr/D-694-model-cost-evidence.md).
+
+## D-695 — 사건 실패 분류 제안과 최종 검토 분리
+
+**Status:** Accepted (2026-10-12, source 계약)
+
+동일 사건·모델 근거 hash에 실패 책임 제안을 결속하고 모델 의견과 사람 최종 검토 후보를 구분한다. 기존 원인·정답 상태와 원장·CORE API는 유지한다. 전문은 [D-695](../adr/D-695-incident-failure-responsibility.md).
