@@ -27,7 +27,7 @@ def digest(value):
 def snapshot(database, *, subject_id, case_id, owner_id, config_sha256, policy_revision, start, end):
     if (any(type(v) is not str or not v or v != v.strip() or len(v) > 512
             for v in (subject_id, owner_id, policy_revision))
-            or case_id is not None and (type(case_id) is not str or not case_id or case_id != case_id.strip())
+            or case_id is not None and (type(case_id) is not str or not case_id or case_id != case_id.strip() or len(case_id) > 512)
             or type(config_sha256) is not str or re.fullmatch('[0-9a-f]{64}', config_sha256) is None
             or any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1e12 for v in (start, end))
             or not 0 < end-start <= 86400):
