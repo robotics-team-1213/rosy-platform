@@ -162,6 +162,9 @@ class TripRunner(TripAdmission, TripProgress):
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
+                engaged = self._engaged(robot_id)
+                if engaged is not None:
+                    raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
