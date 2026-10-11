@@ -79,7 +79,7 @@
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
 
-## 2026-10-12 - D-668 Fleet header controls
+## 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
 
 - One upper-right theme button consumes RosyTheme choices/get/set and is usable without operator rights.
 - One status entry opens connection, role and messages; summary open does not mark messages read. Development warning and E-stop remain outside the fold.
