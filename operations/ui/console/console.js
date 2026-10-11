@@ -555,7 +555,7 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     life.check();
-    if (auth.role !== identity.role) confirmedAction.cancel();
+    if (auth.role !== identity.role || auth.principal !== identity.principal_id) { confirmedAction.cancel(); workView.reset(); }
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     showSession(identity);
