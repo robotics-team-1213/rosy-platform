@@ -190,3 +190,21 @@ def test_stale_after_dequeue_defers_without_consuming_http_attempt(tmp_path):
     asyncio.run(deliver())
     final = next(row for row in log.notifications.rows() if row['kind'] == 'FINAL_REVIEW')
     assert final['state'] == 'PENDING' and final['attempts'] == 0
+
+
+@pytest.mark.parametrize('original_case', ['case-1', 'foreign'])
+def test_zero_attempt_origin_binds_revision_after_audit_rotation(tmp_path, original_case):
+    now, log, board, _, store, scope, summary = managed(tmp_path)
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    now[0] = 101
+    observe(board, 101)
+    with closing(log._connect()) as connection, connection:
+        connection.execute('DELETE FROM fleet_judgment_records')
+        connection.execute('CREATE TABLE IF NOT EXISTS fleet_incident_v2_origins '
+                           '(subject_id TEXT, case_id TEXT, observation_revision TEXT, PRIMARY KEY(subject_id,case_id))')
+        connection.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)',
+                           (scope.subject_id, original_case, summary['observation_revision']))
+    if original_case == scope.case_id:
+        assert log.notifications.enqueue_final(scope, summary, now=101)
+    else:
+        with pytest.raises(ValueError): log.notifications.enqueue_final(scope, summary, now=101)
