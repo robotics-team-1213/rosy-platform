@@ -413,6 +413,7 @@ def test_strict_intake_binds_model_to_training_labels(tmp_path, monkeypatch, tra
     ev = report["eval"]
     assert ev["training_content_verified"] is True
     if training_semantic == "road_surface/1":
+        assert rc == 0, report["reasons"]
         assert not ev["training_semantic_mismatches"] and not ev["training_unverified_semantics"]
     else:
         assert rc == 1
@@ -425,6 +426,19 @@ def test_strict_training_resolution_rejects_modified_store_content(tmp_path):
     (training / "manifest.json").write_text('{"frames": []}', encoding="utf-8")
     with pytest.raises(intake.EvalSetError, match="content hash"):
         intake.training_sessions(tmp_path / "store", training.name, verify_content=True)
+
+
+def test_strict_eval_detects_truth_changed_during_inference(tmp_path, monkeypatch):
+    folder = _seal(_eval_set(tmp_path))
+    original = intake.model_logits
+
+    def mutate_truth(model, bgr):
+        (folder / "masks/s/s__000000.png").write_bytes(b"changed")
+        return original(model, bgr)
+
+    monkeypatch.setattr(intake, "model_logits", mutate_truth)
+    with pytest.raises(intake.EvalSetError, match="content hash"):
+        intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
 
 
 def _store_dataset(tmp_path, sessions):
