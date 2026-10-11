@@ -672,6 +672,7 @@
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
+| D-696 | 비식별 사건 인수 근거 export | Accepted |
 | D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
 | D-697 | 독립 운영 성과 비교와 증거 생산 책임 | Accepted |
 
@@ -776,3 +777,8 @@
 **Status:** Accepted (2026-10-12, 설계 계약)
 
 모델 주도 범용 사건 종결 목표의 독립 운영 비교를 learning에 두고 Fleet 불변 export로 연결한다. 규칙·기본 모델·조건부 검토의 동일 cohort, 인수·정상 명령·재발·비용의 생산 책임과 자료 부족 HOLD를 고정한다. 전문은 [D-697](../adr/D-697-independent-operational-comparison.md).
+## D-696 — 비식별 사건 인수 근거 export
+
+**Status:** Accepted (2026-10-12).
+
+Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted and case-only named claim remain distinct. [D-696](../adr/D-696-incident-handoff-evidence.md).
