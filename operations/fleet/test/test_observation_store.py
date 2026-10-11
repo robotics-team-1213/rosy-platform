@@ -84,3 +84,6 @@ def test_offline_learning_export_preserves_hashes_and_has_no_automatic_labels(tm
     assert json.loads(raw)["observation"]["state"]["battery"]["voltage"] == 7.4
     with pytest.raises(FileExistsError):
         exporter.export(store.path, tmp_path / "training-source")
+    (tmp_path / "training-source/observations.jsonl").write_bytes(raw.replace(b"7.4", b"8.4"))
+    with pytest.raises(ValueError, match="changed"):
+        exporter.verify(tmp_path / "training-source")

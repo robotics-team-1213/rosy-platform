@@ -32,7 +32,8 @@ def export(database, output, *, robot_id=None):
             for oid, rid, received, payload in cursor:
                 body = json.loads(payload)
                 if (len(payload.encode("utf-8")) > MAX_EVENT_BYTES or _contains_sensitive_field(body)
-                        or body.get("robot_id") != rid or type(body.get("online")) is not bool):
+                        or body.get("robot_id") != rid or type(body.get("online")) is not bool
+                        or json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False) != payload):
                     raise ValueError("observation source failed validation")
                 item = dict(observation_id=oid, robot_id=rid, received_at=received, observation=body,
                             sha256=hashlib.sha256(payload.encode("utf-8")).hexdigest())
@@ -52,9 +53,30 @@ def export(database, output, *, robot_id=None):
             stream.write((json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
             stream.flush()
             os.fsync(stream.fileno())
-        return manifest
+        return verify(output)
     finally:
         connection.close()
+
+
+def verify(output):
+    output = Path(output)
+    manifest = json.loads((output / "manifest.json").read_bytes())
+    if (manifest.get("schema") != "rosy.fleet-observations/1" or manifest.get("file") != "observations.jsonl"
+            or manifest.get("train_eligible") is not False or manifest.get("labels") is not None):
+        raise ValueError("unlabeled Fleet source manifest is invalid")
+    digest, count = hashlib.sha256(), 0
+    with (output / "observations.jsonl").open("rb") as stream:
+        for line in stream:
+            digest.update(line)
+            item = json.loads(line)
+            payload = json.dumps(item["observation"], ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            if (_contains_sensitive_field(item) or item["sha256"] != hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                    or item["robot_id"] != item["observation"]["robot_id"]):
+                raise ValueError("observation content or lineage changed")
+            count += 1
+    if count != manifest["rows"] or digest.hexdigest() != manifest["sha256"]:
+        raise ValueError("Fleet observation export hash or row count changed")
+    return manifest
 
 
 def main():

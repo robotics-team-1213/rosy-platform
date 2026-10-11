@@ -25,6 +25,7 @@ def test_accepted_hold_reobserves_and_recovers_once_without_a_person():
     wait = core.step(0, [row])[0]
     core.sent(wait, 0)
     held = core.result(wait, code=None)
+    row["state"]["line_follow"]["stuck"]["phase"] = "WAITING_CONSOLE"
     assert type(held).__name__ == "Hold"
     assert core.step(1, [row]) == []
     row["state"]["line_follow"]["crosswalk"] = None
@@ -46,7 +47,28 @@ def test_exhaustion_observes_without_resetting_the_budget(config, reason):
     chain = core._chains["rosy_01"]
     initial = (chain.started_at, chain.rule_answers)
     assert core.step(1000, [row]) == []
+    row["state"]["mode"] = "MANUAL"
+    assert core.step(1001, [row]) == []
     assert (chain.started_at, chain.rule_answers) == initial
+
+
+@pytest.mark.parametrize("phase", ["YIELDED", "TURNING", "CRAWLING", "BACKING", "SETTLING"])
+def test_unresolved_yield_only_resumes_after_completed_owner_segment(monkeypatch, phase):
+    core = resolver()
+    row = _row(stuck=_stuck())
+    core.step(0, [row])
+    answer = Answer("rosy_01", "stuck-1", "YIELD", "meet", yield_m=0.1, yield_turn_rad=0)
+    core.sent(answer, 0)
+    core.result(answer, code=None)
+    chain = core._chains["rosy_01"]
+    chain.unresolved.add("YIELD")
+    core._escalate(chain, "rosy_01", "stuck-1", "unresolved:YIELD")
+    row["state"]["line_follow"]["stuck"]["phase"] = phase
+    monkeypatch.setattr(core, "_meet", lambda *_: ("meet", "YIELD", 0, 0.1))
+    assert core.step(21, [row]) == []
+    monkeypatch.setattr(core, "_meet", lambda *_: ("meet", "RESUME"))
+    actions = core.step(22, [row])
+    assert actions == ([Answer("rosy_01", "stuck-1", "RESUME", "meet")] if phase == "YIELDED" else [])
 
 
 def test_unknown_motion_and_actual_human_claim_never_reopen():
@@ -60,6 +82,28 @@ def test_unknown_motion_and_actual_human_claim_never_reopen():
     assert core.step(2, [row]) == []
     core.claim("rosy_01", "stuck-1")
     assert core.step(3, [row]) == []
+
+
+def test_restart_freeze_requires_exact_owner_case_closure(tmp_path):
+    from types import SimpleNamespace
+    from fleet.stuck.reports import LineStuckAnswerLog
+    journal = LineStuckAnswerLog(tmp_path / "journal.sqlite3")
+    _loop, board, _robot = _setup(log=journal)
+    board.record(robot_id="rosy_01", stuck_id="stuck-abc", decision="BACK_AND_RETRY",
+                 principal_id="fleet-resolver", accepted=None,
+                 code="STUCK_DECISION_OUTCOME_UNKNOWN", tier="rule")
+    loop, _board, robot = _setup(log=journal)
+    loop._resolver.autonomous_robots = frozenset({"rosy_01"})
+    assert loop._resolver._uncertain == {("rosy_01", "stuck-abc")}
+    events = [SimpleNamespace(type="nav.line_stuck_closed", data={"stuck_id": "another-case"})]
+    loop.events_since = lambda *_: events
+    asyncio.run(loop.run_once())
+    assert robot.calls == [] and journal.uncertain_motion()
+    events[0].data["stuck_id"] = "stuck-abc"
+    asyncio.run(loop.run_once())
+    assert not loop._resolver._uncertain and not journal.uncertain_motion()
+    restarted, _board, _robot = _setup(log=journal)
+    assert not restarted._resolver._uncertain
 
 
 @pytest.mark.parametrize("change", ["estop", "activity", "case", "mode", "missing"])
@@ -140,7 +184,7 @@ def test_authorized_deterministic_replan_uses_checks_without_ai_or_operator(monk
     assert runner.view("b")["detail"]["replan_confirmed_by"] == "fleet-rule"
 
 
-@pytest.mark.parametrize("change", ["stop", "hold", "route", "map", "scope"])
+@pytest.mark.parametrize("change", ["stop", "hold", "content", "route", "map", "scope"])
 def test_replan_cannot_apply_after_await_invalidates_its_admission(monkeypatch, change):
     runner, store, fleet = _cycle(monkeypatch)
     _routable(monkeypatch, runner)
@@ -154,6 +198,8 @@ def test_replan_cannot_apply_after_await_invalidates_its_admission(monkeypatch, 
             runner._stop_epoch += 1
         elif change == "hold":
             live.view["hold"] = dict(hold)
+        elif change == "content":
+            hold["plan"]["segments"] = []
         elif change == "route":
             live.route_rev += 1
         elif change == "scope":
