@@ -7820,3 +7820,9 @@ osy-d395-s1d\`.
 - 변경: D-659 인지 평가에서 기존 연결 구역 후보와 D-597 추종 대상을 구별하는 시험을 추가했다. 연결 분기 보존, 분리 도로 제외, 가림/crop 제외와 추종용 hole filling의 차이를 검증했다. 중앙 시드 부재의 최대 영역 선택은 실제 구역 귀속 증거가 아닌 한계 사례로 추가했다.
 - 증거: 첫 시험의 부분집합 가정은 NEW 1로 실패했고 gap closing/hole filling 원인을 확인했다. 관측 화소와 채운 추종 화소를 구별한 `c952f2a0a` 원격 terminal exit 0, NEW 0. 추가 한계 사례와 최신 main 통합은 후속 검증으로 기록한다.
 - gate 변화: 없음. 합성 source 시험이며 독립 실물 정답·시뮬레이션 영상·구역 추정 승인·주행 활성화의 증거가 아니다.
+
+## 2026-10-11 · 6353771b7 · D-663 도로면 drivable과 후속 구역 로직의 의미 계보
+
+- 변경: 사용자의 도로 자체는 drivable, 현재/따라갈 구역은 로직 판단 지침을 실행 계획과 새 road_surface_v1 검수 classes에 반영했다. 선택 semantic은 classes→dataset→export→eval에 보존되고 의미 불일치·구형 strict 평가·champion 혼용과 기존 조향 슬롯의 도로면/궤적 모델 전달을 거절한다. v13의 원래 구역 의미는 별도 유지한다.
+- 증거: 최초 의미 보존/비교/전달 시험은 NEW 16으로 RED를 확인했다. 추가 template RED 후 `6353771b7` 관련 원격 builder/export/notebook/intake/delivery/manifest 회귀 terminal exit 0, NEW 0. notebook은 generator에서 재생성했다. 독립 데이터 계보의 strict 검증과 별도 도메인/구역 평가, 관측 전용 전달은 후속이다.
+- gate 변화: 없음. 새 클래스별 도로면 학습 정답 검수, 학습된 모델의 적합성·장치 관측·주행 활성화·배포는 미완료다.
