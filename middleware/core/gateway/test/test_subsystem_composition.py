@@ -48,10 +48,10 @@ def test_service_build_keeps_subsystem_instances_and_listener_order(core_client,
     assert assembled.signal_observer is built["traffic"][1]
     assert assembled.power is built["power"][0]
     assert assembled.battery is built["power"][1]
-    assert [fn.__name__ for fn in assembled.modes.change_listeners[:3]] == [
-        "mirror_mode", "leave_docking", "drop_return_on_release"]
-    assert [fn.__name__ for fn in assembled.safety.estop_listeners[:6]] == [
-        "reflect_stop", "on_estop", "on_estop", "<lambda>", "stop_line_follow", "reset_traffic_policy"]
+    assert [fn.__name__ for fn in assembled.modes.change_listeners[:4]] == [
+        "<lambda>", "mirror_mode", "leave_docking", "drop_return_on_release"]
+    assert [fn.__name__ for fn in assembled.safety.estop_listeners[:7]] == [
+        "_clear_for_stop", "reflect_stop", "on_estop", "on_estop", "<lambda>", "stop_line_follow", "reset_traffic_policy"]
 
 
 def test_line_follow_constructor_keeps_the_live_manual_angular_provider():

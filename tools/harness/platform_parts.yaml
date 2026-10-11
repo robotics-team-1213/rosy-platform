@@ -702,6 +702,8 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - middleware/core/gateway/core/drive/traffic.py  # D-628 traffic admission composition
+  - middleware/core/gateway/core/system/power.py  # D-628 battery shutdown configuration
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
   - middleware/execution/local/src/rosy/execution/local/omx_policy.py
@@ -739,6 +741,8 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: core.drive.traffic.build_traffic}
+  - {symbol: core.system.power.build_power_and_battery}
   - {symbol: control.control.command_gate.CommandPolicy}
   - {symbol: control.safety.node.SafetyNode}
   - {symbol: core.drive.line_follow.bind_motion_envelope}

@@ -264,7 +264,7 @@ def test_control_imports_no_core_code():
     allowed_contracts = ("core_common.protocol", "core_common.calibration_store",
                          "core_common.robot_body")
     violations = []
-    for path in _prod_py_files(CONTROL_PKG.parent):
+    for path in (file for tree in CONTROL_TREES for file in _prod_py_files(tree)):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
