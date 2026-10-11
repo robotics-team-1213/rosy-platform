@@ -88,6 +88,12 @@ export function createInboxPanel({scope, el, readView}) {
         evidence.append(title, receipt, raw);
         item.append(heading, status, evidence);
       }
+      if (item.dataset.stuckId && item.dataset.stuckId !== stuck.stuck_id) {
+        const focused = item.contains(document.activeElement);
+        item.querySelectorAll("details").forEach(fold => { fold.open = false; });
+        if (focused) item.querySelector(":scope > details > summary").focus({preventScroll: true});
+      }
+      item.dataset.stuckId = stuck.stuck_id;
       const facts = stuck.ai_facts || [];
       item.querySelector('[data-message-summary]').textContent = stuckSummary(stuck);
       item.querySelector('[data-message-evidence]').textContent = `로봇 문의: ${CAUSE_LABEL[inquiry?.observations?.cause || stuck.cause] || "원인 미확인"} · 영상 분석: ${proposal ? "제안 있음" : facts.length ? "참고 관측 있음" : "기록 없음"} · 관제: ${answer ? "지시 전달 기록 있음" : "전달 기록 미확인"} · 로봇: ${answer?.accepted === true ? "수락 · 완료는 별도 확인" : answer?.accepted === false ? "거절 · 개발 진단에서 응답 확인" : "응답 미확인"}`;
