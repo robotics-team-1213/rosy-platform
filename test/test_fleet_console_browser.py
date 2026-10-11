@@ -286,10 +286,10 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        _open_cards(page)
-        goals = page.locator("#robot-workspace ui-button[data-goal-robot-id]")
-        assert goals.count() == 2
-        for goal in goals.all():
+        for robot_id in ("robot-a", "robot-b"):
+            _open_cards(page, robot_id)
+            goal = page.locator("#robot-workspace ui-button[data-goal-robot-id]")
+            assert goal.count() == 1
             assert goal.get_attribute("disabled") == (None if supported else "")
             if not supported:
                 assert goal.get_attribute("reason") == "수동 주행만 지원"
@@ -548,7 +548,8 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         assert not errors
         assert "1.00" not in page.inner_text("#robot-workspace")
         assert "상태 확인 불가" in page.inner_text("#robot-workspace")
-        assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
+        assert "로봇 위치 확인 불가" in page.locator("#map-tag").text_content()
+        assert page.locator('#roster [data-localization]').inner_text() == "위치 미확인"
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
         assert page.locator("#robot-workspace article ui-button").first.is_disabled()
         assert page.locator("#online-pill").evaluate("node => node.scrollWidth <= node.clientWidth")
@@ -557,7 +558,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
                 api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
                                            "robots": [robot]}
                 page.wait_for_function("() => document.querySelector('#robot-workspace article')?.textContent.includes('1.00')")
-                assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+                assert "로봇 위치 확인 불가" not in page.locator("#map-tag").text_content()
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
