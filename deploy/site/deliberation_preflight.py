@@ -39,8 +39,12 @@ async def descendant_probe(launcher, cancel):
             task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, TimeoutError):
+        except asyncio.CancelledError:
+            if not cancel or asyncio.current_task().cancelling():
+                raise
             expected_exit = True
+        except TimeoutError:
+            expected_exit = not cancel
     finally:
         if not task.done():
             task.cancel()
