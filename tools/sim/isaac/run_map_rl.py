@@ -90,7 +90,8 @@ def camera_route_guide(task, pose, result, stamp):
         local_x, local_y = after[0] - centre[0], after[1] - centre[1]
     relative = lambda x, y: math.degrees(math.atan2(math.sin(math.atan2(y, x) - pose[2]),
                                                    math.cos(math.atan2(y, x) - pose[2])))
-    return (relative(dx, dy), stamp, True, relative(local_x, local_y),
+    # A route tangent alone does not prove a Fleet turn spot or the native body's sweep clearance.
+    return (relative(dx, dy), stamp, False, relative(local_x, local_y),
             result['deviation_m'], result['progress_m'])
 
 
