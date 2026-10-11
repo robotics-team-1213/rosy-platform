@@ -4,7 +4,7 @@ import json
 import re
 
 from . import identifier
-from .calibration_metrics import digest, finite, metrics, serialize, wilson_lower
+from .calibration_metrics import calibrated_metrics, digest, finite, metrics, serialize, wilson_lower
 
 IDENTITY = ('profile_revision', 'model_revision', 'domain', 'calibration_revision')
 LINEAGE = ('session_id', 'recording_id', 'session_sha256', 'recording_sha256')
@@ -88,6 +88,7 @@ def evaluate_calibration(fit, evaluation, *, training, reviewed_profile):
         evaluated.update(fit_count=fitted_bin['count'], fit_accuracy=fitted_bin['empirical_accuracy'],
                          fit_accuracy_lower=fitted_bin['accuracy_lower'])
         evaluated['calibrated_confidence'] = min(evaluated['accuracy_lower'], fitted_bin['accuracy_lower'])
+    test_metrics.update(calibrated_metrics(bins, len(evaluation)))
     report = dict(schema_version=2, **{field: profile[field] for field in IDENTITY}, choices=list(choices),
         fit_sha256=profile['fit_sha256'], evaluation_sha256=profile['evaluation_sha256'],
         training_sha256=profile['training_sha256'], reviewed_by=profile['reviewed_by'],
@@ -108,8 +109,11 @@ def evaluate_calibration(fit, evaluation, *, training, reviewed_profile):
         enough = min(len(fit), len(evaluation)) >= limits['minimum_cases']
         failed = (test_metrics['accuracy_lower'] < limits['minimum_accuracy_lower']
             or any(test_metrics[metric] > limits[field] for metric, field in
-                (('brier', 'maximum_brier'), ('ece', 'maximum_ece'), ('p95_latency_ms', 'maximum_p95_latency_ms'))))
-        report['state'] = ('FAIL' if failed else 'PASS_OFFLINE_ONLY') if enough else 'HOLD'
+                (('brier', 'maximum_brier'), ('ece', 'maximum_ece'), ('p95_latency_ms', 'maximum_p95_latency_ms')))
+            or any(test_metrics[metric] is not None and test_metrics[metric] > limits[field] for metric, field in
+                (('calibrated_top_brier', 'maximum_brier'), ('calibrated_ece', 'maximum_ece'))))
+        complete = test_metrics['calibrated_coverage'] == 1
+        report['state'] = ('FAIL' if failed else 'PASS_OFFLINE_ONLY') if enough and complete else 'HOLD'
     if fit_metrics['forbidden'] or test_metrics['forbidden']:
         report['state'] = 'FAIL'
     return CalibrationArtifact(serialize(report))
