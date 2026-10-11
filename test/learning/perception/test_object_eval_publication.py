@@ -140,3 +140,42 @@ def test_truncated_source_proof_cannot_publish(tmp_path, monkeypatch):
     monkeypatch.setattr(bootstrap, 'prove_frames', truncate)
     with pytest.raises(ValueError, match='proof.*count'):
         bootstrap.publish(registry.root, review.state, 'truncated', tmp_path / 'scratch', target='objects')
+
+
+def test_publication_reproves_actual_synthetic_mcap_bytes(tmp_path, monkeypatch):
+    pytest.importorskip('mcap_ros2')
+    from mcap_ros2.writer import Writer
+    from test_dataset_extract import IMAGE_DEF
+    original_prove = bootstrap.prove_frames
+    registry, mock_review, _ = fixture(tmp_path, monkeypatch)
+    source = mock_review.get(0)['source']
+    session = Path(source['mcap']['session_dir'])
+    bag = session / 'bag'
+    bag.mkdir()
+    with (bag / 'bag_0.mcap').open('wb') as stream:
+        writer = Writer(stream)
+        definition = writer.register_msgdef('sensor_msgs/msg/Image', IMAGE_DEF)
+        writer.write_message('/camera/front', definition, {
+            'header': {'stamp': {'sec': 0, 'nanosec': 1000}, 'frame_id': 'camera'},
+            'height': 24, 'width': 32, 'encoding': 'bgr8', 'is_bigendian': 0,
+            'step': 96, 'data': [0] * (24 * 32 * 3)}, 1000, 1000)
+        writer.finish()
+    (bag / 'metadata.yaml').write_text('rosbag2_bagfile_information:\n  relative_file_paths:\n    - bag_0.mcap\n')
+    proof = original_prove(session, [dict(topic='/camera/front', log_ns=1000,
+                           image=mock_review.image(0))], tmp_path / 'scratch')
+    source['mcap'] = dict(session_dir=str(session), metadata_sha256=proof['metadata_sha256'],
+                         bags=proof['bags'], frame=proof['frames'][0], decoder=proof['decoder'])
+    source['image'] = '0.png'
+    (tmp_path / 'source.jsonl').write_bytes(evidence.encoded(source))
+    actual = ReviewStore(tmp_path / 'actual-state', tmp_path / 'source.jsonl',
+                        tmp_path / 'human.jsonl', tmp_path / 'images')
+    with actual.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('workspace_kind','evaluation')")
+    monkeypatch.setattr(bootstrap, 'prove_frames', original_prove)
+    result = bootstrap.publish(registry.root, actual.state, 'actual-synthetic',
+                               tmp_path / 'scratch', target='objects')
+    assert read_fixed_manifest(result['path'])['frames'][0]['source']['mcap']['bags'] == proof['bags']
+    with (bag / 'bag_0.mcap').open('ab') as stream:
+        stream.write(b'drift')
+    with pytest.raises(ValueError, match='bag hash'):
+        bootstrap.ready(registry.root, actual.state, tmp_path / 'scratch', target='objects')
