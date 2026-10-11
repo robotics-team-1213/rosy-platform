@@ -11,6 +11,9 @@ import asyncio
 import logging
 import sqlite3
 import time
+import hashlib
+import json
+from dataclasses import asdict
 from typing import Awaitable, Callable, Mapping, Optional
 
 import httpx
@@ -33,6 +36,9 @@ class StuckResolverLoop:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
         self.incident_worker = incident_worker
+        from fleet.observe.rules import RuleSelectionStore
+        self.rule_selections = RuleSelectionStore(board._log.path) if board is not None and board._log is not None else None
+        self._rule_selections = {}
         #: D-517 5 (M4): a robot on a running trip gets stopping answers only (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
@@ -60,11 +66,6 @@ class StuckResolverLoop:
 
     async def run_once(self) -> None:
         snapshot = await self._snapshot()
-        if self.incident_worker is not None:
-            try:
-                self.incident_worker.feed(snapshot)
-            except (ValueError, TypeError, KeyError):
-                log.warning('incident worker rejected poll')
         robots = [self._row(row) for row in snapshot["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
@@ -84,6 +85,10 @@ class StuckResolverLoop:
         await closed_loop.check(self, now, robots)
         # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         actions = self._resolver.step(now, robots)
+        await self._record_selections(robots, actions)
+        if self.incident_worker is not None:
+            try: self.incident_worker.feed(snapshot)
+            except (ValueError, TypeError, KeyError): log.warning('incident worker rejected poll')
         selected = self._rows.copy()
         verdicts, self._resolver.ai_verdicts[:] = list(self._resolver.ai_verdicts), []
         if verdicts and self.ai_board is not None:
@@ -100,6 +105,40 @@ class StuckResolverLoop:
                 await self._answer(action, now, selected=selected.get(action.robot_id))
         if self.problems is not None:              # D-610 4: stalled and pose_lost
             await self.problems.run(self, now, robots)
+
+    async def _record_selections(self, robots, actions):
+        self._rule_selections = {}
+        if self.rule_selections is None: return
+        try:
+            def digest(value):
+                raw = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+                if len(raw) > 1024 * 1024: raise ValueError('RULE_SELECTION_SOURCE_LIMIT')
+                return hashlib.sha256(raw).hexdigest()
+            source = digest(robots)
+            config = digest(dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots)))
+            selected = {action.robot_id: action for action in actions}
+            mixed = self._resolver.ai_first is not None or any(
+                r.get('ai_facts') or r.get('ai_proposal') or r.get('ai_wait') for r in robots)
+            records = [pipeline.selection_receipt(self._board.intervention_assessment(r['robot_id']),
+                selected.get(r['robot_id']), source_sha256=source, config_sha256=config, mixed=bool(mixed)) for r in robots]
+            records = await asyncio.to_thread(self.rule_selections.append_batch, records, now=self._board._wall())
+            self._rule_selections = {r['assessment']['request']['subject_id']: r for r in records}
+        except (ValueError, TypeError, KeyError, OSError, sqlite3.Error):
+            log.warning('rule selection journal unavailable; no current model baseline')
+
+    def rule_baseline(self, assessment):
+        from rosy.contracts.learning.incident_rule import baseline_choice
+        from fleet.server.incident_deliberation import FleetBaseline
+        from rosy_situation.snapshot_assessment import POLICY
+        if assessment is None or not assessment.applies_to(assessment.request, now=self._board._wall(), policy_revision=POLICY.revision):
+            return None
+        record = self._rule_selections.get(assessment.request.subject_id)
+        if (record is None or record['assessment']['request'] != json.loads(json.dumps(asdict(assessment.request)))
+                or record['assessment']['policy_revision'] != assessment.policy_revision
+                or not record['assessment']['evaluated_at'] <= self._board._wall() < record['assessment']['valid_until']):
+            return None
+        choice = baseline_choice(record)
+        return FleetBaseline.from_assessment(assessment, choice) if choice is not None else None
 
     def _row(self, row: dict) -> dict:
         extra = {}
