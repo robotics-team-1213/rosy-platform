@@ -9,7 +9,7 @@ import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
-import { capabilityReason } from "./motion-readiness.js";
+import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
@@ -323,6 +323,16 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
+    const context = nodeWithText('div', 'robot-actions');
+    const recording = nodeWithText('a', '', '지도 기록');
+    recording.href = `/console/site-map?robot=${encodeURIComponent(robot.robot_id)}#teach-heading`;
+    recording.dataset.mapRecording = '';
+    const group = nodeWithText('ui-button', '', '대형·대열 관리');
+    group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
+    group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
+    context.append(recording, group); node.appendChild(context);
+    if (role) node.appendChild(nodeWithText('p', 'hint',
+      `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
     if (tripLine) {
       const line = nodeWithText("p", "trip-line", tripLine);
@@ -467,7 +477,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
     blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : capabilityReason(robot.capabilities, "navigation.goal_navigation")
+        : motionCommandReason(view, robot.robot_id, 'goal')
+          || capabilityReason(robot.capabilities, "navigation.goal_navigation")
           || (!view.map ? "지도 없음"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
