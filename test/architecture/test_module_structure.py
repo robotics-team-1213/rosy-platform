@@ -270,7 +270,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        53_093,
+        53_396,
+        "split: independently re-judged on 2026-10-12 by safety_structure_review at 53396, including the "
+        "35-line Discord transport holder installed by Fleet. D-671 adds dedicated authenticated reception, "
+        "existing-DB journal and owner-only Console reading, with no work creation or device/model authority. "
+        "app.py remains at its existing 906 ceiling. Keep +150, every file ceiling and existing full-progress/"
+        "observe/server/UI extraction obligations. Previous verdict: "
         "split: re-judged on 2026-10-12 with D-655/D-664 main integrated: Decision deliberation (231 lines) has its own reviewed "
         "proposal-only subpackage; Fleet retains its 86-line durable journal and database authority. "
         "See docs/plans/2026-10-12-decision-deliberation-boundary.md. Parent measured at 53093; "

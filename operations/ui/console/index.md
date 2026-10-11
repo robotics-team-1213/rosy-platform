@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
 - 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
 - 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 - 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
 - 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
-- 2026-10-11 · ebf05b9811 · D-655 카메라 관측 누적과 근거 보존

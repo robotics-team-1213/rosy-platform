@@ -52,3 +52,9 @@ python tools/land.py --tests auto
 ```
 
 자기 경로만 커밋하고 사용자 승인 범위의 로컬 FF를 사용한다. push/배포/provider/장치 동작은 source 착지와 별도다. D-669가 Proposed인 동안 새 권한 경로를 구현·활성화하지 않는다.
+
+## 2026-10-12 후속: D-671 제한 접수 source
+
+D-671이 실행 권한 없는 접수·owner read만 source 수용했다. Task 2의 Fleet 접수 API/기명 mapping 검증/원장과 순수 Discord projection/signature holder, CLI opt-in 및 설치 closure를 구현했다. Task 3에서는 현재 Console 작업 화면에 자기 원문 조회만 연결했으며 후보/resolve/admit은 연결하지 않았다. Task 4와 Task 5 실제 대화 수신 수용은 미완료다. Gateway 실행기/token/runtime identity mapping은 다음 작업이다.
+
+기명 계정·paired HTTPS Console의 실제 cookie 로그인을 별도로 확인했다. Bot 서버 멤버 등록 및 기존 승인 webhook 연결 메시지 수신도 확인했으며 Bot 수신과 동일시하지 않는다. 독립 리뷰와 원격 증거는 [후속 기록](../validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md)에 남긴다.
