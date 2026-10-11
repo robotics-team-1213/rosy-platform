@@ -114,3 +114,11 @@ AI PC의 기존 `data-v13/manifest.json`에서 각 item의 image SHA256과 선�
 따라서 해당 99프레임의 촬영 원본은 이 194개 학습 자료와 출처를 공유한다. 평가 PNG image SHA와 세 기존 dataset의 image SHA 직접 대조는 모두 0이었지만 출처 독립성은 성립하지 않는다. 이 99프레임을 20261010 학습 자료에 대한 독립 최종 평가 정답으로 사용하지 않는다. 나머지 126프레임이나 별도 8프레임의 독립성을 이 결과로 증명하지 않는다. 기존 검수 상태·예약·raw·dataset split·모델을 바꾸거나 삭제하지 않고 연구 기준선으로 보존한다.
 
 증거는 같은 X 드라이브 세션의 `evidence/existing-eval-review-source-audit-20261012.json`, `existing-eval-review-training-image-overlap-20261012.json`, `20261005-derived-video-bag-closure-20261012.json`, `20261005-existing-eval-original-bag-join-20261012.json`, `20261005-source-video-train-membership-20261012.json`이다. 실제 학습 실행 전체의 재현, 검수 독립성, 전체 upstream 출처 closure, paired 도로면/구역 정답 및 실물·시뮬레이션 적합성은 여전히 HOLD다.
+
+## 이전 사용자 검수 ZIP의 실제 마스크 대조 (2026-10-12)
+
+AI PC의 `pinky-v13-pidnet-unet-20261008/review-before-user-confirmation.zip`과 `review-user-completed-snapshot.zip`을 추출·수정 없이 읽었다. 각 묶음의 242개 마스크는 선언된 SHA256, 크기, 허용 픽셀 값 대조를 모두 통과했다. 두 묶음 사이 이미지·원본 영상·프레임·세션 식별자는 동일하고 마스크 해시 변경은 0개다. 상태는 approved 101 / needs_fix 140 / excluded 1에서 approved 241 / excluded 1로 바뀌었지만, 두 묶음 모두 `human_mask_review_completed=false` 242개, `visual_bump_presence_reviewed=true` 242개다. 파일명과 approved 상태만으로 전체 픽셀 검수 완료를 인정하지 않는다.
+
+클래스는 background, lane_left, lane_right, crosswalk, speed_bump이며 drivable/도로 전체 정답이 없다. 두 원본 영상의 선언된 SHA256별 항목은 215개와 27개이고 intended_split은 모두 train이다. 완료 묶음 이미지 SHA256을 현재 20261010 dataset-v2와 대조하면 205개가 일치하며 모두 train에 있다. 기존 차선·과속방지턱 개발 자료로 보존하고 독립 도로면 평가 정답으로 승격하지 않는다. 검수자 인증이나 나머지 37개의 학습 이력 독립성을 이 결과로 증명하지 않는다.
+
+증거는 같은 X 드라이브 세션의 `evidence/older-user-review-zip-metadata-20261012.json` 및 `older-review-zip-mask-readback-20261012.json`이다. 기존 파일·라벨·검수 상태·split은 변경하지 않았으며 도로면 적합성은 HOLD다.
