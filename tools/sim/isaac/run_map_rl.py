@@ -382,6 +382,8 @@ def main():
                             result = dict(result, terminated=True, truncated=False, complete=False,
                                           reason='camera_lane_lost', reward=result['reward'] - 10.)
                         state = lane.state()
+                        if state is None:
+                            speed, angular = 0., 0.
                     if phase == 'train' and lane is not None:
                         learning_step = learn_transition(policy, previous, state, result)
                     if phase == 'train':
