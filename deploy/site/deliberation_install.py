@@ -30,6 +30,7 @@ def dedicated_account():
         user = pwd.getpwnam('rosy-deliberation')
     group = grp.getgrnam('rosy-deliberation')
     if (not 0 < user.pw_uid < 1000 or user.pw_gid != group.gr_gid or group.gr_mem
+            or any(p.pw_gid == group.gr_gid and p.pw_name != user.pw_name for p in pwd.getpwall())
             or os.getgrouplist(user.pw_name, user.pw_gid) != [user.pw_gid]
             or user.pw_dir != '/var/lib/rosy-deliberation' or user.pw_shell != '/usr/sbin/nologin'):
         raise ValueError('DEDICATED_ACCOUNT_CONFLICT')
