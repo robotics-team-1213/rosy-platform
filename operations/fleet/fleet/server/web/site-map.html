@@ -96,11 +96,11 @@
       </details>
     </ui-section>
     <ui-section aria-labelledby="profile-heading">
-      <ui-head><ui-text id="profile-heading" scale="label">지도 지도 설정</ui-text></ui-head>
-      <label>저장된 지도<select class="ui-field" id="map-profile" aria-label="지도 지도 설정 선택"></select></label>
+      <ui-head><h2 class="ui-section-heading" id="profile-heading">지도 설정</h2></ui-head>
+      <label>저장된 지도<select class="ui-field" id="map-profile" aria-label="지도 설정 선택"></select></label>
       <div class="actions">
         <ui-button id="profile-new" kind="quiet">새 지도 규칙 작성</ui-button>
-        <ui-button id="profile-copy" kind="quiet">보는 지도를 새 지도 설정로</ui-button>
+        <ui-button id="profile-copy" kind="quiet">보는 지도를 새 지도 설정으로</ui-button>
         <ui-button id="profile-draft" kind="quiet" disabled>선택한 지도 설정을 초안으로</ui-button>
       </div>
       <label>지도 설정 ID<input class="ui-field" id="profile-id" maxlength="64" pattern="[A-Za-z0-9_.-]{1,64}"></label>
@@ -115,7 +115,7 @@
         <ui-text>예시 치수입니다. 실측값을 입력한 뒤 새 지도 규칙 작성을 누르면 중심 원점의 경기장 경계를 만듭니다. 경기 시작과 카메라 교정은 별도입니다.</ui-text>
       </fieldset>
       <details>
-        <summary>파일 가져오기 · 좌표와 차로 규칙</summary>
+        <summary class="ui-disclosure-row">파일 가져오기 · 좌표와 차로 규칙</summary>
         <label>지도 JSON 파일<input class="ui-field" id="profile-file" type="file" accept="application/json,.json"></label>
         <label>지도 규칙 JSON<textarea class="ui-field" id="profile-rules" rows="14" spellcheck="false" aria-describedby="profile-rule-hint"></textarea></label>
         <ui-text id="profile-rule-hint">rosy.site_map/1 형식: x·y는 공유 map 좌표(m), yaw는 rad입니다. places는 장소, edges의 polyline은 차로 선입니다. direction·width_m·speed_cap_mps·turn_bans로 통행 규칙을 정합니다. 저장할 때 좌표·연결·규칙을 검증한 뒤 2D로 그립니다.</ui-text>
