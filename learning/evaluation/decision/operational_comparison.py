@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import re
+import sys
 
 
 def digest(value):
@@ -40,6 +41,25 @@ def timestamp(value):
     return value
 
 
+def budget_limits(value):
+    fields(value, ('started_at', 'deadline', 'max_calls', 'max_observations', 'max_cost_usd', 'role_limits'))
+    if not 0 < timestamp(value['deadline']) - timestamp(value['started_at']) <= 120:
+        raise ValueError('INVALID_COMPARISON_BUDGET_WINDOW')
+    count(value['max_calls'], 8); count(value['max_observations'], 8)
+    cost = value['max_cost_usd']
+    if type(cost) not in (int, float) or not 0 <= cost <= 10 or not math.isfinite(cost):
+        raise ValueError('INVALID_COMPARISON_BUDGET_COST')
+    roles = value['role_limits']
+    if type(roles) is not list or len(roles) > 2: raise ValueError('INVALID_COMPARISON_ROLE_LIMITS')
+    limits = {}
+    for row in roles:
+        if (type(row) is not list or len(row) != 2 or type(row[0]) is not str
+                or row[0] not in {'primary', 'reviewer'} or row[0] in limits or count(row[1], 8) < 1):
+            raise ValueError('INVALID_COMPARISON_ROLE_LIMITS')
+        limits[row[0]] = row[1]
+    return limits
+
+
 def identities(rows, *, evaluation=False):
     if type(rows) is not list or len(rows) > 4096: raise ValueError('INVALID_COHORT_SIZE')
     seen = {key: set() for key in ('session_id', 'recording_id', 'source_sha256')}
@@ -66,6 +86,7 @@ def checked_export(exported):
     base = {'scope', 'budget', 'profiles', 'state', 'reason', 'calls', 'observations',
             'spent_micros', 'reserved_micros', 'attempts', 'closure', 'outcome'}
     fields(case, base | ({'handoff'} if exported['schema'].endswith('/2') else set()))
+    limits = budget_limits(case['budget'])
     scope = case['scope']
     fields(scope, ('subject_id', 'case_id', 'owner_id', 'profile_sha256', 'policy_revision'))
     for value in scope.values(): text(value)
@@ -77,11 +98,15 @@ def checked_export(exported):
         raise ValueError('INVALID_PAIRED_STRATEGY_PROFILES')
     if case['state'] not in {'ACTIVE', 'HOLD', 'NOT_NEEDED'}: raise ValueError('INVALID_CASE_STATE')
     text(case['reason'])
+    if case['reason'] == 'RESOLVED_OBSERVED' and case['closure'] is None:
+        raise ValueError('MISSING_COMPARISON_CLOSURE')
     expected = ('IN_PROGRESS' if case['state'] == 'ACTIVE' else
                 'DO_NOT_INTERVENE' if case['state'] == 'NOT_NEEDED' else
                 'RESOLVED_OBSERVED' if case['closure'] is not None else 'UNRESOLVED')
     if case['outcome'] != expected: raise ValueError('CASE_OUTCOME_CHANGED')
     for key in ('calls', 'observations', 'spent_micros', 'reserved_micros'): count(case[key])
+    if case['calls'] > case['budget']['max_calls'] or case['observations'] > case['budget']['max_observations']:
+        raise ValueError('COMPARISON_BUDGET_COUNTER_CHANGED')
     attempts = case['attempts']
     if type(attempts) is not list or len(attempts) > 16: raise ValueError('INVALID_COMPARISON_ATTEMPTS')
     costs, liabilities, unknown, calls, observations, ids = 0, 0, 0, 0, 0, set()
@@ -105,11 +130,15 @@ def checked_export(exported):
         unknown += row['kind'] == 'model' and actual is None
     if (calls, observations, costs, liabilities) != (case['calls'], case['observations'], case['spent_micros'], case['reserved_micros']):
         raise ValueError('COMPARISON_COUNTERS_CHANGED')
+    if limits and any(row['kind'] == 'model' and row['role'] not in limits for row in attempts):
+        raise ValueError('COMPARISON_UNDECLARED_ROLE')
+    if any(sum(row['kind'] == 'model' and row['role'] == role for row in attempts) > limit for role, limit in limits.items()):
+        raise ValueError('COMPARISON_ROLE_BUDGET_CHANGED')
     if case['state'] == 'NOT_NEEDED' and attempts: raise ValueError('INTERVENTION_IN_NOT_NEEDED_CASE')
     if case['closure'] is not None:
         proof = case['closure']
         fields(proof, ('scope', 'requested_at', 'observed_at', 'closed_at', 'normal_revision', 'action_credit', 'state'))
-        if (proof['scope'] != scope or proof['state'] != 'RESOLVED_OBSERVED'
+        if (case['state'] != 'HOLD' or proof['scope'] != scope or proof['state'] != 'RESOLVED_OBSERVED'
                 or case['reason'] != proof['state'] or proof['action_credit'] not in {'NONE', 'UNVERIFIED'}):
             raise ValueError('INVALID_COMPARISON_CLOSURE')
         requested = timestamp(proof['requested_at'])
@@ -179,6 +208,7 @@ def compare(cohort, exports):
 
 
 def main(argv=None):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cohort', type=Path)
     parser.add_argument('exports', type=Path, nargs='+')
