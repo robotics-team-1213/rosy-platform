@@ -9,6 +9,69 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 
 
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
+def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size):
+    from playwright.sync_api import expect, sync_playwright
+    request_id, digest = 'a' * 24, 'b' * 64
+    path = f'/api/fleet/channel-requests/{request_id}'
+    receipt = {'request_id': request_id, 'content_hash': digest, 'content': 'prepare arm work',
+               'received_at': '2026-10-12T00:00:00+00:00'}
+    view = {'request_id': request_id, 'content_hash': digest, 'revision': 0, 'state': 'REQUESTED',
+            'candidate': None, 'reason': None, 'work_id': None, 'work_kind': None, 'work_status': None,
+            'request_key': 'discord-' + request_id}
+    api = {**API, path + '/review': view, '/api/fleet/channel-requests': {'rows': [receipt]},
+           '/api/fleet/work': {'rows': [{'source': 'mission', 'source_id': 'owned-source', 'status': 'PROPOSED',
+               'action_kind': 'PICK_PLACE', 'device_id': 'omx', 'workcell_id': 'cell', 'reason': None,
+               'updated_at': receipt['received_at']}], 'observed_at': receipt['received_at'],
+               'tasks_available': True, 'missions_available': True, 'truncated_sources': []},
+           '/api/fleet/proposals/owned-source': {'proposal': {'proposal_id': 'owned-source'},
+               'mission': {'workcell_id': 'cell', 'instance_id': 'omx'}},
+           '/api/fleet/dispatch-control': {'dispatch_enabled': True, 'generation': 7}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=size)
+        try:
+            page.goto(site + '/console?view=work')
+            page.clock.run_for(2000)
+            page.locator('#channel-requests ui-button').click()
+            expect(page.locator('#channel-review-cell')).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
+            page.locator('#channel-review-mission').select_option('owned-source')
+            page.locator('#channel-review-reason').fill('verified current source candidate')
+
+            def prepare(route):
+                body = route.request.post_data_json
+                assert body == {'kind': 'mission', 'source_proposal_id': 'owned-source', 'workcell_id': 'cell',
+                    'instance_id': 'omx', 'reason': 'verified current source candidate',
+                    'expected_hash': digest, 'expected_revision': 0}
+                posts.append(('prepare', body))
+                view.update(state='LINKED', work_kind='mission', work_id='mission-new', work_status='PROPOSED', revision=1)
+                route.fulfill(json=view)
+            page.route('**' + path + '/prepare', prepare)
+            page.locator('#channel-review-mission-prepare').click()
+            expect(page.locator('#channel-review-state')).to_contain_text('PROPOSED')
+            assert len(posts) == 1
+            button = page.locator('#channel-review-mission-admit')
+            button.click()
+            page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+            assert len(posts) == 1
+
+            def admit(route):
+                body = route.request.post_data_json
+                assert body == {'expected_hash': digest, 'expected_revision': 1, 'expected_generation': 7}
+                posts.append(('admit', body))
+                view.update(work_status='READY')
+                route.fulfill(json=view)
+            page.route('**' + path + '/admit', admit)
+            button.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+            expect(page.locator('#channel-review-state')).to_contain_text('READY')
+            expect(button).not_to_be_visible()
+            assert len(posts) == 2 and not errors
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 def test_channel_review_keeps_candidate_separate_from_execution(site, size):
     from playwright.sync_api import expect, sync_playwright
 
