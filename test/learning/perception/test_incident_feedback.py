@@ -72,8 +72,8 @@ def model_feedback(**changes):
     case = dict(scope=dict(subject_id='rosy_40', case_id='stuck-a', owner_id='core',
                            profile_sha256='a' * 64, policy_revision='policy-1'),
                 state='HOLD', outcome='UNRESOLVED', reason='PROVIDER_OUTCOME_UNKNOWN',
-                calls=1, observations=0, spent_micros=0, reserved_micros=100000,
-                **changes)
+                calls=1, observations=0, spent_micros=0, reserved_micros=100000)
+    case.update(changes)
     digest = hashlib.sha256(json.dumps(case, sort_keys=True, separators=(',', ':'),
                                      ensure_ascii=False, allow_nan=False).encode()).hexdigest()
     return dict(schema='rosy.incident.model_feedback/1', case=case, digest=digest,
