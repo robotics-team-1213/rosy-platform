@@ -88,6 +88,28 @@ def test_legacy_inference_keeps_existing_road_semantics(tmp_path, semantic, meth
     assert getattr(model, method)(np.zeros((240, 320, 3), np.uint8)) is not None
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
+def test_slot_keeps_previous_when_new_model_has_incompatible_road_semantics(tmp_path, semantic):
+    good = _model_dir(tmp_path)
+    other = _model_dir(tmp_path, "other", "lane-seg-other")
+    path = other / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": semantic})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    pointer = tmp_path / "shadow"
+    now = [0.0]
+    slot = ModelSlot(pointer, opener=lambda p: LaneSegModel.open(
+        p, session_factory=_factory(n_classes=3 if p == other else 2)),
+        clock=lambda: now[0], poll_s=1.0)
+    pointer.write_text(str(good), encoding="utf-8")
+    previous = slot.poll()
+    pointer.write_text(str(other), encoding="utf-8")
+    now[0] = 1.0
+    assert slot.poll() is previous
+    assert "drivable semantic" in slot.last_error
+
+
 def test_open_refuses_tampered_file(tmp_path):
     d = _model_dir(tmp_path)
     (d / "model.onnx").write_bytes(b"other")

@@ -4,6 +4,8 @@ import re
 
 import numpy as np
 
+from control.sensing.perception.learned.manifest import road_delivery_error
+
 # D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
 V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
                    {"annotation_origin": "map_projected", "adr": "D-563"})
@@ -152,9 +154,3 @@ def evaluation_semantics(model_classes: list, eval_classes: list, matched: list)
     return {"label_semantics": declared, "semantic_mismatches": mismatches, "unverified_semantics": unverified}
 
 
-def road_delivery_error(doc: dict) -> str | None:
-    if doc.get("task") == "lane_seg" and any(
-            c.get("role") == "drivable" and c.get("semantic") not in (None, "current_road_region/1")
-            for c in doc.get("output", {}).get("classes", [])):
-        return "drivable semantic is incompatible with existing lane_seg delivery (current_road_region/1 required)"
-    return None
