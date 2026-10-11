@@ -727,6 +727,12 @@ function tooltipOwnerVisible(owner) {
   return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") &&
     owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
 }
+function overTooltip(event) {
+  if (!tooltip || tooltip.hidden) return false;
+  const box = tooltip.getBoundingClientRect();
+  return event.clientX >= box.left && event.clientX <= box.right &&
+    event.clientY >= box.top && event.clientY <= box.bottom;
+}
 function placeTooltip() {
   if (!tooltip || tooltip.hidden) return;
   if (!tooltipOwnerVisible(tooltipOwner)) { hideTooltip(); return; }
@@ -752,7 +758,6 @@ function showTooltip() {
     tooltip.id = "rosy-shared-tooltip";
     tooltip.setAttribute("role", "tooltip");
     document.body.append(tooltip);
-    tooltip.addEventListener("pointerleave", () => { tooltipHover = null; showTooltip(); });
   }
   if (tooltipOwner !== owner) hideTooltip();
   tooltipOwner = owner;
@@ -764,7 +769,7 @@ function showTooltip() {
   placeTooltip();
 }
 document.addEventListener("pointerover", event => {
-  if (tooltip?.contains(event.target)) return;
+  if (overTooltip(event)) return;
   const owner = tooltipTarget(event.target);
   if (owner !== tooltipHover) {
     tooltipHover = owner;
@@ -773,8 +778,14 @@ document.addEventListener("pointerover", event => {
   }
 });
 document.addEventListener("pointerout", event => {
-  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || tooltip?.contains(event.relatedTarget)) return;
+  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || overTooltip(event)) return;
   tooltipHover = null; showTooltip();
+});
+// Hoverable descriptions must not take pointer events from the controls below.
+document.addEventListener("pointermove", event => {
+  if (tooltipHover && !tooltipHover.contains(event.target) && !overTooltip(event)) {
+    tooltipHover = null; showTooltip();
+  }
 });
 document.addEventListener("focusin", event => {
   tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
