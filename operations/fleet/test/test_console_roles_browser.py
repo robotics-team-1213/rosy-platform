@@ -141,6 +141,9 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
     with sync_playwright() as playwright:
         browser, page, errors, _ = _login(playwright, origin)
         try:
+            with page.expect_response(lambda response:
+                    urlparse(response.url).path == "/api/fleet/tracking" and response.status == 404):
+                page.reload()
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
             page.locator("#map-readouts > summary").click()
             table = page.locator("#tracking-positions")
