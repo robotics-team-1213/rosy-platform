@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from browser_harness import browser_tests_enabled, open_page
+from browser_harness import browser_tests_enabled, open_page, open_token_access
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401 - shared HTTP fixture
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
@@ -66,6 +66,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
 
         accepted_token = "fleet-session-b"
         expired = False
+        open_token_access(page)
         page.fill("#console-token", accepted_token)
         page.locator("#token-save").click()
         page.wait_for_function("document.querySelector('#user-role').textContent.includes('local-operator')")
