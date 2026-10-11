@@ -44,7 +44,7 @@ def test_managed_hold_suppresses_historical_open_and_final_is_once_without_claim
     store = IncidentCaseStore(log.path, clock=lambda: now[0])
     scope = CaseScope('pinky', 'case-1', 'core', 'a' * 64, 'line-follow-shadow-v1')
     store.begin_case(scope, CaseBudget(100, 130, 2, 2, 0))
-    store.finish_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
     summary = dict(reason='REOBSERVE_FAILED', calls=0, observations=0, spent_micros=0,
                    reserved_micros=0, profile_sha256=scope.profile_sha256,
                    observation_revision=board.judgment_view('pinky')['request']['revision'])
@@ -60,7 +60,7 @@ def test_managed_hold_suppresses_historical_open_and_final_is_once_without_claim
 @pytest.mark.parametrize('fault', ['active', 'scope', 'counter', 'reason', 'revision', 'config'])
 def test_final_enqueue_validates_hold_scope_summary_and_configuration(tmp_path, fault):
     _, log, _, _, store, scope, summary = managed(tmp_path, config=fault != 'config')
-    if fault != 'active': store.finish_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    if fault != 'active': store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
     if fault == 'scope': scope = replace(scope, profile_sha256='b' * 64)
     elif fault == 'counter': summary['reserved_micros'] = 1
     elif fault == 'reason': summary['reason'] = 'OTHER'
@@ -74,7 +74,7 @@ def test_final_enqueue_validates_hold_scope_summary_and_configuration(tmp_path, 
 @pytest.mark.parametrize('change', ['replaced', 'closed', 'claimed', 'expired', 'fresh_revision', 'parent_changed'])
 def test_final_pending_rechecks_case_owner_freshness_and_parent(tmp_path, change):
     now, log, board, channels, store, scope, summary = managed(tmp_path)
-    store.finish_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
+    store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
     log.notifications.enqueue_final(scope, summary, now=100)
     if change == 'replaced': observe(board, 100, 'case-2')
     elif change == 'closed': observe(board, 100, None)
