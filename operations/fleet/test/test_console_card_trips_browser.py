@@ -134,6 +134,7 @@ def test_convoy_follows_the_leader_from_the_formation_block(site):  # noqa: F811
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, posts, answers)
         assert page.locator("#formation-heading").inner_text() == "대형·대열"
+        page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         # Leader first: only a robot on an open repeat trip; the follower list leaves out robots on a trip.
         assert page.locator("#convoy-leader").input_value() == "rosy_01"
@@ -201,6 +202,7 @@ def test_an_unnamed_operator_sees_why_moves_are_off_and_can_still_cancel(site): 
         trip = card.locator('ui-button[data-trip-open="rosy_02"]')
         assert trip.get_attribute("reason") == NAMED and trip.evaluate("node => node.disabled")
         assert not card.locator('ui-button[data-cancel-scope="goal-lane"]').evaluate("node => node.disabled")
+        page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         page.locator("#convoy-follower").select_option("rosy_02")
         page.clock.run_for(1100)
@@ -304,6 +306,7 @@ def test_rail_panels_do_not_overlap(site):  # noqa: F811
 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, [])
+        page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()  # the audit scene: the ops block grows
         for width, height in [(1440, 900), (1024, 768)]:
             page.set_viewport_size({"width": width, "height": height})

@@ -30,12 +30,35 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-// D-493 — 넓은 단: 왼쪽 열은 지도 하나, 오른쪽 열은 예외·로봇(발행 띠 포함)·카메라·대형 순서다.
-// 한 열 단(D-359 US-009): 예외 → 지도 → 사건 → 로봇 → 카메라 → 대형·기록.
+// Current intervention stays outside context tabs; hidden panels keep their owners mounted.
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
-  document.querySelector('.incident-panel'), document.querySelector('[aria-labelledby="roster-heading"]'),
-  document.querySelector('.vision-preview'), document.querySelector('.ops-block')];
+  document.querySelector('.console-context')];
 const MAP_PANEL = 1;
+const contextTabs = [...document.querySelectorAll('[data-context-tab]')];
+let contextChoice = "status";
+function selectContext(choice, focus = false) {
+  contextChoice = choice;
+  for (const tab of contextTabs) {
+    const selected = tab.dataset.contextTab === choice;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    el(tab.getAttribute("aria-controls")).hidden = !selected;
+    if (selected && focus) tab.focus({preventScroll: true});
+  }
+}
+for (const tab of contextTabs) {
+  pageScope.listen(tab, "click", () => selectContext(tab.dataset.contextTab));
+  pageScope.listen(tab, "keydown", event => {
+    const index = contextTabs.indexOf(tab);
+    const next = {ArrowRight: (index + 1) % contextTabs.length,
+      ArrowLeft: (index + contextTabs.length - 1) % contextTabs.length, Home: 0, End: contextTabs.length - 1}[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    selectContext(contextTabs[next].dataset.contextTab, true);
+  });
+}
+// A result link must reveal its destination before native anchor scrolling.
+pageScope.listen(el("cancel-all-details"), "click", () => selectContext("evidence"));
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
@@ -45,6 +68,7 @@ function layoutConsole() {
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
   });
+  selectContext(contextChoice);
   if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
 }
 layoutConsole();
@@ -143,7 +167,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -203,6 +227,16 @@ async function call(path, options = {}) {
 }
 
 let incidentReports = [], incidentTrafficReports = [];
+function incidentSummary(summary, report, title) {
+  const name = document.createElement("span");
+  name.textContent = title;
+  const time = document.createElement("time");
+  const opened = report.opened_at ? new Date(report.opened_at) : null;
+  time.textContent = opened && Number.isFinite(opened.getTime())
+    ? `시작 ${opened.toLocaleString("ko-KR")}` : "시각 미확인";
+  if (opened && Number.isFinite(opened.getTime())) time.dateTime = opened.toISOString();
+  summary.append(name, time);
+}
 function incidentLine(parent, value) {
   const line = document.createElement("p");
   line.textContent = value;
@@ -225,7 +259,8 @@ function incidentReviewForm(report, path) {
   note.maxLength = 1000;
   note.placeholder = "판단 근거 또는 수정 내용";
   note.setAttribute("aria-label", `${report.robot_ids.map(incidentRobotName).join(", ")} 검토 메모`);
-  const save = document.createElement("button");
+  const save = document.createElement("ui-button");
+  save.setAttribute("kind", "quiet");
   save.type = "submit";
   save.textContent = "검토 기록";
   form.append(select, note, save);
@@ -266,14 +301,14 @@ async function refreshIncidents() {
     list.replaceChildren();
     for (const report of incidentReports) {
       const item = document.createElement("li");
-      item.className = `stuck-item incident-row${report.closed_at ? " closed" : ""}`;
+      item.className = "incident-row";
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
       const core = report.evidence.core, fleet = report.evidence.fleet;
       const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
-      summary.textContent = `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName} · ${new Date(report.opened_at).toLocaleString("ko-KR")}`;
+      incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName}`);
       detail.append(summary);
-      incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "진행 중"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
+      incidentLine(detail, `판정: 라인 정지 (교착 여부 별도 판정) · ${report.closed_at ? "종료" : "종료 기록 없음"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"}`);
       incidentLine(detail, `CORE: 단계 ${core.phase_at_open || "미확인"}, 정지 ${core.held_s_max ?? "미확인"}초, 재시도 ${core.attempts_max ?? "미확인"}`);
       incidentLine(detail, `Fleet: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"}, 관측 나이 ${fleet.pose_age_s ?? "미확인"}초, 해결 ${fleet.resolved_by || "미확인"}`);
       const cam = report.evidence.rosy_cam;
@@ -281,7 +316,7 @@ async function refreshIncidents() {
         : "Rosy Cam: 사건 시작 ±5초 관측 없음");
       incidentLine(detail, report.closed_at
         ? "Pinky 앞 카메라: 사건 종료 후 이미지는 보존되지 않음"
-        : "Pinky 앞 카메라: 진행 중 한 장은 위 개입 목록에서 확인 · 종료 후 이미지는 보존되지 않음");
+        : "Pinky 앞 카메라: 현재 열린 사건의 영상은 위 개입 목록에서 확인 · 종료 후 이미지는 보존되지 않음");
       const ai = report.evidence.ai_facts || [];
       const draft = ai.find(f => f.kind === "incident_context");
       if (draft) {
@@ -309,7 +344,7 @@ async function refreshIncidents() {
     for (const report of incidentTrafficReports) {
       const ai = report.evidence.ai_fact;
       const item = document.createElement("li");
-      item.className = "stuck-item incident-row closed";
+      item.className = "incident-row";
       const detail = document.createElement("details");
       const summary = document.createElement("summary");
       const name = report.classification === "wait_cycle_confirmed"
@@ -317,7 +352,7 @@ async function refreshIncidents() {
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || report.classification;
-      summary.textContent = `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")} · ${new Date(report.opened_at).toLocaleString("ko-KR")}`;
+      incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`);
       detail.append(summary);
       incidentLine(detail, `AI ${ai.source} · ${ai.stage} · 신뢰도 ${Math.round(ai.confidence * 100)}%`);
       incidentLine(detail, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
@@ -748,6 +783,7 @@ pageScope.listen(document, "keydown", (event) => {
   const active = document.activeElement;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
+    selectContext("status");
     const idx = cards.indexOf(active);
     const next = idx < 0
       ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
@@ -829,6 +865,7 @@ async function commitGoal(col, row) {
 }
 
 function focusGoalButton(robotId) {
+  selectContext("status");
   [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
     .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
 }
@@ -1015,7 +1052,7 @@ const mapView = createMapView({ scope: pageScope,
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
-view.openLeaderTrip = (robotId) => { roster.openCard(robotId); roster.trip.focus(robotId); render(); };
+view.openLeaderTrip = (robotId) => { selectContext("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
