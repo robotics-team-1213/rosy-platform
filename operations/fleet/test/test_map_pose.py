@@ -32,7 +32,7 @@ def test_survey_odom_is_fresh_relative_evidence_without_an_operational_anchor():
     assert tracker.pose(T0 + 4).state == UNKNOWN
 
 
-def test_survey_odom_keeps_epoch_on_repeated_reads_and_changes_on_a_reset():
+def test_survey_odom_keeps_repeated_reads_and_breaks_on_reset_or_rejected_observation():
     tracker = MapPoseTracker('r1')
     assert tracker.add_odom(odom(0), T0)
     assert not tracker.add_odom(odom(0), T0)
@@ -40,7 +40,8 @@ def test_survey_odom_keeps_epoch_on_repeated_reads_and_changes_on_a_reset():
     assert tracker.add_odom(odom(0.1, x=3), T0 + 0.1)
     assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 1)
     assert not tracker.add_odom(odom(0.05, x=4), T0 + 0.1)
-    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 1)
+    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 2)
+    assert tracker._epoch == 1  # rejected evidence breaks survey continuity, not operational odom
 
 
 def seen(t, x=ANCHOR[0], y=ANCHOR[1], yaw=ANCHOR[2], robot="r1", quality=None):
