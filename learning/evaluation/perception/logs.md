@@ -25,3 +25,9 @@
 - gate 변화: 없음. 원래 독립 profile과 팀 FIELD 수용 HOLD를 유지한다.
 
 2026-10-11: D-662 offline Pinky judgment checker at 0b14fa02b0; independent review corrected required-ABSTAIN errors and duplicated physical windows. Remote acceptance-review-green 11 passed, NEW0 (8 checker + 3 installed delivery). Initial profile and team FIELD acceptance remain HOLD. See docs/validation/responsibility-boundaries-2026-10-11/implementation.md.
+
+## 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
+
+- 변경: evaluate_model_frame이 기존 preprocess와 모델 session 출력을 별도 도로면/구역 평가에 연결한다. crop 밖 알려진 정답은 실제 255와 구별해 제외 분모와 전체 grid coverage를 보존한다.
+- 증거: a8212d3806 원격 55개 시험 terminal exit 0, 실제 ONNX Runtime crop/전체 영상 2개 포함. crop 제외 제거 2개 실패·원본 정답 모순 검사 제거 1개 실패 후 복구했다.
+- gate 변화: 없음. 독립 dataset/파일 결속·물리 보정·실물 성능·장치 관측 수용을 검증한 결과가 아니다.

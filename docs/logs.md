@@ -7864,3 +7864,9 @@ osy-d395-s1d\`.
 - 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
 - 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
 - gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
+
+## 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
+
+- 변경: 기존 모델 로더/preprocess의 추론을 도로면/구역 평가에 연결하고, 원본 정답과 기준점 좌표를 같은 resize/crop grid로 옮긴다. crop 제외와 실제 미관측 정답을 구별하고 전체 grid coverage도 보고한다.
+- 증거: a8212d3806 원격 합성 모델/좌표·구역·기준선 55개 시험 terminal exit 0. 실제 ONNX Runtime crop/전체 영상 2개 포함; crop 제외와 원본 정답 모순 검사를 각각 제거한 실패를 확인한 뒤 복구했다. 전체 회귀/known_failures는 별도 receipt다.
+- gate 변화: 없음. 고정 dataset/모델 파일·독립 검수 결속, 실제 보정·성능·장치 전달·현장 수용은 아직 미완료다.
