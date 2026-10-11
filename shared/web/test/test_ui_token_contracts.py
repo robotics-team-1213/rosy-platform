@@ -34,6 +34,15 @@ def surface_scripts() -> list[Path]:
     return sorted(WEB_ROOT.glob("*.js"))
 
 
+def test_all_registered_web_token_references_are_declared():
+    sources = {page: text for row in _web_rows()
+               for page, text in registry.colour_sources(registry.REPO, row)}
+    declared = {name for text in sources.values() for name in DECLARATION.findall(text)}
+    missing = [f"{page.relative_to(registry.REPO)}: {name}"
+               for page, text in sources.items() for name in sorted(set(REFERENCE.findall(text)) - declared)]
+    assert missing == [], "\n".join(missing)
+
+
 def test_tokens_file_is_the_single_source_of_colour():
     assert TOKENS.exists(), "web_common/tokens.css가 없다"
     declared = set(DECLARATION.findall(tokens_text()))

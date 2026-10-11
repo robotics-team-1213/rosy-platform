@@ -9,6 +9,40 @@
  * 48px 누름 면이 된다.
  */
 
+/* Native disclosure keeps its marker and keyboard/expanded semantics. */
+.ui-page-heading {
+  margin: 0;
+  font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body);
+}
+.ui-section-heading {
+  margin: 0;
+  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
+}
+.ui-disclosure-row {
+  box-sizing: border-box;
+  min-height: var(--target-secondary);
+  padding: var(--inset-button);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-align: start;
+  cursor: pointer;
+}
+.ui-disclosure-row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] {
+  color: var(--text-secondary);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+.ui-disclosure-name {
+  font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

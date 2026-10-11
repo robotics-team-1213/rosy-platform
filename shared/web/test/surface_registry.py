@@ -92,10 +92,28 @@ def grammars(root=None) -> tuple[str, ...]:
     return tuple(_ITEM.findall(match.group(1))) if match else ()
 
 
+class UniqueKeyLoader(yaml.SafeLoader):
+    """Reject overwritten contracts instead of accepting PyYAML's last key wins."""
+
+
+def _unique_mapping(loader, node, deep=False):
+    seen = set()
+    for key, _ in node.value:
+        value = loader.construct_object(key, deep=deep)
+        if value in seen:
+            raise yaml.constructor.ConstructorError("mapping", node.start_mark,
+                                                    f"duplicate key: {value}", key.start_mark)
+        seen.add(value)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
+
+
 def raw_rows(root=None) -> list:
     """레지스트리 원문 항목. 형식이 아니면 그대로 내보내 문제가 보이게 한다."""
     base = REPO if root is None else Path(root)
-    data = yaml.safe_load((base / REGISTRY).read_text(encoding="utf-8"))
+    data = yaml.load((base / REGISTRY).read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
     if not isinstance(data, dict) or not isinstance(data.get("surfaces"), list):
         return []
     return data["surfaces"]
