@@ -156,7 +156,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     facts.append(battery);
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
-    const position = tag(loc?.text || "위치 미확인", loc?.cls || "warn");
+    const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
     position.dataset.localization = "";
     if (loc) position.title = [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ");
     facts.append(position);
