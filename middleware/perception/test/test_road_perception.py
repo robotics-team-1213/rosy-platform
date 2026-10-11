@@ -7,6 +7,7 @@ from control.sensing.perception.road import (
     PreviewRateLimiter,
     RoadObservation,
     RoadPreviewConfig,
+    RoadPerceptionConfig,
     detect_road_observation,
     render_road_preview,
     road_observation_payload,
@@ -17,7 +18,7 @@ WIDTH = 320
 HEIGHT = 240
 
 
-def test_260919_longitudinal_crosswalk_has_metric_road_evidence():
+def _longitudinal_crosswalk_frame(centres=(-.06, -.02, .02, .06)):
     # Project the source map's four 25 mm x 120 mm bars at 40 mm pitch through the nominal camera.
     ground = simulation_ground_plane(
         source='GAZEBO', simulation_enabled=True, use_sim_time=True,
@@ -29,11 +30,40 @@ def test_260919_longitudinal_crosswalk_has_metric_road_evidence():
         if distance is not None and .22 <= distance <= .34:
             for column in range(WIDTH):
                 lateral = ground.lateral(column, row)
-                if any(abs(lateral-centre) <= .0125 for centre in (-.06, -.02, .02, .06)):
+                if any(abs(lateral-centre) <= .0125 for centre in centres):
                     frame[row, column] = 245
+    return frame, ground
+
+
+def test_260919_longitudinal_crosswalk_has_metric_road_evidence():
+    frame, ground = _longitudinal_crosswalk_frame()
     observation = detect_road_observation(frame, ground=ground)
     assert observation.crosswalk is not None
     assert observation.crosswalk.distance_m == pytest.approx(.22, abs=.01)
+    assert 0 < observation.crosswalk.confidence <= 1
+    assert ground.distance(observation.crosswalk.image_row) == pytest.approx(observation.crosswalk.distance_m)
+    assert detect_road_observation(frame).crosswalk is None
+    assert detect_road_observation(frame, ground=ground,
+                                  config=RoadPerceptionConfig(crosswalk_min_bars=5)).crosswalk is None
+
+
+@pytest.mark.parametrize("centres", [(), (-.02, .02), (.125, .165, .205, .245)])
+def test_metric_crosswalk_requires_three_bars_in_this_corridor(centres):
+    frame, ground = _longitudinal_crosswalk_frame(centres)
+    if centres:
+        assert (frame > 180).any()
+    assert detect_road_observation(frame, ground=ground).crosswalk is None
+
+
+@pytest.mark.parametrize("marking", [{"lane_x": 160}, {"stop_y": 180}])
+def test_metric_crosswalk_does_not_reclassify_a_lane_or_single_stop_line(marking):
+    ground = simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=WIDTH, height_px=HEIGHT, height_m=.06343,
+        pitch_rad=.13962634015954636, hfov_rad=1.0334, max_range_m=.6)
+    observation = detect_road_observation(_frame(**marking), ground=ground)
+    assert observation.crosswalk is None
+    assert (observation.stop_line is not None) == ('stop_y' in marking)
 
 
 def _frame(*, lane_x=None, stop_y=None, crosswalk_rows=(), signals=()):

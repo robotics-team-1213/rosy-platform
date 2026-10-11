@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · uncommitted · 260919 진행 방향 횡단 줄무늬 관측
 - 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
 - 2026-10-11 · 9fc0a88c9 · source test import precedence
 - 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
 - 2026-10-11 · 177e7faff · refactor: legacy Drive entry source ownership (D-649)
-- 2026-10-11 · 92b5cff5e · fix(control): preserve the ROS-free paint map boundary after holder moves
