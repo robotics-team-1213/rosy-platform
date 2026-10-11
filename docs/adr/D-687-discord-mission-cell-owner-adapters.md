@@ -16,4 +16,6 @@ Admission은 관계가 연결된 현재 기명 소유자를 다시 확인하고 
 
 ## Verification and rollout
 
+Source 복사는 일반 PROPOSED/RESOLVED proposal만 허용한다. source lineage 또는 supersedes metadata가 있는 feedback/replan 후보와 REJECTED/UNRESOLVED/RESOLVING 원본은 409로 거절한다. 원래 attempt·generation·event fence와 successor 책임을 일반 Mission 복사로 우회하지 않는다.
+
 기존 실제 proposal/resolve/admit 경로, 원장 설치와 누락, 다른 owner/service author, hash/revision 변경, 같은 key 충돌, 중복 연결과 실제 rollback을 원격 시험한다. Console는 기존 확인창과 인증 lifetime을 사용한다. 새 source/size 독립 검토, 최신 main 착지, CI·서명 배포, 실제 Discord 요청/회신 readback이 남는다. 위험 사건 어댑터와 실제 FIELD는 이 ADR의 구현 완료로 승격하지 않는다.

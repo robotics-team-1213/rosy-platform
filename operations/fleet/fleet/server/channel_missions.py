@@ -56,6 +56,11 @@ class ChannelMissions:
                 source = self.proposals.get(body.source_proposal_id, principal_id=principal)
                 if source is None:
                     raise HTTPException(404, detail='CHANNEL_SOURCE_PROPOSAL_NOT_FOUND')
+                # Feedback/replan lineage must stay with its original fenced resolver.
+                if (source['state'] not in {'PROPOSED', 'RESOLVED'}
+                        or source.get('supersedes_mission_id') is not None
+                        or any(value is not None for key, value in source.items() if key.startswith('source_'))):
+                    raise HTTPException(409, detail='CHANNEL_SOURCE_PROPOSAL_FENCED')
                 if (source['candidate'].get('kind') == 'cell_job'
                         or source['workcell_id'] != body.workcell_id or source['instance_id'] != body.instance_id):
                     raise HTTPException(409, detail='CHANNEL_SOURCE_PROPOSAL_SCOPE_CHANGED')
