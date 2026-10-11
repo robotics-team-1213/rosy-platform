@@ -1,5 +1,8 @@
 """Reply claims survive restart without replaying ambiguous delivery."""
+import asyncio
 from contextlib import closing
+
+import pytest
 
 from core_common.protocol.channel_requests import DiscordRequestEnvelope
 from fleet.server.channel_replies import ChannelReplyOutbox
@@ -81,3 +84,60 @@ def test_queue_failure_rolls_back_receipt(tmp_path, monkeypatch):
     else:
         raise AssertionError("reply journal failure was ignored")
     assert journal.read("op") == []
+
+
+def test_reply_worker_records_outcome_and_does_not_replay(tmp_path):
+    from fleet.server.channel_replies import ChannelReplyWorker
+    journal, outbox, _, envelope = fixture(tmp_path)
+    journal.receive(envelope)
+    calls = []
+    class Sender:
+        async def send(self, **kwargs):
+            calls.append(kwargs)
+            return {"state": "SENT", "provider_id": USER}
+    worker = ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000)
+    asyncio.run(worker.run_once())
+    asyncio.run(worker.run_once())
+    assert len(calls) == 1 and calls[0]["message_id"] == MESSAGE
+    assert outbox.rows("op")[0]["state"] == "SENT"
+
+
+def test_cancelled_send_is_unknown_and_cancellation_propagates(tmp_path):
+    from fleet.server.channel_replies import ChannelReplyWorker
+    journal, outbox, _, envelope = fixture(tmp_path)
+    journal.receive(envelope)
+    class Sender:
+        async def send(self, **kwargs):
+            raise asyncio.CancelledError
+    worker = ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker.run_once())
+    assert outbox.rows("op")[0]["state"] == "UNKNOWN"
+
+
+def test_revocation_after_claim_prevents_send(tmp_path, monkeypatch):
+    from fleet.server.channel_replies import ChannelReplyWorker
+    journal, outbox, accounts, envelope = fixture(tmp_path)
+    journal.receive(envelope)
+    claim = outbox.claim
+    def claim_then_revoke(**kwargs):
+        result = claim(**kwargs)
+        accounts["op"] = "viewer"
+        return result
+    monkeypatch.setattr(outbox, "claim", claim_then_revoke)
+    class Sender:
+        async def send(self, **kwargs):
+            raise AssertionError("revoked operator triggered send")
+    asyncio.run(ChannelReplyWorker(outbox, Sender(), clock=lambda: 1000).run_once())
+    with closing(journal._connect()) as conn:
+        assert conn.execute("SELECT state FROM fleet_channel_reply_outbox").fetchone()[0] == "UNKNOWN"
+
+
+def test_replies_require_explicit_boolean_opt_in():
+    from pydantic import ValidationError
+    config = dict(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
+                  transport_key="test-key-" * 5, users={USER: "op"})
+    assert ChannelConfig(**config).replies_enabled is False
+    assert ChannelConfig(**config, replies_enabled=True).replies_enabled is True
+    with pytest.raises(ValidationError):
+        ChannelConfig(**config, replies_enabled="true")
