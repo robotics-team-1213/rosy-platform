@@ -125,7 +125,9 @@ assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necess
 assert importlib.util.find_spec('fleet.server.model_feedback_dispatch') is not None
 assert importlib.util.find_spec('rosy.decision.tool_dispatch') is None
 from rosy_discord.intake import project_message, signed_request
+from rosy_discord.gateway import DiscordGateway
 assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
+assert Path(importlib.util.find_spec('rosy_discord.gateway').origin).is_relative_to(installed)
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
@@ -189,6 +191,7 @@ import sys
 sys.path.insert(0, sys.argv[1])
 from fleet.server.mission_service import MissionService
 from rosy_discord.intake import project_message, signed_request
+from rosy_discord.gateway import DiscordGateway
 from fleet.server.channel_requests import ChannelRequests
 from fleet.server.mission_progress import MissionProgressService
 from rosy.execution.site.goal_evidence import GoalPredicate

@@ -3309,4 +3309,6 @@
 
 ## 2026-10-12 · 38941ff24 · D-675 Discord Gateway 수신 source
 
-기존 Fleet lifespan 수신 worker, private Bot token 파일, 원장 commit 후 resume 및 미해결 session 공백 정지 구현. remote RED는 gateway 모듈 누락 확인; GREEN/설치/실제 수신은 검사 전이다. 장치 명령 없음.
+- 변경: 기존 Fleet lifespan 수신 worker, private Bot token 파일, 원장 commit 후 resume 및 미해결 session 공백 정지 구현.
+- 증거: 원격 RED는 gateway 모듈 누락 확인. GREEN43 PASS, resume/secret/API/structure86 PASS+size1NEW; ACK/session 종료 코드 보완 및 독립 검토 중.
+- gate 변화: source 구현 검증 중; 실제 이미지/수신은 미확인. 장치 명령 없음.
