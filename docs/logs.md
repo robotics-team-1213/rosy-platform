@@ -7961,3 +7961,8 @@ osy-d395-s1d\`.
 - 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
 - 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
 - gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
+## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
+
+- 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
+- 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
+- gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.
