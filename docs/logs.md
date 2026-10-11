@@ -7820,3 +7820,9 @@ osy-d395-s1d\`.
 - 변경: D-661 팀 통지·사람 인수를 incidents 하위 패키지로 분리하고 최신 main의 순수 진척·지연 schema import를 통합했다. 단계별 계획·팀 인수·독립 평가·착지 증거를 기록했다.
 - 증거: 최종 AI PC 원격493 passed/0 skipped/NEW0, 독립 검토 및 tools/land.py lint/시험 통과, 로컬 main FF `7afb0e2c4f`. 상세 docs/validation/responsibility-boundaries-2026-10-11/landing.md. 이전 전체 회귀16676 성공과 당시 크기1 NEW는 최종 영향군 결과와 구별했다.
 - gate 변화: 로컬 통합 완료, push·CI·배포·실제 채널/현장 수용 없음. 팀의 Discord 준비·Pinky 검수 이후 운영 수용; 단계6 HOLD 유지.
+
+## 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
+
+- 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
+- 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
+- gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
