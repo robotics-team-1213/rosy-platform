@@ -623,8 +623,8 @@ rename) restart Vision, because the container keeps the old inode. Copy
 `site-users.yaml.example` there, then replace every map/calibration/device
 placeholder with reviewed site data. `robots.yaml` contains CORE credentials
 and must be owned by root with mode `0600`. Keep configuration read-only to the
-containers. `site-users.yaml` contains only SHA-256 digests of individual user
-tokens, never raw tokens; keep it owned by root and readable only by the Fleet
+containers. `site-users.yaml` contains SHA-256 token digests and D-519 scrypt
+password hashes, never raw credentials; keep it owned by root and readable only by the Fleet
 service group (`0440`, group `10001`).
 
 Provision one independent high-entropy bearer token per named person through the
@@ -650,6 +650,19 @@ subcommands; removing the last principal is refused because Fleet rejects an
 empty users list. After each write the tool applies `root:10001` mode `0440`
 itself when run as root, and otherwise prints the exact `chown`/`chmod` line
 to run.
+
+For a human Console login, generate the password hash with the existing
+`python3 -m fleet.server.site_users hash-password` command in the Fleet
+environment. It prompts without echo on an interactive terminal. Supply the
+result through a private pipe to `sudo python3 deploy/site/site_users.py
+add-login /etc/rosy/site/site-users.yaml --principal <person-id> --role operator
+--login <login-id> --password-hash-stdin`. Do not put the password or hash in
+command arguments, logs, or chat. `--dry-run` validates without publishing;
+`list` and write results omit password hashes. This adds a separate person and
+preserves existing service, AI observer and token users. Duplicate principal
+or login IDs are refused; it does not overwrite or reset an existing account.
+Validate before restarting Fleet; the process loads accounts at startup.
+Account provisioning does not bind a Discord identity or authorize a Bot.
 
 The host-side config-reload watcher that restarts Fleet when `site-users.yaml`
 changes is installed on the site host; its source is not part of this
