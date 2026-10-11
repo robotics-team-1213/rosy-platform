@@ -197,7 +197,7 @@ def test_renamed_training_road_still_requires_whole_surface_semantic(tmp_path, m
     model_doc["dataset"]["revision"] = train.name
     (paths[0] / "model_manifest.json").write_bytes(review.encoded(model_doc))
     paths[-1] = revise(paths[-1], lambda doc: doc.update(training_refs=[f"train@{train.name}"]))
-    with pytest.raises(ValueError, match="drivable semantic"):
+    with pytest.raises(ValueError, match="semantic differs or is unverified"):
         run(paths)
 
 
@@ -222,6 +222,35 @@ def test_changed_model_during_inference_is_refused(tmp_path, monkeypatch):
         return result
     monkeypatch.setattr(model._session, "run", changed)
     with pytest.raises(ValueError, match="model manifest changed during replay"):
+        run(paths)
+
+
+def test_changed_dataset_during_inference_produces_no_report(tmp_path, monkeypatch):
+    from argparse import Namespace
+    paths = bundle(tmp_path, monkeypatch)
+    model = replay.LaneSegModel.open(paths[0])
+    original = model._session.run
+    def changed(*args):
+        result = original(*args)
+        with (paths[2] / "manifest.json").open("a") as stream:
+            stream.write(" ")
+        return result
+    monkeypatch.setattr(model._session, "run", changed)
+    output = tmp_path / "report.json"
+    assert replay.execute(Namespace(model=paths[0], store=paths[1], road_eval=paths[2],
+                          region_eval=paths[3], inputs=paths[4], max_age_ns=100, out=output)) == 2
+    assert not output.exists()
+
+
+def test_training_capture_group_overlap_is_rejected_with_different_images(tmp_path, monkeypatch):
+    paths = list(bundle(tmp_path, monkeypatch))
+    train = next((paths[1] / "datasets/train").iterdir())
+    train = revise(train, lambda doc: doc["frames"][0].update(capture_group="eval-g"))
+    model_doc = json.loads((paths[0] / "model_manifest.json").read_bytes())
+    model_doc["dataset"]["revision"] = train.name
+    (paths[0] / "model_manifest.json").write_bytes(review.encoded(model_doc))
+    paths[-1] = revise(paths[-1], lambda doc: doc.update(training_refs=[f"train@{train.name}"]))
+    with pytest.raises(ValueError, match="training/evaluation source or image overlap"):
         run(paths)
 
 
