@@ -955,7 +955,7 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     draft = store.save_draft(base, expected_revision=None, principal_id='bob')
     observation = SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'yard', 'survey': reference,
         'places': [{'id': 'A', 'name': 'A', 'x': 1, 'y': 0}, {'id': 'B', 'name': 'B', 'x': 2, 'y': 0}],
-        'edges': [{'id': 'ab', 'from': 'A', 'to': 'B', 'polyline': [[1, 0], [2, 0]], 'width_m': .2,
+        'edges': [{'id': 'ab', 'from': 'A', 'to': 'B', 'polyline': [[1, 0], [2, 0]], 'width_m': .2, 'speed_cap_mps': .03,
             'evidence': {'source': 'camera', 'status': 'observed', 'reference_revision': 'survey-camera',
                 'note': 'Frame sha256 fixture'}}]}).body()
     page.set_viewport_size({'width': width, 'height': 1000})
