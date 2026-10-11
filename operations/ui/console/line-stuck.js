@@ -303,17 +303,19 @@ export function fleetAnswerText(answer) {
 
 /** Operator summary: a receipt is never evidence that movement completed. */
 export function stuckSummary(stuck) {
-  const answer = stuck.fleet_answer, proposal = stuck.ai_proposal || stuck.ai?.proposal;
+  const answer = stuck.fleet_answer, proposal = stuck.ai_proposal;
   const decision = DECISION_LABEL[answer?.decision || proposal?.decision] || "조치 미확인";
   if (answer) {
-    const source = answer.tier === "ai" ? "영상 분석의 제안을 관제가" : answer.tier === "human" ? "운영자의 판단을 관제가" : "관제가";
+    const source = {ai: "AI 분석 제안", human: "운영자 판단", rule: "관제 규칙"}[answer.tier] || "판단 주체 미확인";
     const reason = typeof answer.message === "string" ? answer.message.slice(answer.message.lastIndexOf(": ") + 2) : "";
     const refusal = {EMERGENCY_ACTIVE: "비상정지 중입니다.", CALIBRATION_ACTIVE: "보정 세션이 로봇을 제어하고 있습니다.",
       OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: "운영자 권한이 필요합니다.",
       STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || REFUSAL_REASON[reason] || "거절 이유 미확인입니다.";
-    const receipt = answer.accepted === true ? "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
-      : answer.accepted === false ? `로봇이 거절했습니다. ${refusal} 판단 근거를 확인하세요.` : "로봇의 응답이 미확인입니다. 상태를 다시 확인하세요.";
-    return `${source} ${decision} 지시로 전달했습니다. ${receipt}`;
+    const receipt = answer.code === "ROBOT_UNREACHABLE" ? "로봇에 연결되지 않아 전달하지 못했습니다. 연결과 현재 요청을 확인하세요."
+      : answer.accepted === true ? "관제가 전달했고 로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
+      : answer.accepted === false ? `로봇이 거절했습니다. ${refusal} 판단 근거를 확인하세요.`
+        : "전달 여부와 처리 결과가 미확인입니다. 이미 적용됐을 수 있으므로 현재 상태를 다시 확인하세요.";
+    return `${source} · 관제 지시 기록: ${decision}. ${receipt}`;
   }
   if (proposal) {
     const status = {accepted: "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다.",
@@ -321,7 +323,7 @@ export function stuckSummary(stuck) {
       pending: "관제가 전달하고 로봇의 응답을 기다립니다.",
       held: `관제가 전달을 보류했습니다. ${AI_HELD_REASON[proposal.verdict] || "보류 이유 미확인"} · 판단 근거를 확인하세요.`}[proposal.class]
       || "전달 결과가 미확인입니다. 판단 근거를 확인하세요.";
-    return `영상 분석이 ${decision}를 제안했습니다. ${status}`;
+    return `AI 분석이 ${decision}를 제안했습니다. ${status}`;
   }
   return stuck.robot_online === false ? "로봇 연결이 끊겼습니다. 연결을 확인한 뒤 현재 요청을 다시 확인하세요."
     : "로봇이 멈춰 판단을 요청했습니다. 주변과 판단 근거를 확인한 뒤 조치를 선택하세요.";
@@ -587,9 +589,9 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       line.textContent = `차선 경계: ${boundaryLabel} · 같은 경계에서는 새 판단 요청을 기다립니다.`;
       detail.append(line);
     }
-    for (const fact of stuck.ai?.facts || stuck.ai_facts || []) {
+    for (const fact of stuck.ai_facts || []) {
       const line = document.createElement("p");
-      line.textContent = `영상 분석 참고 · 신뢰도 ${Number.isFinite(fact.confidence) ? `${Math.round(fact.confidence * 100)}%` : "미확인"} · 조치 명령과 별도입니다.`;
+      line.textContent = `AI 분석 참고 · 신뢰도 ${Number.isFinite(fact.confidence) ? `${Math.round(fact.confidence * 100)}%` : "미확인"} · 조치 명령과 별도입니다.`;
       detail.append(line);
     }
     const identifiers = document.createElement("p");

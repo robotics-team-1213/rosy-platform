@@ -205,8 +205,8 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
 def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site, width):
     from playwright.sync_api import expect, sync_playwright
 
-    stuck = {**STUCK, "ai": {"facts": [{"kind": "new_fact_kind", "source": "analyzer:test", "confidence": 0.8,
-                                       "evidence": {"wire_marker": "source_preserved"}}]}}
+    stuck = {**STUCK, "ai": {"state": "present"}, "ai_facts": [{"kind": "new_fact_kind", "source": "analyzer:test", "confidence": 0.8,
+                                       "evidence": {"wire_marker": "source_preserved"}}]}
     api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [_robot("rosy_01", line_stuck=stuck)]}}
     posts = []
     with sync_playwright() as playwright:
