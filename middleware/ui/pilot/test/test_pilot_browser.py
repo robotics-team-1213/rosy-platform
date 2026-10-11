@@ -858,13 +858,15 @@ def test_lobby_self_state_never_turns_missing_or_moving_evidence_into_idle(table
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-@pytest.mark.parametrize("stored", ["null", "{}", "[null, 1]", '[{"host":"other.test","label":"다른 로봇"}]'])
+@pytest.mark.parametrize("stored", ["null", "{}", "[null, 1]", '[{"host":"other.test","label":"다른 로봇"}]',
+                                   '[{"host":"other.test","label":null,"token":"legacy-secret"}]'])
 def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin(tablet_page, stored):
     base_url, page, errors = tablet_page
     page.add_init_script(f"localStorage.setItem('rosy.pilot.recent', {json.dumps(stored)})")
     page.goto(f"{base_url}/pilot")
     page.locator("form[data-pilot-token-form] ui-field input").wait_for(state="visible")
     assert page.locator("[data-recent-connect]").count() == 0
+    assert "legacy-secret" not in page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
     assert errors == [], errors
 
 
