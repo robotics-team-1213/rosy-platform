@@ -719,3 +719,9 @@
 - 상태: Accepted (2026-10-12).
 - 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
 - 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
+
+## D-679 — Fleet·Qwen 불일치와 제한된 GLM 재평가
+
+- 상태: Accepted (2026-10-12).
+- 결정: 무료 Qwen 기본 추론을 유지하고 Fleet 판단 불일치·응답 문제를 한 번의 GLM 검토로 기록한다. 재평가는 HOLD이며 실행 권한을 만들지 않는다.
+- 계약: [ADR](../adr/D-679-conditional-fleet-qwen-glm-review.md). 최초 실제 검증은 합성 사건 1건·1회, 출력 1,024 토큰·30초·자동 재시도 없음이다.
