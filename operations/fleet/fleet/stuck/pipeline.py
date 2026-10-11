@@ -78,6 +78,8 @@ def candidate(resolver, now, row, stuck, rows, chain):
         rule = ("meet", "WAIT")  # Resume only after a completed meet segment.
     if rule is None:
         return resolver._escalate(chain, rid, sid, "no_rule")
+    if rid in resolver.autonomous_robots and rule[1] in chain.unresolved:
+        return resolver._escalate(chain, rid, sid, "unresolved:" + rule[1])
     if rule[0] == "R5":
         return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
     if chain.rule_answers >= resolver.config.rule_budget and chain.retries.get(sid) != 1:

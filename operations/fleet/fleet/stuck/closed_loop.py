@@ -115,6 +115,7 @@ async def check(loop, now: float, robots) -> None:
                     note = loop._board.resolver_note(rid, sid) or {}
                     if note.get("rule"):
                         chain.retired.add(note["rule"])
+                    chain.unresolved.add(out["decision"])
                     action = loop._resolver._escalate(chain, rid, sid, "unresolved:" + out["decision"])
                     if action is not None:
                         loop._escalated(action)
