@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
 - 2026-10-11 · b6a8d0d2e8 · feat(isaac): 고정 정책 네 시작 방향 실제 화면 녹화
 - 2026-10-11 · dc25401e61 · feat(isaac): 실제 맵 한 대 CPU RL 진단
 - 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
 - 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
-- 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
