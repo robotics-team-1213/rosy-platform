@@ -128,7 +128,7 @@
 
 ## 2026-10-12 · eae0f59da0 · test(isaac): 카메라 RL 업데이트와 진단 실패 기록
 
-- 실행: 실제 headless Isaac 한 대에서 고정 segmentation·기존 line_follow/Drive/CORE·native LiDAR 몸체 검사로 6개 순차 seed와 3개 baseline/frozen RL 쌍의 10초 진단을 실행했다. 유효 업데이트 1938회·상태 5개·무효 관측 2923개 제외. seed 0/1은 관측 0이며 나머지 seed는 70/1199/527/142회 갱신했다. 병렬 환경 학습은 아니다.
+- 변경: 실제 headless Isaac 한 대에서 고정 segmentation·기존 line_follow/Drive/CORE·native LiDAR 몸체 검사로 6개 순차 seed와 3개 baseline/frozen RL 쌍의 10초 진단을 실행했다. 유효 업데이트 1938회·상태 5개·무효 관측 2923개 제외. seed 0/1은 관측 0이며 나머지 seed는 70/1199/527/142회 갱신했다. 병렬 환경 학습은 아니다.
 - 증거: SDK exit 1, held-out full-map completion failed. baseline 진행 0.190~0.200m·eval 0.180~0.200m, 평가 완주 0/3·모두 timeout으로 개선 미입증. 정책 hash 2492e21e54187bd0369009339c4b65be43583cb3b91ec6b3d020f721dc84b3c5. 실제 영상 7개 hash/ffprobe 960x540 프레임/렌더 순서·episode 정지·cleanup 정지·SDK 잔여 0 확인 후 private 51개 artifact hash 검증 보관. 훈련 영상은 없고 trace·전방 이미지는 보존한다.
 - 자원: 사용자가 runtime ZFS ARC 상한 4GiB→2GiB를 적용하고 readback했다. 다른 세션 시험·서비스는 유지했으며 영구 설정 변경은 없다. 최신 main c90833b2a를 통합한 e4bf2710cf에서 Isaac/body 원격 264PASS1SKIP·Gazebo/domain 87PASS1SKIP·각 known_failures 0NEW.
 - gate 변화: native 카메라 RL 유효 학습 생성 확인. 완주·정책 개선·네 방향·병렬 RL·교통/Fleet·Gazebo 두 대 주행·실물 수용은 HOLD 유지. 영상은 진단 부분 주행이며 full-lap이 아니다. 다음 실행은 최신 통합 소스의 긴 진단과 카메라 손실 원인 검증이 필요하다.
