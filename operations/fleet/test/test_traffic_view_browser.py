@@ -281,7 +281,6 @@ def test_map_coordinate_disclosure_clears_expired_observations_without_shrinking
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1500)
             page.locator("#map-readouts > summary").click()
-            page.locator("#tracking-coordinate-details > summary").click()
             expect(page.locator("#tracking-positions")).to_be_visible()
             expect(page.locator("#tracking-position-rows tr")).to_have_count(1)
             expect(page.locator("#tracking-position-rows td")).to_have_text(
