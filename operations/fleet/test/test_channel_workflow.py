@@ -137,7 +137,8 @@ def test_revoked_first_batch_does_not_starve_later_valid_result(tmp_path):
     asyncio.run(worker.run_once())
     assert len(sent) == 1 and sent[0]["message_id"] == receipt["message_id"]
     with closing(journal._connect()) as conn:
-        assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE state='SUPERSEDED'").fetchone()[0] == 50
+        count = conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE state='SUPERSEDED'").fetchone()[0]
+        assert count == 50
 
 
 @pytest.mark.parametrize("next_state", ["HOLD", "READY"])
