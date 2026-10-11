@@ -2,7 +2,7 @@
 
 ## 첫 로그인·기본 내 프로필 — D-686/D-689
 
-사용자는 팀원 네 명에게만 사람 계정을 발급하고 초기 비밀번호를 로그인 ID와 일치시키되 첫 로그인에서 반드시 변경하도록 요청했다. 기본 프로필은 표시 이름 수정·현재 비밀번호 확인 변경·ID/이메일/권한 조회로 확정했다. 기존 기계·운용·AI 자격은 보존하며 실제 명단·자격을 이 문서에 기록하지 않는다. 서버는 초기 쿠키의 운용 API 접근을 거절하고 기존 SQLite에서 자격·프로필·세션 회전을 관리한다. 네 문서 우상단의 내 프로필은 Map/Cell 새 탭으로 입력을 보존한다.
+사용자는 팀원 네 명에게만 사람 계정을 발급하고 초기 비밀번호를 로그인 ID와 일치시키되 첫 로그인에서 반드시 변경하도록 요청했다. 기본 프로필은 표시 이름 수정·현재 비밀번호 확인 변경·ID/이메일/권한 조회로 확정했다. 기존 기계·운용·AI 자격은 보존하며 실제 명단·자격을 이 문서에 기록하지 않는다. 서버는 초기 쿠키의 운용 API 접근을 거절하고 기존 SQLite에서 자격·프로필·세션 회전을 관리한다. 화면 이름과 우상단 링크는 운용 용어 규칙에 맞춰 **내 계정**으로 통일했다. Map/Cell 새 탭으로 입력을 보존한다.
 
 | 증거 | 결과와 범위 |
 |---|---|
@@ -12,6 +12,9 @@
 | `7ae3c7a67` 프로필 UI RED | 서버를 합치기 전 6 NEW/known 0, 네 진입 경로/비밀번호/실패 복구 시나리오의 미구현 endpoint를 확인했다. `logs/self-profile-ui-red/run-1.txt` |
 | `73b23b956` 프로필·전체 인증/문서 호출자 | 적정 AI PC 22 cores/9 GB에서 173 passed, 종료 0, NEW 0. `logs/profile-green/run-1.txt` |
 | `70e970acb` 잘못된 Unicode 입력 수정 | 같은 자격 원격 PC에서 프로필 20 passed, 종료 0, NEW 0. 단일 surrogate 거절과 기존 이름 보존, 정상 한국어/emoji 수용. `logs/profile-surrogate/run-1.txt` |
+| `197b3d31f` 계정·첫 변경 화면 캡처 | 적정 Model PC 원격 Chromium 5 passed, 종료 0, NEW 0. 네 업무 진입의 320/1366px 계정 화면과 첫 변경 화면 9 PNG를 관측했다. 이후 제목은 내 계정으로 정렬했다. `logs/profile-capture/run-1.txt`, `evidence/profile-screens/sha256.csv` |
+| `d002c579d` 최신 main 통합 영향 gate | 첫 묶음 6921 passed / 800 skipped / 2 NEW, 둘째 537 passed / 309 skipped / 1 NEW, known 0. 계정 화면 용어·CORE API 설명 핀·합친 계획 문서의 공개 commit 표기 문제가 남아 착지하지 않았다. `logs/land-profile-final/uiux-header-all-surfaces/` |
+| `900bd1f708` 세 실패 수정 재검증 | 적정 Site PC 3.3 cores/8.6 GB에서 실패한 세 시험 3 passed, 종료 0, NEW 0. 용어·API 설명·비밀 탐지 기준을 유지하고 소스 표기를 수정했다. `logs/g1-corrections/run-1.txt` |
 | 독립 검토 | D-686 원본 설정 변경 세션 무효화, D-689 Unicode 경계, 키보드 초점, 만료 시 비밀 삭제와 타 탭 계정 변경을 발견하고 수정했다. 수정된 서버 명세/품질과 UI에 추가 blocker 없음. 실제 시험과 배포 증거를 대신하지 않는다. |
 
 `83c2a49fd` 통합 브라우저/인증/자산 검사는 통과했으나 비밀 탐지 1 NEW가 남아 전체 실패였다. 변수 참조와 이미 허용된 합성 fixture 표현을 정리하고 탐지 기준을 유지했다. `e592eb8e8` 최종 인증/프로필/실제 Chromium/disabled 사유/비밀 탐지/P6는 143 passed, 종료 0, NEW 0이다 (`logs/profile-final/run-1.txt`, 적정 AI PC 22 cores/9 GB). 최신 main 영향 gate·해당 SHA CI·서명·설치·실제 팀원 발급은 아직 확인하지 않았다. 당사자 대신 최종 비밀번호를 정하지 않았고 실제 첫 변경·실물 수용을 완료로 추정하지 않는다.
