@@ -276,7 +276,8 @@ class NotificationWorker:
                     ledger_current = (final_current(connection, row['robot_id'], row['stuck_id'], facts['scope_json'],
                                                     self.clock(), receipt=receipt) if row['kind'] == 'FINAL_REVIEW'
                                       else parent is None or parent['state'] not in ('ACTIVE', 'HOLD'))
-                if ledger_current is None and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending:
+                if (ledger_current is None and self.board.is_open(row['robot_id'], row['stuck_id'])
+                        and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending):
                     await asyncio.to_thread(self.outbox.defer, row, now=self.clock())
                     continue
                 if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
