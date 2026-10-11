@@ -143,3 +143,18 @@ def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
     lane.observe(frame, stamp=1., source_now=1., pose=(0., 0., 0.))
     stopped = lane.manager.tick_gain(10., gain=1.7)
     assert (stopped.linear, stopped.angular) == (0., 0.) and len(calls) == 1
+
+
+def test_existing_model_revision_hash_and_roles_must_match_before_inference():
+    from camera_lane import camera_model_identity
+    model = SimpleNamespace(manifest=SimpleNamespace(model_revision='lane-seg-test',
+        backend='onnx', classes=[SimpleNamespace(role='lane_marking'), SimpleNamespace(role='drivable')],
+        files=[SimpleNamespace(name='model.onnx', sha256='a' * 64)],
+        onnx_file=lambda: Path('model.onnx')))
+    assert camera_model_identity(model, revision='lane-seg-test', sha256='a' * 64) == perception_id()
+    for revision, sha in [('different', 'a' * 64), ('lane-seg-test', 'b' * 64)]:
+        with pytest.raises(ValueError):
+            camera_model_identity(model, revision=revision, sha256=sha)
+    model.manifest.classes = [SimpleNamespace(role='lane_marking')]
+    with pytest.raises(ValueError):
+        camera_model_identity(model, revision='lane-seg-test', sha256='a' * 64)
