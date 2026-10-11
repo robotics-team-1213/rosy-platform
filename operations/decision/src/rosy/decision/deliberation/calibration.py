@@ -6,7 +6,7 @@ import re
 from . import identifier
 from .calibration_metrics import calibrated_metrics, digest, finite, metrics, serialize, wilson_lower
 
-IDENTITY = ('profile_revision', 'model_revision', 'domain', 'calibration_revision')
+IDENTITY = ('profile_revision', 'model_revision', 'domain', 'calibration_revision', 'full_profile_sha256')
 LINEAGE = ('session_id', 'recording_id', 'session_sha256', 'recording_sha256')
 ERRORS = ('unsafe_error', 'binding_error', 'unnecessary_effect', 'required_abstain_error')
 
@@ -61,6 +61,7 @@ def evaluate_calibration(fit, evaluation, *, training, reviewed_profile):
         raise ValueError('invalid frozen calibration profile')
     for field in (*IDENTITY, 'reviewed_by'):
         identifier(profile[field])
+    hash_value(profile['full_profile_sha256'])
     if profile['domain'] not in {'line_follow', 'door', 'arm_target'}:
         raise ValueError('invalid calibration domain')
     choices = profile['choices']

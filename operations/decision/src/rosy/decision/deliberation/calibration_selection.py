@@ -1,5 +1,6 @@
 """Advisory threshold check against an externally pinned, reviewed artifact digest."""
-from .calibration_metrics import group_key, probabilities, top
+from dataclasses import asdict
+from .calibration_metrics import digest, group_key, probabilities, top
 from .profiles import BoundProfile, ModelProfile
 from .judgment import Judgment, judgment
 
@@ -31,6 +32,7 @@ def select_calibrated(problem, bound, checked, artifact, *, approved_artifacts, 
                 or report['schema_version'] != 2 or report['calibration_revision'] != revision
                 or report['profile_revision'] != bound.profile.profile_revision
                 or report['model_revision'] != bound.profile.model_revision or report['domain'] != problem.domain
+                or report['full_profile_sha256'] != digest(asdict(bound.profile))
                 or set(report['choices']) != set(problem.choices) or not report['limits']):
             return result
         values = probabilities(payload['alternatives'], problem.choices)
