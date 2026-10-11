@@ -149,9 +149,11 @@ async function refreshIncidents() {
       if (auth.role === "operator") {
         if (!report.closed_at && !report.handoff && report.judgment_revision) {
           const claim = document.createElement('ui-button');
+          claim.setAttribute('kind', 'quiet');
           claim.textContent = '이 사건 맡기';
           claim.addEventListener('click', scope.listener(async () => {
             claim.disabled = true;
+            claim.setAttribute('reason', '담당 인수를 기록하고 있습니다');
             try {
               await call(`/api/fleet/robots/${encodeURIComponent(report.robot_ids[0])}/line-stuck/claim`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
