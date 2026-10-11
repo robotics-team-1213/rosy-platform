@@ -127,12 +127,21 @@ def summarize_frames(reports):
     profile = reports[0]['profile']
     if any(row['profile'] != profile for row in reports):
         raise ValueError('cannot pool different metric profiles')
+    binding_keys = ('model_revision', 'camera_profile_revision', 'preprocessing', 'detector_thresholds')
+    binding = {key: reports[0][key] for key in binding_keys if key in reports[0]}
+    if binding and len(binding) != len(binding_keys):
+        raise ValueError('incomplete model binding')
+    for row in reports:
+        if {key: row[key] for key in binding_keys if key in row} != binding:
+            raise ValueError('cannot pool different or missing model bindings')
+        if row['domain'] not in ('real', 'simulation'):
+            raise ValueError('invalid report domain')
     def pool(rows):
         return dict(frames=len(rows), inference_abstained_frames=sum(r['inference_abstained'] for r in rows),
                     classes={name: _rates({key: sum(r['classes'][name][key] for r in rows)
                                           for key in COUNTS}) for name in OBJECT_CLASSES})
     domains = {domain: [r for r in reports if r['domain'] == domain] for domain in ('real', 'simulation')}
-    return dict(fitness_verdict='HOLD', profile=profile,
+    return dict(fitness_verdict='HOLD', profile=deepcopy(profile), bindings=deepcopy(binding),
                 domains={domain: pool(rows) for domain, rows in domains.items()},
                 conditions={domain: {condition: pool([r for r in rows if condition in r['conditions']])
                                      for condition in sorted({c for r in rows for c in r['conditions']})}
