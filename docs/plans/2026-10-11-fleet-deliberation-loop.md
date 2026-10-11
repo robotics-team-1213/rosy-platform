@@ -41,7 +41,7 @@ provider 프로파일 미설정은 호출 불가다. 셸/쓰기/MCP/배포/장�
 
 ## 4. Fleet 사건과 비실행 후보/결과 연결
 
-Read/extend: `operations/situation/rosy_situation/incidents/context.py`, `operations/decision/src/rosy/decision/tool_dispatch.py`와 기존 Fleet incident/Mission turn journal 소비자.
+Read/extend: `operations/situation/rosy_situation/incidents/context.py`, `operations/fleet/fleet/server/model_feedback_dispatch.py`와 기존 Fleet incident/Mission turn journal 소비자.
 Test: `operations/fleet/test/test_deliberation_journal.py` (new), 기존 `test_mission_feedback_loop.py`, `test_model_tool_call_journal.py`, `test_mission_model_turn_store.py`.
 
 먼저 기존 서비스 호출자를 `rg`로 찾아 연결 위치를 확정한다. durable 시작/의견/최종 후보/거절/종료를 기존 사건과 연결하고 중복·내용 변경·원장 장애·재시작을 시험한다. 모델 출력은 새로운 임의 tool 호출을 만들지 않으며 첫 버전은 출력 미적용이다. 후보 접수·Action terminal·goal evidence를 따로 기록한다. 실제 장치 재개 연결은 기존 정책·Safety 리뷰·장치 관문이 준비된 후속 변경이다.

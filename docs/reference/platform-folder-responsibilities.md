@@ -37,10 +37,11 @@ rosy-platform/
 │  └─ ui/{robot,pilot,face}
 ├─ operations/
 │  ├─ fleet/ (transaction·serving·기존 배포 owner)
+│  │  └─ fleet/incidents/ (handoff.py: 사람 인수, notifications.py: 팀 알림)
 │  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
 │  ├─ world/ (src/rosy/world/api, state/projections)
 │  ├─ situation/ (rosy_situation/assessment, snapshot_assessment, analyzers, incidents)
-│  ├─ execution/ (src/rosy/execution/api, site)
+│  ├─ execution/ (src/rosy/execution/api, site: goal_evidence, workflow 등)
 │  ├─ processes/{cell,palletizing}
 │  ├─ vision/signal_observer
 │  ├─ site_devices/{dock,signal}/firmware
@@ -102,7 +103,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
 | `middleware/execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
 | `operations/execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
-| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 유지 — site 실행·권한 projection. local loader나 장치 writer가 아님 |
+| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
 | `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
 | `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
 | `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
@@ -112,8 +113,9 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/site_devices/signal` | signal contract·driver library | 유지 — Fleet 소비 signal 장치. Fleet가 sequence·command owner를 유지 |
 | `operations/site_devices/signal/firmware` | signal MCU firmware | 유지 — boot·supervision-loss failsafe. 관측용 signal observer와 구분 |
 | `operations/vision/signal_observer` | measured-light 관측 서비스·소스 | 유지 — read-only light evidence. CORE traffic observer 소비; 실행 host 결정이나 signal command 권한 추가 없음 |
-| `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose projection을 World로 이전. admission·claim·dispatch·MapPoseService 조립·trip consumer는 Fleet에 유지 |
-| `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — 기존 ER2/VLM·candidate/tool 제안. Fleet transaction/store/provider 소비 유지; `fleet.ai` shim 없음 |
+| `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose는 World, 순수 목표/진척 규칙은 execution 소비. D-657 `server/model_feedback_dispatch` 원장 어댑터와 admission·claim·dispatch·producer 인증·MapPoseService 조립·trip consumer는 Fleet 소유 |
+| `operations/fleet/fleet/incidents` | `fleet.incidents.handoff`, `fleet.incidents.notifications` | 분리 완료 — D-661 이름 있는 담당자의 사건 인수와 기존 Fleet DB의 알림 outbox·고정 채널 worker·receipt. 판단·resolver는 `fleet/stuck`, 인증·라우트·worker 생명주기는 `fleet/server`에 유지. 실제 운영 수용은 HOLD |
+| `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
 | `operations/ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
@@ -171,6 +173,12 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`만 포함한다. 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
 
+D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제 원장 모델 도구 구현은 `fleet.server.model_feedback_dispatch`, 순수 목표 검증은 `rosy.execution.site.goal_evidence`, 기존 시각·신선도·step 상태 투영은 `rosy.execution.site.workflow`가 소유한다. D-656 후속 통합은 Fleet가 제공하는 일관된 snapshot의 읽기 진행 계산 전체를 같은 workflow의 `project_progress`에 둔다. DB 전이·auth·claim·admission·transport는 Fleet에 남긴다. Fleet는 기존 execution wheel dependency를 사용하고 execution 파일을 중복 포장하지 않는다. site source image도 해당 source closure를 포함한다. 다른 Mission 전이·복구 규칙 및 D-648 단계 4는 후속으로 유지한다. 소스/설치 검증과 실제 이미지 빌드·배포·현장 정확도는 별도다.
+
+사용자의 후속 처리 요청으로 `project_progress` 전체 계산도 같은 workflow에 분리했다. Fleet adapter가 하나의 transaction에서 읽은 snapshot과 clock을 제공하고 execution은 기존 wire 결과를 투영한다. 단독 helper import는 stdlib만 필요하며 projection 호출 시 기존 foundation schema를 불러온다. 이는 DB 상태 전이·복구나 D-660~D-662 운영 판단 기능의 승인/착지를 대신하지 않는다.
+
+후속 main `7afb0e2c4`의 소스에서는 D-661 인수·알림이 `fleet/incidents/{handoff,notifications}.py`에 있다. 다음 구조 작업도 이 직접 import 경로와 책임을 유지한다. Situation의 `rosy_situation/incidents`는 상황 근거를 구성하는 모듈이며 Fleet의 담당 인수·전송 원장과 구분한다. [하위 패키지 이동 계획](../plans/2026-10-11-fleet-team-incidents-subpackage.md)과 [책임 분리 계획](../plans/2026-10-11-responsibility-authority-orchestration.md)을 따른다. D-660~D-662 소스 반영과 최종 검증 receipt·실제 운영 수용은 별개이며, 실제 채널 수신·현장 정답 검수 및 단계 6 모델 토론은 HOLD다.
+
 현재 World 구현은 `ObservationSnapshot`과 관측/odom을 합성하는 `MapPoseTracker`다. `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 이를 소비한다. World 내부의 `predicted` 표기는 마지막 관측에서 odom으로 갱신하는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
@@ -180,6 +188,8 @@ D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 �
 D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1파일, 총 299파일을 처리했다. Console은 67개 source 파일 중 65개 설치 자산이며 AGENTS와 package.json은 개발 안내/도구 입력이다. `test/learning/perception`은 기존 99파일의 shared workflow 시험 위치다. 퇴역 WSL 도구 6개는 `docs/reference/legacy-tools/wsl`로 동결했고 현재 운영 경로에 재연결하지 않는다.
 
 ## D-649 책임 이동 보완
+
+후속 책임·권한·결과 확인 계약은 Accepted [D-656](../adr/D-656-responsibility-authority-and-orchestration-boundaries.md)과 [실행 계획](../plans/2026-10-11-responsibility-authority-orchestration.md)을 따른다. 수용 범위는 논리 경계와 이행 순서이며 위 표의 현재 소스 배치와 D-652 내부 shadow 외의 구현/운영 수용을 뜻하지 않는다.
 
 `middleware/control/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/control/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
 

@@ -644,8 +644,16 @@
 | D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers | Accepted (2026-10-11; internal shadow only, no command or wire changes) |
 | D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 | Accepted |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 | Accepted (2026-10-11; logical responsibility and staged execution only) |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 | Accepted (2026-10-11) |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 | Accepted (2026-10-11) |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox | Accepted (2026-10-11) |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 | Accepted (2026-10-11) |
 
 | D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+| D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
+| D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
+| D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -678,3 +686,14 @@
 - Status: Accepted (2026-10-11).
 - Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
 - Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.
+
+## D-654 ROSY 플랫폼 경로 R 심볼
+
+- Status: Accepted (2026-10-11).
+- Decision: One canonical platform mark, shared token-driven wordmark application, distinct role icons, accessible names, and separately evidenced rollout.
+- Contract: [ADR](../adr/D-654-rosy-platform-route-mark.md), [plan](../plans/2026-10-11-rosy-brand.md).
+
+## D-658 Fleet 공용 헤더 영역
+
+- 상태: Accepted (2026-10-11).
+- Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
