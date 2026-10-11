@@ -80,7 +80,7 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
             or type(exported['case']) is not dict):
         raise ValueError('invalid unreviewed model feedback')
     case = exported['case']
-    encoded = json.dumps(case, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+    encoded = json.dumps(case, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()
     if len(encoded) > 1024 * 1024 or hashlib.sha256(encoded).hexdigest() != exported['digest']:
         raise ValueError('model feedback content hash differs')
     scope = case.get('scope')
@@ -89,7 +89,7 @@ def attach_model_feedback(recording_feedback: dict, exported: dict) -> dict:
             or re.fullmatch('[0-9a-f]{64}', scope['profile_sha256']) is None
             or type(case.get('reason')) is not str or re.fullmatch('[A-Z0-9_]{1,64}', case['reason']) is None
             or case.get('state') not in {'ACTIVE', 'HOLD', 'NOT_NEEDED'}
-            or case.get('outcome') not in {'IN_PROGRESS', 'UNRESOLVED', 'RESOLVED_OBSERVED'}):
+            or case.get('outcome') not in {'IN_PROGRESS', 'UNRESOLVED', 'RESOLVED_OBSERVED', 'DO_NOT_INTERVENE'}):
         raise ValueError('invalid bound model feedback')
     for key in ('calls', 'observations', 'spent_micros', 'reserved_micros'):
         if type(case.get(key)) is not int or not 0 <= case[key] <= (8 if key in {'calls', 'observations'} else 1_000_000_000_000):
