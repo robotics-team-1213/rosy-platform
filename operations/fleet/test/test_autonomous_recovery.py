@@ -37,10 +37,12 @@ def test_autonomous_start_requires_recording_and_background_resolver(tmp_path):
     assert create_app(console).state.line_stuck._log is None
 
 
-@pytest.mark.parametrize("result", ["crash", "accepted", "write_failed", "admission_changed"])
+@pytest.mark.parametrize("result", ["crash", "accepted", "write_failed", "admission_changed",
+                                    "client_changed", "server_error", "bad_response", "empty_response", "refused"])
 def test_moving_dispatch_is_journaled_before_send_and_rechecked(tmp_path, monkeypatch, result):
     from copy import deepcopy
     from fleet.stuck.reports import LineStuckAnswerLog
+    from fleet.swarm.transport import RobotApiError
     journal = LineStuckAnswerLog(tmp_path / "journal.sqlite3")
     loop, board, robot = _setup(log=journal)
     loop._resolver.autonomous_robots = frozenset({"rosy_01"})
@@ -54,19 +56,26 @@ def test_moving_dispatch_is_journaled_before_send_and_rechecked(tmp_path, monkey
         calls.append(args)
         if result == "crash":
             raise Crash()
-        return {"outcome": "accepted"}
+        if result in ("server_error", "bad_response", "refused"):
+            status, code = {"server_error": (500, "HTTP_500"), "bad_response": (200, "BAD_RESPONSE"),
+                            "refused": (409, "STUCK_DECISION_REFUSED")}[result]
+            raise RobotApiError("rosy_01", status, code, "test receipt")
+        return {} if result == "empty_response" else {"outcome": "back"}
 
     monkeypatch.setattr(robot, "line_stuck_decision", send)
     if result == "write_failed":
         monkeypatch.setattr(journal, "append", lambda *_: (_ for _ in ()).throw(OSError("disk full")))
-    if result == "admission_changed":
+    if result in ("admission_changed", "client_changed"):
         original, reads = loop._admission_row, []
 
         async def changed(rid):
             row = deepcopy(await original(rid))
             reads.append(rid)
             if len(reads) == 2:
-                row["state"]["safety"]["estop"] = True
+                if result == "client_changed":
+                    loop._clients = lambda: {}
+                else:
+                    row["state"]["safety"]["estop"] = True
             return row
 
         monkeypatch.setattr(loop, "_admission_row", changed)
@@ -81,8 +90,12 @@ def test_moving_dispatch_is_journaled_before_send_and_rechecked(tmp_path, monkey
         assert _robot.calls == []
     else:
         asyncio.run(loop.run_once())
-        assert bool(calls) == (result == "accepted")
-        if result != "write_failed":
+        assert bool(calls) == (result in ("accepted", "server_error", "bad_response", "empty_response", "refused"))
+        if result in ("server_error", "bad_response", "empty_response"):
+            assert journal.uncertain_motion() == {("rosy_01", "stuck-abc")}
+            restarted, _board, _robot = _setup(log=journal)
+            assert restarted._resolver._uncertain == {("rosy_01", "stuck-abc")}
+        elif result != "write_failed":
             assert journal.uncertain_motion() == set()
         else:
             assert board.view("rosy_01")["resolver"]["escalated"] == "auto_hold:journal_unavailable"
@@ -180,6 +193,14 @@ def test_restart_freeze_requires_exact_owner_case_closure(tmp_path):
     asyncio.run(loop.run_once())
     assert robot.calls == [] and journal.uncertain_motion()
     events[0].data["stuck_id"] = "stuck-abc"
+    original = loop._snapshot
+
+    async def closed_snapshot():
+        snapshot = await original()
+        snapshot["robots"][0]["state"]["line_follow"]["stuck"] = None
+        return snapshot
+
+    loop._snapshot = closed_snapshot
     asyncio.run(loop.run_once())
     assert not loop._resolver._uncertain and not journal.uncertain_motion()
     restarted, _board, _robot = _setup(log=journal)
