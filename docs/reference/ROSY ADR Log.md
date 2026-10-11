@@ -662,6 +662,7 @@
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
+| D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

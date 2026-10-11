@@ -1653,7 +1653,8 @@ def _files(name: str, suffixes):
     if name == 'core_features':
         holders = (ROOT / 'middleware/control/drive/behaviors',)
     if name == "fleet":
-        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console")
+        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console",
+                   ROOT / "integrations/messaging/discord")
     for directory in (PACKAGES[name]["dir"], *holders):
         for path in directory.rglob("*"):
             if path.is_file() and path.suffix in suffixes and _is_prod(path):

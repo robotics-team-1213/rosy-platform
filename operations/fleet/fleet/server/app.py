@@ -3,9 +3,8 @@
 경로는 로봇 계약(`/api/v1/...`)과 일부러 다르다. 관제 API 는 사이트 것이고, 로봇 것을
 흉내 내면 둘 중 어느 쪽에 말하고 있는지 화면에서도 코드에서도 흐려진다.
 
-인증: 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 즉 이 포트에 닿는 사람은 현장의
-모든 로봇을 움직일 수 있다. 그래서 기본은 루프백이고, 루프백 밖으로 열려면 콘솔 토큰을
-반드시 받는다(`serve()` 가 강제한다).
+인증: 기본 바인드는 루프백이며 외부 접속은 설정된 Fleet 자격과 역할 검사를 거친다.
+등록 자격·기명 운영자·장치 자격은 서로 다른 권한이다.
 
 구조 (D-362 P0-1): 이 파일은 구성 검증·lifespan·감사 미들웨어·비전 임대만 남고, 경로는
 소유자 모듈이 단다 — mission_routes, task_dispatch_routes, intent_routes, console_routes,
@@ -459,10 +458,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
     password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
     app.state.password_sessions = password_sessions
+    other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
-        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
         if goal_evidence_service is not None:
             other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
         assert_cell_producer_credentials_isolated(
@@ -784,15 +783,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 operator_guard=operator_guard, read_guard=read_guard)
 
     from fleet.server.work_routes import install_work_routes
+    from fleet.server.channel_requests import install_channel_feature
     install_work_routes(app, task_service=task_service, mission_service=mission_service,
                         require_viewer=require_viewer, read_guard=read_guard)
-    if channel_config is not None:
-        from fleet.server.channel_requests import install_channel_feature
-        install_channel_feature(app, config=channel_config, task_service=task_service, principals=principals,
-                                site_logins=site_logins, require_operator=require_operator, read_guard=read_guard,
-                                console=console, secrets=(console_token, discovery_token, vision_lease_secret,
-                                                         robot_credential_key, pairing_sync_token),
-                                secret_owners=(sightings, policy_evidence))
+    install_channel_feature(app, config=channel_config, task_service=task_service, principals=principals,
+                            site_logins=site_logins, require_operator=require_operator, read_guard=read_guard,
+                            console=console, secrets=other_tokens, secret_owners=(sightings, policy_evidence))
     from fleet.server.cell_app_routes import install_cell_app_routes
     install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
                             service_id=cell_app_service_id, principals=principals,
