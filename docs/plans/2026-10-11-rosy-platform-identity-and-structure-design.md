@@ -1,5 +1,7 @@
 # ROSY Platform 정체성과 최대 5단계 책임 구조 설계
 
+**현재 상태 (2026-10-11):** 채택한 실제 폴더 이동·소비자/패키징 수정은 D-626/D-628/D-630/D-637로 완료하고 local main `d4988bffba`에 반영했다. [현재 89개 holder 책임](../reference/platform-folder-responsibilities.md)과 [D-637 검증 결과](../validation/d637-remaining-folders-2026-10-11/result.md)가 현재 기준이다. 아래 원래 후보·미실행 표는 각 당시 기준의 이력이다. 미래 모델·producer admission 확장·새 API·실기 수용은 폴더 단계 완료에 포함하지 않는다.
+
 **상태:** 구조 방향은 [D-625](../adr/D-625-semantic-structure-and-staged-migration.md)로 Accepted (2026-10-11). 상세 책임 추출·개별 holder 생성·설치·장치 수용은 후속 단계다. 기존 API와 현재 배포 구조를 변경·승격하지 않는다.
 **기준:** `81b6ed879`, `docs/core-responsibility-plan`. 세계 상태와 행동 예측을 함께 다룬다는 사용자 답변을 반영한다.
 **실행:** [플랫폼 구조 실행 계획](2026-10-11-rosy-platform-identity-and-structure.md).

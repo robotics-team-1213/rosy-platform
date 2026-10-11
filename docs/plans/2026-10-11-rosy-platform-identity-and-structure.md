@@ -1,5 +1,7 @@
 # ROSY Platform Identity and Structure Implementation Plan
 
+**현재 상태 (2026-10-11):** 채택한 실제 폴더 이동·소비자/패키징 수정은 D-626/D-628/D-630/D-637로 완료하고 local main `d4988bffba`에 반영했다. [현재 89개 holder 책임](../reference/platform-folder-responsibilities.md)과 [D-637 검증 결과](../validation/d637-remaining-folders-2026-10-11/result.md)가 현재 기준이다. 아래 원래 후보·미실행 표는 각 당시 기준의 이력이다. 미래 모델·producer admission 확장·새 API·실기 수용은 폴더 단계 완료에 포함하지 않는다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** ROSY의 공통 제품 정체성에 맞춰 3단계 도메인 개요와 필요한 내부 책임을 최대 5 depth로 정돈하고 세계 상태와 행동 예측을 권한·근거·학습 수명에 맞게 연결한다.

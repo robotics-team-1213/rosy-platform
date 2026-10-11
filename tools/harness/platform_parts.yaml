@@ -269,8 +269,8 @@ roots:
     wave: "4c"
     import_prefix: [omx_adapter]
     note: >-
-      demonstration.py and lerobot_export.py are learning-flavoured (future
-      learning/curation); kept at package granularity until the B move.
+      demonstration.py remains device-owned capture; offline lerobot_export.py
+      lives in learning/curation/omx and consumes contracts/learning validation.
     concern: control
   - path: middleware/devices/omx/profile
     layout_target: middleware/devices/omx/profile

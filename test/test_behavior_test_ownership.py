@@ -80,6 +80,18 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "test/test_footprint_profiles.py",
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",
+    # D-637: existing shared learning corpus moved into test/learning/perception.
+    # Export/intake/signing validate artifacts with the runtime manifest/signature;
+    # object/training/replay tests bind runtime classes, runners and recorded topics.
+    # Keep these eight exact integration paths; scanner and set equality stay intact.
+    "test/learning/perception/test_model_convert.py",
+    "test/learning/perception/test_model_intake.py",
+    "test/learning/perception/test_model_intake_tasks.py",
+    "test/learning/perception/test_model_ncnn_intake.py",
+    "test/learning/perception/test_model_sign.py",
+    "test/learning/perception/test_object_boxes.py",
+    "test/learning/perception/test_road_replay.py",
+    "test/learning/perception/test_training_contract.py",
     # feat/lane-network-junctions, written 2026-09-23..24 alongside D-184's
     # acceptance and brought in by the main merge. They drive CORE's own
     # docking/mode wiring (core.bridge.docking_mode, services.take_docking_mode,
@@ -102,6 +114,16 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # the sensing node's pure core (control.loc_assist), CORE's relay and app, and
     # Fleet's client against each other, so it belongs to no single package.
     "middleware/core/gateway/test/test_localization_cross_lane.py",
+    # D-637 moved the existing learning workflow suite here; these exercise the
+    # model intake/signing/replay seams with the unchanged perception contracts.
+    "test/learning/perception/test_model_convert.py",
+    "test/learning/perception/test_model_intake.py",
+    "test/learning/perception/test_model_intake_tasks.py",
+    "test/learning/perception/test_model_ncnn_intake.py",
+    "test/learning/perception/test_model_sign.py",
+    "test/learning/perception/test_object_boxes.py",
+    "test/learning/perception/test_road_replay.py",
+    "test/learning/perception/test_training_contract.py",
 })
 
 
