@@ -16,7 +16,8 @@ def road(**changes):
     return {"schema": "rosy.site_map/1", "map_id": "new-course",
             "places": [{"id": "a", "name": "start", "x": 0, "y": 0},
                        {"id": "b", "name": "end", "x": 2, "y": 0}],
-            "edges": [{"id": "ab", "from": "a", "to": "b", "polyline": [[0, 0], [2, 0]]}],
+            "edges": [{"id": "ab", "from": "a", "to": "b", "polyline": [[0, 0], [2, 0]],
+                       "width_m": .2, "speed_cap_mps": .03}],
             **changes}
 
 
