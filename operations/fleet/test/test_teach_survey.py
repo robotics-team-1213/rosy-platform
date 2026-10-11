@@ -198,3 +198,47 @@ def test_survey_http_start_stop_confirm_are_named_operator_actions_without_motio
     assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}
     assert {('POST', f'/api/fleet/teach/{action}', 200) for action in ('start', 'stop', 'confirm')} <= {
         (row['method'], row['path'], row['status_code']) for row in tasks.store.api_audit()}
+
+
+@pytest.mark.parametrize("stamp_delta", [-0.1, 0.0])
+def test_rejected_odom_breaks_survey_without_resuming_across_it(stamp_delta):
+    service, poses, store, clock, draft = setup()
+
+    async def run():
+        await start(service, draft)
+        await advance(service, poses, clock, 0.2)
+        poses.observe_state('r1', {'odom_pose': {'x': 9, 'y': 9, 'yaw': 0.4,
+            'stamp': clock.now + stamp_delta}})
+        await service.sample()
+        await advance(service, poses, clock, 0.4)
+
+    asyncio.run(run())
+    assert service.view()['recording'] is None
+    assert service.view()['pending'][0]['reason'] == 'odom_reset'
+    assert service.view()['pending'][0]['polyline'] == [[10, 20], [10, 20.2]]
+    assert store.draft_view() == draft
+
+
+@pytest.mark.parametrize('action', ['start', 'place', 'confirm'])
+def test_normal_teach_cannot_write_operational_coordinates_into_survey_draft(action):
+    from test_teach import _service, _drive
+    service, poses, store, _clock = _service()
+    result = None
+    if action == 'confirm':
+        async def run():
+            await service.start('rosy_60', 'bob')
+            await _drive(service, poses, [(0.2, 0)])
+            return await service.stop('bob')
+        result = asyncio.run(run())
+    survey = setup()[4]['map']
+    draft = store.save_draft(SiteMap.model_validate(survey), expected_revision=None, principal_id='bob')
+    with pytest.raises(TeachError) as error:
+        if action == 'start':
+            asyncio.run(service.start('rosy_60', 'bob'))
+        elif action == 'place':
+            asyncio.run(service.place('rosy_60', name='Wrong frame', kind='park',
+                expected_revision=draft['revision'], principal_id='bob'))
+        else:
+            confirm(service, result, draft['revision'])
+    assert error.value.code == 'TEACH_MAP_CHANGED'
+    assert store.draft_view() == draft
