@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
 - 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
 - 2026-10-12 · 4ebcb80c86 · fix: pinned OpenCode CLI compatibility
 - 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
 - 2026-10-12 · uncommitted · fix: sandbox PWD preflight
-- 2026-10-12 · c21b8bea0c · fix: deliberation host admission
