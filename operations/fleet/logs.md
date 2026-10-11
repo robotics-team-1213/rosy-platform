@@ -3226,6 +3226,24 @@
 - 검증: `fb2e5e07d3` 원격 212 passed / NEW 0, 독립 소스 리뷰 승인. 기존 execution wheel dependency와 source image COPY/allowlist를 함께 검증했고 Fleet wheel에 execution을 중복 포장하지 않는다.
 - gate: 소스·설치 구성. main 착지·push/CI·실제 Docker build·배포·장치/현장 정확도는 각각 별도 증거다.
 
+## 2026-10-11 · 0b14fa02b0 · 책임 추출·현재 판단·사람 인수·팀 알림
+
+- 변경: 모델 원장 dispatcher는 Fleet, 순수 목표/진행 규칙은 execution/site에 두었다. D-660 현재 읽기 판단과 자연 해소 근거, D-661 이름 있는 case/revision 인수 및 기본 OFF 알림 outbox를 기존 DB/auth/CORE 경계에 연결했다.
+- 증거: 원격 추출114/작업147/판단99/인수127/알림149 passed, 각각 NEW0. 최종 설치 및 독립 평가 보강 11 passed/NEW0; 독립 검토의 경쟁/만료/평가 결함 수정. 상세: docs/validation/responsibility-boundaries-2026-10-11/implementation.md.
+- gate 변화: SOURCE/원격 fake·설치 계약. 실제 Discord 준비·수신·현장 정답/한계는 팀 담당이며 운영 수용 HOLD. 실제 모델 토론·provider 호출·배포·motion 없음.
+
+## 2026-10-11 · 757226957d · 팀 사건 조정 책임 하위 패키지
+
+- 변경: D-661 알림·이름 있는 사람 인수를 `fleet/incidents`로 그대로 이동하고 직접 호출자·설치 검사·문서를 갱신했다. 판단·resolver·장치 admission은 기존 소유자에 유지한다.
+- 증거: 독립 responsibility_review 경계 확인. physical-line 실측 부모51933/incidents360, 예산·+150 유지. 최종 원격 terminal과 착지는 docs/validation/responsibility-boundaries-2026-10-11/landing.md에 후속 기록한다.
+- gate 변화: 경계 분리만. 실제 팀 채널·현장 수용·모델 토론 HOLD 유지.
+
+## 2026-10-11 · 7afb0e2c4f · 사건 조정 분리 최종 검증과 착지
+
+- 변경: 판단·resolver·장치 명령 소유권을 보존하고 incidents 경계·직접 호출자·설치 계약을 최종 통합했다.
+- 증거: AI PC 원격493 passed/NEW0, 독립 책임·설치 검토 통과, tools/land.py 로컬 main FF `7afb0e2c4f`. 실제 범위·로그·후속 관문은 docs/validation/responsibility-boundaries-2026-10-11/landing.md.
+- gate 변화: 로컬 소스 통합 완료. 새 팀 Discord와 독립 현장 정답 수용은 팀 담당 HOLD; 실제 provider/발송/배포/motion 없음.
+
 ## 2026-10-11 · 89c9b79bbd · fix(test): 추적 응답 fixture 설치 뒤 화면 초기화
 
 - 문제: 좌표 수명 브라우저 시험은 로그인 뒤에 tracking 응답을 가로챘다. 그 전에 실제 미설정404를 받으면 tracking view가 unavailable을 기억하므로 fixture가 있어도 표가 숨겨져 CI가 간헐 실패했다.

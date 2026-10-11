@@ -171,7 +171,7 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`만 포함한다. 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
 
-D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제 원장 모델 도구 구현은 `fleet.server.model_feedback_dispatch`, 순수 목표 검증은 `rosy.execution.site.goal_evidence`, 기존 시각·신선도·step 상태 투영은 `rosy.execution.site.workflow`가 소유한다. Fleet는 기존 execution wheel dependency를 사용하고 execution 파일을 중복 포장하지 않는다. site source image도 해당 source closure를 포함한다. 다른 Mission 전이·복구 규칙 및 D-648 단계 4는 후속으로 유지한다. 소스/설치 검증과 실제 이미지 빌드·배포·현장 정확도는 별도다.
+D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제 원장 모델 도구 구현은 `fleet.server.model_feedback_dispatch`, 순수 목표 검증은 `rosy.execution.site.goal_evidence`, 기존 시각·신선도·step 상태 투영은 `rosy.execution.site.workflow`가 소유한다. D-656 후속 통합은 Fleet가 제공하는 일관된 snapshot의 읽기 진행 계산 전체를 같은 workflow의 `project_progress`에 둔다. DB 전이·auth·claim·admission·transport는 Fleet에 남긴다. Fleet는 기존 execution wheel dependency를 사용하고 execution 파일을 중복 포장하지 않는다. site source image도 해당 source closure를 포함한다. 다른 Mission 전이·복구 규칙 및 D-648 단계 4는 후속으로 유지한다. 소스/설치 검증과 실제 이미지 빌드·배포·현장 정확도는 별도다.
 
 사용자의 후속 처리 요청으로 `project_progress` 전체 계산도 같은 workflow에 분리했다. Fleet adapter가 하나의 transaction에서 읽은 snapshot과 clock을 제공하고 execution은 기존 wire 결과를 투영한다. 단독 helper import는 stdlib만 필요하며 projection 호출 시 기존 foundation schema를 불러온다. 이는 DB 상태 전이·복구나 D-660~D-662 운영 판단 기능의 승인/착지를 대신하지 않는다.
 

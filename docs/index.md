@@ -222,6 +222,9 @@
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 | D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
 | D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
 
 ## 계획·결과 문서
 
@@ -321,8 +324,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
+- 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
 - 2026-10-11 · fb2e5e07d3 · D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
 - 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 계약 (D-659)
 - 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
-- 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
-- 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리

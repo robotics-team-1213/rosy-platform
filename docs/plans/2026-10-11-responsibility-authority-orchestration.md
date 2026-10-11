@@ -8,7 +8,7 @@
 
 **Tech Stack:** 기존 Python·표준 라이브러리·SQLite/httpx/pydantic·ROS-free 계약·wheel/sdist source mapping·원격 pytest. 새 범용 orchestration framework나 dependency는 추가하지 않는다.
 
-**Status:** 책임 계약 수용 및 후속 계획. 구현 착수 기준은 작업 당시 HEAD다. 현재 확인 기준 `063676cbcb`는 D-652 착지 `a159625a0`를 포함한다. D-652 공통 필요성/CORE adapter/Fleet·Situation shadow/설치 구성은 구현됐고 원격 mapped 5,139 passed/217 skipped/NEW 0 기록이 있다. 전체 CI·실제 이미지 빌드·현장 정확도/운영 소비는 별도다. 아래 후속 작업과 예정 파일은 미착수이며 공개 API가 아니다.
+**Status:** 책임 추출과 D-660~D-662의 판단 기록·사람 인수·알림·독립 checker를 구현하고 원격 검증했다. 실제 소유 경로와 단위별 증거는 [구현 기록](../validation/responsibility-boundaries-2026-10-11/implementation.md)을 따른다. 공개 API는 API Reference에 기록한 필드만 사용한다. 팀은 새 Discord 서버/채널 준비와 현장 정답 검수·한계 확정을 맡는다. 실제 채널 수신·현장 수용이 없는 단계 3~5는 HOLD이며, 단계 6은 선행 수용 뒤 구현한다. 전체 CI·실제 이미지 빌드·배포·현장 활성화는 별도다.
 
 ---
 
@@ -16,13 +16,13 @@
 
 | 단계 | 산출물과 단일 책임 | 완료 조건 | 현재 상태 |
 |---|---|---|---|
-| 0 | 실제 producer/consumer·권한·사건 owner 목록 | 각 판단/쓰기/종료의 owner와 설치 소비 확인 | D-652 범위 완료, 후속 범위 재점검 필요 |
-| 1 | 모델 원장 도구의 현장 어댑터 분리 | Decision 핵심 Fleet import 제거, 동일 transaction/fence/설치 보존 | 미착수 |
-| 2 | 순수 작업 진행·목표 근거 규칙 추출 | 계산만 이동, 현재 store/admission/장치 호출 유지 | 미착수 |
-| 3 | 현재 사건·비개입·보류·owner·결과·화면 연결 | 신선도/기한/경쟁/자연 해소, 단일 종료 writer 확인 | 내부 shadow 외 미착수 |
-| 4 | 외부 알림·인증된 사람 인수 | outbox→수신→Console 인수→결과 readback | 미착수 |
-| 5 | 독립 중앙 판단 수용 | 정상 분모·도메인 정답·지연/정확도 한계 확정 및 통과 | 미착수 |
-| 6 | 제한 모델 런과 개선 후보 | 0~5 receipt 뒤 후보 전용 토론·독립 비교·승격/rollback | 미착수 |
+| 0 | 실제 producer/consumer·권한·사건 owner 목록 | 각 판단/쓰기/종료의 owner와 설치 소비 확인 | 소스 목록 확정; 현장·문 capability 미확인 |
+| 1 | 모델 원장 도구의 현장 어댑터 분리 | Decision 핵심 Fleet import 제거, 동일 transaction/fence/설치 보존 | 소스·원격 설치 계약 완료 |
+| 2 | 순수 작업 진행·목표 근거 규칙 추출 | 계산만 이동, 현재 store/admission/장치 호출 유지 | 소스·원격 설치 계약 완료; 실물/ARM64 미확인 |
+| 3 | 현재 사건·비개입·보류·owner·결과·화면 연결 | 신선도/기한/경쟁/자연 해소, 단일 종료 writer 확인 | D-660 읽기 판단·종료 근거, D-661 이름 있는 인수 구현; 운영 수용 HOLD |
+| 4 | 외부 알림·인증된 사람 인수 | outbox→수신→Console 인수→결과 readback | D-661 기본 OFF·3채널 fake 시험 완료; 팀 Discord 준비/실제 수신 HOLD |
+| 5 | 독립 중앙 판단 수용 | 정상 분모·도메인 정답·지연/정확도 한계 확정 및 통과 | D-662 offline checker 구현; 팀 정답/한계 검수 HOLD |
+| 6 | 제한 모델 런과 개선 후보 | 0~5 receipt 뒤 후보 전용 토론·독립 비교·승격/rollback | 선행 실제 수용 대기 HOLD; 구현/provider 호출 미착수 |
 
 단계 1/2는 의미를 보존하는 추출이다. 단계 3부터의 새 저장/공개 필드/정책은 해당 D-642~D-646의 세부 수용 뒤 구현한다. 5단계가 준비되기 전 운영 provider 호출을 연결하지 않는다. 문서 검증 통과는 이 관문들의 런타임 완료가 아니다.
 
@@ -100,7 +100,7 @@ python test/known_failures.py <session>/logs/<unit>-green/run-1.txt
 
 ## Task 4: 외부 알림과 인증된 사람 인수
 
-**Detailed plan:** [중앙 판단 단계](2026-10-11-fleet-central-judgment-stages.md)의 D-645 절. **Create proposed:** `operations/fleet/fleet/notifications.py`, `operations/fleet/test/test_notifications.py` (기존 adapter가 있으면 재사용).
+**Detailed plan:** [중앙 판단 단계](2026-10-11-fleet-central-judgment-stages.md)의 D-645 절. **Create proposed:** `operations/fleet/fleet/incidents/notifications.py`, `operations/fleet/test/test_notifications.py` (기존 adapter가 있으면 재사용).
 
 **Read/Modify:** 실제 사건 owner의 transaction·store/service, 기존 Console 인증·inbox·설정 및 채널별 비공개 설정 template.
 
@@ -127,7 +127,7 @@ python test/known_failures.py <session>/logs/<unit>-green/run-1.txt
 
 **Create proposed:** `operations/decision/src/rosy/decision/{deliberation,cli_deliberation}.py`, `operations/fleet/test/{test_deliberation,test_cli_deliberation,test_deliberation_journal,test_deliberation_replay}.py`.
 
-**Reuse:** `model_tool_contract.py`, `model_tool_catalog.py`, Task 1의 Fleet 현장 dispatcher, 기존 `mission_model_turn_{store,scheduler,worker}.py`, incident feedback/replay. D-640 계획에 남아 있는 이전 dispatcher 경로는 Task 1 착지 시 새 namespace로 갱신한다.
+**Reuse:** `model_tool_contract.py`, `model_tool_catalog.py`, `operations/fleet/fleet/server/model_feedback_dispatch.py`, 기존 `mission_model_turn_{store,scheduler,worker}.py`, incident feedback/replay. D-640의 현장 dispatcher 경로도 같은 namespace를 사용한다.
 
 1. 0~5 선행 receipt가 준비된 뒤 구현한다. 규칙/검수 사례/빠른 모델과 미해결 문제의 유한 토론을 구별한다. 한 문제 활성 런 하나, 전체 deadline/횟수/비용 제한·취소·재시작·출력 불명·상충·늦은 결과를 fake adapter/clock으로 검증한다.
 2. 실제 CLI/model ID·버전·권한·지원 기능을 확인하고 승인 프로파일을 고정한다. 프로세스/네트워크/파일 권한 제한과 호스트 hooks/MCP/메모리 비상속을 검증한다. 정상 작업/장치 stop은 모델을 기다리지 않는다.
