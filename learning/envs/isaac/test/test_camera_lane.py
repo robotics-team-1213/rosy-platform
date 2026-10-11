@@ -36,11 +36,11 @@ def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
 @pytest.mark.parametrize('index', [0, 2, 3])
 def test_camera_route_guide_uses_nonzero_tangent_at_duplicates_and_route_end(index):
     from run_map_rl import camera_route_guide
-    task = SimpleNamespace(points=((0., 0.), (0., 0.), (.3, 0.), (.3, 0.)),
+    task = SimpleNamespace(points=((0., 0.), (0., 0.), (0., .3), (0., .3)),
                            distance=(0., 0., .3, .3), index=index)
     guide = camera_route_guide(task, (*task.points[index], 0.),
                                dict(deviation_m=0., progress_m=task.distance[index]), 1.)
-    assert guide[3] == pytest.approx(0.)
+    assert guide[3] == pytest.approx(90.)
 
 
 def test_missing_camera_observation_is_not_a_learning_state():
