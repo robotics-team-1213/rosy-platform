@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 484ce96805 · fix(isaac): 지도 prior를 회전 승인으로 사용하지 않기
 - 2026-10-12 · fa75953dfe · feat(isaac): native camera containment 관측 연결
 - 2026-10-12 · fff1b93a6 · fix(isaac): 콘솔 admission 오류와 R19 픽셀 재현
 - 2026-10-12 · 25add33f95 · fix(isaac): 실패 픽셀 보존과 네 방향 진단 계속
 - 2026-10-12 · eae0f59da0 · test(isaac): 카메라 RL 업데이트와 진단 실패 기록
-- 2026-10-12 · cb0ee3cd51 · fix(isaac): native scan을 CORE 몸체 경로 판정에 연결
