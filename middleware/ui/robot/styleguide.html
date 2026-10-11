@@ -272,11 +272,16 @@
       <p class="rule">아이콘 단독도 이름을 유지합니다. 마우스를 올리거나 Tab으로 이동하면 설명이 보이고 Escape로 닫습니다. 선택은 페이지·탭·토글 각각의 상태로 표현합니다.</p>
       <nav class="demo icon-states" aria-label="아이콘 상태 견본">
         <a class="ui-disclosure-row" href="#semantic-icons" data-action-icon="fleet" data-icon-only aria-current="page">관제</a>
-        <ui-button kind="segment" type="button" data-action-icon="history" data-icon-only aria-selected="true" role="tab">기록</ui-button>
+        <div class="icon-tab-demo" role="tablist" aria-label="맥락 선택 견본">
+          <ui-button id="icon-history-tab" kind="segment" type="button" data-action-icon="history" data-icon-only aria-selected="true" role="tab" aria-controls="icon-history-panel">기록</ui-button>
+          <ui-button id="icon-tools-tab" kind="segment" type="button" data-action-icon="tools" data-icon-only aria-selected="false" role="tab" aria-controls="icon-tools-panel" tabindex="-1">운영 도구</ui-button>
+        </div>
         <ui-button kind="toggle" type="button" data-action-icon="notification" data-icon-only aria-pressed="true">알림 보기</ui-button>
         <ui-button id="icon-focus-demo" kind="quiet" type="button" data-action-icon="refresh" data-icon-only data-ui-tooltip="Tab으로 이동해 현재 내용 다시 조회 설명을 확인합니다">새로고침</ui-button>
         <ui-button kind="quiet" type="button" data-action-icon="download" data-icon-only disabled reason="이 견본에는 내보낼 결과가 없습니다">내보내기</ui-button>
       </nav>
+      <p id="icon-history-panel" role="tabpanel" aria-labelledby="icon-history-tab">견본 기록 · 현재 개입과 과거 처리 결과를 구분합니다.</p>
+      <p id="icon-tools-panel" role="tabpanel" aria-labelledby="icon-tools-tab" hidden>견본 운영 도구 · 실제 장비의 설정을 변경하지 않습니다.</p>
       <p class="gate">게이트: <code>test_semantic_icons_browser.py</code> — 이름·선택·focus 설명·48px·비활성 사유. 이 견본은 장치 요청을 보내지 않습니다.</p>
     </section>
 

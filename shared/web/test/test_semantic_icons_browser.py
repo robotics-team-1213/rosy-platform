@@ -81,6 +81,12 @@ def test_catalog_names_geometry_states_and_keyboard_tooltip(page, theme, width, 
     page.keyboard.press("Tab")
     assert page.get_by_role("tab", name="기록", exact=True).evaluate("node => node === document.activeElement")
     assert tooltip.inner_text() == "기록"
+    page.keyboard.press("ArrowRight")
+    tools = page.get_by_role("tab", name="운영 도구", exact=True)
+    assert tools.get_attribute("aria-selected") == "true"
+    assert tools.evaluate("node => node === document.activeElement")
+    assert page.locator("#icon-history-panel").is_hidden()
+    assert page.locator("#icon-tools-panel").is_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert not errors
 
