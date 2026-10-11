@@ -279,8 +279,8 @@ textarea.ui-field:focus-visible {
 
 ui-button[kind="irreversible"] span {
   display: block;
-  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--mono);
-  letter-spacing: var(--track-wide);
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 ui-button[kind="irreversible"] small {
