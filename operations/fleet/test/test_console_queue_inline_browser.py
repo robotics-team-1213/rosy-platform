@@ -344,6 +344,11 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
 
 def _shot(page, name, *, full_page=False):
     if out := os.environ.get("ROSY_SHOT_DIR"):
+        if full_page:
+            page.evaluate("document.activeElement?.blur(); window.scrollTo(0, 0)")
+            page.evaluate("document.fonts.ready")
+            page.clock.run_for(100)
+            assert page.evaluate("window.scrollY") == 0
         page.screenshot(path=str(Path(out) / name), full_page=full_page)
 
 
