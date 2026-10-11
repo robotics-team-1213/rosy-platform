@@ -44,6 +44,7 @@ class ChannelRequests:
         if type(max_rows) is not int or not 1 <= max_rows <= 1000:
             raise ValueError("invalid channel journal capacity")
         self.path, self.config, self.accounts, self.max_rows = Path(path), config, accounts, max_rows
+        self.reply_outbox = None
         if any(not re.fullmatch(r"[0-9]{17,20}", user) or accounts.get(principal) != "operator"
                for user, principal in config.users.items()):
             raise ValueError("Discord users require currently registered operators")
@@ -81,6 +82,8 @@ class ChannelRequests:
                 receipt = json.loads(old[1])
                 if receipt["principal_id"] != principal:
                     raise HTTPException(403, detail="CHANNEL_OWNER_CHANGED")
+                if self.reply_outbox is not None:
+                    self.reply_outbox.received(conn, receipt)
                 return receipt
             if conn.execute("SELECT COUNT(*) FROM fleet_channel_requests").fetchone()[0] >= self.max_rows:
                 raise HTTPException(503, detail="CHANNEL_JOURNAL_FULL")
@@ -92,6 +95,8 @@ class ChannelRequests:
                 received_at=datetime.now(timezone.utc).isoformat()).model_dump()
             conn.execute("INSERT INTO fleet_channel_requests VALUES (?, ?, ?, ?, ?, ?)",
                          (*scope, digest, principal, json.dumps(receipt, ensure_ascii=False)))
+            if self.reply_outbox is not None:
+                self.reply_outbox.received(conn, receipt)
         return receipt
 
     def read(self, principal):

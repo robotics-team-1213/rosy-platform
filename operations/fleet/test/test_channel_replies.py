@@ -14,7 +14,7 @@ def fixture(tmp_path):
     config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT,
                            transport_key="test-key-" * 5, users={USER: "op"})
     journal = ChannelRequests(tmp_path / "tasks.sqlite", config, accounts)
-    outbox = ChannelReplyOutbox(journal)
+    outbox = ChannelReplyOutbox(journal, clock=lambda: 1000)
     journal.reply_outbox = outbox
     envelope = DiscordRequestEnvelope(guild_id=GUILD, channel_id=CHANNEL, author_id=USER,
                                       message_id=MESSAGE, mentions=[BOT], author_bot=False,
