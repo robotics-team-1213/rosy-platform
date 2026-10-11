@@ -28,6 +28,8 @@ def main():
     parser.add_argument('--train-episodes', type=int, default=6)
     parser.add_argument('--time-limit', type=float, default=400.)
     parser.add_argument('--source-revision', required=True)
+    parser.add_argument('--policy-file', type=Path, help='fixed saved policy; evaluate four initial directions')
+    parser.add_argument('--record-video', action='store_true', help='record actual headless Isaac camera frames')
     args = parser.parse_args()
     if not 1 <= args.train_episodes <= 20 or not 0 < args.time_limit <= 600 or not math.isfinite(args.time_limit):
         raise ValueError('bounded episode count and time limit required')
@@ -36,6 +38,14 @@ def main():
     if os.environ.get('ROSY_CONFIG') or os.environ.get('ROSY_NAMESPACE'):
         raise ValueError('diagnostic refuses operational CORE environment')
     check_urdf(args.urdf, 'pinky', allow_package=False)
+    saved = None
+    policy_bytes = None
+    if args.policy_file:
+        with args.policy_file.open('rb') as policy_input:
+            policy_bytes = policy_input.read(65537)
+        if len(policy_bytes) > 65536:
+            raise ValueError('bounded saved policy required')
+        saved = QPolicy.restore(json.loads(policy_bytes))
     passive = passive_caster_joints(ET.parse(args.urdf).getroot())
     output = validate_output_path(args.output_dir / 'result.json').parent
     output.mkdir(parents=True, exist_ok=False)
@@ -48,6 +58,8 @@ def main():
                          'anti_aliasing': 0, 'extra_args': ['--/app/extensions/excluded=["isaacsim.gui.menu"]']})
     owner = None
     stop_robot = None
+    recorder = None
+    camera = None
     summary = dict(source_revision=args.source_revision, map_sha256=track['source_sha256'],
                    segments=track['segments'], algorithm='CPU residual Q-learning, pursuit yaw gain',
                    operating_acceptance='HOLD', episodes=[])
@@ -103,7 +115,22 @@ def main():
         paint.CreateDisplayColorAttr([Gf.Vec3f(1.)])
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
+        if args.record_video:
+            from isaacsim.sensors.camera import Camera
+            from pxr import UsdLux
+            light = UsdLux.DomeLight.Define(stage, '/World/RecordingLight')
+            light.CreateIntensityAttr(1000.)
+            camera = Camera(prim_path='/World/RecordingCamera', resolution=(960, 540))
+            camera.set_world_pose(position=np.array([0., 0., 2.]),
+                                  orientation=np.array([1., 0., 0., 0.]), camera_axes='usd')
+            camera.set_focal_length(20.)
+            camera.set_horizontal_aperture(36.)
         world.reset()
+        if camera is not None:
+            camera.initialize()
+            summary['recording'] = dict(kind='native Isaac camera RGBA', resolution=[960, 540],
+                sample_sim_s=.2, encoded_fps=25, playback_speed=5., camera_axes='usd',
+                position=[0., 0., 2.], orientation=[1., 0., 0., 0.])
         stiffness, damping = robot.get_articulation_controller().get_gains()
         summary['physics'] = dict(dt_s=world.get_physics_dt(), restitution=0.,
                                  dofs=robot.dof_names, stiffness=stiffness.tolist(), damping=damping.tolist())
@@ -112,7 +139,10 @@ def main():
                                       wheel_base=contract['wheel_distance'], max_linear_speed=.06,
                                       max_angular_speed=.8)
         owner = SimulationOwner()
-        policy = QPolicy(seed=17)
+        policy = saved or QPolicy(seed=17)
+        if saved is not None:
+            (output / 'policy.json').write_bytes(policy_bytes)
+            summary['evaluation_only'] = True
         frame = 0
         epoch = 0
         power = type('DiagnosticPower', (), {'on_activity': lambda self, source: None})()
@@ -138,7 +168,7 @@ def main():
             nonlocal frame
             if not app.is_running():
                 raise RuntimeError('SDK stopped before task result')
-            world.step(render=frame % 30 == 0)
+            world.step(render=frame % (48 if recorder is not None else 30) == 0)
             frame += 1
 
         def physical_stop():
@@ -167,8 +197,11 @@ def main():
         stop_robot = physical_stop
         summary['initial_stop'] = physical_stop()
         baseline = None
-        for phase, seed in [('baseline', 101), *[('train', i) for i in range(args.train_episodes)],
-                            ('eval', 202), ('eval', 303)]:
+        phases = ([('eval', 707, 0.), ('eval', 808, math.pi / 2),
+                   ('eval', 909, math.pi), ('eval', 1001, -math.pi / 2)] if saved is not None else
+                  [('baseline', 101, 0.), *[('train', i, 0.) for i in range(args.train_episodes)],
+                   ('eval', 202, 0.), ('eval', 303, 0.)])
+        for phase, seed, heading_offset in phases:
             physical_stop()
             rng = random.Random(seed)
             route = track['points']
@@ -178,6 +211,7 @@ def main():
                 route = route[start:start + 100]
             heading = math.atan2(route[1][1] - route[0][1], route[1][0] - route[0][0])
             heading += rng.uniform(-.025, .025)
+            heading += heading_offset
             robot.set_world_pose(position=np.array([*route[0], .005]),
                                  orientation=np.array([math.cos(heading / 2), 0., 0., math.sin(heading / 2)]))
             robot.set_world_velocity(np.zeros(6))
@@ -193,6 +227,7 @@ def main():
             task = MapTask(route, half_size=(scene.size_x / 2, scene.size_y / 2),
                            time_limit=min(60., args.time_limit) if phase == 'train' else args.time_limit)
             start_time = world.current_time
+            initial_pose = read_pose()
             wall_start = time.monotonic()
             previous = None
             frozen = policy.export() if phase == 'eval' else None
@@ -200,9 +235,24 @@ def main():
                     value != 0. for values in policy.table.values() for value in values)):
                 raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
             learned_steps = 0
+            if camera is not None and phase == 'eval':
+                from native_recording import NativeRecorder
+                # Initialize the native render product before accepting episode frames.
+                for _ in range(20):
+                    world.render()
+                pixels = camera.get_rgba()
+                if pixels.shape != (540, 960, 4) or np.ptp(pixels[:, :, :3]) < 20:
+                    raise RuntimeError('native recording camera has no visible image')
+                recorder = NativeRecorder(output / f'isaac-eval-{seed}.mp4')
             with (output / f'trace-{epoch}-{phase}-{seed}.jsonl').open('w') as trace:
                 while True:
                     pose = read_pose()
+                    if recorder is not None and (recorder.frames == 0 or (frame - 1) % 48 == 0):
+                        image_frame = camera.get_current_frame()
+                        recorder.write(camera.get_rgba(),
+                            render_frame=image_frame['rendering_frame'],
+                            render_time=float(image_frame['rendering_time']),
+                            sim_s=world.current_time - start_time, pose=pose)
                     now = time.monotonic()
                     elapsed = world.current_time - start_time
                     result = task.observe(*pose, elapsed)
@@ -234,7 +284,20 @@ def main():
                     step()
             episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
                            sim_s=elapsed, wall_s=time.monotonic() - wall_start,
+                           initial_heading_offset_rad=heading_offset, initial_pose=initial_pose,
                            learned_state_steps=learned_steps, stop=physical_stop())
+            if recorder is not None:
+                # Record the true completed stop even when it falls between sample ticks.
+                for _ in range(2):
+                    world.render()
+                image_frame = camera.get_current_frame()
+                recorder.write(camera.get_rgba(), render_frame=image_frame['rendering_frame'],
+                    render_time=float(image_frame['rendering_time']),
+                    sim_s=world.current_time - start_time, pose=read_pose())
+                recorder.close()
+                episode['video'] = dict(file=recorder.path.name, frames=recorder.frames,
+                    sha256=hashlib.sha256(recorder.path.read_bytes()).hexdigest())
+                recorder = None
             summary['episodes'].append(episode)
             print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'baseline':
@@ -248,7 +311,7 @@ def main():
         summary['updates'] = policy.updates
         summary['policy_sha256'] = hashlib.sha256((output / 'policy.json').read_bytes()).hexdigest()
         summary['full_map_complete'] = all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval')
-        summary['baseline_complete'] = baseline['complete']
+        summary['baseline_complete'] = baseline['complete'] if baseline is not None else None
         summary['final_stop'] = physical_stop()
         (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
         print('RESULT ' + json.dumps(summary), flush=True)
@@ -260,15 +323,30 @@ def main():
         raise
     finally:
         try:
-            if stop_robot is not None:
-                summary['cleanup_stop'] = stop_robot()
-        except Exception as exc:
-            summary['cleanup_error'] = str(exc)
-            raise
+            cleanup_error = None
+            try:
+                if stop_robot is not None:
+                    summary['cleanup_stop'] = stop_robot()
+            except Exception as exc:
+                summary['cleanup_error'] = str(exc)
+                cleanup_error = exc
+            try:
+                if recorder is not None:
+                    recorder.close()
+            except Exception as exc:
+                summary['video_cleanup_error'] = str(exc)
+                cleanup_error = cleanup_error or exc
+            if cleanup_error is not None:
+                raise cleanup_error
         finally:
             try:
-                from sdk_entrypoint import close_sdk
-                close_sdk(app, headless=True)
+                try:
+                    if camera is not None:
+                        camera.pause()
+                        camera.destroy()
+                finally:
+                    from sdk_entrypoint import close_sdk
+                    close_sdk(app, headless=True)
             except Exception as exc:
                 summary['sdk_shutdown_error'] = str(exc)
                 raise
