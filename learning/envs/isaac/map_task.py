@@ -142,6 +142,31 @@ class QPolicy:
         return dict(updates=self.updates, gains=self.gains,
                     q={','.join(map(str, state)): values[:] for state, values in sorted(self.table.items())})
 
+    @classmethod
+    def restore(cls, data):
+        if not isinstance(data, dict) or set(data) != {'updates', 'gains', 'q'}:
+            raise ValueError('saved policy fields differ')
+        if type(data['updates']) is not int or not 0 < data['updates'] <= 10**9:
+            raise ValueError('measured policy updates required')
+        if not isinstance(data['gains'], (list, tuple)) or not all(
+                type(v) in (int, float) for v in data['gains']) or tuple(data['gains']) != cls.gains:
+            raise ValueError('saved yaw gains differ')
+        table = data['q']
+        if not isinstance(table, dict) or not 0 < len(table) <= 21:
+            raise ValueError('bounded saved state table required')
+        policy = cls(seed=17)
+        for key, values in table.items():
+            if not isinstance(key, str) or key not in {f'{a},{b}' for a in range(7) for b in range(3)}:
+                raise ValueError('saved state outside observation bins')
+            if not isinstance(values, list) or len(values) != len(cls.gains) or not all(
+                    type(v) in (int, float) and math.isfinite(v) for v in values):
+                raise ValueError('finite action Q values required')
+            policy.table[tuple(map(int, key.split(',')))] = values[:]
+        if not any(v != 0. for values in policy.table.values() for v in values):
+            raise ValueError('untrained zero policy refused')
+        policy.updates = data['updates']
+        return policy
+
 
 class SimulationOwner:
     """Private in-process diagnostic owner; never an operational POLICY API."""

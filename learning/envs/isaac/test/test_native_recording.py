@@ -42,13 +42,29 @@ def test_native_frames_are_tied_to_renderer_and_encoder_failure_is_not_success(t
     monkeypatch.setattr(native_recording.subprocess, 'Popen', lambda *args, **kwargs: process)
     recorder = native_recording.NativeRecorder(tmp_path / 'test.mp4', width=2, height=2)
     pixels = np.arange(16, dtype=np.uint8).reshape(2, 2, 4)
-    recorder.write(pixels, render_frame=4, render_time=1., sim_s=0., pose=[0.] * 5)
+    frame = dict(referenceTimeNumerator=4, referenceTimeDenominator=1)
+    recorder.write(pixels, render_frame=frame, render_time=1., sim_s=0., pose=[0.] * 5)
     with pytest.raises(ValueError, match='fresh'):
-        recorder.write(pixels, render_frame=4, render_time=1., sim_s=.2, pose=[0.] * 5)
+        recorder.write(pixels, render_frame=frame, render_time=1., sim_s=.2, pose=[0.] * 5)
     with pytest.raises(ValueError, match='frame'):
-        recorder.write(pixels[:1], render_frame=5, render_time=1.2, sim_s=.2, pose=[0.] * 5)
+        recorder.write(pixels[:1], render_frame=frame, render_time=1.2, sim_s=.2, pose=[0.] * 5)
     with pytest.raises(RuntimeError, match='encoder'):
         recorder.close()
     receipt = json.loads((tmp_path / 'test.frames.jsonl').read_text().splitlines()[0])
-    assert receipt['render_frame'] == 4 and receipt['sim_s'] == 0.
+    assert receipt['render_frame'] == frame and receipt['sim_s'] == 0.
     assert receipt['pose'] == [0.] * 5
+
+
+def test_encoder_is_reaped_even_when_pipe_close_raises(tmp_path, monkeypatch):
+    import native_recording
+    waited = []
+    class Pipe:
+        def close(self):
+            raise BrokenPipeError('encoder stopped')
+    process = SimpleNamespace(stdin=Pipe(), wait=lambda timeout: waited.append(timeout) or 1)
+    monkeypatch.setattr(native_recording.subprocess, 'Popen', lambda *args, **kwargs: process)
+    recorder = native_recording.NativeRecorder(tmp_path / 'failed.mp4')
+    with pytest.raises(RuntimeError, match='encoder'):
+        recorder.close()
+    assert waited == [60]
+    assert recorder.receipts.closed and recorder.errors.closed
