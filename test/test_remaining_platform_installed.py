@@ -136,7 +136,8 @@ print('installed namespace, resources and HTTP guards verified')
         run(['-m', 'pip', 'install', '--no-deps', '--no-index', '--target', str(native),
              *dependencies], tmp_path)
         script = ROOT / 'deploy/robot/pinky_pro/image/install-motion-contracts.sh'
-        environment = {**os.environ, 'TMPDIR': str(tmp_path)}
+        environment = {**os.environ, 'TMPDIR': str(tmp_path),
+                       'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']}
         command = ['bash', str(script), str(staging), str(tmp_path / 'native')]
         result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
