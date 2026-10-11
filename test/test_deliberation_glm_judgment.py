@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 
 import pytest
 
@@ -21,7 +20,7 @@ def fixture(*, prior=False):
         payload = opinion(problem, previous)
         step = dict(tool_name='get_incident_status', arguments={}, evidence_ids=['e1'])
         payload.update(verdict='reobserve', next_step=step,
-                       success_check={**step, 'expected_facts': {'line_state': 'clear'}})
+                       success_check={**step, 'expected_facts': {'state': 'normal'}})
         pairs = ((previous, judgment(problem, previous, payload)),)
     _, raw = prepare_request(problem, bound, pairs, 30, budget_usd=0)
     return problem, bound, raw

@@ -104,7 +104,10 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
     raw = json.dumps(incoming).encode() if change != 'oversize' else b'x' * 16385
     with gate.Gateway(path, gate.Handler) as server:
         server.timeout = 2
-        server.problem, server.body, server.token = problem(), 'trusted canonical job', 'fake-unit-token'
+        p = problem()
+        body = json.dumps({'problem': {**asdict(p), 'input_hash': p.digest},
+                           'prior': [], 'instruction': 'test'})
+        server.problem, server.body, server.token = p, body, 'fake-unit-token'
         server.deadline, server.calls = time.monotonic() + 30, 0
         server.metrics = {}
         worker = threading.Thread(target=server.handle_request, daemon=True)
@@ -117,7 +120,7 @@ def test_gateway_reconstructs_only_trusted_job_and_one_call(tmp_path, monkeypatc
         assert not worker.is_alive()
         if change in {'valid', 'stream'}:
             assert result.status == 200 and len(seen) == server.calls == 1
-            assert seen[0]['messages'][1]['content'] == 'trusted canonical job'
+            assert seen[0]['messages'][1]['content'] == body
             assert seen[0]['max_tokens'] == 1024 and seen[0]['stream'] is False
             assert 'tools' not in seen[0]
             assert b'[DONE]' in output if change == 'stream' else json.loads(output)['usage']
