@@ -105,8 +105,9 @@ def test_policy_cap_after_line_submission_preserves_curve():
     safety._policy_clock = lambda: 10.
     safety.bind_policy(lambda r: SafetyDecision(r.command_id, r.source, r.calibration_revision,
                                                10., 10.2, .02, .8, "limit"), "rev")
+    command.set_nav_twist(before, now=10., preserve_curvature=True)
     after = command.select_output(now=10.)
-    assert after.linear <= .02
+    assert 0 < after.linear <= .02
     assert after.angular / after.linear == pytest.approx(before.angular / before.linear)
 
 
@@ -139,10 +140,11 @@ def test_line_rejects_actuation_that_changes_the_checked_curve(monkeypatch):
     safety._policy_clock = lambda: 10.
     safety.bind_policy(lambda r: SafetyDecision(r.command_id, r.source, r.calibration_revision,
                                                10., 10.2, .01, .1, "limit"), "rev")
+    command.set_nav_twist(Twist(.04, .2), now=10., preserve_curvature=True)
     safety._actuation_required = True
     safety._actuation = SimpleNamespace(revision="rev", expires_at=10.2,
                                         scan_received_at=10., scan_source_at=10.,
                                         prepare=lambda *args: SimpleNamespace(
-                                            motor_linear=.01, linear=.01, angular=.1))
+                                            motor_linear=.01, linear=.01, angular=.08))
     monkeypatch.setattr(safety, "_simulation_actuation_enabled", lambda: True)
     assert command.select_output(now=10.) == Twist()
