@@ -62,6 +62,63 @@ def test_unknown_motion_and_actual_human_claim_never_reopen():
     assert core.step(3, [row]) == []
 
 
+@pytest.mark.parametrize("change", ["estop", "activity", "case", "mode", "missing"])
+def test_unknown_motion_survives_unrelated_state_and_chain_changes(change):
+    core = resolver()
+    row = _row(stuck=_stuck())
+    core.step(0, [row])
+    answer = Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")
+    core.sent(answer, 0)
+    core.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
+    if change == "estop":
+        row["state"]["safety"]["estop"] = True
+    elif change == "activity":
+        row["state"]["activity"] = "calibration"
+    elif change == "case":
+        row["state"]["line_follow"]["stuck"]["stuck_id"] = "new-case"
+    elif change == "mode":
+        row["state"]["line_follow"]["mode"] = "IR_LINE"
+    core.step(1, [] if change == "missing" else [row])
+    row["state"]["safety"]["estop"] = False
+    row["state"].pop("activity", None)
+    assert not any(isinstance(a, Answer) for a in core.step(2, [row]))
+    assert core._uncertain == {("rosy_01", "stuck-1")}
+
+
+def test_wait_observation_does_not_replace_the_actual_accepted_receipt():
+    from test_stuck_resolver_loop import _state, STUCK
+    state = _state(stuck={**STUCK, "cause": "lane_lost"})
+    state["line_follow"]["crosswalk"] = {"state": "unknown"}
+    loop, board, _robot = _setup(state)
+    loop._resolver.autonomous_robots = frozenset({"rosy_01"})
+    asyncio.run(loop.run_once())
+    assert board.view("rosy_01")["fleet_answer"]["accepted"] is True
+    assert board.answers()[-1]["decision"] == "ESCALATE"
+    assert board.answers()[-1]["tier"] == "rule"
+
+
+def test_existing_replan_hold_recovers_without_replanning_or_resetting_attempts(monkeypatch):
+    from fleet.server.trip_runner import TripError
+    runner, _store, fleet = _cycle(monkeypatch)
+    _routable(monkeypatch, runner)
+    runner.autonomous_robots = frozenset({"b"})
+    original = runner._pose_checks
+
+    async def unavailable(*_args):
+        raise TripError(422, "TRIP_POSE_UNTRUSTED")
+
+    monkeypatch.setattr(runner, "_pose_checks", unavailable)
+    _ticks(runner, fleet, n=CYCLE_PERIODS + 1)
+    live = runner._live["b"]
+    hold, tried = live.view["hold"], dict(runner.traffic._tried)
+    assert hold is not None
+    monkeypatch.setattr(runner, "_pose_checks", original)
+    _ticks(runner, fleet)
+    assert live.view["hold"] is None
+    assert live.view["detail"]["replan_confirmed_by"] == "fleet-rule"
+    assert tried["b"][1] == hold["blocked"]
+
+
 def test_auto_hold_is_audited_as_observation_not_human_ownership():
     loop, board, robot = _setup()
     loop._resolver.autonomous_robots = frozenset({"rosy_01"})
