@@ -130,6 +130,31 @@ def _raw_words(page):
     return sorted(set(RAW.findall(page.locator("main").inner_text())))
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_site, width):
+    from playwright.sync_api import expect, sync_playwright
+
+    origin, _ = fleet_site
+    with sync_playwright() as playwright:
+        browser, page, errors, posts = _login(playwright, origin)
+        try:
+            page.set_viewport_size({'width': width, 'height': 1000})
+            before = list(posts)
+            card = _card(page, 'rosy_02')
+            expect(card.locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_02#teach-heading')
+            leader = page.locator('#formation-leader').input_value()
+            card.locator('[data-open-formation]').click()
+            expect(page.locator('#context-tools')).to_be_visible()
+            expect(page.locator('#formation-form-summary')).to_be_visible()
+            assert page.locator('#formation-leader').input_value() == leader
+            assert page.locator('#formation-heading').evaluate('node => node === document.activeElement')
+            expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
+            assert posts == before and errors == []
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        finally:
+            browser.close()
+
+
 def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_site):
     """Coordinate lifetime changes content, never the table's visibility or map location."""
     from playwright.sync_api import expect, sync_playwright
