@@ -76,8 +76,7 @@ def test_record_stop_confirm_appends_a_draft_edge_and_audits():
         with pytest.raises(TeachError) as err:
             await service.start("rosy_60", "eve")
         assert err.value.code == "TEACH_BUSY" and err.value.status == 409
-        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.0, 0.5, "LOCALIZED", 0.6),
-                                      (1.5, 0.0, "DEGRADED", 0.3), (1.9, 0.0)])
+        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.9, 0.0)])
         assert [p[:2] for p in service.view()["recording"]["points"]] == [
             [0.02, 0.0], [0.5, 0.01], [1.0, 0.0], [1.9, 0.0]]
         return view, await service.stop("bob")
@@ -130,6 +129,23 @@ def test_confirm_keeps_the_draft_revision_rule():
                           drive_mode="free", speed_cap_mps=0.3, width_m=0.3, expected_revision=revision,
                           principal_id="bob")       # a refused confirm keeps the recording
     assert out["draft"]["saved_by"] == "bob" and len(out["draft"]["map"]["edges"]) == 2
+
+
+@pytest.mark.parametrize('state,bridge', [('DEGRADED', 0.3), ('UNKNOWN', 0), ('LOCALIZED', 0.6)])
+def test_lost_pose_stops_recording_without_bridging_the_unobserved_gap(state, bridge):
+    service, poses, store, _clock = _service()
+
+    async def go():
+        await service.start('rosy_60', 'bob')
+        await _drive(service, poses, [(0.5, 0), (1, 0), (1.5, 0, state, bridge), (1.9, 0)])
+
+    run(go())
+    view = service.view()
+    assert view['recording'] is None
+    assert view['pending'][0]['reason'] == 'pose_lost'
+    assert view['pending'][0]['polyline'] == [[0, 0], [1, 0]]
+    assert store.draft_view()['map'] is None
+    assert store.active()[0] == 1
 
 
 def test_stop_without_confirm_is_dropped_after_10_minutes_and_short_runs_are_refused():
