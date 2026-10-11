@@ -191,6 +191,7 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
+        page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
         expect(page.locator("#formation-leader")).to_be_disabled()
         page.locator("#formation-shape").select_option("LINE")
