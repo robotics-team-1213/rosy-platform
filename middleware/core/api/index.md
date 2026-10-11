@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
 - 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
 - 2026-10-11 · c9480b464 · docs: 지도 설정 계약 버전 정렬
 - 2026-10-11 · 5faad3583 · refactor: API holder 이전 검증
 - 2026-10-10 · d7f032f513 · test: D-620 API contracts verified
-- 2026-10-10 · 10955eeaa4 · docs: D-620 live API version alignment
