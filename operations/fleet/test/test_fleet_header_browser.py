@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = [("console", "/console"), ("install", "/console/install"),
         ("site-map", "/console/site-map"), ("cell", "/console/cell")]
-SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844), (320, 700)]
+SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844), (320, 568)]
 STUCK = {"stuck_id": "stuck-abc", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 41.0,
          "attempts": 1, "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 9.0,
          "last_answer": None, "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
@@ -138,6 +138,18 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 measured[(name, width)] = fact
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
+                assert page.locator("#development-badge").evaluate(
+                    "node => node.scrollWidth <= node.clientWidth + 1"), (name, width)
+                inbox = page.locator("#fleet-inbox").bounding_box()
+                assert inbox and inbox["height"] >= 48 and inbox["y"] + inbox["height"] <= height
+                assert h == inbox["height"] == 48 and w >= 48, (name, width, fact)
+                assert page.locator("#estop").evaluate("""node => {
+                  const style = getComputedStyle(node);
+                  return style.fontSize === '14px' && style.paddingLeft === '12px' &&
+                    style.paddingRight === '12px' &&
+                    [...node.querySelectorAll('span:not(.sr-only)')].every(
+                      label => getComputedStyle(label).fontSize === '14px');
+                }"""), (name, width)
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
@@ -157,6 +169,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert fact["header"] <= 0.2 * height, (name, width, fact)
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
+            page.locator("#fleet-inbox").click()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:

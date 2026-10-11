@@ -229,14 +229,15 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .workspace > .photo-sidebar { order: 1; }
 #editor, #pixel-main { padding-top: var(--space-3); }
 #pixel-main { position: relative; }
-#pixel-title { padding-right: calc(var(--space-6) * 4); margin-bottom: 0; }
+#pixel-title { margin-bottom: 0; }
 #pixel-workspace-mode { font-size: var(--text-label); margin-bottom: var(--space-1); }
-#pixel-reload { position: absolute; top: var(--space-3); right: var(--space-5); }
+#pixel-reload { display: flex; width: fit-content; }
 #frame-progress { margin-top: 0; }
 #object-workspace-mode { font-size: var(--text-label); }
 #review-content { display: flex; flex-direction: column; }
 #review-content > .frame-heading { order: 0; }
 #review-content > .frame-navigation { order: 1; }
+.frame-navigation { padding-block: var(--space-1); }
 #review-content > .review-layout { order: 2; }
 #review-content > .review-flow { order: 3; }
 #review-content > .preparation { order: 4; }
