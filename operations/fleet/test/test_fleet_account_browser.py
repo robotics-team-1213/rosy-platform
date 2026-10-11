@@ -71,6 +71,13 @@ def test_first_login_changes_password_before_return_and_does_not_replay_commands
     expect(page).to_have_url(origin + '/console/login?return=%2Fconsole%3Fview%3Dwork')
     assert page.request.get(origin + '/api/fleet/session').status == 403
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    for path in ('/console', '/console/install', '/console/site-map', '/console/cell'):
+        tab = page.context.new_page()
+        tab.goto(origin + path)
+        expect(tab.locator('#fleet-login')).to_have_text('비밀번호 변경')
+        expect(tab.locator('#fleet-account')).to_be_hidden()
+        expect(tab.locator('#estop')).to_be_disabled()
+        tab.close()
     page.reload()
     expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
     page.locator('[data-login=password]').fill('new-credential-123')
@@ -91,6 +98,33 @@ def test_first_login_changes_password_before_return_and_does_not_replay_commands
     assert writes == [origin + '/api/fleet/auth/login', origin + '/api/fleet/auth/change-password']
     session = page.request.get(origin + '/api/fleet/auth/session').json()
     assert session['password_change_required'] is False
+
+
+@pytest.mark.parametrize('account_page', ['alice'], indirect=True)
+def test_first_password_change_waits_for_readback_and_recovers_expired_login(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login')
+    page.locator('[data-login=login]').fill('alice')
+    page.locator('[data-login=password]').fill('alice')
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
+    page.route('**/api/fleet/auth/change-password', lambda route: route.fulfill(status=503, body='{}'))
+    page.locator('[data-login=password]').fill('new-credential-123')
+    page.locator('[data-login=confirm]').fill('new-credential-123')
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('[data-login=error]')).to_contain_text('화면을 새로고침해 계정 상태')
+    expect(page.locator('[data-login=password]')).to_have_value('')
+    expect(page.locator('[data-login=confirm]')).to_have_value('')
+    expect(page).to_have_url(origin + '/console/login')
+    page.unroute('**/api/fleet/auth/change-password')
+    page.route('**/api/fleet/auth/change-password', lambda route: route.fulfill(status=401, body='{}'))
+    page.locator('[data-login=password]').fill('new-credential-123')
+    page.locator('[data-login=confirm]').fill('new-credential-123')
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('[data-login=error]')).to_contain_text('로그인이 만료')
+    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '관제 로그인')
+    expect(page.locator('[data-login=password]')).to_have_value('')
 
 
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
