@@ -218,7 +218,8 @@ def main():
             light = UsdLux.DomeLight.Define(stage, '/World/RecordingLight')
             light.CreateIntensityAttr(1000.)
         if args.record_video:
-            camera = Camera(prim_path='/World/RecordingCamera', resolution=(960, 540))
+            # Explicit renders must refresh receipts even before physics time advances.
+            camera = Camera(prim_path='/World/RecordingCamera', resolution=(960, 540), frequency=-1)
             camera.set_world_pose(position=np.array([0., 0., 2.]),
                                   orientation=np.array([1., 0., 0., 0.]), camera_axes='usd')
             camera.set_focal_length(20.)
@@ -228,7 +229,7 @@ def main():
             from control.sensing.perception.camera_ground import ground_plane
             from isaacsim.core.utils.rotations import quat_to_rot_matrix, rot_matrix_to_quat
             camera_profile = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/camera_nominal.yaml').read_text())
-            front_camera = Camera(prim_path='/World/FrontCamera', resolution=(320, 240))
+            front_camera = Camera(prim_path='/World/FrontCamera', resolution=(320, 240), frequency=-1)
             default_clip = front_camera.get_clipping_range()
             # USD's 1 m near plane hides the Pinky's entire 0.6 m ground view.
             front_camera.set_clipping_range(.01, 10.)
