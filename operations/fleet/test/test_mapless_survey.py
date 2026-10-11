@@ -96,6 +96,27 @@ def test_mismatched_evidence_revision_is_rejected():
         SiteMap.model_validate(value)
 
 
+def test_exclusion_lane_overlap_blocks_activation():
+    store = SiteMapStore()
+    facility = {"id": "no-entry", "name": "Keep out", "kind": "exclusion",
+                "geometry": [[.5, -.2], [1, -.2], [1, .2], [.5, .2]]}
+    saved = store.save_draft(SiteMap.model_validate(road(facilities=[facility])),
+                             expected_revision=None, principal_id="operator")
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=saved["revision"], principal_id="operator", route_active=False)
+    assert error.value.code == "SITE_MAP_EXCLUSION_OVERLAP"
+    assert store.active_view() is None
+
+
+def test_valid_polygon_and_duplicate_ids_or_reverse_one_way_relation():
+    facility = {"id": "x", "name": "Keep out", "kind": "exclusion",
+                "geometry": [[0, 1], [1, 1], [1, 2], [0, 2]]}
+    assert SiteMap.model_validate(road(facilities=[facility])).facilities[0].kind == "exclusion"
+    for facilities in ([signal(), signal()], [signal(approaches=[{"edge_id": "ab", "forward": False}])]):
+        with pytest.raises(ValidationError):
+            SiteMap.model_validate(road(facilities=facilities))
+
+
 @pytest.mark.parametrize("facility", [
     {"id": "x", "name": "line", "kind": "stop_line", "geometry": [[0, 0], [0, 0]]},
     {"id": "x", "name": "zone", "kind": "exclusion", "geometry": [[0, 0], [1, 0], [2, 0]]},

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.205
+**Version:** v1.206
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -24,6 +24,15 @@
 - CORE `line_follow.stuck.inquiry`는 선택 object/null이며 현재 `situation-inquiry-v1` 문맥을 담는다. `lane_boundary`는 `{state:unknown|baseline|confirming|confirmed, revision:integer>=0, epoch:integer, source_stamp_ns:integer|null, geometry_id?:string, reason?:string}`이다. 신선한 D-468 경계가 자세 정렬 후 기존 경계와 다르고 서로 다른 촬영 시각 세 개에서 일치할 때만 revision이 증가한다. 새 epoch/geometry는 baseline이며 변화로 세지 않는다. Fleet은 최신 상태 inquiry를 최초 사건 inquiry보다 우선한다. AI는 같은 stuck의 첫 문의 후에는 confirmed revision 변경에서만 재문의한다. 경계 상태가 없는 기존 장치도 첫 문의만 가능하며 자동 재문의는 하지 않는다. 이 상태는 기하 관측의 변화이고 명령·허가가 아니다.
 
 ---
+
+### v1.206 지도 없는 조사 좌표와 도로 시설 (D-655)
+
+- 기존 `rosy.site_map/1`에 선택 `survey`와 `facilities`, edge의 선택 `evidence`를 추가한다. 기계 계약은 `core_common.protocol.site_survey`이며 `core_common.protocol.schemas`에서 재노출한다. 없는 필드는 기존 지도 body와 해시에 추가하지 않는다.
+- `survey`: `{revision, origin:[x,y], heading_rad, scale_source:odometry|measured, measured_distance_m?:number|null, description, reviewed:false, review_note:string}`. 좌표는 m, 방향은 rad이며 유한 값이다. 원점 좌표는 ±1000 m, 방향은 ±2π, revision은 영문·숫자·밑줄·점·하이픈 1–64자다. description은 비공백 1–1000자다. 실측 축척에는 양의 `measured_distance_m`(≤2000), reviewed=true에는 비공백 review_note(≤1000)가 필요하다. odometry 축척은 측량 정확도나 운행 위치 승인 증거가 아니다.
+- edge `evidence`: `{source:camera|odometry|operator,status:observed|inferred|reviewed,reference_revision,note}`. note 기본 빈 문자열, reviewed에는 비공백 note(≤1000) 필수. 조사 기준이 있으면 reference_revision이 일치해야 한다.
+- `facilities`는 최대 500개 `{id,name,kind:traffic_signal|stop_line|landmark|exclusion,geometry:[[x,y]],approaches:[{edge_id,forward,stop_s_m?}],signal_id?,signal_kind?:physical|virtual}`다. 신호등/landmark는 한 점, 정지선은 서로 다른 두 점, 금지 구역은 퇴화·자기 교차 없는 3–32점 다각형이다. geometry 좌표는 ±1000 m의 유한 값이다. id는 revision과 같은 형식, name은 비공백 최대 64자. approaches 최대 64개, 존재하는 차로와 허용 방향만 참조하고 동일 차로·방향 중복 불가, stop_s_m은 0 이상 차로 길이 이하. 신호등은 signal_id·signal_kind·제어 approaches 필수이고 나머지 시설에는 device 필드를 넣지 않는다. 시설 기하는 장치 등록·신호 제어 활성화가 아니다.
+- 기존 초안·프로필 요청의 크기·revision·named operator·감사 계약은 유지한다. 활성화 및 최초 import는 미검토 survey를 422 `SITE_MAP_SURVEY_UNREVIEWED`, observed/inferred road evidence를 422 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 메타데이터는 World의 운행 MapPose나 CORE 명령을 바꾸지 않는다.
+- 금지 구역에 닿거나 차로 반폭 이내로 접근하는 주행 간선이 있으면 활성화/최초 import는 422 `SITE_MAP_EXCLUSION_OVERLAP`이다. 금지 영역을 그림으로만 표시한 채 경로 계획이 통과하도록 두지 않는다. 간선 기하를 수정하거나 차로 초안에서 제거한 뒤 다시 검토한다.
 
 # 1. 버저닝 및 폐기 정책
 
