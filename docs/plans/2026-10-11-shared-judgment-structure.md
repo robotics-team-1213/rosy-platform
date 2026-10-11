@@ -10,6 +10,8 @@
 
 **Status:** 단계 0/1의 내부 shadow 구현은 [D-652](../adr/D-652-intervention-assessment-shadow.md) 범위로 진행한다. 공통 필요성 평가와 기존 CORE snapshot adapter만 수용하며 D-647/D-648 전체 구조, 단계 2~4, 외부 API와 현장 활성화는 Proposed/미완료다. [구현 및 검증 기록](../validation/intervention-assessment-2026-10-11.md)에 실제 소비자와 설치 closure를 기록한다.
 
+사용자 선택(2026-10-11): 이번 병합은 판단·현장 연결·설치 책임부터 분리한다. 설치 구성의 실제 holder는 `tools/packaging/fleet_sources.py`; Fleet 메타데이터, source-layout 계산, site image COPY와 self-contained wheel/sdist를 함께 대조한다. 2/3단계 모델 도구 중재와 작업 규칙 이전은 이번 착지 범위에 넣지 않는다.
+
 ## 0. 현재 소비자와 목표 책임 검수
 Read: `operations/{world,situation,decision,execution,fleet}/AGENTS.md`, `rosy.decision` 하위 AGENTS, D-427/D-429/D-430/D-630/D-637, Proposed D-435/D-647/D-648.
 
