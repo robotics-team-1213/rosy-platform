@@ -630,6 +630,15 @@ def test_password_change_stores_only_hash_and_preserves_remember(tmp_path):
     assert NEW_PASSWORD.encode() not in app.state.password_sessions.path.read_bytes()
 
 
+def test_long_initial_password_cannot_be_reused(tmp_path):
+    login = "teamuser"
+    source = {login: {"principal_id": "member", "role": "operator", "password_scrypt": hash_password(login)}}
+    client = _client(_app(tmp_path, logins=source)[0])
+    assert _login(client, login=login, password=login).status_code == 204
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": login}).status_code == 422
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
+
+
 def test_concurrent_password_changes_have_exactly_one_winner(tmp_path):
     app, client = _bootstrap(tmp_path)
     sessions, cookie = app.state.password_sessions, client.cookies[COOKIE]
