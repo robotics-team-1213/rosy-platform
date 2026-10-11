@@ -41,3 +41,12 @@ def test_forbidden_effect_is_zero_gate_and_unknown_latency_refuses():
     runs[0]['latency_ms'] = float('nan')
     with pytest.raises(ValueError):
         compare_deliberation(cases, runs, training_sessions=[], limits=None)
+
+
+def test_frozen_limits_and_recording_lineage_are_required():
+    cases = [case()]
+    limits = {'error_rate': 0, 'p95_latency_ms': 20, 'cost_usd': 1}
+    assert compare_deliberation(cases, rows(cases), training_sessions=[], limits=limits)['state'] == 'HOLD'
+    with pytest.raises(ValueError, match='leaked'):
+        compare_deliberation(cases, rows(cases), training_sessions=[],
+                             training_recordings=['case-1'], limits=limits)
