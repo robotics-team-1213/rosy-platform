@@ -14,6 +14,8 @@ D-638은 격리 한 대 CPU 진단, D-653은 장치별 owner·관측 신원 분�
 
 **최종 주행의 입력은 실제 카메라 segmentation이다.** 이미 학습한 모델의 revision/hash를 고정해 native RGB에서 차선·주행 가능 영역·횡단보도·주의 표시의 기존 클래스 증거를 사용한다. 모델 재학습과 조향 정책 강화학습을 구분한다. 경로 지시는 분기 선택에만 사용하며 실제 카메라 target을 대신하는 정답 경로 조향으로 완주를 인정하지 않는다. 신호 인식은 기존 신호 관측 경로와 Fleet 상태를 함께 검증하며 segmentation에 없는 신호 클래스를 있다고 가정하지 않는다.
 
+기존 모델의 `speed_bump` 클래스는 role `ignore`를 유지하되 같은 추론의 별도 마스크로 전달한다. paint worker는 횡단보도와 주의 표식 마스크를 각각 재사용·이동 보정·reset하며 배열을 JSON 진단 metadata와 분리한다. 클래스 없음은 관측 불가다. native trace의 픽셀 수는 표식 관측 진단이며 정지선 위치·점유 없음·통행 권한의 증거가 아니다. 이를 실제 주의 표시 앞 정지 gate와 연결하는 단계는 별도 검증한다.
+
 **R12 회복 연결의 선행 조건.** 유효 target 상실 시 기존 zero 명령과 학습 업데이트 거부를 유지한다. 실제 native scan·pose를 기존 CORE 관측 접점에 연결하고 기존 회복 gate를 만족한 뒤 재관측한다. LiDAR mount를 두 번 적용하지 않고 physics 원본 시간·monotonic 수신 시간·Fleet pose authority 시간을 각 계약대로 유지한다. 무응답 scan은 UNKNOWN이며 최대 거리의 가상 hit로 바꾸지 않는다. 회전 여유는 prepared simulation collision 형상으로 검사하고, 회복 중 map-only 조향을 유효 camera 학습 state로 바꾸지 않는다.
 
 **목표 판정은 셋으로 분리한다.** 기존 frozen 모델·CORE/Fleet 안전 규칙을 지키는 두 Pinky 전체 완주, 교통·장애물 실패 주입의 안전 정지/회복, fixed baseline 대비 RL 차선 오차·조향 흔들림 개선을 각각 입증한다. 단순 완주로 RL 추가 효과를 주장하지 않고 짧은 10초 실행을 full lap으로 세지 않는다. 유효 transition·updates>0과 독립 frozen-policy 짝 비교가 없으면 RL 성과는 미확인이다. 서버 신호 규칙을 학습하는 과제가 아니다.
