@@ -84,7 +84,9 @@ class AprilGrid:
 def detect_grid(image, grid):
     if image is None or image.ndim not in (2, 3):
         raise ValueError("target image unavailable")
-    detector = cv2.aruco.ArucoDetector(grid.dictionary)
+    parameters = cv2.aruco.DetectorParameters()
+    parameters.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+    detector = cv2.aruco.ArucoDetector(grid.dictionary, parameters)
     corners, ids, _ = detector.detectMarkers(image)
     selected = [] if ids is None else [(int(tag), corner.reshape(4, 2))
         for tag, corner in zip(ids.reshape(-1), corners)
@@ -93,7 +95,9 @@ def detect_grid(image, grid):
     if len(selected) < 3:
         raise ValueError("need at least three complete target tags; retake closer")
     return {"object_points": grid.points([tag for tag, _ in selected]),
-            "image_points": np.concatenate([points for _, points in selected]).astype(np.float64)}
+            "image_points": np.concatenate([points for _, points in selected]).astype(np.float64),
+            "min_tag_side_px": float(min(np.linalg.norm(np.roll(points, -1, axis=0)-points, axis=1).min()
+                                          for _, points in selected))}
 
 
 def _points(value, dim, minimum):
@@ -134,6 +138,8 @@ def fit_lenses(training, validation, size, *, source_id, capture_signature, mode
     hull = np.concatenate([image for _, image in views[:n]])
     coverage = float(cv2.contourArea(cv2.convexHull(hull.astype(np.float32))) / (size[0] * size[1]))
     warnings = ["independent_floor_survey_required", "capture_settings_require_operator_verification"]
+    if min(view.get("min_tag_side_px", math.inf) for view in [*training, *validation]) < 24:
+        warnings.append("tag_pixels_low")
     if coverage < .4 or np.any(hull.min(axis=0) > np.asarray(size)*.15) or np.any(hull.max(axis=0) < np.asarray(size)*.85):
         warnings.append("edge_coverage_low")
     report = {"status": "review_required", "applied": False, "source_id": source_id,
@@ -282,7 +288,7 @@ def advice_request(report):
     return {"authority": "advisory", "allowed_recommendations": list(RECOMMENDATIONS),
             "warnings": [w for w in report.get("warnings", []) if w in {
                 "edge_coverage_low", "tilt_diversity_low", "independent_floor_survey_required",
-                "capture_settings_require_operator_verification"}],
+                "capture_settings_require_operator_verification", "tag_pixels_low", "capture_or_measurement_failed"}],
             "models": [{"model": c["model"], "validation": c["validation"]}
                        for c in report.get("candidates", [])],
             "failed_models": [c["model"] for c in report.get("failures", []) if c.get("model") in {"pinhole", "fisheye"}],
@@ -331,10 +337,12 @@ def main(argv=None):
     parser.add_argument("--floor", help="separate floor candidate for plane")
     parser.add_argument("--bounds", nargs=4, type=float)
     args = parser.parse_args(argv)
+    created = False
     try:
         value = _read(args.input) if args.input else {}
         out = Path(args.output)
         out.mkdir(parents=True, exist_ok=False)
+        created = True
         if args.action == "target":
             grid = AprilGrid(**value)
             (out / "target.svg").write_text(grid.svg(), encoding="utf-8")
@@ -384,6 +392,11 @@ def main(argv=None):
         else:
             _write(out / "advice.json", validate_advice(value))
     except (ValueError, KeyError, TypeError, OSError, cv2.error) as error:
+        if args.action == "fit" and created:
+            report = {"status": "review_required", "applied": False, "candidates": [],
+                      "failures": [], "warnings": ["capture_or_measurement_failed"]}
+            _write(out / "report.json", report)
+            _write(out / "ai-request.json", advice_request(report))
         parser.exit(2, f"calibration failed: {error}\n")
     return 0
 

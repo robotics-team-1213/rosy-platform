@@ -506,7 +506,7 @@ $('plane-load').addEventListener('click', async () => {
         // Header rectangle = picture, so the view's toMap is x = min_x + u/ppm, y = max_y - v/ppm (D-560 4).
         plane = {mapId: record.map_id, ...planeView(got.plane, W, H, turn), bounds: got.plane, url};
         url = null;  // the plane owns it until clearPlane
-        $('plane-status').textContent = `불러온 평면 영상 · Rosy Cam 평면 영상 · ${record.source_id} · ${got.calibrationRevision} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+        $('plane-status').textContent = `불러온 평면 영상 · Rosy Cam 평면 영상 · ${record.source_id} · ${got.calibrationRevision} · 영상 유효 영역 ${Number.isFinite(got.observedFraction) ? `${Math.round(got.observedFraction * 100)}%` : '미확인'} · ${new Date().toLocaleTimeString()} · 표시 전용`;
         render();
         return;
       }

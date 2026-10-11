@@ -187,7 +187,8 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
         else:
             route.fulfill(body=plane_png, content_type="image/png",
                           headers={"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "map",
-                                   "X-Frame-Plane": "-1,-1,3,1,50", "X-Frame-Calibration": plane["revision"]})
+                                   "X-Frame-Plane": "-1,-1,3,1,50", "X-Frame-Calibration": plane["revision"],
+                                   "X-Frame-Observed-Fraction": "0.75"})
 
     page.route("**/api/fleet/calibrations", lambda route: route.fulfill(json={"calibrations": [record]}))
     page.route("**/api/fleet/vision/lease", serve_lease)
@@ -198,6 +199,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     page.locator(".plane-tools summary").click()
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("Rosy Cam 평면 영상")
+    expect(page.locator("#plane-status")).to_contain_text("영상 유효 영역 75%")
     expect(page.locator("#plane-status")).to_contain_text("paint-test")
     assert leases == [{"source_id": "camera-test", "rectification": {"mode": "map"}}]
     image = page.locator("#site-map-svg image")

@@ -108,19 +108,19 @@ P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
 grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$N/constraints.txt"
-"$N/bin/python" - "$N/constraints.txt" deploy/site/requirements-fleet.txt "$N/fleet-extra.txt" <<'PY'
+"$N/bin/python" - "$N/constraints.txt" deploy/site/requirements-fleet.txt deploy/site/requirements-vision.txt "$N/site-extra.txt" <<'PY'
 import re
 import sys
 from pathlib import Path
 
 normalize = lambda name: re.sub(r"[-_.]+", "-", name).lower()
 pinned = {normalize(line.split("==", 1)[0]) for line in Path(sys.argv[1]).read_text().splitlines()}
-extra = (line for line in Path(sys.argv[2]).read_text().splitlines(keepends=True)
+extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_text().splitlines(keepends=True)
          if normalize(line.split("==", 1)[0]) not in pinned)
-Path(sys.argv[3]).write_text("".join(extra))
+Path(sys.argv[-1]).write_text("".join(extra))
 PY
-$P install -c "$N/constraints.txt" -r "$N/fleet-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
-  jsonschema ext4 numpy pillow playwright -r deploy/site/requirements-vision.txt
+$P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
+  jsonschema ext4 numpy pillow playwright
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
   --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
