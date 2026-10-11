@@ -48,6 +48,14 @@ test("운행 취소 stops the open trip, else the goal and the lane driving that
   assert.deepEqual(cancelScope(null, "OFF"), { trip: null, lane: false, text: "목표를 취소합니다" });
 });
 
+test("trip gate explains formation conflicts without blocking unrelated robots", () => {
+  const view = {activeSiteMap: ACTIVE, formation: {active: true, leader: 'a', assignment: {b: 0}}};
+  const reason = id => tripReason(robot(false, {robot_id: id}), {view, operator: true, named: ''});
+  assert.match(reason('a'), /대형.*해제/);
+  assert.match(reason('b'), /대형.*해제/);
+  assert.equal(reason('c'), '');
+});
+
 const LOST = { trip_id: "t0", robot_id: "a", state: "stopped", reason: "lease_lost",
   detail: { lease_reason: "taken_over", lease_by: "kim-tablet" } };
 

@@ -222,6 +222,11 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_02").locator('[data-formation-role="leader"]')).to_have_text("대형 리더")
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
+        follower = _card(page, "rosy_01")
+        expect(follower.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('팔로워.*리더'))
+        expect(follower.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
+        leader = _card(page, "rosy_02")
+        expect(leader.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
         page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
@@ -235,6 +240,8 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         page.locator("#formation-stop").click()
         expect(page.locator("#formation-state")).to_have_text("해제됨")
         assert page.locator("[data-formation-role]").count() == 0
+        expect(_card(page, "rosy_01").locator('ui-button[data-trip-open]')).to_be_enabled()
+        assert not [path for path, _body in posts if path.endswith('/goal') or path == '/api/fleet/trips']
         assert not errors
         browser.close()
 
