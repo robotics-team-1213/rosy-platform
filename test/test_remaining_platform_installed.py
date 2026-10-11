@@ -30,7 +30,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
-                     'contracts/foundation', 'contracts/skill', 'contracts/motion', 'operations/world',
+                     'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
                      'operations/execution', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
@@ -122,6 +122,14 @@ assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rc
 fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
 assert 'rosy-execution==0.1.1' in importlib.metadata.requires('fleet')
+assert 'rosy-contracts-learning>=0.1.10' in importlib.metadata.requires('fleet')
+from rosy.contracts.learning import incident_rule
+assert Path(incident_rule.__file__).is_relative_to(installed)
+from fleet.stuck.loop import StuckResolverLoop
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.resolver import StuckResolver, ResolverConfig
+loop = StuckResolverLoop(None, LineStuckBoard(), StuckResolver(ResolverConfig()), clients=lambda: {})
+assert loop.rule_selections is None
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
                           (EvidenceRef('robot', 'core', 'state-1', 99.0),))
 assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'

@@ -138,10 +138,22 @@ def test_rule_contract_and_storage_reject_malformed_or_impossible_receipts(tmp_p
                          ('selection.kind', 'UNKNOWN'), ('selection.yield_m', 1),
                          ('selection.reason', '-----BEGIN PRIVATE KEY-----')]:
         changed = deepcopy(receipt)
-        target, *_, = [changed]
+        target = changed
         keys = path.split('.')
         for key in keys[:-1]: target = target[key]
         target[keys[-1]] = value
         with pytest.raises(ValueError): validate_rule(changed)
     for maximum in (True, 0, -1, 100_001):
         with pytest.raises(ValueError): RuleSelectionStore(tmp_path / 'invalid.db', max_rows=maximum)
+
+
+def test_wait_is_a_physical_candidate_not_a_completed_human_handoff(tmp_path):
+    from rosy.contracts.learning.incident_rule import baseline_choice
+    for autonomous in (True, False):
+        loop, _ = make_loop(tmp_path / str(autonomous), autonomous=autonomous)
+        asyncio.run(loop.run_once())
+        assessment = loop._board.intervention_assessment('pinky')
+        answer = Answer('pinky', 'case-1', 'WAIT', 'R5', escalate='lane_lost_hold:pose_unknown')
+        receipt = pipeline.selection_receipt(assessment, answer, source_sha256='a'*64,
+                                             config_sha256='b'*64, mixed=False)
+        assert baseline_choice(receipt) is None
