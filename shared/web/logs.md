@@ -704,3 +704,8 @@
 - 변경: 관제·지도·설치·Cell·알림·기록·도구·새로고침·내보내기·접속의 닫힌 SVG 의미를 기존 actionIcon에 연결했다. 아이콘 단독 조작도 접근성 이름을 보존하며 hover·키보드 focus 설명, Escape 닫기, 숨김·제거된 소유자 정리를 제공한다. CSP 좌표는 typed attr()로 표현하고 설명 내부 여백은 inset-tooltip 역할을 소비한다. 실제 갤러리에 열 가지 의미와 선택·방향키·비활성 사유 견본을 추가했다.
 - 증거: 커밋 5071836f7 원격 시험 101 passed(11.17s), known_failures 0 NEW. 두 테마·1920/1366/390/320 폭의 실제 갤러리와 CSP·토큰·공용 조작·레지스트리 검사를 포함한다. 시험 PC는 strict probe에서 현장 PC 5.2 cores/9 GB로 2 cores/6 GB 하한을 충족했고 다른 두 PC는 하한 미달로 사용하지 않았다. 로그 X:/DevTemp/ui-shell-common-641/run-3.txt.
 - Gate: 공용 소스와 원격 브라우저 증거. Fleet 전체 문서 통합·CI·설치·기기·현장 수용은 이 증거로 선언하지 않는다. 기존 명령·권한·신선도 계약을 보존한다.
+
+## 2026-10-11 · 4402c5c4b · fix: 기존 아이콘 설명의 키보드 연결
+
+- 변경: actionIcon이 기존 title을 공용 tooltip에 연결하고, 보이는 문구가 없는 아이콘은 접근성 이름을 설명으로 재사용한다. 명시 tooltip·라벨·선택·높이·권한은 보존한다.
+- 증거: 실제 Fleet 테마·영상 새로고침·접속 마크업의 키보드 회귀를 포함한 원격 102 passed(13.15s), known_failures 0 NEW. OMEN strict probe 22 cores/7.6 GB로 하한 충족. 로그 X:/DevTemp/ui-shell-common-641/run-4.txt. 최종 Fleet 통합·설치 수용은 별도다.
