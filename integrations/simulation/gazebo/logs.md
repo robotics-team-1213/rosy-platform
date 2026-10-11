@@ -311,3 +311,9 @@
 - 변경: gz_multi는 image transport 없이 nominal camera geometry와 headless rendering만 선택한다. map_v2_fleet_multi_real 전용 launch가 runner-owned run_spec·모델 pointer를 받고 두 namespaced local image bridge·기존 line_observer·JPEG relay를 구성한다. camera Fleet은 fleet_sim_camera_site.yaml의 preview admission을 유지한다.
 - 증거: 원격65pass1skip·D601/package16pass·known_failures0NEW. AI PC ROS Jazzy에서 두 namespaced 인식/미리보기 각3노드와 CORE2개 launch graph를 확인했다. ROS pytest 모듈은 skip이며 graph 확인이 native 실행을 대신하지 않는다.
 - gate 변화: 없음. 초기 연결 구성이다. 신호/횡단보도 gate·Fleet 실행·두 대 주행/완주·RL 성공은 아직 미검증이다. 기본 gz_multi와 D-118 parameter bridge에는 생 Image를 추가하지 않았다.
+
+## 2026-10-12 · 3c50387944 · test(sim): Gazebo 두 카메라·CORE 정지 상태 연결
+
+- 변경: 제품 런타임 변경 없이 AI PC 신규 A16 환경의17개 colcon package를 빌드하고 전용camera launch로 두 로봇을 실제 headless 생성했다. 독립API·HOME·namespace·loopback DDS·run_spec를 사용하고 Fleet/주행 요청은 하지 않았다.
+- 증거: rosy_01 image310/scan387/odom1137/line310/cmd1933, rosy_02도 센서/미리보기 수신, 각 LiDAR finite640·320x240 camera·CORE publisher1개·cmd 최대0·실제 odom속도0. 원본result/사진/log/cleanup은 private/isaac/results/gazebo-a16-stationary-two-camera에 보관했다. partition에 남은 own process13개를 종료하고 residual_after0을 확인했다.
+- gate 변화: 없음. CORE runtime의 DOMAIN_ID_INVALID와 FOREIGN_NAMESPACE를 확인했다. runner run_spec120..199와 CORE Linux-safe0..101 계약이 모순이며 domain172는 ERROR다. 연결 증거일 뿐 Fleet runtime 준비/카메라 주행/교통/완주/RL 수용이 아니다. 서로다른 로봇namespace 진단과 domain allocator/validator를 계약·시험과 함께 바로잡아야 한다.
