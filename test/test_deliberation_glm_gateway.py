@@ -64,7 +64,7 @@ def test_invalid_upstream_never_admitted(change):
 
 def test_secret_rejects_mode_symlink_and_wrong_schema(tmp_path, monkeypatch):
     path = tmp_path / 'secret'
-    monkeypatch.setattr(gate, 'SECRET', path)
+    monkeypatch.setattr(gate, 'CONFIG_PATH', path)
     path.write_text('{"type":"api","key":"fake-unit-token"}')
     path.chmod(0o600)
     assert gate.read_secret() == 'fake-unit-token'
