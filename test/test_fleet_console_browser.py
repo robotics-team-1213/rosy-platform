@@ -1303,6 +1303,7 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         # D-560: this Vision answers the map-plane lease with a raw frame (no D-560), so the D-515
         # browser warp is the fallback and the tag says so.
         assert "브라우저 보정(대체)" in page.inner_text("#map-tag")
+        page.select_option("#map-display-mode", "overlay")
         # D-487: the calibrated canvas carries the frame; no second copy under the map.
         assert page.locator("#map-camera").count() == 0
         # D-515: the frame is laid top-down on the metre view. The site centre (canvas centre for
@@ -1383,6 +1384,7 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
             "() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 평면 영상 · paint-test')",
             timeout=10000)
         assert {"mode": "map"} in [body.get("rectification") for body in leases]
+        page.select_option("#map-display-mode", "overlay")
         # Known map points land on the canvas pixel the map's own toPx gives (siteBounds 0.25 margin,
         # fitTransform pad 32, no view turn): red inside the square, blue outside, ground beyond the plane.
         # Points stay off the 0.5 m grid lines.
@@ -1464,6 +1466,7 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
             timeout=20000)
         tag = page.inner_text("#map-tag")
         assert "paint-test" in tag, tag
+        page.select_option("#map-display-mode", "overlay")
         # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
         # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
         pixel = page.evaluate("""async () => {
@@ -2483,13 +2486,14 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
-    assert layout["headerRows"] <= 4, layout
+    assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # Compact: brand/connection fold above, connection status/inbox below; clock is hidden.
+        # D-641: compact header keeps status/inbox; the visible clock belongs to the flow footer.
         status, inbox = layout["status"], layout["inbox"]
         assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
-        assert layout["clock"]["height"] == 0, layout
+        assert layout["clock"]["height"] > 0, layout
+        assert layout["clock"]["top"] >= layout["stop"]["bottom"], layout
         assert layout["stopScopeHidden"], layout
         # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
         assert layout["stopVerb"] == "비상 정지", layout
@@ -2545,7 +2549,9 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             stop: box('#estop'), more: box('#topbar-more'),
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
             token: shown('#console-token'), theme: shown('#theme-choice'), role: shown('#user-role'),
-            status: shown('#online-pill'), clock: shown('#clock')};
+            status: shown('#online-pill'), clock: shown('#clock'),
+            clockInFooter: !!document.querySelector('footer.fleet-footer #clock'),
+            clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
         page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
@@ -2563,7 +2569,9 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
     assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and not folded["role"], folded
-    assert folded["status"] and not folded["clock"], folded
+    assert folded["status"] and folded["clock"] and folded["clockInFooter"], folded
+    assert not folded["clockInHeader"], folded
+    assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
     assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
     assert opened["overflow"] <= 0, opened
     assert scrolled["expanded"] == "false", scrolled
@@ -3768,7 +3776,10 @@ def test_development_mode_console_gets_a_session_and_shows_the_badge(console_url
             timeout=8000)
 
         assert page.is_visible("#development-badge")
-        assert page.inner_text("#development-badge").strip() == "개발 연결 모드"
+        assert page.inner_text("#development-badge").strip() == "개발"
+        assert page.locator("#development-badge").get_attribute("data-action-icon") == "connect"
+        assert page.locator("#development-badge").get_attribute("aria-label") == (
+            "개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공")
         assert page.evaluate("() => sessionStorage.getItem('rosy-console-token')") == "dev-token-1"
         assert issued == ["dev-token-1"], "one 401 must ask for one session, not loop"
         assert not errors, f"페이지 오류: {errors}"

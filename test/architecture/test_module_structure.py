@@ -191,8 +191,13 @@ SIZE_VERDICTS = {
         "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
     "ui/console/map-view.js": (
-        831,
-        "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
+        984,
+        "split: independently re-judged at 984 on 2026-10-11 by design_consistency_review: D-641 "
+        "keeps camera-backdrop and traffic-view in their existing owners. Compact-map robot labels "
+        "use the shared micro font and current grid scale for marker clearance; no polling, transport "
+        "or command owner is added. Keep +150 allowance, HARD_TIER=1000 and the existing split plan; "
+        "further camera growth belongs to camera-backdrop, and chip placement/paint growth must first "
+        "extract its pure display helper. Previously measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
         "(behaviour-preserving): the camera picture path (cameraMapCalibration, the top-down cache, "
         "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl, bindCamera) is in "
         "web/camera-backdrop.js, which map-view feeds its draw hook, calibrations and toPx; the D-517 10 "
@@ -240,8 +245,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        51_800,
-        "split: independently re-judged at 51800 on 2026-10-11 by calibration_review: D-634-D-636 add "
+        52_083,
+        "split: independently re-judged on 2026-10-11 by design_consistency_review and measured at "
+        "52083 after the incident panel seam: D-641 uses existing shared shell/icon/tooltip owners, "
+        "and incident-view.js owns report display, review and export while console.js retains session, "
+        "polling and command calls at 994 lines below its existing 1175 zero-growth ceiling. No new "
+        "transport, command authority or SIZE_UNITS. Keep package +150 and observe/server/UI split "
+        "obligations. Previous verdict: independently re-judged at 51800 on 2026-10-11 by calibration_review: D-634-D-636 add "
         "352 lines for stable camera selection, stale-coordinate display, bounded map profile "
         "validation/store/routes and the existing map editor, plus read-only pixel coverage. "
         "Intrinsic/floor fitting stays offline in Vision; no Fleet process, transport or command "
