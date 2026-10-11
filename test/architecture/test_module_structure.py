@@ -101,6 +101,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
               "fleet/fleet/incidents/automation",
+              "fleet/fleet/incidents/automation/ledger",
               "decision/src/rosy/decision/deliberation",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
@@ -147,12 +148,22 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/incidents/automation": (
         322,
-        "accept: actual opt-in incident parent/attempt budget journal and existing-poll observation "
-        "adapter, independently scoped by responsibility_review on 2026-10-12. Same Fleet SQLite "
-        "ownership; no gather, provider activation, CORE command or notification transport. "
-        "Measured 322 physical lines; docs/plans/2026-10-12-deliberation-role-subpackages.md "
-        "and docs/plans/2026-10-12-incident-observation-budget-store.md. Keep +150 and file limits; "
-        "later worker growth needs a fresh responsibility and size review.",
+        "split: responsibility_review extracted the actual reservation, creator ownership and "
+        "receipt journal into ledger on 2026-10-12. Automation retains immutable poll observation, "
+        "trusted closure projection, provider lifecycle and explicit stable import facades. "
+        "Measured 429 remaining physical lines under the unchanged 322+150 allowance. "
+        "docs/plans/2026-10-12-incident-ledger-subpackage.md records ownership and installed closure. "
+        "Previous 322-line boundary: docs/plans/2026-10-12-deliberation-role-subpackages.md and "
+        "docs/plans/2026-10-12-incident-observation-budget-store.md. Keep +150 and file limits.",
+    ),
+    "fleet/fleet/incidents/automation/ledger": (
+        370,
+        "accept: actual same-Fleet-DB reservation, creator/attempt ownership, role/global budgets, "
+        "observed closure receipt persistence and durable final-handoff journal. No provider, "
+        "observation gathering, CORE dispatch or notification transport. Measured 370 physical "
+        "lines, counted once by the innermost filter; "
+        "docs/plans/2026-10-12-incident-ledger-subpackage.md. Keep +150 and file limits; split by "
+        "an independently reviewed real responsibility before another journal family grows.",
     ),
     "web/ui.js": (
         811,
@@ -317,7 +328,12 @@ SIZE_VERDICTS = {
         "stays in server/observation_store.py, read wiring in console_routes.py, offline unlabeled export "
         "under learning/curation. No new authority, process, SIZE_UNITS or allowance. Keep package +150, "
         "Console1325 zero-growth and all observe/server/UI split obligations. Previous verdict: "
-        "split: responsibility_review verified the 2026-10-12 incident automation and three "
+        "split: responsibility_review rechecked the 2026-10-12 ledger extraction at 53408 parent "
+        "lines under the unchanged 53366+150 allowance. The nested ledger leaves automation, "
+        "not the parent or incidents a second time. "
+        "docs/plans/2026-10-12-incident-ledger-subpackage.md records source and installed proof. "
+        "Previous verdict: "
+        "responsibility_review verified the 2026-10-12 incident automation and three "
         "Decision role extractions at 53408 remaining parent lines, within the unchanged "
         "53366+150 allowance. Units are counted once by the existing innermost filter. "
         "docs/plans/2026-10-12-deliberation-role-subpackages.md records the source and installed "
