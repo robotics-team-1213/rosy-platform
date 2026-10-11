@@ -896,10 +896,7 @@ class BatteryStatus(BaseModel):
     shutdown_armed: bool = False
     filtered_voltage: Optional[float] = None
     charging: bool = False      # 확인된 충전 — DEEP 셧다운을 억제한다 (D-27)
-    # D-688: screen estimate. While charging this stays the pre-charge reading.
-    # ``percent`` on the battery sample stays the live voltage estimate the
-    # policy acts on. None until the first sample.
-    shown_percent: Optional[float] = None
+    shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
 class DockState(str, enum.Enum):
