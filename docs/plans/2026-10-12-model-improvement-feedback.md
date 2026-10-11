@@ -42,6 +42,10 @@ RED: 미검수/의견 충돌을 정답으로 변환, 사건 ID 추정, recording
 
 RED: 서로 다른 evaluation 세트 비교, 현재 후보만 분모에서 UNKNOWN 제외, 금지 오류를 평균 점수로 상쇄, 보정 artifact/profile 불일치, 비용 불명 상태에서 비용 개선 승인. GREEN: 같은 manifest의 비교와 회귀 시 거절.
 
+독립 보정 비교의 실행 경로는 `python tools/decision_calibration.py --compare <bundles.json>`이다. Model PC의 고정 입력 파일은 기존 `fit/evaluation/training/reviewed_profile` bundle 2~4개의 배열이며 첫 bundle이 현재 기준이다. 같은 held-out 사건 ID·session/recording ID와 hash·정답·검수자·domain·선택지·평가 한계를 요구하고, 각 후보의 기존 데이터 hash·훈련/보정/평가 분리를 다시 검증한다. 전체 프로파일 SHA 중복과 서로 다른 정답 세트는 거절한다.
+
+출력 `rosy.calibration.comparison/1`은 공통 정답 manifest hash, 기준 프로파일 SHA, 후보별 보정 artifact SHA·상태·측정값·회귀 항목을 고정한다. 정확도 하한·보정 coverage 감소, Brier/ECE·보정 오차·p95 지연 증가를 거절하고 금지 오류는 FAIL, 미검수 한계는 HOLD다. 모두 통과해도 상태는 `PASS_COMPARISON_OFFLINE_ONLY`, 운영 승격은 항상 `HOLD`, 현장 수용은 false다. 이 출력은 실제 종결·결과 불명·재발·인수·비용을 missing evidence로 명시한다. 따라서 Task 3의 전체 운영 성과 비교나 Task 4 승격 완료를 뜻하지 않는다.
+
 ## Task 4: 제한된 후보 승격과 복귀
 
 독립 평가와 기존 실행 admission을 통과한 후보만 새 profile revision으로 다음 사건부터 적용한다. 진행 중 사건은 원래 profile·예산·원장·정책을 유지한다. 승격 전 현재 revision과 artifact hash를 복귀 대상으로 기록하고 후보의 수용 근거를 재검증한다.
