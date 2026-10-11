@@ -2840,6 +2840,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.204 | 2026-10-11 | Additive + Behavioural (D-623): current stuck inquiry lane_boundary revision and validated heading_review; authenticated live raw evidence with no-store and 3 s freshness; existing historical evidence and CORE execution gates preserved. |
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
+| v1.215 | 2026-10-12 | Merge (D-686/D-689, D-671/D-680/D-687/D-693): preserve named account/profile and Discord request/work/incident contracts together; initial-cookie restrictions and existing owners remain. Historical parallel revision rows are retained. |
 | v1.211 | 2026-10-12 | Additive (D-689): cookie-owned basic profile and verified-current-password rotation; no human authority via Bearer, no role/account edits. |
 | v1.210 | 2026-10-12 | Additive (D-686): initial-cookie password-change gate, auth/session boolean, POST auth/change-password and source-bound durable scrypt override; existing machine/Bearer and CORE authority unchanged. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
