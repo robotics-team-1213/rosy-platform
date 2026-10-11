@@ -737,7 +737,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
-    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
+    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None
+                            or console.formation_status()["active"] or app.state.teach.view()["recording"] is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
     marker_sources = sightings is not None and any(s.place_markers for s in sightings.sources)  # D-564

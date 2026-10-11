@@ -253,6 +253,7 @@ class MapPoseTracker:
         self._refused = 0
         self._refused_reason: Optional[str] = None
         self._epoch = 0   # D-581: odom resets so far (odom_to_map)
+        self._survey_breaks = 0  # rejected observations break recording, not the operational anchor
 
     @property
     def sourced(self) -> bool:
@@ -262,6 +263,13 @@ class MapPoseTracker:
     @property
     def latest_odom_stamp(self) -> Optional[float]:
         return self._odom[-1].stamp if self._odom else None
+
+    def survey_odom(self, now: float) -> Optional[tuple[Pose, float, int]]:
+        """D-655: fresh relative (pose, stamp, epoch) evidence, independent of any map anchor."""
+        latest = self._odom[-1] if self._odom else None
+        if latest is None or not 0.0 <= now - latest.stamp <= self.config.max_odom_age_s:
+            return None
+        return latest.pose, latest.stamp, self._epoch + self._survey_breaks
 
     def moved_since(self, since: float, min_m: float, min_rad: float) -> bool:
         """D-511 2: an odom sample after `since` is more than `min_m` / `min_rad` (a jitter
@@ -286,6 +294,7 @@ class MapPoseTracker:
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
         self._refused += 1
+        self._survey_breaks += 1
         self._refused_reason = reason
 
     def add_odom(self, sample: OdomSample, now: float) -> bool:

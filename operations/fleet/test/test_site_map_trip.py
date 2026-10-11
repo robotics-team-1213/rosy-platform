@@ -127,6 +127,23 @@ def _on_ring_s(store):
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
+@pytest.mark.parametrize('state', ['ARMING', 'RUNNING', 'HOLDING'])
+def test_activation_preserves_active_formation_until_explicit_release(tmp_path, monkeypatch, state):
+    client, _tasks, store, robot = _app(tmp_path)
+    draft = store.save_draft(SiteMap.model_validate(_line()), expected_revision=None, principal_id='bob')
+    active = store.active_view()
+    formation = {'active': True, 'state': state}
+    monkeypatch.setattr(client.app.state.console, 'formation_status', lambda: dict(formation))
+    refused = client.post('/api/fleet/site-map/activate', headers=OPERATOR, json={'expected_revision': draft['revision']})
+    assert refused.status_code == 409 and refused.json()['detail']['code'] == 'SITE_MAP_ROUTE_ACTIVE'
+    assert store.active_view() == active and store.draft_view() == draft
+    assert client.app.state.console.formation_status() == formation
+    assert robot.calls == []
+    formation.update(active=False, state='IDLE')
+    assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+        json={'expected_revision': draft['revision']}).status_code == 200
+
+
 def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     client, tasks, store, _robot = _app(tmp_path)
     active = client.get("/api/fleet/site-map/active", headers=VIEWER)

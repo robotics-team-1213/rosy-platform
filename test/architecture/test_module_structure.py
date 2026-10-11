@@ -261,7 +261,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_150,
+        53_012,
+        "split: independently re-judged on 2026-10-11 by survey_feature_review at 53012 after "
+        "merging D-655 survey/recording/UI and D-664 source-scoped work read; incidents remains "
+        "a separate 360-line unit. Keep +150, every file ceiling and both existing split obligations. "
+        "Work reading adds no execution authority; dispatch remains with owning Task/Mission services. "
+        "Previous D-655 verdict: independently re-judged at 52790 after the D-661 incidents split, "
+        "preserving observe/server/UI boundaries. Previous D-664 verdict: "
         "split: independently re-judged on 2026-10-11 by mixed_work_size_review at 52150: D-664 adds "
         "bounded work_routes/work_read and work-view using existing store, call, pageScope and shared "
         "controls. Mission owner scope and both execution owners remain unchanged; no runner, writer, "
@@ -274,6 +280,20 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md. Parent measured at 51933; existing "
         "observe/server/UI split obligations and +150 remain. Previous verdict: "
         "independently re-judged on 2026-10-11 by design_consistency_review and measured at "
+        "Previous D-655 verdict: "
+        "split: independently re-judged on 2026-10-11 by survey_feature_review at 53010 under D-655 "
+        "after reviewed camera endpoint connections joined a focused camera-import controller. "
+        "Topology dedup preserves explicit place IDs and robot-kind restrictions; pending writes "
+        "are bound to file, choices, draft edits and session context. Node 29 and remote Chromium "
+        "16 pass, including desktop/mobile asynchronous races. Retain +150 and every file ceiling. "
+        "(docs/plans/2026-10-11-mapless-fleet-control.md): protocol owns survey validation, World owns "
+        "freshness/recording continuity, Fleet teach owns recording/CAS and the existing UI owner "
+        "owns its focused survey controller and pure draft edits. The model seam is 770 lines. "
+        "Review corrected coordinate frame writes/previews, rejected odom continuity and category "
+        "ID preservation; no new transport, process, command authority or size unit. Keep +150, "
+        "observe/server/UI split obligations and existing file ceilings; camera extraction stays "
+        "in Vision. Previous verdict: "
+        "split: independently re-judged on 2026-10-11 by design_consistency_review and measured at "
         "52083 after the incident panel seam: D-641 uses existing shared shell/icon/tooltip owners, "
         "and incident-view.js owns report display, review and export while console.js retains session, "
         "polling and command calls at 994 lines below its existing 1175 zero-growth ceiling. No new "

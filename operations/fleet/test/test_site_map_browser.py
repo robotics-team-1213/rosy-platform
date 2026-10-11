@@ -19,6 +19,127 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, width):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    assert page.evaluate('''() => {
+        const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
+        return ids.length === new Set(ids).size;
+    }''')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도 없음')
+    page.locator('#survey-setup > summary').click()
+    page.locator('#survey-description').fill('Start mark facing east, calibrated wheel odom')
+    page.locator('#survey-new').click()
+    expect(page.locator('#map-status')).to_contain_text('초안')
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(0)
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(0)
+    page.locator('#survey-editor > summary').click()
+
+    def point(x, y):
+        page.locator('#element-x').fill(str(x))
+        page.locator('#element-y').fill(str(y))
+        page.locator('#element-point').click()
+
+    for id_, name, x, y in [('a', 'Start', 0, 0), ('b', 'Destination', 1, 0)]:
+        page.locator('#element-id').fill(id_)
+        page.locator('#element-name').fill(name)
+        page.locator('#element-kind').select_option('park')
+        point(x, y)
+        page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
+    page.locator('#element-id').fill('ab')
+    page.locator('#element-name').fill('Road')
+    page.locator('#element-kind').select_option('road')
+    page.locator('#element-from').select_option('a')
+    page.locator('#element-to').select_option('b')
+    page.locator('#element-direction').select_option('two_way')
+    page.locator('#element-endpoints').click()
+    page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    page.locator('#element-id').fill('sig')
+    page.locator('#element-name').fill('Junction signal')
+    page.locator('#element-kind').select_option('traffic_signal')
+    page.locator('#element-signal-id').fill('sig-ring')
+    page.locator('#element-lanes').select_option(['ab'])
+    page.locator('#element-stop').fill('.8')
+    point(.8, .1)
+    page.locator('#element-save').click()
+    expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    saved = store.draft_view()['map']
+    assert saved['survey']['reviewed'] is False
+    assert saved['edges'][0]['evidence']['status'] == 'observed'
+    assert saved['facilities'][0]['approaches'] == [{'edge_id': 'ab', 'forward': True, 'stop_s_m': .8}]
+    assert store.active_view() is None
+    page.locator('#element-existing').select_option('facilities:sig')
+    page.locator('#element-load').click()
+    page.locator('#element-name').fill('Reviewed signal name')
+    page.locator('#element-save').click()
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    assert store.draft_view()['map']['facilities'][0]['name'] == 'Reviewed signal name'
+    assert store.draft_view()['map']['facilities'][0]['approaches'][0]['stop_s_m'] == .8
+    page.reload()
+    open_token_access(page)
+    page.locator('#token-save').click()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
+    expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not [call for call in robot.calls if call[0] in ('navigation_goal', 'swarm_arm', 'line_follow_start')]
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(page_site, width):
+    import math
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    store.save_draft(SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'survey-yard',
+        'places': [], 'edges': [], 'survey': {'revision': 'reference-1', 'origin': [10, 20],
+        'heading_rad': math.pi / 2, 'scale_source': 'odometry', 'description': 'Start at the marked origin'}}),
+        expected_revision=None, principal_id='bob')
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#draft-status')).to_contain_text('초안')
+    page.locator('#map-source').select_option('draft')
+    page.locator('#teach-frame').select_option('survey')
+    expect(page.locator('#teach-start')).to_be_disabled()
+    expect(page.locator('#teach-start')).to_have_attribute('reason', re.compile('시작점'))
+    expect(page.locator('#teach-reference')).to_contain_text('10.00, 20.00')
+    page.locator('#teach-origin-confirm').check()
+    robot._state = {'robot_id': 'rosy_60', 'pose': None, 'localization': {'state': 'UNKNOWN', 'pose_frame': 'odom'},
+        'odom_pose': {'x': 2, 'y': 3, 'yaw': 0, 'stamp': time.time()}}
+    page.locator('#teach-start').click()
+    expect(page.locator('#teach-status')).to_contain_text('조사 기록 중')
+    robot._state['odom_pose'] = {'x': 2.2, 'y': 3, 'yaw': 0, 'stamp': time.time() + 0.01}
+    expect(page.locator('#teach-status')).to_contain_text('2점')
+    page.locator('#teach-stop').click()
+    expect(page.locator('#teach-form')).to_be_visible()
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    page.locator('#teach-from-name').fill('Origin')
+    page.locator('#teach-to-name').fill('End')
+    page.locator('#teach-confirm').click()
+    expect(page.locator('#notice')).to_contain_text('초안에 차로')
+    body = store.draft_view()['map']
+    assert body['edges'][0]['polyline'] == [[10, 20], [10, 20.2]]
+    assert body['edges'][0]['evidence']['source'] == 'odometry'
+    assert body['survey']['reviewed'] is False and store.active_view() is None
+    assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_soccer_profile_basic_information_and_template(page_site, width):
     from playwright.sync_api import expect
     page, store, robot = page_site
@@ -73,7 +194,8 @@ def test_profiles_rules_import_preview_and_draft_stay_separate(page_site, width)
     page.locator('#profile-save').click()
     expect(page.locator('#profile-status')).to_contain_text('지도 설정을 저장했습니다')
     expect(page.locator('#map-status')).to_contain_text('연습장')
-    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(0)
+    assert next(row['map'] for row in store.profiles() if row['profile_id'] == 'training')['places'] == []
     expect(page.locator('#site-map-svg #robot-layer')).to_have_count(0)
     assert store.active_view() == before and store.draft_view()['map'] is None
     body = {'schema': 'rosy.site_map/1', 'map_id': 'imported', **_line()}
@@ -265,11 +387,12 @@ def test_import_camera_map_draft_never_activates(page_site):
 
 
 @pytest.fixture
-def page_site(tmp_path):
+def page_site(tmp_path, request):
     from playwright.sync_api import sync_playwright
 
-    client, tasks, store, robot = _app(tmp_path)
-    robot._state = _on_ring_s(store)
+    client, tasks, store, robot = _app(tmp_path, imported=getattr(request, 'param', True))
+    if store.active() is not None:
+        robot._state = _on_ring_s(store)
     client.app.state.web_common = ROOT / "shared" / "web"
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
@@ -294,6 +417,58 @@ def page_site(tmp_path):
         server.should_exit = True
         worker.join(timeout=20)
         listener.close()
+
+
+def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    page.goto(page.url + '?robot=not-in-roster#teach-heading')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'bob · operator')
+    expect(page.locator('#teach-target')).to_contain_text('not-in-roster')
+    expect(page.locator('#teach-robot')).to_have_value('')
+    expect(page.locator('#teach-start')).to_be_disabled()
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+
+
+def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(page_site):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    roster = {'robots': [{'robot_id': 'alpha', 'online': True}, {'robot_id': 'beta', 'online': True}]}
+    recording = {'recording': None, 'pending': []}
+    page.route('**/api/fleet/state', lambda route: route.fulfill(content_type='application/json', body=json.dumps(roster)))
+    page.route('**/api/fleet/teach', lambda route: route.fulfill(content_type='application/json', body=json.dumps(recording)))
+    page.goto(page.url + '?robot=beta#teach-heading')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-robot')).to_have_value('beta')
+    page.locator('#teach-robot').select_option('alpha')
+    open_token_access(page)
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-robot')).to_have_value('alpha')
+    roster['robots'][0]['online'] = False
+    open_token_access(page)
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-target')).to_contain_text('연결 끊김')
+    recording['recording'] = {'teach_id': 'running', 'robot_id': 'beta', 'map_id': store.active_view()['map']['map_id'],
+        'points': [], 'started_at': time.time()}
+    expect(page.locator('#teach-target')).to_contain_text('기록 중인 로봇 beta')
+    expect(page.locator('#teach-robot')).to_have_value('beta')
+    expect(page.locator('#teach-robot')).to_be_disabled()
+    roster['robots'] = roster['robots'][:1]
+    open_token_access(page)
+    page.locator('#token-save').click()
+    expect(page.locator('#teach-target')).to_contain_text('기록 중인 로봇 beta')
+    expect(page.locator('#teach-robot')).to_have_value('')
+    expect(page.locator('#teach-stop')).to_be_enabled()
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -606,7 +781,8 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
-    expect(page.locator("#notice")).to_contain_text("관리자에게 현장 지도 가져오기를 요청")
+    expect(page.locator("#notice")).to_contain_text("지도 없이 시작에서 기준을 정하거나")
+    expect(page.locator("#survey-new")).to_be_enabled()
     expect(page.locator("#map-viewport")).to_be_hidden()
     expect(page.locator("#save-draft")).to_be_disabled()
     expect(page.locator("#activate")).to_be_disabled()
@@ -789,3 +965,205 @@ def test_viewer_sees_crosswalks_without_band_tools(page_site):
     expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
     expect(page.locator("#crosswalk-form")).to_be_hidden()
     expect(page.locator("#import-crosswalks")).to_be_disabled()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, width):
+    from playwright.sync_api import expect
+    page, store, robot = page_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    active = store.active_view()
+    pending = {'teach_id': 'old-frame', 'robot_id': 'rosy_60', 'map_id': active['map']['map_id'],
+        'polyline': [[0, 0], [0.2, 0]], 'expires_at': time.time() + 600,
+        'points': 2, 'from_candidates': [], 'to_candidates': [], 'reason': 'operator'}
+    page.route('**/api/fleet/teach', lambda route: route.fulfill(status=200,
+        content_type='application/json', body=json.dumps({'recording': None, 'pending': [pending]})))
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    page.locator('#profile-new').click()
+    page.locator('#profile-id').fill('other-frame')
+    page.locator('#profile-save').click()
+    expect(page.locator('#map-profile')).to_have_value('other-frame')
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+    assert store.active_view() == active and store.draft_view()['map'] is None
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_camera_observation_accumulates_without_replacing_operator_features(page_site, width):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    page, store, robot = page_site
+    active = store.active_view()
+    reference = {'revision': 'survey-camera', 'origin': [0, 0], 'heading_rad': 0,
+        'scale_source': 'measured', 'measured_distance_m': 2, 'description': 'Measured origin'}
+    base = SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'yard', 'survey': reference,
+        'places': [], 'edges': [], 'facilities': [{'id': 'mark', 'name': 'Origin marker',
+            'kind': 'landmark', 'geometry': [[0, 0]], 'approaches': []}]})
+    draft = store.save_draft(base, expected_revision=None, principal_id='bob')
+    observation = SiteMap.model_validate({'schema': 'rosy.site_map/1', 'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'A', 'name': 'A', 'x': 1, 'y': 0}, {'id': 'B', 'name': 'B', 'x': 2, 'y': 0}],
+        'edges': [{'id': 'ab', 'from': 'A', 'to': 'B', 'polyline': [[1, 0], [2, 0]], 'width_m': .2, 'speed_cap_mps': .03,
+            'evidence': {'source': 'camera', 'status': 'observed', 'reference_revision': 'survey-camera',
+                'note': 'Frame sha256 fixture'}}]}).body()
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-map-file').set_input_files({'name': 'observation.json',
+        'mimeType': 'application/json', 'buffer': json.dumps(observation).encode()})
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#map-source')).to_have_value('draft')
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    saved = store.draft_view()
+    assert saved['map']['facilities'] == draft['map']['facilities']
+    assert saved['map']['edges'][0]['evidence']['source'] == 'camera'
+    assert saved['map']['survey']['reviewed'] is False
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#notice')).to_contain_text('관측')
+    assert len(store.draft_view()['map']['edges']) == 1
+    other = {**observation, 'map_id': 'wrong-frame'}
+    page.locator('#camera-map-file').set_input_files({'name': 'wrong.json',
+        'mimeType': 'application/json', 'buffer': json.dumps(other).encode()})
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#notice')).to_contain_text('지도 ID')
+    assert store.draft_view()['map'] == saved['map']
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(page_site, width):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    from fleet.server.site_map_store import SiteMapError
+    page, store, robot = page_site
+    body = store.active_view()['map']
+    for edge in body['edges']:
+        edge['evidence'] = {'source': 'camera', 'status': 'observed', 'reference_revision': 'cal_fixture',
+            'note': 'calibration sha256 abc; frame sha256 def'}
+    draft = store.save_draft(SiteMap.model_validate(body), expected_revision=None, principal_id='bob')
+    active = store.active_view()
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=draft['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#survey-review')).to_be_enabled()
+    page.locator('details').filter(has=page.locator('#survey-review-note')).locator('summary').click()
+    page.locator('#survey-review-note').fill('Measured calibration and road directions checked')
+    page.locator('#survey-review').click()
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    reviewed = store.draft_view()
+    assert 'survey' not in reviewed['map']
+    assert all(e['evidence']['status'] == 'reviewed' for e in reviewed['map']['edges'])
+    assert all('frame sha256 def' in e['evidence']['note'] for e in reviewed['map']['edges'])
+    assert all('Measured calibration' in e['evidence']['note'] for e in reviewed['map']['edges'])
+    edge_id = reviewed['map']['edges'][0]['id']
+    page.locator(f'#site-map-svg [data-edge="{edge_id}"]').dispatch_event('click')
+    page.locator('#edge-speed').fill('0.02')
+    page.locator('#apply-edit').click()
+    with page.expect_response(lambda response: response.url.endswith('/api/fleet/site-map/draft')
+                              and response.request.method == 'PUT'):
+        page.locator('#save-draft').click()
+    edited = store.draft_view()
+    assert edited['map']['edges'][0]['evidence']['status'] == 'observed'
+    assert 'frame sha256 def' in edited['map']['edges'][0]['evidence']['note']
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=edited['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('race', ['none', 'file', 'choice', 'dirty', 'dialog'])
+def test_camera_connections_require_review_before_extending_the_saved_map(page_site, width, race):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+    from fleet.server.site_map_store import SiteMapError
+    page, store, robot = page_site
+    active = store.active_view()
+    reference = {'revision': 's1', 'origin': [0, 0], 'heading_rad': 0,
+        'scale_source': 'measured', 'measured_distance_m': 2, 'description': 'Measured origin'}
+    base = SiteMap.model_validate({'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'a', 'name': 'Start', 'x': 0, 'y': 0}, {'id': 'b', 'name': 'Junction', 'x': 2, 'y': 0}],
+        'edges': [{'id': 'ab', 'from': 'a', 'to': 'b', 'polyline': [[0, 0], [2, 0]],
+            'width_m': .2, 'speed_cap_mps': .03}]})
+    draft = store.save_draft(base, expected_revision=None, principal_id='bob')
+    observation = SiteMap.model_validate({'map_id': 'yard', 'survey': reference,
+        'places': [{'id': 'near', 'name': 'Observed start', 'x': 2.02, 'y': 0}, {'id': 'far', 'name': 'Branch end', 'x': 3, 'y': 1}],
+        'edges': [{'id': 'branch', 'from': 'near', 'to': 'far', 'polyline': [[2.02, 0], [3, 1]],
+            'width_m': .2, 'speed_cap_mps': .03, 'evidence': {'source': 'camera', 'status': 'observed',
+                'reference_revision': 's1', 'note': 'frame sha256 abc'}}]}).body()
+    page.set_viewport_size({'width': width, 'height': 1000})
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    page.locator('#token-save').click()
+    page.locator('#camera-map-file').set_input_files({'name': 'branch.json', 'mimeType': 'application/json',
+        'buffer': json.dumps(observation).encode()})
+    page.locator('#preview-camera-connections').click()
+    expect(page.locator('#camera-connections')).to_contain_text('Observed start')
+    expect(page.locator('#camera-connections')).to_contain_text('0.020')
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-connections select').select_option('b')
+    expect(page.locator('#merge-camera-map')).to_be_disabled()
+    page.locator('#camera-connect-confirm').check()
+    if race != 'none':
+        if race != 'dialog':
+            page.evaluate('''() => {
+                const file = document.getElementById('camera-map-file').files[0];
+                const original = file.text.bind(file);
+                file.text = () => new Promise(resolve => { window.finishCameraRead = () => original().then(resolve); });
+            }''')
+        page.locator('#import-camera-map' if race == 'dialog' else '#merge-camera-map').click()
+        if race == 'dialog':
+            expect(page.locator('dialog.ui-confirm')).to_be_visible()
+        else:
+            page.wait_for_function('typeof window.finishCameraRead === "function"')
+        if race == 'file':
+            page.locator('#camera-map-file').set_input_files([])
+        elif race == 'choice':
+            page.locator('#camera-connect-confirm').uncheck()
+            page.locator('#camera-connect-confirm').check()
+        else:
+            page.locator('#map-source').select_option('draft')
+            page.locator('#site-map-svg [data-edge="ab"]').dispatch_event('click')
+            page.locator('#edge-speed').fill('0.02')
+            page.locator('#apply-edit').dispatch_event('click')
+        if race == 'dialog':
+            page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        else:
+            page.evaluate('window.finishCameraRead()')
+        expect(page.locator('#notice')).to_contain_text('다시 확인')
+        assert store.draft_view() == draft
+        assert store.active_view() == active
+        return
+    page.locator('#merge-camera-map').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(2)
+    saved = store.draft_view()
+    assert saved['map']['places'][:2] == draft['map']['places']
+    assert saved['map']['edges'][1]['from'] == 'b'
+    assert saved['map']['edges'][1]['polyline'][0] == [2, 0]
+    assert saved['map']['edges'][1]['evidence']['status'] == 'inferred'
+    assert 'near -> b' in saved['map']['edges'][1]['evidence']['note']
+    with pytest.raises(SiteMapError) as error:
+        store.activate(expected_revision=saved['revision'], principal_id='bob', route_active=False)
+    assert error.value.code == 'SITE_MAP_SURVEY_UNREVIEWED'
+    assert store.active_view() == active
+    assert not [call for call in robot.calls if call[0] not in
+        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
