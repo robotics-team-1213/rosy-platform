@@ -449,7 +449,13 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
                     "reason": "LOCALIZATION_UNTRUSTED"}
+        if robot_id in self._formation_members():
+            raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation during goal admission")
+        if lease_source != "trip" and self.trip_busy(robot_id):
+            raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
+        if result["accepted"] is False:
+            return result
         # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
         # 않을 곳으로 로봇이 간다고 읽는다.
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
@@ -640,6 +646,11 @@ class FleetConsole(TripAware):
             raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation while planning a yield")
+        if self.trip_busy(robot_id):
+            raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
+        result = await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
+        if result["accepted"] is False:
+            raise RuntimeError("navigation yield goal was rejected")
         own = self._goals.pop(robot_id, None)
         if own is not None and robot_id not in self._queued:
             # 비켜서는 것은 잠깐 물러나는 것이지 미션 취소가 아니다. 지나가는 대가 끝나면
@@ -647,7 +658,6 @@ class FleetConsole(TripAware):
             self._queued[robot_id] = {**own, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "YIELDED"}
         self._claims.pop(robot_id, None)
-        await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:

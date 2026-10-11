@@ -73,15 +73,18 @@ class GoalLeases(dict):
             correlation_id = correlation_id or f"fleet-lease-{uuid.uuid4().hex}"
             result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id,
                                                   lease_ttl_s=self.ttl_s)
-            self[robot_id] = {"state": "leased", "correlation_id": correlation_id,
-                              "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
-            return result
-        if correlation_id is None:
+            lease = {"state": "leased", "correlation_id": correlation_id,
+                     "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
+        elif correlation_id is None:
             result = await client.navigation_goal(x, y, yaw)
+            lease = {"state": "unbounded"}
         else:
             result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id)
-        if self.ttl_s > 0:
-            self[robot_id] = {"state": "unbounded"}
+            lease = {"state": "unbounded"}
+        if not isinstance(result, dict) or type(result.get("accepted")) is not bool:
+            raise RuntimeError("missing navigation goal acknowledgement")
+        if result["accepted"] and self.ttl_s > 0:
+            self[robot_id] = lease
         return result
 
     async def cancel(self, robot_id: str, client) -> dict:
