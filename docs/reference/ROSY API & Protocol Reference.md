@@ -2,11 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-<<<<<<< HEAD
-**Version:** v1.206
-=======
-**Version:** v1.207
->>>>>>> main
+**Version:** v1.208
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -16,7 +12,7 @@
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
-### v1.206 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
+### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
 `FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다.
 
@@ -2803,7 +2799,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
-| v1.206 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
+| v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
 | v1.203 | 2026-10-10 | Additive + Behavioural (D-620): paired Fleet heartbeat 교차로 신호 질의와 상관 답변, 기본 꺼짐인 CAMERA_LINE 감독 시험의 완전 무응답 3초 우측 회전 선택, 적색/미확인/오류/만료 대기, 요청 ID와 signal_state 상태 필드; CORE 보호 유지. |
 
 | v1.202 | 2026-10-10 | Additive (D-619): optional frame-bound evidence.assessment with shared mobility/manipulation taxonomy, advisory direction and uncertainties; model verification stays unverified; no new execution authority. |
