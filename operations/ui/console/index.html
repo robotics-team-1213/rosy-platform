@@ -83,6 +83,10 @@
           <option value="overlay">교정 영상 + 좌표</option>
           <option value="camera">원본 영상만</option>
         </select>
+      </div>
+      <details id="map-options" class="map-options">
+        <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
+        <div class="map-options-content">
         <a href="/console/site-map#profile-heading">지도 설정</a>
         <span class="hint" id="map-display-status" role="status">공유 map 좌표 · m</span>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
@@ -98,7 +102,8 @@
           </div>
         </details>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
-      </div>
+        </div>
+      </details>
       <div class="map-board">
       <div class="map-stage" id="map-stage" data-map-state="loading">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
@@ -112,27 +117,27 @@
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
       </div>
-      <aside class="map-readouts" aria-label="지도 상황">
+      </div>
+      <details id="map-readouts" class="map-readouts">
+      <summary class="ui-disclosure-row">장소·교통·관측 좌표</summary>
+      <div class="map-readouts-content">
       <div class="map-context">
       <h3 class="ui-section-heading">장소</h3>
       <ol id="map-places" class="map-place-list" aria-label="지도 번호별 장소" hidden></ol>
       <h3 class="ui-section-heading">교통</h3>
       <ul id="map-traffic-status" class="map-traffic-status" aria-label="지도 교통 상태"><li>교통 상태 대기</li></ul>
-      <p class="hint" id="map-calibration-status" role="status" hidden></p>
       </div>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
-        <details id="tracking-coordinate-details">
-        <summary class="ui-disclosure-row">관측 좌표</summary>
         <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
           <caption>지도 좌표 · m · 카메라 관측</caption>
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
         </table>
-        </details>
       </div>
-      </aside>
       </div>
+      </details>
+      <p class="hint" id="map-calibration-status" role="status" hidden></p>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
       <div class="legend" id="map-legend" hidden>
         <span data-legend="grid"><i class="sw free"></i>자유</span>
@@ -168,19 +173,6 @@
           </div>
         </div>
       </section>
-      <section class="console-context" aria-label="관제 상세">
-        <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" data-ui-tooltip="등록 로봇의 현재 상태와 대응 확인" aria-controls="context-status" aria-selected="true">로봇 상태</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" data-ui-tooltip="수신된 관제 메시지 확인" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" data-ui-tooltip="사건 기록과 영상 근거 검토" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" data-ui-tooltip="대형과 신호 등 운영 도구 확인" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
-        </div>
-        <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
-      <section class="panel" aria-labelledby="roster-heading">
-        <div class="roster-block">
-          <h2 id="roster-heading">등록 로봇</h2>
-          <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>
-          <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
           <section id="dispatch-control" class="dispatch-control" role="status"
                    aria-live="polite" aria-labelledby="dispatch-control-title">
             <div>
@@ -195,6 +187,22 @@
             <!-- D-421 — 래치 없는 전체 주행 취소. 다시 움직이려면 새 목표만 보내면 된다. -->
             <ui-button id="cancel-all" kind="quiet" type="button">전체 주행 취소</ui-button>
           </section>
+      <section class="console-context" aria-label="관제 상세">
+        <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+        </div>
+        <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
+      <section class="panel" aria-labelledby="roster-heading">
+        <div class="roster-block">
+          <h2 id="roster-heading">로봇 선택</h2>
+          <label class="sr-only" for="robot-choice">작업할 로봇</label>
+          <select id="robot-choice" class="ui-field" aria-label="작업할 로봇"><option value="">로봇 선택</option></select>
+          <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>
+          <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
+
           <div id="address-drift" class="address-drift" hidden>
             <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
             <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
@@ -203,9 +211,18 @@
             <summary class="ui-disclosure-row" id="site-path-heading">관제 경로 · <span id="site-path-summary" role="status" aria-live="polite">확인 중</span></summary>
             <ul id="site-path-list"></ul>
           </details>
+        </div>
+        <div class="workspace-heading"><h3>목적지·작업 배정</h3><span class="hint">선택 → 배정 → 진행 확인</span></div>
+        <p id="robot-workspace-empty" class="hint" role="status">로봇을 선택하면 작업 배정과 진행 상태를 확인할 수 있습니다.</p>
+        <div id="robot-workspace" aria-label="선택한 로봇의 작업"></div>
+        <div class="robot-list-details">
+          <h3 class="ui-section-heading">등록 로봇 · 연결·안전 요약</h3>
           <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
         </div>
       </section>
+
+        </div>
+        <div class="context-panel" id="context-tools" role="tabpanel" tabindex="0" aria-labelledby="context-tools-tab" hidden>
       <section class="panel vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>
@@ -245,8 +262,6 @@
           <p class="hint" id="camera-corrected-status" role="status">같은 지도의 승인 교정과 신선한 영상이 필요합니다.</p>
         </details>
       </section>
-        </div>
-        <div class="context-panel" id="context-tools" role="tabpanel" tabindex="0" aria-labelledby="context-tools-tab" hidden>
       <section class="panel ops-block" aria-labelledby="fleet-operations-heading">
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
         <div class="formation" aria-labelledby="formation-heading" data-role-lock>
