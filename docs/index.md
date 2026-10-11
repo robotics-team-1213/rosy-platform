@@ -219,6 +219,7 @@
 | D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
 | D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 
 ## 계획·결과 문서
 
@@ -317,8 +318,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
+- 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
 - 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
 - 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
 - 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
-- 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)
-- 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)

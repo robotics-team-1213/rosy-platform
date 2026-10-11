@@ -9,14 +9,15 @@ SOURCE_ROOTS = {
     name: (PACKAGE_ROOT / '_source_roots' / name
            if (PACKAGE_ROOT / '_source_roots' / name).is_dir()
            else PACKAGE_ROOT.parent / relative)
-    for name, relative in (('decision', 'decision'), ('console', 'ui/console'))
+    for name, relative in (('decision', 'decision'), ('console', 'ui/console'), ('assessment', 'situation'))
 }
 
 
 def bootstrap_decision():
-    root = str(SOURCE_ROOTS['decision'] / 'src')
-    if root not in sys.path:
-        sys.path.insert(0, root)
+    for folder in (SOURCE_ROOTS['decision'] / 'src', SOURCE_ROOTS['assessment']):
+        root = str(folder)
+        if root not in sys.path:
+            sys.path.insert(0, root)
 
 
 def console_root():
