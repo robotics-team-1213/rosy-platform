@@ -665,6 +665,7 @@
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
+| D-680 | Discord 요청의 Fleet 작업 연결과 결과 회신 | Accepted (source design only, 2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
