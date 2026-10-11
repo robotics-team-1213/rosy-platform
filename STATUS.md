@@ -14,7 +14,7 @@
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
-| [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | 0b14fa02b0 (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_cli](tools/perception/progress.md) | perception_cli | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](operations/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |

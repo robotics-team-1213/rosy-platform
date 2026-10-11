@@ -2,7 +2,7 @@
 module: perception_evaluation
 owner: perception_evaluation
 last_verified:
-  commit: d4988bffba
+  commit: 0b14fa02b0
   date: 2026-10-11
 gates:
   SOURCE:
@@ -27,6 +27,9 @@ gates:
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 adrs:
 - D-637
+- D-662
 ---
 
 Existing implementation holder; shared regression suite as registered in harness.yaml.
+
+D-662 Pinky judgment checker: remote 8 synthetic cases plus 3 installed-delivery checks passed, NEW0. Required abstention and duplicate physical windows independently reviewed. Team labels/profile limits, actual notifications and FIELD receipts remain HOLD; PASS_OFFLINE_ONLY never activates a model.

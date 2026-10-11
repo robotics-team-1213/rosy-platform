@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
 
 ## 계획·결과 문서
 
