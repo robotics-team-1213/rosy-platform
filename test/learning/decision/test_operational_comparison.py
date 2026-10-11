@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 import pytest
 
@@ -78,3 +79,18 @@ def test_closed_report_contains_no_provider_or_person_text(tmp_path):
     report = compare(cohort, exports)
     assert 'private-' not in json.dumps(report)
     assert 'profiles' not in report['candidates'][0]
+
+
+def test_cli_joins_actual_export_and_never_overwrites(tmp_path):
+    cohort, exports = evidence(tmp_path)
+    cohort_path = tmp_path / 'cohort.json'; cohort_path.write_text(json.dumps(cohort))
+    export_path = tmp_path / 'case.json'; export_path.write_text(json.dumps(exports[0]))
+    output = tmp_path / 'report.json'
+    command = [sys.executable, str(ROOT / 'learning/evaluation/decision/operational_comparison.py'),
+               str(cohort_path), str(export_path), '--out', str(output)]
+    result = subprocess.run(command, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text())['promotion_state'] == 'HOLD'
+    original = output.read_bytes()
+    assert subprocess.run(command, capture_output=True).returncode != 0
+    assert output.read_bytes() == original
