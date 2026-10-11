@@ -30,7 +30,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(2000)
-            page.wait_for_function("document.querySelectorAll('#work-list ui-button').length === 2")
+            page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 2")
             assert page.locator("#work-overview").is_visible()
             page.locator("#work-list ui-button").filter(has_text="팔 작업").click()
             assert page.locator("#work-detail").inner_text().find("packing") >= 0
@@ -44,7 +44,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             _shot(page, f"mixed-work-{role}-{size[0]}.png", full_page=True)
             page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
             page.locator("#work-refresh").click()
-            page.wait_for_function("document.getElementById('work-list').childElementCount === 0")
+            page.wait_for_function("() => document.getElementById('work-list').childElementCount === 0")
             assert "조회 실패" in page.locator("#work-state").inner_text()
             assert not posts and not errors
         finally:
