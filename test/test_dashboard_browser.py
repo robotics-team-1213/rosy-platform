@@ -1258,7 +1258,7 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         page.wait_for_function("document.querySelector('[data-mode=IDLE]').disabled===false")
         page.locator('[data-line-mode=IR_LINE]').click()
         page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
-        page.locator('#emergency-stop').click(position={'x':62,'y':60}, timeout=3_000)
+        page.locator('#emergency-stop').click(timeout=3_000)
         expect(dialog).to_have_count(0)
         page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length===2")
         page.locator('[data-line-mode=IR_LINE]').click()
