@@ -1634,3 +1634,11 @@ Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안
 검수된 실행 파일 SHA256과 모델·프로파일을 `sandbox_provider`로 주입하고 context 종료 시
 snapshot을 정리한다. 네트워크·호스트 홈·설정은 상속하지 않으며 현재 offline-only다.
 설치만으로 제공자 호출을 활성화하지 않는다. [계획과 실제 격리 HOLD](../../docs/plans/2026-10-12-pinky-deliberation-host-runner.md)를 먼저 확인한다.
+
+Ubuntu AppArmor의 namespace 거절은 `deliberation_install`의 전용 계정·실행 파일 프로파일로
+처리한다. 관리자가 적용한 뒤 `deliberation_preflight`의 실제 격리·자손 종료·cgroup readback을
+확인한다. [관리자 명령과 후속 수용](../../docs/plans/2026-10-12-deliberation-host-admission.md)을 따른다.
+팀의 관리자 적용과 재검사에서 HOST_OFFLINE 수용 13개 검사가 통과했다.
+로컬 Qwen의 수동 호출과 Decision의 관측 부족 HOLD도 확인했다.
+[실제 수용 증거와 제한](../../docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)을 따른다.
+운영 제공자·자동 worker·로봇 실행은 활성화하지 않았다.

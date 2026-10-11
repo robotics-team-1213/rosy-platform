@@ -28,6 +28,8 @@ gates:
 adrs:
 - D-637
 - D-640
+- D-679
+- D-681
 ---
 
 Existing implementation holder; shared regression suite as registered in harness.yaml.

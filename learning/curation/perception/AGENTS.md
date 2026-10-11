@@ -12,6 +12,8 @@ D-663 road review uses explicit semantic bindings: `road_surface/1` is not clipp
 
 Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot, cut frames, label them (by hand through CVAT or automatically from LiDAR geometry), build a session-split dataset and publish it into the store for the trainer. Developer-side only; outputs live in `data/perception/` (gitignored) and `data/teleop/learning/`.
 
+Media stage, before a recording job: `media_pipeline.py` scans raw sessions, makes a missing learning video, verifies it, and writes a `rosy.learning.media/1` receipt. `--apply` then deletes only the verified raw directories. `trainer_recordings` turns the checked videos into recording-job `video` entries. The recording job still does not delete raw.
+
 ## Key Files
 
 | File | Description |
@@ -19,6 +21,8 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 | `harvest.py` | Pulls un-harvested recording sessions from a robot over ssh/scp, only while CORE reports idle (D-136); `--assume-idle` is bench-only; never deletes robot data |
 | `bag_to_video.py` | Session camera topic to an H.265/H.264 mp4 plus a per-frame `.jsonl` sidecar (`--codec hevc|h264`, `--crf`) |
 | `shrink_session.py` | Writes `<session>.compact/` with raw images turned into JPEG `CompressedImage`; never modifies the source; verifies by default |
+| `reclaim.py` | Reports raw sessions whose mp4, sidecar and meta agree; deletes those directories only with `--apply`. `--make-video` and `--shrink` are optional. `.compact` folders and unmatched videos stay |
+| `media_pipeline.py` | Disk stage before a recording job: scan, video, verify, reclaim, receipt (`rosy.learning.media/1`). A checked video becomes the trainer input. Raw is deleted only with `--apply` |
 | `extract.py` | Training frames from an mp4 (with sidecar) or an MCAP session; side topics attach by the clock rule in `../AGENTS.md` |
 | `frames.py` | Frame selection: time spacing plus perceptual-hash de-duplication |
 | `prelabel.py` | Pre-labels frames with a learned lane model and packs a CVAT import zip |
@@ -54,7 +58,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception -q -p no:cacheprovider
 ```
 
-Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
+Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_reclaim.py`, `test_media_pipeline.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
 
 ### Edge-capture loop
 
