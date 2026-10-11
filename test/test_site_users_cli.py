@@ -272,7 +272,7 @@ def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeyp
     from fleet.server.site_users import hash_password, load_site_accounts, verify_password
 
     path = tmp_path / "site-users.yaml"
-    machine = _entry("situation", "ai_observer")
+    machine = _entry("situation", "ai_observer", "situation-token")
     original = [_entry(), machine]
     _seed(path, *original)
     encoded = hash_password("test-only-password")
@@ -296,6 +296,9 @@ def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeyp
     assert encoded not in capsys.readouterr().out
     gid = ["--gid", str(path.stat().st_gid)] if os.name == "posix" else []
     assert main(["validate", str(path), *gid]) == 0
+    add_user(path, "viewer-2", "viewer", "unique-viewer-token")
+    remove_user(path, "viewer-2")
+    assert load_site_accounts(path)[1]["human"]["password_scrypt"] == encoded
     _no_temp_files_left(tmp_path)
 
 
