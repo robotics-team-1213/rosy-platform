@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from fleet.incidents.budget.store import CaseBudget, CaseScope, IncidentCaseStore
+from fleet.incidents.automation.store import CaseBudget, CaseScope, IncidentCaseStore
 
 
 def scope():
