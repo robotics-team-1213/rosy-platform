@@ -9,10 +9,10 @@
 5. 정상은 호출·관측 0회 상태에서 NOT_NEEDED로 기록할 수 있다. 성공 종결 API는 제공하지 않는다. 실제 readback과 종결 증명은 후속 worker 계약에서 연결한다.
 6. 원격 RED/GREEN에서 동시 예약, 재시작, 새 revision, 비용 초과/불명, deadline, 다른 owner/profile, 재발행 금지를 확인한다. source·원격 시험과 운영 호출·현장 수용은 별도 증거다.
 
-구현 경로는 `fleet.incidents.budget.contract`, `fleet.incidents.budget.store`다. 실제 worker/catalog와 인수 outbox 연결은 root 통합 단계에서 별도로 처리한다.
+구현 경로는 `fleet.incidents.automation.contract`, `fleet.incidents.automation.store`다. 실제 worker/catalog와 인수 outbox 연결은 root 통합 단계에서 별도로 처리한다.
 
 ## 책임 단위 분리
 
-서버 부모에 추가한 첫 구현 237줄은 부모 성장 한도를 넘어 등록된 책임 단위로 분리한다. `fleet/incidents/budget`은 실제 Python 하위 패키지이며 지속 자동 사건 예산만 소유한다. 기존 `fleet/incidents/handoff.py`와 `notifications.py`의 사람 인수·팀 전달 360줄 책임에 판단/자동 루프를 섞지 않는다. 기존 server 경로는 남기지 않고 모든 소비자가 새 경로를 직접 import한다. 같은 DB와 SQLite 정책을 사용하고 프로세스·권한·활성화는 추가하지 않는다.
+서버 부모에 추가한 첫 구현 237줄은 부모 성장 한도를 넘어 등록된 책임 단위로 분리한다. `fleet/incidents/automation`은 실제 Python 하위 패키지이며 지속 사건 원장과 후속 관측/worker 생명주기를 소유한다. 기존 `fleet/incidents/handoff.py`와 `notifications.py`의 사람 인수·팀 전달 360줄 책임에 판단/자동 루프를 섞지 않는다. 기존 server 경로는 남기지 않고 모든 소비자가 새 경로를 직접 import한다. 같은 DB와 SQLite 정책을 사용하고 프로세스·권한·활성화는 추가하지 않는다.
 
-독립 accounting 편집자 `responsibility_review`가 dated split plan과 nested SIZE_UNITS/VERDICTS를 등록하고 부모·incidents·budget을 중복 없이 재측정한다. 현재 budget 실측은 `__init__.py`를 포함한 238줄이며 기존 +150 allowance와 임계값을 바꾸지 않는다. 이후 사건 worker는 같은 책임 단위에서 성장 한도를 다시 검증한다. 실제 측정·독립 검토·원격 구조 시험이 끝나기 전 착지하지 않는다.
+독립 accounting 편집자 `responsibility_review`가 dated split plan과 nested SIZE_UNITS/VERDICTS를 등록하고 부모·incidents·automation을 중복 없이 재측정한다. 현재 원장 실측은 `__init__.py`를 포함한 238줄이며 기존 +150 allowance와 임계값을 바꾸지 않는다. 이후 관측 port와 사건 worker는 같은 책임 단위에서 성장 한도를 다시 검증한다. 실제 측정·독립 검토·원격 구조 시험이 끝나기 전 착지하지 않는다.
