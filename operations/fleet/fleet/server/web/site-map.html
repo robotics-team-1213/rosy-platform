@@ -68,7 +68,7 @@
       <ui-head>
         <ui-text id="map-heading" scale="label">지도</ui-text>
         <label class="inline">보기 <select class="ui-field" id="map-source" aria-label="보는 지도">
-          <option value="active">활성 지도</option><option value="draft">초안</option><option value="profile">저장된 프로필</option>
+          <option value="active">활성 지도</option><option value="draft">초안</option><option value="profile">저장된 지도 설정</option>
         </select></label>
         <label class="inline">화면 방향 <select class="ui-field" id="map-view-turn" aria-label="지도 화면 방향, 기본 화면에서 시계 방향 회전">
           <option value="0">기본 (+y 위)</option><option value="90">90° 돌림</option>
@@ -96,14 +96,14 @@
       </details>
     </ui-section>
     <ui-section aria-labelledby="profile-heading">
-      <ui-head><ui-text id="profile-heading" scale="label">지도 프로필</ui-text></ui-head>
-      <label>저장된 지도<select class="ui-field" id="map-profile" aria-label="지도 프로필 선택"></select></label>
+      <ui-head><ui-text id="profile-heading" scale="label">지도 지도 설정</ui-text></ui-head>
+      <label>저장된 지도<select class="ui-field" id="map-profile" aria-label="지도 지도 설정 선택"></select></label>
       <div class="actions">
         <ui-button id="profile-new" kind="quiet">새 지도 규칙 작성</ui-button>
-        <ui-button id="profile-copy" kind="quiet">보는 지도를 새 프로필로</ui-button>
-        <ui-button id="profile-draft" kind="quiet" disabled>선택한 프로필을 초안으로</ui-button>
+        <ui-button id="profile-copy" kind="quiet">보는 지도를 새 지도 설정로</ui-button>
+        <ui-button id="profile-draft" kind="quiet" disabled>선택한 지도 설정을 초안으로</ui-button>
       </div>
-      <label>프로필 ID<input class="ui-field" id="profile-id" maxlength="64" pattern="[A-Za-z0-9_.-]{1,64}"></label>
+      <label>지도 설정 ID<input class="ui-field" id="profile-id" maxlength="64" pattern="[A-Za-z0-9_.-]{1,64}"></label>
       <label>지도 이름<input class="ui-field" id="profile-name" maxlength="64"></label>
       <label>지도 종류<select class="ui-field" id="profile-kind"><option value="lane_course">차선 주행 코스</option><option value="soccer">로봇 축구장</option><option value="general">일반 지도</option></select></label>
       <label>설명<textarea class="ui-field" id="profile-description" rows="2" maxlength="1000"></textarea></label>
@@ -120,8 +120,8 @@
         <label>지도 규칙 JSON<textarea class="ui-field" id="profile-rules" rows="14" spellcheck="false" aria-describedby="profile-rule-hint"></textarea></label>
         <ui-text id="profile-rule-hint">rosy.site_map/1 형식: x·y는 공유 map 좌표(m), yaw는 rad입니다. places는 장소, edges의 polyline은 차로 선입니다. direction·width_m·speed_cap_mps·turn_bans로 통행 규칙을 정합니다. 저장할 때 좌표·연결·규칙을 검증한 뒤 2D로 그립니다.</ui-text>
       </details>
-      <ui-button id="profile-save" kind="primary" disabled>검증하고 프로필 저장</ui-button>
-      <ui-text id="profile-status" role="status">프로필 선택·저장은 활성 지도를 바꾸지 않습니다. 운행에 쓰려면 초안으로 불러온 뒤 활성화하세요.</ui-text>
+      <ui-button id="profile-save" kind="primary" disabled>검증하고 지도 설정 저장</ui-button>
+      <ui-text id="profile-status" role="status">지도 설정 선택·저장은 활성 지도를 바꾸지 않습니다. 운행에 쓰려면 초안으로 불러온 뒤 활성화하세요.</ui-text>
     </ui-section>
     <div class="map-workflow">
       <ui-section aria-labelledby="trip-heading">
