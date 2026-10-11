@@ -850,3 +850,11 @@ main {
 .console-secondary > .dispatch-control { flex-wrap: wrap; }
 .console-secondary > .dispatch-control small { white-space: normal; }
 .map-head > #map-display-mode { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+
+.robot-summary { border-bottom: 1px solid var(--border-subtle); }
+.robot-summary.selected { background: var(--surface-raised); }
+.robot-summary .robot-line { align-items: center; justify-content: space-between; }
+.robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
+.robot-list-details { margin-top: var(--space-3); }
+.context-tabs ui-button { font-size: var(--text-label); }
