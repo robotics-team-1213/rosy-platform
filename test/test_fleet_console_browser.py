@@ -1299,6 +1299,8 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
         # D-560: this Vision answers the map-plane lease with a raw frame (no D-560), so the D-515
         # browser warp is the fallback and the tag says so.
@@ -1380,6 +1382,8 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         page.route("**/api/fleet/vision/lease", serve_lease)
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 평면 영상 · paint-test')",
             timeout=10000)
@@ -1461,6 +1465,8 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         # The 1 s tracking poll keeps the network busy; networkidle never comes (timed out on main too).
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
@@ -1531,6 +1537,8 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
             timeout=20000)
@@ -1597,6 +1605,8 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
+        page.select_option("#map-display-mode", "overlay")
+        page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('정지 로봇 관측 차이')",
             timeout=20000)
@@ -1998,11 +2008,11 @@ def test_console_fits_the_declared_viewport(console_url):
     assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 2) <= 0.03, fit  # D-629: map 2 : rail 1
     # D-540 3 replaces D-493's 1920 rail fit: the rail is the one scroll, its first panels start on screen.
     assert fit["rosterPanel"]["top"] < fit["vh"], fit
-    for name in ("mapCanvas", "visionPreview", "roster", "rosterPanel", "stop"):
+    for name in ("mapCanvas", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
-    for name in ("signals", "formation"):
+    for name in ("signals", "formation", "visionPreview"):
         assert tools_fit[name]["width"] > 0 and tools_fit[name]["height"] > 0, tools_fit
-    assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
+    assert tools_fit["visionFrame"]["height"] == 0, tools_fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 48 and fit["stop"]["height"] >= 48, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["rosterPreceding"]["top"] >= fit["rosterHeading"]["bottom"], fit
