@@ -16,6 +16,7 @@ PACKAGE_DIRS = {
 }
 FLAT_ROOTS = tuple(DRIVE_ROOT / name for name in
                    ("safety", "recovery", "tracking", "calibration"))
+RUNTIME_ROOT = DRIVE_ROOT / 'runtime'
 
 
 def load_source_package(namespace):

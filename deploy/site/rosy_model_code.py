@@ -78,7 +78,7 @@ CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
 SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
                        "middleware/perception/package.xml",
                        *("middleware/control/drive/" + name + "/" for name in
-                         ("safety", "recovery", "tracking", "calibration", "planning/grid")))
+                         ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
 SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/vision/perception/__init__.py",
@@ -87,6 +87,7 @@ SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/control/drive/tracking/path_follow.py",
                   "middleware/control/drive/calibration/modes.py",
                   "middleware/control/drive/planning/grid/__init__.py",
+                  "middleware/control/drive/runtime/control_node.py",
                   "middleware/control/drive/safety/adapter/__init__.py",
                   "middleware/control/drive/tracking/wander/__init__.py")
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
