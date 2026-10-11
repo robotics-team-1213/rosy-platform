@@ -1,7 +1,7 @@
 """D-671 reception receipts carry no execution grant."""
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 Snowflake = str
 
@@ -43,3 +43,39 @@ class ChannelNavigationCandidate(BaseModel):
     x: FiniteFloat
     y: FiniteFloat
     yaw: FiniteFloat = 0.0
+
+
+class ChannelReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_revision: int = Field(ge=0)
+    state: Literal["READY", "HOLD", "REJECTED"]
+    candidate: ChannelNavigationCandidate | None = None
+    reason: str = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def candidate_scope(self):
+        if (self.state == "READY") != (self.candidate is not None) or not self.reason.strip():
+            raise ValueError("READY requires a candidate; HOLD/REJECTED require only a reason")
+        return self
+
+
+class ChannelTaskLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_revision: int = Field(ge=0)
+    task_id: str = Field(min_length=1, max_length=128)
+
+
+class ChannelWorkflowView(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    request_id: str
+    content_hash: str
+    revision: int
+    state: Literal["REQUESTED", "READY", "HOLD", "REJECTED", "LINKED"]
+    candidate: ChannelNavigationCandidate | None
+    reason: str | None
+    work_kind: Literal["task"] | None
+    work_id: str | None
+    work_status: str | None
+    request_key: str

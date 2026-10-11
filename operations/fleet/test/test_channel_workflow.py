@@ -36,6 +36,7 @@ def review(workflow, receipt, **changes):
 def task(tasks, receipt, **changes):
     body = {"task_id": "task-one", "robot_id": "pinky", "task_type": "navigate",
             "source": "operator", "actor_id": "op", "request_key": "discord-" + receipt["request_id"],
+            "evidence": None,
             "request": {"goal": {key: GOAL[key] for key in ("x", "y", "yaw")}}}
     body.update(changes)
     return tasks.create_task(**body)["task"]
