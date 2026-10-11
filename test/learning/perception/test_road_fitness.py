@@ -85,6 +85,7 @@ def test_region_logic_does_not_reinterpret_legacy_road_labels(semantic):
 @pytest.mark.parametrize("change,reason", [
     ({"captured_at_ns": 800}, "anchor_stale"),
     ({"captured_at_ns": 1100}, "anchor_future"),
+    ({"captured_at_ns": 1010}, "capture_time_mismatch"),
     ({"validity": SnapshotValidity.UNKNOWN}, "anchor_invalid"),
     ({"frame_id": "map"}, "frame_mismatch"),
     ({"calibration_revision": "other"}, "calibration_mismatch"),
@@ -115,6 +116,34 @@ def test_paired_evaluation_keeps_truth_denominators_when_region_abstains():
     assert report["current_region"]["scored_pixels"] == 0
     assert report["current_region"]["iou"] is None and report["region_reason"] == "no_anchor"
     assert report["fitness_verdict"] == "HOLD"
+
+
+def test_invalid_image_keeps_truth_counts_without_scoring_either_target():
+    image, anchor = _snapshots()
+    labels = _labels()
+    truth = (labels == 2).astype(np.uint8)
+    report = evaluate_frame(labels, CLASSES, replace(image, validity=SnapshotValidity.INVALID),
+                            anchor, ((10, 2),), truth, truth, domain="real", conditions=(),
+                            now_ns=1050, max_age_ns=100)
+    assert report["road_surface"]["valid_truth_pixels"] == labels.size
+    assert report["road_surface"]["scored_pixels"] == report["current_region"]["scored_pixels"] == 0
+    assert report["region_reason"] == "invalid_inputs" and "image_invalid" in report["input_errors"]
+
+
+def test_contradictory_road_and_region_truth_is_not_scored():
+    image, anchor = _snapshots()
+    labels = _labels()
+    road_truth = (labels == 2).astype(np.uint8)
+    region_truth = np.ones_like(road_truth)
+    with pytest.raises(ValueError, match="outside declared road truth"):
+        evaluate_frame(labels, CLASSES, image, anchor, ((10, 2),), road_truth, region_truth,
+                       domain="real", conditions=(), now_ns=1050, max_age_ns=100)
+
+
+@pytest.mark.parametrize("seeds", [None, (None,), ((True, 2),), ((1.5, 2),)])
+def test_malformed_projection_pixels_are_rejected(seeds):
+    with pytest.raises(ValueError, match="anchors"):
+        observed_road_region(_labels(), CLASSES, seeds)
 
 
 def test_wrong_region_is_measured_separately_from_correct_whole_road():

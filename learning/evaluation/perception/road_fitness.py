@@ -38,8 +38,11 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
     road, _ = road_masks(labels, classes)
     errors = road_region_input_errors(image, anchor, now_ns=now_ns, max_age_ns=max_age_ns)
     region, reason = (None, "invalid_inputs") if errors else observed_road_region(labels, classes, seed_pixels)
-    surface_metrics = _metrics(road, road_truth, labels.shape)
+    surface_metrics = _metrics(None if any(e.startswith("image_") for e in errors) else road,
+                               road_truth, labels.shape)
     region_metrics = _metrics(region, region_truth, labels.shape)
+    if ((region_truth == 1) & (road_truth == 0)).any():
+        raise ValueError("current region truth lies outside declared road truth")
     other = (road_truth == 1) & (region_truth == 0)
     region_metrics.update(other_region_truth_pixels=int(other.sum()),
                           other_region_included_pixels=int((region & other).sum()) if region is not None else None,
