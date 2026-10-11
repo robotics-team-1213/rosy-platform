@@ -525,12 +525,15 @@ export function canvasTextSize(role = "micro") {
     throw new Error(`Missing canvas text token: --text-${role}`);
   }
   const probe = document.createElement("span");
-  probe.style.fontSize = `var(--text-${role})`;
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
+  probe.hidden = true;
+  probe.dataset.rosyFontProbe = "";
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`[data-rosy-font-probe] { font-size: var(--text-${role}); }`);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   document.documentElement.append(probe);
   const size = parseFloat(getComputedStyle(probe).fontSize);
   probe.remove();
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((entry) => entry !== sheet);
   if (!Number.isFinite(size) || size <= 0) throw new Error(`Missing canvas text token: --text-${role}`);
   fontCache.set(`size:${role}`, size);
   return size;
