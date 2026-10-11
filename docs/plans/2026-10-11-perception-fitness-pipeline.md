@@ -83,4 +83,10 @@ module: docs
 
 현재 구역 로직: D-665가 내부 입력·보류·소비자를 정의한다. World는 관측 snapshot의 시각·유효성·frame/calibration/transform/reference를 확인하고, perception은 확인된 기준점이 하나의 연결 영역에 속하는 경우만 현재 구역을 산출한다. learning의 `road_fitness.evaluate_frame`은 도로면/현재 구역의 독립 정답을 각각 점수화하고 구역 보류에서도 정답 분모를 보존한다. `b64dc94e0a` 원격 합성 로직·기존 기준선·World 설치 wheel 시험은 terminal exit 0, NEW 0이다.
 
-남은 구현: 실제 기준점 투영 생산자와 보정/위치 오차 검증, 독립 정답 데이터/예약/split과 실물·시뮬레이션별 실행·coverage 보고, 물체 독립 평가, 사전 고정 수용 profile, 관측 전용 장치 전달과 지연 readback. 새 데이터 검수·학습과 현장 수용은 아직 확인되지 않았다.
+남은 구현: 실제 기준점 투영 생산자와 보정/위치 오차 검증, 독립 정답 데이터/예약/split과 실물·시뮬레이션별 실행·coverage 보고, 물체 독립 평가, 사전 고정 수용 profile, 관측 전용 장치 전달과 지연 readback. 새 도로면 정답 검수·학습과 현장 수용은 아직 확인되지 않았다.
+
+## 20261010 검수 데이터 연결
+
+사용자가 알려 준 Desktop 패키지와 AI PC 원본을 [직접 확인했다](../validation/drivable-reviewed-desktop-2026-10-11.md). 후속 `v13-drivable-human-20261010`은 2,769장(2,167 train / 358 val / 244 test), 모든 frame에 human_edit/done 기록이 있으며 이미지·마스크 5,538개의 hash가 일치했다. 동일 이미지의 split 중복은 0이다. 검수 자료가 없다는 기존 탐색 가정은 이 확인으로 해소됐다.
+
+다만 이 drivable은 선과 로봇 연결성에 따른 기존 구역 의미다. 전체 도로면으로 재해석하거나 semantic을 소급 덧붙이지 않는다. 기준선과 재검수 원본으로 활용하고, 원본 영상 단위 분리·독립 authority·새 도로면/현재 구역 정답을 각각 결속한다. v2 Desktop에는 원본 dataset이 없으므로 AI PC 원본의 manifest 파일 hash와 실제 image/mask hash를 함께 유지한다. manifest 파일 hash를 store content SHA로 대체하지 않는다. crop 112..239 좌표 결속과 평가 분모 차이를 재생 평가 구현에 반영한다.
