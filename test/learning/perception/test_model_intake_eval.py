@@ -386,7 +386,11 @@ def test_strict_evaluation_checks_actual_content(tmp_path):
 
 @pytest.mark.parametrize("training_semantic", [None, "current_road_region/1", "road_surface/1"])
 def test_strict_intake_binds_model_to_training_labels(tmp_path, monkeypatch, training_semantic):
-    folder, model = _semantic_eval(tmp_path, "road_surface/1", "road_surface/1")
+    ev = _semantic_eval(tmp_path, "road_surface/1", "road_surface/1")
+    folder = Path(ev["set"]["path"])
+    model = _model(_pred())
+    model.manifest.raw["output"] = {"classes": [vars(c).copy() for c in MODEL_CLASSES]}
+    model.manifest.raw["output"]["classes"][-1]["semantic"] = "road_surface/1"
     folder = _seal(folder)
     _store_dataset(tmp_path, ["training-session"])
     training = tmp_path / "store/datasets/lanes" / DS_SHA
