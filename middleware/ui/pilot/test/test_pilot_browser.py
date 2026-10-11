@@ -813,6 +813,7 @@ def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
     page.route("**/api/v1/robot/state",
                lambda route: route.fulfill(json={
                    "mode": "MANUAL",
+                   "evidence": {"velocity": {"evidence": "fresh"}},
                    "velocity": {"linear": 0.08, "angular": 0.0}}))
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
@@ -829,7 +830,8 @@ def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
                lambda route: route.fulfill(json={"rooms": []}))
     page.route("**/api/v1/robot/state",
                lambda route: route.fulfill(json={
-                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}}))
+                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0},
+                   "evidence": {"velocity": {"evidence": "fresh"}}}))
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     tag = page.locator("[data-lobby-self]")
@@ -840,10 +842,20 @@ def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("status,state,word", [
-    (503, {}, "상태 확인 불가"),
-    (200, {"mode": "MANUAL", "velocity": {"linear": 0}}, "상태 확인 불가"),
-    (200, {"mode": "SAFE_STOP", "safety": {"estop": True}}, "안전 정지"),
-    (200, {"mode": "NAVIGATION", "velocity": {"linear": 0, "angular": 0.1}}, "이동 중"),
+    (503, {}, "속도 연결 끊김"),
+    (200, {"mode": "MANUAL", "velocity": {"linear": 0}}, "속도 정보 없음"),
+    (200, {"mode": "SAFE_STOP", "safety": {"estop": True},
+           "evidence": {"safety": {"evidence": "fresh"}}}, "안전 정지"),
+    (200, {"mode": "SAFE_STOP", "safety": {"estop": True}}, "안전 정지 보고 · 안전 상태 확인 불가"),
+    (200, {"mode": "NAVIGATION", "velocity": {"linear": 0, "angular": 0.1},
+           "evidence": {"velocity": {"evidence": "fresh"}}}, "이동 중"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "delayed"}}}, "속도 지연"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "disconnected"}}}, "속도 연결 끊김"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "unavailable"}}}, "속도 정보 없음"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0}}, "속도 연결 끊김"),
 ])
 def test_lobby_self_state_never_turns_missing_or_moving_evidence_into_idle(tablet_page, status, state, word):
     base_url, page, errors = tablet_page
