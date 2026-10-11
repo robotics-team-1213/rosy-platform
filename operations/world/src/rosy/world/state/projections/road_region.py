@@ -28,4 +28,6 @@ def road_region_input_errors(image: ObservationSnapshot, anchor: ObservationSnap
         errors.append("transform_mismatch")
     if image.snapshot_id not in anchor.evidence_refs:
         errors.append("image_reference_missing")
+    if image.captured_at_ns != anchor.captured_at_ns:
+        errors.append("capture_time_mismatch")
     return tuple(errors)
