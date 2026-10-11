@@ -3338,7 +3338,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         banner.wait_for()
         assert banner.inner_text().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
         page.wait_for_function(
-            "() => document.querySelectorAll('#roster p.robot-summary-evidence').length === 3")
+            "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         listed = page.locator("#address-movable li")
         assert listed.count() == 2
         assert "rosy_09 → 10.16.36.20:8080" in listed.nth(0).inner_text()
@@ -3477,7 +3477,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.locator("#address-banner").wait_for()
         page.wait_for_function(
-            "() => document.querySelectorAll('#roster p.robot-summary-evidence').length === 3")
+            "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#enrolled-list li[data-robot-id]').length > 0")
