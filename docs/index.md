@@ -213,6 +213,7 @@
 | D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
 
 ## 계획·결과 문서
 
@@ -311,8 +312,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
 - 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
 - 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
 - 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
 - 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
-- 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
