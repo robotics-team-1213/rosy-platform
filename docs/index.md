@@ -301,6 +301,7 @@
 - [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -318,8 +319,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
 - 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
 - 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
 - 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
 - 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
-- 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
