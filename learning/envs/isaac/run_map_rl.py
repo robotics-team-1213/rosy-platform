@@ -244,8 +244,17 @@ def main():
         try:
             if stop_robot is not None:
                 summary['cleanup_stop'] = stop_robot()
+        except Exception as exc:
+            summary['cleanup_error'] = str(exc)
+            raise
         finally:
-            app.close()
+            try:
+                app.close()
+            except Exception as exc:
+                summary['sdk_shutdown_error'] = str(exc)
+                raise
+            finally:
+                (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
 
 
 if __name__ == '__main__':
