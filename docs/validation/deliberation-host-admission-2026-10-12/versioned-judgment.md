@@ -16,9 +16,9 @@ CLI와 로컬 제공자는 같은 v2 요청 생성기를 사용한다. 기존 GL
 
 ## 원격 증거
 
-- 프로파일·JSON: `1c755a7fb35d6ad9b7bbb272f2d461d99779f591`, Model PC 자원 기준 충족, 관련 137 passed / NEW 0.
-- v2 CLI·공통 요청: `aab682ca6bfff5de79911121f6b1af3753512c12`, Model PC 자원 기준 충족, 관련 145 passed / NEW 0.
-- 보정 프로파일 바인딩: `ba9c6dffb301e523e7e5901bcdf130dd4cdb934e`, 모델·역할·한도 교체 회귀 8개 RED 이후 관련 82 passed / NEW 0. 이 실행은 자원 하한 미달 fallback이며 지연·용량 수용 증거가 아니다.
+- 프로파일·JSON: commit `1c755a7fb3`, Model PC 자원 기준 충족, 관련 137 passed / NEW 0.
+- v2 CLI·공통 요청: commit `aab682ca6b`, Model PC 자원 기준 충족, 관련 145 passed / NEW 0.
+- 보정 프로파일 바인딩: commit `ba9c6dffb3`, 모델·역할·한도 교체 회귀 8개 RED 이후 관련 82 passed / NEW 0. 이 실행은 자원 하한 미달 fallback이며 지연·용량 수용 증거가 아니다.
 - GLM 영속 사용 표식: `5cb1572912`, Model PC 자원 기준 충족, 관련 94 passed / NEW 0. 요청 결과 불명·새 프로세스·다른 사건에서도 첫 실제 호출의 표식을 보존한다.
 
 위 suite는 범위가 겹치므로 합산하지 않는다. 통합 HEAD 시험과 독립 검토 결과는 확인 후 추가한다.

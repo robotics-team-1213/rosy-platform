@@ -6,11 +6,22 @@ import json
 import os
 from pathlib import Path
 import sqlite3
-import sys
+import re
 
-ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "operations/fleet"))
-from fleet.server.core_event_store import MAX_EVENT_BYTES, _contains_sensitive_field  # noqa: E402
+MAX_EVENT_BYTES = 64 * 1024
+_SENSITIVE_FIELD = re.compile(
+    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
+    r"api[_-]?key|private[_-]?key|bearer)", re.IGNORECASE)
+_PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")
+
+
+def _contains_sensitive_field(value):
+    if isinstance(value, dict):
+        return any(_SENSITIVE_FIELD.search(str(key)) or _contains_sensitive_field(child)
+                   for key, child in value.items())
+    if isinstance(value, list):
+        return any(_contains_sensitive_field(child) for child in value)
+    return isinstance(value, str) and bool(_PRIVATE_KEY.search(value))
 
 
 def export(database, output, *, robot_id=None):

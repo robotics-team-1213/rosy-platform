@@ -143,7 +143,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
-    journal = getattr(console.hub, "event_store", None)
+    journal = getattr(getattr(console, "hub", None), "event_store", None)
     observation_path = answer_log_path or (journal.path if journal is not None else None)
     if observation_path is not None:
         from fleet.server.observation_store import ObservationStore

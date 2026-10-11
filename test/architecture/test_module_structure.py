@@ -1000,7 +1000,11 @@ SIZE_VERDICTS = {
         "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
     "fleet/fleet/server/app.py": (
-        756,
+        909,
+        "accept: independently re-judged by pipeline_review on 2026-10-12 at 909: D-685 adds "
+        "only approved robot scope and owner-event reader composition wiring; all judgment, storage, "
+        "learning and command logic remain with their existing owners. Keep600 threshold and +150. "
+        "Previous verdict: "
         "accept: re-judged at 756 on 2026-10-08: Service Control (D-524) adds one route install; "
         "the allowlist and helper stay in host_control.py. +150 allowance measured from 756. "
         "Previously: one existing composition/lifespan owner wires bounded route siblings; "

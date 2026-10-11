@@ -63,6 +63,7 @@ def test_unresolved_yield_only_resumes_after_completed_owner_segment(monkeypatch
     core.sent(answer, 0)
     core.result(answer, code=None)
     chain = core._chains["rosy_01"]
+    chain.rule_answers = 1  # Exhausted rule tier; existing meet segments do not consume that counter.
     chain.unresolved.add("YIELD")
     core._escalate(chain, "rosy_01", "stuck-1", "unresolved:YIELD")
     row["state"]["line_follow"]["stuck"]["phase"] = phase

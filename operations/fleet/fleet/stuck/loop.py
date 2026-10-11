@@ -46,7 +46,7 @@ class StuckResolverLoop:
         self.outcomes, self.episodes, self.problems = Outcomes(), None, None
         self._rows: dict[str, dict] = {}
         self.wake = asyncio.Event()
-        if board._log is not None:
+        if board is not None and board._log is not None:
             resolver._uncertain.update(board._log.uncertain_motion())
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
@@ -60,7 +60,7 @@ class StuckResolverLoop:
         robots = [self._row(row) for row in (await self._snapshot())["robots"]]
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
-        for rid, sid in tuple(self._resolver._uncertain):
+        for rid, sid in tuple(getattr(self._resolver, "_uncertain", ())):
             events = self.events_since(rid, 0)
             if any(event.type == "nav.line_stuck_closed" and event.data.get("stuck_id") == sid for event in events):
                 self._board.record(robot_id=rid, stuck_id=sid, decision="ESCALATE", principal_id=PRINCIPAL_ID,
