@@ -221,6 +221,7 @@
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
 | D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
 | D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -302,6 +303,7 @@
 - [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -319,8 +321,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 계약 (D-659)
 - 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
+- 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
 - 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
 - 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
-- 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
-- 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
