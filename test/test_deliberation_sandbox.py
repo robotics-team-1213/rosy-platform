@@ -40,7 +40,20 @@ def test_scope_cleanup_uses_exact_generated_scope(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'bounded_process', fake_process)
     assert asyncio.run(launcher(('opencode', 'run'), b'{}', 1, 32, .1)) == (0, b'{}')
     scope = next(arg.split('=', 1)[1] for arg in calls[0] if arg.startswith('--unit='))
-    assert scope.endswith('.scope') and calls[1] == ('/usr/bin/systemctl', '--user', 'stop', scope)
+    assert scope.endswith('.scope') and calls[1] == ('/usr/bin/systemctl', '--user', 'kill',
+        '--kill-whom=all', '--signal=KILL', scope)
+
+
+def test_provider_factory_connects_translator_and_closes_snapshot(tmp_path):
+    from deploy.site.deliberation_sandbox import sandbox_provider
+    executable = tmp_path / 'provider'
+    executable.write_bytes(b'fixture')
+    with sandbox_provider(kind='claude', executable=executable,
+            executable_sha256=hashlib.sha256(b'fixture').hexdigest(),
+            model='reviewed-model', profile_id='reviewed-profile') as provider:
+        snapshot = provider.launch.executable
+        assert provider.kind == 'claude' and snapshot.exists()
+    assert not snapshot.exists()
 
 
 def test_stdout_is_bounded_and_stderr_is_not_returned():

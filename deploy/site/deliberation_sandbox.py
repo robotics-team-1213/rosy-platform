@@ -8,6 +8,7 @@ import signal
 import sys
 import tempfile
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -133,6 +134,8 @@ class SandboxLauncher:
             '--setenv', 'HOME', '/tmp/home', '--setenv', 'PATH', '/usr/bin:/bin', '--', '/provider', *argv[1:])
 
     async def __call__(self, argv, body, remaining, output_limit, budget_usd):
+        if type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30:
+            raise ValueError('invalid provider deadline')
         if type(budget_usd) not in (int, float) or not math.isfinite(budget_usd) or not 0 < budget_usd <= 10:
             raise ValueError('invalid provider cost budget')
         unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
@@ -143,7 +146,18 @@ class SandboxLauncher:
             return await bounded_process(command, body,
                 remaining - (asyncio.get_running_loop().time() - started), output_limit)
         finally:
-            # Stop only this generated scope, including children that changed their process group.
-            code, _ = await protect_cleanup(bounded_process(('/usr/bin/systemctl', '--user', 'stop', unit), b'', 1, 256))
+            # Kill only this generated scope, including children that changed their process group.
+            code, _ = await protect_cleanup(bounded_process(('/usr/bin/systemctl', '--user', 'kill',
+                '--kill-whom=all', '--signal=KILL', unit), b'', 1, 256))
             if code not in (0, 5):
                 raise RuntimeError('SANDBOX_CLEANUP_UNCONFIRMED')
+
+
+@contextmanager
+def sandbox_provider(*, kind, executable, executable_sha256, model, profile_id):
+    from rosy.decision.deliberation.cli import CliProvider
+    launcher = SandboxLauncher(kind, executable, executable_sha256)
+    try:
+        yield CliProvider(kind=kind, model=model, profile_id=profile_id, launch=launcher)
+    finally:
+        launcher.close()
