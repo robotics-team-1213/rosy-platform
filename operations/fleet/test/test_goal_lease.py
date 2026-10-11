@@ -81,7 +81,7 @@ def test_off_by_default_sends_no_lease_and_shows_nothing():
     assert robot.renewals == [] and _goal(console) == {"x": 1.0, "y": 0.0, "yaw": 0.0}
 
 
-@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_calc", "bay_cap", "bay_receipt", "traffic_cancel"])
+@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_calc", "bay_cap", "bay_receipt", "bay_timeout", "bay_malformed", "traffic_cancel"])
 @pytest.mark.parametrize("stop_all", [False, True])
 def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch):
     async def main():
@@ -140,7 +140,13 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch
             elif stage == "bay_calc":
                 monkeypatch.setattr(console_module.asyncio, "to_thread", lambda *_args, **_kw: pause((1.0, 1.0)))
             else:
-                other.navigation_goal = lambda *_args, **_kw: pause({"accepted": True})
+                async def bay_reply(*_args, **_kw):
+                    await pause(None)
+                    if stage == "bay_timeout":
+                        raise TimeoutError("receipt lost")
+                    return {} if stage == "bay_malformed" else {"accepted": True}
+
+                other.navigation_goal = bay_reply
         goal = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
         await entered.wait()
         try:
@@ -154,7 +160,7 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch
         assert "rosy_01" not in console._goals
         assert not _sent(other)
         assert "rosy_02" not in console._yielding
-        if stage == "bay_receipt":
+        if stage in {"bay_receipt", "bay_timeout", "bay_malformed"}:
             assert ("navigation_cancel",) in other.calls
 
     run(main())
