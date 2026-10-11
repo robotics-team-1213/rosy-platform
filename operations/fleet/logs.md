@@ -1,11 +1,5 @@
 # fleet logs
 
-## 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
-
-- 변경: 같은 전체 조사 기준에서 명시적으로 고른 0.05 m 이내 장소에 새 관측의 끝점만 접합한다. inferred 근거와 원본 frame/calibration note를 보존하며 검토 전 활성화를 거절한다. 같은 좌표의 다른 장소 ID와 robot_kinds를 중복 비교에 포함한다.
-- 증거: Node 29 PASS. AI PC 자원 기준 통과한 원격 Chromium 16 PASS/63 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-connect-race-green/run-1.txt`). 독립 검토 수용. 이전 구조 시험 1 NEW는 Fleet 52995 > 52840+150이며 기존 실패로 간주하지 않았다. 독립 재측정 53010으로 split 판정을 갱신하고 +150·파일 상한·기존 분리 의무를 유지한다.
-- gate 변화: source/remote 연결 검토 완료. main 통합·CI·배포·실제 사이트 및 실물 정확도는 아직 미확인이다.
-
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
@@ -3248,3 +3242,10 @@
 - 변경: survey가 없는 camera map에서도 marker로 이동한 장소의 연결 간선을 operator/observed로 바꿔 재검토를 요구한다. 기존 프레임/교정 note는 보존하고 활성 지도를 유지한다.
 - 증거: 새 단일 시험 remote RED 뒤 ebf05b9811 원격 카메라·marker·UI·구조 12 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-review-final-retry/run-1.txt. AI PC 자원 기준 통과. marker 편집 뒤 활성화는 ROAD_UNREVIEWED로 거절한다.
 - gate 변화: source/remote; endpoint 연결 검토·통합·CI·배포·실제 로봇/측정은 미완료다.
+
+## 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
+
+- 변경: 같은 전체 조사 기준에서 명시적으로 고른 0.05 m 이내 장소에 새 관측의 끝점만 접합한다. inferred 근거와 원본 frame/calibration note를 보존하며 검토 전 활성화를 거절한다. 같은 좌표의 다른 장소 ID와 robot_kinds를 중복 비교에 포함한다.
+- 증거: Node 29 PASS. AI PC 자원 기준 통과한 원격 Chromium 16 PASS/63 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-connect-race-green/run-1.txt`). 독립 검토 수용. 이전 구조 시험 1 NEW는 Fleet 52995 > 52840+150이며 기존 실패로 간주하지 않았다. 독립 재측정 53010으로 split 판정을 갱신하고 +150·파일 상한·기존 분리 의무를 유지한다.
+- gate 변화: source/remote 연결 검토 완료. main 통합·CI·배포·실제 사이트 및 실물 정확도는 아직 미확인이다.
+

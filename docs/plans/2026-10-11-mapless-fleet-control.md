@@ -207,3 +207,9 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 - 일반 camera 초안도 기존 검토 메모로 검토할 수 있다. 간선 운행 속성 수정과 marker 끝점 수정은 camera/observed가 아닌 operator/observed로 재검토하고 기존 프레임 지문을 보존한다. review는 원본 note에 근거를 덧붙인다. UI 검토 fixture에서 닫힌 disclosure를 열지 않은 두 실패는 실제 사용자 조작을 추가해 다시 실행한다. NEW를 known failure로 넣지 않는다.
 - 가까운 기존 장소(0.05 m 이내)를 자동 접합하지 않는다. Task 3의 중첩 경로 연결 후보 표시·검토는 미완료이며 다음 구현에서 명시적 endpoint mapping과 근거 상태를 연결한다. 카메라 누적 slice의 시험 통과를 Task 3 전체·최종 관제·배포 완료로 사용하지 않는다.
 - ebf05b9811 최종 원격 카메라/Vision/marker/desktop/mobile/구조 12 PASS/122 deselected, NEW 0 (`logs/camera-review-final-retry/run-1.txt`, AI PC 자원 기준 통과). Node 28 PASS. 독립 검토자는 소스와 해당 terminal 영수증을 확인해 누적/근거 보존 범위를 수용했다. 전체 browser 69개와 main 통합 회귀는 Task 6에서 확인한다.
+
+### Task 3 endpoint 연결 검토 종결
+
+- 78d642317b 연결 화면 시험은 통과했으나 구조 시험에서 Fleet 52995 > 52840+150 NEW가 발생했다. 독립 검토에서 같은 좌표의 다른 장소 ID를 무시하는 중복 처리와 파일/확인 창 대기 중 바뀐 선택·편집이 저장되는 경합을 발견했다.
+- 962fa15277은 명시적 endpoint ID와 robot_kinds까지 중복 비교하고, 클릭 당시 선택을 고정하며 파일·초안·미저장 편집·선택·접속 변경 시 대기 중 저장을 취소한다. Node 29 PASS와 AI PC 자원 기준 통과 원격 Chromium 16 PASS/63 deselected, NEW 0. 독립 검토 수용. package 53010 재측정과 split 재판정을 기록하며 +150·파일 상한·기존 observe/server/UI 분리 의무를 유지한다.
+- 1ea4f4c2c 최종 연결/구조 원격 19 PASS/98 deselected, NEW 0 (`logs/camera-connect-final/run-1.txt`, 모델 PC 23.2 cores/8.5 GB 기준 통과). 연결은 inferred로 보존하며 별도 검토 전 활성화를 거절한다. 이 증거는 실물 연결 정확도·main 통합·CI·배포·실제 사이트 수용이 아니다.

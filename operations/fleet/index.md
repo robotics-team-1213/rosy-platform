@@ -81,6 +81,7 @@
 - [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 - [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 
 ## 교훈 (docs/solutions)
@@ -93,8 +94,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · 962fa15277 · D-655 camera endpoint connection review
 - 2026-10-11 · b80fa42817 · D-655 카메라 지도 marker 편집 재검토
 - 2026-10-11 · 7476837977 · D-655 조사 독립 검토 회귀 수정
 - 2026-10-11 · 1a14e9705a · D-655 지도 없는 상대 주행 조사 API
 - 2026-10-11 · 7bf0f597dc · D-655 주행 기록 위치 단절 처리
-- 2026-10-11 · ea60284994 · D-655 조사용 상대 odom 읽기
