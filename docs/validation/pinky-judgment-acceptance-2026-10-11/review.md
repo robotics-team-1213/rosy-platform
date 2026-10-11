@@ -11,6 +11,7 @@
 팀 검수자는 정답·training의 canonical JSON SHA-256(`judgment_acceptance.digest`)와 정책 revision, 최소 표본/실제 해소 관측 수, 모든 한계를 **실제 평가 전에** 새 profile에 확정한다. CLI는 검수 정보/한계/표본이 미정이면 HOLD(exit2), 금지 건수/확정 한계 위반이면 FAIL(exit1), offline 통과도 PASS_OFFLINE_ONLY(exit0)이며 FIELD를 승인하지 않는다.
 
 ```powershell
+ # abstain_required_error_rate도 평가 전에 확정한다. 같은 물리 구간을 다른 ID로 복제하지 않는다.
 python learning/evaluation/perception/judgment_acceptance.py <reviewed-profile.json> <labels.json> <observations.json> <training.json> --out X:/DevTemp/<registered-session>/judgment-result.json
 ```
 

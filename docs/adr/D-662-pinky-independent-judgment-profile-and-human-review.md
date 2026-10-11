@@ -12,4 +12,6 @@
 
 ### Verification
 
+2026-10-11 검토 보강: 필수 ABSTAIN 정답에 확정 판단/명령을 낸 비율은 `abstain_required_error_rate`로 별도 검사하며 한계는 팀이 평가 전에 고정한다. 같은 subject/session/recording/시간 구간/case를 다른 ID로 복제하면 물리 표본 중복으로 거절한다. 위험 정답은 INTERVENE와 일치해야 한다. 초기 profile의 새 한계도 null/HOLD이며 실제 검수 완료를 뜻하지 않는다.
+
 가짜 입력으로 정상/기권 분모, 기한 전 pending/기한 후 위험 누락, 미정 HOLD, hash/중복 split/누락 receipt 거절, 다른 사건·stale·금지 명령 0건, 자연 해소 제외를 원격 시험한다. source/원격 계약, 설치, CI, 실제 채널, DEVICE/FIELD는 별도다.
