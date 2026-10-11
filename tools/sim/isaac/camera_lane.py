@@ -20,6 +20,18 @@ from core_features.line_follow import LineFollowConfig, LineFollowManager, LineF
 from map_task import QPolicy
 
 
+def camera_model_identity(model, *, revision, sha256):
+    manifest = model.manifest
+    roles = {c.role for c in manifest.classes}
+    chosen = [f for f in manifest.files if f.name == manifest.onnx_file().name]
+    if (manifest.backend != 'onnx' or manifest.model_revision != revision
+            or not {'lane_marking', 'drivable'} <= roles or len(chosen) != 1 or chosen[0].sha256 != sha256):
+        raise ValueError('existing camera model revision/hash/roles differ')
+    identity = {'schema': 'isaac-camera-error-confidence/1', 'model_revision': revision, 'model_sha256': sha256}
+    CameraQPolicy(17, perception=identity)
+    return identity
+
+
 class CameraQPolicy(QPolicy):
     def __init__(self, seed, *, perception):
         super().__init__(seed)

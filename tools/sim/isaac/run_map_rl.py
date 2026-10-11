@@ -31,6 +31,9 @@ def main():
     parser.add_argument('--source-revision', required=True)
     parser.add_argument('--policy-file', type=Path, help='fixed saved policy; evaluate four initial directions')
     parser.add_argument('--record-video', action='store_true', help='record actual headless Isaac camera frames')
+    parser.add_argument('--camera-model', type=Path, help='existing frozen perception model; CAMERA_LINE diagnostic')
+    parser.add_argument('--camera-model-revision')
+    parser.add_argument('--camera-model-sha256')
     args = parser.parse_args()
     if not 1 <= args.train_episodes <= 20 or not 0 < args.time_limit <= 600 or not math.isfinite(args.time_limit):
         raise ValueError('bounded episode count and time limit required')
@@ -39,6 +42,19 @@ def main():
     if os.environ.get('ROSY_CONFIG') or os.environ.get('ROSY_NAMESPACE'):
         raise ValueError('diagnostic refuses operational CORE environment')
     check_urdf(args.urdf, 'pinky', allow_package=False)
+    for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
+                 'middleware/core/gateway', 'middleware/core/services', 'middleware/core/events', 'middleware/perception'):
+        sys.path.insert(0, str(REPOSITORY / path))
+    camera_args = (args.camera_model, args.camera_model_revision, args.camera_model_sha256)
+    if any(camera_args) and not all(camera_args):
+        raise ValueError('camera model folder, exact revision and SHA256 required together')
+    perception_model = perception = None
+    if args.camera_model:
+        from camera_lane import CameraQPolicy, LearnedCameraLane, camera_model_identity
+        from control.sensing.perception.learned.runner import LaneSegModel
+        perception_model = LaneSegModel.open(args.camera_model, threads=1, allow_spinning=False, floor_gate=True)
+        perception = camera_model_identity(perception_model, revision=args.camera_model_revision,
+                                            sha256=args.camera_model_sha256)
     saved = None
     policy_bytes = None
     if args.policy_file:
@@ -46,13 +62,11 @@ def main():
             policy_bytes = policy_input.read(65537)
         if len(policy_bytes) > 65536:
             raise ValueError('bounded saved policy required')
-        saved = QPolicy.restore(json.loads(policy_bytes))
+        saved = (QPolicy.restore(json.loads(policy_bytes)) if perception is None else
+                 CameraQPolicy.restore(json.loads(policy_bytes), perception=perception))
     passive = passive_caster_joints(ET.parse(args.urdf).getroot())
     output = validate_output_path(args.output_dir / 'result.json').parent
     output.mkdir(parents=True, exist_ok=False)
-    for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
-                 'middleware/core/gateway', 'middleware/core/services', 'middleware/perception'):
-        sys.path.insert(0, str(REPOSITORY / path))
     track = load_track()
     from isaacsim import SimulationApp
     app = SimulationApp({'headless': True, 'fast_shutdown': False, 'width': 640, 'height': 480,
@@ -61,9 +75,14 @@ def main():
     stop_robot = None
     recorder = None
     camera = None
+    front_camera = None
+    lane = None
     summary = dict(source_revision=args.source_revision, map_sha256=track['source_sha256'],
                    segments=track['segments'], algorithm='CPU residual Q-learning, pursuit yaw gain',
                    operating_acceptance='HOLD', episodes=[])
+    if perception is not None:
+        summary.update(algorithm='CPU residual Q-learning, existing CAMERA_LINE yaw gain', perception=perception,
+                       camera_acceptance='HOLD', camera_guidance='map route direction + native odom, camera required')
     try:
         import numpy as np
         import omni.kit.app
@@ -116,17 +135,49 @@ def main():
         paint.CreateDisplayColorAttr([Gf.Vec3f(1.)])
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
-        if args.record_video:
+        if args.record_video or perception is not None:
             from isaacsim.sensors.camera import Camera
             from pxr import UsdLux
             light = UsdLux.DomeLight.Define(stage, '/World/RecordingLight')
             light.CreateIntensityAttr(1000.)
+        if args.record_video:
             camera = Camera(prim_path='/World/RecordingCamera', resolution=(960, 540))
             camera.set_world_pose(position=np.array([0., 0., 2.]),
                                   orientation=np.array([1., 0., 0., 0.]), camera_axes='usd')
             camera.set_focal_length(20.)
             camera.set_horizontal_aperture(36.)
+        if perception is not None:
+            import yaml
+            from control.sensing.perception.camera_ground import ground_plane
+            from isaacsim.core.utils.rotations import quat_to_rot_matrix, rot_matrix_to_quat
+            camera_profile = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/camera_nominal.yaml').read_text())
+            front_camera = Camera(prim_path='/World/FrontCamera', resolution=(320, 240))
+            front_camera.set_focal_length(20.)
+            front_camera.set_horizontal_aperture(320. * 20. / camera_profile['fx'])
+            front_camera.set_vertical_aperture(240. * 20. / camera_profile['fx'])
+            pitch = camera_profile['pitch_rad']
+            mount_rotation = np.array([[math.cos(pitch), 0., math.sin(pitch)],
+                                       [0., 1., 0.], [-math.sin(pitch), 0., math.cos(pitch)]])
+            mount_position = np.array([camera_profile['x_offset_m'], 0., camera_profile['height_m']])
+
+            def position_front_camera():
+                base_position, base_orientation = robot.get_world_pose()
+                rotation = quat_to_rot_matrix(base_orientation)
+                position = base_position + rotation @ mount_position
+                orientation = rot_matrix_to_quat(rotation @ mount_rotation)
+                front_camera.set_world_pose(position=position, orientation=orientation, camera_axes='world')
+
         world.reset()
+        if front_camera is not None:
+            front_camera.initialize()
+            position_front_camera()
+            intrinsics = front_camera.get_intrinsics_matrix()
+            if not np.allclose(intrinsics, [[camera_profile['fx'], 0., 160.],
+                                           [0., camera_profile['fx'], 120.], [0., 0., 1.]], atol=.001):
+                raise RuntimeError('native camera intrinsics differ from configured geometry')
+            summary['front_camera'] = dict(resolution=[320, 240], intrinsics=intrinsics.tolist(),
+                mount_position=mount_position.tolist(), pitch_rad=pitch,
+                geometry='configured URDF nominal mount; native simulation, not physical calibration', sample_sim_s=.1)
         if camera is not None:
             camera.initialize()
             summary['recording'] = dict(kind='native Isaac camera RGBA', resolution=[960, 540],
@@ -140,7 +191,7 @@ def main():
                                       wheel_base=contract['wheel_distance'], max_linear_speed=.06,
                                       max_angular_speed=.8)
         owner = SimulationOwner()
-        policy = saved or QPolicy(seed=17)
+        policy = saved or (QPolicy(seed=17) if perception is None else CameraQPolicy(seed=17, perception=perception))
         if saved is not None:
             (output / 'policy.json').write_bytes(policy_bytes)
             summary['evaluation_only'] = True
@@ -225,6 +276,16 @@ def main():
                 raise RuntimeError('reset pose or rest readback differs')
             epoch += 1
             owner.begin(epoch)
+            if lane is not None:
+                lane.close()
+            lane = None
+            if front_camera is not None:
+                ground = ground_plane(camera_profile['height_m'] + float(robot.get_world_pose()[0][2]),
+                    pitch, float(intrinsics[0, 0]), 160., 120., .6)
+                lane = LearnedCameraLane(perception_model, ground, camera_x=camera_profile['x_offset_m'])
+                position_front_camera()
+                for _ in range(20):
+                    world.render()
             task = MapTask(route, half_size=(scene.size_x / 2, scene.size_y / 2),
                            time_limit=min(60., args.time_limit) if phase == 'train' else args.time_limit)
             start_time = world.current_time
@@ -236,6 +297,7 @@ def main():
                     value != 0. for values in policy.table.values() for value in values)):
                 raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
             learned_steps = 0
+            camera_frames = camera_visible_frames = 0
             if camera is not None and phase == 'eval':
                 from native_recording import NativeRecorder
                 # Initialize the native render product before accepting episode frames.
@@ -257,12 +319,48 @@ def main():
                     now = time.monotonic()
                     elapsed = world.current_time - start_time
                     result = task.observe(*pose, elapsed)
-                    state, speed, angular = task.pursuit(*pose[:3])
+                    if lane is None:
+                        state, speed, angular = task.pursuit(*pose[:3])
+                    else:
+                        if camera_frames == 0 or (frame - 1) % 24 == 0:
+                            position_front_camera()
+                            world.render()
+                            image = front_camera.get_current_frame()
+                            rgba = front_camera.get_rgba()
+                            if rgba.shape != (240, 320, 4) or rgba.dtype != np.uint8:
+                                lane.invalidate('invalid_native_camera')
+                            else:
+                                ahead = task.index
+                                while ahead < len(task.points) - 1 and task.distance[ahead] - task.distance[task.index] < .25:
+                                    ahead += 1
+                                dx, dy = task.points[ahead][0] - pose[0], task.points[ahead][1] - pose[1]
+                                guide_deg = math.degrees(math.atan2(math.sin(math.atan2(dy, dx) - pose[2]),
+                                                                   math.cos(math.atan2(dy, dx) - pose[2])))
+                                guide = (guide_deg, world.current_time, True, guide_deg,
+                                         result['deviation_m'], result['progress_m'])
+                                lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
+                                    stamp=float(image['rendering_time']), source_now=world.current_time,
+                                    pose=pose[:3], guide=guide)
+                                if camera_frames == 0:
+                                    import cv2
+                                    cv2.imwrite(str(output / f'front-camera-{epoch}-{phase}-{seed}.png'), rgba[:, :, 2::-1])
+                            camera_frames += 1
+                            camera_visible_frames += int(lane.observation is not None)
+                        if lane.stamp is not None and world.current_time - lane.stamp > lane.manager.config.stale_after_s:
+                            lane.invalidate('camera_source_stale')
+                        state = lane.state()
+                        now = time.monotonic()
                     if phase == 'train' and previous is not None:
                         policy.update(*previous, result['reward'], state,
                                       terminated=result['terminated'] or result['truncated'])
                     action = 1 if phase == 'baseline' else policy.choose(state, explore=phase == 'train')
-                    angular = max(-.8, min(.8, angular * policy.gains[action]))
+                    if lane is None:
+                        angular = max(-.8, min(.8, angular * policy.gains[action]))
+                    else:
+                        decision = lane.manager.tick_gain(now, gain=policy.gains[action])
+                        speed, angular = decision.linear, decision.angular
+                        if lane.manager.status().state == 'LOST':
+                            result = dict(result, terminated=True, truncated=False, complete=False, reason='camera_lane_lost')
                     if result['goal_reached'] or result['terminated'] or result['truncated']:
                         owner.stop()
                         speed, angular = 0., 0.
@@ -273,10 +371,17 @@ def main():
                             MotionHeader(f'isaac:{epoch}:{frame}', 'isaac-pinky', 'learned_policy',
                                 PriorityClass.POLICY, now, .1, envelope_ref='isaac-map-v1', state_sequence=epoch,
                                 limits={'linear_mps': .06, 'angular_radps': .8}), BaseTwist(speed, angular))
-                        owner.submit(intent, observed_at=now, now=now)
+                        if lane is None:
+                            owner.submit(intent, observed_at=now, now=now)
+                        else:
+                            if not lane.manager.apply_if_current(decision, lambda _decision:
+                                owner.submit(intent, observed_at=now, now=now, preserve_curvature=True)):
+                                owner.stop()
                     cmd_vel_cycle(command=owner, power=power, send=send)
                     trace.write(json.dumps(dict(frame=frame, sim_s=elapsed, wall_s=time.monotonic() - wall_start,
-                                                pose=pose, action=action, candidate=[speed, angular], **result)) + '\n')
+                                                pose=pose, action=action, candidate=[speed, angular],
+                                                **({'camera': lane.last, 'line': lane.manager.status().model_dump()}
+                                                   if lane is not None else {}), **result)) + '\n')
                     if result['terminated'] or result['truncated']:
                         break
                     if owner.halted and not result['goal_reached']:
@@ -287,6 +392,8 @@ def main():
                            sim_s=elapsed, wall_s=time.monotonic() - wall_start,
                            initial_heading_offset_rad=heading_offset, initial_pose=initial_pose,
                            learned_state_steps=learned_steps, stop=physical_stop())
+            if lane is not None:
+                episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames)
             if recorder is not None:
                 # Record the true completed stop even when it falls between sample ticks.
                 for _ in range(2):
@@ -307,6 +414,8 @@ def main():
                 raise RuntimeError('evaluation mutated policy')
             if phase == 'eval' and learned_steps == 0:
                 raise RuntimeError('evaluation visited no learned state')
+            if lane is not None and camera_visible_frames == 0:
+                raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates
@@ -337,14 +446,29 @@ def main():
             except Exception as exc:
                 summary['video_cleanup_error'] = str(exc)
                 cleanup_error = cleanup_error or exc
+            try:
+                if lane is not None:
+                    lane.close()
+            except Exception as exc:
+                summary['lane_cleanup_error'] = str(exc)
+                cleanup_error = cleanup_error or exc
             if cleanup_error is not None:
                 raise cleanup_error
         finally:
             try:
                 try:
-                    if camera is not None:
-                        camera.pause()
-                        camera.destroy()
+                    camera_error = None
+                    for owned_camera in (camera, front_camera):
+                        if owned_camera is not None:
+                            try:
+                                try:
+                                    owned_camera.pause()
+                                finally:
+                                    owned_camera.destroy()
+                            except Exception as exc:
+                                camera_error = camera_error or exc
+                    if camera_error is not None:
+                        raise camera_error
                 finally:
                     from sdk_entrypoint import close_sdk
                     close_sdk(app, headless=True)
