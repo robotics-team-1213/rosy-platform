@@ -3364,3 +3364,9 @@
 - 변경: 실제 예산·creator·시도·종결·FINAL 원장을 `incidents/automation/ledger`로 옮기고 기존 import의 클래스·helper identity를 유지한다. DB 본문과 수치는 동일하며 store의 closure import 깊이만 조정했다.
 - 증거: 분리 전 실제 wheel/sdist 부재와 automation 초과를 AI PC 9 GB 유효 원격 RED 3 NEW로 확인했다. 추출 후 GREEN은 별도 확인한다. 실측 Fleet53408/incidents502/automation429/ledger370; 기존 부모 기준과 +150은 유지한다.
 - gate 변화: 책임 분리 source 검증 중이다. provider·운영 활성화·배포·push·물리 수용을 추가하지 않는다.
+
+## 2026-10-12 · 51176f181 · D-685 crash-consistent admission
+
+- 변경: durable pending 선기록과 마지막 await 뒤 law/AI/사람 점유/동일 client 재검사를 연결했다. 모호한 receipt·500·crash는 재시작 후에도 동결하고 확정 대조만 해제한다. 자율 설정은 durable journal과 background resolver가 필수다.
+- 증거: 관련 원격 184 passed, exit 0, known-failures NEW 0. pipeline_review 독립 검토 승인 및 stuck 3317 재판정; 기존 +150·이전 이력·책임 분리 의무 유지.
+- gate 변화: SOURCE와 관련 원격 회귀만 확인. 최종 통합 착지·현장 활성화·물리 수용·실제 학습/승격은 별도 증거다.
