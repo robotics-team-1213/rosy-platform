@@ -762,3 +762,9 @@
 **Status:** Accepted (2026-10-12, 소스 계약)
 
 포함 요금제 marginal cash와 미관측 청구액을 분리하고 검증된 호출별 비용 근거를 숫자 원장과 원자적으로 결속한다. 과거 tuple2와 model receipt/1을 유지하며 계정·원문 키를 export하지 않는다. 실제 제공자 활성화는 별도 admission이다. 전문은 [D-694](../adr/D-694-model-cost-evidence.md).
+
+## D-695 — 사건 실패 분류 제안과 최종 검토 분리
+
+**Status:** Accepted (2026-10-12, source 계약)
+
+동일 사건·모델 근거 hash에 실패 책임 제안을 결속하고 모델 의견과 사람 최종 검토 후보를 구분한다. 기존 원인·정답 상태와 원장·CORE API는 유지한다. 전문은 [D-695](../adr/D-695-incident-failure-responsibility.md).
