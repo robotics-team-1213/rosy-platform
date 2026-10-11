@@ -137,6 +137,7 @@ class FleetConsole(TripAware):
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
+        self._goal_busy: set[str] = set()
         #: 열려 있는 대형 세션. 한 사이트에 하나다 - 같은 로봇이 두 대형에 들어가면
         #: 어느 리더를 따라야 하는지 로봇 쪽에서 정할 방법이 없다.
         self._formation = None
@@ -401,6 +402,18 @@ class FleetConsole(TripAware):
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
                    attempt_seq: int | None = None, lease_source: str | None = None) -> dict:
+        if robot_id in self._goal_busy:
+            raise HubError("COMMAND_REJECTED", f"{robot_id} has a goal pipeline in flight")
+        self._goal_busy.add(robot_id)
+        try:
+            return await self._goal(robot_id, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                                    attempt_seq=attempt_seq, lease_source=lease_source)
+        finally:
+            self._goal_busy.discard(robot_id)
+
+    async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
+                    task_id: str | None, attempt_id: str | None,
+                    attempt_seq: int | None, lease_source: str | None) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -414,6 +427,7 @@ class FleetConsole(TripAware):
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
         client = self._client(robot_id)
+        stop = self.goal_leases.stop_token(robot_id)
         caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
@@ -449,6 +463,8 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
                     "reason": "LOCALIZATION_UNTRUSTED"}
+        if stop != self.goal_leases.stop_token(robot_id):
+            raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during goal admission")
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation during goal admission")
         if lease_source != "trip" and self.trip_busy(robot_id):
@@ -639,11 +655,23 @@ class FleetConsole(TripAware):
                 "yielding": yielded, "no_space": no_space}
 
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:
+        if robot_id in self._goal_busy:
+            raise HubError("COMMAND_REJECTED", f"{robot_id} has a goal pipeline in flight")
+        self._goal_busy.add(robot_id)
+        try:
+            await self._bay_goal(robot_id, bay, mover)
+        finally:
+            self._goal_busy.discard(robot_id)
+
+    async def _bay_goal(self, robot_id: str, bay: tuple, mover: str) -> None:
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
         client = self._client(robot_id)
+        stop = self.goal_leases.stop_token(robot_id)
         caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
+        if stop != self.goal_leases.stop_token(robot_id):
+            raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during yield admission")
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation while planning a yield")
         if self.trip_busy(robot_id):

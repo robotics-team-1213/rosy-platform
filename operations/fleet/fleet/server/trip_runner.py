@@ -93,6 +93,8 @@ class TripRunner(TripAdmission, TripProgress):
         self._engaged, self._release_queue, self._roster = engaged, release_queue, roster
         #: D-517 1: robot id -> its trip (open, or the last one it ran).
         self._live: dict[str, LiveTrip] = {}
+        self._stop_epoch = 0
+        self._start_cancels: dict[str, int] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
@@ -141,6 +143,7 @@ class TripRunner(TripAdmission, TripProgress):
         if plan is None:
             raise TripError(404, "TRIP_PLAN_UNKNOWN")
         robot_id = row["robot_id"]
+        start_token = self._start_token(robot_id)
         async with self._lock_for(robot_id):
             if self._store.trip(plan_id) is not None:
                 raise TripError(409, "TRIP_ALREADY_STARTED")
@@ -156,12 +159,16 @@ class TripRunner(TripAdmission, TripProgress):
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
+            self._check_start_token(robot_id, start_token)
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
-                robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps)
+                robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
+                start_token=start_token)
+            self._check_start_token(robot_id, start_token)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
             try:
+                self._check_start_token(robot_id, start_token)
                 engaged = self._engaged(robot_id)
                 if engaged is not None:
                     raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
@@ -247,6 +254,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     def close_all(self, reason: str) -> list[LiveTrip]:
         """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
+        self._stop_epoch += 1
         closed = [live for live in self._live.values() if live.open]
         for live in closed:
             live.view.update(state="canceled", reason=reason)
@@ -273,6 +281,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def cancel_robot(self, robot_id: str, reason: str) -> None:
         """The robot's trip ends canceled (``trip_guard``: an operator turned line-follow OFF)."""
+        self._start_cancels[robot_id] = self._start_cancels.get(robot_id, 0) + 1
         if self.robot_busy(robot_id):
             await self.cancel(self._live[robot_id].view["trip_id"], None, reason)
 
