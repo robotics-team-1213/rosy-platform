@@ -12,6 +12,7 @@ $('frame-progress').after(modeBadge);
 const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 · 학습 제외':'학습 후보 · 승인 후 수용 확인';
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
+document.querySelector('.review-editor-tools').append($('reload'));
 const objectCanvasColumn=document.querySelector('.review-editor-canvas');
 objectCanvasColumn.querySelector('.image-stage').after($('candidate-details'));
 document.querySelector('.review-stage').append(document.querySelector('.review-editor-tools'));

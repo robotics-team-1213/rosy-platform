@@ -1295,7 +1295,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         readiness = panel.locator("#map-readiness-status")
         action = panel.locator("ui-status[role=status]").last
         initial_action = action.inner_text()
-        page.locator('[data-map-click="goal"]').click()
+        assert page.locator('[data-map-click="goal"]').is_disabled()
         page.locator("canvas").click(position={"x":30,"y":30})
         assert action.inner_text() and action.inner_text() != initial_action
         assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
