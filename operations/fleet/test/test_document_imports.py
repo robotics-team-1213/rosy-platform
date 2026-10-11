@@ -32,6 +32,7 @@ SHARED = {
 
 OWN = {
     "console.js": {
+        "inbox.js",  # D-632: console notification and context view owner
         "connection-view.js",
         "formation.js",
         "map-view.js",
