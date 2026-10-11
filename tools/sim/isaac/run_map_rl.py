@@ -3,6 +3,7 @@
 Uses the CORE final port in process, never ROS, Fleet or a robot endpoint.
 """
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import math
@@ -20,6 +21,24 @@ from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
 from graph_contract import robot_contract
 from map_task import load_track, MapTask, QPolicy, SimulationOwner
+
+
+def learn_transition(policy, previous, state, result):
+    if state is None:
+        return 'invalid_camera_observation'
+    if previous is None or previous[0] is None:
+        return 'no_previous_observation'
+    policy.update(*previous, result['reward'], state,
+                  terminated=result['terminated'] or result['truncated'])
+    return 'updated'
+
+
+def camera_tick(lane, now, *, gain):
+    decision = lane.manager.tick_gain(now, gain=gain)
+    state = lane.state()
+    if state is None:
+        decision = replace(decision, linear=0., angular=0.)
+    return decision, state
 
 
 def main():
@@ -78,9 +97,10 @@ def main():
     camera = None
     front_camera = None
     lane = None
+    policy = None
     summary = dict(source_revision=args.source_revision, map_sha256=track['source_sha256'],
                    segments=track['segments'], algorithm='CPU residual Q-learning, pursuit yaw gain',
-                   operating_acceptance='HOLD', episodes=[])
+                   operating_acceptance='HOLD', episodes=[], learning_steps={})
     if perception is not None:
         summary.update(algorithm='CPU residual Q-learning, existing CAMERA_LINE yaw gain', perception=perception,
                        camera_acceptance='HOLD', camera_guidance='map route direction + native odom, camera required')
@@ -358,22 +378,28 @@ def main():
                             lane.invalidate('camera_source_stale')
                         state = lane.state()
                         now = time.monotonic()
-                    if phase == 'train' and previous is not None:
-                        policy.update(*previous, result['reward'], state,
-                                      terminated=result['terminated'] or result['truncated'])
-                    action = 1 if phase == 'baseline' else policy.choose(state, explore=phase == 'train')
+                    learning_step = None
+                    if phase == 'train' and lane is None:
+                        learning_step = learn_transition(policy, previous, state, result)
+                    action = 1 if phase == 'baseline' or state is None else policy.choose(state, explore=phase == 'train')
                     if lane is None:
                         angular = max(-.8, min(.8, angular * policy.gains[action]))
                     else:
-                        decision = lane.manager.tick_gain(now, gain=policy.gains[action])
+                        decision, state = camera_tick(lane, now, gain=policy.gains[action])
                         speed, angular = decision.linear, decision.angular
-                        if lane.manager.status().state == 'LOST':
-                            result = dict(result, terminated=True, truncated=False, complete=False, reason='camera_lane_lost')
+                        if lane.manager.status().state == 'LOST' and not result['terminated']:
+                            result = dict(result, terminated=True, truncated=False, complete=False,
+                                          reason='camera_lane_lost', reward=result['reward'] - 10.)
+                    if phase == 'train' and lane is not None:
+                        learning_step = learn_transition(policy, previous, state, result)
+                    if phase == 'train':
+                        counts = summary['learning_steps']
+                        counts[learning_step] = counts.get(learning_step, 0) + 1
                     if result['goal_reached'] or result['terminated'] or result['truncated']:
                         owner.stop()
                         speed, angular = 0., 0.
                     else:
-                        if phase == 'eval' and any(value != 0. for value in policy.table.get(state, ())):
+                        if phase == 'eval' and state is not None and any(value != 0. for value in policy.table.get(state, ())):
                             learned_steps += 1
                         intent = MotionIntent(MotionKind.BASE_TWIST,
                             MotionHeader(f'isaac:{epoch}:{frame}', 'isaac-pinky', 'learned_policy',
@@ -388,13 +414,14 @@ def main():
                     cmd_vel_cycle(command=owner, power=power, send=send)
                     trace.write(json.dumps(dict(frame=frame, sim_s=elapsed, wall_s=time.monotonic() - wall_start,
                                                 pose=pose, action=action, candidate=[speed, angular],
+                                                learning_step=learning_step,
                                                 **({'camera': lane.last, 'line': lane.manager.status().model_dump()}
                                                    if lane is not None else {}), **result)) + '\n')
                     if result['terminated'] or result['truncated']:
                         break
                     if owner.halted and not result['goal_reached']:
                         raise RuntimeError('policy envelope HOLD during active route')
-                    previous = (state, action)
+                    previous = (state, action) if state is not None else None
                     step()
             episode = dict(phase=phase, seed=seed, epoch=epoch, **result,
                            sim_s=elapsed, wall_s=time.monotonic() - wall_start,
@@ -440,6 +467,7 @@ def main():
         (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
         raise
     finally:
+        summary['updates'] = 0 if policy is None else policy.updates
         try:
             cleanup_error = None
             try:
