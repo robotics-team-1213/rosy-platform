@@ -218,6 +218,17 @@ test('survey teach start requires a saved explicit basis and a checked physical 
     {robot_id: 'r1', mode: 'survey', map_id: 'yard', reference_revision: 'r1', expected_revision: 'd1'});
 });
 
+test('survey records are shown only against their original coordinate reference', async () => {
+  const {surveyTeachMatches} = await import('../../../ui/console/shared/site-map-model.js');
+  const reference = {revision: 'r1', origin: [1, 2], heading_rad: 0, description: 'mark'};
+  const record = {mode: 'survey', map_id: 'yard', survey_reference: reference};
+  const map = {map_id: 'yard', survey: {...reference, reviewed: true, review_note: 'checked'}};
+  assert.equal(surveyTeachMatches(record, map), true);
+  assert.equal(surveyTeachMatches(record, {...map, map_id: 'other'}), false);
+  assert.equal(surveyTeachMatches(record, {...map, survey: {...reference, origin: [9, 2]}}), false);
+  assert.equal(surveyTeachMatches(record, null), false);
+});
+
 test('teach confirm body: a place id, or a new address name; speed is bounded', async () => {
   const {teachConfirmBody} = await import('../../../ui/console/shared/site-map-model.js');
   const args = {teachId: 't1', from: 'A', fromName: '', to: '', toName: ' 새 곳 ', direction: 'two_way',

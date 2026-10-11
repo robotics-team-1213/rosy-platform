@@ -4,6 +4,7 @@
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
+  teachStartBody, surveyTeachMatches,
 } from '/console/assets/site-map-model.js';
 
 const POLL_MS = 1000;
@@ -14,6 +15,7 @@ export function createTeachPanel(host) {
   let view = null;
   let drawn = '';
   let markersKey = '';
+  let basisKey = '';
   for (const kind of PLACE_KINDS) $('teach-place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
   function gate(id, reason) {
@@ -29,13 +31,26 @@ export function createTeachPanel(host) {
     const recording = view?.recording;
     const pending = newestPending(view);
     const draftReason = host.dirty() ? '고친 초안을 먼저 저장하세요' : '';
-    gate('teach-start', robot || (recording ? '기록 중입니다' : ''));
+    const draft = host.draft(), reference = draft?.map?.survey;
+    const survey = $('teach-frame').value === 'survey';
+    const key = `${$('teach-robot').value}:${$('teach-frame').value}:${draft?.revision}`;
+    if (key !== basisKey) { basisKey = key; $('teach-origin-confirm').checked = false; }
+    $('teach-origin-check').hidden = !survey;
+    $('teach-frame').disabled = Boolean(recording);
+    $('teach-robot').disabled = Boolean(recording);
+    $('teach-reference').textContent = reference
+      ? `조사 기준 ${reference.revision} · 시작 ${reference.origin.map(v => v.toFixed(2)).join(', ')} m · 방향 ${Math.round(reference.heading_rad * 180 / Math.PI)}° · ${reference.description}`
+      : '조사 기준 없음 · 지도 없이 시작에서 기준을 정해 저장하세요';
+    const surveyReason = survey ? draftReason || (!reference || !draft?.revision ? '조사 기준이 있는 초안을 먼저 저장하세요' : '')
+      || ($('teach-origin-confirm').checked ? '' : '로봇이 조사 시작점과 방향에 놓였는지 확인하세요') : '';
+    gate('teach-start', robot || (recording ? '기록 중입니다' : '') || surveyReason);
     gate('teach-stop', base || (recording ? '' : '기록 중이 아닙니다'));
     const named = $('teach-place-name').value.trim() ? '' : '새 주소 이름을 적으세요';
     gate('teach-place', robot || draftReason || named);
     gate('teach-marker-place', base || draftReason || ($('teach-marker').value ? '' : '보이는 장소 마커가 없습니다') || named);
     $('teach-form').hidden = !pending || Boolean(base);
-    gate('teach-confirm', base || draftReason);
+    gate('teach-confirm', base || draftReason || (pending?.mode === 'survey' && !surveyTeachMatches(pending, draft?.map)
+      ? '기록의 조사 기준과 현재 초안이 다릅니다 · 기존 기준을 확인하세요' : ''));
   }
 
   function fillEnd(selectId, candidates) {
@@ -102,7 +117,10 @@ export function createTeachPanel(host) {
     body: JSON.stringify(body || {})});
 
   $('teach-start').addEventListener('click', () => act(async () => {
-    view = {recording: (await post('/api/fleet/teach/start', {robot_id: $('teach-robot').value})).recording, pending: view?.pending || []};
+    view = {recording: (await post('/api/fleet/teach/start', teachStartBody({robotId: $('teach-robot').value,
+      mode: $('teach-frame').value, draft: host.draft(), confirmed: $('teach-origin-confirm').checked}))).recording,
+      pending: view?.pending || []};
+    $('teach-origin-confirm').checked = false;
   }, '기록을 시작했습니다. Pilot으로 로봇을 모세요. 가르치기는 로봇을 움직이지 않습니다.'));
   $('teach-stop').addEventListener('click', () => act(async () => {
     const result = await post('/api/fleet/teach/stop');
@@ -138,7 +156,7 @@ export function createTeachPanel(host) {
     $('teach-place-name').value = '';
     return `초안에 마커 자리 주소 ${out.place_id}를 더했습니다. 활성화는 따로 합니다.`;
   }));
-  for (const id of ['teach-robot', 'teach-place-name', 'teach-marker']) $(id).addEventListener('input', sync);
+  for (const id of ['teach-robot', 'teach-place-name', 'teach-marker', 'teach-frame', 'teach-origin-confirm']) $(id).addEventListener('input', sync);
   poll();
 
   return {
@@ -148,8 +166,9 @@ export function createTeachPanel(host) {
     },
     /** Lines in map metres to draw over the map: the live recording, then the newest stopped one. */
     lines() {
-      const live = view?.recording?.points;
-      return [live, newestPending(view)?.polyline].filter(points => points && points.length > 1);
+      return [view?.recording, newestPending(view)]
+        .filter(record => record && (record.mode !== 'survey' || surveyTeachMatches(record, host.map())))
+        .map(record => record.points || record.polyline).filter(points => points && points.length > 1);
     },
   };
 }

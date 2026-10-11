@@ -32,6 +32,7 @@ const ROBOT_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
+  map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
 const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,

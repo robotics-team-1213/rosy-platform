@@ -37,6 +37,7 @@
 - `POST /api/fleet/teach/start`에 선택 mode `map`(기본값)/`survey`를 추가한다. map은 기존 요청을 유지하며 조사 필드를 받지 않는다. survey는 저장된 초안의 `map_id`, `reference_revision`(조사 revision 형식), `expected_revision`과 신선한 상대 odom을 요구한다. 현재 로봇 위치를 survey.origin, 현재 방향을 survey.heading_rad에 놓는 상대 변환으로 선을 기록한다. 로봇을 설명에 명시한 실제 시작점·방향에 놓고 시작해야 한다. 운행 MapPose나 map pin은 생성하지 않는다.
 - survey 시작은 초안 없음/조사 없음 422 `TEACH_SURVEY_REQUIRED`, revision 불일치 409 `SITE_MAP_DRAFT_CHANGED`, map_id/조사 기준 불일치 409 `TEACH_SURVEY_CHANGED`, odom 없음·stale·읽기 실패 422 `TEACH_ODOM_UNAVAILABLE`을 반환한다. 유효하지 않은 mode/필드 조합은 422 `TEACH_MODE_INVALID`이다. 기존 named operator·roster·한 사이트 한 기록·busy·감사·pending 10분 계약을 유지한다.
 - survey recording/result에는 mode, map_id, reference_revision을 추가하며 recording의 draft_revision은 시작 시점의 저장 revision이다. 내부 odom anchor/epoch는 공개 응답에 넣지 않는다. 기록 중 초안 수정은 `survey_changed`, odom 단절은 `odom_lost`, odom epoch 변경은 `odom_reset`으로 유효 앞부분만 남기고 끝낸다. confirm은 시작 기준과 현재 초안의 동일성을 확인하고 기존 expected_revision CAS로 저장하며 새 간선을 source=odometry/status=observed로 기록하고 survey 검토를 무효화한다. 기준이 바뀌면 409 `TEACH_SURVEY_CHANGED`로 기록을 유지하고 저장을 거절한다.
+- survey recording/result의 `survey_reference`는 시작 기준 snapshot(reviewed/review_note 제외)이다. UI는 동일 map_id와 기준 snapshot에만 조사 선을 겹치고 현재 초안 기준이 다르면 confirm을 차단한다. 공개 응답의 points는 기존처럼 배열의 배열이다. 시작점 확인은 각 시작마다 필요하며 로봇·기록 방식·저장 revision 변경 시 UI 확인을 초기화한다.
 
 # 1. 버저닝 및 폐기 정책
 
