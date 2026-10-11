@@ -7783,3 +7783,9 @@ osy-d395-s1d\`.
 - 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
 - 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
 - gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
+
+- 변경: 사용자 합의에 따라 도로면·현재 도로 구역을 별도 인지 평가 대상으로 정리하고, 목적지에 따른 경로 선택과 주행 수용을 후속 단계로 분리했다. 독립 정답, 세션 분리, 시뮬레이션/실물 비교, 불확실 처리, 기존 drivable 의미의 전환 경계를 설계 문서에 명시했다.
+- 증거: 설계 문서와 기존 D-475/D-576/D-379 계약의 대조. 문서 lint 및 원격 계약 시험 결과는 검증 후 별도 보고한다.
+- gate 변화: 없음. 의미별 출력 구현, 평가 정답 검수, 모델 인지 승인, 장치 배포 및 주행 수용은 수행하지 않았다.
