@@ -198,6 +198,8 @@ def test_zero_attempt_origin_binds_revision_after_audit_rotation(tmp_path, origi
     store.close_case(scope, state='HOLD', reason='REOBSERVE_FAILED')
     now[0] = 101
     observe(board, 101)
+    if original_case != scope.case_id:
+        store.begin_case(replace(scope, case_id=original_case), CaseBudget(100, 130, 2, 2, 0))
     with closing(log._connect()) as connection, connection:
         connection.execute('DELETE FROM fleet_judgment_records')
         connection.execute('CREATE TABLE IF NOT EXISTS fleet_incident_v2_origins '
