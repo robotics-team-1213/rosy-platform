@@ -1,6 +1,7 @@
 """The absorbed distribution preserves import identity across semantic holders."""
 
 from pathlib import Path, PurePosixPath
+import csv
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,17 @@ def test_sensor_and_drive_sources_have_distinct_semantic_holders():
     assert not (PACKAGE / "control/control/command_gate.py").exists()
 
 
+def test_ros_source_audit_includes_moved_adapter_once(tmp_path):
+    output = tmp_path / "endpoints.csv"
+    _run(str(PACKAGE / "tools/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
+    with output.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert any(row["source"] == "middleware/control/drive/safety/adapter/node.py"
+               for row in rows)
+    keys = [(row["source"], row["line"], row["kind"], row["expression"]) for row in rows]
+    assert len(keys) == len(set(keys))
+
+
 def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
     # Copy only this distribution and its declared Drive sources, not the repo.
     test_sensor_and_drive_sources_have_distinct_semantic_holders()
@@ -60,6 +72,15 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         names = wheel.namelist()
         for module in SOURCE_MODULES.values():
             assert names.count(module.replace(".", "/") + ".py") == 1
+        for group in ("safety", "recovery", "tracking", "calibration"):
+            for path in (MIDDLEWARE / "control/drive" / group).glob("*.py"):
+                assert names.count("control/control/" + path.name) == 1
+                assert sum(name.startswith("control/") and name.endswith("/" + path.name)
+                           for name in names) == 1
+        stl = "map/map_v2_fleet/260919 MAP FILE.STL"
+        archived_stl = [name for name in names if name.endswith("/share/control/" + stl)]
+        assert len(archived_stl) == 1
+        assert wheel.read(archived_stl[0]) == (PACKAGE / stl).read_bytes()
         assert not any("_source_roots" in name for name in names)
         wheel.extractall(installed)
     check = (

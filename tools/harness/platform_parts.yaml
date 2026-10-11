@@ -188,11 +188,39 @@ roots:
     legacy: src/runtime/sensing
     wave: "4e"
     import_prefix: [control]
+    source_packages:
+      sensors/sensing: control.sensing
+      vision/perception: control.sensing.perception
     note: >-
-      Package `control` also holds the recorder (middleware/recorder), line follow,
-      sim tooling (tools/gz) and map assets the Fleet image copies. They move with the
-      package in 4e and their split is deferred (D-427 plan Q2); not separate roots yet.
+      D-630 sensing and vision source holders; control remains the ROS distribution/import identity.
+      Node composition, recorder compatibility and map assets stay in this package.
     concern: control
+  - path: middleware/control/drive
+    part: middleware
+    d427_target: middleware/control/drive
+    layout_target: middleware/control/drive
+    wave: none
+    import_prefix: [control.control, control.planning, control.wander]
+    source_packages:
+      safety: control.control
+      recovery: control.control
+      tracking: control.control
+      calibration: control.control
+      planning/grid: control.planning
+      safety/adapter: control.safety
+      tracking/wander: control.wander
+    concern: control
+    note: D-630 Drive algorithms; installed by the existing control distribution.
+  - path: middleware/control/drive/safety
+    part: middleware
+    d427_target: middleware/control/drive/safety
+    wave: none
+    import_prefix: [control.control.actuation, control.control.adaptive_speed, control.control.command_gate, control.control.configured_operation, control.control.floor_evidence, control.control.footprint_guard, control.control.footprint_sweep, control.control.lidar_guard, control.control.motion_sweep, control.control.obstacle_risk, control.control.policy_handoff, control.control.rotation_clearance, control.control.rotation_envelope, control.control.safety_profile, control.control.space_speed, control.safety]
+    source_packages:
+      '': control.control
+      adapter: control.safety
+    concern: safety
+    note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
     d427_target: middleware/drivers/imu_bno055
@@ -711,6 +739,8 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: control.control.command_gate.CommandPolicy}
+  - {symbol: control.safety.node.SafetyNode}
   - {symbol: core.drive.line_follow.bind_motion_envelope}
   - {symbol: core.drive.line_follow.bind_stuck_recovery}
   - {symbol: core.drive.line_follow.bind_lane_return_motion}

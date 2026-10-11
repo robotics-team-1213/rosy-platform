@@ -1,46 +1,55 @@
-# `control` inside Rosy OS
+# `control` inside ROSY Platform
 
-This is the absorbed ROS 2 package in `Rosy OS/src/control`. It owns
+This is the absorbed ROS 2 distribution in `middleware/perception`. It installs
 reusable sensing, OpenCV preprocessing, calibration records, planning, and
 safety evidence. `core` owns the external API, the policy consumer, and
 the only final `cmd_vel` publisher. The old standalone Control checkout is not
 a runtime dependency.
 
+| Source holder | Preserved Python identity |
+|---|---|
+| `sensors/sensing` | `control.sensing` |
+| `vision/perception` | `control.sensing.perception`, including drivable/learned backends |
+| `../control/drive/{safety,tracking,recovery,calibration}` | `control.control` modules |
+| `../control/drive/planning/grid` | `control.planning` |
+| `../control/drive/safety/adapter` | `control.safety` |
+| `../control/drive/tracking/wander` | `control.wander` |
+
+`control/` retains provider and ROS composition plus source compatibility
+facades. `setup.py` installs each old import once; only `control.control`
+combines modules from several holders. Its sdist snapshots the declared Drive
+sources internally so it can build without the repository. ROS package name,
+console scripts and `share/control/{config,launch,map,web}` remain the same.
+
 ## Canonical development checks
 
-Run the package and CORE tests from the Rosy OS repository root. The source
-tree is not installed on a plain host, so include both package roots when
-running without a colcon overlay:
+Run pytest through the remote runner from the repository root (D-584):
 
 ```bash
-PYTHONPATH=src/control:src python3 -m pytest src/control/test/ -q
-PYTHONPATH=src/core:src/control:src python3 -m pytest src/core/test/ -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<session> -- middleware/perception/test/
+python test/known_failures.py X:/DevTemp/<session>/run-1.txt
 ```
-
-On PowerShell, use `$env:PYTHONPATH="$PWD/src/core;$PWD/src/control;$PWD/src"`
-before the CORE command (and omit the first entry for the Control-only
-command). A sourced colcon install overlay provides the same imports.
 
 Build in a ROS 2 Jazzy environment:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 cd /opt/rosy
-colcon build --merge-install --packages-up-to core pinky_pro
+colcon build --merge-install --base-paths $(python3 tools/harness/colcon_roots.py)
 source install/setup.bash
 ```
 
-A passing host test or build proves source and ROS-simulation behavior only.
+A passing host test or build proves only the checks actually executed.
 It does not prove a Device install, sensor capture, motor motion, payload
 handling, or Pinky Pro arm operation.
 
 ## Device flow
 
-The supported Device baseline is Raspberry Pi OS Lite 64-bit with the signed
-Rosy OS release installed at `/opt/rosy`:
+The supported Device baseline is Ubuntu Server 24.04 arm64 with the signed
+ROSY Platform release installed at `/opt/rosy`:
 
 ```bash
-cd /opt/rosy/deploy/robot
+cd /opt/rosy/deploy/robot/pinky_pro
 sudo ROSY_ROBOT_NUMBER=1 bash ./install-pi.sh
 sudo ./verify-pi.sh
 sudo ./runtime-mode.sh up
