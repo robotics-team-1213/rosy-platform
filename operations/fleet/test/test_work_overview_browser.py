@@ -9,6 +9,60 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 
 
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
+def test_discord_current_incident_requires_separate_named_confirmation(site, size):
+    from playwright.sync_api import expect, sync_playwright
+    request_id, digest, revision = 'a' * 24, 'b' * 64, 'c' * 64
+    path = f'/api/fleet/channel-requests/{request_id}'
+    receipt = {'request_id': request_id, 'content_hash': digest, 'content': 'inspect current risk',
+               'received_at': '2026-10-12T00:00:00+00:00'}
+    view = {'request_id': request_id, 'content_hash': digest, 'revision': 0, 'state': 'REQUESTED',
+            'candidate': None, 'reason': None, 'work_id': None, 'work_kind': None, 'work_status': None,
+            'request_key': 'discord-' + request_id, 'incident': None}
+    report = {'id': 'line_stuck:rosy_03:stuck-abc', 'classification': 'line_stuck',
+        'robot_ids': ['rosy_03'], 'stuck_id': 'stuck-abc', 'judgment_revision': revision, 'handoff': None,
+        'opened_at': receipt['received_at'], 'closed_at': None, 'actions': [], 'reviews': [],
+        'evidence': {'core': {}, 'fleet': {}, 'rosy_cam': None, 'ai_facts': [],
+                     'front_image': {'status': 'not_retained'}}}
+    api = {**API, path + '/review': view, '/api/fleet/channel-requests': {'rows': [receipt]},
+           '/api/fleet/incidents': {'reports': [report], 'traffic_reports': []},
+           '/api/fleet/work': {'rows': [], 'observed_at': receipt['received_at'],
+               'tasks_available': True, 'missions_available': True, 'truncated_sources': []}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=size)
+        try:
+            page.goto(site + '/console?view=work')
+            page.clock.run_for(2000)
+            page.locator('#channel-requests ui-button').click()
+            page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
+            page.locator('#channel-review-reason').fill('current risk review')
+            claim = page.locator('#channel-review-incident-claim')
+            claim.click()
+            page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+            assert not posts
+
+            def accept(route):
+                body = route.request.post_data_json
+                assert body == {'expected_hash': digest, 'expected_revision': 0, 'robot_id': 'rosy_03',
+                    'stuck_id': 'stuck-abc', 'judgment_revision': revision, 'reason': 'current risk review'}
+                posts.append((path + '/incident', body))
+                view.update(state='LINKED', revision=1, work_kind='incident', work_id=request_id,
+                    work_status='CLAIMED', incident={key: body[key] for key in ('robot_id', 'stuck_id', 'judgment_revision')})
+                route.fulfill(json=view)
+            page.route('**' + path + '/incident', accept)
+            claim.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+            expect(page.locator('#channel-review-state')).to_contain_text('CLAIMED')
+            expect(claim).to_be_disabled()
+            expect(page.locator('#channel-review-incident-link')).to_have_attribute('href',
+                '/console?inbox=1&robot=rosy_03&incident=stuck-abc')
+            assert len(posts) == 1 and not errors
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size):
     from playwright.sync_api import expect, sync_playwright
     request_id, digest = 'a' * 24, 'b' * 64
