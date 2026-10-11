@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,12 +22,14 @@ async def gateway_session(body, remaining, directory, *, credential_sha256=None)
     if len(data) > 16384 + 1024:
         raise ValueError('GATEWAY_JOB_LIMIT')
     process = None
-    spawn = asyncio.create_task(asyncio.create_subprocess_exec('/usr/bin/python3', '-m',
+    versioned = 'schema' in json.loads(body) or 'profile_revision' in json.loads(body)
+    interpreter = sys.executable if versioned else '/usr/bin/python3'
+    spawn = asyncio.create_task(asyncio.create_subprocess_exec(interpreter, '-m',
         'deploy.ai_pc.deliberation_glm_gateway', stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         start_new_session=True, cwd=str(ROOT), limit=4097,
         env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': os.pathsep.join(
-            (str(ROOT), str(ROOT / 'operations/decision/src')))}))
+            (str(ROOT), str(ROOT / 'operations/decision/src'), str(ROOT / 'contracts/foundation')))}))
     try:
         process = await asyncio.shield(spawn)
         process.stdin.write(data)
