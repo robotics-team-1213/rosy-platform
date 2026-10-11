@@ -1008,6 +1008,7 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     page.locator('#token-save').click()
     page.locator('#map-source').select_option('draft')
     expect(page.locator('#survey-review')).to_be_enabled()
+    page.locator('details').filter(has=page.locator('#survey-review-note')).locator('summary').click()
     page.locator('#survey-review-note').fill('Measured calibration and road directions checked')
     page.locator('#survey-review').click()
     page.locator('#save-draft').click()
