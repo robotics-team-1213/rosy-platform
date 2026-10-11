@@ -206,7 +206,7 @@ function validateCameraMap(base, observation) {
     throw new Error('관측 근거가 있는 카메라 차로 초안이 필요합니다');
 }
 
-const cameraSignature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps]);
+const cameraSignature = e => JSON.stringify([e.polyline, e.direction, e.width_m, e.drive_mode, e.speed_cap_mps, e.robot_kinds ?? null]);
 
 export function cameraConnectionCandidates(base, observation) {
   validateCameraMap(base, observation);
@@ -239,7 +239,8 @@ export function mergeCameraMap(base, observation, connections = {}) {
   const next = copy(base), ids = new Map();
   let addedEvidence = false;
   const fresh = observation.edges.filter(e => {
-    const old = next.edges.find(row => cameraSignature(row) === cameraSignature(e));
+    const old = next.edges.find(row => cameraSignature(row) === cameraSignature(e)
+      && ['from', 'to'].every(end => !joins.has(e[end]) || joins.get(e[end]) === row[end]));
     if (!old) return true;
     const note = e.evidence.note || '';
     if (note && !old.evidence?.note?.includes(note)) {

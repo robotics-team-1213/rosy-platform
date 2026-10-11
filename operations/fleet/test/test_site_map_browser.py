@@ -1038,7 +1038,8 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
 
 
 @pytest.mark.parametrize('width', [1440, 390])
-def test_camera_connections_require_review_before_extending_the_saved_map(page_site, width):
+@pytest.mark.parametrize('race', ['none', 'file', 'choice', 'dirty', 'dialog'])
+def test_camera_connections_require_review_before_extending_the_saved_map(page_site, width, race):
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap
     from fleet.server.site_map_store import SiteMapError
@@ -1069,6 +1070,36 @@ def test_camera_connections_require_review_before_extending_the_saved_map(page_s
     page.locator('#camera-connections select').select_option('b')
     expect(page.locator('#merge-camera-map')).to_be_disabled()
     page.locator('#camera-connect-confirm').check()
+    if race != 'none':
+        if race != 'dialog':
+            page.evaluate('''() => {
+                const file = document.getElementById('camera-map-file').files[0];
+                const original = file.text.bind(file);
+                file.text = () => new Promise(resolve => { window.finishCameraRead = () => original().then(resolve); });
+            }''')
+        page.locator('#import-camera-map' if race == 'dialog' else '#merge-camera-map').click()
+        if race == 'dialog':
+            expect(page.locator('dialog.ui-confirm')).to_be_visible()
+        else:
+            page.wait_for_function('typeof window.finishCameraRead === "function"')
+        if race == 'file':
+            page.locator('#camera-map-file').set_input_files([])
+        elif race == 'choice':
+            page.locator('#camera-connect-confirm').uncheck()
+            page.locator('#camera-connect-confirm').check()
+        else:
+            page.locator('#map-source').select_option('draft')
+            page.locator('#site-map-svg [data-edge="ab"]').dispatch_event('click')
+            page.locator('#edge-speed').fill('0.02')
+            page.locator('#apply-edit').dispatch_event('click')
+        if race == 'dialog':
+            page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        else:
+            page.evaluate('window.finishCameraRead()')
+        expect(page.locator('#notice')).to_contain_text('다시 확인')
+        assert store.draft_view() == draft
+        assert store.active_view() == active
+        return
     page.locator('#merge-camera-map').click()
     expect(page.locator('#site-map-svg [data-edge]')).to_have_count(2)
     saved = store.draft_view()

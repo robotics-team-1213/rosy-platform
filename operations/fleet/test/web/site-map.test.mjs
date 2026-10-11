@@ -433,5 +433,17 @@ test('camera endpoint connections need explicit same-frame review and remain inf
   assert.deepEqual(base.places, MAP.places);
   assert.equal(reviewSurveyDraft(joined, 'Endpoint connection checked').edges[1].evidence.status, 'reviewed');
   assert.deepEqual(mergeCameraMap(joined, observation, {near: 'B'}), joined);
+  const alternate = {...joined, places: [...joined.places, {...joined.places[1], id: 'C'}]};
+  const connections = {near: 'C', far: joined.places[2].id};
+  const differentTarget = mergeCameraMap(alternate, observation, connections);
+  assert.equal(differentTarget.edges.length, 3);
+  assert.equal(differentTarget.edges[2].from, 'C');
+  assert.ok(differentTarget.edges[2].evidence.note.includes('near -> C'));
+  assert.deepEqual(mergeCameraMap(differentTarget, observation, connections), differentTarget);
+  const unrestricted = mergeCameraMap({...joined, edges: joined.edges.map(e => ({...e, robot_kinds: ['pinky']}))},
+    observation, {...connections, near: 'B'});
+  assert.equal(unrestricted.edges.length, 3);
+  assert.equal(unrestricted.edges[1].robot_kinds[0], 'pinky');
+  assert.equal(unrestricted.edges[2].robot_kinds, undefined);
   assert.throws(() => cameraConnectionCandidates(base, {...observation, map_id: 'other'}));
 });
