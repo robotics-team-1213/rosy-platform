@@ -202,6 +202,39 @@ def test_prelabel_refuses_classes_disagreeing_with_model():
         prelabel.resolve_classes(bad, model)
 
 
+def test_prelabel_refuses_declared_road_without_model_semantic_evidence():
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable',
+                          'color': [0, 255, 0], 'semantic': 'road_surface/1'}]
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    with pytest.raises(build.BuildError, match='semantic'):
+        prelabel.resolve_classes(entries, model)
+
+
+@pytest.mark.parametrize('yaml_semantic,model_semantic', [
+    ('road_surface/1', 'current_road_region/1'), ('current_road_region/1', 'road_surface/1'),
+    ('road_surface/1', None), (None, 'road_surface/1'),
+    ('road_surface/1', 'trajectory_band/1')])
+def test_prelabel_refuses_different_model_road_meaning(yaml_semantic, model_semantic):
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable', 'color': [0, 255, 0]}]
+    raw = [dict(c) for c in entries]
+    if yaml_semantic is not None:
+        entries[-1]['semantic'] = yaml_semantic
+    if model_semantic is not None:
+        raw[-1]['semantic'] = model_semantic
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    with pytest.raises(build.BuildError, match='semantic'):
+        prelabel.resolve_classes(entries, model, model_raw_classes=raw)
+
+
+@pytest.mark.parametrize('semantic', [None, 'road_surface/1', 'current_road_region/1', 'trajectory_band/1'])
+def test_prelabel_preserves_matching_model_road_meaning(semantic):
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable', 'color': [0, 255, 0]}]
+    if semantic is not None:
+        entries[-1]['semantic'] = semantic
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    assert prelabel.resolve_classes(entries, model, model_raw_classes=list(reversed(entries))) == entries
+
+
 def test_duplicate_colour_or_label_in_labelmap_rejected(tmp_path):
     for extra in ("cone:0,0,0::\n", "line:1,1,1::\n"):
         lm = tmp_path / "labelmap.txt"
