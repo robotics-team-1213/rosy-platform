@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-11 · f62299e82 · feat: D-654 경로 R 플랫폼 심볼
 - 2026-10-11 · 2a848f3c3 · fix: 공용 설명이 아래 조작의 클릭을 가로막지 않도록 수정
 - 2026-10-11 · 4402c5c4b · fix: 기존 아이콘 설명의 키보드 연결
 - 2026-10-11 · 5071836f7 · uiux: D-641 의미 아이콘과 공용 설명
 - 2026-10-11 · uncommitted · uiux: D-639 공용 역할 출처
-- 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)

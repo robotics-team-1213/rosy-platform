@@ -722,3 +722,4 @@
 
 - 변경: 평면 SVG 정본과 플랫폼 타일을 공용 allowlist·CMake에 등록하고 ui-brand 워드마크에 같은 mask를 사용한다. 기존 장미색·글자 토큰, 역할별 앱 아이콘, 접근성 이름과 목적지를 유지한다.
 - 검증: source f62299e82의 원격 Chromium·토큰·기하·설치 계약 검사 78개가 통과했고 known_failures NEW 0이다. 두 테마, 네 Fleet 문서·여섯 폭, Cell 320px 정지 접근을 포함하며 데스크톱·모바일 캡처를 직접 확인했다. source bec3528c5의 CI에서 교체 중인 로봇 버튼을 한 번만 읽던 측정 경합이 발견돼 살아 있는 locator를 재확인하는 단언으로 수정했다. 로그는 관리 세션 rosy-brand의 logs/browser/run-1.txt다. 정확한 CI·서명 설치·native 앱 수용은 별도다.
+- gate 변화: 기존 SOURCE/LOCAL 상태는 유지한다. 새 브랜드의 원격 브라우저 증거와 정확한 SHA의 CI·설치·native 수용은 구분하며 후자는 아직 미검증이다.
