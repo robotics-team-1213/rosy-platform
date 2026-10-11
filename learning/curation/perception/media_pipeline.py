@@ -6,10 +6,11 @@ Usage: media_pipeline.py [--root data/perception] [--video-dir data/teleop/learn
 Stages, in order: scan, video, verify, reclaim, receipt.
 scan reads both raw layouts. video runs bag_to_video for a stem that has no
 video yet. verify requires the mp4, sidecar, meta and ffprobe count to agree.
-reclaim deletes those raw directories only with --apply. receipt is
-rosy.learning.media/1. trainer_recordings() turns each checked video into one
-recording-job row {"session", "video"}. A compact bag can free disk, but it is
-not a training input.
+reclaim deletes those raw directories only with --apply. A verified video also
+removes its .compact sibling; a compact that is the only remaining bag stays.
+receipt is rosy.learning.media/1. trainer_recordings() turns each checked video
+into one recording-job row {"session", "video"}. A compact bag is not a
+training input.
 
 Does not harvest, label, train, or delete the robot copy. recording_job still
 does not delete raw: run this stage first, then point that job at the receipt.
@@ -44,13 +45,20 @@ def trainer_recordings(doc: dict) -> list[dict]:
 
 
 def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
-                  removed: list[Path]) -> dict:
+                  removed: list[Path], compacts: list[Path] | None = None) -> dict:
     removed_paths = {path.resolve() for path in removed}
     sessions = []
     for row in rows:
         raw = Path(row["path"])
         video = video_dir / f"{row['stem']}.mp4" if row["stem"] else None
         trainable = row["status"] == "ok" and video is not None and video.is_file()
+        sibling = reclaim.compact_sibling(raw)
+        if sibling.resolve() in removed_paths:
+            compact_state = "removed"
+        elif sibling.is_dir():
+            compact_state = "kept"
+        else:
+            compact_state = "absent"
         sessions.append({
             "session": raw.name,
             "stem": row["stem"],
@@ -58,10 +66,19 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
             "raw": str(raw),
             "raw_bytes": row["bytes"],
             "raw_state": "removed" if raw.resolve() in removed_paths else "kept",
+            "compact_state": compact_state,
             "video": str(video) if trainable else None,
             "trainable": trainable,
         })
-    return {"schema": SCHEMA, "stages": list(STAGES), "applied": applied, "sessions": sessions}
+    compact_rows = []
+    for path in compacts or []:
+        compact_rows.append({
+            "session": path.name[:-len(".compact")],
+            "compact": str(path),
+            "compact_state": "removed" if path.resolve() in removed_paths else "kept",
+        })
+    return {"schema": SCHEMA, "stages": list(STAGES), "applied": applied,
+            "sessions": sessions, "compacts": compact_rows}
 
 
 def write_receipt(path: Path, doc: dict) -> None:
@@ -81,14 +98,15 @@ def run(raw: Path, video_dir: Path, *, shrink: bool, apply: bool, probe, encode,
     removed: list[Path] = []
     applied = False
     refused = False
+    compacts = reclaim.compacts_with_video(raw, video_dir, probe)
     if apply:
         try:
-            removed = reclaim.delete_targets(rows, raw)
+            removed = reclaim.delete_targets(rows, raw, compacts)
             applied = True
         except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             refused = True
-    doc = build_receipt(rows, video_dir, applied=applied, removed=removed)
+    doc = build_receipt(rows, video_dir, applied=applied, removed=removed, compacts=compacts)
     blocked = refused or any(row["status"] not in READY for row in rows)
     return (1 if blocked else 0), doc
 
